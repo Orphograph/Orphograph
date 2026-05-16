@@ -2,572 +2,324 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Orphograph — Proof your file existed, that outlives us all</title>
+<title>Orphograph — Empirical Notary · Bitcoin-Anchored</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="description" content="Timestamp any file in 10 seconds. The proof outlives us, the platform, and you. Your file never leaves your browser.">
+<meta name="description" content="An empirical notary. Present a file; receive a verifiable Bitcoin-anchored fingerprint that proves it existed by no later than the recorded block. The file does not leave your browser.">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-<meta property="og:title" content="Orphograph — Proof your file existed, that outlives us all">
-<meta property="og:description" content="Timestamp any file in 10 seconds. The proof outlives us, the platform, and you.">
-<meta property="og:image" content="/og.svg">
+<meta property="og:title" content="Orphograph — Empirical Notary">
+<meta property="og:description" content="Bitcoin-anchored proof a file existed. The file does not leave your browser.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://orphograph.com/">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:image" content="/og.svg">
-<link rel="stylesheet" href="/style.css">
 <style>
-  /* Overhaul-specific tweaks layered on top of style.css */
-  .header-cta { margin-left: 14px; padding: 6px 14px; background: var(--accent); color: #0c0e10; border-radius: 999px; font-weight: 500; text-decoration: none; font-size: 13px; white-space: nowrap; }
-  .header-cta:hover { filter: brightness(1.1); }
-  .trust-chips { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0 22px; padding: 0; list-style: none; }
-  .trust-chips li { padding: 6px 12px; border: 1px solid var(--panel-stroke); border-radius: 999px; font-size: 13px; color: var(--text-soft); background: var(--panel); }
-  .trust-chips li::before { content: "✓ "; color: var(--accent); }
-  .counter-strip { display: flex; flex-wrap: wrap; gap: 18px; justify-content: center; padding: 14px 18px; margin: 18px auto 28px; max-width: 760px; border: 1px solid var(--panel-stroke); background: var(--panel); border-radius: 12px; font-size: 14px; color: var(--text-soft); }
-  .counter-strip strong { color: var(--accent); font-variant-numeric: tabular-nums; }
-  .counter-strip .sep { color: var(--muted); }
-  .badge-section { border: 1px solid var(--panel-stroke); background: var(--panel); border-radius: 12px; padding: 22px; margin: 28px 0; }
-  .badge-snippet { background: #0c0e10; color: #e7e9ec; padding: 14px 16px; border-radius: 8px; font-family: var(--mono); font-size: 13px; overflow-x: auto; position: relative; }
-  .badge-snippet button { position: absolute; top: 8px; right: 8px; background: var(--accent); color: #0c0e10; border: 0; border-radius: 6px; padding: 4px 10px; font-size: 12px; cursor: pointer; }
-  details.tech-detail { margin-top: 18px; padding: 14px 18px; border: 1px solid var(--panel-stroke); border-radius: 10px; background: var(--panel); }
-  details.tech-detail summary { cursor: pointer; color: var(--accent); font-size: 14px; }
-  details.tech-detail[open] summary { margin-bottom: 12px; }
-  .verify-block { border: 1px solid var(--panel-stroke); background: var(--panel); border-radius: 12px; padding: 22px; margin: 28px 0; }
-  .pricing-footnote { margin-top: 18px; text-align: center; color: var(--muted); font-size: 14px; }
-  .waitlist-mini { margin-top: 10px; display: flex; gap: 6px; flex-wrap: wrap; }
-  .waitlist-mini input { flex: 1; min-width: 140px; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--panel-stroke); background: var(--bg); color: var(--text); font-size: 13px; }
-  .waitlist-mini button { padding: 8px 14px; border-radius: 6px; border: 0; background: var(--accent); color: #0c0e10; font-size: 13px; font-weight: 500; cursor: pointer; }
-  @media (max-width: 480px) {
-    .header-cta { display: none; } /* desktop only — mobile nav already short */
-    .trust-chips li { font-size: 12px; }
-    .counter-strip { font-size: 13px; gap: 12px; }
+  :root{
+    --paper:#f1ead8;
+    --paper-2:#f9f3e3;
+    --paper-3:#fbf6e6;
+    --ink:#15110d;
+    --rule:#5a4a35;
+    --rule-thin:#a8967a;
+    --muted:#5c5446;
+    --accent:#3a2f24;
+    --confirm:#3a5a3a;
+    --warn:#7a5230;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--paper);color:var(--ink);
+    font-family:"EB Garamond","Iowan Old Style","Apple Garamond",Garamond,Georgia,serif;
+    font-size:17px;line-height:1.6;}
+  a{color:var(--accent);}
+  code{font-family:"SF Mono","Menlo","Courier New",monospace;font-size:0.9em;background:#e9dfc1;padding:1px 5px;border-radius:2px;}
+
+  .sheet{max-width:1080px;margin:0 auto;padding:28px 32px 96px;}
+
+  /* Header */
+  header.site{display:flex;justify-content:space-between;align-items:center;padding:8px 0 18px;border-bottom:1px solid var(--rule-thin);font-size:12px;letter-spacing:0.16em;text-transform:uppercase;color:var(--muted);}
+  header.site nav a{color:var(--muted);text-decoration:none;margin-left:18px;padding-bottom:2px;border-bottom:1px solid transparent;}
+  header.site nav a:hover{color:var(--accent);border-bottom-color:var(--accent);}
+  header.site .brand-line{font-variant:small-caps;letter-spacing:0.24em;color:var(--accent);}
+
+  /* Letterhead masthead — minimal, left-aligned, generous whitespace */
+  .letterhead{margin:36px 0 28px;padding:42px 0 30px;
+    background:
+      radial-gradient(circle at 30% 20%, rgba(180,160,120,0.05), transparent 60%),
+      var(--paper);
+    border-bottom:1px solid var(--rule-thin);}
+  .letterhead-row{display:flex;align-items:center;gap:30px;max-width:780px;}
+  .letterhead .seal{width:118px;height:118px;flex-shrink:0;}
+  .letterhead .seal img, .letterhead .seal svg{width:100%;height:100%;display:block;}
+  .letterhead .stack{display:flex;flex-direction:column;align-items:flex-start;flex:1;}
+  .letterhead .wordmark{font-size:44px;letter-spacing:0.32em;text-transform:uppercase;font-weight:500;margin:0;line-height:1;color:var(--ink);font-family:"EB Garamond","Cormorant Garamond",Garamond,Georgia,serif;}
+  .letterhead .hairline{width:100%;max-width:380px;height:1px;background:var(--rule-thin);margin:14px 0 10px;}
+  .letterhead .tagline{font-size:11px;letter-spacing:0.42em;text-transform:uppercase;color:var(--muted);}
+  .letterhead .est{font-size:9px;letter-spacing:0.48em;text-transform:uppercase;color:var(--muted);margin-top:18px;}
+  @media (max-width:560px){
+    .letterhead-row{flex-direction:column;align-items:flex-start;gap:18px;}
+    .letterhead .wordmark{font-size:30px;letter-spacing:0.22em;}
+    .letterhead .hairline{max-width:240px;}
   }
 
-  /* ── Tab navigation for lower sections ──────────────────────────── */
-  .tabs {
-    display: flex;
-    gap: 4px;
-    margin: 32px 0 0;
-    padding: 0;
-    border-bottom: 1px solid var(--panel-stroke);
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-  }
-  .tabs::-webkit-scrollbar { display: none; }
-  .tab-btn {
-    padding: 12px 18px;
-    background: transparent;
-    border: 0;
-    color: var(--text-soft);
-    font-size: 14px;
-    font-weight: 500;
-    cursor: pointer;
-    border-bottom: 2px solid transparent;
-    white-space: nowrap;
-    transition: color 120ms, border-color 120ms;
-  }
-  .tab-btn:hover { color: var(--text); }
-  .tab-btn[aria-selected="true"] {
-    color: var(--accent);
-    border-bottom-color: var(--accent);
-  }
-  .tab-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
-  .tab-panel { display: none; padding-top: 28px; }
-  .tab-panel.active { display: block; }
-  @media (max-width: 600px) {
-    .tab-btn { padding: 10px 12px; font-size: 13px; }
+  /* Headline */
+  .hl{margin:32px 0 22px;text-align:center;}
+  .hl h2{font-size:32px;line-height:1.2;margin:0;font-weight:500;font-style:italic;color:var(--ink);}
+  .hl .deck{margin-top:8px;font-size:13px;letter-spacing:0.14em;text-transform:uppercase;color:var(--muted);}
+
+  /* Counter (drop zone) */
+  .counter-panel{margin:30px 0;border:2px solid var(--rule);background:var(--paper-2);padding:26px;display:grid;grid-template-columns:1.1fr 1fr;gap:24px;align-items:stretch;}
+  .counter-panel h3{margin:0 0 12px;font-size:13px;letter-spacing:0.22em;text-transform:uppercase;color:var(--accent);}
+  .counter-panel ol{margin:0;padding-left:20px;font-size:15px;line-height:1.7;}
+  .counter-panel ol li{margin-bottom:6px;}
+  .counter-panel ol li code{font-size:13px;}
+
+  .drop{border:2px dashed var(--rule);background:var(--paper-3);
+    padding:30px 22px;text-align:center;cursor:pointer;transition:background .2s,border-color .2s;
+    display:flex;flex-direction:column;justify-content:center;align-items:center;min-height:200px;}
+  .drop:hover, .drop.dragover{background:#f0e3b8;border-color:var(--accent);}
+  .drop strong{display:block;font-size:22px;font-variant:small-caps;letter-spacing:0.06em;margin-bottom:8px;}
+  .drop em{font-style:normal;color:var(--muted);font-size:13px;display:block;max-width:280px;}
+  .drop .or{margin:14px 0 6px;font-size:11px;letter-spacing:0.22em;text-transform:uppercase;color:var(--muted);}
+  .drop button{padding:10px 18px;background:var(--accent);color:var(--paper);border:0;font-family:inherit;font-size:13px;letter-spacing:0.14em;text-transform:uppercase;cursor:pointer;}
+  .drop button:hover{background:#241c14;}
+
+  /* Working state */
+  .status-line{margin:14px 0 0;padding:14px 18px;background:var(--paper-3);border-left:3px solid var(--rule);font-size:14px;display:none;}
+  .status-line.show{display:block;}
+  .status-line strong{font-variant:small-caps;letter-spacing:0.04em;}
+  .status-line.error{border-left-color:var(--warn);color:var(--warn);}
+  .status-line.success{border-left-color:var(--confirm);}
+  .status-line .field{font-family:"SF Mono","Menlo",monospace;font-size:12px;word-break:break-all;color:var(--accent);margin-top:4px;}
+
+  /* Ledger strip */
+  .ledger{margin:24px 0;border-top:1px solid var(--rule);border-bottom:1px solid var(--rule);padding:16px 0;
+    display:grid;grid-template-columns:repeat(5,1fr);gap:8px;text-align:center;}
+  .ledger .n{font-size:24px;font-variant-numeric:tabular-nums;color:var(--accent);}
+  .ledger .l{font-size:10px;letter-spacing:0.24em;text-transform:uppercase;color:var(--muted);margin-top:2px;}
+
+  /* Editorial columns */
+  .cols{column-count:3;column-gap:36px;column-rule:1px solid #c9bda0;margin-top:20px;}
+  .cols p{margin:0 0 14px;text-align:justify;hyphens:auto;font-size:16px;line-height:1.65;}
+  .cols h3{font-size:13px;letter-spacing:0.22em;text-transform:uppercase;color:var(--accent);margin:18px 0 6px;font-weight:600;break-after:avoid;}
+  .dropcap::first-letter{font-size:48px;line-height:1;float:left;margin:4px 8px 0 0;font-weight:600;color:var(--accent);}
+
+  /* Fees */
+  .fees{margin:36px 0 0;display:grid;grid-template-columns:repeat(3,1fr);gap:16px;}
+  .fee{border:1.5px solid var(--rule);padding:22px 18px;background:var(--paper-2);text-align:center;display:flex;flex-direction:column;justify-content:space-between;}
+  .fee .t{font-size:11px;letter-spacing:0.24em;text-transform:uppercase;color:var(--muted);}
+  .fee .p{font-size:30px;margin:8px 0 2px;}
+  .fee .d{font-size:14px;color:var(--muted);margin-bottom:14px;}
+  .fee a{display:inline-block;padding:10px 18px;border:1px solid var(--accent);color:var(--accent);text-decoration:none;font-size:12px;letter-spacing:0.22em;text-transform:uppercase;}
+  .fee a:hover{background:var(--accent);color:var(--paper);}
+  .fee.middle{background:var(--paper-3);border-width:2px;}
+
+  /* Verification block */
+  section.verify{margin:40px 0 0;border-top:3px double var(--rule);padding-top:28px;}
+  section.verify h2{font-size:13px;letter-spacing:0.32em;text-transform:uppercase;color:var(--muted);font-weight:500;margin:0 0 18px;text-align:center;}
+  .verify-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:18px;}
+  .vlevel{border:1px solid var(--rule-thin);background:var(--paper-2);padding:18px;}
+  .vlevel .tag{font-size:10px;letter-spacing:0.24em;text-transform:uppercase;color:var(--confirm);}
+  .vlevel h3{margin:6px 0 8px;font-size:17px;font-style:italic;}
+  .vlevel p{margin:0;font-size:14px;line-height:1.6;color:var(--ink);}
+
+  /* Clauses / footer */
+  .clauses{margin:42px 0 0;border-top:3px double var(--rule);padding-top:22px;font-size:13px;color:var(--muted);}
+  .clauses p{margin:0 0 10px;line-height:1.7;}
+  .clauses strong{color:var(--ink);font-style:italic;}
+
+  .endline{margin-top:36px;text-align:center;font-size:11px;letter-spacing:0.28em;text-transform:uppercase;color:var(--muted);border-top:1px solid var(--rule);padding-top:18px;}
+  .endline a{color:var(--muted);text-decoration:none;margin:0 14px;border-bottom:1px solid #c9bda0;padding-bottom:2px;}
+  .endline a:hover{color:var(--accent);}
+
+  /* Timezone */
+  .tz-block{margin-top:6px;}
+  .tz-primary{list-style:none;padding:0;margin:0;display:grid;grid-template-columns:1fr 1fr;gap:4px 18px;}
+  .tz-row{display:flex;justify-content:space-between;gap:10px;font-family:"SF Mono","Menlo",monospace;padding:2px 0;font-size:13px;}
+  .tz-row .tz-zone{color:var(--muted);font-size:11px;letter-spacing:0.14em;text-transform:uppercase;}
+  .tz-row .tz-val{font-variant-numeric:tabular-nums;}
+  .tz-row.tz-canonical .tz-val{color:var(--accent);font-weight:600;}
+  details.tz-featured-wrap, details.tz-all-wrap{margin-top:6px;border-top:1px dashed #c9bda0;padding-top:4px;}
+  details.tz-featured-wrap summary, details.tz-all-wrap summary{cursor:pointer;font-size:11px;letter-spacing:0.18em;text-transform:uppercase;color:var(--muted);padding:3px 0;}
+  details.tz-featured-wrap summary:hover, details.tz-all-wrap summary:hover{color:var(--accent);}
+  .tz-featured, .tz-all{list-style:none;padding:0;margin:4px 0 0;max-height:240px;overflow-y:auto;}
+  .tz-filter{width:100%;padding:6px 8px;font-family:"EB Garamond",Garamond,serif;font-size:14px;background:var(--paper-2);border:1px solid #c9bda0;color:var(--ink);margin:4px 0;}
+
+  @media (max-width:760px){
+    .cols{column-count:1;}
+    .counter-panel{grid-template-columns:1fr;}
+    .ledger{grid-template-columns:repeat(2,1fr);}
+    .fees{grid-template-columns:1fr;}
+    .mast{grid-template-columns:1fr;text-align:center;}
+    .mast .left, .mast .right{text-align:center;}
+    .mast .wordmark{font-size:36px;}
+    .verify-grid{grid-template-columns:1fr;}
+    .tz-primary{grid-template-columns:1fr;}
+    header.site{flex-direction:column;gap:8px;text-align:center;}
+    header.site nav a{margin:0 8px;}
   }
 </style>
 </head>
 <body>
+<div class="sheet">
 
-<header>
-  <div class="brand"><a href="/" style="color:inherit;text-decoration:none;">orphograph</a></div>
+<header class="site">
+  <div class="brand-line">Orphograph &nbsp;·&nbsp; Empirical Notary</div>
   <nav>
-    <a href="#how"     data-tab="how">how it works</a>
-    <a href="#pricing" data-tab="pricing">pricing</a>
-    <a href="#verify"  data-tab="verify">verify</a>
-    <a href="#faq"     data-tab="faq">faq</a>
-    <a href="/learn.html">learn</a>
-    <a href="/signin.html" id="nav-signin">sign in</a>
-    <a href="/account.html" id="nav-account" hidden>account</a>
-    <a href="#drop" class="header-cta">Anchor a file free</a>
+    <a href="/verify">Verify</a>
+    <a href="/learn.html">Method</a>
+    <a href="/about.html">Office</a>
+    <a href="/signin.html">Sign In</a>
   </nav>
 </header>
 
-<main>
-
-<!-- ============================================================== -->
-<!-- HERO: copy per spec, drop zone above the fold -->
-<!-- ============================================================== -->
-<section class="hero">
-  <h1>Proof your file existed — that outlives us, the platform, and you.</h1>
-  <p class="lede">
-    Drop a file. We timestamp it to Bitcoin in about 10 seconds.
-    You get a tiny receipt anyone can verify, forever, even if this site disappears.
-  </p>
-  <ul class="trust-chips">
-    <li>Your file never leaves your browser</li>
-    <li>Open-source verifier — verify without us</li>
-    <li>16 years and counting: Bitcoin has never been rewritten</li>
-  </ul>
-  <div id="pack-banner" class="pack-banner" hidden>
-    <strong>Pack active.</strong>
-    <span id="pack-balance-text">checking balance…</span>
-    <button id="pack-clear" class="link">remove</button>
+<div class="letterhead">
+  <div class="letterhead-row">
+    <div class="seal" aria-hidden="true">
+      <img src="/seal.svg" alt="Orphograph seal — a gridded globe enclosing a cosmic egg wreathed by a serpent" width="118" height="118">
+    </div>
+    <div class="stack">
+      <h1 class="wordmark">Orphograph</h1>
+      <div class="hairline"></div>
+      <div class="tagline">Strategy &nbsp;·&nbsp; Stewardship</div>
+      <div class="est">Est. MMXXVI</div>
+    </div>
   </div>
-</section>
-
-<!-- Drop zone — moved above the fold per spec -->
-<section id="drop" class="drop" tabindex="0" aria-label="File drop zone">
-  <input type="file" id="file" hidden>
-  <div class="drop-inner">
-    <div class="drop-icon">＋</div>
-    <div class="drop-text">Drop a file here, or <button id="pick" class="link" type="button">tap to choose</button></div>
-    <div class="drop-sub">Ready. Nothing uploads — SHA-256 is computed locally in your browser.</div>
-  </div>
-</section>
-
-<p style="text-align:center;margin:14px 0 8px;font-size:14px;color:var(--text-soft);">
-  Already have a receipt? <a href="#verify">Verify it →</a>
-</p>
-
-<!-- ============================================================== -->
-<!-- LIVE COUNTER STRIP -->
-<!-- ============================================================== -->
-<div class="counter-strip" id="counter-strip" aria-live="polite">
-  <span><strong id="c-files">—</strong> files timestamped</span>
-  <span class="sep">·</span>
-  <span><strong id="c-verifications">—</strong> receipts verified</span>
-  <span class="sep">·</span>
-  <span><strong id="c-blocks">—</strong> Bitcoin blocks anchored</span>
 </div>
 
-<!-- Optional rows previously hidden by default — kept for the anchor flow -->
-<section id="email-row" class="email-row" hidden>
-  <label for="notify-email">Email for your receipt (Pack only):</label>
-  <input id="notify-email" type="email" placeholder="you@example.com" autocomplete="email">
-</section>
+<div class="hl" style="margin-top:24px;">
+  <div class="deck" style="font-size:11px;letter-spacing:0.32em;text-transform:uppercase;color:var(--muted);">Empirical Notary &nbsp;·&nbsp; Bitcoin Anchored &nbsp;·&nbsp; A Bilateral Service</div>
+</div>
 
-<section id="privacy-row" class="privacy-row">
-  <label class="privacy-toggle">
-    <input type="checkbox" id="include-filename">
-    <span>Include filename in receipt (default: off — only the hash is sent)</span>
-  </label>
-  <label class="privacy-toggle">
-    <input type="checkbox" id="include-exif">
-    <span>Include camera metadata (EXIF camera, lens, capture time — GPS dropped)</span>
-  </label>
-  <label class="privacy-toggle" id="private-receipt-row" hidden>
-    <input type="checkbox" id="private-receipt">
-    <span>Make this receipt private (only you can view — Pro subscribers)</span>
-  </label>
-  <p class="hint small">
-    By default, only the cryptographic fingerprint reaches our server.
-    Optional metadata strengthens proof-of-existence in disputes; GPS coordinates
-    are always stripped client-side before sending.
-  </p>
-</section>
+<div class="hl">
+  <h2>"That a file existed by no later than this Bitcoin block."</h2>
+  <div class="deck">That is the entire claim · And it is verifiable by anyone</div>
+</div>
 
-<section id="attest-row" class="attest-row">
-  <details class="attest-details">
-    <summary>Add authorship claim (optional, anchored with the receipt)</summary>
-    <p class="hint small">
-      A brief statement about the file. Anchored alongside the hash to Bitcoin
-      so its existence at this date is provable. Does not legally establish
-      authorship — it's an additional signed piece of evidence.
-    </p>
-    <label for="attest-claim">Claim</label>
-    <input id="attest-claim" type="text" maxlength="500"
-           placeholder="I took this photo on a particular date in a particular place.">
-    <label for="attest-author">Author (optional)</label>
-    <input id="attest-author" type="text" maxlength="200"
-           placeholder="Your name or handle">
-    <label for="attest-license">License (optional)</label>
-    <input id="attest-license" type="text" maxlength="100"
-           placeholder="e.g. CC-BY 4.0, All rights reserved">
-  </details>
-</section>
-
-<section id="status" class="status" hidden aria-live="polite">
-  <div class="step" data-step="hash">Computing hash…</div>
-  <div class="step" data-step="post">Sending to calendars…</div>
-  <div class="step" data-step="cals">Stamping to 5 Bitcoin calendars…</div>
-  <div class="step" data-step="done">Receipt ready.</div>
-</section>
-
-<section id="receipt" class="receipt" hidden>
-  <h2>Receipt</h2>
-  <dl>
-    <dt>Receipt ID</dt><dd id="r-id"></dd>
-    <dt>SHA-256</dt><dd id="r-hash" class="mono"></dd>
-    <dt>Anchored at (UTC)</dt><dd id="r-time"></dd>
-    <dt>Calendars</dt><dd id="r-cals"></dd>
-  </dl>
-  <div id="r-warn" class="warn" hidden></div>
-  <div class="actions">
-    <button id="download">Download receipt JSON</button>
-    <button id="copy">Copy receipt ID</button>
-    <button id="share">Copy share link</button>
-    <a id="view-receipt" class="btn-link" target="_blank" rel="noopener">View / print receipt →</a>
-  </div>
-  <p class="hint critical">
-    Save this receipt now — without it you cannot prove anything later.
-    Bitcoin block-pinning upgrades within ~1 hour; the OTS proof becomes fully
-    block-attested after that.
-  </p>
-</section>
-
-<!-- ============================================================== -->
-<!-- TABBED CONTENT (everything below the conversion funnel) -->
-<!-- ============================================================== -->
-<nav class="tabs" role="tablist" aria-label="Page sections">
-  <button class="tab-btn" role="tab" id="tab-what"    aria-controls="panel-what"    aria-selected="true">What it is</button>
-  <button class="tab-btn" role="tab" id="tab-how"     aria-controls="panel-how"     aria-selected="false">How it works</button>
-  <button class="tab-btn" role="tab" id="tab-verify"  aria-controls="panel-verify"  aria-selected="false">Verify</button>
-  <button class="tab-btn" role="tab" id="tab-pricing" aria-controls="panel-pricing" aria-selected="false">Pricing</button>
-  <button class="tab-btn" role="tab" id="tab-badge"   aria-controls="panel-badge"   aria-selected="false">Badge</button>
-  <button class="tab-btn" role="tab" id="tab-faq"     aria-controls="panel-faq"     aria-selected="false">FAQ</button>
-</nav>
-
-<!-- ===== Tab panel: WHAT IT IS ===== -->
-<section class="tab-panel active" role="tabpanel" id="panel-what" aria-labelledby="tab-what">
-<section class="explainer">
-  <h2>What is this, in plain English</h2>
-  <p>
-    Imagine you took a photo this morning and need to prove, years from now,
-    that it existed today. A social-media post date is not durable evidence:
-    accounts can lapse, platforms change, timestamps can be edited. You want
-    something that doesn't depend on any one company, including ours.
-  </p>
-  <p>
-    You drop a file. Your browser computes a unique fingerprint of it — the file
-    itself never leaves your machine. We register that fingerprint to Bitcoin,
-    the most-attacked, most-survived database in history. You download a tiny
-    receipt. That's it.
-  </p>
-  <p>
-    Bitcoin is maintained by ~50,000 independent computers worldwide. To erase
-    your proof, someone would need to convince every one of them. That's never
-    happened in 16 years. Your receipt verifies against the chain directly —
-    you don't need us alive to read it.
-  </p>
-</section>
-
-<!-- USE CASE CARDS (still inside the "What it is" tab) -->
-<section class="use-cases">
-  <h2>Who this is for</h2>
-  <div class="use-grid">
-    <div class="use">
-      <h3>Working artists in the AI era</h3>
-      <p><strong>Problem:</strong> Your work shows up in a generative AI dataset and you need to prove it predates the model.</p>
-      <p><strong>Outcome:</strong> A Bitcoin timestamp from before the training cutoff. Hard to argue with.</p>
-    </div>
-    <div class="use">
-      <h3>Researchers establishing a date of record</h3>
-      <p><strong>Problem:</strong> A draft, a dataset, or a finding whose creation date may later be questioned.</p>
-      <p><strong>Outcome:</strong> Anchor the file the moment it is finalized. The receipt establishes a date of record that anyone can verify against Bitcoin.</p>
-    </div>
-    <div class="use">
-      <h3>Freelancers delivering to clients</h3>
-      <p><strong>Problem:</strong> "This isn't what we agreed to" — and the email thread is gone.</p>
-      <p><strong>Outcome:</strong> Anchor the deliverable on send day. Cryptographic proof of what you actually sent and when.</p>
-    </div>
-    <div class="use">
-      <h3>Long-term archivists</h3>
-      <p><strong>Problem:</strong> Family history, research data, oral recordings — the date matters and you need it verifiable in 30 years.</p>
-      <p><strong>Outcome:</strong> A receipt that works without depending on any company surviving.</p>
-    </div>
-  </div>
-</section>
-
-</section><!-- /panel-what -->
-
-<!-- ===== Tab panel: HOW IT WORKS ===== -->
-<section class="tab-panel" role="tabpanel" id="panel-how" aria-labelledby="tab-how">
-<section id="how">
-  <h2>How it works</h2>
-  <ol class="steps">
-    <li>
-      <strong>Drop a file.</strong>
-      Your browser computes a fingerprint locally — the file stays on your machine.
-    </li>
-    <li>
-      <strong>Wait ~10 seconds.</strong>
-      Five independent timestamp servers confirm. Green checkmarks appear as each one finishes.
-    </li>
-    <li>
-      <strong>Download your receipt.</strong>
-      A 3 KB file. Save it next to your original. Done.
-    </li>
-  </ol>
-  <details class="tech-detail">
-    <summary>Show the technical detail</summary>
+<!-- Counter (drop zone + procedure) -->
+<div class="counter-panel">
+  <div>
+    <h3>The Procedure</h3>
     <ol>
-      <li>Your browser computes the SHA-256 of your file using <code>crypto.subtle.digest</code> — the file never leaves your machine.</li>
-      <li>The 32-byte hash is sent to our server, which submits it to five OpenTimestamps calendars (a.pool, b.pool, alice, finney, btc.catallaxy).</li>
-      <li>Each calendar aggregates many hashes into a single Merkle root and writes it to a Bitcoin transaction (~hourly).</li>
-      <li>You receive a receipt with the hash, timestamp, and five independently-verifiable OTS proofs.</li>
-      <li>To prove existence later, anyone can re-hash the original file and check the receipt — no trust in us required.</li>
-      <li>We also embed a SHA-512 sibling witness in every receipt as a quantum-era hedge.</li>
+      <li>Place a file at the counter. Your browser reads it locally.</li>
+      <li>Your browser computes its <code>SHA-256</code> and <code>SHA-512</code> fingerprints. The file does not move.</li>
+      <li>The fingerprints are submitted to five independent OpenTimestamps calendars.</li>
+      <li>You receive a 16-character receipt identifier and five small <code>.ots</code> proof files.</li>
+      <li>Within roughly one hour the fingerprint is committed to a Bitcoin block. The receipt's status flips from <em>pending</em> to <em>confirmed</em>.</li>
     </ol>
-  </details>
-</section>
-
-</section><!-- /panel-how -->
-
-<!-- ===== Tab panel: VERIFY ===== -->
-<section class="tab-panel" role="tabpanel" id="panel-verify" aria-labelledby="tab-verify">
-<section id="verify" class="verify-block">
-  <h2>Verify any receipt — no account needed, no upload, no trust required.</h2>
-  <p>
-    Re-hash your file in this browser and check it against any receipt ID.
-    Same client-side privacy: nothing uploads.
-  </p>
-  <div class="verify-row">
-    <input id="v-file" type="file">
-    <input id="v-id" type="text" placeholder="receipt ID (e.g. ChvTMbYLIACHEHJT)">
-    <button id="v-go">Verify</button>
   </div>
-  <pre id="v-out" class="mono"></pre>
-  <p class="hint small">
-    Prefer the command line?
-    <a href="https://github.com/Orphograph/Orphograph/tree/master/dist/orphograph-verify" target="_blank" rel="noopener">Use the open-source verifier on GitHub</a> — same answer, without us.
-  </p>
-</section>
+  <label class="drop" for="drop-input" id="drop">
+    <strong>Counter</strong>
+    <em>Place a file here, or click to choose</em>
+    <div class="or">— or —</div>
+    <button type="button" id="drop-btn">Choose a file</button>
+    <input id="drop-input" type="file" hidden>
+  </label>
+</div>
 
-<!-- ============================================================== -->
-<!-- LIVE SAMPLE RECEIPT — pinned to a real anchored ID -->
-<!-- ============================================================== -->
-<section id="sample" class="sample">
-  <h2>See a real receipt before you buy</h2>
-  <p>
-    This is an actual Orphograph receipt anchored to Bitcoin via all 5 OpenTimestamps calendars.
-    Click verify and watch the chain of custody check live against the same server you'd use.
-  </p>
-  <div id="sample-card" class="receipt">
-    <dl>
-      <dt>Receipt ID</dt><dd id="s-id" class="mono">ChvTMbYLIACHEHJT</dd>
-      <dt>SHA-256</dt><dd id="s-hash" class="mono">4965300960806ca104a0a4f40101385cbace7704efc0b46ff2eb70fcee3e2d0d</dd>
-      <dt>Source file</dt><dd><a id="s-file" href="/api/receipt/ChvTMbYLIACHEHJT/source" download>source.txt</a></dd>
-      <dt>Anchored at (UTC)</dt><dd>2026-05-16T03:30:19+00:00</dd>
-      <dt>Calendars</dt><dd>5 / 5 succeeded</dd>
-    </dl>
-    <div class="actions">
-      <button id="s-verify">Verify this sample</button>
-      <a id="s-receipt-dl" href="/api/receipt/ChvTMbYLIACHEHJT.zip" class="btn-link" download>Download receipt bundle (ZIP)</a>
-      <a href="/r/ChvTMbYLIACHEHJT" class="btn-link" target="_blank" rel="noopener">View public receipt page →</a>
-      <button id="s-share" type="button" class="btn-link" data-copy="https://orphograph.com/r/ChvTMbYLIACHEHJT">Copy share link</button>
+<div class="status-line" id="status"></div>
+
+<!-- Ledger strip (live counts from /api/stats) -->
+<div class="ledger" aria-label="public ledger">
+  <div><div class="n" id="c-anchors">—</div><div class="l">Files Recorded</div></div>
+  <div><div class="n" id="c-blocks">—</div><div class="l">Bitcoin Blocks</div></div>
+  <div><div class="n">5 / 5</div><div class="l">Calendars Live</div></div>
+  <div><div class="n">SHA‑256 / 512</div><div class="l">Hash Functions</div></div>
+  <div><div class="n">$0.00</div><div class="l">Marginal On‑Chain</div></div>
+</div>
+
+<!-- Editorial columns -->
+<div class="cols">
+  <h3>The Office</h3>
+  <p class="dropcap">Orphograph is an empirical notary. Its sole function is to record, in a manner mathematically permanent and independently verifiable, that a file existed on or before a specific block of the Bitcoin blockchain. The office issues no opinion on authorship, ownership, or legality. It issues only the fact.</p>
+
+  <h3>What Crosses the Counter</h3>
+  <p>Only the SHA-256 fingerprint of your file crosses the counter — a 64-character number that is one-way and content-blind. The file itself remains on your machine and is read by your browser alone. The office cannot reconstruct it, identify it, or transmit it. There is no copy to retrieve and none was ever collected.</p>
+
+  <h3>Why the Chain</h3>
+  <p>Bitcoin has not reorganized beyond a handful of blocks in sixteen years of operation. A block from one hour ago is, for every practical purpose, immutable. By submitting your fingerprint to five independent OpenTimestamps calendars, we link it through public mathematics to a block whose proof-of-work cannot be undone.</p>
+
+  <h3>What Survives the Office</h3>
+  <p>The receipts. If this office closes, changes hands, or is forgotten, every receipt it ever issued continues to verify against the chain using open-source software. There is no proprietary verifier, no license key, no captive format. The instrument outlives the institution. <em>That is the contract.</em></p>
+
+  <h3>What the Office Refuses</h3>
+  <p>Claims of court admissibility. Promises of legal weight. Statements about authorship. Sale of customer identity. Per-receipt blockchain fees. Hidden lock-in. Marketing language untethered from the cryptography. Anything that would require the customer to trust us in order for the instrument to work.</p>
+
+  <h3>Why It Is Cheap</h3>
+  <p>OpenTimestamps batches many fingerprints into a single Bitcoin transaction roughly once per hour. The marginal on-chain cost of one additional fingerprint is, in arithmetic terms, near zero. This is why the first three recordings every twenty-four hours are free — not as inducement, but as architecture.</p>
+</div>
+
+<!-- Fees -->
+<section style="margin-top:36px;">
+  <h2 style="font-size:13px;letter-spacing:0.32em;text-transform:uppercase;color:var(--muted);font-weight:500;margin:0 0 18px;text-align:center;">— Schedule of Fees —</h2>
+  <div class="fees">
+    <div class="fee">
+      <div class="t">First Party</div>
+      <div class="p">$0</div>
+      <div class="d">Three recordings every 24 hours, perpetual. Server-enforced.</div>
+      <a href="#drop">Begin</a>
     </div>
-    <pre id="s-out" class="mono"></pre>
-  </div>
-</section>
-
-</section><!-- /panel-verify (includes sample receipt above) -->
-
-<!-- ===== Tab panel: PRICING ===== -->
-<section class="tab-panel" role="tabpanel" id="panel-pricing" aria-labelledby="tab-pricing">
-<section id="pricing">
-  <h2>Pricing</h2>
-  <div class="tiers">
-    <div class="tier">
-      <h3>Free</h3>
-      <p class="price">$0</p>
-      <ul>
-        <li>3 timestamps every 24 hours</li>
-        <li>Receipt JSON download</li>
-        <li>Standalone verifier access</li>
-      </ul>
-      <p class="tier-cta"><a class="btn" href="#drop">Drop a file above</a></p>
+    <div class="fee middle">
+      <div class="t">Pack of Fifty</div>
+      <div class="p">$29</div>
+      <div class="d">One-time. No subscription. No expiry.</div>
+      <a href="/buy.html">Purchase</a>
     </div>
-
-    <div class="tier highlight">
-      <h3>Pro</h3>
-      <div class="billing-toggle" role="tablist" aria-label="Billing cadence">
-        <button type="button" id="billing-monthly" class="billing-btn active" role="tab" aria-selected="true">Monthly</button>
-        <button type="button" id="billing-annual" class="billing-btn" role="tab" aria-selected="false">Annual <span class="save-pill">save $18</span></button>
-      </div>
-      <p class="price">
-        <span id="personal-price">$9</span>
-        <span class="price-sub" id="personal-cadence">/ month</span>
-      </p>
-      <p class="muted small" id="personal-equiv" hidden></p>
-      <ul>
-        <li>Unlimited timestamps</li>
-        <li>Email-delivered receipts with PDF summary</li>
-        <li>Embeddable "Verified" badge for your portfolio</li>
-        <li>Timestamp history with search</li>
-        <li>Priority verification queue</li>
-      </ul>
-      <p class="tier-cta">
-        <a class="btn" id="buy-personal" data-stripe-placeholder="true">Start free, upgrade anytime</a>
-      </p>
-      <p class="tier-note muted">Subscriptions activate once Stripe live-mode is connected. Leave email to be first in line.</p>
-      <form class="waitlist-mini" data-interest="pro">
-        <input type="email" placeholder="you@example.com" autocomplete="email" required>
-        <button type="submit">Notify me</button>
-      </form>
-    </div>
-
-    <div class="tier">
-      <h3>Project Pack</h3>
-      <p class="price">$29 <span class="price-sub">one-time</span></p>
-      <ul>
-        <li>50 timestamps, never expire</li>
-        <li>For one-off projects: weddings, document deliveries, research batches</li>
-        <li>Receipt bundle as ZIP</li>
-      </ul>
-      <p class="tier-cta">
-        <a class="btn" id="buy-pack" data-stripe-placeholder="true">Buy a Pack (card)</a>
-      </p>
-      <p class="tier-cta" style="margin-top:6px;">
-        <a class="btn" href="/pay/btc.html" style="background:#f7931a;color:#fff;">₿ Pay with Bitcoin</a>
-      </p>
-      <p class="tier-note muted">Card checkout activating soon. Bitcoin pays now via any BTC wallet (Phantom, Electrum, hardware, exchange).</p>
-      <p class="coupon-pill muted" id="coupon-pill" hidden></p>
-      <form class="waitlist-mini" data-interest="pack">
-        <input type="email" placeholder="you@example.com" autocomplete="email" required>
-        <button type="submit">Notify me</button>
-      </form>
+    <div class="fee">
+      <div class="t">Standing Order</div>
+      <div class="p">$9 <span style="font-size:14px;color:var(--muted);">/ month</span></div>
+      <div class="d">Unrestricted recordings. Cancel at will.</div>
+      <a href="/buy.html?plan=pro">Subscribe</a>
     </div>
   </div>
-  <p class="pricing-footnote">
-    All tiers use the same cryptography. Free receipts are just as durable as paid ones.
-  </p>
 </section>
 
-</section><!-- /panel-pricing -->
-
-<!-- ===== Tab panel: BADGE ===== -->
-<section class="tab-panel" role="tabpanel" id="panel-badge" aria-labelledby="tab-badge">
-<section class="badge-section">
-  <h2>Show your work is anchored</h2>
-  <p>
-    Paste one line of HTML on your portfolio. Visitors see a
-    "Timestamped to Bitcoin" badge that links to your receipt.
-    No tracking, no third-party fetches.
-  </p>
-  <div class="badge-snippet">
-    <button type="button" id="badge-copy">Copy</button>
-    <code id="badge-snippet-code">&lt;a href=&quot;https://orphograph.com/r/YOUR_RECEIPT_ID&quot;&gt;
-  &lt;img src=&quot;https://orphograph.com/badge/YOUR_RECEIPT_ID.svg&quot;
-       alt=&quot;Timestamped to Bitcoin&quot;
-       width=&quot;180&quot; height=&quot;40&quot;&gt;
-&lt;/a&gt;</code>
-  </div>
-  <p class="hint small">
-    Replace <code>YOUR_RECEIPT_ID</code> with the ID from any receipt you've anchored.
-    The badge is a static SVG — no JavaScript, no analytics, no callback.
-  </p>
-</section>
-
-</section><!-- /panel-badge -->
-
-<!-- ===== Tab panel: FAQ ===== -->
-<section class="tab-panel" role="tabpanel" id="panel-faq" aria-labelledby="tab-faq">
-<section id="faq">
-  <h2>FAQ</h2>
-  <div class="faq">
-    <h3>Is this legal evidence?</h3>
-    <p>
-      Strong evidence that a file existed at a specific moment. Useful for
-      deterring disputes, establishing priority of creation, and supporting
-      other evidence in negotiation or court. Not a replacement for a notary —
-      we're not a qualified trust service provider under eIDAS, and we don't
-      guarantee admissibility. For litigation, talk to a digital evidence
-      specialist.
-    </p>
-
-    <h3>What happens if your site disappears?</h3>
-    <p>
-      Your receipt and the five OTS proof files keep working. The
-      <a href="https://github.com/Orphograph/Orphograph/tree/master/dist/orphograph-verify" target="_blank" rel="noopener">open-source verifier</a>
-      reads them without us. The proofs live on Bitcoin's chain, not our
-      server. Save the receipt locally; that's all you need.
-    </p>
-
-    <h3>How is this different from a social-media post date or sending myself an email?</h3>
-    <p>
-      Platform timestamps depend on the platform continuing to exist and on
-      its internal records. Email timestamps depend on email providers.
-      A Bitcoin timestamp depends on no single party — it is verified by
-      tens of thousands of independent computers and has not been rewritten
-      in sixteen years.
-    </p>
-
-    <h3>Do you ever see my file?</h3>
-    <p>
-      No. SHA-256 is computed in your browser. We only ever receive a
-      64-character fingerprint. There is no upload of the file itself.
-    </p>
-
-    <h3>How is this different from OpenTimestamps directly?</h3>
-    <p>
-      OpenTimestamps is the protocol we use. It's free if you're comfortable
-      with a Python CLI. We provide a browser flow, emailed receipts, a hosted
-      verifier, and a badge system. The cryptography is identical; you're
-      paying for convenience.
-    </p>
-
-    <h3>Can I embed a verified badge?</h3>
-    <p>
-      Yes — one line of HTML. See the
-      <a href="#" id="faq-badge-link">badge section above</a>.
-    </p>
-
-    <h3>Is this quantum-safe?</h3>
-    <p>
-      The proof binding is hash-based, which resists quantum attacks far
-      better than signature schemes. We also embed a SHA-512 sibling witness
-      in every receipt as an extra hedge.
-      Technical detail at <a href="/security.html">/security</a>.
-    </p>
-
-    <h3>Who's behind this?</h3>
-    <p>
-      Built and operated by a small team committed to keeping the codebase
-      auditable and the surface area small. The verifier is open source so
-      your proofs outlive any operator — including us. For sensitive use
-      cases (legal, journalism), contact us at
-      <a href="mailto:hello@orphograph.com">hello@orphograph.com</a> for
-      additional context.
-    </p>
+<!-- Verification levels -->
+<section class="verify">
+  <h2>— Verification of an Instrument —</h2>
+  <div class="verify-grid">
+    <div class="vlevel">
+      <div class="tag">Method I · One Click</div>
+      <h3>Open the receipt page</h3>
+      <p>Every receipt has a public URL: <code>/r/&lt;id&gt;</code>. The page shows the fingerprint, calendar status, the Bitcoin block once mined, and a drop-zone to re-hash any file and check the match in your browser.</p>
+    </div>
+    <div class="vlevel">
+      <div class="tag">Method II · Open Source</div>
+      <h3>Run the open-source verifier</h3>
+      <p>A small standalone tool, on your computer. Hashes the file, reads the <code>.ots</code> proof files, talks to the OpenTimestamps calendars, reports pass or fail. <a href="/learn.html#three-ways">How →</a></p>
+    </div>
+    <div class="vlevel">
+      <div class="tag">Method III · Trustless</div>
+      <h3>Verify against Bitcoin directly</h3>
+      <p>Use the official OpenTimestamps client against your own Bitcoin node. The office is not in the loop. Math and proof-of-work are the entire trust surface. <a href="/learn.html#chain">How →</a></p>
+    </div>
   </div>
 </section>
 
-</section><!-- /panel-faq -->
+<!-- Time anchor display -->
+<section style="margin:40px 0 0;border-top:1px solid var(--rule-thin);padding-top:22px;">
+  <h2 style="font-size:13px;letter-spacing:0.32em;text-transform:uppercase;color:var(--muted);font-weight:500;margin:0 0 14px;text-align:center;">— This Page, In Every Time Zone —</h2>
+  <p style="text-align:center;font-size:14px;color:var(--muted);margin:0 0 10px;">The most recently anchored receipt was issued at:</p>
+  <div class="tz-block" id="latest-tz-block" data-utc="2026-05-16T15:21:38Z" style="max-width:680px;margin:0 auto;"></div>
+</section>
 
-</main>
+<!-- Clauses -->
+<div class="clauses">
+  <p><strong>On legality.</strong> Orphograph is not a notary public, nor a registered timestamping authority under eIDAS or equivalent statute. Its receipts are verifiable cryptographic facts, not legal opinions. Admissibility in any jurisdiction is determined by counsel and the relevant court — not by this office.</p>
+  <p><strong>On privacy.</strong> Files are hashed in the customer's browser and never transmitted. The office retains no copy of the original. The receipt contains the fingerprint, the time of submission, and the calendar attestations — nothing more, unless the customer voluntarily attaches metadata.</p>
+  <p><strong>On survival.</strong> Receipts verify by reference to the Bitcoin blockchain, using open-source software (<a href="https://github.com/opentimestamps/opentimestamps-client" rel="noopener" style="color:var(--accent);">OpenTimestamps</a>) that does not depend on this office continuing to exist.</p>
+  <p><strong>On the guarantee.</strong> The privacy contract of this service is <em>structural</em>, not promissory. Your file is never transmitted, by anyone, by any tool, to any party. The architecture cannot disclose what it never received — and that property holds regardless of who reads, writes, or maintains the code.</p>
+</div>
 
-<!-- ============================================================== -->
-<!-- FOOTER — consolidated -->
-<!-- ============================================================== -->
-<footer>
-  <small>
-    <a href="/about.html">About</a> ·
-    <a href="/learn.html">Learn</a> ·
-    <a href="/press.html">Press</a> ·
-    <a href="/docs/api.html">API</a> ·
-    <a href="/terms.html">Terms</a> ·
-    <a href="/privacy.html">Privacy</a> ·
-    <a href="/status.html">Status</a> ·
-    <a href="/stats.html">Stats</a> ·
-    <a href="https://github.com/Orphograph/Orphograph" target="_blank" rel="noopener">GitHub</a> ·
-    <a href="mailto:hello@orphograph.com">Contact</a>
-  </small>
-  <p style="text-align:center;margin-top:8px;color:var(--muted);font-size:13px;">
-    We never see your file.
-  </p>
-  <p style="text-align:right;margin-top:4px;color:var(--muted);font-size:12px;">
-    © Orphograph 2026
-  </p>
-</footer>
+<div class="endline">
+  <a href="/verify">Verify a Receipt</a>
+  <a href="/learn.html">Method</a>
+  <a href="/about.html">Office</a>
+  <a href="/terms.html">Terms</a>
+  <a href="/privacy.html">Privacy</a>
+  <a href="https://github.com/Orphograph/Orphograph" rel="noopener">Open Source</a>
+</div>
 
-<!-- Hidden anchor placeholders for app.js back-compat (verifier link IDs) -->
-<a id="verifier-link" href="https://github.com/Orphograph/Orphograph/tree/master/dist/orphograph-verify" hidden></a>
-<a id="verifier-link-footer" href="https://github.com/Orphograph/Orphograph/tree/master/dist/orphograph-verify" hidden></a>
+</div>
 
-<script src="/exif.js"></script>
-<script src="/app.js"></script>
-<script src="/landing.js"></script>
+<script src="/timezones.js"></script>
+<script src="/v2.js"></script>
 </body>
 </html>
