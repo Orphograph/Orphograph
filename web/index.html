@@ -4,320 +4,553 @@
 <meta charset="utf-8">
 <title>Orphograph — Empirical Notary · Bitcoin-Anchored</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="description" content="An empirical notary. Present a file; receive a verifiable Bitcoin-anchored fingerprint that proves it existed by no later than the recorded block. The file does not leave your browser.">
-<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<meta name="theme-color" content="#f6f1e3">
+<meta name="description" content="An empirical notary. Drop a file in your browser; receive a Bitcoin-anchored proof it existed by the recorded block. The file never leaves your machine.">
+<link rel="icon" type="image/png" href="/seal.png">
 <meta property="og:title" content="Orphograph — Empirical Notary">
 <meta property="og:description" content="Bitcoin-anchored proof a file existed. The file does not leave your browser.">
+<meta property="og:image" content="/seal.png">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://orphograph.com/">
 <meta name="twitter:card" content="summary_large_image">
 <style>
   :root{
-    --paper:#f1ead8;
-    --paper-2:#f9f3e3;
-    --paper-3:#fbf6e6;
-    --ink:#15110d;
-    --rule:#5a4a35;
-    --rule-thin:#a8967a;
-    --muted:#5c5446;
-    --accent:#3a2f24;
-    --confirm:#3a5a3a;
-    --warn:#7a5230;
+    --paper:        #f7f1e3;
+    --paper-soft:   #fbf7ea;
+    --paper-card:   #ffffff;
+    --ink:          #14110d;
+    --ink-2:        #2c2620;
+    --muted:        #6b6354;
+    --muted-2:      #948a76;
+    --line:         #d9cfb6;
+    --line-soft:    #e9e1cb;
+    --accent:       #3a2f24;
+    --accent-warm:  #b8835a;
+    --confirm:      #3a6a4c;
+    --warn:         #a65a30;
+    --shadow-1: 0 1px 2px rgba(60, 40, 20, 0.04), 0 2px 6px rgba(60, 40, 20, 0.04);
+    --shadow-2: 0 4px 12px rgba(60, 40, 20, 0.06), 0 12px 32px rgba(60, 40, 20, 0.06);
+    --shadow-3: 0 12px 28px rgba(60, 40, 20, 0.08), 0 24px 64px rgba(60, 40, 20, 0.06);
+    --radius-sm: 8px;
+    --radius:    14px;
+    --radius-lg: 22px;
+    --serif: "EB Garamond", "Cormorant Garamond", "Iowan Old Style", Garamond, Georgia, serif;
+    --sans:  -apple-system, BlinkMacSystemFont, "Inter", "Söhne", "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+    --mono:  "JetBrains Mono", "SF Mono", "Menlo", "Roboto Mono", monospace;
   }
-  *{box-sizing:border-box;}
-  html,body{margin:0;padding:0;background:var(--paper);color:var(--ink);
-    font-family:"EB Garamond","Iowan Old Style","Apple Garamond",Garamond,Georgia,serif;
-    font-size:17px;line-height:1.6;}
-  a{color:var(--accent);}
-  code{font-family:"SF Mono","Menlo","Courier New",monospace;font-size:0.9em;background:#e9dfc1;padding:1px 5px;border-radius:2px;}
-
-  .sheet{max-width:1080px;margin:0 auto;padding:28px 32px 96px;}
-
-  /* Header */
-  header.site{display:flex;justify-content:space-between;align-items:center;padding:8px 0 18px;border-bottom:1px solid var(--rule-thin);font-size:12px;letter-spacing:0.16em;text-transform:uppercase;color:var(--muted);}
-  header.site nav a{color:var(--muted);text-decoration:none;margin-left:18px;padding-bottom:2px;border-bottom:1px solid transparent;}
-  header.site nav a:hover{color:var(--accent);border-bottom-color:var(--accent);}
-  header.site .brand-line{font-variant:small-caps;letter-spacing:0.24em;color:var(--accent);}
-
-  /* Letterhead masthead — minimal, left-aligned, generous whitespace */
-  .letterhead{margin:36px 0 28px;padding:42px 0 30px;
+  *,*::before,*::after{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0;
     background:
-      radial-gradient(circle at 30% 20%, rgba(180,160,120,0.05), transparent 60%),
+      radial-gradient(1200px 600px at 80% -10%, rgba(184, 131, 90, 0.06), transparent 60%),
+      radial-gradient(900px 500px at -10% 30%, rgba(58, 47, 36, 0.04), transparent 60%),
       var(--paper);
-    border-bottom:1px solid var(--rule-thin);}
-  .letterhead-row{display:flex;align-items:center;gap:30px;max-width:780px;}
-  .letterhead .seal{width:118px;height:118px;flex-shrink:0;}
-  .letterhead .seal img, .letterhead .seal svg{width:100%;height:100%;display:block;}
-  .letterhead .stack{display:flex;flex-direction:column;align-items:flex-start;flex:1;}
-  .letterhead .wordmark{font-size:44px;letter-spacing:0.32em;text-transform:uppercase;font-weight:500;margin:0;line-height:1;color:var(--ink);font-family:"EB Garamond","Cormorant Garamond",Garamond,Georgia,serif;}
-  .letterhead .hairline{width:100%;max-width:380px;height:1px;background:var(--rule-thin);margin:14px 0 10px;}
-  .letterhead .tagline{font-size:11px;letter-spacing:0.42em;text-transform:uppercase;color:var(--muted);}
-  .letterhead .est{font-size:9px;letter-spacing:0.48em;text-transform:uppercase;color:var(--muted);margin-top:18px;}
-  @media (max-width:560px){
-    .letterhead-row{flex-direction:column;align-items:flex-start;gap:18px;}
-    .letterhead .wordmark{font-size:30px;letter-spacing:0.22em;}
-    .letterhead .hairline{max-width:240px;}
+    color:var(--ink);
+    font-family:var(--sans);
+    font-size:16px;
+    line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+    -moz-osx-font-smoothing:grayscale;
+    text-rendering:optimizeLegibility;
+  }
+  a{color:var(--ink-2);text-decoration:none;border-bottom:1px solid transparent;transition:border-color .15s ease, color .15s ease;}
+  a:hover{color:var(--ink);border-bottom-color:var(--accent-warm);}
+  code{font-family:var(--mono);font-size:0.85em;background:rgba(184,131,90,0.10);padding:1px 6px;border-radius:4px;color:var(--ink-2);}
+
+  .wrap{max-width:1200px;margin:0 auto;padding:0 28px;}
+
+  /* ── Header (sticky, slim) ─────────────────────────────────────── */
+  header.nav{
+    position:sticky;top:0;z-index:50;
+    backdrop-filter:saturate(140%) blur(14px);
+    -webkit-backdrop-filter:saturate(140%) blur(14px);
+    background:rgba(247, 241, 227, 0.78);
+    border-bottom:1px solid var(--line-soft);
+  }
+  header.nav .row{display:flex;align-items:center;justify-content:space-between;height:60px;}
+  header.nav .brand{display:flex;align-items:center;gap:10px;color:var(--ink);font-family:var(--serif);font-size:18px;letter-spacing:0.24em;text-transform:uppercase;}
+  header.nav .brand img{width:28px;height:28px;}
+  header.nav nav{display:flex;align-items:center;gap:6px;}
+  header.nav nav a{font-size:13.5px;color:var(--muted);padding:8px 12px;border-radius:8px;border-bottom:0;transition:background .15s ease, color .15s ease;}
+  header.nav nav a:hover{background:rgba(58,47,36,0.06);color:var(--ink);}
+  header.nav .cta{
+    margin-left:8px;padding:9px 16px;background:var(--ink);color:var(--paper-soft);
+    border-radius:999px;font-size:13px;font-weight:500;letter-spacing:0.02em;
+    box-shadow:var(--shadow-1);transition:transform .15s ease, box-shadow .15s ease, background .15s ease;border:0;
+  }
+  header.nav .cta:hover{background:#000;transform:translateY(-1px);box-shadow:var(--shadow-2);}
+  @media (max-width:680px){
+    header.nav nav a:not(.cta){display:none;}
   }
 
-  /* Headline */
-  .hl{margin:32px 0 22px;text-align:center;}
-  .hl h2{font-size:32px;line-height:1.2;margin:0;font-weight:500;font-style:italic;color:var(--ink);}
-  .hl .deck{margin-top:8px;font-size:13px;letter-spacing:0.14em;text-transform:uppercase;color:var(--muted);}
+  /* ── Hero ───────────────────────────────────────────────────────── */
+  .hero{padding:84px 0 72px;}
+  .hero-grid{display:grid;grid-template-columns:1fr 380px;gap:64px;align-items:center;}
+  .hero h1{
+    font-family:var(--serif);
+    font-size:clamp(40px, 5.6vw, 72px);
+    line-height:1.04;
+    letter-spacing:-0.012em;
+    margin:0 0 22px;
+    color:var(--ink);
+    font-weight:500;
+  }
+  .hero h1 em{font-style:italic;color:var(--ink-2);font-family:var(--serif);}
+  .hero .lede{font-size:19px;color:var(--muted);max-width:600px;margin:0 0 32px;line-height:1.55;}
+  .hero .seal-card{
+    background:var(--paper-card);
+    border-radius:var(--radius-lg);
+    padding:30px;
+    box-shadow:var(--shadow-3);
+    display:flex;flex-direction:column;align-items:center;text-align:center;
+    transition:transform .3s cubic-bezier(.2,.8,.2,1);
+  }
+  .hero .seal-card:hover{transform:translateY(-4px) rotate(-0.3deg);}
+  .hero .seal-card img{width:170px;height:auto;display:block;margin-bottom:18px;
+    filter:drop-shadow(0 4px 18px rgba(60,40,20,0.06));}
+  .hero .seal-card .wordmark{font-family:var(--serif);font-size:22px;letter-spacing:0.34em;text-transform:uppercase;color:var(--ink);font-weight:500;line-height:1;margin-bottom:10px;}
+  .hero .seal-card .rule{width:64px;height:1px;background:var(--line);margin:4px auto 10px;}
+  .hero .seal-card .tag{font-size:10px;letter-spacing:0.32em;text-transform:uppercase;color:var(--muted-2);margin-bottom:8px;}
+  .hero .seal-card .est{font-size:10px;letter-spacing:0.3em;text-transform:uppercase;color:var(--muted-2);}
+  .hero .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px;}
+  .hero .chips span{
+    display:inline-flex;align-items:center;gap:6px;
+    background:rgba(255,255,255,0.6);border:1px solid var(--line-soft);
+    padding:7px 12px;border-radius:999px;font-size:12.5px;color:var(--muted);
+    backdrop-filter:blur(8px);
+  }
+  .hero .chips span::before{content:"";width:6px;height:6px;background:var(--confirm);border-radius:50%;}
+  @media (max-width:880px){
+    .hero{padding:54px 0 48px;}
+    .hero-grid{grid-template-columns:1fr;gap:36px;}
+    .hero .seal-card{max-width:340px;margin:0 auto;}
+  }
 
-  /* Counter (drop zone) */
-  .counter-panel{margin:30px 0;border:2px solid var(--rule);background:var(--paper-2);padding:26px;display:grid;grid-template-columns:1.1fr 1fr;gap:24px;align-items:stretch;}
-  .counter-panel h3{margin:0 0 12px;font-size:13px;letter-spacing:0.22em;text-transform:uppercase;color:var(--accent);}
-  .counter-panel ol{margin:0;padding-left:20px;font-size:15px;line-height:1.7;}
-  .counter-panel ol li{margin-bottom:6px;}
-  .counter-panel ol li code{font-size:13px;}
+  /* ── Action band (the counter) ──────────────────────────────────── */
+  .action{padding:32px 0 64px;}
+  .action-card{
+    background:var(--paper-card);
+    border-radius:var(--radius-lg);
+    padding:36px;
+    box-shadow:var(--shadow-3);
+    display:grid;grid-template-columns:1.05fr 1fr;gap:32px;
+    align-items:stretch;
+  }
+  .action h2{font-family:var(--serif);font-size:30px;font-weight:500;margin:0 0 10px;line-height:1.2;color:var(--ink);letter-spacing:-0.01em;}
+  .action p.sub{margin:0 0 20px;color:var(--muted);font-size:15.5px;}
+  .action ol{margin:0;padding-left:0;list-style:none;counter-reset:step;}
+  .action ol li{counter-increment:step;padding-left:42px;position:relative;margin-bottom:14px;font-size:15px;color:var(--ink-2);line-height:1.6;}
+  .action ol li::before{
+    content:counter(step);position:absolute;left:0;top:1px;
+    width:28px;height:28px;border-radius:50%;background:rgba(58,47,36,0.06);
+    color:var(--accent);font-weight:500;font-size:13px;
+    display:flex;align-items:center;justify-content:center;font-family:var(--mono);
+  }
+  .drop{
+    background:linear-gradient(180deg, var(--paper-soft) 0%, #faf3df 100%);
+    border:1.5px dashed var(--line);
+    border-radius:var(--radius);
+    padding:36px 24px;text-align:center;cursor:pointer;
+    transition:border-color .2s, background .2s, transform .2s;
+    display:flex;flex-direction:column;justify-content:center;align-items:center;min-height:240px;
+  }
+  .drop:hover, .drop.dragover{border-color:var(--accent-warm);background:linear-gradient(180deg, #faf2dc 0%, #f4e6c2 100%);transform:translateY(-2px);}
+  .drop .icon{width:44px;height:44px;border-radius:50%;background:var(--accent);color:var(--paper-soft);display:flex;align-items:center;justify-content:center;margin-bottom:14px;}
+  .drop strong{display:block;font-family:var(--serif);font-size:22px;color:var(--ink);margin-bottom:6px;font-weight:500;}
+  .drop em{font-style:normal;color:var(--muted);font-size:13.5px;max-width:280px;display:block;}
+  .drop button{
+    margin-top:18px;padding:11px 22px;background:var(--ink);color:var(--paper-soft);border:0;
+    border-radius:999px;font-family:inherit;font-size:14px;font-weight:500;cursor:pointer;
+    letter-spacing:0.01em;box-shadow:var(--shadow-1);transition:transform .15s ease, box-shadow .15s ease, background .15s ease;
+  }
+  .drop button:hover{background:#000;transform:translateY(-1px);box-shadow:var(--shadow-2);}
 
-  .drop{border:2px dashed var(--rule);background:var(--paper-3);
-    padding:30px 22px;text-align:center;cursor:pointer;transition:background .2s,border-color .2s;
-    display:flex;flex-direction:column;justify-content:center;align-items:center;min-height:200px;}
-  .drop:hover, .drop.dragover{background:#f0e3b8;border-color:var(--accent);}
-  .drop strong{display:block;font-size:22px;font-variant:small-caps;letter-spacing:0.06em;margin-bottom:8px;}
-  .drop em{font-style:normal;color:var(--muted);font-size:13px;display:block;max-width:280px;}
-  .drop .or{margin:14px 0 6px;font-size:11px;letter-spacing:0.22em;text-transform:uppercase;color:var(--muted);}
-  .drop button{padding:10px 18px;background:var(--accent);color:var(--paper);border:0;font-family:inherit;font-size:13px;letter-spacing:0.14em;text-transform:uppercase;cursor:pointer;}
-  .drop button:hover{background:#241c14;}
+  .status-line{
+    margin-top:18px;padding:16px 20px;background:rgba(255,255,255,0.7);
+    border-radius:var(--radius);border:1px solid var(--line-soft);
+    display:none;font-size:14px;color:var(--ink-2);
+    box-shadow:var(--shadow-1);
+  }
+  .status-line.show{display:block;animation:fadeIn .25s ease;}
+  .status-line strong{font-family:var(--serif);font-size:16px;color:var(--ink);}
+  .status-line.error{border-left:3px solid var(--warn);background:#fef3eb;}
+  .status-line.success{border-left:3px solid var(--confirm);background:#eaf5ee;}
+  .status-line .field{font-family:var(--mono);font-size:12px;color:var(--accent);margin-top:8px;word-break:break-all;background:rgba(58,47,36,0.04);padding:6px 10px;border-radius:6px;}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:none;}}
 
-  /* Working state */
-  .status-line{margin:14px 0 0;padding:14px 18px;background:var(--paper-3);border-left:3px solid var(--rule);font-size:14px;display:none;}
-  .status-line.show{display:block;}
-  .status-line strong{font-variant:small-caps;letter-spacing:0.04em;}
-  .status-line.error{border-left-color:var(--warn);color:var(--warn);}
-  .status-line.success{border-left-color:var(--confirm);}
-  .status-line .field{font-family:"SF Mono","Menlo",monospace;font-size:12px;word-break:break-all;color:var(--accent);margin-top:4px;}
+  @media (max-width:780px){
+    .action-card{grid-template-columns:1fr;padding:26px;}
+  }
 
-  /* Ledger strip */
-  .ledger{margin:24px 0;border-top:1px solid var(--rule);border-bottom:1px solid var(--rule);padding:16px 0;
-    display:grid;grid-template-columns:repeat(5,1fr);gap:8px;text-align:center;}
-  .ledger .n{font-size:24px;font-variant-numeric:tabular-nums;color:var(--accent);}
-  .ledger .l{font-size:10px;letter-spacing:0.24em;text-transform:uppercase;color:var(--muted);margin-top:2px;}
+  /* ── Live ledger strip ──────────────────────────────────────────── */
+  .ledger-section{padding:24px 0 36px;}
+  .ledger{
+    display:grid;grid-template-columns:repeat(5,1fr);gap:1px;
+    background:var(--line-soft);border-radius:var(--radius);overflow:hidden;
+    box-shadow:var(--shadow-1);
+  }
+  .ledger > div{background:var(--paper-card);padding:22px 14px;text-align:center;}
+  .ledger .n{font-family:var(--serif);font-size:30px;font-weight:500;color:var(--ink);line-height:1;font-variant-numeric:tabular-nums;}
+  .ledger .l{font-size:10.5px;letter-spacing:0.2em;text-transform:uppercase;color:var(--muted);margin-top:8px;font-weight:500;}
+  @media (max-width:680px){.ledger{grid-template-columns:repeat(2,1fr);}}
 
-  /* Editorial columns */
-  .cols{column-count:3;column-gap:36px;column-rule:1px solid #c9bda0;margin-top:20px;}
-  .cols p{margin:0 0 14px;text-align:justify;hyphens:auto;font-size:16px;line-height:1.65;}
-  .cols h3{font-size:13px;letter-spacing:0.22em;text-transform:uppercase;color:var(--accent);margin:18px 0 6px;font-weight:600;break-after:avoid;}
-  .dropcap::first-letter{font-size:48px;line-height:1;float:left;margin:4px 8px 0 0;font-weight:600;color:var(--accent);}
+  /* ── Section pattern ────────────────────────────────────────────── */
+  section.band{padding:88px 0;}
+  section.band > .wrap > .head{text-align:center;max-width:680px;margin:0 auto 44px;}
+  section.band .eyebrow{font-size:11.5px;letter-spacing:0.28em;text-transform:uppercase;color:var(--muted-2);margin-bottom:14px;font-weight:500;}
+  section.band h2{font-family:var(--serif);font-size:clamp(28px,3.4vw,42px);font-weight:500;margin:0 0 14px;line-height:1.15;letter-spacing:-0.012em;color:var(--ink);}
+  section.band p.head-sub{font-size:17px;color:var(--muted);margin:0;line-height:1.55;}
 
-  /* Fees */
-  .fees{margin:36px 0 0;display:grid;grid-template-columns:repeat(3,1fr);gap:16px;}
-  .fee{border:1.5px solid var(--rule);padding:22px 18px;background:var(--paper-2);text-align:center;display:flex;flex-direction:column;justify-content:space-between;}
-  .fee .t{font-size:11px;letter-spacing:0.24em;text-transform:uppercase;color:var(--muted);}
-  .fee .p{font-size:30px;margin:8px 0 2px;}
-  .fee .d{font-size:14px;color:var(--muted);margin-bottom:14px;}
-  .fee a{display:inline-block;padding:10px 18px;border:1px solid var(--accent);color:var(--accent);text-decoration:none;font-size:12px;letter-spacing:0.22em;text-transform:uppercase;}
-  .fee a:hover{background:var(--accent);color:var(--paper);}
-  .fee.middle{background:var(--paper-3);border-width:2px;}
+  /* ── Feature cards (3-up) ───────────────────────────────────────── */
+  .feature-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;}
+  .feature{
+    background:var(--paper-card);border-radius:var(--radius);padding:30px 26px;
+    box-shadow:var(--shadow-1);transition:transform .25s cubic-bezier(.2,.8,.2,1), box-shadow .25s ease;
+    border:1px solid transparent;
+  }
+  .feature:hover{transform:translateY(-3px);box-shadow:var(--shadow-2);border-color:var(--line-soft);}
+  .feature .num{font-family:var(--mono);font-size:12px;color:var(--accent-warm);letter-spacing:0.12em;margin-bottom:14px;}
+  .feature h3{font-family:var(--serif);font-size:21px;font-weight:500;margin:0 0 10px;color:var(--ink);line-height:1.3;}
+  .feature p{font-size:14.5px;color:var(--muted);margin:0;line-height:1.6;}
+  @media (max-width:780px){.feature-grid{grid-template-columns:1fr;}}
 
-  /* Verification block */
-  section.verify{margin:40px 0 0;border-top:3px double var(--rule);padding-top:28px;}
-  section.verify h2{font-size:13px;letter-spacing:0.32em;text-transform:uppercase;color:var(--muted);font-weight:500;margin:0 0 18px;text-align:center;}
-  .verify-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:18px;}
-  .vlevel{border:1px solid var(--rule-thin);background:var(--paper-2);padding:18px;}
-  .vlevel .tag{font-size:10px;letter-spacing:0.24em;text-transform:uppercase;color:var(--confirm);}
-  .vlevel h3{margin:6px 0 8px;font-size:17px;font-style:italic;}
-  .vlevel p{margin:0;font-size:14px;line-height:1.6;color:var(--ink);}
+  /* ── Fees / tiers ───────────────────────────────────────────────── */
+  .tiers{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;}
+  .tier{
+    background:var(--paper-card);border-radius:var(--radius);padding:32px 28px;
+    box-shadow:var(--shadow-1);position:relative;
+    transition:transform .25s ease, box-shadow .25s ease;
+    display:flex;flex-direction:column;
+  }
+  .tier:hover{transform:translateY(-3px);box-shadow:var(--shadow-2);}
+  .tier.featured{background:linear-gradient(180deg, #fffaef 0%, var(--paper-card) 100%);box-shadow:var(--shadow-2);transform:scale(1.02);border:1px solid var(--accent-warm);}
+  .tier .ribbon{position:absolute;top:14px;right:14px;font-size:10px;letter-spacing:0.22em;text-transform:uppercase;background:var(--accent);color:var(--paper-soft);padding:4px 10px;border-radius:999px;}
+  .tier .t-name{font-size:12px;letter-spacing:0.24em;text-transform:uppercase;color:var(--muted-2);font-weight:500;}
+  .tier .t-price{font-family:var(--serif);font-size:46px;font-weight:500;color:var(--ink);margin:10px 0 4px;line-height:1;}
+  .tier .t-price small{font-size:14px;color:var(--muted);font-family:var(--sans);}
+  .tier .t-desc{font-size:14.5px;color:var(--muted);margin:0 0 22px;line-height:1.55;flex:1;}
+  .tier ul{list-style:none;padding:0;margin:0 0 24px;}
+  .tier ul li{font-size:14px;color:var(--ink-2);padding:8px 0;border-bottom:1px solid var(--line-soft);display:flex;align-items:center;gap:10px;}
+  .tier ul li:last-child{border-bottom:0;}
+  .tier ul li::before{content:"✓";color:var(--confirm);font-weight:600;font-size:13px;}
+  .tier .cta{
+    display:inline-flex;justify-content:center;align-items:center;
+    padding:12px 22px;border-radius:999px;background:var(--ink);color:var(--paper-soft);
+    font-size:14px;font-weight:500;border-bottom:0;
+    transition:background .15s ease, transform .15s ease;
+  }
+  .tier .cta:hover{background:#000;transform:translateY(-1px);color:var(--paper-soft);border-bottom:0;}
+  .tier.featured .cta{background:var(--accent-warm);}
+  .tier.featured .cta:hover{background:#a37047;}
+  @media (max-width:880px){
+    .tiers{grid-template-columns:1fr;}
+    .tier.featured{transform:none;}
+  }
 
-  /* Clauses / footer */
-  .clauses{margin:42px 0 0;border-top:3px double var(--rule);padding-top:22px;font-size:13px;color:var(--muted);}
-  .clauses p{margin:0 0 10px;line-height:1.7;}
-  .clauses strong{color:var(--ink);font-style:italic;}
+  /* ── Verification levels ────────────────────────────────────────── */
+  .levels{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;}
+  .level{
+    background:var(--paper-card);border-radius:var(--radius);padding:28px;
+    box-shadow:var(--shadow-1);transition:transform .25s ease, box-shadow .25s ease;
+    border:1px solid var(--line-soft);
+  }
+  .level:hover{transform:translateY(-3px);box-shadow:var(--shadow-2);}
+  .level .step{
+    display:inline-flex;align-items:center;justify-content:center;
+    width:32px;height:32px;border-radius:50%;background:var(--accent);color:var(--paper-soft);
+    font-family:var(--mono);font-size:13px;margin-bottom:16px;
+  }
+  .level h3{font-family:var(--serif);font-size:20px;margin:0 0 8px;font-weight:500;color:var(--ink);}
+  .level .who{font-size:11px;letter-spacing:0.18em;text-transform:uppercase;color:var(--confirm);margin-bottom:10px;}
+  .level p{font-size:14.5px;color:var(--muted);margin:0 0 16px;line-height:1.6;}
+  .level a{font-size:13.5px;color:var(--accent);border-bottom:1px solid var(--line);padding-bottom:1px;}
+  @media (max-width:880px){.levels{grid-template-columns:1fr;}}
 
-  .endline{margin-top:36px;text-align:center;font-size:11px;letter-spacing:0.28em;text-transform:uppercase;color:var(--muted);border-top:1px solid var(--rule);padding-top:18px;}
-  .endline a{color:var(--muted);text-decoration:none;margin:0 14px;border-bottom:1px solid #c9bda0;padding-bottom:2px;}
-  .endline a:hover{color:var(--accent);}
-
-  /* Timezone */
-  .tz-block{margin-top:6px;}
-  .tz-primary{list-style:none;padding:0;margin:0;display:grid;grid-template-columns:1fr 1fr;gap:4px 18px;}
-  .tz-row{display:flex;justify-content:space-between;gap:10px;font-family:"SF Mono","Menlo",monospace;padding:2px 0;font-size:13px;}
-  .tz-row .tz-zone{color:var(--muted);font-size:11px;letter-spacing:0.14em;text-transform:uppercase;}
-  .tz-row .tz-val{font-variant-numeric:tabular-nums;}
+  /* ── Timezone ───────────────────────────────────────────────────── */
+  section.tz{padding:64px 0;}
+  .tz-card{background:var(--paper-card);border-radius:var(--radius);padding:30px;box-shadow:var(--shadow-1);max-width:760px;margin:0 auto;}
+  .tz-card h3{font-family:var(--serif);font-size:22px;margin:0 0 6px;font-weight:500;}
+  .tz-card .sub{font-size:14px;color:var(--muted);margin:0 0 18px;}
+  .tz-block{margin-top:8px;}
+  .tz-primary{list-style:none;padding:0;margin:0;display:grid;grid-template-columns:1fr 1fr;gap:6px 24px;}
+  .tz-row{display:flex;justify-content:space-between;font-family:var(--mono);font-size:13px;padding:6px 0;border-bottom:1px solid var(--line-soft);}
+  .tz-row .tz-zone{color:var(--muted);font-size:11px;letter-spacing:0.12em;text-transform:uppercase;}
+  .tz-row .tz-val{font-variant-numeric:tabular-nums;color:var(--ink-2);}
   .tz-row.tz-canonical .tz-val{color:var(--accent);font-weight:600;}
-  details.tz-featured-wrap, details.tz-all-wrap{margin-top:6px;border-top:1px dashed #c9bda0;padding-top:4px;}
-  details.tz-featured-wrap summary, details.tz-all-wrap summary{cursor:pointer;font-size:11px;letter-spacing:0.18em;text-transform:uppercase;color:var(--muted);padding:3px 0;}
-  details.tz-featured-wrap summary:hover, details.tz-all-wrap summary:hover{color:var(--accent);}
-  .tz-featured, .tz-all{list-style:none;padding:0;margin:4px 0 0;max-height:240px;overflow-y:auto;}
-  .tz-filter{width:100%;padding:6px 8px;font-family:"EB Garamond",Garamond,serif;font-size:14px;background:var(--paper-2);border:1px solid #c9bda0;color:var(--ink);margin:4px 0;}
+  details.tz-featured-wrap, details.tz-all-wrap{margin-top:10px;border-top:1px solid var(--line-soft);padding-top:8px;}
+  details summary{cursor:pointer;font-size:11.5px;letter-spacing:0.16em;text-transform:uppercase;color:var(--muted);padding:6px 0;list-style:none;}
+  details summary::-webkit-details-marker{display:none;}
+  details summary::before{content:"+";display:inline-block;margin-right:8px;color:var(--accent);transition:transform .2s;}
+  details[open] summary::before{content:"−";}
+  details summary:hover{color:var(--accent);}
+  .tz-featured, .tz-all{list-style:none;padding:0;margin:8px 0 0;max-height:280px;overflow-y:auto;}
+  .tz-filter{width:100%;padding:8px 12px;font-family:var(--sans);font-size:14px;background:var(--paper-soft);border:1px solid var(--line);color:var(--ink);border-radius:8px;margin:8px 0;}
+  @media (max-width:560px){.tz-primary{grid-template-columns:1fr;}}
 
-  @media (max-width:760px){
-    .cols{column-count:1;}
-    .counter-panel{grid-template-columns:1fr;}
-    .ledger{grid-template-columns:repeat(2,1fr);}
-    .fees{grid-template-columns:1fr;}
-    .mast{grid-template-columns:1fr;text-align:center;}
-    .mast .left, .mast .right{text-align:center;}
-    .mast .wordmark{font-size:36px;}
-    .verify-grid{grid-template-columns:1fr;}
-    .tz-primary{grid-template-columns:1fr;}
-    header.site{flex-direction:column;gap:8px;text-align:center;}
-    header.site nav a{margin:0 8px;}
+  /* ── Clauses ────────────────────────────────────────────────────── */
+  section.clauses{padding:48px 0 72px;}
+  .clause-card{
+    background:transparent;border-top:1px solid var(--line-soft);padding-top:32px;
+    display:grid;grid-template-columns:repeat(4,1fr);gap:24px;
   }
+  .clause{font-size:13.5px;color:var(--muted);line-height:1.65;}
+  .clause strong{color:var(--ink-2);display:block;margin-bottom:4px;font-family:var(--serif);font-style:italic;font-size:15px;font-weight:500;}
+  @media (max-width:880px){.clause-card{grid-template-columns:1fr 1fr;}}
+  @media (max-width:560px){.clause-card{grid-template-columns:1fr;}}
+
+  /* ── Footer ─────────────────────────────────────────────────────── */
+  footer.site{padding:32px 0 56px;border-top:1px solid var(--line-soft);margin-top:32px;}
+  footer.site .row{display:flex;justify-content:space-between;align-items:center;gap:24px;flex-wrap:wrap;}
+  footer.site .brand{font-family:var(--serif);font-size:13px;letter-spacing:0.24em;text-transform:uppercase;color:var(--muted);}
+  footer.site nav{display:flex;flex-wrap:wrap;gap:8px 18px;}
+  footer.site nav a{font-size:13px;color:var(--muted);border-bottom:0;}
+  footer.site nav a:hover{color:var(--ink);}
+
+  /* ── Selection ──────────────────────────────────────────────────── */
+  ::selection{background:rgba(184, 131, 90, 0.25);}
 </style>
 </head>
 <body>
-<div class="sheet">
 
-<header class="site">
-  <div class="brand-line">Orphograph &nbsp;·&nbsp; Empirical Notary</div>
-  <nav>
-    <a href="/verify">Verify</a>
-    <a href="/learn.html">Method</a>
-    <a href="/about.html">Office</a>
-    <a href="/signin.html">Sign In</a>
-  </nav>
+<header class="nav">
+  <div class="wrap row">
+    <a href="/" class="brand"><img src="/seal.png" alt=""> Orphograph</a>
+    <nav>
+      <a href="/learn.html">Method</a>
+      <a href="#tiers">Pricing</a>
+      <a href="/about.html">Office</a>
+      <a href="/signin.html">Sign in</a>
+      <a href="#drop" class="cta">Anchor a file</a>
+    </nav>
+  </div>
 </header>
 
-<div class="letterhead">
-  <div class="letterhead-row">
-    <div class="seal" aria-hidden="true">
-      <img src="/seal.svg" alt="Orphograph seal — a gridded globe enclosing a cosmic egg wreathed by a serpent" width="118" height="118">
+<!-- ────────────────────────────────── HERO ─────────────────────────────── -->
+<section class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <h1>Proof a file existed —<br><em>before anyone could argue otherwise.</em></h1>
+      <p class="lede">An empirical notary. Drop a file in your browser; receive a Bitcoin-anchored fingerprint that records it existed by no later than the next block. The file itself never leaves your machine.</p>
+      <div class="chips">
+        <span>Client-side hashing</span>
+        <span>5 independent calendars</span>
+        <span>Verifies without us</span>
+      </div>
     </div>
-    <div class="stack">
-      <h1 class="wordmark">Orphograph</h1>
-      <div class="hairline"></div>
-      <div class="tagline">Strategy &nbsp;·&nbsp; Stewardship</div>
-      <div class="est">Est. MMXXVI</div>
-    </div>
+    <aside class="seal-card">
+      <img src="/seal.png" alt="Orphograph seal">
+      <div class="wordmark">Orphograph</div>
+      <div class="rule"></div>
+      <div class="tag">Strategy · Stewardship</div>
+      <div class="est">Est. 2026</div>
+    </aside>
   </div>
-</div>
+</section>
 
-<div class="hl" style="margin-top:24px;">
-  <div class="deck" style="font-size:11px;letter-spacing:0.32em;text-transform:uppercase;color:var(--muted);">Empirical Notary &nbsp;·&nbsp; Bitcoin Anchored &nbsp;·&nbsp; A Bilateral Service</div>
-</div>
-
-<div class="hl">
-  <h2>"That a file existed by no later than this Bitcoin block."</h2>
-  <div class="deck">That is the entire claim · And it is verifiable by anyone</div>
-</div>
-
-<!-- Counter (drop zone + procedure) -->
-<div class="counter-panel">
-  <div>
-    <h3>The Procedure</h3>
-    <ol>
-      <li>Place a file at the counter. Your browser reads it locally.</li>
-      <li>Your browser computes its <code>SHA-256</code> and <code>SHA-512</code> fingerprints. The file does not move.</li>
-      <li>The fingerprints are submitted to five independent OpenTimestamps calendars.</li>
-      <li>You receive a 16-character receipt identifier and five small <code>.ots</code> proof files.</li>
-      <li>Within roughly one hour the fingerprint is committed to a Bitcoin block. The receipt's status flips from <em>pending</em> to <em>confirmed</em>.</li>
-    </ol>
+<!-- ────────────────────────────────── ACTION ───────────────────────────── -->
+<section class="action">
+  <div class="wrap">
+    <div class="action-card">
+      <div>
+        <h2>The procedure</h2>
+        <p class="sub">Five steps. The file is never uploaded. Only its fingerprint crosses the counter.</p>
+        <ol>
+          <li>Place a file at the counter. Your browser reads it locally.</li>
+          <li>The browser computes its <code>SHA-256</code> and <code>SHA-512</code> fingerprints.</li>
+          <li>The fingerprints are submitted to five independent OpenTimestamps calendars.</li>
+          <li>You receive a 16-character receipt identifier and five <code>.ots</code> proof files.</li>
+          <li>Within ~1 hour, the fingerprint is committed to a Bitcoin block. The receipt is final.</li>
+        </ol>
+      </div>
+      <label class="drop" for="drop-input" id="drop">
+        <div class="icon" aria-hidden="true">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        </div>
+        <strong>Place a file</strong>
+        <em>Drag it here, or tap to choose. Read locally. Only the fingerprint is submitted.</em>
+        <button type="button" id="drop-btn">Choose a file</button>
+        <input id="drop-input" type="file" hidden>
+      </label>
+    </div>
+    <div class="status-line" id="status"></div>
   </div>
-  <label class="drop" for="drop-input" id="drop">
-    <strong>Counter</strong>
-    <em>Place a file here, or click to choose</em>
-    <div class="or">— or —</div>
-    <button type="button" id="drop-btn">Choose a file</button>
-    <input id="drop-input" type="file" hidden>
-  </label>
-</div>
+</section>
 
-<div class="status-line" id="status"></div>
-
-<!-- Ledger strip (live counts from /api/stats) -->
-<div class="ledger" aria-label="public ledger">
-  <div><div class="n" id="c-anchors">—</div><div class="l">Files Recorded</div></div>
-  <div><div class="n" id="c-blocks">—</div><div class="l">Bitcoin Blocks</div></div>
-  <div><div class="n">5 / 5</div><div class="l">Calendars Live</div></div>
-  <div><div class="n">SHA‑256 / 512</div><div class="l">Hash Functions</div></div>
-  <div><div class="n">$0.00</div><div class="l">Marginal On‑Chain</div></div>
-</div>
-
-<!-- Editorial columns -->
-<div class="cols">
-  <h3>The Office</h3>
-  <p class="dropcap">Orphograph is an empirical notary. Its sole function is to record, in a manner mathematically permanent and independently verifiable, that a file existed on or before a specific block of the Bitcoin blockchain. The office issues no opinion on authorship, ownership, or legality. It issues only the fact.</p>
-
-  <h3>What Crosses the Counter</h3>
-  <p>Only the SHA-256 fingerprint of your file crosses the counter — a 64-character number that is one-way and content-blind. The file itself remains on your machine and is read by your browser alone. The office cannot reconstruct it, identify it, or transmit it. There is no copy to retrieve and none was ever collected.</p>
-
-  <h3>Why the Chain</h3>
-  <p>Bitcoin has not reorganized beyond a handful of blocks in sixteen years of operation. A block from one hour ago is, for every practical purpose, immutable. By submitting your fingerprint to five independent OpenTimestamps calendars, we link it through public mathematics to a block whose proof-of-work cannot be undone.</p>
-
-  <h3>What Survives the Office</h3>
-  <p>The receipts. If this office closes, changes hands, or is forgotten, every receipt it ever issued continues to verify against the chain using open-source software. There is no proprietary verifier, no license key, no captive format. The instrument outlives the institution. <em>That is the contract.</em></p>
-
-  <h3>What the Office Refuses</h3>
-  <p>Claims of court admissibility. Promises of legal weight. Statements about authorship. Sale of customer identity. Per-receipt blockchain fees. Hidden lock-in. Marketing language untethered from the cryptography. Anything that would require the customer to trust us in order for the instrument to work.</p>
-
-  <h3>Why It Is Cheap</h3>
-  <p>OpenTimestamps batches many fingerprints into a single Bitcoin transaction roughly once per hour. The marginal on-chain cost of one additional fingerprint is, in arithmetic terms, near zero. This is why the first three recordings every twenty-four hours are free — not as inducement, but as architecture.</p>
-</div>
-
-<!-- Fees -->
-<section style="margin-top:36px;">
-  <h2 style="font-size:13px;letter-spacing:0.32em;text-transform:uppercase;color:var(--muted);font-weight:500;margin:0 0 18px;text-align:center;">— Schedule of Fees —</h2>
-  <div class="fees">
-    <div class="fee">
-      <div class="t">First Party</div>
-      <div class="p">$0</div>
-      <div class="d">Three recordings every 24 hours, perpetual. Server-enforced.</div>
-      <a href="#drop">Begin</a>
-    </div>
-    <div class="fee middle">
-      <div class="t">Pack of Fifty</div>
-      <div class="p">$29</div>
-      <div class="d">One-time. No subscription. No expiry.</div>
-      <a href="/buy.html">Purchase</a>
-    </div>
-    <div class="fee">
-      <div class="t">Standing Order</div>
-      <div class="p">$9 <span style="font-size:14px;color:var(--muted);">/ month</span></div>
-      <div class="d">Unrestricted recordings. Cancel at will.</div>
-      <a href="/buy.html?plan=pro">Subscribe</a>
+<!-- ────────────────────────────────── LIVE LEDGER ──────────────────────── -->
+<section class="ledger-section">
+  <div class="wrap">
+    <div class="ledger">
+      <div><div class="n" id="c-anchors">—</div><div class="l">Files Recorded</div></div>
+      <div><div class="n" id="c-blocks">—</div><div class="l">Bitcoin Blocks</div></div>
+      <div><div class="n">5 / 5</div><div class="l">Calendars Live</div></div>
+      <div><div class="n">SHA‑256 / 512</div><div class="l">Hash Functions</div></div>
+      <div><div class="n">$0.00</div><div class="l">Marginal On‑Chain</div></div>
     </div>
   </div>
 </section>
 
-<!-- Verification levels -->
-<section class="verify">
-  <h2>— Verification of an Instrument —</h2>
-  <div class="verify-grid">
-    <div class="vlevel">
-      <div class="tag">Method I · One Click</div>
-      <h3>Open the receipt page</h3>
-      <p>Every receipt has a public URL: <code>/r/&lt;id&gt;</code>. The page shows the fingerprint, calendar status, the Bitcoin block once mined, and a drop-zone to re-hash any file and check the match in your browser.</p>
+<!-- ────────────────────────────────── WHY ──────────────────────────────── -->
+<section class="band">
+  <div class="wrap">
+    <div class="head">
+      <div class="eyebrow">The office</div>
+      <h2>An empirical notary, nothing more.</h2>
+      <p class="head-sub">Orphograph records, in a manner mathematically permanent and independently verifiable, that a file existed on or before a specific block of the Bitcoin blockchain. It issues no opinion on authorship, ownership, or legality. It issues only the fact.</p>
     </div>
-    <div class="vlevel">
-      <div class="tag">Method II · Open Source</div>
-      <h3>Run the open-source verifier</h3>
-      <p>A small standalone tool, on your computer. Hashes the file, reads the <code>.ots</code> proof files, talks to the OpenTimestamps calendars, reports pass or fail. <a href="/learn.html#three-ways">How →</a></p>
-    </div>
-    <div class="vlevel">
-      <div class="tag">Method III · Trustless</div>
-      <h3>Verify against Bitcoin directly</h3>
-      <p>Use the official OpenTimestamps client against your own Bitcoin node. The office is not in the loop. Math and proof-of-work are the entire trust surface. <a href="/learn.html#chain">How →</a></p>
+    <div class="feature-grid">
+      <div class="feature">
+        <div class="num">01</div>
+        <h3>What crosses the counter</h3>
+        <p>Only the SHA-256 fingerprint — a 64-character one-way number. The file remains on your machine. The office cannot reconstruct, identify, or transmit it.</p>
+      </div>
+      <div class="feature">
+        <div class="num">02</div>
+        <h3>Why Bitcoin</h3>
+        <p>Bitcoin has not reorganized beyond a handful of blocks in sixteen years. A block from an hour ago is, for any practical purpose, immutable. We commit to that chain via OpenTimestamps.</p>
+      </div>
+      <div class="feature">
+        <div class="num">03</div>
+        <h3>What survives the office</h3>
+        <p>Every receipt. If this service ever ceased, your <code>.ots</code> proof files would continue to verify against the public chain using open-source software. The instrument outlives the institution.</p>
+      </div>
     </div>
   </div>
 </section>
 
-<!-- Time anchor display -->
-<section style="margin:40px 0 0;border-top:1px solid var(--rule-thin);padding-top:22px;">
-  <h2 style="font-size:13px;letter-spacing:0.32em;text-transform:uppercase;color:var(--muted);font-weight:500;margin:0 0 14px;text-align:center;">— This Page, In Every Time Zone —</h2>
-  <p style="text-align:center;font-size:14px;color:var(--muted);margin:0 0 10px;">The most recently anchored receipt was issued at:</p>
-  <div class="tz-block" id="latest-tz-block" data-utc="2026-05-16T15:21:38Z" style="max-width:680px;margin:0 auto;"></div>
+<!-- ────────────────────────────────── TIERS ────────────────────────────── -->
+<section class="band" id="tiers" style="background:linear-gradient(180deg, transparent, rgba(255,255,255,0.4) 50%, transparent);">
+  <div class="wrap">
+    <div class="head">
+      <div class="eyebrow">Schedule of fees</div>
+      <h2>One file. One receipt. No surprises.</h2>
+      <p class="head-sub">Free tier resets every twenty-four hours by the server's clock. Paid tiers verify identically — same calendars, same chain.</p>
+    </div>
+    <div class="tiers">
+      <div class="tier">
+        <div class="t-name">First Party</div>
+        <div class="t-price">$0</div>
+        <p class="t-desc">For trying it out, for occasional creators, perpetual.</p>
+        <ul>
+          <li>3 anchors every 24 hours</li>
+          <li>Full Bitcoin attestation</li>
+          <li>All 5 calendars</li>
+          <li>Open-source verifier</li>
+        </ul>
+        <a href="#drop" class="cta">Begin</a>
+      </div>
+      <div class="tier featured">
+        <span class="ribbon">Most Popular</span>
+        <div class="t-name">Pack of Fifty</div>
+        <div class="t-price">$29</div>
+        <p class="t-desc">One-time purchase. No subscription. Credits never expire.</p>
+        <ul>
+          <li>50 anchor credits</li>
+          <li>Use them anytime</li>
+          <li>Pay in BTC or card</li>
+          <li>Gift to a friend</li>
+        </ul>
+        <a href="/buy.html" class="cta">Purchase</a>
+      </div>
+      <div class="tier">
+        <div class="t-name">Standing Order</div>
+        <div class="t-price">$9<small> / mo</small></div>
+        <p class="t-desc">For working creators and small teams. Cancel anytime.</p>
+        <ul>
+          <li>Unrestricted anchoring</li>
+          <li>Private receipts</li>
+          <li>Receipt vault</li>
+          <li>API access</li>
+        </ul>
+        <a href="/buy.html?plan=pro" class="cta">Subscribe</a>
+      </div>
+    </div>
+  </div>
 </section>
 
-<!-- Clauses -->
-<div class="clauses">
-  <p><strong>On legality.</strong> Orphograph is not a notary public, nor a registered timestamping authority under eIDAS or equivalent statute. Its receipts are verifiable cryptographic facts, not legal opinions. Admissibility in any jurisdiction is determined by counsel and the relevant court — not by this office.</p>
-  <p><strong>On privacy.</strong> Files are hashed in the customer's browser and never transmitted. The office retains no copy of the original. The receipt contains the fingerprint, the time of submission, and the calendar attestations — nothing more, unless the customer voluntarily attaches metadata.</p>
-  <p><strong>On survival.</strong> Receipts verify by reference to the Bitcoin blockchain, using open-source software (<a href="https://github.com/opentimestamps/opentimestamps-client" rel="noopener" style="color:var(--accent);">OpenTimestamps</a>) that does not depend on this office continuing to exist.</p>
-  <p><strong>On the guarantee.</strong> The privacy contract of this service is <em>structural</em>, not promissory. Your file is never transmitted, by anyone, by any tool, to any party. The architecture cannot disclose what it never received — and that property holds regardless of who reads, writes, or maintains the code.</p>
-</div>
+<!-- ────────────────────────────────── VERIFICATION ─────────────────────── -->
+<section class="band">
+  <div class="wrap">
+    <div class="head">
+      <div class="eyebrow">Verification</div>
+      <h2>Don't trust us. Check the chain.</h2>
+      <p class="head-sub">Three levels of trust, from one-click to fully trustless. The math is the same. The level of paranoia is up to you.</p>
+    </div>
+    <div class="levels">
+      <div class="level">
+        <div class="step">I</div>
+        <div class="who">One click</div>
+        <h3>Open your receipt page</h3>
+        <p>Each receipt has a public URL at <code>/r/&lt;id&gt;</code>. Drop the original file; the page re-hashes locally and reports match.</p>
+      </div>
+      <div class="level">
+        <div class="step">II</div>
+        <div class="who">No account</div>
+        <h3>Run the open-source verifier</h3>
+        <p>A small standalone tool, on your computer. Talks to the OpenTimestamps calendars. Tells you pass or fail. We don't see it run.</p>
+        <a href="/learn.html#three-ways">How →</a>
+      </div>
+      <div class="level">
+        <div class="step">III</div>
+        <div class="who">Trustless</div>
+        <h3>Verify against Bitcoin</h3>
+        <p>Use the OpenTimestamps client against your own Bitcoin node. Orphograph is not in the loop. Math and proof-of-work are the trust surface.</p>
+        <a href="/learn.html#chain">How →</a>
+      </div>
+    </div>
+  </div>
+</section>
 
-<div class="endline">
-  <a href="/verify">Verify a Receipt</a>
-  <a href="/learn.html">Method</a>
-  <a href="/about.html">Office</a>
-  <a href="/terms.html">Terms</a>
-  <a href="/privacy.html">Privacy</a>
-  <a href="https://github.com/Orphograph/Orphograph" rel="noopener">Open Source</a>
-</div>
+<!-- ────────────────────────────────── TIMEZONE ─────────────────────────── -->
+<section class="tz">
+  <div class="wrap">
+    <div class="tz-card">
+      <h3>The most recent receipt was issued at</h3>
+      <p class="sub">Shown in your local time, UTC, and every IANA time zone the browser knows.</p>
+      <div class="tz-block" id="latest-tz-block" data-utc="2026-05-16T15:21:38Z"></div>
+    </div>
+  </div>
+</section>
 
-</div>
+<!-- ────────────────────────────────── CLAUSES ──────────────────────────── -->
+<section class="clauses">
+  <div class="wrap">
+    <div class="clause-card">
+      <div class="clause">
+        <strong>On legality.</strong>
+        Orphograph is not a notary public, nor a registered timestamping authority under eIDAS or equivalent statute. Admissibility in any jurisdiction is determined by counsel and the relevant court, not by this office.
+      </div>
+      <div class="clause">
+        <strong>On privacy.</strong>
+        Files are hashed in your browser and never transmitted. The office retains no copy of the original. The receipt contains the fingerprint, the time of submission, and the calendar attestations only.
+      </div>
+      <div class="clause">
+        <strong>On survival.</strong>
+        Receipts verify by reference to the Bitcoin blockchain, using open-source software (<a href="https://github.com/opentimestamps/opentimestamps-client" rel="noopener">OpenTimestamps</a>) that does not depend on this office continuing to exist.
+      </div>
+      <div class="clause">
+        <strong>On the guarantee.</strong>
+        The privacy contract is <em>structural</em>, not promissory. The architecture cannot disclose what it never received — independent of who reads, writes, or maintains the code.
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer class="site">
+  <div class="wrap row">
+    <div class="brand">Orphograph &nbsp;·&nbsp; Bitcoin-Anchored Notary</div>
+    <nav>
+      <a href="/learn.html">Method</a>
+      <a href="/about.html">Office</a>
+      <a href="/compare.html">Compare</a>
+      <a href="/docs/api.html">API</a>
+      <a href="/terms.html">Terms</a>
+      <a href="/privacy.html">Privacy</a>
+      <a href="/status.html">Status</a>
+      <a href="https://github.com/Orphograph/Orphograph" rel="noopener">Open Source</a>
+    </nav>
+  </div>
+</footer>
 
 <script src="/timezones.js"></script>
 <script src="/v2.js"></script>
