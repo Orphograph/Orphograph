@@ -131,9 +131,26 @@ def anchor_hash(
     except OSError:
         pass
 
+    # Submit to all calendars in parallel. Total wall time becomes
+    # max(per-calendar latency) instead of sum(); one slow calendar no
+    # longer blocks anchoring on the others. Ordering of successes/
+    # failures is preserved by collecting via the input index.
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    results: list[tuple[bool, object]] = [(False, "not run")] * len(CALENDARS)
+    with ThreadPoolExecutor(max_workers=len(CALENDARS)) as pool:
+        future_to_idx = {
+            pool.submit(_submit, cal, hash_bytes): i
+            for i, cal in enumerate(CALENDARS)
+        }
+        for fut in as_completed(future_to_idx):
+            idx = future_to_idx[fut]
+            try:
+                results[idx] = fut.result()
+            except Exception as exc:  # noqa: BLE001 — calendar errors are recorded, not raised
+                results[idx] = (False, f"executor: {exc}")
+
     successes, failures = [], []
-    for cal in CALENDARS:
-        ok, body = _submit(cal, hash_bytes)
+    for cal, (ok, body) in zip(CALENDARS, results):
         if ok:
             ots_bytes = _build_ots(hash_bytes, body)
             ots_path = receipt_dir / f"{_calendar_short(cal)}.ots"

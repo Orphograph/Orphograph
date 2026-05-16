@@ -262,19 +262,53 @@ def test_literal_crlf_in_url_is_blocked_at_client_layer():
 
 # ── Concurrent-flood rate-limit boundary ──────────────────────────────────
 
-def test_rate_limit_eventually_blocks(server):
-    """Hammer /api/anchor without a pack token; eventually 429."""
-    body = json.dumps({"hash_hex": "00" * 32}).encode()  # bad hash; rejected at validation
-    # Note: rate limiter ticks BEFORE validation, so even bad-hash anchors
-    # consume tokens. We expect to see a 429 within ~20 attempts.
-    saw_429 = False
-    for _ in range(20):
-        code = _status(f"{server}/api/anchor", method="POST", body=body,
-                       headers={"Content-Type": "application/json"})
-        if code == 429:
-            saw_429 = True
+def test_rate_limit_eventually_blocks(tmp_path_factory):
+    """Hammer /api/anchor without a pack token; eventually 429.
+
+    Uses a dedicated tight-limit server (3/day) so the rate-limit envelope
+    is reached deterministically without depending on the test-module server
+    (which uses RATE_LIMIT_PER_DAY=100000 for fuzz throughput).
+    """
+    import os, subprocess, time, urllib.request
+    port = _free_port()
+    data_dir = tmp_path_factory.mktemp("rl_block")
+    env = {
+        **os.environ,
+        "PORT": str(port),
+        "HOST": "127.0.0.1",
+        "ORPHO_DATA_DIR": str(data_dir),
+        "ORPHO_COOKIE_SECURE": "0",
+        "RATE_LIMIT_PER_DAY": "3",  # production default — must trip within 20 attempts
+    }
+    proc = subprocess.Popen(
+        [sys.executable, str(REPO_ROOT / "server" / "app.py")],
+        env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+    )
+    base = f"http://127.0.0.1:{port}"
+    deadline = time.time() + 10
+    while time.time() < deadline:
+        try:
+            urllib.request.urlopen(base + "/api/health", timeout=1).read()
             break
-    assert saw_429, "expected to hit rate limit within 20 attempts"
+        except Exception:
+            time.sleep(0.2)
+    else:
+        proc.kill()
+        pytest.fail("rate-limit server did not start")
+    try:
+        body = json.dumps({"hash_hex": "00" * 32}).encode()
+        saw_429 = False
+        for _ in range(20):
+            code = _status(f"{base}/api/anchor", method="POST", body=body,
+                           headers={"Content-Type": "application/json"})
+            if code == 429:
+                saw_429 = True
+                break
+        assert saw_429, "expected to hit rate limit within 20 attempts"
+    finally:
+        proc.terminate()
+        try: proc.wait(timeout=5)
+        except subprocess.TimeoutExpired: proc.kill()
 
 
 # ── Sample receipt absolutely never returns 500 ──────────────────────────

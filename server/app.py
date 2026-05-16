@@ -415,6 +415,13 @@ class Handler(BaseHTTPRequestHandler):
             elif rid_with_suffix.endswith("/summary"):
                 rid = rid_with_suffix[:-len("/summary")]
                 response_shape = "summary"
+            elif rid_with_suffix.endswith("/nft-metadata"):
+                # NFT-friendly JSON snippet — designed to be copy-pasted into
+                # ERC-721 / ERC-1155 / Solana SPL metadata. We don't mint
+                # anything; the user's tooling does. We just describe the
+                # pre-existence attestation in a metadata-server-friendly shape.
+                rid = rid_with_suffix[:-len("/nft-metadata")]
+                response_shape = "nft"
             else:
                 rid = rid_with_suffix
                 response_shape = "json"
@@ -478,6 +485,52 @@ class Handler(BaseHTTPRequestHandler):
                 if not summary.get("private"):
                     summary.pop("owner_id", None)
                 _json_response(self, 200, summary)
+                return
+            if response_shape == "nft":
+                # Build a metadata snippet the user can drop into their NFT
+                # mint. We do NOT mint, custody, or wrap any token — this is
+                # informational JSON describing the pre-existence proof.
+                site = os.environ.get("SITE_URL", "https://orphograph.com").rstrip("/")
+                nft = {
+                    "name": f"Orphograph attestation {rid}",
+                    "description": (
+                        "Bitcoin-anchored proof, via the OpenTimestamps "
+                        "protocol, that a file with the SHA-256 fingerprint "
+                        "below existed on or before the recorded Bitcoin "
+                        "block. Orphograph issues no claim of authorship, "
+                        "ownership, or legality; the instrument is a "
+                        "verifiable empirical fact."
+                    ),
+                    "external_url": f"{site}/r/{rid}",
+                    "attributes": [
+                        {"trait_type": "Receipt ID", "value": rid},
+                        {"trait_type": "SHA-256", "value": record.get("hash_hex")},
+                        {"trait_type": "SHA-512", "value": record.get("sha512_hex")},
+                        {"trait_type": "Submitted (UTC)", "value": record.get("created_at")},
+                        {
+                            "trait_type": "Calendars",
+                            "value": f"{record.get('calendars_ok', 0)} / {record.get('calendars_total', 5)}",
+                        },
+                        {"trait_type": "BTC pinned at", "value": record.get("btc_pinned_at")},
+                        {"trait_type": "Status", "value": record.get("status")},
+                        {"trait_type": "Verifier", "value": f"{site}/api/verify/{rid}"},
+                    ],
+                    "orphograph": {
+                        "receipt_id": rid,
+                        "hash_sha256": record.get("hash_hex"),
+                        "hash_sha512": record.get("sha512_hex"),
+                        "submitted_at_utc": record.get("created_at"),
+                        "btc_pinned_at": record.get("btc_pinned_at"),
+                        "calendars_ok": record.get("calendars_ok"),
+                        "calendars_total": record.get("calendars_total"),
+                        "status": record.get("status"),
+                        "receipt_url": f"{site}/r/{rid}",
+                        "verifier_url": f"{site}/api/verify/{rid}",
+                        "protocol": "OpenTimestamps",
+                        "anchor_chain": "Bitcoin",
+                    },
+                }
+                _json_response(self, 200, nft)
                 return
             _json_response(self, 200, record)
             return
