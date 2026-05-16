@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Timestamp screenshots as forensic evidence — Orphograph</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Anchor a screenshot to Bitcoin within seconds of capture. Defeats the \"you Photoshopped it\" rebuttal in disputes, harassment cases, and online evidence preservation.">
+<link rel="canonical" href="https://orphograph.com/lp/screenshot-evidence-timestamp.html">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<meta property="og:title" content="Timestamp screenshots as forensic evidence">
+<meta property="og:description" content="A screenshot's evidentiary value collapses without a timestamp. Anchor to Bitcoin in seconds — without uploading the image.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://orphograph.com/lp/screenshot-evidence-timestamp.html">
+<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/blog.css">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "Why does a screenshot need a timestamp?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Screenshots are trivial to fabricate. The browser's developer tools can edit any page's text in seconds. Without an independent timestamp, the response to any incriminating screenshot is \"you faked it.\" An anchor from immediately after capture closes off that defense."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Does the screenshot upload?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "No. SHA-256 runs in your browser via WebCrypto. Only the 32-byte hash is sent. The screenshot itself stays on your machine."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "How quickly should I anchor after capture?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Within minutes if you can. The shorter the gap between capture and anchor, the stronger the claim that the screenshot wasn't fabricated in the interim. Most users anchor immediately after taking the screenshot."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Can I anchor a batch of screenshots together?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes. Zip the screenshots and anchor the zip. The receipt then proves the entire batch existed at the anchored time. Each screenshot inside retains its file identity for later individual reference."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Is a screenshot timestamp enough by itself in a serious case?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "No. For serious cases — harassment, defamation, formal complaints — pair the screenshot with the live URL, archive.org capture, and any platform-side evidence (transparency reports, subpoena-able records). The Orphograph timestamp is a strong corroborating layer, not a one-shot proof."
+      }
+    }
+  ]
+}
+</script>
+</head>
+<body>
+
+<header>
+  <div class="brand"><a href="/">orphograph</a></div>
+  <nav>
+    <a href="/#how">how it works</a>
+    <a href="/#pricing">pricing</a>
+    <a href="/lp/">guides</a>
+    <a href="/about.html">about</a>
+    <a href="/signin.html">sign in</a>
+  </nav>
+</header>
+
+<main class="blog-post">
+
+<article class="post-header">
+  <h1>Timestamp screenshots as forensic evidence</h1>
+  <p class="post-meta muted">A workflow for anyone who has ever taken a screenshot of something they might need to prove existed.</p>
+</article>
+
+<section class="post-body">
+
+<p>
+  A bare screenshot is among the weakest forms of digital evidence. The
+  browser's developer tools can edit any visible text in fifteen
+  seconds. Photoshop can do the rest. Any opponent in a dispute will,
+  correctly, respond to your screenshot with "you fabricated this." A
+  cryptographic timestamp on the screenshot, captured within minutes
+  of the screenshot itself, cuts off most of that response. It doesn't
+  prove the original page actually said what your screenshot shows —
+  but it does prove that you weren't <em>just now</em> editing it after
+  the dispute began.
+</p>
+
+<h2>The 30-second workflow</h2>
+<ol>
+  <li>
+    Take the screenshot the normal way.
+  </li>
+  <li>
+    Drop the screenshot file into Orphograph. SHA-256 runs locally;
+    the image bytes don't leave.
+  </li>
+  <li>
+    Save the receipt JSON in the same folder as the screenshot.
+  </li>
+</ol>
+<p>
+  The gap between "I took the screenshot" and "I anchored it" is the
+  window in which an opponent can claim you doctored the image. Keep
+  that window minutes long, not days, and the claim becomes
+  implausible.
+</p>
+
+<h2>What the anchor actually proves</h2>
+<p>
+  The receipt proves: <em>this exact screenshot file existed by this
+  Bitcoin block time</em>. It does not prove the page you screenshotted
+  ever said what's in the screenshot — that's a separate evidentiary
+  question, addressed by tools like archive.org, the Wayback Machine,
+  and platform-side records. The Orphograph timestamp closes off the
+  "you Photoshopped it after the fact" defense. It does not close off
+  the "you Photoshopped it before the screenshot was taken" defense,
+  which is a different conversation about the source authenticity.
+</p>
+
+<h2>Common use cases</h2>
+<ul>
+  <li>
+    <strong>Harassment documentation.</strong> When someone sends
+    threatening DMs and then deletes them, a screenshot anchored
+    immediately after receipt establishes the message existed in your
+    inbox at a specific time.
+  </li>
+  <li>
+    <strong>Defamation receipts.</strong> Public posts get edited or
+    deleted. An anchored screenshot captures the original form.
+  </li>
+  <li>
+    <strong>Vendor disputes.</strong> A pricing page or terms-of-service
+    page that changes mid-dispute. The anchored screenshot documents
+    what the page said when you relied on it.
+  </li>
+  <li>
+    <strong>Bug reports.</strong> A weird UI state that the vendor
+    later denies could have happened. The anchored screenshot is
+    timestamped evidence.
+  </li>
+</ul>
+
+<h2>Pair with the rest of the evidence stack</h2>
+<p>
+  For anything serious, the anchored screenshot is one layer.
+  Additional layers worth collecting at the same time:
+</p>
+<ul>
+  <li>
+    The live URL, copied to a notes file you also anchor.
+  </li>
+  <li>
+    A Wayback Machine capture, requested at the moment of the
+    incident.
+  </li>
+  <li>
+    Browser developer-tools network logs, exported as HAR and
+    anchored.
+  </li>
+  <li>
+    A short text note describing what happened, anchored alongside the
+    screenshot.
+  </li>
+</ul>
+<p>
+  Each is cheap. Together they form a corroborating story that's hard
+  to dismiss as fabricated.
+</p>
+
+<h2>What this is not</h2>
+<p>
+  Not legal evidence on its own. Not authentication of the underlying
+  page. Not source-protection or anonymization tooling. For serious
+  cases, consult an attorney who handles digital evidence.
+</p>
+
+<div class="post-footer" style="margin: 36px 0; padding: 24px; background: var(--accent-soft); border: 1px solid var(--accent-stroke); border-radius: 12px;">
+  <h2 style="margin-top:0;">Anchor your first file — free</h2>
+  <p>Drop a screenshot, get a Bitcoin-anchored receipt within seconds. The image never uploads.</p>
+  <p><a class="btn" href="/#drop" style="display:inline-block; padding: 10px 18px; border: 1px solid var(--accent); color: var(--accent); border-radius: 8px; text-decoration: none;">Start now →</a></p>
+</div>
+
+<h2 id="faq">FAQ</h2>
+<div class="faq">
+  <h3>Why does a screenshot need a timestamp?</h3>
+  <p>Screenshots are trivial to fake. Without an independent timestamp, "you fabricated it" is the easy response. An anchor seconds after capture closes off that defense.</p>
+
+  <h3>Does the screenshot upload?</h3>
+  <p>No. SHA-256 runs in your browser. Only the hash leaves.</p>
+
+  <h3>How quickly should I anchor?</h3>
+  <p>Within minutes. The shorter the gap, the stronger the claim.</p>
+
+  <h3>Can I anchor a batch?</h3>
+  <p>Yes. Zip them and anchor the zip; the receipt covers the whole batch.</p>
+
+  <h3>Is a screenshot timestamp enough by itself in a serious case?</h3>
+  <p>No. Pair it with the live URL, an archive.org capture, and platform-side records. It's a strong layer, not a one-shot proof.</p>
+</div>
+
+</section>
+
+</main>
+
+<footer>
+  <small>
+    <a href="/">← Home</a> ·
+    <a href="/lp/">More guides</a> ·
+    <a href="/about.html">About</a> ·
+    <a href="/privacy.html">Privacy</a> ·
+    We never see your file
+  </small>
+</footer>
+
+</body>
+</html>

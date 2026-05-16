@@ -1,0 +1,135 @@
+/* receipt.css — print-friendly receipt view at /r/<id>. */
+
+.receipt-page main { max-width: 720px; }
+
+.receipt-card {
+  background: var(--panel);
+  border: 1px solid var(--panel-stroke);
+  border-radius: 14px;
+  padding: 48px;
+  margin: 48px 0;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  border-bottom: 1px solid var(--panel-stroke);
+  padding-bottom: 24px;
+  margin-bottom: 24px;
+}
+.card-header h1 { font-size: 26px; font-weight: 400; margin: 0 0 4px; letter-spacing: 0; }
+.brand-stamp { text-align: right; opacity: 0.85; }
+.small { font-size: 12px; line-height: 1.4; }
+
+dl.kv { display: grid; grid-template-columns: 220px 1fr; gap: 12px 24px; margin: 0 0 32px; }
+dl.kv dt { color: var(--muted); font-size: 13px; padding-top: 2px; }
+dl.kv dd { margin: 0; font-size: 14px; word-break: break-all; line-height: 1.5; }
+
+.checks { margin-bottom: 32px; }
+.checks h2 { font-size: 16px; font-weight: 500; margin: 0 0 12px; }
+.checks ul { list-style: none; padding: 0; margin: 0; }
+.checks li {
+  padding: 10px 14px; margin: 6px 0;
+  border: 1px solid var(--panel-stroke); border-radius: 8px;
+  display: flex; gap: 12px; align-items: baseline;
+  font-size: 13px;
+}
+.checks .ok { color: var(--accent); }
+.checks .bad { color: var(--bad); }
+.checks .file { font-family: var(--mono); }
+
+.footnote p { color: var(--muted); font-size: 13px; margin: 0 0 10px; }
+.footnote a { color: var(--accent); }
+
+#err { padding: 24px; }
+
+/* Print rules: hide chrome, reset background to white, ensure ink-friendly text. */
+@media print {
+  .no-print { display: none !important; }
+  html, body { background: white !important; color: black !important; }
+  .receipt-card {
+    background: white !important; border: 1px solid #444; box-shadow: none;
+    padding: 0; margin: 0;
+  }
+  .card-header { border-bottom-color: #888; }
+  .checks li { border-color: #888; }
+  .muted, dl.kv dt { color: #555 !important; }
+  .footnote p, .footnote .small { color: #444 !important; }
+  .brand-stamp svg line, .brand-stamp svg circle, .brand-stamp svg path { stroke: #000 !important; }
+  .checks .ok { color: #006a3d !important; }
+  .checks .bad { color: #aa1212 !important; }
+  a { color: #000 !important; text-decoration: underline; }
+  /* avoid awkward page breaks inside the card */
+  .receipt-card, dl.kv, .checks li { break-inside: avoid; }
+}
+
+/* External-explorer cards on receipt page — proves "don't trust us".
+   Cream-warm palette matches the rest of the site. */
+.explorers {
+  margin-top: 32px;
+  padding-top: 24px;
+  border-top: 1px solid var(--panel-stroke);
+}
+.explorers h2 {
+  font-size: 16px;
+  margin: 0 0 8px;
+  color: var(--text);
+  font-weight: 500;
+}
+.explorer-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+.explorer-card {
+  background: var(--panel);
+  border: 1px solid var(--panel-stroke);
+  border-radius: 8px;
+  padding: 14px 16px;
+}
+.explorer-card h3 {
+  font-size: 14px;
+  margin: 0 0 6px;
+  color: var(--accent);
+  text-transform: capitalize;
+  font-weight: 500;
+}
+.explorer-card .small {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-soft);
+}
+.explorer-card .btn-link {
+  display: inline-block;
+  margin-top: 8px;
+  padding: 5px 10px;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-stroke);
+  border-radius: 4px;
+  color: var(--accent);
+  font-size: 12px;
+  text-decoration: none;
+}
+.explorer-card .btn-link:hover {
+  background: rgba(74,154,115,0.18);
+}
+.explorer-card .ok { color: var(--accent); }
+.explorer-card .bad { color: var(--bad); }
+.explorer-link-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.explorer-card-btc { border-color: rgba(247,147,26,0.30); background: rgba(247,147,26,0.04); }
+.explorer-card-btc h3 { color: #b56c12; }
+.footnote-explorer {
+  margin-top: 12px;
+  padding: 10px 12px;
+  background: var(--accent-soft);
+  border-left: 3px solid var(--accent);
+  border-radius: 0 4px 4px 0;
+  color: var(--text-soft);
+}

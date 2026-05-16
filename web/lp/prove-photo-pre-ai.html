@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>How to prove a photo existed before AI training — Orphograph</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Prove a photo existed before AI training cutoffs using Bitcoin-anchored timestamps. SHA-256 hashing runs in your browser — the file never uploads. Free for one anchor per month.">
+<link rel="canonical" href="https://orphograph.com/lp/prove-photo-pre-ai.html">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<meta property="og:title" content="How to prove a photo existed before AI training">
+<meta property="og:description" content="Anchor a SHA-256 of your photo to Bitcoin in under a minute. Your file never leaves your browser. Receipts verify forever.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://orphograph.com/lp/prove-photo-pre-ai.html">
+<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/blog.css">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "Does the photo upload to your server?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "No. The SHA-256 fingerprint is computed in your browser via WebCrypto. Only the 32-byte hash is sent to the anchor service. The image bytes never leave your machine."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Will a Bitcoin timestamp actually convince a skeptic that my photo predates an AI model?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "A timestamp proves the file existed at a specific block time. If that time is earlier than a model's published training-data cutoff, you have a hard cryptographic anchor that the file was on disk before the model could have learned from it. It is not legal evidence on its own, but it is the strongest pre-existence claim that does not require trusting any single company."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "What if Orphograph shuts down in two years?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Your receipt.json plus the five .ots proof files keep working. The open-source verify_cli.py validates them directly against the Bitcoin chain. No Orphograph server is required for verification."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Do I need to anchor every photo I take?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Most photographers only anchor the work they expect to defend later — portfolio shots, client deliverables, anything that might surface in a future AI dispute. You can also hash a folder manifest and anchor the manifest in one shot."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "How is this different from EXIF metadata or a cloud backup timestamp?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "EXIF can be edited with free software. Cloud-backup timestamps depend on the cloud provider continuing to exist and being honest. A Bitcoin-anchored hash depends on the Bitcoin chain, which is replicated across roughly 50,000 nodes worldwide."
+      }
+    }
+  ]
+}
+</script>
+</head>
+<body>
+
+<header>
+  <div class="brand"><a href="/">orphograph</a></div>
+  <nav>
+    <a href="/#how">how it works</a>
+    <a href="/#pricing">pricing</a>
+    <a href="/lp/">guides</a>
+    <a href="/about.html">about</a>
+    <a href="/signin.html">sign in</a>
+  </nav>
+</header>
+
+<main class="blog-post">
+
+<article class="post-header">
+  <h1>How to prove a photo existed before AI training</h1>
+  <p class="post-meta muted">A practical walk-through for working photographers, illustrators, and editorial shooters.</p>
+</article>
+
+<section class="post-body">
+
+<p>
+  If your work is good enough that someone might one day claim
+  <em>you</em> stole it from an AI image generator, you need a way to
+  prove the photo existed before that generator's training cutoff. EXIF
+  metadata won't help — it's a text field anyone can rewrite. A Google
+  Photos timestamp won't help — Google can revise its own database and
+  has no obligation to keep one for a decade. What does help is a
+  cryptographic anchor to a public chain nobody controls.
+</p>
+
+<h2>The shape of the proof</h2>
+<p>
+  A SHA-256 hash is a 64-character fingerprint of the file's bytes. Change
+  one pixel and the hash changes completely. When you anchor that hash to
+  the Bitcoin blockchain via OpenTimestamps, you publish — for anyone to
+  see — a record that says: "this exact file's fingerprint existed on or
+  before block N." Block N has a timestamp in UTC. That timestamp is
+  enforced by ~50,000 independent computers running Bitcoin Core. Rewriting
+  it would require redoing every block of mining work since then, which
+  has never happened in sixteen years of Bitcoin history.
+</p>
+<p>
+  In practical terms: you drop a photo into Orphograph, the browser
+  hashes it locally, the hash gets submitted to five independent
+  OpenTimestamps calendars, and within about an hour the calendars
+  fold your hash into a Merkle root that lands in a Bitcoin
+  transaction. You walk away with a small receipt file. Five years
+  later, anyone with your original photo plus that receipt can
+  re-hash the photo, check the receipt against the live Bitcoin
+  chain, and confirm the date — without trusting Orphograph or any
+  other intermediary.
+</p>
+
+<h2>Why pre-AI proof matters now</h2>
+<p>
+  Generative image models have published training cutoffs. Stability AI's
+  SDXL 1.0 trained on data scraped before mid-2023. Midjourney v5 closed
+  its dataset in early 2023. If you can prove your image existed before
+  those cutoffs, you defeat the most common bad-faith claim: that your
+  work was generated <em>by</em> a model rather than fed <em>into</em>
+  one. That claim shows up in stock-license rejections, in plagiarism
+  callouts on social media, and in style-mimicry disputes between
+  illustrators and AI service providers.
+</p>
+<p>
+  The defense isn't "I'm a real artist" — that's not falsifiable. The
+  defense is a timestamp from a chain that started running in 2009.
+</p>
+
+<h2>The exact workflow</h2>
+<ol>
+  <li>
+    Export the photo at the resolution you want to defend. If you might
+    publish at 4K, anchor at 4K. If you might publish a watermarked
+    web-resolution version too, anchor that separately — they have
+    different hashes.
+  </li>
+  <li>
+    Drop the file into the Orphograph drop zone. SHA-256 runs in your
+    browser; the bytes never leave. You'll see a 64-character hash
+    appear in seconds.
+  </li>
+  <li>
+    The hash is submitted to five calendars: a.pool, b.pool, alice,
+    finney, and btc.catallaxy. Each is operated by a different party.
+    You only need one to survive to verify.
+  </li>
+  <li>
+    Download your receipt JSON. Save it next to the original photo.
+    Backups in two places — local drive plus a cloud bucket — cost
+    nothing and inoculate you against drive failure.
+  </li>
+</ol>
+
+<h2>What this is not</h2>
+<p>
+  This is proof-of-existence, not legal evidence on its own. We don't
+  claim court-admissibility, we don't act as a notary, and we don't
+  certify your identity — only that <em>some file with this exact
+  content</em> existed at the anchored time. For litigation, talk to a
+  digital-evidence specialist who can place your timestamp inside a
+  broader chain-of-custody. What we sell is the cheapest, most durable
+  pre-existence anchor available to a one-person creative business.
+</p>
+
+<div class="post-footer" style="margin: 36px 0; padding: 24px; background: var(--accent-soft); border: 1px solid var(--accent-stroke); border-radius: 12px;">
+  <h2 style="margin-top:0;">Anchor your first file — free</h2>
+  <p>One anchor per month is free, forever. No card, no signup. Drop a photo, get a receipt.</p>
+  <p><a class="btn" href="/#drop" style="display:inline-block; padding: 10px 18px; border: 1px solid var(--accent); color: var(--accent); border-radius: 8px; text-decoration: none;">Start now →</a></p>
+</div>
+
+<h2 id="faq">FAQ</h2>
+<div class="faq">
+  <h3>Does the photo upload to your server?</h3>
+  <p>No. The SHA-256 fingerprint is computed in your browser via WebCrypto. Only the 32-byte hash is sent to the anchor service. The image bytes never leave your machine.</p>
+
+  <h3>Will a Bitcoin timestamp convince a skeptic that my photo predates an AI model?</h3>
+  <p>A timestamp proves the file existed at a specific block time. If that time is earlier than a model's published training-data cutoff, you have a hard cryptographic anchor that the file was on disk before the model could have learned from it. It is not legal evidence on its own, but it is the strongest pre-existence claim that does not require trusting any single company.</p>
+
+  <h3>What if Orphograph shuts down?</h3>
+  <p>Your <code>receipt.json</code> plus the five <code>.ots</code> proof files keep working. The open-source <code>verify_cli.py</code> validates them directly against the Bitcoin chain. No Orphograph server required.</p>
+
+  <h3>Do I need to anchor every photo?</h3>
+  <p>No. Anchor what you'd want to defend later — portfolio shots, client deliverables, things that might surface in an AI dispute. You can also hash a folder manifest and anchor that one file.</p>
+
+  <h3>How is this different from EXIF or a cloud-backup date?</h3>
+  <p>EXIF is editable in seconds with free tools. Cloud-backup dates depend on the cloud provider's continued existence and honesty. A Bitcoin-anchored hash depends on the chain, which is replicated across ~50,000 nodes.</p>
+</div>
+
+</section>
+
+</main>
+
+<footer>
+  <small>
+    <a href="/">← Home</a> ·
+    <a href="/lp/">More guides</a> ·
+    <a href="/about.html">About</a> ·
+    <a href="/privacy.html">Privacy</a> ·
+    We never see your file
+  </small>
+</footer>
+
+</body>
+</html>

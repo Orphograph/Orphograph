@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Join an Orphograph team</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/style.css">
+<style>
+  .join-card {
+    max-width: 480px;
+    margin: 60px auto;
+    text-align: center;
+    background: var(--panel);
+    border: 1px solid var(--panel-stroke);
+    border-radius: 14px;
+    padding: 32px;
+  }
+  .join-card code { display: block; word-break: break-all; padding: 8px; background: var(--bg); border-radius: 6px; margin: 12px 0; font-size: 13px; }
+  .join-card .btn { display: inline-block; margin-top: 20px; padding: 12px 24px; }
+  #join-result { margin-top: 16px; }
+</style>
+</head>
+<body>
+
+<header class="topnav">
+  <a href="/" class="brand"><strong>Orphograph</strong></a>
+</header>
+
+<main>
+  <div class="join-card">
+    <h1>Join a team</h1>
+    <p class="muted">
+      You've been invited to join an Orphograph team. The owner's subscription
+      gives you unlimited anchors while you're a member.
+    </p>
+    <code id="invite-code">…</code>
+    <div id="signed-out" hidden>
+      <p class="hint">
+        Sign in first, then come back to this link — or paste the invite code
+        on your account page.
+      </p>
+      <a href="/signin.html?then=/team/join" class="btn">Sign in</a>
+    </div>
+    <div id="signed-in" hidden>
+      <p id="signed-in-email" class="muted small"></p>
+      <button id="redeem-btn" type="button" class="btn">Redeem invite</button>
+      <p id="join-result" hidden></p>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <small><a href="/">Home</a> · <a href="/privacy.html">Privacy</a> · <a href="/terms.html">Terms</a></small>
+</footer>
+
+<script>
+(async function () {
+  const params = new URLSearchParams(location.search);
+  const code = (params.get("code") || "").trim();
+  const codeEl = document.getElementById("invite-code");
+  if (!code) {
+    codeEl.textContent = "(no invite code in URL — ask the team owner for a fresh link)";
+    return;
+  }
+  codeEl.textContent = code;
+
+  let me = null;
+  try {
+    const r = await fetch("/api/me", { credentials: "same-origin" });
+    if (r.ok) me = await r.json();
+  } catch {}
+
+  if (!me || !me.email) {
+    document.getElementById("signed-out").hidden = false;
+    return;
+  }
+
+  document.getElementById("signed-in").hidden = false;
+  document.getElementById("signed-in-email").textContent = "Signed in as " + me.email;
+  document.getElementById("redeem-btn").addEventListener("click", async () => {
+    const r = await fetch("/api/me/team/redeem", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ invite_code: code }),
+    });
+    const data = await r.json().catch(() => ({}));
+    const result = document.getElementById("join-result");
+    result.hidden = false;
+    if (data.ok) {
+      result.textContent = "Joined! Redirecting to your account…";
+      setTimeout(() => { location.href = "/account.html"; }, 800);
+    } else {
+      result.textContent = data.error || "Could not redeem invite.";
+    }
+  });
+})();
+</script>
+</body>
+</html>

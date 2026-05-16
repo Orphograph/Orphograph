@@ -1,0 +1,135 @@
+/* stats.css — marketing-oriented stats page.
+ *
+ * Distinct from status.css: status is small operational cards, stats leans
+ * on one giant lifetime number plus secondary grid. Cream-warm palette
+ * inherited from style.css (--bg, --panel, --accent, etc.).
+ */
+
+.stats-hero {
+  margin: 32px 0 48px;
+  text-align: left;
+}
+.stats-hero h1 {
+  font-size: 42px;
+  font-weight: 300;
+  letter-spacing: -0.01em;
+  margin: 0 0 16px;
+}
+.stats-hero .lede {
+  max-width: 60ch;
+}
+
+.big-numbers {
+  margin: 32px 0 56px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.big {
+  background: var(--panel);
+  border: 1px solid var(--panel-stroke);
+  border-radius: 14px;
+  padding: 40px 28px;
+  text-align: center;
+}
+.big-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.big.small {
+  padding: 24px 20px;
+}
+.big-value {
+  font-size: 72px;
+  font-weight: 200;
+  letter-spacing: -0.02em;
+  line-height: 1.0;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+.big.small .big-value {
+  font-size: 44px;
+}
+.big-value[data-pending="1"] {
+  color: var(--muted);
+}
+.big-label {
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  text-transform: lowercase;
+}
+
+.stats-row {
+  margin: 56px 0;
+}
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px;
+  margin-top: 20px;
+}
+.stat-card {
+  background: var(--panel);
+  border: 1px solid var(--panel-stroke);
+  border-radius: 12px;
+  padding: 20px;
+}
+.stat-label {
+  color: var(--muted);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  text-transform: lowercase;
+}
+.stat-value {
+  font-size: 24px;
+  font-weight: 300;
+  margin-top: 6px;
+  font-variant-numeric: tabular-nums;
+}
+.stat-value.ok { color: var(--accent); }
+.stat-value.bad { color: var(--bad); }
+.stat-sub {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.cal-list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.cal-list li {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 0;
+  border-top: 1px solid var(--panel-stroke-soft);
+}
+.cal-list li:first-child { border-top: 0; }
+.cal-list .cal-name { font-family: var(--mono); font-size: 11.5px; }
+.cal-list .cal-ok { color: var(--accent); }
+.cal-list .cal-bad { color: var(--bad); }
+
+.stats-foot {
+  margin-top: 64px;
+  padding-top: 24px;
+  border-top: 1px solid var(--panel-stroke);
+}
+.stats-foot p {
+  max-width: 60ch;
+  color: var(--text-soft);
+}
+.stats-foot .small {
+  font-size: 12.5px;
+}
+
+@media (max-width: 540px) {
+  .big-value { font-size: 56px; }
+  .big.small .big-value { font-size: 32px; }
+  .big-row { grid-template-columns: 1fr; }
+}

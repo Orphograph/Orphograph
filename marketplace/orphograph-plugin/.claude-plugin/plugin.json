@@ -1,0 +1,22 @@
+{
+  "name": "orphograph",
+  "version": "0.1.0",
+  "description": "Bitcoin-anchored file timestamping. Prove a file existed at a specific moment — without uploading the file. Only the SHA-256 hash leaves your machine, anchored to Bitcoin via OpenTimestamps. Useful for photographers, journalists, researchers, and creators who need pre-AI-era provenance.",
+  "author": {
+    "name": "Orphograph",
+    "url": "https://orphograph.com"
+  },
+  "homepage": "https://orphograph.com",
+  "repository": "https://github.com/orphograph/orphograph",
+  "license": "MIT",
+  "keywords": [
+    "timestamping",
+    "bitcoin",
+    "opentimestamps",
+    "provenance",
+    "ai-provenance",
+    "photography",
+    "sha256",
+    "proof-of-existence"
+  ]
+}

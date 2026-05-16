@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+launchd config for orphograph-capture.
+Copy to ~/Library/LaunchAgents/ and load with:
+  launchctl load ~/Library/LaunchAgents/com.orphograph.capture.plist
+Edit the watch directories and API key before loading.
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.orphograph.capture</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/python3</string>
+        <string>/Users/CHANGEME/orphograph/capture/orphograph_capture.py</string>
+        <string>--watch</string>
+        <string>/Users/CHANGEME/Pictures</string>
+        <string>--watch</string>
+        <string>/Users/CHANGEME/Desktop</string>
+        <string>--interval</string>
+        <string>5</string>
+    </array>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>ORPHO_ENDPOINT</key>
+        <string>https://orphograph.com</string>
+        <key>ORPHO_API_KEY</key>
+        <string>PASTE_YOUR_CREATOR_TIER_KEY_HERE</string>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/CHANGEME/Library/Logs/orphograph-capture.out</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/CHANGEME/Library/Logs/orphograph-capture.err</string>
+
+    <key>ProcessType</key>
+    <string>Background</string>
+
+    <key>Nice</key>
+    <integer>10</integer>
+</dict>
+</plist>

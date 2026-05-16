@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Orphograph — Prove your art existed before the bots saw it</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Anchor any file to Bitcoin in 10 seconds. Your file never leaves your browser. Your receipt verifies forever — even if we vanish.">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<meta property="og:title" content="Orphograph — Prove your art existed before the bots saw it">
+<meta property="og:description" content="Anchor any file to Bitcoin in 10 seconds. Your file never leaves your browser. Your receipt verifies forever.">
+<meta property="og:image" content="/og.svg">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://orphograph.com/">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="/og.svg">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<header>
+  <div class="brand">orphograph</div>
+  <nav>
+    <a href="#how">how it works</a>
+    <a href="#pricing">pricing</a>
+    <a href="#faq">faq</a>
+    <a href="#verify">verify</a>
+    <a href="/about.html">about</a>
+    <a href="/press.html">press</a>
+    <a href="/signin.html" id="nav-signin">sign in</a>
+    <a href="/account.html" id="nav-account" hidden>account</a>
+  </nav>
+</header>
+
+<main>
+
+<section class="hero">
+  <h1>Prove your art existed before the bots saw it.</h1>
+  <p class="lede">
+    Anchor any file to Bitcoin in 10 seconds. SHA-256 is computed in your browser —
+    your image never leaves your machine. You get a receipt anyone can verify against
+    Bitcoin's chain, with or without us.
+  </p>
+  <ul class="trust">
+    <li>Open-source verifier</li>
+    <li>No file uploads — ever</li>
+    <li>5 independent Bitcoin calendars</li>
+    <li>Receipt verifies forever</li>
+  </ul>
+  <div id="pack-banner" class="pack-banner" hidden>
+    <strong>Pack active.</strong>
+    <span id="pack-balance-text">checking balance…</span>
+    <button id="pack-clear" class="link">remove</button>
+  </div>
+</section>
+
+<section class="explainer">
+  <h2>In plain language, what is this?</h2>
+  <p>
+    Imagine you took a photo this morning. You want a way to prove to
+    anyone, forever, that <em>this exact photo existed before this exact
+    moment</em>. Not "I uploaded it to Instagram" (Instagram can edit the
+    timestamp, or vanish, or delete your account). Something that doesn't
+    depend on any single company — including ours — continuing to exist.
+  </p>
+  <p>
+    That's what this site does. Drop a file. We compute a small
+    cryptographic fingerprint of it — right inside your browser, so the file
+    itself never leaves your machine — and we anchor that fingerprint to the
+    Bitcoin blockchain. The Bitcoin chain is run by ~50,000 independent
+    computers worldwide; once your fingerprint is in it, the only way for
+    someone to remove the proof would be to convince every one of them.
+    That's never happened in 16 years.
+  </p>
+  <p>
+    You get a small receipt file (~3 KB). Save it next to your photo. Five
+    years from now, anyone with your photo + your receipt can verify it
+    against the Bitcoin chain in 10 seconds — even if our website is long
+    gone. The receipt is yours, the proof is yours, and you don't need to
+    trust us to read it.
+  </p>
+</section>
+
+<section class="use-cases">
+  <h2>Why you'd want this</h2>
+  <div class="use-grid">
+    <div class="use">
+      <h3>You make art and AI is being trained on it</h3>
+      <p>
+        If your work shows up in a generative AI dataset, you may need to
+        prove it was made before the model was trained. A Bitcoin timestamp
+        from before the training cutoff is hard for anyone to argue with.
+      </p>
+    </div>
+    <div class="use">
+      <h3>You're a journalist or photographer with sensitive material</h3>
+      <p>
+        Documents leaked to you, photos from a protest, a recording that
+        might be challenged later — anchor the originals immediately. If
+        anyone claims the file was created or altered after the fact, your
+        receipt says otherwise.
+      </p>
+    </div>
+    <div class="use">
+      <h3>You delivered creative work to a client</h3>
+      <p>
+        Anchor the final deliverable on delivery day. If a dispute comes up
+        later — "this isn't what we agreed to" — you have cryptographic
+        proof of what you actually sent and when.
+      </p>
+    </div>
+    <div class="use">
+      <h3>You're documenting something for the long term</h3>
+      <p>
+        Family archive, oral history, research data, anything where the date
+        matters and you want it to still be verifiable in 30 years without
+        depending on any company surviving that long.
+      </p>
+    </div>
+  </div>
+</section>
+
+<section class="how-now">
+  <h2>How to use it — your first anchor in 3 steps</h2>
+  <ol class="steps">
+    <li>
+      <strong>Drop a file into the box below.</strong>
+      Any file works — photo, PDF, MP3, ZIP, code, whatever. The file
+      itself never leaves your laptop; we only ever see a 64-character
+      fingerprint.
+    </li>
+    <li>
+      <strong>Wait about 10 seconds.</strong>
+      We send the fingerprint to five independent Bitcoin timestamp servers.
+      You'll see green checkmarks appear as each one confirms.
+    </li>
+    <li>
+      <strong>Download your receipt.</strong>
+      It's a tiny file (~3 KB). Save it next to the original file you
+      anchored. That's it — your proof exists, forever.
+    </li>
+  </ol>
+  <p class="hint" style="margin-top:18px;">
+    To check a receipt later, scroll to <a href="#verify">Verify</a> below
+    or use the open-source <a href="/verify/">command-line tool</a>. Both
+    work even if our site disappears.
+  </p>
+</section>
+
+<section id="drop" class="drop" tabindex="0">
+  <input type="file" id="file" hidden>
+  <div class="drop-inner">
+    <div class="drop-icon">＋</div>
+    <div class="drop-text">Drop a file here, or <button id="pick" class="link">pick one</button></div>
+    <div class="drop-sub">Nothing uploads. SHA-256 is computed locally in your browser.</div>
+  </div>
+</section>
+
+<section id="email-row" class="email-row" hidden>
+  <label for="notify-email">Email for your receipt (Pack only):</label>
+  <input id="notify-email" type="email" placeholder="you@example.com" autocomplete="email">
+</section>
+
+<section id="privacy-row" class="privacy-row">
+  <label class="privacy-toggle">
+    <input type="checkbox" id="include-filename">
+    <span>Include filename in receipt (default: off — only the hash is sent)</span>
+  </label>
+  <label class="privacy-toggle">
+    <input type="checkbox" id="include-exif">
+    <span>Include camera metadata (EXIF camera, lens, capture time — GPS dropped)</span>
+  </label>
+  <label class="privacy-toggle" id="private-receipt-row" hidden>
+    <input type="checkbox" id="private-receipt">
+    <span>Make this receipt private (only you can view — Personal subscribers)</span>
+  </label>
+  <p class="hint small">
+    By default, only the cryptographic fingerprint reaches our server.
+    Optional metadata strengthens proof-of-existence in disputes; GPS coordinates
+    are always stripped client-side before sending.
+  </p>
+</section>
+
+<section id="attest-row" class="attest-row">
+  <details class="attest-details">
+    <summary>Add authorship claim (optional, anchored with the receipt)</summary>
+    <p class="hint small">
+      A brief statement about the file. Anchored alongside the hash to Bitcoin
+      so its existence at this date is provable. Does not legally establish
+      authorship — it's an additional signed piece of evidence.
+    </p>
+    <label for="attest-claim">Claim</label>
+    <input id="attest-claim" type="text" maxlength="500"
+           placeholder="I took this photo on 2026-05-15 in San Juan, PR.">
+    <label for="attest-author">Author (optional)</label>
+    <input id="attest-author" type="text" maxlength="200"
+           placeholder="Your name or handle">
+    <label for="attest-license">License (optional)</label>
+    <input id="attest-license" type="text" maxlength="100"
+           placeholder="e.g. CC-BY 4.0, All rights reserved">
+  </details>
+</section>
+
+<section id="status" class="status" hidden>
+  <div class="step" data-step="hash">Hashing locally…</div>
+  <div class="step" data-step="post">Submitting hash to anchor service…</div>
+  <div class="step" data-step="cals">Stamping to 5 Bitcoin calendars…</div>
+  <div class="step" data-step="done">Receipt ready.</div>
+</section>
+
+<section id="receipt" class="receipt" hidden>
+  <h2>Receipt</h2>
+  <dl>
+    <dt>Receipt ID</dt><dd id="r-id"></dd>
+    <dt>SHA-256</dt><dd id="r-hash" class="mono"></dd>
+    <dt>Anchored at (UTC)</dt><dd id="r-time"></dd>
+    <dt>Calendars</dt><dd id="r-cals"></dd>
+  </dl>
+  <div id="r-warn" class="warn" hidden></div>
+  <div class="actions">
+    <button id="download">Download receipt JSON</button>
+    <button id="copy">Copy receipt ID</button>
+    <button id="share">Copy share link</button>
+    <a id="view-receipt" class="btn-link" href="#" target="_blank" rel="noopener">View / print receipt →</a>
+  </div>
+  <p class="hint critical">
+    Save this receipt now — without it you cannot prove anything later.
+    Bitcoin block-pinning upgrades within ~1 hour; the OTS proof becomes fully
+    block-attested after that.
+  </p>
+</section>
+
+<section id="sample" class="sample">
+  <h2>See a real receipt before you buy</h2>
+  <p>
+    This is an actual Orphograph receipt for a short text file we anchored at launch.
+    Click verify and watch the chain of custody check live against the same server
+    you'd use for your own files.
+  </p>
+  <div id="sample-card" class="receipt">
+    <dl>
+      <dt>Receipt ID</dt><dd id="s-id" class="mono">loading…</dd>
+      <dt>SHA-256</dt><dd id="s-hash" class="mono"></dd>
+      <dt>Source file</dt><dd><a id="s-file" href="#" download>sample.txt</a></dd>
+    </dl>
+    <div class="actions">
+      <button id="s-verify">Verify this sample</button>
+      <a id="s-receipt-dl" class="btn-link" href="#" download>Download receipt.json</a>
+      <button id="s-share" class="btn-link">Copy share link</button>
+    </div>
+    <pre id="s-out" class="mono"></pre>
+  </div>
+  <p class="hint">
+    The receipt and the five <code>.ots</code> proof files are committed to our
+    repo so anyone can run <code>verify_cli.py sample/receipt.json --file sample/sample.txt</code>
+    and reach the same answer without trusting us.
+  </p>
+</section>
+
+<section id="how">
+  <h2>How it works</h2>
+  <ol>
+    <li>Your browser computes the SHA-256 of your file using <code>crypto.subtle</code> — the file never leaves your machine.</li>
+    <li>The 32-byte hash is sent to our server, which submits it to five OpenTimestamps calendars.</li>
+    <li>Each calendar aggregates many hashes into a single Merkle root and writes it to a Bitcoin transaction (~hourly).</li>
+    <li>You receive a receipt with the hash, timestamp, and five independently-verifiable OTS proofs.</li>
+    <li>To prove existence later, anyone can re-hash the original file and check the receipt — no trust in us required.</li>
+  </ol>
+</section>
+
+<section id="pricing">
+  <h2>Pricing</h2>
+  <div class="tiers">
+    <div class="tier">
+      <h3>Free</h3>
+      <p class="price">$0</p>
+      <ul>
+        <li>1 anchor per month</li>
+        <li>Receipt JSON download</li>
+        <li>Standalone verifier</li>
+      </ul>
+      <p class="tier-cta muted">Just drop a file above.</p>
+    </div>
+    <div class="tier highlight">
+      <h3>Pack</h3>
+      <p class="price">$7 <span class="price-sub">one-time</span></p>
+      <ul>
+        <li>10 anchors, never expires</li>
+        <li>Receipt emailed to you</li>
+        <li>Skip the rate limit</li>
+      </ul>
+      <p class="tier-cta">
+        <a class="btn" id="buy-pack" href="#" data-stripe-placeholder="true">Buy a Pack</a>
+      </p>
+      <p class="tier-note muted">Checkout opens in a new tab. After paying, check your email for the claim link.</p>
+      <p class="tier-note muted small">
+        Or <a href="/gift.html">gift a Pack to someone</a> — they get the claim code by email.
+      </p>
+      <p class="coupon-pill muted" id="coupon-pill" hidden></p>
+    </div>
+    <div class="tier">
+      <h3>Personal</h3>
+      <div class="billing-toggle" role="tablist" aria-label="Billing cadence">
+        <button type="button" id="billing-monthly" class="billing-btn active" role="tab" aria-selected="true">Monthly</button>
+        <button type="button" id="billing-annual" class="billing-btn" role="tab" aria-selected="false">Annual <span class="save-pill">save $0</span></button>
+      </div>
+      <p class="price">
+        <span id="personal-price">$5</span>
+        <span class="price-sub" id="personal-cadence">/ month</span>
+      </p>
+      <p class="muted small" id="personal-equiv" hidden></p>
+      <ul>
+        <li>Unlimited anchors</li>
+        <li>Email delivery</li>
+        <li>Anchor history</li>
+      </ul>
+      <p class="tier-cta">
+        <a class="btn" id="buy-personal" href="#" data-stripe-placeholder="true">Subscribe</a>
+      </p>
+      <p class="tier-note muted" id="personal-note">Subscriptions launch alongside the public site. Join the waitlist below to be notified.</p>
+      <form class="waitlist-form" data-interest="personal">
+        <label for="wl-personal" class="visually-hidden">Email</label>
+        <input id="wl-personal" type="email" placeholder="you@example.com" autocomplete="email" required>
+        <button type="submit">Notify me</button>
+        <span class="wl-msg muted" hidden></span>
+      </form>
+    </div>
+  </div>
+</section>
+
+<section id="verify">
+  <h2>Verify a receipt</h2>
+  <p>
+    Re-hash your file in this browser and check it against any receipt ID.
+    Same client-side privacy: nothing uploads.
+  </p>
+  <div class="verify-row">
+    <input id="v-file" type="file">
+    <input id="v-id" type="text" placeholder="receipt ID">
+    <button id="v-go">Verify</button>
+  </div>
+  <pre id="v-out" class="mono"></pre>
+</section>
+
+<section id="faq">
+  <h2>FAQ</h2>
+  <div class="faq">
+    <h3>How is this different from OpenTimestamps?</h3>
+    <p>
+      OpenTimestamps is the protocol we use under the hood — it's free if you're
+      comfortable with a Python CLI. Orphograph gives you a browser flow, an emailed
+      receipt, and a verifier that anyone can run without installing Python. The
+      cryptography is the same; the wedge is convenience and receipt UX.
+    </p>
+
+    <h3>What if your domain disappears?</h3>
+    <p>
+      Your receipt JSON + 5 <code>.ots</code> proof files + our open-source verifier
+      (<a href="#" id="verifier-link">link</a>) keep working without us. Save them
+      locally — that's all you need. The proofs are anchored to Bitcoin's chain,
+      not to our server.
+    </p>
+
+    <h3>Is this legal evidence?</h3>
+    <p>
+      No. We provide proof-of-existence — strong cryptographic evidence that a file
+      existed at a moment in time. We are <strong>not</strong> a qualified
+      trust-service provider (no eIDAS, no court-admissibility guarantee). For
+      litigation, consult a digital evidence specialist. Treat us as a sturdy
+      "this existed by date X" witness, not as a notary replacement.
+    </p>
+
+    <h3>Can I embed a "verified" badge on my portfolio?</h3>
+    <p>
+      Yes — one line of HTML pastes a small "Anchored to Bitcoin · view
+      receipt" badge that links to the receipt page. No tracking, no
+      external fetches. See the <a href="/badge-demo.html">badge
+      demo</a> for the snippet.
+    </p>
+
+    <h3>Who's behind this?</h3>
+    <p>
+      Built by an anonymous solo founder. The code is small (under 1,000
+      lines of Python + vanilla JS, stdlib only). The verifier is open source so
+      anyone can audit it and so your proofs outlive the company.
+    </p>
+
+    <h3>Is this quantum-safe?</h3>
+    <p>
+      The proof binding (your file hash → Merkle root → Bitcoin block)
+      is purely hash-based, so it is not exposed to Shor's algorithm. SHA-256
+      under Grover's algorithm retains roughly 128-bit effective security —
+      enough that NIST still considers it acceptable.
+    </p>
+    <p>
+      As a hedge, every receipt now also stores a SHA-512 sibling witness
+      computed in your browser. To forge a file matching your receipt, an
+      attacker would need a simultaneous collision in both SHA-256 and
+      SHA-512 — substantially harder than either alone, even with a
+      capable quantum computer. The OTS Bitcoin anchor still uses SHA-256
+      (calendar protocol requirement); the SHA-512 sibling is independent
+      and rides along in the receipt.
+    </p>
+
+    <h3>What about EXIF / capture metadata?</h3>
+    <p>
+      Today we anchor the hash of whatever bytes you drop in. We don't read EXIF
+      and we don't bind your identity to the file — you bring your own metadata.
+      A capture-time provenance tier is on the roadmap; we'd rather ship it
+      working than promise it now.
+    </p>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <small>
+    <a id="verifier-link-footer" href="#">Open-source verifier on GitHub</a> ·
+    Powered by OpenTimestamps ·
+    <a href="/about.html">About</a> ·
+    <a href="/docs/api.html">API</a> ·
+    <a href="/terms.html">Terms</a> ·
+    <a href="/privacy.html">Privacy</a> ·
+    <a href="/status.html">Status</a> ·
+    <a href="/stats.html">stats</a> ·
+    We never see your file
+  </small>
+</footer>
+
+<script src="/exif.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>

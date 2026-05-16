@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Orphograph</title>
+<style>
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #faf6ef;
+    color: #1f1d1a;
+    width: 320px;
+    padding: 16px;
+    margin: 0;
+  }
+  h1 { font-size: 14px; margin: 0 0 12px; font-weight: 500; }
+  label {
+    display: block;
+    font-size: 11px;
+    color: #6b6660;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin: 12px 0 4px;
+  }
+  input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px 10px;
+    border: 1px solid #ddd6cc;
+    border-radius: 6px;
+    background: #fff;
+    font-size: 12px;
+    font-family: ui-monospace, "SF Mono", monospace;
+  }
+  button {
+    margin-top: 12px;
+    width: 100%;
+    padding: 10px;
+    background: #1f1d1a;
+    color: #faf6ef;
+    border: none;
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  button:hover { background: #2e2a25; }
+  .note {
+    margin-top: 12px;
+    padding: 10px;
+    background: #f0ebe1;
+    border-radius: 6px;
+    font-size: 11px;
+    color: #6b6660;
+    line-height: 1.5;
+  }
+  a { color: #b07a3a; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .status { margin-top: 10px; font-size: 12px; color: #1f7a3a; }
+</style>
+</head>
+<body>
+  <h1>Orphograph credentials</h1>
+  <p style="font-size:12px;color:#6b6660;margin:0 0 12px;">
+    Optional. Set a Pack token or API key to anchor without rate limits.
+  </p>
+
+  <label for="pack">Pack token</label>
+  <input id="pack" type="text" placeholder="pk_…" autocomplete="off">
+
+  <label for="api">API key (Personal subscribers)</label>
+  <input id="api" type="text" placeholder="ok_…" autocomplete="off">
+
+  <button id="save">Save</button>
+  <div id="status" class="status" hidden></div>
+
+  <div class="note">
+    Right-click any image, link, or media element and choose
+    <em>Anchor with Orphograph</em>. The file is fetched, hashed locally,
+    and only the 32-byte SHA-256 digest is sent. The file itself never
+    leaves your machine. <a href="https://orphograph.com/docs/api.html" target="_blank">API docs</a>.
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

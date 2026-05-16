@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>About Orphograph — who runs this, and why</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="A solo-founder service for photographers worried about AI training. Built on OpenTimestamps and Bitcoin. Receipts work without us, by design.">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<meta property="og:title" content="About Orphograph">
+<meta property="og:description" content="Who runs Orphograph, why it exists, and what happens if the service disappears.">
+<meta property="og:image" content="/og.svg">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://orphograph.com/about.html">
+<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/blog.css">
+</head>
+<body>
+
+<header>
+  <div class="brand"><a href="/" style="color:inherit;text-decoration:none;">orphograph</a></div>
+  <nav>
+    <a href="/#how">how it works</a>
+    <a href="/#pricing">pricing</a>
+    <a href="/blog/">blog</a>
+    <a href="/about.html" aria-current="page">about</a>
+    <a href="/signin.html">sign in</a>
+  </nav>
+</header>
+
+<main>
+
+<article class="blog-post">
+<header class="post-header">
+<h1>About Orphograph</h1>
+</header>
+<div class="post-body">
+<p class="lede">
+  A solo-founder service for photographers, illustrators, and writers who
+  want a permanent, cheap record that a file existed before a given date —
+  before an AI training run, before a dispute, before a content claim.
+</p>
+
+<h2>Why this exists</h2>
+<p>
+  Generative AI training is changing what "I made this" can mean. If your
+  portfolio is online, it has probably been scraped. If a dispute ever
+  comes up — "did this human make it, or is it an AI imitation?" — the
+  practical answer is "whoever has the earliest verifiable timestamp."
+</p>
+<p>
+  Court-grade chain-of-custody is expensive and overkill for most working
+  artists. A free Bitcoin-anchored cryptographic timestamp covers ~95% of
+  real-world cases, and the protocol (OpenTimestamps) has existed since
+  2016. The gap was UX: dropping a file into a browser and walking away
+  with a receipt your grandkids can still verify.
+</p>
+<p>That's the entire product.</p>
+
+<h2>Who runs it</h2>
+<p>
+  Orphograph is bootstrapped by a single operator. Solo means accountable —
+  every choice on the site (the open-source verifier, the receipts that
+  outlive the company, the no-fingerprinting analytics) is one person's
+  call, made deliberately, not a committee compromise.
+</p>
+<p>
+  Solo also means honest about scale. We are not a 24/7 enterprise support
+  desk. Email replies arrive within a few days, not within minutes. The
+  software is durable; the human running it has a normal schedule.
+</p>
+
+<h2>The trust contract</h2>
+<p>
+  Every commercial timestamping service before us has eventually died,
+  pivoted, or been acquired. Proof of Existence, Stampery, Po.et,
+  OriginStamp's consumer tier — all of them issued receipts that became
+  worthless when the company moved on.
+</p>
+<p>
+  We refuse to make that trade. Concretely:
+</p>
+<ol>
+  <li>
+    <strong>The receipt format is open.</strong> Standard OpenTimestamps
+    <code>.ots</code> files plus a small JSON manifest. No proprietary
+    fields, no DRM, no "premium verification" tier.
+  </li>
+  <li>
+    <strong>The verifier is MIT-licensed.</strong> ~100 lines of Python,
+    stdlib only, hosted at
+    <a href="/verify/">orphograph.com/verify/</a>. Download a copy, throw
+    it on your backup drive. If we vanish, your receipt still verifies.
+  </li>
+  <li>
+    <strong>Your files never touch our server.</strong> SHA-256 is
+    computed in your browser via the WebCrypto API. We only ever see the
+    32-byte hash, never the file bytes. Verifiable: open the network tab,
+    drop a file, watch what gets sent.
+  </li>
+  <li>
+    <strong>Bitcoin is the durable layer, not us.</strong> The receipts
+    anchor to public Bitcoin transactions via the OpenTimestamps calendar
+    network. Five independent calendars per anchor. Even if all five
+    calendars disappear, an "upgraded" <code>.ots</code> file contains
+    the full Merkle path to a Bitcoin block — no calendars needed for
+    verification.
+  </li>
+</ol>
+
+<h2>What we don't do</h2>
+<ul>
+  <li>
+    <strong>We don't claim "legally binding" or "court-admissible."</strong>
+    A timestamp tells you a hash existed at a moment in time. Whether
+    that's evidence depends on jurisdiction, judge, and procedure — way
+    above our pay grade. We sell proof of existence, not legal evidence.
+  </li>
+  <li>
+    <strong>We don't host your files.</strong> If you lose the file, the
+    receipt by itself is useless — there's nothing to compare against.
+    Back up your files like you always have.
+  </li>
+  <li>
+    <strong>We don't watermark, fingerprint, or track.</strong> No
+    Google Analytics, no Mixpanel, no third-party scripts at all. The
+    only request log is the server's own access log, which captures
+    truncated IPs and is rotated weekly.
+  </li>
+  <li>
+    <strong>We don't do qualified TSA / eIDAS.</strong> If you need an
+    EU-qualified electronic timestamp for regulated contracts, services
+    like Bernstein.io serve that market.
+  </li>
+</ul>
+
+<h2>What happens if Orphograph shuts down</h2>
+<p>Read <a href="/blog/why-domain-dying-doesnt-kill-your-timestamp">this post</a> for
+  the deep version. The short version: your receipts still work, because
+  the trust is in Bitcoin and an open standard, not in us. Save the
+  verifier locally and you are independent of our continued existence.</p>
+
+<h2>How to reach us</h2>
+<p>
+  Send email to <code>hello@orphograph.com</code>. We read it. We're slow
+  but not silent.
+</p>
+<p>
+  For security disclosures, please mention "security" in the subject line.
+  Anything plausibly affecting receipt validity gets prioritized over
+  everything else.
+</p>
+
+<h2>One-line story</h2>
+<p>
+  A photographer asked me how to prove a photo was theirs before
+  Midjourney trained on it. The honest answer was "OpenTimestamps, but
+  you'd have to install a Python CLI." Then it was: "give me a weekend."
+  That weekend became this.
+</p>
+
+<p class="muted small" style="margin-top:48px;">
+  This page is maintained by the founder. Last updated 2026-05-13.
+</p>
+
+<p style="margin-top:32px;"><a class="btn" href="/">← back to the homepage</a></p>
+</div>
+</article>
+
+</main>
+
+<footer>
+  <p>
+    <a href="/about.html">about</a> ·
+    <a href="/blog/">blog</a> ·
+    <a href="/compare.html">how we compare</a> ·
+    <a href="/verify/">verifier</a> ·
+    <a href="/status.html">status</a> ·
+    <a href="/privacy.html">privacy</a> ·
+    <a href="/terms.html">terms</a>
+  </p>
+  <p class="muted small">
+    Orphograph anchors SHA-256 hashes to Bitcoin via OpenTimestamps. Your
+    files never leave your browser.
+  </p>
+</footer>
+
+</body>
+</html>

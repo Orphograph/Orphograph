@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Bitcoin-anchored file timestamping, explained — Orphograph</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="How Bitcoin-anchored file timestamping works, what it costs, and why the marginal on-chain cost is effectively zero. SHA-256 in your browser, anchored via OpenTimestamps calendars.">
+<link rel="canonical" href="https://orphograph.com/lp/bitcoin-timestamp-file.html">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<meta property="og:title" content="Bitcoin-anchored file timestamping, explained">
+<meta property="og:description" content="A walk-through of how a single file's SHA-256 ends up immortalized inside a Bitcoin block — without you paying a per-file mining fee.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://orphograph.com/lp/bitcoin-timestamp-file.html">
+<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/blog.css">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "Why doesn't each timestamp cost a Bitcoin transaction fee?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "OpenTimestamps calendar servers aggregate thousands of user hashes per hour into a single Merkle root and pay for one Bitcoin transaction containing that root. Your individual hash inherits the timestamp via the Merkle path. The marginal cost per receipt is effectively zero."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "How long until my file's hash is provably in a Bitcoin block?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Calendars batch-broadcast roughly hourly. Your receipt is immediately useful as a calendar-attested proof and upgrades to a full block-attested proof within about an hour, sometimes sooner."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "What exactly gets written to Bitcoin?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "An OP_RETURN output carrying a 32-byte Merkle root. Your file's hash is one leaf inside that Merkle tree. The .ots proof file records the path from your hash to that root."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Can I verify the proof without trusting Orphograph?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes. The open-source verify_cli.py reads your receipt, walks the Merkle path to the OP_RETURN output, and confirms the Bitcoin block time via any public block explorer or your own Bitcoin node. No Orphograph server is required."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "What happens if Bitcoin itself goes away?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Bitcoin has run continuously for over sixteen years and is replicated across roughly 50,000 nodes globally. If you want belt-and-braces, anchor the same hash to a second chain or print the receipt — but for the vast majority of disputes, a single Bitcoin anchor is the strongest commercially available timestamp."
+      }
+    }
+  ]
+}
+</script>
+</head>
+<body>
+
+<header>
+  <div class="brand"><a href="/">orphograph</a></div>
+  <nav>
+    <a href="/#how">how it works</a>
+    <a href="/#pricing">pricing</a>
+    <a href="/lp/">guides</a>
+    <a href="/about.html">about</a>
+    <a href="/signin.html">sign in</a>
+  </nav>
+</header>
+
+<main class="blog-post">
+
+<article class="post-header">
+  <h1>Bitcoin-anchored file timestamping</h1>
+  <p class="post-meta muted">What it is, what gets written to the chain, and why each anchor doesn't cost you a transaction fee.</p>
+</article>
+
+<section class="post-body">
+
+<p>
+  "Bitcoin-anchored file timestamping" is the umbrella term for a small
+  family of techniques that bind a file's contents to a specific moment
+  in Bitcoin's transaction history. The dominant protocol is
+  OpenTimestamps. The technique is older than most cryptocurrency
+  speculation, and the underlying idea — Merkle trees plus a public
+  ledger — was the breakthrough behind Bitcoin itself.
+</p>
+
+<h2>The walk from your file to a Bitcoin block</h2>
+<p>
+  Step one happens entirely on your computer. The browser computes a
+  SHA-256 hash of the file. SHA-256 is a fixed-size fingerprint: any
+  input, no matter how large, produces a 32-byte output. Change a single
+  byte of input and the output changes completely. The hash reveals
+  nothing about the file's contents.
+</p>
+<p>
+  Step two: that 32-byte hash is submitted to one or more
+  <em>calendar servers</em>. A calendar is just a publicly-listed server
+  that collects user hashes and, on a regular cadence, combines them
+  into a Merkle tree. The Merkle root — a single 32-byte value
+  summarizing thousands of user submissions — is what eventually
+  reaches Bitcoin.
+</p>
+<p>
+  Step three: the calendar broadcasts a Bitcoin transaction whose
+  <code>OP_RETURN</code> output contains that Merkle root. <code>OP_RETURN</code>
+  is the standard way to embed a small payload in a Bitcoin transaction
+  without creating spendable outputs. The transaction is mined into a
+  block, and the block's timestamp becomes the timestamp for every
+  hash inside the Merkle tree — including yours.
+</p>
+<p>
+  Step four: you receive a small proof file. It contains your hash, the
+  Merkle path from your hash up to the Merkle root, and a reference to
+  the Bitcoin transaction that committed that root. Anyone with this
+  proof file and the original input file can walk the Merkle path,
+  recompute the root, look up the Bitcoin transaction, and confirm the
+  block time.
+</p>
+
+<h2>Why the per-file cost is effectively zero</h2>
+<p>
+  At Bitcoin's current fee rates, a single transaction costs anywhere
+  from a few cents to a few dollars depending on mempool congestion. If
+  each user paid for their own transaction, file timestamping would be
+  uneconomic for anyone but enterprises. The Merkle-batching design
+  amortizes one transaction across thousands or millions of user
+  hashes. Calendar operators absorb the fee.
+</p>
+<p>
+  This is also why Orphograph doesn't charge cryptographic fees that
+  scale with your usage. Our pricing reflects the cost of running a
+  receipt-management UI, sending emails, and providing a hosted
+  verifier — not per-anchor blockchain economics.
+</p>
+
+<h2>Five calendars instead of one</h2>
+<p>
+  Orphograph submits each hash to five independent OpenTimestamps
+  calendars rather than relying on a single operator. If one calendar
+  vanishes or refuses to serve the upgrade path later, the other four
+  remain. Your receipt only needs <em>one</em> surviving calendar to
+  verify successfully against Bitcoin — the redundancy is purely a
+  hedge against operator failure.
+</p>
+
+<h2>What you get back</h2>
+<p>
+  The artifact is a JSON receipt plus five small binary <code>.ots</code>
+  files. Total disk footprint: roughly 3 KB. Save them next to the
+  original file. To verify later, point any OpenTimestamps-compatible
+  client — including the open-source <code>verify_cli.py</code> shipped
+  with Orphograph — at the receipt. It will walk the Merkle path, fetch
+  the Bitcoin block headers it needs, and confirm the date.
+</p>
+
+<div class="post-footer" style="margin: 36px 0; padding: 24px; background: var(--accent-soft); border: 1px solid var(--accent-stroke); border-radius: 12px;">
+  <h2 style="margin-top:0;">Anchor your first file — free</h2>
+  <p>One anchor per month is free. Drop a file, watch the five calendars confirm, download your receipt.</p>
+  <p><a class="btn" href="/#drop" style="display:inline-block; padding: 10px 18px; border: 1px solid var(--accent); color: var(--accent); border-radius: 8px; text-decoration: none;">Start now →</a></p>
+</div>
+
+<h2 id="faq">FAQ</h2>
+<div class="faq">
+  <h3>Why doesn't each timestamp cost a Bitcoin transaction fee?</h3>
+  <p>Calendars aggregate thousands of user hashes into one Merkle root and pay for one Bitcoin transaction. Your hash inherits the timestamp via its Merkle path. Marginal cost per receipt is effectively zero.</p>
+
+  <h3>How long until my hash is provably in a block?</h3>
+  <p>Calendars batch-broadcast roughly hourly. The receipt is immediately useful as a calendar-attested proof and upgrades to a full block-attested proof within about an hour.</p>
+
+  <h3>What exactly gets written to Bitcoin?</h3>
+  <p>An <code>OP_RETURN</code> output carrying a 32-byte Merkle root. Your hash is one leaf in that tree. The <code>.ots</code> file records the path from your hash to the root.</p>
+
+  <h3>Can I verify without trusting Orphograph?</h3>
+  <p>Yes. <code>verify_cli.py</code> walks the Merkle path to the Bitcoin transaction and confirms the block time via any public explorer or your own node. No Orphograph server required.</p>
+
+  <h3>What if Bitcoin itself goes away?</h3>
+  <p>Bitcoin has run continuously for over sixteen years across ~50,000 nodes. If you want extra insurance, anchor the same hash to a second chain — but a single Bitcoin anchor is the strongest commercially available timestamp.</p>
+</div>
+
+</section>
+
+</main>
+
+<footer>
+  <small>
+    <a href="/">← Home</a> ·
+    <a href="/lp/">More guides</a> ·
+    <a href="/about.html">About</a> ·
+    <a href="/privacy.html">Privacy</a> ·
+    We never see your file
+  </small>
+</footer>
+
+</body>
+</html>

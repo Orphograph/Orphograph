@@ -1,0 +1,68 @@
+# CI test gate.
+# Safety: this workflow does NOT interpolate any github.event.*, github.head_ref,
+# or other untrusted GitHub-event inputs into shell commands. Only static
+# strings + the file globs in the repo. Reviewed against
+# https://github.blog/security/vulnerability-research/how-to-catch-github-actions-workflow-injections-before-attackers-do/
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install pytest only (stdlib-only project; no other runtime deps)
+        run: pip install pytest==9.0.2
+      - name: Compile check every server module
+        run: python3 -m py_compile server/*.py
+      - name: Run pytest
+        env:
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+        run: python3 -m pytest tests/ -q
+
+  jslint:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Syntax-check every frontend JS file
+        run: |
+          for f in web/*.js; do
+            echo "checking $f"
+            node --check "$f"
+          done
+
+  verifier_roundtrip:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Verify the bundled sample with the OSS verifier
+        run: |
+          cd dist/orphograph-verify
+          python3 verify.py examples/sample/receipt.json --file examples/sample/sample.txt

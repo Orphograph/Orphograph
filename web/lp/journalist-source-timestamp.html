@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Timestamp source documents before publishing — Orphograph</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="For journalists and investigators: timestamp leaked documents, source recordings, and evidence files before publication — without uploading the contents anywhere.">
+<link rel="canonical" href="https://orphograph.com/lp/journalist-source-timestamp.html">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<meta property="og:title" content="Timestamp source documents before publishing">
+<meta property="og:description" content="Bitcoin-anchored proof that a source document or recording was in your possession before publication. Bytes stay on your machine.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://orphograph.com/lp/journalist-source-timestamp.html">
+<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/blog.css">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "Do the source documents upload anywhere?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "No. SHA-256 is computed in your browser. Only the 32-byte hash reaches the anchor service. The document's contents — and any sensitive source information — never leave your machine."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Will this protect my source?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Anchoring protects the document, not the source. The hash reveals nothing about the file's contents or origin. For source protection, your operational security practices — encrypted comms, air-gapped storage, no metadata leaks — matter far more than where you timestamp."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Can I anchor a folder of documents at once?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Hash the folder into a single archive (zip, tar) and anchor that. The receipt then proves the entire archive's contents existed by the anchored time. Each file inside retains its identity through the archive's manifest."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "What if I'm subpoenaed for the receipt?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "The receipt contains only a hash, the anchor time, and Merkle paths. It does not reveal the document's contents and does not identify you. Anyone holding the receipt only learns that some file with these bytes existed by date X."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Is the receipt by itself enough for legal protection?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "No. Orphograph is proof-of-existence, not legal evidence. For litigation or formal disclosure proceedings, consult a media lawyer and a digital-evidence specialist who can integrate the timestamp into a broader chain-of-custody."
+      }
+    }
+  ]
+}
+</script>
+</head>
+<body>
+
+<header>
+  <div class="brand"><a href="/">orphograph</a></div>
+  <nav>
+    <a href="/#how">how it works</a>
+    <a href="/#pricing">pricing</a>
+    <a href="/lp/">guides</a>
+    <a href="/about.html">about</a>
+    <a href="/signin.html">sign in</a>
+  </nav>
+</header>
+
+<main class="blog-post">
+
+<article class="post-header">
+  <h1>Timestamp source documents before publishing</h1>
+  <p class="post-meta muted">For investigative journalists, fact-checkers, and editors who need a defensible record of when a file came into their possession.</p>
+</article>
+
+<section class="post-body">
+
+<p>
+  Journalism that breaks news on leaked documents lives or dies on
+  provenance. The moment a story runs, a hostile party will claim the
+  documents are fakes, were altered, or were created after the fact to
+  fit a narrative. Most of those claims can be defeated with a single
+  cryptographic anchor: a Bitcoin timestamp on the source file, dated
+  to before the story published.
+</p>
+
+<h2>The minimum viable workflow</h2>
+<p>
+  As soon as a document, recording, or photo arrives from a source,
+  before any editing or transcription:
+</p>
+<ol>
+  <li>
+    Make a working copy. Set the original aside on read-only media.
+  </li>
+  <li>
+    Drop the working copy into Orphograph. SHA-256 runs in your
+    browser; the bytes never upload. You receive a Bitcoin-anchored
+    receipt within minutes.
+  </li>
+  <li>
+    Store the receipt with your source file in your secure archive.
+    Note in your reporter's log when the file arrived, from whom (per
+    your own source-protection scheme), and the anchor receipt ID.
+  </li>
+</ol>
+<p>
+  If the document's authenticity is ever challenged, you can point to
+  the receipt and demonstrate: <em>some file with these exact bytes
+  was in my possession before the story ran</em>. That defeats the
+  "you made it up after publication" attack. It does not defeat the
+  "your source faked the document before giving it to you" attack —
+  no timestamp can — but it sharply narrows the dispute space.
+</p>
+
+<h2>Privacy is structural</h2>
+<p>
+  Orphograph hashes locally via WebCrypto. We never see the document's
+  contents. We never see file names unless you check the "include
+  filename in receipt" box. We log the truncated IP for abuse
+  prevention and the hash itself. For high-stakes operations,
+  anchor over Tor or via a VPN; the hash itself is unlinkable to
+  contents anyway, but operational anonymity always helps.
+</p>
+
+<h2>Anchor early, anchor often</h2>
+<p>
+  The value of a timestamp is its <em>earliness</em>. A receipt from
+  the morning the document arrived is more useful than a receipt from
+  the night before publication. Build the anchor into your intake
+  ritual the same way you'd build encrypted-comms into your contact
+  ritual. Free tier covers one file per month; the $7 Pack covers ten
+  receipts for newsrooms doing occasional bulk intake.
+</p>
+
+<h2>What this is not</h2>
+<p>
+  Not legal evidence on its own. Not source protection — that is a
+  function of your tradecraft, not of any timestamping tool. Not
+  document authentication — the timestamp proves the file existed,
+  not that the file's claims are true. For high-risk reporting, pair
+  the timestamp with a media-law consult and your newsroom's standard
+  evidence-handling procedures.
+</p>
+
+<div class="post-footer" style="margin: 36px 0; padding: 24px; background: var(--accent-soft); border: 1px solid var(--accent-stroke); border-radius: 12px;">
+  <h2 style="margin-top:0;">Anchor your first file — free</h2>
+  <p>Drop a source document, get a Bitcoin-anchored receipt. The contents never upload.</p>
+  <p><a class="btn" href="/#drop" style="display:inline-block; padding: 10px 18px; border: 1px solid var(--accent); color: var(--accent); border-radius: 8px; text-decoration: none;">Start now →</a></p>
+</div>
+
+<h2 id="faq">FAQ</h2>
+<div class="faq">
+  <h3>Do the source documents upload anywhere?</h3>
+  <p>No. SHA-256 runs in your browser; only the 32-byte hash reaches the anchor service.</p>
+
+  <h3>Will this protect my source?</h3>
+  <p>It protects the document. Source protection is a function of your operational security — encrypted comms, air-gapped storage, no metadata leaks.</p>
+
+  <h3>Can I anchor a folder of documents at once?</h3>
+  <p>Zip or tar the folder and anchor the archive. The receipt covers everything inside, and the archive's manifest preserves each file's identity.</p>
+
+  <h3>What if I'm subpoenaed for the receipt?</h3>
+  <p>The receipt is just a hash, a timestamp, and Merkle paths. It does not reveal the document's contents.</p>
+
+  <h3>Is the receipt by itself enough for legal protection?</h3>
+  <p>No. Pair it with a media-law consult and your newsroom's chain-of-custody procedures.</p>
+</div>
+
+</section>
+
+</main>
+
+<footer>
+  <small>
+    <a href="/">← Home</a> ·
+    <a href="/lp/">More guides</a> ·
+    <a href="/about.html">About</a> ·
+    <a href="/privacy.html">Privacy</a> ·
+    We never see your file
+  </small>
+</footer>
+
+</body>
+</html>

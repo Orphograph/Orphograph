@@ -1,0 +1,87 @@
+# secrets
+.env
+.env.local
+.env.production
+.env.*.local
+
+# runtime artifacts
+receipts/
+!receipts/.gitkeep
+ledger.jsonl
+credit_ledger.jsonl
+upgrade_log.jsonl
+stripe_processed_events.jsonl
+*.log
+*.out
+logs/
+
+# Production data directory — must never be in git per CLAUDE.md.
+# Contains secrets (.hmac_secret), sessions, ledgers, receipts at runtime.
+data/
+!data/.gitkeep
+# Belt + suspenders: explicit blocks for the high-risk files anywhere in tree.
+**/.hmac_secret
+**/auth_sessions.jsonl
+**/auth_link_tokens.jsonl
+**/auth_revoked.jsonl
+**/credits.ledger
+
+# python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# editor
+.vscode/
+.idea/
+.DS_Store
+
+# do NOT ignore .claude/ commands — they're part of the project scaffold
+!.claude/
+# BUT settings.local.json leaks the macOS username path + sibling-project refs
+.claude/settings.local.json
+deploy/PUBLISH_SAFETY.md
+WORK_SUMMARY_2026_05_14.md
+
+# Internal planning / outreach / valuation docs — stay local, don't ship public.
+# These contain founder-personal context (location, finances, tax, outreach
+# templates referencing the founder). Public repo ships code + tests + the
+# customer-facing docs (terms.html, privacy.html, README, SECURITY.md, press kit).
+deploy/FOUNDER_TODO.md
+deploy/STRIPE_ACTIVATION.md
+deploy/FINANCE_TOOLING_TRIAGE.md
+deploy/PAID_ACQUISITION_PLAN.md
+deploy/PARTNERSHIP_TARGETS.md
+deploy/INFLUENCER_TARGETS.md
+deploy/COLD_OUTREACH.md
+deploy/LAUNCH_DRAFTS.md
+deploy/LAUNCH_BLOCKER_STATUS.md
+deploy/LAUNCH_READINESS_MEGA_TODO.md
+deploy/LAUNCH_READINESS_FINAL.md
+deploy/LAUNCH_CHECKLIST.md
+deploy/VALUATION_*.md
+deploy/2_HOUR_LAUNCH.md
+deploy/MARKET_ROADMAP.md
+deploy/CONTENT_CALENDAR_30D.md
+deploy/EMAIL_AND_LEGAL_COMPLIANCE.md
+deploy/LLC_FORMATION.md
+deploy/PAYMENT_PII_AUDIT.md
+deploy/FOUNDER_RUNBOOK.md
+deploy/RELEASE_NOTES_V0.1.0.md
+
+# Internal session audits (not customer-facing)
+docs/audits/
+
+# Internal outreach drafts (not customer-facing — they reference the founder)
+outreach/
+
+# Press kit references the project pseudonym; keep press/ public.
+
+# Internal IP-publishing safety script (contains the deny-token regex itself,
+# which leaks what we're trying to hide — keep local, don't ship).
+scripts/publish_safety_check.sh

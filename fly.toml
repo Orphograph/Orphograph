@@ -1,0 +1,46 @@
+# fly.toml — Fly.io configuration for Orphograph.
+# Run `fly launch --copy-config` from the repo root to import this on first deploy.
+# After launch, set secrets via `fly secrets set STRIPE_WEBHOOK_SECRET=... RESEND_API_KEY=...`.
+
+app = "orphograph"
+primary_region = "iad"
+
+[build]
+
+[env]
+  HOST = "0.0.0.0"
+  PORT = "8080"
+  RATE_LIMIT_PER_HOUR = "10"
+  MIN_CALENDARS_OK = "3"
+  RESEND_FROM = "Orphograph <hello@orphograph.com>"
+  SITE_URL = "https://orphograph.com"
+  ORPHO_DATA_DIR = "/app/data"
+  ORPHO_TRUST_PROXY_HEADERS = "1"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    grace_period = "10s"
+    interval = "30s"
+    method = "GET"
+    timeout = "5s"
+    path = "/api/health"
+
+[mounts]
+  source = "orphograph_data"
+  destination = "/app/data"
+  initial_size = "1gb"
+
+# Receipts and ledgers should live on the persistent volume in production.
+# Symlinks created at first boot via a small init step in scripts/init_volume.sh,
+# or set RECEIPTS_DIR / LEDGER_PATH via env once the engine supports it.
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 256

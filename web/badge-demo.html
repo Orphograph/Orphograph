@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Verifier badge — Orphograph</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<header>
+  <div class="brand"><a href="/">orphograph</a></div>
+  <nav><a href="/">home</a> <a href="/docs/api.html">api</a></nav>
+</header>
+
+<main>
+<section>
+  <h1>Verifier badge</h1>
+  <p class="lede">
+    Paste this snippet next to any image on your portfolio to show
+    that it's been anchored to Bitcoin. Visitors click → land on the
+    receipt page → see all 5 OTS proofs verifying live.
+  </p>
+
+  <h2>The snippet (SVG badge, recommended)</h2>
+  <p>
+    A pure-SVG version of the badge. Zero JavaScript on the embedding
+    page, works in RSS readers, e-mail clients, and static-site
+    generators. Just an <code>&lt;img&gt;</code> inside an
+    <code>&lt;a&gt;</code>.
+  </p>
+  <pre><code>&lt;a href="https://orphograph.com/r/YOUR-RECEIPT-ID"&gt;
+  &lt;img src="https://orphograph.com/api/badge/YOUR-RECEIPT-ID.svg"
+       alt="Verified by Orphograph"
+       width="300" height="80"&gt;
+&lt;/a&gt;</code></pre>
+
+  <h2>Live preview at three sizes</h2>
+  <p>Each badge is the same SVG, scaled by the embedding page:</p>
+  <p>
+    <a href="/r/XwTULwlh76PcCst9">
+      <img src="/api/badge/XwTULwlh76PcCst9.svg"
+           alt="Verified by Orphograph" width="225" height="60">
+    </a>
+  </p>
+  <p>
+    <a href="/r/XwTULwlh76PcCst9">
+      <img src="/api/badge/XwTULwlh76PcCst9.svg"
+           alt="Verified by Orphograph" width="300" height="80">
+    </a>
+  </p>
+  <p>
+    <a href="/r/XwTULwlh76PcCst9">
+      <img src="/api/badge/XwTULwlh76PcCst9.svg"
+           alt="Verified by Orphograph" width="450" height="120">
+    </a>
+  </p>
+
+  <h2>The snippet (legacy JS widget)</h2>
+  <pre><code>&lt;script src="https://orphograph.com/badge.js"
+        data-receipt="YOUR-RECEIPT-ID"
+        async&gt;&lt;/script&gt;</code></pre>
+
+  <h2>Live preview (using our sample receipt)</h2>
+  <p>The badge below is the exact thing your visitors will see:</p>
+  <p>
+    <script src="/badge.js" data-receipt="XwTULwlh76PcCst9" async></script>
+  </p>
+
+  <h2>What the badge does</h2>
+  <ul>
+    <li>Renders inline where you paste it — no popups, no overlays.</li>
+    <li>Single outbound link to <code>/r/&lt;id&gt;</code> on
+        <code>orphograph.com</code>. No extra fetches at page-load.</li>
+    <li>Self-contained: no extra CSS, no cookies, no analytics. Safe
+        to embed on any privacy-conscious site.</li>
+    <li>Validates the receipt ID against
+        <code>[A-Za-z0-9_-]{1,64}</code> before rendering — invalid
+        IDs produce nothing, not a broken link.</li>
+  </ul>
+
+  <h2>Where to find your receipt ID</h2>
+  <p>
+    Every Orphograph receipt has a 12-character URL-safe ID like
+    <code class="mono">XwTULwlh76PcCst9</code>. You can find it:
+  </p>
+  <ul>
+    <li>On the receipt page (<code>/r/&lt;id&gt;</code>) — it's the last
+        path segment.</li>
+    <li>In the receipt JSON you downloaded — the <code>receipt_id</code> field.</li>
+    <li>In the email Resend sent you after anchoring (paid tiers).</li>
+    <li>On your <a href="/account.html">account dashboard</a> (Personal tier).</li>
+  </ul>
+
+  <h2>Multiple badges on one page</h2>
+  <p>
+    Each <code>&lt;script&gt;</code> tag renders a badge in its own
+    position. You can place as many as you want — one per image
+    works well in portfolio grids.
+  </p>
+
+  <h2>Tampering — what happens if someone steals my badge?</h2>
+  <p>
+    The badge is just a link. Anyone can copy it. What they
+    <em>cannot</em> do is forge the receipt itself — the receipt
+    proves a specific SHA-256 hash existed at a specific time,
+    and that hash is whatever you originally anchored. If an
+    attacker pastes your badge next to a different image, a
+    visitor who clicks through and runs the verifier against the
+    image gets a hash mismatch and can see the trick.
+  </p>
+  <p class="muted small">
+    For higher-trust contexts (legal disputes, journalism), pair
+    the badge with the open-source verifier link so visitors can
+    confirm the file's hash matches independently. See
+    <a href="https://github.com/orphograph/orphograph-verify">github.com/orphograph/orphograph-verify</a>.
+  </p>
+
+  <h2>Source</h2>
+  <p>
+    The badge is &lt;100 lines of vanilla JS, no dependencies, MIT
+    when we open-source the verifier repo. Inspect at
+    <a href="/badge.js">/badge.js</a> any time.
+  </p>
+</section>
+</main>
+
+<footer>
+  <small><a href="/">home</a> · <a href="/terms.html">Terms</a> · <a href="/privacy.html">Privacy</a> · <a href="/status.html">Status</a></small>
+</footer>
+
+</body>
+</html>

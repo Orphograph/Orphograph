@@ -1,0 +1,689 @@
+// app.js — client-side hashing + receipt rendering. No file content ever leaves this browser.
+
+const $ = (sel) => document.querySelector(sel);
+const PACK_KEY = "orpho_pack_token";
+
+function track(event, page) {
+  // Fire-and-forget — silent on any failure. Same-origin only.
+  try {
+    fetch("/api/event", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ event, page: page || "landing" }),
+      keepalive: true,
+    }).catch(() => {});
+  } catch {}
+}
+const VERIFIER_URL = "/verify/";
+// Stripe URLs and pricing are now fetched dynamically from /api/config.
+// Founder configures via environment variables (STRIPE_PACK_URL,
+// STRIPE_PERSONAL_MONTHLY_URL, etc.) — no code edits needed.
+let STRIPE_PACK_URL = "";
+let STRIPE_PERSONAL_MONTHLY_URL = "";
+let STRIPE_PERSONAL_ANNUAL_URL = "";
+let PERSONAL_MONTHLY_USD = 5;
+let PERSONAL_ANNUAL_USD = 60;
+let ANNUAL_SAVINGS_USD = (PERSONAL_MONTHLY_USD * 12) - PERSONAL_ANNUAL_USD;
+
+async function loadPublicConfig() {
+  try {
+    const r = await fetch("/api/config", { credentials: "same-origin" });
+    if (!r.ok) return;
+    const cfg = await r.json();
+    if (cfg.stripe) {
+      STRIPE_PACK_URL = cfg.stripe.pack_url || "";
+      STRIPE_PERSONAL_MONTHLY_URL = cfg.stripe.personal_monthly_url || "";
+      STRIPE_PERSONAL_ANNUAL_URL = cfg.stripe.personal_annual_url || "";
+    }
+    if (cfg.pricing) {
+      PERSONAL_MONTHLY_USD = cfg.pricing.personal_monthly_usd ?? PERSONAL_MONTHLY_USD;
+      PERSONAL_ANNUAL_USD = cfg.pricing.personal_annual_usd ?? PERSONAL_ANNUAL_USD;
+      ANNUAL_SAVINGS_USD = (PERSONAL_MONTHLY_USD * 12) - PERSONAL_ANNUAL_USD;
+    }
+  } catch {}
+}
+
+function _hexOf(digest) {
+  return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function sha256Hex(file) {
+  const buf = await file.arrayBuffer();
+  return _hexOf(await crypto.subtle.digest("SHA-256", buf));
+}
+
+async function dualHash(file) {
+  // SHA-256 is what we anchor to Bitcoin via OpenTimestamps.
+  // SHA-512 is recorded as a quantum-hedge sibling witness in the receipt:
+  // to forge the file→receipt binding, an attacker must collide BOTH hashes.
+  const buf = await file.arrayBuffer();
+  const [s256, s512] = await Promise.all([
+    crypto.subtle.digest("SHA-256", buf),
+    crypto.subtle.digest("SHA-512", buf),
+  ]);
+  return { sha256: _hexOf(s256), sha512: _hexOf(s512) };
+}
+
+function setStep(name, state) {
+  const el = document.querySelector(`.step[data-step="${name}"]`);
+  if (!el) return;
+  el.classList.remove("active", "done");
+  if (state) el.classList.add(state);
+}
+
+function packToken() {
+  try { return localStorage.getItem(PACK_KEY) || ""; }
+  catch { return ""; }
+}
+
+function setPackToken(code) {
+  try {
+    if (code) localStorage.setItem(PACK_KEY, code);
+    else localStorage.removeItem(PACK_KEY);
+  } catch { /* localStorage may be disabled; pack will not persist */ }
+}
+
+async function refreshPackBanner() {
+  const code = packToken();
+  const banner = $("#pack-banner");
+  const emailRow = $("#email-row");
+  if (!code) {
+    if (banner) banner.hidden = true;
+    if (emailRow) emailRow.hidden = true;
+    return;
+  }
+  if (banner) banner.hidden = false;
+  if (emailRow) emailRow.hidden = false;
+  try {
+    const resp = await fetch(`/api/pack/balance/${encodeURIComponent(code)}`);
+    const j = await resp.json();
+    const bal = (j && typeof j.balance === "number") ? j.balance : 0;
+    $("#pack-balance-text").textContent = `${bal} anchors remaining (code ${code.slice(0, 8)}…)`;
+    if (bal <= 0) {
+      $("#pack-balance-text").textContent = `Pack empty (code ${code.slice(0, 8)}…) — buy another to keep going.`;
+    }
+  } catch {
+    $("#pack-balance-text").textContent = `Pack active (code ${code.slice(0, 8)}…)`;
+  }
+}
+
+function ingestPackFromUrl() {
+  // Pack tokens arrive via URL fragment (e.g. #pack=pk_xxx) — fragments
+  // never reach the server, so the bearer credential cannot be logged.
+  // Legacy ?pack= query is also accepted (warned and stripped).
+  let pack = "";
+  const hash = location.hash.replace(/^#/, "");
+  const hashParams = new URLSearchParams(hash);
+  if (hashParams.get("pack")) pack = hashParams.get("pack");
+
+  if (!pack) {
+    const qs = new URLSearchParams(location.search);
+    if (qs.get("pack")) {
+      pack = qs.get("pack");
+      console.warn("orphograph: ?pack= in the URL was logged by the server. Use the email's #pack= link instead.");
+      qs.delete("pack");
+      history.replaceState({}, "", location.pathname + (qs.toString() ? "?" + qs.toString() : "") + location.hash);
+    }
+  } else {
+    hashParams.delete("pack");
+    const rest = hashParams.toString();
+    history.replaceState({}, "", location.pathname + location.search + (rest ? "#" + rest : ""));
+  }
+
+  if (pack && /^pk_[A-Za-z0-9_-]+$/.test(pack)) {
+    setPackToken(pack);
+  }
+}
+
+function showReceipt(record) {
+  $("#receipt").hidden = false;
+  $("#r-id").textContent = record.receipt_id;
+  $("#r-hash").textContent = record.hash_hex;
+  $("#r-time").textContent = record.created_at;
+  $("#r-cals").textContent = `${record.calendars_ok} of ${record.calendars_total} succeeded`;
+
+  const warn = $("#r-warn");
+  if (warn) {
+    if (record.low_redundancy) {
+      warn.hidden = false;
+      warn.textContent = `Only ${record.calendars_ok}/${record.calendars_total} calendars confirmed. Receipt is still valid against the calendars that succeeded — for full redundancy, re-anchor when the network recovers.`;
+    } else {
+      warn.hidden = true;
+    }
+  }
+
+  $("#download").onclick = () => {
+    const blob = new Blob([JSON.stringify(record, null, 2)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `receipt-${record.receipt_id}.json`;
+    a.click();
+  };
+  $("#copy").onclick = () => navigator.clipboard.writeText(record.receipt_id);
+
+  const shareUrl = `${location.origin}/r/${record.receipt_id}`;
+  const viewBtn = $("#view-receipt");
+  if (viewBtn) viewBtn.href = `/r/${record.receipt_id}`;
+  const shareBtn = $("#share");
+  if (shareBtn) {
+    shareBtn.onclick = async () => {
+      try { await navigator.clipboard.writeText(shareUrl); shareBtn.textContent = "Link copied ✓"; }
+      catch { shareBtn.textContent = shareUrl; }
+      setTimeout(() => { shareBtn.textContent = "Copy share link"; }, 2500);
+    };
+  }
+}
+
+async function anchorFile(file) {
+  track("anchor_start", "landing");
+  $("#status").hidden = false;
+  setStep("hash", "active");
+  const { sha256: hash, sha512 } = await dualHash(file);
+  setStep("hash", "done");
+
+  const includeFilename = !!$("#include-filename")?.checked;
+  const body = {
+    hash_hex: hash,
+    sha512_hex: sha512,
+    client_label: includeFilename ? file.name : "",
+  };
+  const emailField = $("#notify-email");
+  if (emailField && emailField.value && emailField.value.includes("@")) {
+    body.notify_email = emailField.value.trim();
+  }
+
+  // Optional: client-side EXIF metadata (strengthens proof-of-existence).
+  // User opts in via the "Include camera metadata" checkbox. GPS is dropped.
+  if ($("#include-exif")?.checked && window.OrphographExif) {
+    try {
+      const meta = await window.OrphographExif.extractExif(file);
+      if (meta) {
+        // Surface EXIF parse failures to the user — silent metadata loss on
+        // a Creator-tier anchor is product-breaking. Tooltip / inline note;
+        // the anchor still proceeds with whatever metadata succeeded.
+        if (meta._exif_status === "failed") {
+          const note = document.createElement("p");
+          note.className = "hint small";
+          note.style.color = "#b03a3a";
+          note.textContent = "Camera metadata could not be read (" + (meta._exif_reason || "unknown reason") + "). Anchor will proceed without EXIF.";
+          $("#status")?.appendChild(note);
+        }
+        // Strip internal status fields from the wire payload — server's
+        // _sanitize_metadata allowlist would drop them anyway, but be explicit.
+        const wire = {};
+        for (const [k, v] of Object.entries(meta)) {
+          if (!k.startsWith("_")) wire[k] = v;
+        }
+        if (Object.keys(wire).length) body.metadata = wire;
+      }
+    } catch (e) {
+      console.warn("[orphograph/exif] extract crashed", e);
+    }
+  }
+
+  // Optional: authorship attestation (strengthens proof-of-existence).
+  const claimField = $("#attest-claim");
+  const authorField = $("#attest-author");
+  const licenseField = $("#attest-license");
+  if (claimField && claimField.value && claimField.value.trim()) {
+    body.attestation = {
+      claim: claimField.value.trim().slice(0, 500),
+      author: (authorField?.value || "").trim().slice(0, 200),
+      license: (licenseField?.value || "").trim().slice(0, 100),
+      signed_at: new Date().toISOString(),
+    };
+  }
+
+  // Optional: mark this anchor as private (subscriber-only feature).
+  if ($("#private-receipt")?.checked) {
+    body.private = true;
+  }
+
+  const headers = { "Content-Type": "application/json" };
+  const token = packToken();
+  if (token) headers["X-Pack-Token"] = token;
+
+  setStep("post", "active");
+  setStep("cals", "active");
+  const resp = await fetch("/api/anchor", {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body),
+  });
+  setStep("post", "done");
+  setStep("cals", "done");
+
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({ error: "unknown error" }));
+    if (resp.status === 429) {
+      const sec = err.retry_after_seconds || 60;
+      alert(`Rate limit reached (${err.limit_per_hour || "?"} per hour). Try again in ${sec}s, or buy a Pack to skip the limit.`);
+    } else {
+      alert("Anchor failed: " + (err.error || resp.statusText));
+    }
+    return;
+  }
+  const record = await resp.json();
+  setStep("done", "done");
+  track("anchor_done", "landing");
+  showReceipt(record);
+  if (record.pack_consumed) refreshPackBanner();
+}
+
+function readCoupon() {
+  // Accept ?coupon= or ?promo= or fragment-form. Sanitize to A-Z0-9_- only,
+  // 4-40 chars. Stripe handles the actual validation.
+  const fromQuery = new URLSearchParams(location.search).get("coupon")
+    || new URLSearchParams(location.search).get("promo");
+  const fromHash = new URLSearchParams(location.hash.replace(/^#/, "")).get("coupon");
+  const raw = (fromQuery || fromHash || "").toUpperCase();
+  return /^[A-Z0-9_-]{4,40}$/.test(raw) ? raw : "";
+}
+
+function applyCouponToStripeUrl(url, coupon) {
+  if (!url || !coupon) return url;
+  // Stripe Payment Links accept `?prefilled_promo_code=CODE`.
+  const sep = url.includes("?") ? "&" : "?";
+  return `${url}${sep}prefilled_promo_code=${encodeURIComponent(coupon)}`;
+}
+
+function readReferralCode() {
+  // Accept ?ref= in query OR #ref= in fragment. Sanitize to ref_xxx shape.
+  const fromQuery = new URLSearchParams(location.search).get("ref");
+  const fromHash = new URLSearchParams(location.hash.replace(/^#/, "")).get("ref");
+  const raw = (fromQuery || fromHash || "").toLowerCase();
+  if (!/^ref_[a-z0-9_-]{6,30}$/.test(raw)) return "";
+  try { localStorage.setItem("orpho_ref_code", raw); } catch {}
+  return raw;
+}
+
+function getReferralCode() {
+  // Read URL first (overrides stored); else fall back to localStorage.
+  let ref = readReferralCode();
+  if (ref) return ref;
+  try { return localStorage.getItem("orpho_ref_code") || ""; } catch { return ""; }
+}
+
+function applyReferralToStripeUrl(url, ref) {
+  if (!url || !ref) return url;
+  // Stripe Payment Links pass metadata via `?prefilled_metadata[KEY]=VAL`.
+  const sep = url.includes("?") ? "&" : "?";
+  return `${url}${sep}prefilled_metadata[ref_code]=${encodeURIComponent(ref)}`;
+}
+
+function wireBuyPack() {
+  const btn = $("#buy-pack");
+  if (!btn) return;
+  const coupon = readCoupon();
+  const ref = getReferralCode();
+  const pill = $("#coupon-pill");
+  if (pill && (coupon || ref)) {
+    pill.hidden = false;
+    const parts = [];
+    if (coupon) parts.push(`Code ${coupon} applies at checkout`);
+    if (ref) parts.push("+10 referral bonus");
+    pill.textContent = parts.join(" · ");
+  }
+  if (STRIPE_PACK_URL) {
+    let url = applyCouponToStripeUrl(STRIPE_PACK_URL, coupon);
+    url = applyReferralToStripeUrl(url, ref);
+    btn.href = url;
+    btn.target = "_blank";
+    btn.rel = "noopener";
+  } else {
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      revealPackWaitlist(btn);
+    });
+  }
+}
+
+function revealPackWaitlist(btn) {
+  if (document.querySelector("#pack-waitlist-inline")) {
+    document.querySelector("#pack-waitlist-email")?.focus();
+    return;
+  }
+  const wrap = document.createElement("div");
+  wrap.id = "pack-waitlist-inline";
+  wrap.className = "pack-waitlist-inline";
+
+  const title = document.createElement("p");
+  title.className = "hint";
+  title.textContent = "Pack checkout opens this week. Leave an email and we'll send the link the moment it goes live.";
+  wrap.appendChild(title);
+
+  const row = document.createElement("div");
+  row.className = "wl-row";
+
+  const input = document.createElement("input");
+  input.id = "pack-waitlist-email";
+  input.type = "email";
+  input.placeholder = "you@example.com";
+  input.autocomplete = "email";
+  input.required = true;
+  row.appendChild(input);
+
+  const send = document.createElement("button");
+  send.type = "button";
+  send.className = "primary";
+  send.textContent = "Notify me";
+  row.appendChild(send);
+
+  const msg = document.createElement("p");
+  msg.className = "wl-msg hint small";
+  msg.hidden = true;
+
+  wrap.appendChild(row);
+  wrap.appendChild(msg);
+  btn.insertAdjacentElement("afterend", wrap);
+  input.focus();
+
+  send.addEventListener("click", async () => {
+    const email = input.value.trim();
+    if (!email || !email.includes("@")) {
+      msg.hidden = false;
+      msg.textContent = "Enter a valid email.";
+      return;
+    }
+    send.disabled = true;
+    send.textContent = "Saving…";
+    try {
+      const r = await fetch("/api/waitlist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, interest: "pack" }),
+      });
+      const data = await r.json().catch(() => ({}));
+      msg.hidden = false;
+      msg.textContent = r.ok ? (data.message || "On the list — we'll email you the second checkout opens.") : "Try again in a moment.";
+      if (r.ok) {
+        input.disabled = true;
+        send.textContent = "✓ Saved";
+        track("pack_waitlist_join", "landing");
+      } else {
+        send.disabled = false;
+        send.textContent = "Notify me";
+      }
+    } catch {
+      msg.hidden = false;
+      msg.textContent = "Network error — try again.";
+      send.disabled = false;
+      send.textContent = "Notify me";
+    }
+  });
+}
+
+function wireBillingToggle() {
+  const monthly = $("#billing-monthly");
+  const annual = $("#billing-annual");
+  const price = $("#personal-price");
+  const cadence = $("#personal-cadence");
+  const equiv = $("#personal-equiv");
+  const savePill = annual ? annual.querySelector(".save-pill") : null;
+  const buyBtn = $("#buy-personal");
+  if (!monthly || !annual || !price || !cadence) return;
+
+  if (savePill) {
+    savePill.textContent = ANNUAL_SAVINGS_USD > 0 ? `save $${ANNUAL_SAVINGS_USD}/yr` : "save $0";
+  }
+
+  const setMode = (mode) => {
+    if (mode === "annual") {
+      monthly.classList.remove("active"); monthly.setAttribute("aria-selected", "false");
+      annual.classList.add("active"); annual.setAttribute("aria-selected", "true");
+      price.textContent = `$${PERSONAL_ANNUAL_USD}`;
+      cadence.textContent = "/ year";
+      const perMonth = (PERSONAL_ANNUAL_USD / 12).toFixed(2);
+      if (equiv) { equiv.hidden = false; equiv.textContent = `~$${perMonth}/mo billed annually`; }
+      if (buyBtn) wirePersonalCheckout(buyBtn, STRIPE_PERSONAL_ANNUAL_URL);
+    } else {
+      annual.classList.remove("active"); annual.setAttribute("aria-selected", "false");
+      monthly.classList.add("active"); monthly.setAttribute("aria-selected", "true");
+      price.textContent = `$${PERSONAL_MONTHLY_USD}`;
+      cadence.textContent = "/ month";
+      if (equiv) equiv.hidden = true;
+      if (buyBtn) wirePersonalCheckout(buyBtn, STRIPE_PERSONAL_MONTHLY_URL);
+    }
+  };
+
+  monthly.addEventListener("click", () => setMode("monthly"));
+  annual.addEventListener("click", () => setMode("annual"));
+  setMode("monthly");
+}
+
+function wireBuyPackBtc() {
+  const btn = $("#buy-pack-btc");
+  const form = $("#btc-form");
+  const emailInput = $("#btc-email");
+  const submit = $("#btc-form-submit");
+  const msg = $("#btc-form-msg");
+  if (!btn || !form) return;
+
+  btn.addEventListener("click", () => { form.hidden = !form.hidden; });
+
+  submit.addEventListener("click", async () => {
+    const email = (emailInput.value || "").trim();
+    if (!email || email.indexOf("@") === -1) {
+      msg.hidden = false; msg.textContent = "Enter your email so we can send the claim code."; return;
+    }
+    submit.disabled = true;
+    msg.hidden = false; msg.textContent = "Generating invoice…";
+    try {
+      const r = await fetch("/api/buy-btc", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (r.ok && data.buy_page) {
+        location.href = data.buy_page;
+      } else if (r.status === 503) {
+        msg.textContent = data.error || "Bitcoin checkout isn't configured yet. Use card checkout above.";
+      } else {
+        msg.textContent = data.error || "Couldn't generate an invoice. Try again in a moment.";
+      }
+    } catch {
+      msg.textContent = "Network error. Try again.";
+    } finally {
+      submit.disabled = false;
+    }
+  });
+}
+
+function wirePersonalCheckout(btn, url) {
+  btn.onclick = null;
+  const coupon = readCoupon();
+  if (url) {
+    btn.href = applyCouponToStripeUrl(url, coupon);
+    btn.target = "_blank";
+    btn.rel = "noopener";
+  } else {
+    btn.href = "#";
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      alert("Personal tier launches alongside the public site. Drop your email in the waitlist below — we'll email you the moment it goes live.");
+    }, { once: true });
+  }
+}
+
+function wireVerifierLinks() {
+  const a = $("#verifier-link");
+  const b = $("#verifier-link-footer");
+  if (a) a.href = VERIFIER_URL;
+  if (b) b.href = VERIFIER_URL;
+}
+
+function wirePackClear() {
+  const btn = $("#pack-clear");
+  if (!btn) return;
+  btn.addEventListener("click", () => {
+    setPackToken("");
+    refreshPackBanner();
+  });
+}
+
+// drag-and-drop
+const drop = $("#drop");
+const fileInput = $("#file");
+drop.addEventListener("click", () => fileInput.click());
+$("#pick").addEventListener("click", (e) => { e.stopPropagation(); fileInput.click(); });
+fileInput.addEventListener("change", () => fileInput.files[0] && anchorFile(fileInput.files[0]));
+["dragenter", "dragover"].forEach(ev => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add("drag"); }));
+["dragleave", "drop"].forEach(ev => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove("drag"); }));
+drop.addEventListener("drop", (e) => { const f = e.dataTransfer.files[0]; if (f) anchorFile(f); });
+
+// verify
+$("#v-go").addEventListener("click", async () => {
+  const file = $("#v-file").files[0];
+  const id = $("#v-id").value.trim();
+  if (!file || !id) { $("#v-out").textContent = "pick a file and a receipt ID"; return; }
+  $("#v-out").textContent = "hashing locally…";
+  const { sha256: hash, sha512 } = await dualHash(file);
+  const resp = await fetch(`/api/verify/${encodeURIComponent(id)}`);
+  if (!resp.ok) { $("#v-out").textContent = `receipt not found: ${id}`; return; }
+  const record = await resp.json();
+  const sha256_match = record.hash_hex === hash;
+  const has_sibling = typeof record.sha512_hex === "string" && record.sha512_hex.length === 128;
+  const sha512_match = has_sibling ? record.sha512_hex === sha512 : null;
+  const matches = sha256_match && (sha512_match !== false);
+  $("#v-out").textContent = JSON.stringify({
+    receipt_id: id,
+    your_file_sha256: hash,
+    receipt_sha256: record.hash_hex,
+    sha256_match,
+    your_file_sha512: sha512,
+    receipt_sha512: has_sibling ? record.sha512_hex : null,
+    sha512_match,
+    receipt_created_at: record.created_at,
+    receipt_status: record.status || "pending",
+    btc_pinned_at: record.btc_pinned_at || null,
+    calendars_ok: record.calendars_ok,
+    calendars_total: record.calendars_total,
+    verdict: matches
+      ? (has_sibling ? "VALID — both SHA-256 and SHA-512 match" : "VALID — SHA-256 matches (this receipt predates the SHA-512 sibling)")
+      : "MISMATCH — this file did not produce that receipt",
+  }, null, 2);
+});
+
+async function wireSampleCard() {
+  const idEl = $("#s-id");
+  if (!idEl) return;
+  try {
+    const meta = await fetch("/sample/index.json").then(r => r.json());
+    idEl.textContent = meta.receipt_id;
+    $("#s-hash").textContent = meta.hash_hex;
+    $("#s-file").href = meta.sample_file;
+    $("#s-receipt-dl").href = "/sample/receipt.json";
+    const sampleShareUrl = `${location.origin}/r/${meta.receipt_id}`;
+    const sShareBtn = $("#s-share");
+    if (sShareBtn) {
+      sShareBtn.addEventListener("click", async () => {
+        try { await navigator.clipboard.writeText(sampleShareUrl); sShareBtn.textContent = "Link copied ✓"; }
+        catch { sShareBtn.textContent = sampleShareUrl; }
+        setTimeout(() => { sShareBtn.textContent = "Copy share link"; }, 2500);
+      });
+    }
+    $("#s-verify").addEventListener("click", async () => {
+      const out = $("#s-out");
+      out.textContent = "verifying against live server…";
+      const resp = await fetch(`/api/verify/${encodeURIComponent(meta.receipt_id)}`);
+      if (!resp.ok) { out.textContent = `unexpected: receipt ${meta.receipt_id} not found on server`; return; }
+      const record = await resp.json();
+      const allOk = (record.checks || []).every(c => c.ok);
+      out.textContent = JSON.stringify({
+        receipt_id: record.receipt_id,
+        anchored_hash: record.hash_hex,
+        receipt_created_at: record.created_at,
+        receipt_status: record.status || "pending",
+        btc_pinned_at: record.btc_pinned_at || null,
+        calendars_ok: record.calendars_ok,
+        calendars_total: record.calendars_total,
+        all_ots_proofs_valid: allOk,
+        verdict: allOk ? "VALID — all 5 calendar proofs check out" : "PARTIAL — see checks",
+      }, null, 2);
+    });
+  } catch (e) {
+    idEl.textContent = "sample unavailable";
+  }
+}
+
+function wireWaitlistForms() {
+  document.querySelectorAll(".waitlist-form").forEach((form) => {
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const input = form.querySelector("input[type=email]");
+      const btn = form.querySelector("button");
+      const msg = form.querySelector(".wl-msg");
+      const email = input.value.trim();
+      const interest = form.dataset.interest || "personal";
+      btn.disabled = true;
+      try {
+        const r = await fetch("/api/waitlist", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, interest }),
+        });
+        const data = await r.json().catch(() => ({}));
+        msg.hidden = false;
+        msg.textContent = data.message || (r.ok ? "On the list." : "Try again in a moment.");
+      } catch {
+        msg.hidden = false;
+        msg.textContent = "Network error.";
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  });
+}
+
+async function detectSignedIn() {
+  try {
+    const r = await fetch("/api/me");
+    if (!r.ok) return;
+    const me = await r.json();
+    if (me && me.email) {
+      const inLink = $("#nav-signin");
+      const acctLink = $("#nav-account");
+      if (inLink) inLink.hidden = true;
+      if (acctLink) acctLink.hidden = false;
+      // Reveal private-receipt toggle only for active subscribers — the
+      // server rejects private=true for non-subscribers anyway, but hiding
+      // the control avoids a misleading UI for free / pack-only users.
+      if (me.subscription_active) {
+        const row = $("#private-receipt-row");
+        if (row) row.hidden = false;
+      }
+    }
+  } catch { /* anonymous fine */ }
+}
+
+ingestPackFromUrl();
+// Load public config (Stripe URLs, pricing) before wiring buy buttons.
+// If config endpoint unreachable, buttons fall back to waitlist mode.
+loadPublicConfig().finally(() => {
+  wireBuyPack();
+  wireBuyPackBtc();
+  wireBillingToggle();
+});
+wireVerifierLinks();
+wirePackClear();
+refreshPackBanner();
+wireSampleCard();
+wireWaitlistForms();
+detectSignedIn();
+track("page_view", "landing");
+
+const buyPackBtn = $("#buy-pack");
+if (buyPackBtn) buyPackBtn.addEventListener("click", () => track("buy_pack_click", "landing"));
+const buyPersonalBtn = $("#buy-personal");
+if (buyPersonalBtn) buyPersonalBtn.addEventListener("click", () => track("buy_personal_click", "landing"));
+const billingMonthly = $("#billing-monthly");
+const billingAnnual = $("#billing-annual");
+if (billingMonthly) billingMonthly.addEventListener("click", () => track("billing_toggle", "landing"));
+if (billingAnnual) billingAnnual.addEventListener("click", () => track("billing_toggle", "landing"));
+const verifySampleBtn = $("#s-verify");
+if (verifySampleBtn) verifySampleBtn.addEventListener("click", () => track("verify_sample_click", "landing"));
+const shareBtn = $("#share");
+if (shareBtn) shareBtn.addEventListener("click", () => track("share_link_click", "landing"));
+const sShareBtn = $("#s-share");
+if (sShareBtn) sShareBtn.addEventListener("click", () => track("share_link_click", "landing"));

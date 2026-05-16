@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Prove wedding photos came from your camera — Orphograph</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="For wedding photographers: anchor delivered photos to Bitcoin so you can prove which RAW files you sent the client on which date. Receipts last decades.">
+<link rel="canonical" href="https://orphograph.com/lp/wedding-photographer-proof.html">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<meta property="og:title" content="Prove wedding photos came from your camera">
+<meta property="og:description" content="A timestamped receipt the day you deliver. Cheap insurance against delivery disputes and AI-generation accusations.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://orphograph.com/lp/wedding-photographer-proof.html">
+<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/blog.css">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "Why would I need to prove the photos came from my camera?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Three reasons that recur in wedding photography: (1) client disputes about which version you delivered, (2) AI-generation accusations on social media, (3) portfolio-theft disputes where another photographer claims your shots. A Bitcoin-anchored timestamp on the delivery file defeats most of these in one step."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Do I have to anchor every photo from the shoot?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "No. Most photographers zip the final delivery set and anchor the zip. The receipt then proves the whole delivery existed at that time. You can also anchor a smaller portfolio set separately."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "What about the RAW files versus the JPEGs I deliver?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "They have different hashes. If you might need to prove the underlying capture, anchor a zip of the RAWs alongside the JPEG delivery. Both receipts cost the same (free for one anchor, $7 for ten)."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Will clients see the receipt?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Only if you share it. Many photographers include a one-line note in the delivery email — \"Your gallery is timestamped to Bitcoin block X via Orphograph\" — but it's optional and you keep the receipt regardless."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "How much does this cost for a working photographer?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "One anchor per month is free. The $7 Pack gives you ten receipts that never expire. $5/month covers unlimited anchors plus history. For a photographer doing 20 weddings a year, the monthly plan is the obvious fit."
+      }
+    }
+  ]
+}
+</script>
+</head>
+<body>
+
+<header>
+  <div class="brand"><a href="/">orphograph</a></div>
+  <nav>
+    <a href="/#how">how it works</a>
+    <a href="/#pricing">pricing</a>
+    <a href="/lp/">guides</a>
+    <a href="/about.html">about</a>
+    <a href="/signin.html">sign in</a>
+  </nav>
+</header>
+
+<main class="blog-post">
+
+<article class="post-header">
+  <h1>Prove wedding photos came from your camera</h1>
+  <p class="post-meta muted">A small ritual at delivery time that pays back the first time a client (or a stranger on Reddit) accuses you of something you didn't do.</p>
+</article>
+
+<section class="post-body">
+
+<p>
+  Wedding photography has three recurring evidence problems and they're
+  all getting worse:
+</p>
+<ul>
+  <li>
+    The client claims you delivered different photos than you actually
+    sent. A year later. After the marriage hit a rough patch and
+    everything's a fight.
+  </li>
+  <li>
+    Someone on social media accuses your portfolio shots of being
+    AI-generated. The accusation gets more reach than your denial.
+  </li>
+  <li>
+    Another photographer's portfolio quietly includes your work, and
+    you need to demonstrate priority — that you took the photo first.
+  </li>
+</ul>
+<p>
+  In all three cases, the strongest single piece of evidence a working
+  photographer can produce is a cryptographic timestamp on the
+  delivered files, dated to the day of delivery. Orphograph generates
+  that timestamp in your browser in about thirty seconds.
+</p>
+
+<h2>The ritual</h2>
+<p>
+  On the day you deliver a gallery:
+</p>
+<ol>
+  <li>
+    Build the final delivery — JPEGs at the resolution the client gets,
+    or a zip of the full set.
+  </li>
+  <li>
+    Drop the file or zip into Orphograph. SHA-256 runs in your browser;
+    the files never upload. Within seconds you have a 64-character
+    hash and within minutes you have a Bitcoin-anchored receipt.
+  </li>
+  <li>
+    Save the receipt JSON in the same folder as the delivered gallery.
+    Back it up the same place you back up your business records.
+  </li>
+  <li>
+    Optionally: include a one-line note in the delivery email letting
+    the client know the gallery is timestamped. It signals
+    professionalism and quietly closes off "you sent me different
+    photos" as a future dispute.
+  </li>
+</ol>
+
+<h2>What this actually proves</h2>
+<p>
+  The receipt proves: <em>this exact zip of these exact JPEGs existed
+  on this exact date</em>. If the client later claims you delivered
+  different files, you can re-hash the original zip, compare to the
+  receipt, and demonstrate the bytes match. If the client claims a
+  particular photo is fake, you can show the zip containing that photo
+  was anchored before any AI tool could have been used to generate it
+  (assuming you anchored promptly).
+</p>
+<p>
+  It does not prove you took the photo — it proves the file existed
+  in its exact form by date X. For "is this photo from my camera," you
+  pair the timestamp with your RAW originals on read-only storage.
+  Together they're a strong evidence package; separately they're each
+  one piece.
+</p>
+
+<h2>RAWs versus JPEGs</h2>
+<p>
+  RAW files and the JPEGs you deliver have different SHA-256 hashes.
+  If you anticipate ever needing to prove "I have the original capture
+  data," anchor a zip of the RAWs in addition to the JPEG delivery.
+  The two receipts cost the same — free for one, $7 for a Pack of ten,
+  $5/month for unlimited. For a photographer doing twenty weddings a
+  year, unlimited is the right tier.
+</p>
+
+<h2>The AI-generation accusation</h2>
+<p>
+  This one's worth addressing directly. Generative image models have
+  published training-data cutoffs. If your photo was anchored before
+  the cutoff for any major model, the AI-generation accusation
+  collapses — the model literally couldn't have produced your photo
+  because it didn't exist when the model trained. For new work,
+  anchor at delivery and that defense is permanent.
+</p>
+
+<div class="post-footer" style="margin: 36px 0; padding: 24px; background: var(--accent-soft); border: 1px solid var(--accent-stroke); border-radius: 12px;">
+  <h2 style="margin-top:0;">Anchor your first file — free</h2>
+  <p>Drop a delivery zip, get a Bitcoin-anchored receipt. The photos never upload.</p>
+  <p><a class="btn" href="/#drop" style="display:inline-block; padding: 10px 18px; border: 1px solid var(--accent); color: var(--accent); border-radius: 8px; text-decoration: none;">Start now →</a></p>
+</div>
+
+<h2 id="faq">FAQ</h2>
+<div class="faq">
+  <h3>Why would I need to prove the photos came from my camera?</h3>
+  <p>Client disputes, AI-generation accusations, and portfolio-theft cases. A Bitcoin-anchored delivery timestamp defeats most of these in one step.</p>
+
+  <h3>Do I have to anchor every photo?</h3>
+  <p>No. Zip the final delivery and anchor the zip. The receipt covers the whole gallery.</p>
+
+  <h3>RAW versus JPEG?</h3>
+  <p>Different hashes. Anchor a zip of the RAWs separately if you might need to prove the capture data exists.</p>
+
+  <h3>Will clients see the receipt?</h3>
+  <p>Only if you share it. Many photographers include a one-line note; others keep the receipt private as personal insurance.</p>
+
+  <h3>What does this cost for a working photographer?</h3>
+  <p>Free for one anchor a month; $7 for a Pack of ten that never expires; $5/month for unlimited.</p>
+</div>
+
+</section>
+
+</main>
+
+<footer>
+  <small>
+    <a href="/">← Home</a> ·
+    <a href="/lp/">More guides</a> ·
+    <a href="/about.html">About</a> ·
+    <a href="/privacy.html">Privacy</a> ·
+    We never see your file
+  </small>
+</footer>
+
+</body>
+</html>

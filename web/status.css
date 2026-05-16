@@ -1,0 +1,25 @@
+.status-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  margin: 24px 0;
+}
+.card {
+  background: var(--panel);
+  border: 1px solid var(--panel-stroke);
+  border-radius: 10px;
+  padding: 16px;
+}
+.card-label { color: var(--muted); font-size: 12px; }
+.card-value { font-size: 22px; font-weight: 300; margin-top: 4px; }
+.card-value.ok { color: var(--accent); }
+.card-value.bad { color: var(--bad); }
+
+.status-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.status-table th, .status-table td {
+  text-align: left; padding: 8px 12px;
+  border-bottom: 1px solid var(--panel-stroke);
+}
+.status-table th { color: var(--muted); font-weight: 400; }
+.cal-ok { color: var(--accent); }
+.cal-bad { color: var(--bad); }

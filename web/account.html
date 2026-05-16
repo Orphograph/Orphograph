@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Account — Orphograph</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<header>
+  <div class="brand"><a href="/">orphograph</a></div>
+  <nav>
+    <a href="/">home</a>
+    <a href="#" id="signout-link">sign out</a>
+  </nav>
+</header>
+
+<main>
+<section id="account-card">
+  <h1>Account</h1>
+  <dl class="kv">
+    <dt>Email</dt><dd id="email" class="mono">loading…</dd>
+    <dt>Subscription</dt><dd id="sub-status">…</dd>
+    <dt>Next renewal</dt><dd id="renewal">…</dd>
+  </dl>
+  <div class="sub-actions">
+    <button id="cancel-sub" class="danger" hidden>Cancel subscription</button>
+    <button id="reactivate-sub" hidden>Reactivate subscription</button>
+    <span id="sub-action-msg" class="muted small" hidden></span>
+  </div>
+</section>
+
+<section id="api-section" hidden>
+  <h2>API access</h2>
+  <p class="hint">
+    Use the API to anchor files programmatically — useful for automation,
+    folder watchers, or integrating Orphograph into your own tools.
+    <a href="/docs/api.html">Read the API docs →</a>
+  </p>
+  <dl class="kv">
+    <dt>API key</dt>
+    <dd id="api-key-display" class="mono">none issued yet</dd>
+  </dl>
+  <div class="sub-actions">
+    <button id="issue-api-key">Generate new key</button>
+    <button id="revoke-api-key" class="danger" hidden>Revoke key</button>
+    <span id="api-key-msg" class="muted small" hidden></span>
+  </div>
+  <div id="api-key-reveal" class="reveal-card" hidden>
+    <p class="muted small">This is the only time you'll see this key. Save it now.</p>
+    <code id="api-key-new" class="mono"></code>
+    <button id="api-key-copy">Copy</button>
+  </div>
+</section>
+
+<section id="team-section">
+  <h2>Team <span class="muted small" id="team-role-pill"></span></h2>
+  <div id="team-none" hidden>
+    <p class="hint">
+      Teams let you share your subscription with up to 25 members. They
+      inherit your unlimited-anchor benefit and can issue receipts that
+      tie back to your owner account. Create a team to get started.
+    </p>
+    <form id="team-create-form" class="inline-form">
+      <input id="team-create-name" type="text" placeholder="Team name (e.g. Acme Studios)" maxlength="80">
+      <button type="submit" class="btn">Create team</button>
+    </form>
+  </div>
+  <div id="team-info" hidden>
+    <dl class="kv">
+      <dt>Name</dt><dd id="team-name"></dd>
+      <dt>Owner</dt><dd id="team-owner" class="mono"></dd>
+      <dt>Members (<span id="team-member-count">0</span>)</dt><dd id="team-members"></dd>
+    </dl>
+    <div id="team-owner-actions" hidden>
+      <button id="team-invite-btn" type="button" class="btn">Issue new invite code</button>
+      <p id="team-invite-result" class="hint" hidden></p>
+    </div>
+    <div id="team-member-actions" hidden>
+      <button id="team-leave-btn" type="button" class="btn-secondary">Leave team</button>
+    </div>
+  </div>
+</section>
+
+<section id="team-join-section" hidden>
+  <h2>Join a team</h2>
+  <p class="hint">Paste the invite code your team owner shared with you.</p>
+  <form id="team-redeem-form" class="inline-form">
+    <input id="team-redeem-code" type="text" placeholder="tinv_…" autocomplete="off">
+    <button type="submit" class="btn">Redeem</button>
+  </form>
+  <p id="team-redeem-result" class="hint" hidden></p>
+</section>
+
+<section>
+  <h2>Anchoring timeline</h2>
+  <p class="hint">
+    A continuous timeline of anchors is the strongest proof-of-existence pattern —
+    much harder to fake retroactively than a single receipt. Each dot is an
+    anchor; gaps mean periods without activity.
+  </p>
+  <svg id="timeline-svg" class="timeline-svg" role="img" aria-label="Anchor timeline"></svg>
+  <div id="timeline-empty" class="hint" hidden>No anchors yet — your timeline starts with your first anchor.</div>
+</section>
+
+<section>
+  <h2>Recent anchors</h2>
+  <p class="hint">
+    Only anchors created while signed in to your subscription appear here.
+    Pack receipts were emailed to you at the time of anchoring.
+  </p>
+  <div class="filter-row" id="filter-row" hidden>
+    <input id="filter-text" type="search" placeholder="filter by label…" autocomplete="off">
+    <label class="muted small">from <input id="filter-from" type="date"></label>
+    <label class="muted small">to <input id="filter-to" type="date"></label>
+    <label class="muted small">privacy
+      <select id="filter-private">
+        <option value="">all</option>
+        <option value="true">private only</option>
+        <option value="false">public only</option>
+      </select>
+    </label>
+    <span id="filter-count" class="muted small"></span>
+    <a id="vault-download" href="/api/me/anchors.zip" class="btn-secondary">Download full vault (ZIP)</a>
+  </div>
+  <div id="anchors-empty" class="hint" hidden>No anchors yet on this subscription.</div>
+  <table id="anchors-table" class="anchors" hidden>
+    <thead>
+      <tr><th>When (UTC)</th><th>Label</th><th>Privacy</th><th>Calendars</th><th>Status</th><th></th></tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+</section>
+
+<section id="founder-section" class="founder-only" hidden>
+  <h2>Payouts <span class="founder-badge">founder</span></h2>
+  <p class="hint">
+    Hot-wallet balance across all addresses in the receive pool. Visible
+    only when a valid founder token is stored locally. Customers don't
+    see this panel.
+  </p>
+  <dl class="kv">
+    <dt>Hot balance</dt><dd id="fp-balance" class="mono">…</dd>
+    <dt>Sweep threshold</dt><dd id="fp-threshold" class="mono">…</dd>
+    <dt>Ready to sweep?</dt><dd id="fp-ready">…</dd>
+    <dt>Cold destination</dt><dd id="fp-cold" class="mono">…</dd>
+    <dt>Address pool size</dt><dd id="fp-pool" class="mono">…</dd>
+    <dt>Last ping</dt><dd id="fp-last-ping" class="mono">…</dd>
+    <dt>Last snapshot</dt><dd id="fp-last-snap" class="mono">…</dd>
+  </dl>
+  <div class="sub-actions">
+    <button id="fp-refresh">Refresh</button>
+    <a id="fp-cold-explorer" target="_blank" rel="noopener noreferrer" class="btn-link" hidden>View on mempool.space →</a>
+  </div>
+</section>
+
+<section id="auth-required" hidden>
+  <p>You're not signed in. <a href="/signin.html">Sign in</a> to view your account.</p>
+</section>
+</main>
+
+<footer>
+  <small><a href="/">home</a> · <a href="/terms.html">Terms</a> · <a href="/privacy.html">Privacy</a></small>
+</footer>
+
+<script src="/account.js"></script>
+</body>
+</html>

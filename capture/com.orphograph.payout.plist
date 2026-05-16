@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+launchd config for the orphograph payout monitor.
+
+What it does:
+  Every day at 9:00 AM local time, polls mempool.space for all addresses
+  in the orphograph hot-wallet pool, computes total balance, and Telegram-
+  pings the founder if balance ≥ ORPHO_SWEEP_THRESHOLD_SATS.
+
+Install:
+  bash ~/orphograph/scripts/install_payout_monitor.sh
+
+Stop:
+  launchctl unload ~/Library/LaunchAgents/com.orphograph.payout.plist
+
+The plist below uses placeholder paths (CHANGEME) — the install script
+substitutes the real $HOME before loading.
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.orphograph.payout</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/python3</string>
+        <string>/Users/CHANGEME/orphograph/server/payout_monitor.py</string>
+    </array>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>ORPHO_DATA_DIR</key>
+        <string>/Users/CHANGEME/orphograph/data</string>
+        <key>ORPHO_SWEEP_THRESHOLD_SATS</key>
+        <string>500000</string>
+    </dict>
+
+    <!-- Run daily at 9:00 AM local. -->
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>9</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/CHANGEME/Library/Logs/orphograph-payout.out</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/CHANGEME/Library/Logs/orphograph-payout.err</string>
+
+    <key>ProcessType</key>
+    <string>Background</string>
+
+    <key>Nice</key>
+    <integer>10</integer>
+</dict>
+</plist>

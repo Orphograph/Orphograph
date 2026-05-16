@@ -1,0 +1,58 @@
+# .dockerignore — keep the image small + don't bake secrets into layers.
+# Anything matched here is excluded from the build context Docker sends to
+# the daemon, so it never lands in the image even if a COPY line matches.
+
+# Local secrets — NEVER ship to a layer
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+keys.sparseimage
+
+# Local development artifacts
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Tests don't run inside the image
+tests/
+
+# Documentation / planning — not needed at runtime
+deploy/
+docs/
+content/blog/*.draft.md
+*.md
+!README.md
+
+# IDE / OS noise
+.DS_Store
+.vscode/
+.idea/
+
+# Plugin tree — separate repo at marketplace/
+marketplace/
+
+# Git metadata
+.git/
+.gitignore
+.gitattributes
+
+# Backup junk
+*.bak
+*~
+
+# Local data — populated by the volume at runtime, not from the image
+data/
+logs/
+receipts/
+ledger.jsonl*
+credit_ledger.jsonl*
+upgrade_log.jsonl*
+stripe_processed_events.jsonl*
+*.jsonl.bak

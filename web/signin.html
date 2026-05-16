@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Sign in — Orphograph</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<header>
+  <div class="brand"><a href="/">orphograph</a></div>
+  <nav><a href="/">home</a></nav>
+</header>
+
+<main>
+<section class="signin">
+  <h1>Sign in</h1>
+  <p class="lede">
+    We email you a one-time link. No passwords, no account creation step.
+    Use the same email you used to subscribe.
+  </p>
+  <form id="signin-form" class="signin-form">
+    <label for="email">Email</label>
+    <input id="email" type="email" autocomplete="email" placeholder="you@example.com" required>
+    <button type="submit" id="submit-btn">Email me a link</button>
+  </form>
+  <p id="signin-msg" class="hint" hidden></p>
+</section>
+</main>
+
+<footer>
+  <small><a href="/">home</a> · <a href="/terms.html">Terms</a> · <a href="/privacy.html">Privacy</a></small>
+</footer>
+
+<script src="/signin.js"></script>
+</body>
+</html>

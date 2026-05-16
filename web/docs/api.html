@@ -1,0 +1,1143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>API documentation — Orphograph</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Public HTTP API for anchoring file hashes to Bitcoin and verifying receipts. Stdlib-only Python and curl examples. Cream-warm docs for plugin authors and integrators.">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/blog.css">
+<style>
+  /* Page-local refinements — keep the prose-like blog density and add
+     a compact endpoint catalog table on top of the cream-warm palette. */
+  .api-toc {
+    background: var(--panel);
+    border: 1px solid var(--panel-stroke);
+    border-radius: 12px;
+    padding: 18px 22px;
+    margin: 24px 0 36px;
+  }
+  .api-toc h2 {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--muted);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    margin: 0 0 12px;
+  }
+  .api-toc ol {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    columns: 2;
+    column-gap: 32px;
+    font-size: 14px;
+  }
+  .api-toc li { margin: 4px 0; break-inside: avoid; color: var(--muted); }
+  .api-toc a { color: var(--accent); text-decoration: none; }
+  .api-toc a:hover { text-decoration: underline; }
+
+  .endpoint {
+    margin: 48px 0;
+    padding-top: 8px;
+    border-top: 1px solid var(--panel-stroke-soft);
+  }
+  .endpoint:first-of-type { border-top: 0; padding-top: 0; }
+  .endpoint h2 {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    font-size: 20px;
+    font-weight: 400;
+    margin: 0 0 8px;
+  }
+  .method {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    border: 1px solid var(--accent-stroke);
+    text-transform: uppercase;
+  }
+  .method.get { background: rgba(74,154,115,0.10); color: var(--accent); border-color: var(--accent-stroke); }
+  .method.post { background: rgba(192,138,62,0.10); color: var(--warn); border-color: rgba(192,138,62,0.30); }
+  .endpoint h2 .path {
+    font-family: var(--mono);
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--text);
+    word-break: break-all;
+  }
+  .endpoint .lede {
+    font-size: 15px;
+    color: var(--text-soft);
+    margin: 0 0 16px;
+    max-width: 64ch;
+  }
+  .endpoint h3 {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--muted);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    margin: 22px 0 8px;
+  }
+  .endpoint pre {
+    background: #f6f0e2;
+    border: 1px solid var(--panel-stroke);
+    border-radius: 8px;
+    padding: 14px 16px;
+    overflow-x: auto;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.55;
+    color: var(--text);
+    margin: 8px 0 12px;
+    white-space: pre;
+    word-break: normal;
+  }
+  .endpoint code {
+    font-family: var(--mono);
+    font-size: 13px;
+    background: var(--accent-soft);
+    color: var(--text);
+    padding: 1px 6px;
+    border-radius: 4px;
+  }
+  .endpoint p { color: var(--text-soft); font-size: 14.5px; margin: 0 0 12px; max-width: 70ch; line-height: 1.65; }
+
+  table.api-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13.5px;
+    margin: 12px 0 18px;
+  }
+  table.api-table th, table.api-table td {
+    text-align: left;
+    padding: 9px 12px;
+    border-bottom: 1px solid var(--panel-stroke);
+    vertical-align: top;
+  }
+  table.api-table th {
+    color: var(--muted);
+    font-weight: 500;
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    background: var(--panel-stroke-soft);
+  }
+  table.api-table td code {
+    background: transparent;
+    padding: 0;
+    font-size: 12.5px;
+    color: var(--accent);
+  }
+
+  .anchor-link {
+    margin-left: auto;
+    color: var(--muted);
+    text-decoration: none;
+    font-size: 12px;
+    font-family: var(--mono);
+    opacity: 0.45;
+    transition: opacity .15s ease;
+  }
+  .endpoint h2:hover .anchor-link { opacity: 1; }
+  .anchor-link:hover { color: var(--accent); }
+
+  .callout {
+    border: 1px solid var(--accent-stroke);
+    background: var(--accent-soft);
+    border-radius: 10px;
+    padding: 14px 18px;
+    margin: 20px 0;
+    font-size: 14px;
+    color: var(--text-soft);
+  }
+  .callout strong { color: var(--accent); }
+  .callout.warn {
+    border-color: rgba(192,138,62,0.30);
+    background: rgba(192,138,62,0.08);
+  }
+  .callout.warn strong { color: var(--warn); }
+
+  .pill {
+    display: inline-block;
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: var(--panel-stroke-soft);
+    color: var(--muted);
+    border: 1px solid var(--panel-stroke);
+    margin-left: 6px;
+    letter-spacing: 0.02em;
+  }
+  .pill.planned { background: rgba(192,138,62,0.08); color: var(--warn); border-color: rgba(192,138,62,0.30); }
+
+  .lang-tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 0;
+  }
+  .lang-tabs span {
+    font-size: 12px;
+    padding: 4px 10px;
+    color: var(--muted);
+    background: var(--panel-stroke-soft);
+    border: 1px solid var(--panel-stroke);
+    border-bottom: 0;
+    border-radius: 6px 6px 0 0;
+    font-family: var(--mono);
+  }
+  .lang-tabs + pre { border-top-left-radius: 0; margin-top: 0; }
+
+  .small-muted { color: var(--muted); font-size: 12.5px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand"><a href="/">orphograph</a></div>
+  <nav>
+    <a href="/">home</a>
+    <a href="/about.html">about</a>
+    <a href="/status.html">status</a>
+    <a href="/account.html">account</a>
+  </nav>
+</header>
+
+<main>
+<article class="blog-post">
+
+<header class="post-header">
+  <h1>API documentation</h1>
+  <p class="post-meta small-muted">
+    Version <strong>0.1</strong> · Base URL <code>https://orphograph.com</code> · Last revised 2026-05-14
+  </p>
+</header>
+
+<section class="post-body">
+
+<p class="lede">
+  A small, stdlib-friendly HTTP API for anchoring file hashes to Bitcoin
+  and reading back receipts. Built for plugin authors, automation,
+  folder watchers, capture-time daemons, and anything that needs to ask
+  "did this exact bag of bytes exist at this exact UTC moment?" without
+  ever sending the bytes themselves.
+</p>
+
+<p>
+  Three rules govern every endpoint here:
+</p>
+<ol>
+  <li>We never see file contents — only the SHA-256 hex digest you compute on your side.</li>
+  <li>Every receipt verifies against the public Bitcoin chain without us. If our domain dies, your receipt still works with the open-source verifier.</li>
+  <li>Anchoring is <em>not</em> idempotent on receipt ID. Submitting the same hash twice produces two distinct receipts. This is by design — see <a href="#idempotency">Idempotency</a>.</li>
+</ol>
+
+<nav class="api-toc" aria-label="Endpoint catalog">
+  <h2>Endpoints</h2>
+  <ol>
+    <li><a href="#post-api-anchor"><code>POST /api/anchor</code></a> — anchor a hash</li>
+    <li><a href="#get-api-receipt"><code>GET /api/receipt/&lt;id&gt;</code></a> — fetch a receipt</li>
+    <li><a href="#get-api-verify"><code>GET /api/verify/&lt;id&gt;</code></a> — verify a receipt</li>
+    <li><a href="#get-api-health"><code>GET /api/health</code></a> — public health snapshot</li>
+    <li><a href="#get-api-btc-qr"><code>GET /api/btc-order/&lt;oid&gt;/qr.svg</code></a> — BIP-21 payment QR</li>
+    <li><a href="#get-api-stats"><code>GET /api/stats</code></a> — public counts (privacy-safe)</li>
+    <li><a href="#get-api-badge"><code>GET /api/badge/&lt;id&gt;.svg</code></a> — server-rendered verification badge</li>
+    <li><a href="#get-api-receipt-zip"><code>GET /api/receipt/&lt;id&gt;.zip</code></a> — download receipt + .ots files as ZIP</li>
+    <li><a href="#get-api-receipt-summary"><code>GET /api/receipt/&lt;id&gt;/summary</code></a> — human-readable receipt with disclaimers</li>
+    <li><a href="#get-api-config"><code>GET /api/config</code></a> — public config (Stripe URLs, pricing, toggles)</li>
+    <li><a href="#vault"><code>GET /api/me/anchors</code></a> — subscriber receipt vault (filterable)</li>
+    <li><a href="#vault"><code>GET /api/me/anchors.zip</code></a> — bulk-download all receipts as ZIP</li>
+    <li><a href="#privacy-toggle"><code>POST /api/me/receipt/&lt;id&gt;/privacy</code></a> — toggle receipt privacy</li>
+  </ol>
+</nav>
+
+<h2 id="authentication">Authentication</h2>
+<p>
+  Three distinct credential types reach the public surface. Pick whichever
+  one matches the audience your integration is built for; they are
+  mutually exclusive on a single request.
+</p>
+
+<table class="api-table">
+  <thead>
+    <tr><th>Type</th><th>Header</th><th>Who uses it</th><th>Rate-limit posture</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Pack token</strong></td>
+      <td><code>X-Pack-Token</code></td>
+      <td>One-shot buyers ($7 / 10 receipts). The token is the claim code emailed after purchase.</td>
+      <td>No IP rate limit. Each anchor consumes one credit until the balance is exhausted.</td>
+    </tr>
+    <tr>
+      <td><strong>API key</strong></td>
+      <td><code>X-Orpho-Api-Key</code></td>
+      <td>Personal / Creator subscribers calling from a script, plugin, or server.</td>
+      <td>No IP rate limit while the underlying subscription is active. Soft fair-use ceiling of 1,000 anchors/day.</td>
+    </tr>
+    <tr>
+      <td><strong>None (free tier)</strong></td>
+      <td>—</td>
+      <td>Anonymous browser drops; quick experimentation from the terminal.</td>
+      <td>10 anchors per hour per /24-truncated IP. Returns <code>429</code> with a <code>Retry-After</code> header on exhaustion.</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>
+  Generate or rotate an API key from <a href="/account.html">your account dashboard</a>.
+  Keys look like <code>orpho_</code> + 32 URL-safe characters. We store only the SHA-256
+  hash of the key — once shown, it cannot be retrieved. Lost a key? Revoke and re-issue.
+</p>
+
+<div class="callout">
+  <strong>Session cookies are for the website only.</strong>
+  The cookie-based <code>/api/me/*</code> account endpoints are not part of this
+  public API surface. They require a browser session and are not designed for
+  programmatic use. Use <code>X-Orpho-Api-Key</code> instead.
+</div>
+
+<h2 id="rate-limits">Rate limits</h2>
+<table class="api-table">
+  <thead>
+    <tr><th>Tier</th><th>Per-IP anchors</th><th>Batch size</th><th>Notes</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Free</td>
+      <td>10 / hour / truncated IP</td>
+      <td>—</td>
+      <td>Token bucket; refills continuously at ~10/3600 tokens/sec. Hit it and you get <code>429</code>.</td>
+    </tr>
+    <tr>
+      <td>Pack ($7 one-shot)</td>
+      <td>No IP limit</td>
+      <td>—</td>
+      <td>One credit consumed per receipt. Pack credits never expire.</td>
+    </tr>
+    <tr>
+      <td>Personal ($5/mo) / Creator ($19/mo)</td>
+      <td>No IP limit, priority queue</td>
+      <td>Up to 50 hashes per <code>/api/anchor/batch</code> call</td>
+      <td>Soft fair-use ceiling: 1,000 anchors / API key / day.</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>
+  When the free-tier limit triggers, the response body includes
+  <code>retry_after_seconds</code> and <code>limit_per_hour</code> so a polite
+  client can back off without parsing headers.
+</p>
+
+<h2 id="errors">Error codes</h2>
+<table class="api-table">
+  <thead>
+    <tr><th>Status</th><th>Meaning</th><th>When you'll see it</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>400</code></td>
+      <td>Bad request</td>
+      <td>Malformed JSON; hash is not 64 lowercase hex characters; receipt ID outside the allowed character set; batch exceeds 50 items; body larger than 4 KB (or 64 KB for batch).</td>
+    </tr>
+    <tr>
+      <td><code>401</code></td>
+      <td>Not authenticated</td>
+      <td>Used by the <code>/api/me/*</code> surface (not public). API key + Pack token failures fall back to free-tier rate limiting and return <code>429</code>, not <code>401</code>.</td>
+    </tr>
+    <tr>
+      <td><code>402</code></td>
+      <td>Subscription required</td>
+      <td>You tried to mint an API key without an active subscription.</td>
+    </tr>
+    <tr>
+      <td><code>404</code></td>
+      <td>Not found</td>
+      <td>Receipt ID is well-formed but no receipt exists. Also returned by founder-gated endpoints to anyone without the founder token — they look like they don't exist.</td>
+    </tr>
+    <tr>
+      <td><code>429</code></td>
+      <td>Rate limit exceeded</td>
+      <td>Free tier exceeded 10 anchors/hour. Response body includes <code>retry_after_seconds</code>. Buying a Pack or subscribing removes the limit entirely.</td>
+    </tr>
+    <tr>
+      <td><code>500</code></td>
+      <td>Server error</td>
+      <td>Genuine internal failure. Retry with exponential backoff; if it persists, check <a href="/status.html">/status.html</a>.</td>
+    </tr>
+    <tr>
+      <td><code>503</code></td>
+      <td>Dependency unavailable</td>
+      <td>BTC oracle down (checkout endpoints only) or all five OTS calendars unreachable. Transient — retry in ~60 s.</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- ─────────────────────────────────────────────────────────────────── -->
+
+<section class="endpoint" id="post-api-anchor">
+  <h2>
+    <span class="method post">POST</span>
+    <span class="path">/api/anchor</span>
+    <a class="anchor-link" href="#post-api-anchor">#</a>
+  </h2>
+  <p class="lede">
+    Anchor one SHA-256 hash to five independent OpenTimestamps calendars.
+    The calendars batch many hashes into a single Bitcoin transaction
+    (~hourly), so each receipt's marginal on-chain cost is effectively
+    zero and you are not paying network fees.
+  </p>
+
+  <h3>Auth</h3>
+  <p>Optional <code>X-Orpho-Api-Key</code> or <code>X-Pack-Token</code>. Anonymous calls fall back to the 10/hour free-tier limit.</p>
+
+  <h3>Request</h3>
+<pre>POST /api/anchor HTTP/1.1
+Host: orphograph.com
+Content-Type: application/json
+X-Orpho-Api-Key: orpho_xxxxxxxxxxxxxxxxxxxxxxxx
+
+{
+  "hash_hex":     "abc123…64-char lowercase hex SHA-256",
+  "sha512_hex":   "def456…128-char lowercase hex SHA-512 (optional, recommended)",
+  "client_label": "filename or short note (optional, max 200 chars)",
+  "notify_email": "you@example.com (Pack only — emails the receipt)"
+}</pre>
+
+  <p>
+    <strong>Body limit:</strong> 4 KB. <strong>hash_hex</strong> is the only
+    required field. <strong>sha512_hex</strong> is a quantum hedge — Grover's
+    algorithm halves preimage resistance, leaving SHA-256 at ~2<sup>128</sup> and SHA-512
+    at ~2<sup>256</sup>. Recording both makes the file→receipt binding harder to
+    forge with a future quantum computer. <strong>client_label</strong> is opt-in;
+    leave it out if you want the receipt to contain only the hash.
+  </p>
+
+  <h3>Response (200 OK)</h3>
+<pre>{
+  "receipt_id":      "XwTULwlh76PcCst9",
+  "created_at":      "2026-05-14T14:00:00+00:00",
+  "hash_hex":        "abc123…",
+  "sha512_hex":      "def456…",
+  "client_label":    "photo.jpg",
+  "calendars_ok":    5,
+  "calendars_total": 5,
+  "low_redundancy":  false,
+  "pack_consumed":   false,
+  "pack_remaining":  0,
+  "subscription_active": true,
+  "successes": [
+    {"calendar": "https://a.pool.opentimestamps.org",      "ots_path": "receipts/XwTULwlh76PcCst9/a.ots"},
+    {"calendar": "https://b.pool.opentimestamps.org",      "ots_path": "receipts/XwTULwlh76PcCst9/b.ots"},
+    {"calendar": "https://alice.btc.calendar.opentimestamps.org", "ots_path": "receipts/XwTULwlh76PcCst9/alice.ots"},
+    {"calendar": "https://finney.calendar.eternitywall.com",      "ots_path": "receipts/XwTULwlh76PcCst9/finney.ots"},
+    {"calendar": "https://btc.calendar.catallaxy.com",     "ots_path": "receipts/XwTULwlh76PcCst9/btc.ots"}
+  ],
+  "failures": []
+}</pre>
+
+  <p>
+    <code>low_redundancy</code> is <code>true</code> when fewer than 3 calendars
+    accepted the submission — usually transient. Retry in a minute; the
+    failed calendars will likely succeed.
+  </p>
+
+  <h3>Errors</h3>
+  <ul>
+    <li><code>400</code> — hash is not 64 lowercase hex chars, or body is malformed JSON.</li>
+    <li><code>429</code> — free-tier limit exhausted. Includes <code>Retry-After</code> header.</li>
+  </ul>
+
+  <h3>curl</h3>
+<pre>HASH=$(sha256sum photo.jpg | awk '{print $1}')
+HASH512=$(sha512sum photo.jpg | awk '{print $1}')
+
+curl -sS -X POST https://orphograph.com/api/anchor \
+  -H "Content-Type: application/json" \
+  -H "X-Orpho-Api-Key: $ORPHO_API_KEY" \
+  -d "{\"hash_hex\":\"$HASH\",\"sha512_hex\":\"$HASH512\",\"client_label\":\"photo.jpg\"}"</pre>
+
+  <h3>Python (stdlib)</h3>
+<pre>import hashlib, json, os, urllib.request
+
+def anchor(path):
+    s256, s512 = hashlib.sha256(), hashlib.sha512()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(65536), b""):
+            s256.update(chunk); s512.update(chunk)
+    body = json.dumps({"hash_hex": s256.hexdigest(),
+                       "sha512_hex": s512.hexdigest(),
+                       "client_label": os.path.basename(path)}).encode()
+    req = urllib.request.Request("https://orphograph.com/api/anchor",
+        data=body, method="POST",
+        headers={"Content-Type": "application/json",
+                 "X-Orpho-Api-Key": os.environ["ORPHO_API_KEY"]})
+    with urllib.request.urlopen(req, timeout=30) as r:
+        return json.loads(r.read())</pre>
+
+  <div class="callout warn">
+    <strong>Save the receipt locally.</strong> The returned
+    <code>receipt_id</code> is what you'll feed to <code>/api/verify/&lt;id&gt;</code>
+    later. Don't rely on us to remember it for you — write the full JSON
+    response next to the original file. Anonymous free-tier receipts may
+    be pruned after the retention window.
+  </div>
+</section>
+
+<!-- ─────────────────────────────────────────────────────────────────── -->
+
+<section class="endpoint" id="post-api-anchor-batch">
+  <h2>
+    <span class="method post">POST</span>
+    <span class="path">/api/anchor/batch</span>
+    <a class="anchor-link" href="#post-api-anchor-batch">#</a>
+  </h2>
+  <p class="lede">
+    Anchor up to 50 hashes in a single round trip. Useful for folder
+    watchers replaying a backlog, capture-daemon flushes, or batch
+    migrations. Each item produces its own independent receipt and
+    can succeed or fail independently.
+  </p>
+
+  <h3>Auth</h3>
+  <p>Same model as <code>/api/anchor</code>. Pack tokens consume one credit per item; the rate limit applies once to the whole batch on the free tier.</p>
+
+  <h3>Request</h3>
+<pre>POST /api/anchor/batch
+Content-Type: application/json
+X-Orpho-Api-Key: orpho_xxxxxxxxxxxxxxxxxxxxxxxx
+
+{
+  "hashes": [
+    {"hash_hex": "abc1…", "sha512_hex": "def1…", "client_label": "img_001.jpg"},
+    {"hash_hex": "abc2…", "sha512_hex": "def2…", "client_label": "img_002.jpg"}
+  ]
+}</pre>
+  <p>
+    Body limit: 64 KB. Maximum 50 items per request.
+  </p>
+
+  <h3>Response (200 OK)</h3>
+<pre>{
+  "ok": true,
+  "submitted": 2,
+  "succeeded": 2,
+  "failed": 0,
+  "results": [
+    {"index": 0, "ok": true,  "receipt_id": "abc...", "created_at": "...", "calendars_ok": 5, "calendars_total": 5, "low_redundancy": false, "client_label": "img_001.jpg"},
+    {"index": 1, "ok": true,  "receipt_id": "def...", "created_at": "...", "calendars_ok": 5, "calendars_total": 5, "low_redundancy": false, "client_label": "img_002.jpg"}
+  ]
+}</pre>
+
+  <h3>Errors</h3>
+  <ul>
+    <li><code>400</code> — body missing <code>hashes</code> array, or array empty, or more than 50 items.</li>
+    <li><code>429</code> — free-tier limit exhausted.</li>
+  </ul>
+</section>
+
+<!-- ─────────────────────────────────────────────────────────────────── -->
+
+<section class="endpoint" id="get-api-receipt">
+  <h2>
+    <span class="method get">GET</span>
+    <span class="path">/api/receipt/&lt;receipt_id&gt;</span>
+    <a class="anchor-link" href="#get-api-receipt">#</a>
+  </h2>
+  <p class="lede">
+    Fetch the canonical receipt JSON for a previously anchored hash.
+    This is the same payload you originally received from <code>/api/anchor</code>,
+    plus any upgrade events the background worker has added since
+    (status transitions to <code>partial</code> → <code>pinned</code>, BTC pin
+    timestamp once the calendar's Merkle root lands in a block).
+  </p>
+
+  <h3>Auth</h3>
+  <p>None. Receipts are world-readable by ID — the ID itself is the unguessable bearer credential (96 bits of entropy from <code>secrets.token_urlsafe(12)</code>).</p>
+
+  <h3>Request</h3>
+<pre>GET /api/receipt/XwTULwlh76PcCst9</pre>
+
+  <h3>Response (200 OK)</h3>
+<pre>{
+  "receipt_id":    "XwTULwlh76PcCst9",
+  "found":         true,
+  "created_at":    "2026-05-14T14:00:00+00:00",
+  "hash_hex":      "abc123…",
+  "sha512_hex":    "def456…",
+  "client_label":  "photo.jpg",
+  "status":        "pinned",
+  "btc_pinned_at": "2026-05-14T15:10:12+00:00",
+  "calendars_ok":  5,
+  "calendars_total": 5,
+  "checks": [
+    {"file": "a.ots",      "magic_ok": true, "hash_match": true, "ok": true},
+    {"file": "alice.ots",  "magic_ok": true, "hash_match": true, "ok": true},
+    {"file": "b.ots",      "magic_ok": true, "hash_match": true, "ok": true},
+    {"file": "btc.ots",    "magic_ok": true, "hash_match": true, "ok": true},
+    {"file": "finney.ots", "magic_ok": true, "hash_match": true, "ok": true}
+  ]
+}</pre>
+
+  <table class="api-table">
+    <thead><tr><th>Field</th><th>Type</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>status</code></td><td>string</td><td><code>pending</code> (just submitted), <code>partial</code> (some calendars pinned to BTC), <code>pinned</code> (Bitcoin block contains the Merkle root that includes your hash).</td></tr>
+      <tr><td><code>btc_pinned_at</code></td><td>string ‖ null</td><td>UTC timestamp the upgrade worker promoted the receipt to <code>pinned</code>. Null until first calendar lands in a block.</td></tr>
+      <tr><td><code>checks[]</code></td><td>array</td><td>Per-<code>.ots</code> validation: magic bytes intact and the embedded hash matches what the receipt claims.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Errors</h3>
+  <ul>
+    <li><code>400</code> — receipt ID does not match <code>^[A-Za-z0-9_-]{1,64}$</code>.</li>
+    <li><code>404</code> — no receipt exists with that ID, or it has been pruned (free-tier retention).</li>
+  </ul>
+
+  <h3>curl</h3>
+<pre>curl -sS https://orphograph.com/api/receipt/XwTULwlh76PcCst9</pre>
+
+  <h3>Python (stdlib)</h3>
+<pre>import json, urllib.request
+with urllib.request.urlopen(
+    "https://orphograph.com/api/receipt/XwTULwlh76PcCst9", timeout=15
+) as r:
+    receipt = json.loads(r.read())
+print(receipt["status"], receipt.get("btc_pinned_at"))</pre>
+</section>
+
+<!-- ─────────────────────────────────────────────────────────────────── -->
+
+<section class="endpoint" id="get-api-verify">
+  <h2>
+    <span class="method get">GET</span>
+    <span class="path">/api/verify/&lt;receipt_id&gt;</span>
+    <a class="anchor-link" href="#get-api-verify">#</a>
+  </h2>
+  <p class="lede">
+    Re-verify a receipt server-side: parse each <code>.ots</code> file, confirm
+    its OpenTimestamps magic bytes are intact and the embedded SHA-256
+    matches the receipt's recorded hash. Returns the same shape as
+    <code>/api/receipt/&lt;id&gt;</code> but recomputes <code>calendars_ok</code> from a
+    live read of every proof file on disk — useful for "is this receipt
+    still healthy?" health checks.
+  </p>
+
+  <div class="callout">
+    <strong>Trust-minimized verification belongs offline.</strong>
+    For evidence-grade verification, ship the receipt JSON + the five
+    <code>.ots</code> files through the open-source
+    <a href="https://github.com/orphograph/orphograph">verify_cli.py</a>
+    against your local copy of the file. This endpoint is a convenience
+    for live integrations — it asks <em>us</em>; the CLI asks <em>Bitcoin</em>.
+  </div>
+
+  <h3>Auth</h3>
+  <p>None.</p>
+
+  <h3>Request</h3>
+<pre>GET /api/verify/XwTULwlh76PcCst9</pre>
+
+  <h3>Response</h3>
+  <p>Identical shape to <code>/api/receipt/&lt;id&gt;</code>. The <code>checks[]</code> array reflects a fresh re-read of the proof files; if any <code>.ots</code> file is missing or corrupted, the corresponding entry will have <code>ok: false</code> with the failed sub-check.</p>
+
+  <h3>Errors</h3>
+  <ul>
+    <li><code>400</code> — receipt ID does not match the allowed pattern.</li>
+    <li><code>404</code> — receipt not found.</li>
+  </ul>
+
+  <h3>curl</h3>
+<pre>curl -sS https://orphograph.com/api/verify/XwTULwlh76PcCst9 | python3 -m json.tool</pre>
+</section>
+
+<!-- ─────────────────────────────────────────────────────────────────── -->
+
+<section class="endpoint" id="get-api-health">
+  <h2>
+    <span class="method get">GET</span>
+    <span class="path">/api/health</span>
+    <a class="anchor-link" href="#get-api-health">#</a>
+  </h2>
+  <p class="lede">
+    Public liveness snapshot. Counts only — no email addresses, no
+    claim codes, no IP addresses, no per-customer detail. Cached
+    server-side for ~30 seconds so polling cannot degrade performance.
+    Safe to wire into your own status board.
+  </p>
+
+  <h3>Auth</h3>
+  <p>None.</p>
+
+  <h3>Request</h3>
+<pre>GET /api/health</pre>
+
+  <h3>Response (200 OK)</h3>
+<pre>{
+  "ok": true,
+  "version": "0.1.0",
+  "boot_at": "2026-05-14T00:00:00+00:00",
+  "uptime_sec": 50400,
+  "counts": {
+    "receipts_on_disk": 1234
+  },
+  "ledger_bytes": {
+    "anchor_ledger": 245678,
+    "upgrade_log":    12345,
+    "expiry_log":      6789
+  },
+  "last": {
+    "anchor_at":       "2026-05-14T14:00:00+00:00",
+    "upgrade_run_at":  "2026-05-14T13:55:00+00:00",
+    "expiry_run_at":   "2026-05-14T12:00:00+00:00"
+  },
+  "calendars": [
+    {"url": "https://a.pool.opentimestamps.org",  "reachable": true},
+    {"url": "https://b.pool.opentimestamps.org",  "reachable": true},
+    {"url": "https://alice.btc.calendar.opentimestamps.org", "reachable": true},
+    {"url": "https://finney.calendar.eternitywall.com",      "reachable": true},
+    {"url": "https://btc.calendar.catallaxy.com", "reachable": true}
+  ],
+  "btc_oracle": {"available": true, "usd_per_btc": 67500.0, "source": "coingecko"},
+  "payout":     {"configured": true, "address_pool_size": 100, "xpub_set": true},
+  "checked_at": "2026-05-14T14:00:30+00:00"
+}</pre>
+
+  <p>
+    The data here is intentionally non-sensitive: counts and timestamps,
+    not contents. The <code>payout</code> block reports only whether BTC
+    checkout is configured and the size of the unused-address pool —
+    actual balances are not exposed on this endpoint.
+  </p>
+
+  <h3>curl</h3>
+<pre>curl -sS https://orphograph.com/api/health | python3 -m json.tool</pre>
+
+  <h3>Python (stdlib)</h3>
+<pre>import json, urllib.request
+with urllib.request.urlopen("https://orphograph.com/api/health", timeout=10) as r:
+    health = json.loads(r.read())
+print(f"{health['counts']['receipts_on_disk']} receipts, uptime {health['uptime_sec']}s")</pre>
+</section>
+
+<!-- ─────────────────────────────────────────────────────────────────── -->
+
+<section class="endpoint" id="get-api-btc-qr">
+  <h2>
+    <span class="method get">GET</span>
+    <span class="path">/api/btc-order/&lt;order_id&gt;/qr.svg</span>
+    <a class="anchor-link" href="#get-api-btc-qr">#</a>
+  </h2>
+  <p class="lede">
+    Server-rendered SVG QR code encoding a BIP-21 payment URI for a
+    previously created Pack purchase order. The QR contains the
+    public BTC address and amount only — no email, no order ID, no
+    customer-identifying data is encoded into the image, so the QR
+    cannot be used downstream to dox the purchaser.
+  </p>
+
+  <h3>Auth</h3>
+  <p>None, but the order ID is unguessable. Anyone with the ID can read the public payment fields — exactly what a wallet app needs.</p>
+
+  <h3>Request</h3>
+<pre>GET /api/btc-order/btc_AbCdEf12345_xyz/qr.svg
+Accept: image/svg+xml</pre>
+
+  <p>
+    Order IDs match <code>^btc_[A-Za-z0-9_-]{1,32}$</code>. Mismatched IDs return <code>400</code>; well-formed IDs that don't exist return <code>404</code>.
+  </p>
+
+  <h3>Response</h3>
+  <p>
+    <code>200 OK</code>, <code>Content-Type: image/svg+xml; charset=utf-8</code>.
+    The SVG renders a square QR encoding a string of the form:
+  </p>
+<pre>bitcoin:bc1q…?amount=0.00010473</pre>
+  <p>The companion JSON endpoint <code>GET /api/btc-order/&lt;order_id&gt;</code> (no <code>/qr.svg</code> suffix) returns the order status:</p>
+<pre>{
+  "order_id":    "btc_AbCdEf12345_xyz",
+  "status":      "awaiting_payment",
+  "address":     "bc1q…",
+  "amount_sats": 10473,
+  "expires_at":  "2026-05-14T15:00:00+00:00",
+  "tx_hash":     null
+}</pre>
+
+  <h3>Errors</h3>
+  <ul>
+    <li><code>400</code> — order ID does not match the allowed pattern.</li>
+    <li><code>404</code> — order not found (typo or expired).</li>
+    <li><code>500</code> — QR encoder rejected the BIP-21 URI (rare; misconfigured address).</li>
+  </ul>
+
+  <h3>Embedding</h3>
+  <p>The SVG is referenced directly from an <code>&lt;img&gt;</code> tag:</p>
+<pre>&lt;img src="https://orphograph.com/api/btc-order/btc_AbCdEf12345_xyz/qr.svg"
+     width="240" height="240" alt="Bitcoin payment QR"&gt;</pre>
+</section>
+
+<!-- ─────────────────────────────────────────────────────────────────── -->
+
+<section class="endpoint" id="get-api-stats">
+  <h2>
+    <span class="method get">GET</span>
+    <span class="path">/api/stats</span>
+    <a class="anchor-link" href="#get-api-stats">#</a>
+  </h2>
+  <p class="lede">
+    Public marketing-metrics snapshot. Strictly aggregate counts and the
+    names of public OTS infrastructure — never customer emails, filenames,
+    IPs, BTC balances, or any per-customer detail. Cached server-side
+    for ~60 seconds. The response is byte-identical for every viewer,
+    so it is safe to embed and aggressively cache.
+  </p>
+
+  <h3>Auth</h3>
+  <p>None.</p>
+
+  <h3>Request</h3>
+<pre>GET /api/stats</pre>
+
+  <h3>Response (200 OK)</h3>
+<pre>{
+  "version":    "0.1.0",
+  "uptime_sec": 50400,
+  "boot_at":    "2026-05-14T00:00:00+00:00",
+  "anchors": {
+    "total":          12345,
+    "last_24h":       142,
+    "last_7d":        980,
+    "last_anchor_at": "2026-05-14T14:00:00+00:00"
+  },
+  "calendars": {
+    "reachable": 5,
+    "total":     5,
+    "items": [
+      {"name": "a",      "reachable": true},
+      {"name": "b",      "reachable": true},
+      {"name": "alice",  "reachable": true},
+      {"name": "finney", "reachable": true},
+      {"name": "btc",    "reachable": true}
+    ]
+  },
+  "btc_oracle": {
+    "available":   true,
+    "source":      "coingecko",
+    "usd_per_btc": 67500.0
+  },
+  "checked_at": "2026-05-14T14:00:30+00:00"
+}</pre>
+
+  <h3>Privacy invariants</h3>
+  <p>The endpoint's contract guarantees these fields are <em>never</em> emitted:</p>
+  <ul>
+    <li>Customer email addresses</li>
+    <li>Filenames or <code>client_label</code> values</li>
+    <li>IP addresses (raw or truncated)</li>
+    <li>Per-customer counts of any kind</li>
+    <li>BTC balances (hot or cold)</li>
+    <li>Individual receipt IDs</li>
+  </ul>
+
+  <h3>curl</h3>
+<pre>curl -sS https://orphograph.com/api/stats | python3 -m json.tool</pre>
+</section>
+
+<!-- ─────────────────────────────────────────────────────────────────── -->
+
+<section class="endpoint" id="get-api-badge">
+  <h2>
+    <span class="method get">GET</span>
+    <span class="path">/api/badge/&lt;receipt_id&gt;.svg</span>
+    <span class="pill planned">planned v0.2</span>
+    <a class="anchor-link" href="#get-api-badge">#</a>
+  </h2>
+  <p class="lede">
+    Planned server-rendered "Anchored to Bitcoin · view receipt" SVG badge,
+    suitable for static embeds in README files, photo portfolios, and
+    galleries where you need an image rather than a script tag.
+  </p>
+  <p>
+    Until v0.2, use the existing JavaScript badge — one line of HTML
+    pastes a live badge that links to the print-friendly receipt page,
+    with no external fetches and no tracking:
+  </p>
+<pre>&lt;script src="https://orphograph.com/badge.js"
+        data-receipt="XwTULwlh76PcCst9"
+        async&gt;&lt;/script&gt;</pre>
+  <p>
+    See the <a href="/badge-demo.html">badge demo</a> for the live rendered
+    output and tampering notes.
+  </p>
+</section>
+
+<!-- ─────────────────────────────────────────────────────────────────── -->
+
+<h2 id="idempotency">Idempotency</h2>
+<p>
+  Anchoring is intentionally <strong>not</strong> idempotent on the
+  receipt ID. Submitting the same hash to <code>/api/anchor</code> twice
+  produces two distinct receipts, each with its own
+  <code>receipt_id</code> and its own <code>created_at</code> timestamp.
+  This is by design:
+</p>
+<ul>
+  <li>
+    A receipt asserts existence at a specific UTC moment. Two anchors of
+    the same file at different times are legitimately different claims —
+    e.g., "I had this file on Monday" and "I still had this file on Friday."
+  </li>
+  <li>
+    Pack and subscription billing is per-receipt. Folding a duplicate
+    into a single receipt would silently change the cost model.
+  </li>
+  <li>
+    The OpenTimestamps calendars themselves are not idempotent on a
+    32-byte digest at the protocol layer.
+  </li>
+</ul>
+<p>
+  If you want at-most-once semantics inside your own integration,
+  deduplicate before calling <code>/api/anchor</code> (e.g., keep a
+  local <code>hash_hex → receipt_id</code> table). The server will not
+  do this for you.
+</p>
+
+<h2 id="privacy">Privacy promise</h2>
+<p>
+  We never see file bytes. The only thing that reaches our server is a
+  64-character hex digest you compute on your side. The browser flow
+  uses <code>crypto.subtle.digest</code> for the same reason. Receipts
+  contain:
+</p>
+<ul>
+  <li>The SHA-256 hex you sent (mandatory).</li>
+  <li>The SHA-512 hex you sent, if you sent one (optional).</li>
+  <li>The free-text <code>client_label</code> you sent, if any. This is
+      the only field where your content choice can leak metadata — if you
+      put a filename, the filename gets stored. If you put nothing, nothing
+      gets stored.</li>
+  <li>A creation timestamp (UTC, second-precision).</li>
+  <li>Five OTS proof blobs (binary, ~600 bytes each).</li>
+</ul>
+<p>
+  Receipts are world-readable by ID. The ID itself is the bearer
+  credential — anyone you give it to can read the receipt, but the
+  receipt does not bind to any specific identity unless you put your
+  identity into <code>client_label</code>. Pack tokens and API keys are
+  stored only as SHA-256 hashes; we cannot retrieve them after issuance.
+</p>
+
+<h2 id="versioning">Versioning</h2>
+<p>
+  Current version: <strong>0.1</strong>, surfaced via the <code>version</code>
+  field on <code>/api/health</code>. Endpoints under <code>/api/*</code>
+  are the v0.1 surface. Additive changes (new optional fields, new
+  endpoints, new auth headers) will land here without bumping the major
+  version. Breaking changes — renamed fields, removed fields, changed
+  semantics, narrower validation — will land under a <code>/v2/</code>
+  prefix and leave the v0.1 path operating in parallel for at least
+  six months from the v2 announcement.
+</p>
+<p>
+  Pre-launch caveat: we have no paying API customers as of publication,
+  so the version-1 surface itself may still shift before being declared
+  stable. Pin to a known-good response shape in your client and treat
+  unknown fields as forward-compatible.
+</p>
+
+<h2 id="sla">SLA &amp; status</h2>
+<p>
+  No formal SLA on the v0.1 free tier. Best-effort uptime; honest
+  reporting at <a href="/status.html">/status.html</a> and structured
+  liveness at <a href="#get-api-health"><code>/api/health</code></a>.
+  Calendar reachability is reported per-calendar — your client should
+  treat 3-of-5 calendars succeeding as a healthy anchor (the
+  <code>low_redundancy</code> flag fires below that threshold).
+</p>
+<p>
+  Paid Personal and Creator tiers are not yet under a written SLA. If
+  you need one for procurement, write to
+  <a href="mailto:hello@orphograph.com">hello@orphograph.com</a> and
+  describe your use case.
+</p>
+
+<h2 id="sdks">SDKs &amp; plugins</h2>
+<p>
+  Stdlib-only Python and curl are deliberately the primary integration
+  surface — no SDK dependency to audit, no version drift, no transitive
+  supply chain. Three first-party integrations live on GitHub:
+</p>
+<ul>
+  <li>
+    <strong>Claude Code plugin</strong> —
+    <a href="https://github.com/orphograph/orphograph-plugin">github.com/orphograph/orphograph-plugin</a>.
+    Drop-in plugin for the Anthropic CLI; anchors session artifacts and
+    transcripts from inside a coding session.
+  </li>
+  <li>
+    <strong>Lightroom plugin</strong> —
+    <a href="https://github.com/orphograph/orphograph/tree/main/lightroom-plugin">github.com/orphograph/orphograph (<code>lightroom-plugin/</code>)</a>.
+    Anchors RAW and exported JPGs at export time from inside Adobe
+    Lightroom Classic. SHA-256 is computed on the export filename's
+    bytes locally; only the hash reaches the API.
+  </li>
+  <li>
+    <strong>Capture daemon</strong> —
+    <a href="https://github.com/orphograph/orphograph/tree/main/capture">github.com/orphograph/orphograph (<code>capture/</code>)</a>.
+    Headless watcher that anchors files as they appear in a folder —
+    DSLR tethering target, screenshot folder, recording dump. Targets
+    the Creator tier's capture-time provenance use case.
+  </li>
+</ul>
+<p>
+  The standalone open-source verifier — useful when you need to verify
+  a receipt without calling us, or after we are gone — lives at
+  <a href="https://github.com/orphograph/orphograph">github.com/orphograph/orphograph</a>
+  under <code>server/verify_cli.py</code>. Zero dependencies, stdlib only.
+</p>
+
+<h2 id="changelog">Changelog</h2>
+<table class="api-table">
+  <thead>
+    <tr><th>Date</th><th>Version</th><th>Change</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>2026-05-14</td><td>0.1</td><td>Public docs page published. Endpoint surface stable; <code>/api/stats</code> and <code>/api/badge/&lt;id&gt;.svg</code> announced as planned for v0.2.</td></tr>
+    <tr><td>2026-05-13</td><td>0.1</td><td>Added <code>sha512_hex</code> quantum-hedge sibling field on <code>/api/anchor</code> and <code>/api/anchor/batch</code>. Both backward-compatible.</td></tr>
+    <tr><td>2026-05-10</td><td>0.1</td><td>Batch endpoint <code>/api/anchor/batch</code> shipped (50 items max).</td></tr>
+    <tr><td>2026-05-07</td><td>0.1</td><td>Initial Pack token + API key auth model.</td></tr>
+  </tbody>
+</table>
+
+<h2 id="contact">Contact</h2>
+<p>
+  Bug reports, schema concerns, or "I need this thing your docs don't
+  mention" — write to
+  <a href="mailto:hello@orphograph.com">hello@orphograph.com</a>. Plain
+  text is fine. Receipts of past bug reports are anchored on request.
+</p>
+
+</section>
+
+<section class="endpoint" id="get-api-receipt-zip">
+  <h2><code>GET /api/receipt/&lt;id&gt;.zip</code></h2>
+  <h3>Auth</h3>
+  <p>None for public receipts; session cookie required for private receipts (subscriber-only).</p>
+  <h3>Response</h3>
+  <p>
+    Returns a ZIP file containing the receipt JSON and all 5 <code>.ots</code>
+    proof files. Use this to keep an offline backup of your receipt that
+    can be re-verified by the open-source verifier without our server.
+  </p>
+  <h3>curl</h3>
+  <pre><code>curl -s -O https://orphograph.com/api/receipt/r_abc123.zip
+unzip r_abc123.zip
+python3 verify_cli.py receipt.json</code></pre>
+</section>
+
+<section class="endpoint" id="get-api-receipt-summary">
+  <h2><code>GET /api/receipt/&lt;id&gt;/summary</code></h2>
+  <h3>Auth</h3>
+  <p>None.</p>
+  <h3>Response</h3>
+  <p>
+    Returns the receipt JSON with extra human-readable fields:
+    <code>what_this_proves</code>, <code>what_this_does_not_prove</code> (a list
+    of legal disclaimers), and <code>how_to_verify</code> (verifier link).
+    Intended for client UIs that want to show users the precise scope of
+    what a receipt is and isn't.
+  </p>
+</section>
+
+<section class="endpoint" id="get-api-config">
+  <h2><code>GET /api/config</code></h2>
+  <h3>Auth</h3>
+  <p>None.</p>
+  <h3>Response</h3>
+  <p>
+    Returns public-safe runtime config: Stripe Payment Link URLs, pricing
+    values, feature toggle states, and feature availability flags. The
+    frontend fetches this on load so the founder can update pricing or
+    launch features by setting environment variables — no code edit needed.
+  </p>
+  <pre><code>{
+  "stripe": { "pack_url": "...", "personal_monthly_url": "...", "personal_annual_url": "...", "creator_monthly_url": "..." },
+  "pricing": { "pack_usd": 7, "pack_credits": 10, "personal_monthly_usd": 5, "personal_annual_usd": 60, "creator_monthly_usd": 19 },
+  "toggles": { "checkout_disabled": false, "anchoring_disabled": false, "maintenance_mode": false },
+  "features": { "btc_payments": false, "creator_tier_live": false, "private_receipts": true, "receipt_vault": true }
+}</code></pre>
+</section>
+
+<section class="endpoint" id="vault">
+  <h2>Receipt vault (subscriber)</h2>
+  <h3>Auth</h3>
+  <p>Session cookie + active Personal subscription.</p>
+  <h3><code>GET /api/me/anchors</code></h3>
+  <p>List all receipts anchored under your subscription. Filter params:</p>
+  <ul>
+    <li><code>limit</code> — page size (1–200, default 50)</li>
+    <li><code>before</code> — cursor; pass <code>next_before</code> from the previous page</li>
+    <li><code>q</code> — hash hex prefix filter (case-insensitive)</li>
+    <li><code>label</code> — substring match on <code>client_label</code> (case-insensitive)</li>
+    <li><code>private</code> — <code>true</code> or <code>false</code> to filter by privacy flag</li>
+  </ul>
+  <h3><code>GET /api/me/anchors.zip</code></h3>
+  <p>
+    Bulk-download every receipt in the vault as one ZIP. Each receipt is
+    placed in its own <code>&lt;receipt_id&gt;/</code> folder containing
+    <code>receipt.json</code> + 5 <code>.ots</code> files. Use this for
+    quarterly archive backups.
+  </p>
+  <h3>curl</h3>
+  <pre><code>curl -s -b cookies.txt "https://orphograph.com/api/me/anchors?q=a3f0&amp;private=true"
+curl -s -b cookies.txt -O https://orphograph.com/api/me/anchors.zip</code></pre>
+</section>
+
+<section class="endpoint" id="privacy-toggle">
+  <h2><code>POST /api/me/receipt/&lt;id&gt;/privacy</code></h2>
+  <h3>Auth</h3>
+  <p>Session cookie + active Personal subscription. Owner-only.</p>
+  <h3>Request</h3>
+  <pre><code>{ "private": true }</code></pre>
+  <h3>Response</h3>
+  <pre><code>{ "ok": true, "receipt_id": "r_abc123", "private": true }</code></pre>
+  <p>
+    Toggles the <code>private</code> flag on an existing receipt you own. When
+    <code>private=true</code>, the receipt becomes 404 for everyone except the
+    session cookie holder. The receipt JSON, badge SVG, and ZIP export are all
+    gated.
+  </p>
+  <p>
+    Returns 404 (not 403) for non-owners to avoid leaking the existence of
+    private receipts via response codes.
+  </p>
+</section>
+
+</article>
+</main>
+
+<footer>
+  <small>
+    <a href="/">home</a> ·
+    <a href="/about.html">about</a> ·
+    <a href="/docs/api.html">API</a> ·
+    <a href="/status.html">status</a> ·
+    <a href="/terms.html">terms</a> ·
+    <a href="/privacy.html">privacy</a> ·
+    We never see your file
+  </small>
+</footer>
+
+</body>
+</html>
