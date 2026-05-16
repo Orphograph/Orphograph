@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Stats — Orphograph</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Live public metrics for Orphograph: total Bitcoin-anchored receipts, calendar uptime, and current BTC oracle source. No customer data, ever.">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<meta property="og:title" content="Orphograph — Live Stats">
+<meta property="og:description" content="Receipts anchored, calendars reachable, oracle live. Counts only — no customer data.">
+<meta property="og:image" content="/og.svg">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://orphograph.com/stats.html">
+<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/stats.css">
+</head>
+<body>
+
+<header>
+  <div class="brand"><a href="/">orphograph</a></div>
+  <nav>
+    <a href="/#how">how it works</a>
+    <a href="/#pricing">pricing</a>
+    <a href="/about.html">about</a>
+    <a href="/stats.html" aria-current="page">stats</a>
+    <a href="/status.html">status</a>
+  </nav>
+</header>
+
+<main>
+
+<section class="stats-hero">
+  <h1>Receipts anchored to Bitcoin.</h1>
+  <p class="lede">
+    Every receipt below was anchored to the Bitcoin blockchain via five
+    independent OpenTimestamps calendars. Counts only — no emails,
+    no filenames, no customer breakdowns. Refreshes every 30 seconds.
+  </p>
+</section>
+
+<section class="big-numbers">
+  <div class="big">
+    <div class="big-value" id="anchors-total" data-pending="1">—</div>
+    <div class="big-label">receipts anchored — lifetime</div>
+  </div>
+  <div class="big-row">
+    <div class="big small">
+      <div class="big-value" id="anchors-24h" data-pending="1">—</div>
+      <div class="big-label">last 24 hours</div>
+    </div>
+    <div class="big small">
+      <div class="big-value" id="anchors-7d" data-pending="1">—</div>
+      <div class="big-label">last 7 days</div>
+    </div>
+  </div>
+</section>
+
+<section class="stats-row">
+  <h2>Infrastructure</h2>
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-label">OTS calendars reachable</div>
+      <div class="stat-value" id="cal-summary">…</div>
+      <ul class="cal-list" id="cal-list"></ul>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">BTC oracle</div>
+      <div class="stat-value">
+        <span id="btc-source" class="mono">…</span>
+      </div>
+      <div class="stat-sub" id="btc-price">…</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Server uptime</div>
+      <div class="stat-value" id="uptime">…</div>
+      <div class="stat-sub" id="boot-at">booted —</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Last anchor</div>
+      <div class="stat-value" id="last-anchor-rel">…</div>
+      <div class="stat-sub" id="last-anchor-abs">—</div>
+    </div>
+  </div>
+</section>
+
+<section class="stats-foot">
+  <h2>What this page is not</h2>
+  <p>
+    This page exists to show that the service is live, that anchors are
+    being produced, and that the public infrastructure we depend on
+    (OpenTimestamps calendars, the BTC price oracle) is reachable.
+  </p>
+  <p>
+    It deliberately does <strong>not</strong> show: customer counts,
+    customer emails, filenames, IPs, wallet balances, or any single
+    receipt ID. Those would betray the buyers who anchored with us.
+    Counts only — by design.
+  </p>
+  <p class="muted small" id="checked-at">last refreshed —</p>
+</section>
+
+</main>
+
+<footer>
+  <small>
+    <a href="/">home</a> ·
+    <a href="/about.html">About</a> ·
+    <a href="/terms.html">Terms</a> ·
+    <a href="/privacy.html">Privacy</a> ·
+    <a href="/status.html">Status</a> ·
+    <a href="/api/stats">raw JSON</a>
+  </small>
+</footer>
+
+<script src="/stats.js"></script>
+</body>
+</html>

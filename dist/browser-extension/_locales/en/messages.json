@@ -1,0 +1,10 @@
+{
+  "appName": {
+    "message": "Orphograph — Right-click to Anchor",
+    "description": "Extension name in browser store."
+  },
+  "appDescription": {
+    "message": "Right-click any image or downloadable file and anchor its hash to Bitcoin. Files never leave your machine.",
+    "description": "Extension description."
+  }
+}

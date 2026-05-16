@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" role="img" aria-label="Orphograph seal: a gridded globe enclosing a cosmic egg wreathed by a serpent.">
+  <defs>
+    <radialGradient id="eggShade" cx="42%" cy="38%" r="72%">
+      <stop offset="0%"  stop-color="#fbf6e6"/>
+      <stop offset="60%" stop-color="#ece1c4"/>
+      <stop offset="100%" stop-color="#cdbe96"/>
+    </radialGradient>
+    <clipPath id="globeClip">
+      <circle cx="120" cy="120" r="92"/>
+    </clipPath>
+  </defs>
+
+  <g fill="none" stroke="#2d2620" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Outer circle (globe boundary) -->
+    <circle cx="120" cy="120" r="92" stroke-width="1.6"/>
+
+    <!-- Latitude (horizontal ellipses) -->
+    <g stroke-width="0.7" opacity="0.78" clip-path="url(#globeClip)">
+      <ellipse cx="120" cy="120" rx="92" ry="14"/>
+      <ellipse cx="120" cy="120" rx="92" ry="32"/>
+      <ellipse cx="120" cy="120" rx="92" ry="50"/>
+      <ellipse cx="120" cy="120" rx="92" ry="68"/>
+      <ellipse cx="120" cy="120" rx="92" ry="84"/>
+    </g>
+
+    <!-- Longitude (vertical ellipses / meridians) -->
+    <g stroke-width="0.7" opacity="0.78" clip-path="url(#globeClip)">
+      <ellipse cx="120" cy="120" rx="14" ry="92"/>
+      <ellipse cx="120" cy="120" rx="32" ry="92"/>
+      <ellipse cx="120" cy="120" rx="50" ry="92"/>
+      <ellipse cx="120" cy="120" rx="68" ry="92"/>
+      <ellipse cx="120" cy="120" rx="84" ry="92"/>
+    </g>
+
+    <!-- Cosmic egg, vertical, slightly tapered top -->
+    <path d="M 120 54
+             C 96 54, 86 88, 86 130
+             C 86 168, 100 192, 120 192
+             C 140 192, 154 168, 154 130
+             C 154 88, 144 54, 120 54 Z"
+          fill="url(#eggShade)" stroke="#2d2620" stroke-width="1.5"/>
+
+    <!-- Subtle egg specular highlight -->
+    <ellipse cx="108" cy="100" rx="9" ry="20" fill="#fbf6e6" stroke="none" opacity="0.55"/>
+
+    <!-- Serpent body: 4 sinuous coils from above the egg, around, to below -->
+    <path d="M 96 64
+             C 110 60, 144 70, 148 92
+             C 144 108, 108 116, 96 112
+             C 86 110, 92 128, 110 134
+             C 138 140, 154 128, 154 124
+             C 152 144, 110 156, 92 152
+             C 86 150, 96 168, 116 172
+             C 144 178, 156 168, 158 160"
+          stroke="#1c1611" stroke-width="2.6" fill="none" stroke-linecap="round"/>
+
+    <!-- Serpent scale ticks along the back of each coil -->
+    <g stroke="#1c1611" stroke-width="0.9" stroke-linecap="round">
+      <line x1="124" y1="68" x2="126" y2="64"/>
+      <line x1="136" y1="76" x2="138" y2="72"/>
+      <line x1="146" y1="86" x2="149" y2="84"/>
+      <line x1="118" y1="110" x2="120" y2="106"/>
+      <line x1="100" y1="120" x2="98"  y2="116"/>
+      <line x1="118" y1="132" x2="120" y2="128"/>
+      <line x1="138" y1="134" x2="142" y2="132"/>
+      <line x1="120" y1="152" x2="122" y2="148"/>
+      <line x1="104" y1="160" x2="100" y2="158"/>
+      <line x1="138" y1="172" x2="142" y2="170"/>
+      <line x1="152" y1="166" x2="156" y2="164"/>
+    </g>
+
+    <!-- Serpent head (above egg crown), diamond-ish -->
+    <path d="M 96 64
+             C 88 62, 84 56, 90 50
+             C 96 46, 104 50, 104 58
+             C 104 62, 100 64, 96 64 Z"
+          fill="#1c1611" stroke="#1c1611" stroke-width="1.2"/>
+    <!-- Forked tongue -->
+    <path d="M 90 50 L 84 44 M 90 50 L 86 42"
+          stroke="#1c1611" stroke-width="0.8" stroke-linecap="round"/>
+
+    <!-- Tail trailing down past the globe -->
+    <path d="M 158 160
+             C 168 168, 178 174, 188 180
+             C 192 182, 192 186, 188 188"
+          stroke="#1c1611" stroke-width="1.9" fill="none" stroke-linecap="round"/>
+  </g>
+</svg>

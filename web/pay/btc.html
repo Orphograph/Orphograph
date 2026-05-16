@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Pay with Bitcoin — Orphograph</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Buy an Orphograph Pack with Bitcoin. Send to a native-segwit address, then email proof for instant fulfillment.">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/style.css">
+<style>
+  .pay-wrap { max-width: 680px; margin: 40px auto; padding: 0 18px; }
+  .pay-card {
+    border: 1px solid var(--panel-stroke);
+    background: var(--panel);
+    border-radius: 14px;
+    padding: 28px;
+  }
+  .addr-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 14px 0 6px;
+    padding: 12px 14px;
+    background: #0c0e10;
+    border-radius: 8px;
+    font-family: var(--mono);
+    font-size: 14px;
+    color: var(--text);
+    word-break: break-all;
+  }
+  .addr-row button {
+    background: var(--accent);
+    color: #0c0e10;
+    border: 0;
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 12px;
+    cursor: pointer;
+    flex: 0 0 auto;
+  }
+  .qr-wrap {
+    margin: 18px auto;
+    width: 220px;
+    height: 220px;
+    background: #fff;
+    border-radius: 8px;
+    padding: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .qr-wrap img { width: 100%; height: auto; display: block; }
+  .price-row {
+    display: flex;
+    gap: 18px;
+    align-items: baseline;
+    margin: 16px 0;
+    padding: 14px;
+    background: var(--accent-soft);
+    border-radius: 8px;
+  }
+  .price-row .usd { font-size: 24px; color: var(--accent); font-weight: 500; }
+  .price-row .btc { font-family: var(--mono); color: var(--text-soft); font-size: 14px; }
+  .pack-pick { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0 18px; }
+  .pack-pick button {
+    flex: 1 1 auto;
+    min-width: 100px;
+    padding: 10px;
+    border: 1px solid var(--panel-stroke);
+    background: transparent;
+    color: var(--text);
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+  }
+  .pack-pick button.active {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+  ol.btc-steps { padding-left: 22px; line-height: 1.7; color: var(--text-soft); }
+  ol.btc-steps strong { color: var(--text); }
+  .email-form { margin-top: 18px; display: flex; flex-direction: column; gap: 8px; }
+  .email-form input, .email-form textarea {
+    padding: 10px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--panel-stroke);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+    font-family: inherit;
+  }
+  .email-form button {
+    padding: 12px;
+    background: var(--accent);
+    color: #0c0e10;
+    border: 0;
+    border-radius: 8px;
+    font-weight: 500;
+    font-size: 15px;
+    cursor: pointer;
+  }
+  .wallet-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 12px 0;
+    list-style: none;
+    padding: 0;
+  }
+  .wallet-list li {
+    padding: 4px 10px;
+    background: var(--panel);
+    border: 1px solid var(--panel-stroke);
+    border-radius: 999px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand"><a href="/" style="color:inherit;text-decoration:none;">orphograph</a></div>
+  <nav>
+    <a href="/#pricing">pricing</a>
+    <a href="/">home</a>
+  </nav>
+</header>
+
+<main class="pay-wrap">
+  <h1>Pay with Bitcoin</h1>
+  <p style="color:var(--text-soft);">
+    Native-segwit address (bech32). Works with any BTC wallet: Phantom,
+    Electrum, BlueWallet, Sparrow, hardware wallets, exchange withdrawals.
+  </p>
+
+  <div class="pay-card">
+    <h2 style="margin-top:0;">1. Choose a Pack</h2>
+    <div class="pack-pick" id="pack-pick">
+      <button data-pack="10" data-usd="7" class="active">$7 · 10 anchors</button>
+      <button data-pack="50" data-usd="29">$29 · 50 anchors</button>
+      <button data-pack="250" data-usd="119">$119 · 250 anchors</button>
+    </div>
+
+    <div class="price-row">
+      <span class="usd"><span id="pay-usd">$7</span> USD</span>
+      <span class="btc">≈ <span id="pay-btc">—</span> BTC</span>
+      <span style="margin-left:auto;font-size:12px;color:var(--muted);">live BTC price</span>
+    </div>
+
+    <h2>2. Send to this address</h2>
+    <div class="addr-row">
+      <span id="btc-addr">bc1qclvjjmwmr294rydv4x0dc787nx9jd8j4ny4jaz</span>
+      <button id="copy-addr" type="button">Copy</button>
+    </div>
+    <p style="font-size:12px;color:var(--muted);margin:4px 0 0;">
+      Send the BTC amount shown above. Send too little → manual reconcile required.
+      Send too much → we email you back the credit balance.
+    </p>
+
+    <div class="qr-wrap">
+      <img id="qr" alt="BTC address QR code">
+    </div>
+
+    <ul class="wallet-list">
+      <li>Phantom (BTC)</li>
+      <li>Electrum</li>
+      <li>BlueWallet</li>
+      <li>Sparrow</li>
+      <li>Hardware wallet</li>
+      <li>Coinbase / Kraken withdrawal</li>
+    </ul>
+
+    <h2>3. Tell us you paid</h2>
+    <p style="color:var(--text-soft);">
+      Submit your transaction ID + email below. The Pack credits land in your
+      inbox within ~1 hour (after Bitcoin's first confirmation). Manual
+      fulfillment for now; auto-detection via mempool.space is on the roadmap.
+    </p>
+    <form class="email-form" id="btc-claim-form">
+      <input type="email" id="claim-email" placeholder="Your email (we send the claim code here)" required autocomplete="email">
+      <input type="text" id="claim-txid" placeholder="Bitcoin transaction ID (64 hex chars)" required minlength="64" maxlength="64" pattern="[0-9a-fA-F]{64}">
+      <textarea id="claim-note" placeholder="Optional: anything we should know (sender wallet, batch payment, etc.)" rows="3"></textarea>
+      <button type="submit">Submit payment proof</button>
+      <p id="claim-msg" style="font-size:13px;color:var(--text-soft);margin:0;"></p>
+    </form>
+  </div>
+
+  <ol class="btc-steps" style="margin-top:24px;">
+    <li>
+      Open your Bitcoin wallet (Phantom, Electrum, etc.). If using
+      <strong>Phantom</strong>: top-right "Send" → select Bitcoin → paste the address.
+    </li>
+    <li>
+      Send the exact BTC amount shown above. Fees come on top — we don't need them.
+    </li>
+    <li>
+      Copy the <strong>transaction ID</strong> from your wallet (a 64-hex string)
+      and paste it into the form. Submit.
+    </li>
+    <li>
+      We verify the payment on-chain and email you a claim code with the
+      Pack credits. First Bitcoin confirmation is typically 10-60 min.
+    </li>
+    <li>
+      Visit <a href="/claim/?code=YOUR_CODE">/claim</a> with the code we send,
+      and the credits attach to your account.
+    </li>
+  </ol>
+
+  <p style="margin-top:30px;color:var(--muted);font-size:13px;text-align:center;">
+    Want USD/card checkout instead? <a href="/#pricing">Activating soon — leave email for the waitlist.</a>
+  </p>
+</main>
+
+<footer>
+  <small>
+    <a href="/">Home</a> ·
+    <a href="/terms.html">Terms</a> ·
+    <a href="/privacy.html">Privacy</a> ·
+    <a href="mailto:hello@orphograph.com">Contact</a>
+  </small>
+</footer>
+
+<script src="/pay-btc.js"></script>
+</body>
+</html>

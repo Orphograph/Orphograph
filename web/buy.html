@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Pay with Bitcoin — Orphograph</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/buy.css">
+</head>
+<body>
+
+<header>
+  <div class="brand"><a href="/">orphograph</a></div>
+  <nav><a href="/">home</a></nav>
+</header>
+
+<main>
+<section id="loading" class="muted">loading order…</section>
+
+<section id="order" hidden>
+  <h1>Pay with Bitcoin</h1>
+  <p class="lede">
+    Send the exact amount below to the address. We watch the chain
+    every 5 minutes. After 1 confirmation (~10 min), your claim code
+    arrives by email.
+  </p>
+
+  <div class="pay-card">
+    <dl class="kv pay-kv">
+      <dt>Amount</dt>
+      <dd>
+        <div class="amount" id="amount-btc"></div>
+        <div class="muted small" id="amount-usd"></div>
+        <div class="muted small">(<span id="amount-sats"></span> sats)</div>
+      </dd>
+
+      <dt>Scan</dt>
+      <dd>
+        <div id="qr-container" class="qr-container" aria-label="Bitcoin payment QR code"></div>
+        <p class="muted small">
+          Open your mobile wallet's scanner (Phantom, BlueWallet,
+          Cash App, Strike, Muun, etc.) and point it at the code.
+          Amount and address pre-fill.
+        </p>
+      </dd>
+
+      <dt>Address</dt>
+      <dd>
+        <div class="address mono" id="address"></div>
+        <button id="copy-address" class="btn-link">Copy address</button>
+      </dd>
+
+      <dt>Send via wallet</dt>
+      <dd>
+        <a id="wallet-link" class="btn" href="#">Open in Bitcoin wallet</a>
+        <p class="muted small">
+          Opens the bitcoin: URI in your default wallet app
+          (Phoenix, Sparrow, BlueWallet, etc.).
+        </p>
+      </dd>
+
+      <dt>Expires</dt>
+      <dd id="expires"></dd>
+
+      <dt>Status</dt>
+      <dd id="status" class="status-pending">⏳ waiting for payment</dd>
+    </dl>
+  </div>
+
+  <div class="pay-note">
+    <p>
+      <strong>Why the weird amount?</strong> Every order has a unique
+      sat amount so we can match your payment to your order without
+      collisions. Send <em>exactly</em> what's shown — wallets will
+      pre-fill it if you use the "Open in wallet" button.
+    </p>
+    <p>
+      <strong>Lost your way back?</strong> Bookmark this URL. The
+      page polls the chain every 30 seconds; come back any time.
+      You'll also get a claim-code email when payment confirms.
+    </p>
+    <p>
+      <strong>Privacy.</strong> The address shown here is generated
+      offline on a hardware wallet. Our server never holds the
+      private key, only the public address — see
+      <a href="/terms.html">our terms</a> for the full security
+      model.
+    </p>
+  </div>
+</section>
+
+<section id="settled" hidden class="settled-card">
+  <h1>Payment confirmed ✓</h1>
+  <p>
+    Your Pack claim code has been emailed to you. Check your inbox
+    (and spam folder) for a message from
+    <code>hello@orphograph.com</code>. From there, click the
+    activation link to load the code into your browser and start
+    anchoring files.
+  </p>
+  <p>
+    <strong>Transaction:</strong>
+    <a id="tx-link" class="mono" href="#" target="_blank" rel="noopener"></a>
+  </p>
+  <p><a class="btn" href="/">Back to home</a></p>
+</section>
+
+<section id="error" hidden>
+  <h1>Something's off</h1>
+  <p id="error-message">Order not found or expired.</p>
+  <p><a class="btn" href="/">Start over</a></p>
+</section>
+</main>
+
+<footer>
+  <small><a href="/">home</a> · <a href="/terms.html">Terms</a> · <a href="/privacy.html">Privacy</a></small>
+</footer>
+
+<script src="/buy.js"></script>
+</body>
+</html>

@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Orphograph Receipt</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/receipt.css">
+</head>
+<body class="receipt-page">
+
+<header class="no-print">
+  <div class="brand"><a href="/">orphograph</a></div>
+  <nav><a href="/">home</a> <a href="#" id="print-btn">print / save as PDF</a></nav>
+</header>
+
+<main>
+<article id="card" class="receipt-card">
+  <div class="card-header">
+    <div>
+      <h1>Orphograph Receipt</h1>
+      <p class="muted" id="created"></p>
+    </div>
+    <div class="brand-stamp">
+      <svg width="48" height="48" viewBox="0 0 32 32" aria-hidden="true">
+        <g fill="none" stroke="#5bdc9b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="16" y1="6" x2="16" y2="26"/>
+          <line x1="11" y1="11" x2="21" y2="11"/>
+          <path d="M8 19 Q 16 28 24 19"/>
+          <circle cx="16" cy="6.5" r="1.5"/>
+        </g>
+      </svg>
+      <p class="muted small">anchored to Bitcoin via<br>OpenTimestamps</p>
+    </div>
+  </div>
+
+  <dl class="kv">
+    <dt>Receipt ID</dt><dd id="rid" class="mono"></dd>
+    <dt>SHA-256</dt><dd id="sha256" class="mono"></dd>
+    <dt>SHA-512 (quantum-hedge sibling)</dt><dd id="sha512" class="mono"></dd>
+    <dt>Client label</dt><dd id="label"></dd>
+    <dt>Status</dt><dd id="status"></dd>
+    <dt>Calendars</dt><dd id="cals"></dd>
+    <dt>BTC pinned at</dt><dd id="btc"></dd>
+    <dt id="attestation-label" hidden>Authorship claim</dt><dd id="attestation" hidden></dd>
+    <dt id="metadata-label" hidden>Camera metadata</dt><dd id="metadata" hidden></dd>
+  </dl>
+
+  <section class="checks">
+    <h2>OpenTimestamps proofs</h2>
+    <ul id="ots-list"></ul>
+  </section>
+
+  <section class="explorers">
+    <h2>Independent verification — don't trust us, check the chain</h2>
+    <p class="hint small">
+      The links below go to <em>public, third-party</em> services we don't run.
+      Each one independently confirms the same fact. If any one of them shows
+      your hash anchored, the proof holds — even if orphograph.com disappears.
+    </p>
+    <div id="explorer-grid" class="explorer-grid"></div>
+    <p class="hint small footnote-explorer">
+      <strong>Note:</strong> a SHA-256 hash is not a Bitcoin transaction. The
+      calendars batch many hashes into one Merkle root and that root lands in
+      a real Bitcoin transaction (usually within ~1 hour). The
+      <code>.ots</code> proof file contains the Merkle path from your hash to
+      the block. Once block-pinned, the BTC block links below resolve.
+    </p>
+  </section>
+
+  <section class="footnote">
+    <p>
+      This receipt proves the SHA-256 above was submitted to the listed
+      OpenTimestamps calendar servers at the time shown. The calendars
+      aggregate hashes into Bitcoin transactions; each <code>.ots</code>
+      file is independently verifiable against the public Bitcoin chain.
+    </p>
+    <p>
+      To verify without trusting us, download the receipt JSON + the five
+      <code>.ots</code> files from <code>/api/receipt/&lt;id&gt;</code>, then
+      run the open-source verifier at
+      <a id="verifier-url" href="#">github.com/orphograph/orphograph-verify</a>
+      against your original file.
+    </p>
+    <p class="muted small">
+      Proof-of-existence only. Not a qualified eIDAS timestamp.
+      Not legal evidence on its own. See <a href="/terms.html">Terms</a>.
+    </p>
+  </section>
+</article>
+
+<p id="err" class="muted no-print" hidden></p>
+</main>
+
+<footer class="no-print">
+  <small>
+    <a href="/">home</a> · <a href="/terms.html">Terms</a> · <a href="/privacy.html">Privacy</a> ·
+    Powered by OpenTimestamps
+  </small>
+</footer>
+
+<script src="/receipt.js"></script>
+</body>
+</html>

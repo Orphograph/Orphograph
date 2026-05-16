@@ -1,0 +1,1968 @@
+#!/usr/bin/env python3
+"""app.py — stdlib HTTP server for orphograph.
+
+Endpoints:
+    GET  /                       — serve web/index.html
+    GET  /<asset>                — serve any file under web/
+    POST /api/anchor             — body: {"hash_hex": "<64 hex>", "client_label": "optional"}
+    GET  /api/receipt/<id>       — return receipt JSON
+    GET  /api/verify/<id>        — re-check the receipt locally
+    GET  /api/health             — liveness
+    GET  /api/stats              — public marketing metrics (counts only, no PII)
+
+Loopback only by default (127.0.0.1). Override with HOST env var for testing.
+"""
+from __future__ import annotations
+
+import csv
+import io
+import json
+import mimetypes
+import os
+import re
+import secrets
+import sys
+from datetime import datetime, timezone
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import engine  # noqa: E402
+import affiliate  # noqa: E402
+import analytics  # noqa: E402
+import api_keys  # noqa: E402
+import blog  # noqa: E402
+import btc_payments  # noqa: E402
+import btc_price  # noqa: E402
+import og_svg  # noqa: E402
+import public_config  # noqa: E402
+import qrcode_svg  # noqa: E402
+import badge_svg  # noqa: E402
+import credits  # noqa: E402
+import auth  # noqa: E402
+import gdpr  # noqa: E402
+import health  # noqa: E402
+import mailer  # noqa: E402
+import stats  # noqa: E402
+import stripe_api  # noqa: E402
+import stripe_webhook  # noqa: E402
+import subscriptions  # noqa: E402
+import teams  # noqa: E402
+import unsubscribe  # noqa: E402
+import waitlist  # noqa: E402
+import btc_claims  # noqa: E402
+try:
+    import payout_monitor  # noqa: E402
+except ImportError:  # pragma: no cover
+    payout_monitor = None  # type: ignore
+from http.cookies import SimpleCookie  # noqa: E402
+from rate_limit import TokenBucket, truncate_ip  # noqa: E402
+
+ROOT = Path(__file__).resolve().parent.parent
+WEB_DIR = ROOT / "web"
+
+HOST = os.environ.get("HOST", "127.0.0.1")
+PORT = int(os.environ.get("PORT", "8989"))
+
+MAX_BODY_BYTES = 4096  # we only accept tiny JSON payloads
+MAX_WEBHOOK_BODY_BYTES = 256 * 1024
+REQUEST_TIMEOUT_SEC = 30
+MAX_BATCH_BODY_BYTES = 64 * 1024
+MAX_BATCH_ITEMS = 50
+RECEIPT_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")  # secrets.token_urlsafe(12) shape
+TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]{16,64}$")
+EMAIL_RE = re.compile(r"^[^@\s,]{1,64}@[^@\s,]{1,255}$")
+COOKIE_SECURE = os.environ.get("ORPHO_COOKIE_SECURE", "1") != "0"
+TRUST_PROXY_HEADERS = os.environ.get("ORPHO_TRUST_PROXY_HEADERS", "0") == "1"
+ALLOW_UNSIGNED_WEBHOOK_PROBE = os.environ.get("ORPHO_ALLOW_UNSIGNED_WEBHOOK_PROBE", "0") == "1"
+ALLOWED_STATIC_SUFFIXES = {
+    ".html", ".css", ".js", ".svg", ".png", ".ico", ".webmanifest",
+    ".json", ".txt", ".ots",  # sample receipt assets under web/sample/
+    ".py", ".md", ".tar", ".gz",  # self-hosted OSS verifier under web/verify/
+}
+
+# 10 anchors/hour/IP by default; refills at 10/3600 = ~0.00278 tokens/sec
+# Free-tier rate limit, server-clock-enforced.
+#
+# Default: 3 anchors per 24h rolling window per IP-prefix bucket.
+# Implementation: token bucket with capacity=3 tokens and refill=3/86400 per
+# second. The user gets 3 anchors per UTC day on average; a fresh token drops
+# in roughly every 8 hours. Because the server uses its own monotonic clock,
+# clients cannot bypass the limit by changing their device's time zone or
+# system clock — the bucket lives on the server, not the browser.
+#
+# Operators can override by setting RATE_LIMIT_PER_DAY (preferred) or
+# RATE_LIMIT_PER_HOUR (legacy; multiplied by 24 if set).
+_legacy_per_hour = os.environ.get("RATE_LIMIT_PER_HOUR")
+if _legacy_per_hour and not os.environ.get("RATE_LIMIT_PER_DAY"):
+    _per_day_default = str(int(_legacy_per_hour) * 24)
+else:
+    _per_day_default = "3"
+ANCHOR_RATE_CAPACITY = int(os.environ.get("RATE_LIMIT_PER_DAY", _per_day_default))
+ANCHOR_RATE_REFILL = ANCHOR_RATE_CAPACITY / 86400.0
+ANCHOR_RATE_WINDOW_LABEL = "24h"
+MIN_CALENDARS_OK = int(os.environ.get("MIN_CALENDARS_OK", "3"))
+STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
+DATA_DIR = Path(os.environ.get("ORPHO_DATA_DIR", str(ROOT / "data") if (ROOT / "data").is_dir() else str(ROOT)))
+RATE_LIMIT_SNAPSHOT = Path(os.environ.get(
+    "ORPHO_RATE_LIMIT_SNAPSHOT", str(DATA_DIR / "rate_limit_state.json")
+))
+# Admin operational toggles (set to "1" to enable)
+ORPHO_MAINTENANCE_MODE = os.environ.get("ORPHO_MAINTENANCE_MODE", "0") == "1"
+ORPHO_DISABLE_CHECKOUT = os.environ.get("ORPHO_DISABLE_CHECKOUT", "0") == "1"
+ORPHO_DISABLE_ANCHORING = os.environ.get("ORPHO_DISABLE_ANCHORING", "0") == "1"
+
+_anchor_limiter = TokenBucket(
+    ANCHOR_RATE_CAPACITY,
+    ANCHOR_RATE_REFILL,
+    snapshot_path=RATE_LIMIT_SNAPSHOT,
+)
+
+
+def _subscription_active_for(email: str | None) -> bool:
+    """True if `email` has an active subscription directly OR via team membership.
+
+    Team members inherit their team owner's subscription benefits. This single
+    helper centralizes the inheritance so endpoints stay readable.
+    """
+    if not email:
+        return False
+    if subscriptions.is_active(email):
+        return True
+    owner = teams.owner_email_for(email)
+    if owner and owner != email and subscriptions.is_active(owner):
+        return True
+    return False
+
+
+def _security_headers(handler: BaseHTTPRequestHandler) -> None:
+    handler.send_header("X-Content-Type-Options", "nosniff")
+    handler.send_header("X-Frame-Options", "DENY")
+    handler.send_header("Referrer-Policy", "strict-origin-when-cross-origin")
+    handler.send_header("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+    handler.send_header(
+        "Content-Security-Policy",
+        "default-src 'self'; script-src 'self'; style-src 'self'; "
+        "img-src 'self' data:; connect-src 'self'; "
+        "frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
+    )
+
+
+def _read_content_length(handler: BaseHTTPRequestHandler) -> int:
+    raw = handler.headers.get("Content-Length", "0") or "0"
+    try:
+        n = int(raw)
+    except ValueError:
+        return -1
+    return n if n >= 0 else -1
+
+
+# ── compression + caching helpers ──────────────────────────────────────
+
+_COMPRESSIBLE_PREFIXES = (
+    "text/", "application/json", "application/xml",
+    "application/atom+xml", "application/javascript",
+    "image/svg+xml",
+)
+_COMPRESS_THRESHOLD_BYTES = 512
+
+
+def _client_accepts_gzip(handler: BaseHTTPRequestHandler) -> bool:
+    enc = handler.headers.get("Accept-Encoding", "")
+    return "gzip" in (token.strip().split(";")[0] for token in enc.split(","))
+
+
+def _maybe_compress(
+    handler: BaseHTTPRequestHandler,
+    body: bytes,
+    content_type: str,
+) -> tuple[bytes, str | None]:
+    """If the client accepts gzip and the payload is large enough + compressible,
+    return (gzipped_body, "gzip"). Otherwise return (body, None)."""
+    if len(body) < _COMPRESS_THRESHOLD_BYTES:
+        return body, None
+    if not any(content_type.startswith(p) for p in _COMPRESSIBLE_PREFIXES):
+        return body, None
+    if not _client_accepts_gzip(handler):
+        return body, None
+    import gzip
+    compressed = gzip.compress(body, compresslevel=6)
+    # If gzip didn't actually shrink it (rare for tiny payloads), skip.
+    if len(compressed) >= len(body):
+        return body, None
+    return compressed, "gzip"
+
+
+def _weak_etag(*, mtime: float, size: int) -> str:
+    """Weak ETag from (mtime, size) — good enough for static files we serve."""
+    import hashlib
+    h = hashlib.sha256(f"{mtime}:{size}".encode()).hexdigest()[:16]
+    return f'W/"{h}"'
+
+
+def _json_response(handler: BaseHTTPRequestHandler, status: int, payload: dict) -> None:
+    body = json.dumps(payload, indent=2).encode("utf-8")
+    ctype = "application/json; charset=utf-8"
+    body, enc = _maybe_compress(handler, body, ctype)
+    handler.send_response(status)
+    handler.send_header("Content-Type", ctype)
+    handler.send_header("Content-Length", str(len(body)))
+    handler.send_header("Cache-Control", "no-store")
+    if enc:
+        handler.send_header("Content-Encoding", enc)
+        handler.send_header("Vary", "Accept-Encoding")
+    _security_headers(handler)
+    handler.end_headers()
+    handler.wfile.write(body)
+
+
+def _send_html(handler: BaseHTTPRequestHandler, status: int, html_body: str) -> None:
+    body = html_body.encode("utf-8")
+    ctype = "text/html; charset=utf-8"
+    body, enc = _maybe_compress(handler, body, ctype)
+    handler.send_response(status)
+    handler.send_header("Content-Type", ctype)
+    handler.send_header("Content-Length", str(len(body)))
+    handler.send_header("Cache-Control", "public, max-age=300")
+    if enc:
+        handler.send_header("Content-Encoding", enc)
+        handler.send_header("Vary", "Accept-Encoding")
+    _security_headers(handler)
+    handler.end_headers()
+    handler.wfile.write(body)
+
+
+def _send_xml(handler: BaseHTTPRequestHandler, status: int, xml_body: str, *, content_type: str = "application/xml; charset=utf-8") -> None:
+    body = xml_body.encode("utf-8")
+    body, enc = _maybe_compress(handler, body, content_type)
+    handler.send_response(status)
+    handler.send_header("Content-Type", content_type)
+    handler.send_header("Content-Length", str(len(body)))
+    handler.send_header("Cache-Control", "public, max-age=600")
+    if enc:
+        handler.send_header("Content-Encoding", enc)
+        handler.send_header("Vary", "Accept-Encoding")
+    _security_headers(handler)
+    handler.end_headers()
+    handler.wfile.write(body)
+
+
+def _build_sitemap() -> str:
+    site = os.environ.get("SITE_URL", "https://orphograph.com").rstrip("/")
+    urls: list[tuple[str, str]] = [
+        ("/", "1.0"),
+        ("/verify/", "0.9"),
+        ("/blog/", "0.8"),
+        ("/status.html", "0.5"),
+        ("/stats.html", "0.6"),
+        ("/terms.html", "0.3"),
+        ("/privacy.html", "0.3"),
+        ("/badge-demo.html", "0.4"),
+        ("/docs/api.html", "0.6"),
+        ("/compare.html", "0.7"),
+        ("/about.html", "0.7"),
+        ("/learn.html", "0.8"),
+        ("/press.html", "0.4"),
+        ("/gift.html", "0.6"),
+        ("/lp/", "0.8"),
+        ("/lp/prove-photo-pre-ai.html", "0.7"),
+        ("/lp/bitcoin-timestamp-file.html", "0.7"),
+        ("/lp/c2pa-alternative.html", "0.7"),
+        ("/lp/opentimestamps-explained.html", "0.7"),
+        ("/lp/proof-of-existence-document.html", "0.7"),
+        ("/lp/wedding-photographer-proof.html", "0.7"),
+        ("/lp/manuscript-priority-date.html", "0.7"),
+        ("/lp/screenshot-evidence-timestamp.html", "0.7"),
+        ("/lp/ai-image-detector-vs-provenance.html", "0.7"),
+    ]
+    for post in blog.list_posts():
+        urls.append((f"/blog/{post['slug']}", "0.7"))
+    lines = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+    ]
+    for path, prio in urls:
+        lines += [
+            "  <url>",
+            f"    <loc>{site}{path}</loc>",
+            f"    <priority>{prio}</priority>",
+            "  </url>",
+        ]
+    lines.append("</urlset>")
+    return "\n".join(lines)
+
+
+def _serve_static(handler: BaseHTTPRequestHandler, rel_path: str) -> None:
+    if rel_path in ("", "/"):
+        rel_path = "index.html"
+    rel_path = rel_path.lstrip("/")
+    target = (WEB_DIR / rel_path).resolve()
+    if WEB_DIR not in target.parents and target != WEB_DIR:
+        handler.send_error(403, "forbidden")
+        return
+    # Directory-style paths (e.g. /verify/) → resolve to <dir>/index.html.
+    if target.is_dir():
+        target = target / "index.html"
+    if not target.exists() or not target.is_file():
+        handler.send_error(404, "not found")
+        return
+    if target.suffix not in ALLOWED_STATIC_SUFFIXES:
+        handler.send_error(403, "type not allowed")
+        return
+
+    # ETag from file mtime + size — weak validator, sufficient for our static set.
+    try:
+        stat = target.stat()
+    except OSError:
+        handler.send_error(500, "stat failed")
+        return
+    etag = _weak_etag(mtime=stat.st_mtime, size=stat.st_size)
+
+    # If-None-Match short-circuit → 304 Not Modified (no body, no Content-Length>0).
+    if_none = handler.headers.get("If-None-Match", "")
+    if if_none and etag in if_none:
+        handler.send_response(304)
+        handler.send_header("ETag", etag)
+        handler.send_header("Cache-Control", _static_cache_control(target.suffix))
+        _security_headers(handler)
+        handler.end_headers()
+        return
+
+    ctype, _ = mimetypes.guess_type(target.name)
+    ctype = ctype or "application/octet-stream"
+    data = target.read_bytes()
+    data, enc = _maybe_compress(handler, data, ctype)
+
+    handler.send_response(200)
+    handler.send_header("Content-Type", ctype)
+    handler.send_header("Content-Length", str(len(data)))
+    handler.send_header("Cache-Control", _static_cache_control(target.suffix))
+    handler.send_header("ETag", etag)
+    if enc:
+        handler.send_header("Content-Encoding", enc)
+        handler.send_header("Vary", "Accept-Encoding")
+    _security_headers(handler)
+    handler.end_headers()
+    handler.wfile.write(data)
+
+
+def _static_cache_control(suffix: str) -> str:
+    """Aggressive caching for binary assets, short caching for HTML.
+
+    HTML can change with each deploy; let browsers revalidate fast.
+    Binaries (svg, ico, ots, tar.gz) effectively immutable per filename.
+    """
+    short_lived = {".html", ".json", ".webmanifest"}
+    if suffix in short_lived:
+        return "public, max-age=300, must-revalidate"
+    return "public, max-age=86400"
+
+
+class Handler(BaseHTTPRequestHandler):
+    server_version = "orphograph/0.1"
+    timeout = REQUEST_TIMEOUT_SEC  # close slow / dead connections so a thread isn't pinned
+
+    def log_message(self, fmt, *args):
+        truncated = truncate_ip(self.client_address[0] if self.client_address else "")
+        sys.stderr.write(f"[{self.log_date_time_string()}] {truncated} - {fmt % args}\n")
+
+    def _client_key(self) -> str:
+        # Trust X-Forwarded-For only when the deployment has explicitly said
+        # every request arrives through a trusted proxy. Local/tunnel/direct
+        # traffic can carry attacker-supplied XFF and must not bypass limits.
+        xff = ""
+        if TRUST_PROXY_HEADERS:
+            xff = self.headers.get("X-Forwarded-For", "").split(",")[0].strip()
+        peer = xff or (self.client_address[0] if self.client_address else "")
+        return truncate_ip(peer)
+
+    def _session_email(self) -> str | None:
+        cookies = SimpleCookie()
+        cookies.load(self.headers.get("Cookie", "") or "")
+        # In prod we set the __Host- prefixed name; in dev we set plain.
+        # Look both up since either could be present across env transitions.
+        sid = cookies.get(auth.cookie_name(COOKIE_SECURE)) or cookies.get("orpho_sid") or cookies.get("__Host-orpho_sid")
+        if not sid:
+            return None
+        return auth.session_email(sid.value)
+
+    def do_GET(self):  # noqa: N802
+        path = self.path.split("?", 1)[0]
+        if path == "/api/health":
+            _json_response(self, 200, health.snapshot())
+            return
+        if path == "/api/stats":
+            _json_response(self, 200, stats.snapshot())
+            return
+        if path == "/api/config":
+            _json_response(self, 200, public_config.snapshot())
+            return
+        # Maintenance mode: allow only health/stats and static pages (founder dashboards stay live)
+        if ORPHO_MAINTENANCE_MODE and not path.startswith(("/web/founder/", "/status.html")):
+            _json_response(self, 503, {
+                "error": "service unavailable",
+                "detail": "Server undergoing maintenance. We'll be back shortly.",
+            })
+            return
+        if path.startswith("/api/receipt/") or path.startswith("/api/verify/"):
+            prefix = "/api/receipt/" if path.startswith("/api/receipt/") else "/api/verify/"
+            rid_with_suffix = path[len(prefix):]
+            # Determine the response shape and extract the receipt id.
+            response_shape: str
+            if rid_with_suffix.endswith(".zip"):
+                rid = rid_with_suffix[:-4]
+                response_shape = "zip"
+            elif rid_with_suffix.endswith("/summary"):
+                rid = rid_with_suffix[:-len("/summary")]
+                response_shape = "summary"
+            else:
+                rid = rid_with_suffix
+                response_shape = "json"
+            if not RECEIPT_ID_RE.match(rid):
+                _json_response(self, 400, {"error": "invalid receipt id"})
+                return
+            # Load the record once and apply the private-receipt gate uniformly
+            # across all three response shapes. A previous version gated only
+            # the JSON path — the .zip and /summary endpoints would return
+            # private receipt contents to anyone who knew the ID.
+            record = engine.verify_receipt(rid)
+            if not record.get("found"):
+                _json_response(self, 404, record)
+                return
+            if record.get("private"):
+                session_email = self._session_email()
+                viewer_id = auth.email_id(session_email) if session_email else None
+                if not viewer_id or viewer_id != record.get("owner_id"):
+                    # Return the same 404 shape for non-owners on every path
+                    # so the existence of a private receipt is not leaked
+                    # by response code or shape.
+                    _json_response(self, 404, {
+                        "receipt_id": rid,
+                        "found": False,
+                        "error": "receipt not found",
+                    })
+                    return
+            # Don't leak owner_id on public receipts — an external observer
+            # could otherwise cluster every public receipt by HMAC(email)
+            # owner. owner_id stays only when the viewer is the owner (and
+            # the receipt is private).
+            if not record.get("private"):
+                record.pop("owner_id", None)
+            if response_shape == "zip":
+                import receipt_export
+                zipped, err = receipt_export.export_zip(rid)
+                if err == receipt_export.NOT_FOUND or zipped is None and err is None:
+                    _json_response(self, 404, {"error": "receipt not found"})
+                    return
+                if err == receipt_export.BROKEN:
+                    _json_response(self, 500, {"error": "could not build receipt zip"})
+                    return
+                self.send_response(200)
+                self.send_header("Content-Type", "application/zip")
+                self.send_header("Content-Length", str(len(zipped)))
+                self.send_header("Content-Disposition", f"attachment; filename=\"receipt_{rid}.zip\"")
+                _security_headers(self)
+                self.end_headers()
+                self.wfile.write(zipped)
+                return
+            if response_shape == "summary":
+                import receipt_export
+                summary, err = receipt_export.export_readable_json(rid)
+                if err == receipt_export.NOT_FOUND or summary is None and err is None:
+                    _json_response(self, 404, {"error": "receipt not found"})
+                    return
+                if err == receipt_export.BROKEN:
+                    _json_response(self, 500, {"error": "could not build receipt summary"})
+                    return
+                # Re-apply the owner_id redaction on the summary path too
+                if not summary.get("private"):
+                    summary.pop("owner_id", None)
+                _json_response(self, 200, summary)
+                return
+            _json_response(self, 200, record)
+            return
+        if path.startswith("/api/badge/") and path.endswith(".svg"):
+            # Embeddable verification badge. Single GET, public, cacheable.
+            # Privacy: badge_svg.render() reads only receipt_id + created_at
+            # — no filename, no email, no hash bytes — so the SVG output is
+            # safe to expose without authentication.
+            rid = path[len("/api/badge/"):-len(".svg")]
+            if not RECEIPT_ID_RE.match(rid):
+                self.send_error(400, "invalid receipt id")
+                return
+            record = engine.verify_receipt(rid)
+            if not record.get("found"):
+                self.send_error(404, "receipt not found")
+                return
+            site = os.environ.get("SITE_URL", "").rstrip("/")
+            svg = badge_svg.render(record, base_url=site)
+            body = svg.encode("utf-8")
+            ctype = "image/svg+xml; charset=utf-8"
+            body, enc = _maybe_compress(self, body, ctype)
+            self.send_response(200)
+            self.send_header("Content-Type", ctype)
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "public, max-age=3600")
+            if enc:
+                self.send_header("Content-Encoding", enc)
+                self.send_header("Vary", "Accept-Encoding")
+            _security_headers(self)
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        if path.startswith("/api/pack/balance/"):
+            code = path[len("/api/pack/balance/"):]
+            if not RECEIPT_ID_RE.match(code.lstrip("pk_")):
+                _json_response(self, 400, {"error": "invalid claim code"})
+                return
+            _json_response(self, 200, {"claim_code": code, "balance": credits.balance(code)})
+            return
+        if path.startswith("/r/"):
+            # Print-friendly receipt view — page is static; JS reads the ID from
+            # the URL and fetches /api/verify/<id>. Validate shape before serving
+            # so we don't render a page for an obviously-bad ID.
+            rid = path[len("/r/"):].rstrip("/")
+            if not RECEIPT_ID_RE.match(rid):
+                self.send_error(400, "invalid receipt id")
+                return
+            _serve_static(self, "/receipt.html")
+            return
+        if path.startswith("/buy/"):
+            # BTC payment page — page is static; JS reads order_id from URL.
+            oid = path[len("/buy/"):].rstrip("/")
+            if not re.match(r"^btc_[A-Za-z0-9_-]{1,32}$", oid):
+                self.send_error(400, "invalid order id")
+                return
+            _serve_static(self, "/buy.html")
+            return
+        if path in ("/blog", "/blog/"):
+            _send_html(self, 200, blog.render_index_html())
+            return
+        if path == "/blog/atom.xml":
+            _send_xml(self, 200, blog.atom_feed_xml(),
+                      content_type="application/atom+xml; charset=utf-8")
+            return
+        if path.startswith("/blog/"):
+            slug = path[len("/blog/"):].rstrip("/")
+            if not re.match(r"^[a-z0-9-]{1,80}$", slug):
+                self.send_error(400, "invalid slug")
+                return
+            html_page = blog.render_post_html(slug)
+            if not html_page:
+                self.send_error(404, "post not found")
+                return
+            _send_html(self, 200, html_page)
+            return
+        if path == "/sitemap.xml":
+            _send_xml(self, 200, _build_sitemap())
+            return
+        if path == "/robots.txt":
+            site = os.environ.get("SITE_URL", "https://orphograph.com").rstrip("/")
+            body_txt = (
+                "User-agent: *\n"
+                "Allow: /\n"
+                "Disallow: /api/\n"
+                "Disallow: /a/\n"
+                "Disallow: /r/\n"
+                "Disallow: /buy/\n"
+                "Disallow: /account.html\n"
+                "Disallow: /signin.html\n"
+                f"Sitemap: {site}/sitemap.xml\n"
+            )
+            body_bytes = body_txt.encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain; charset=utf-8")
+            self.send_header("Content-Length", str(len(body_bytes)))
+            self.send_header("Cache-Control", "public, max-age=3600")
+            _security_headers(self)
+            self.end_headers()
+            self.wfile.write(body_bytes)
+            return
+        if path.startswith("/api/btc-order/"):
+            # Status lookup for the buy page to poll. Sub-path /qr.svg
+            # returns a server-rendered QR-code SVG for the BIP-21 URI —
+            # public address + amount ONLY, no customer/email data.
+            tail = path[len("/api/btc-order/"):].rstrip("/")
+            if "/" in tail:
+                parts = tail.split("/", 1)
+                oid, sub = parts[0], parts[1]
+            else:
+                oid, sub = tail, ""
+            if not re.match(r"^btc_[A-Za-z0-9_-]{1,32}$", oid):
+                _json_response(self, 400, {"error": "invalid order id"})
+                return
+            order = btc_payments.get_order(oid)
+            if not order:
+                _json_response(self, 404, {"error": "not found"})
+                return
+            if sub == "qr.svg":
+                # Build the BIP-21 URI from on-disk fields only — never the
+                # request — so the QR can't be spoofed via the URL.
+                addr = order.get("address") or ""
+                sats = int(order.get("amount_sats") or 0)
+                if not addr or sats <= 0:
+                    self.send_error(404, "order not ready")
+                    return
+                btc_amount = sats / 100_000_000
+                # NO label, NO email, NO order_id in the QR payload.
+                # The privacy contract: only the public address + amount.
+                bip21 = f"bitcoin:{addr}?amount={btc_amount:.8f}"
+                try:
+                    svg = qrcode_svg.make_svg(bip21)
+                except ValueError as e:
+                    self.send_error(500, f"qr encode failed: {e}")
+                    return
+                _send_xml(self, 200, svg, content_type="image/svg+xml; charset=utf-8")
+                return
+            _json_response(self, 200, {
+                "order_id": oid,
+                "status": btc_payments.status_of(oid),
+                "address": order.get("address"),
+                "amount_sats": order.get("amount_sats"),
+                "expires_at": order.get("expires_at"),
+                "tx_hash": order.get("tx_hash"),
+            })
+            return
+        if path.startswith("/a/"):
+            # Magic-link redemption. One-time consume → set session cookie → redirect.
+            token = path[len("/a/"):].rstrip("/")
+            if not TOKEN_RE.match(token):
+                self.send_error(400, "invalid login token")
+                return
+            redeemed = auth.redeem_link_token(token)
+            if not redeemed:
+                self.send_error(404, "link expired or already used")
+                return
+            sid, _exp = auth.create_session(redeemed["email"])
+            self.send_response(303)
+            self.send_header("Location", "/account.html")
+            self.send_header("Set-Cookie", auth.build_session_cookie(sid, secure=COOKIE_SECURE))
+            self.send_header("Cache-Control", "no-store")
+            _security_headers(self)
+            self.end_headers()
+            return
+        if path == "/api/me":
+            email = self._session_email()
+            if not email:
+                _json_response(self, 401, {"error": "not authenticated"})
+                return
+            team = teams.team_for_member(email)
+            team_role = None
+            if team:
+                team_role = "owner" if team.get("owner") == email else "member"
+            _json_response(self, 200, {
+                "email": email,
+                "subscription_active": _subscription_active_for(email),
+                "subscription_status": subscriptions.status_for(email),
+                "api_key_prefix": api_keys.active_key_prefix(email),
+                "team": team,
+                "team_role": team_role,
+            })
+            return
+        if path == "/api/me/referral-code":
+            email = self._session_email()
+            if not email:
+                _json_response(self, 401, {"error": "not authenticated"})
+                return
+            code = affiliate.code_for_email(email)
+            site = os.environ.get("SITE_URL", "").rstrip("/")
+            share_url = f"{site}/?ref={code}" if (site and code) else (
+                f"/?ref={code}" if code else ""
+            )
+            _json_response(self, 200, {
+                "ref_code": code,
+                "share_url": share_url,
+            })
+            return
+        if path == "/api/me/affiliate":
+            email = self._session_email()
+            if not email:
+                _json_response(self, 401, {"error": "not authenticated"})
+                return
+            s = affiliate.stats(email)
+            # Privacy: stats() returns aggregate counters + masked history;
+            # never an email or referee identifier. Pass through as-is.
+            _json_response(self, 200, s)
+            return
+        if path == "/api/me/team":
+            email = self._session_email()
+            if not email:
+                _json_response(self, 401, {"error": "not authenticated"})
+                return
+            t = teams.team_for_member(email)
+            if not t:
+                _json_response(self, 200, {"team": None})
+                return
+            _json_response(self, 200, {"team": t, "role": "owner" if t.get("owner") == email else "member"})
+            return
+        if path == "/api/me/anchors":
+            email = self._session_email()
+            if not email:
+                _json_response(self, 401, {"error": "not authenticated"})
+                return
+            qs = self.path.split("?", 1)[1] if "?" in self.path else ""
+            params = {}
+            for pair in qs.split("&"):
+                if "=" not in pair:
+                    continue
+                k, v = pair.split("=", 1)
+                params[k] = v
+            from urllib.parse import unquote
+            before_raw = unquote(params.get("before", ""))
+            limit_raw = params.get("limit", "50")
+            hash_prefix = unquote(params.get("q", "")).strip().lower()
+            label_substr = unquote(params.get("label", "")).strip()
+            private_filter_raw = unquote(params.get("private", "")).strip().lower()
+            private_only: bool | None
+            if private_filter_raw == "true":
+                private_only = True
+            elif private_filter_raw == "false":
+                private_only = False
+            else:
+                private_only = None
+            try:
+                limit = max(1, min(int(limit_raw), 200))
+            except ValueError:
+                limit = 50
+            before = before_raw if before_raw else None
+            anchors, has_more = _list_anchors_for_email(
+                email,
+                limit=limit,
+                before=before,
+                with_more_flag=True,
+                hash_prefix=hash_prefix if hash_prefix else None,
+                label_substr=label_substr if label_substr else None,
+                private_only=private_only,
+            )
+            next_before = anchors[-1].get("created_at") if (has_more and anchors) else None
+            _json_response(self, 200, {
+                "anchors": anchors,
+                "has_more": has_more,
+                "next_before": next_before,
+            })
+            return
+        if path == "/api/me/anchors.zip":
+            email = self._session_email()
+            if not email:
+                _json_response(self, 401, {"error": "not authenticated"})
+                return
+            if not subscriptions.is_active(email):
+                _json_response(self, 402, {"error": "receipt vault requires an active subscription"})
+                return
+            import io as _io
+            import zipfile as _zipfile
+            anchors = _list_anchors_for_email(email, limit=10000)
+            buf = _io.BytesIO()
+            with _zipfile.ZipFile(buf, "w", _zipfile.ZIP_DEFLATED) as zf:
+                for a in anchors:
+                    rid = a.get("receipt_id")
+                    if not rid:
+                        continue
+                    rdir = engine.RECEIPTS_DIR / rid
+                    rjson = rdir / "receipt.json"
+                    if rjson.exists():
+                        zf.write(rjson, arcname=f"{rid}/receipt.json")
+                    for ots in sorted(rdir.glob("*.ots")):
+                        zf.write(ots, arcname=f"{rid}/{ots.name}")
+            body = buf.getvalue()
+            ts = datetime.now(timezone.utc).strftime("%Y%m%d")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/zip")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Content-Disposition", f'attachment; filename="orphograph_vault_{ts}.zip"')
+            self.send_header("Cache-Control", "no-store")
+            _security_headers(self)
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        if path == "/api/me/anchors.csv":
+            email = self._session_email()
+            if not email:
+                _json_response(self, 401, {"error": "not authenticated"})
+                return
+            anchors = _list_anchors_for_email(email, limit=10000)
+            csv_body = _anchors_to_csv(anchors)
+            body = csv_body.encode("utf-8")
+            ts = datetime.now(timezone.utc).strftime("%Y%m%d")
+            filename = f"orphograph_anchors_{ts}.csv"
+            self.send_response(200)
+            self.send_header("Content-Type", "text/csv; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
+            self.send_header("Cache-Control", "no-store")
+            _security_headers(self)
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        if path == "/api/me/export":
+            email = self._session_email()
+            if not email:
+                _json_response(self, 401, {"error": "not authenticated"})
+                return
+            _json_response(self, 200, gdpr.export_for_email(email))
+            return
+        if path == "/api/unsubscribe":
+            # GET — render confirmation page. RFC 8058 also accepts POST
+            # for one-click via List-Unsubscribe-Post header.
+            self._handle_unsubscribe_get()
+            return
+        if path == "/api/founder/payout-status":
+            # Founder-only — hot BTC balance + sweep recommendation.
+            # Gated by ORPHO_FOUNDER_TOKEN env var (shared-secret in header).
+            self._handle_payout_status()
+            return
+        if path == "/api/founder/metrics":
+            # Founder-only — revenue metrics (MRR, ARR, churn, LTV).
+            # Gated by ORPHO_FOUNDER_TOKEN env var (shared-secret in header).
+            self._handle_founder_metrics()
+            return
+        if path.startswith("/api/founder/customer"):
+            # Founder-only — customer lookup by email.
+            self._handle_founder_customer_lookup()
+            return
+        if path == "/api/founder/admin/toggles":
+            # Founder-only — view operational admin toggles (maintenance, checkout, anchoring).
+            self._handle_founder_admin_toggles()
+            return
+        if path in ("/affiliate", "/affiliate/"):
+            # Public landing for the affiliate program.
+            _serve_static(self, "/affiliate.html")
+            return
+        _serve_static(self, path)
+
+    def do_POST(self):  # noqa: N802
+        if self.path == "/api/stripe/webhook":
+            self._handle_stripe_webhook()
+            return
+        # Maintenance mode: block user-facing requests but allow critical ops
+        if ORPHO_MAINTENANCE_MODE:
+            _json_response(self, 503, {
+                "error": "service unavailable",
+                "detail": "Server undergoing maintenance. We'll be back shortly.",
+            })
+            return
+        if self.path == "/api/auth/email-link":
+            self._handle_request_email_link()
+            return
+        if self.path == "/api/auth/signout":
+            self._handle_signout()
+            return
+        if self.path == "/api/me/delete":
+            self._handle_account_delete()
+            return
+        if self.path == "/api/me/cancel-subscription":
+            self._handle_cancel_subscription()
+            return
+        if self.path == "/api/me/reactivate-subscription":
+            self._handle_reactivate_subscription()
+            return
+        if self.path == "/api/me/api-key":
+            self._handle_issue_api_key()
+            return
+        if self.path.startswith("/api/me/receipt/") and self.path.endswith("/privacy"):
+            self._handle_toggle_receipt_privacy()
+            return
+        if self.path == "/api/me/team/create":
+            self._handle_team_create()
+            return
+        if self.path == "/api/me/team/invite":
+            self._handle_team_invite()
+            return
+        if self.path == "/api/me/team/redeem":
+            self._handle_team_redeem()
+            return
+        if self.path == "/api/me/team/remove":
+            self._handle_team_remove()
+            return
+        if self.path == "/api/me/team/leave":
+            self._handle_team_leave()
+            return
+        if self.path == "/api/me/api-key/revoke":
+            self._handle_revoke_api_key()
+            return
+        if self.path == "/api/me/affiliate/payout":
+            self._handle_affiliate_payout()
+            return
+        if self.path == "/api/waitlist":
+            self._handle_waitlist()
+            return
+        if self.path == "/api/btc/claim":
+            self._handle_btc_claim()
+            return
+        if self.path.startswith("/api/unsubscribe"):
+            self._handle_unsubscribe_post()
+            return
+        if self.path == "/api/event":
+            self._handle_event()
+            return
+        if self.path == "/api/buy-btc":
+            self._handle_buy_btc()
+            return
+        if self.path == "/api/anchor/batch":
+            self._handle_anchor_batch()
+            return
+        if self.path != "/api/anchor":
+            self.send_error(404, "not found")
+            return
+        # Admin toggle: disable anchoring if external services are down
+        if ORPHO_DISABLE_ANCHORING:
+            _json_response(self, 503, {
+                "error": "anchoring temporarily unavailable",
+                "detail": "Calendar service unavailable. Anchoring is temporarily disabled.",
+            })
+            return
+        pack_token = self.headers.get("X-Pack-Token", "").strip()
+        pack_consumed = False
+        pack_remaining = 0
+        if pack_token:
+            pack_consumed, pack_remaining = credits.consume_credit(pack_token)
+        # API key path: alternative to session cookie / pack token. The key
+        # owner must have an active subscription for the key to bypass limits.
+        api_key = self.headers.get("X-Orpho-Api-Key", "").strip()
+        api_key_email = api_keys.email_for_key(api_key) if api_key else None
+        api_key_active = bool(api_key_email and _subscription_active_for(api_key_email))
+        # Authenticated subscribers bypass the free-tier rate limit.
+        subscriber_email = api_key_email or (self._session_email() if not pack_consumed else None)
+        subscription_active = api_key_active or _subscription_active_for(subscriber_email)
+        if not pack_consumed and not subscription_active:
+            allowed, retry_after = _anchor_limiter.check(self._client_key())
+            if not allowed:
+                self.send_response(429)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Retry-After", str(int(retry_after) + 1))
+                body = json.dumps({
+                    "error": "rate limit exceeded",
+                    "retry_after_seconds": int(retry_after) + 1,
+                    "limit_per_day": ANCHOR_RATE_CAPACITY,
+                    "hint": "Buy a Pack to anchor without rate limits.",
+                }).encode("utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                _security_headers(self)
+                self.end_headers()
+                self.wfile.write(body)
+                return
+        length = _read_content_length(self)
+        if length <= 0 or length > MAX_BODY_BYTES:
+            _json_response(self, 400, {"error": "invalid body size"})
+            return
+        raw = self.rfile.read(length)
+        try:
+            payload = json.loads(raw.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            _json_response(self, 400, {"error": "body must be JSON"})
+            return
+        hash_hex = payload.get("hash_hex", "")
+        sha512_hex = payload.get("sha512_hex")
+        client_label = payload.get("client_label")
+        notify_email = payload.get("notify_email")
+        # Private receipts: subscriber-only feature. Anonymous and pack-only
+        # anchors cannot be marked private (no owner_id to gate by).
+        want_private = bool(payload.get("private", False)) and subscription_active
+        # Attestation + metadata: any caller can submit these. The engine
+        # sanitizes (allowlist + size caps); unknown fields are dropped.
+        attestation = payload.get("attestation") if isinstance(payload.get("attestation"), dict) else None
+        metadata = payload.get("metadata") if isinstance(payload.get("metadata"), dict) else None
+        if isinstance(client_label, str):
+            client_label = client_label[:200]
+        else:
+            client_label = None
+        if sha512_hex is not None and not isinstance(sha512_hex, str):
+            sha512_hex = None
+        # Tag the anchor source so the expiry worker can distinguish free vs paid.
+        # Pack tokens are bearer credentials so we record only a short prefix.
+        if pack_consumed:
+            source = f"pack:{pack_token[:8]}"
+        elif api_key_active:
+            source = f"api:{api_key[:10]}"
+        elif subscription_active:
+            # HMAC-derived identifier — an attacker with only disk access
+            # cannot dictionary-attack receipts→email without also stealing
+            # the per-installation HMAC secret.
+            source = "sub:" + auth.email_id(subscriber_email)
+        else:
+            source = "free"
+        try:
+            owner_id = auth.email_id(subscriber_email) if subscriber_email else None
+            record = engine.anchor_hash(
+                hash_hex,
+                client_label=client_label,
+                sha512_hex=sha512_hex,
+                source=source,
+                private=want_private,
+                owner_id=owner_id if want_private else None,
+                attestation=attestation,
+                metadata=metadata,
+            )
+        except ValueError as e:
+            _json_response(self, 400, {"error": str(e)})
+            return
+        low_redundancy = record["calendars_ok"] < MIN_CALENDARS_OK
+        if isinstance(notify_email, str) and pack_consumed:
+            candidate = notify_email[:200].strip()
+            if EMAIL_RE.match(candidate):
+                # email delivery is a paid-tier benefit; inert if RESEND_API_KEY unset
+                mailer.send_receipt_email(candidate, record)
+        _json_response(self, 200, {
+            "receipt_id": record["receipt_id"],
+            "created_at": record["created_at"],
+            "hash_hex": record["hash_hex"],
+            "sha512_hex": record.get("sha512_hex"),
+            "client_label": record["client_label"],
+            "calendars_ok": record["calendars_ok"],
+            "calendars_total": record["calendars_total"],
+            "low_redundancy": low_redundancy,
+            "pack_consumed": pack_consumed,
+            "pack_remaining": pack_remaining,
+            "subscription_active": subscription_active,
+            "successes": [{"calendar": s["calendar"], "ots_path": s["ots_path"]} for s in record["successes"]],
+            "failures": record["failures"],
+        })
+
+    def _handle_request_email_link(self) -> None:
+        # Rate-limited by IP to prevent email bombing.
+        allowed, retry = _anchor_limiter.check(f"auth:{self._client_key()}")
+        if not allowed:
+            _json_response(self, 429, {"error": "too many requests", "retry_after_seconds": int(retry) + 1})
+            return
+        length = _read_content_length(self)
+        if length <= 0 or length > MAX_BODY_BYTES:
+            _json_response(self, 400, {"error": "invalid body size"})
+            return
+        try:
+            payload = json.loads(self.rfile.read(length).decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            _json_response(self, 400, {"error": "body must be JSON"})
+            return
+        email = payload.get("email", "")
+        if not isinstance(email, str) or not EMAIL_RE.match(email.strip()):
+            # Enumeration defense: still return 200 with neutral body. Don't leak
+            # whether the address shape was valid via different status codes.
+            _json_response(self, 200, {"ok": True, "message": "If that address is valid, a link is on the way."})
+            return
+        email = email.strip()
+        token, _exp = auth.issue_link_token(email)
+        mailer.send_login_link_email(email, token)
+        _json_response(self, 200, {"ok": True, "message": "Check your inbox for a sign-in link."})
+
+    def _handle_buy_btc(self) -> None:
+        # Per-IP rate limit so anonymous order creation can't be abused.
+        allowed, retry = _anchor_limiter.check(f"btc:{self._client_key()}")
+        if not allowed:
+            _json_response(self, 429, {"error": "too many requests",
+                                       "retry_after_seconds": int(retry) + 1})
+            return
+        if not btc_payments.is_configured():
+            _json_response(self, 503, {"error": "BTC checkout not configured"})
+            return
+        length = _read_content_length(self)
+        if length <= 0 or length > MAX_BODY_BYTES:
+            _json_response(self, 400, {"error": "invalid body size"})
+            return
+        try:
+            payload = json.loads(self.rfile.read(length).decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            _json_response(self, 400, {"error": "body must be JSON"})
+            return
+        email = payload.get("email", "")
+        if not isinstance(email, str) or not EMAIL_RE.match(email.strip()):
+            _json_response(self, 400, {"error": "invalid email"})
+            return
+        email = email.strip()
+
+        # USD amount: $7 default Pack. (Tier param is reserved for
+        # future Personal subscriptions via BTC — not built yet.)
+        usd_amount = 7.0
+
+        # Use a random 4-digit suffix so the exact sat amount is unique
+        # to this order. The settle worker matches by exact amount.
+        suffix = secrets.randbelow(10000) if "secrets" in globals() else int.from_bytes(os.urandom(2), "big") % 10000
+        sats = btc_price.sats_for_usd(usd_amount, suffix=suffix)
+        if sats <= 0:
+            _json_response(self, 503, {"error": "BTC price feed unavailable; try again in a minute"})
+            return
+
+        try:
+            order = btc_payments.create_order(email=email, usd_amount=usd_amount, sats_amount=sats)
+        except (RuntimeError, ValueError) as e:
+            _json_response(self, 400, {"error": str(e)})
+            return
+
+        # bitcoin: URI — opens in the user's wallet app on click.
+        btc_amount = sats / 100_000_000
+        bitcoin_uri = f"bitcoin:{order['address']}?amount={btc_amount:.8f}&label=Orphograph+Pack"
+        _json_response(self, 200, {
+            "ok": True,
+            "order_id": order["order_id"],
+            "address": order["address"],
+            "amount_sats": sats,
+            "amount_btc": f"{btc_amount:.8f}",
+            "usd_amount": usd_amount,
+            "expires_at": order["expires_at"],
+            "bitcoin_uri": bitcoin_uri,
+            "buy_page": f"/buy/{order['order_id']}",
+        })
+
+    def _handle_anchor_batch(self) -> None:
+        """Anchor up to 50 hashes in one request. Same auth model as /api/anchor.
+
+        Each item gets its own receipt (one OTS submission per hash; calendars
+        already batch internally). Useful for the folder-watcher CLI sending
+        a backlog. API-key auth bypasses the rate limit; pack tokens consume
+        one credit per item; subscribers anchor under their session.
+        """
+        # Auth resolution mirrors /api/anchor but with one twist: pack-token
+        # credit-consumption happens per-item below so partial fills work.
+        pack_token = self.headers.get("X-Pack-Token", "").strip()
+        api_key = self.headers.get("X-Orpho-Api-Key", "").strip()
+        api_key_email = api_keys.email_for_key(api_key) if api_key else None
+        api_key_active = bool(api_key_email and subscriptions.is_active(api_key_email))
+        session_email = self._session_email()
+        sub_active = api_key_active or bool(session_email and subscriptions.is_active(session_email))
+        effective_email = api_key_email or session_email
+
+        # Free tier is rate-limited per IP; consume ONE token for the whole
+        # batch (the per-item OTS work is what we're budgeting against).
+        if not pack_token and not api_key_active and not sub_active:
+            allowed, retry_after = _anchor_limiter.check(self._client_key())
+            if not allowed:
+                _json_response(self, 429, {
+                    "error": "rate limit exceeded",
+                    "retry_after_seconds": int(retry_after) + 1,
+                    "limit_per_day": ANCHOR_RATE_CAPACITY,
+                    "hint": "Buy a Pack or subscribe to skip rate limits.",
+                })
+                return
+
+        length = _read_content_length(self)
+        if length <= 0 or length > MAX_BATCH_BODY_BYTES:
+            _json_response(self, 400, {"error": "invalid body size",
+                                       "max_bytes": MAX_BATCH_BODY_BYTES})
+            return
+        try:
+            payload = json.loads(self.rfile.read(length).decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            _json_response(self, 400, {"error": "body must be JSON"})
+            return
+
+        items = payload.get("hashes") if isinstance(payload, dict) else None
+        if not isinstance(items, list) or not items:
+            _json_response(self, 400, {"error": "expected non-empty 'hashes' array"})
+            return
+        if len(items) > MAX_BATCH_ITEMS:
+            _json_response(self, 400, {"error": f"too many items (max {MAX_BATCH_ITEMS})"})
+            return
+
+        results: list[dict] = []
+        for idx, item in enumerate(items):
+            if not isinstance(item, dict):
+                results.append({"index": idx, "ok": False, "error": "item must be an object"})
+                continue
+            hash_hex = item.get("hash_hex", "")
+            sha512_hex = item.get("sha512_hex")
+            client_label = item.get("client_label")
+            if isinstance(client_label, str):
+                client_label = client_label[:200]
+            else:
+                client_label = None
+            if sha512_hex is not None and not isinstance(sha512_hex, str):
+                sha512_hex = None
+
+            # Determine per-item source tag + auth disposition.
+            pack_consumed_here = False
+            if pack_token and not api_key_active and not sub_active:
+                pack_consumed_here, _ = credits.consume_credit(pack_token)
+                if not pack_consumed_here:
+                    results.append({"index": idx, "ok": False,
+                                    "error": "pack credits exhausted",
+                                    "client_label": client_label})
+                    continue
+                source = f"pack:{pack_token[:8]}"
+            elif api_key_active:
+                source = f"api:{api_key[:10]}"
+            elif sub_active:
+                source = "sub:" + auth.email_id(effective_email)
+            else:
+                source = "free"
+
+            try:
+                record = engine.anchor_hash(
+                    hash_hex,
+                    client_label=client_label,
+                    sha512_hex=sha512_hex,
+                    source=source,
+                )
+            except ValueError as e:
+                results.append({"index": idx, "ok": False, "error": str(e),
+                                "client_label": client_label})
+                continue
+            results.append({
+                "index": idx,
+                "ok": True,
+                "receipt_id": record["receipt_id"],
+                "created_at": record["created_at"],
+                "client_label": record["client_label"],
+                "calendars_ok": record["calendars_ok"],
+                "calendars_total": record["calendars_total"],
+                "low_redundancy": record["calendars_ok"] < MIN_CALENDARS_OK,
+            })
+
+        succeeded = sum(1 for r in results if r.get("ok"))
+        _json_response(self, 200, {
+            "ok": True,
+            "submitted": len(items),
+            "succeeded": succeeded,
+            "failed": len(items) - succeeded,
+            "results": results,
+        })
+
+    def _handle_event(self) -> None:
+        # Bounded per-IP to keep noisy clients from filling the ledger.
+        allowed, _ = _anchor_limiter.check(f"event:{self._client_key()}")
+        if not allowed:
+            # Silent drop — analytics is best-effort, not authoritative.
+            _json_response(self, 204, {})
+            return
+        length = _read_content_length(self)
+        if length <= 0 or length > MAX_BODY_BYTES:
+            _json_response(self, 400, {"error": "invalid body size"})
+            return
+        try:
+            payload = json.loads(self.rfile.read(length).decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            _json_response(self, 400, {"error": "body must be JSON"})
+            return
+        event = payload.get("event")
+        page = payload.get("page", "other")
+        if not isinstance(event, str) or not isinstance(page, str):
+            _json_response(self, 400, {"error": "invalid event"})
+            return
+        # Capture referer HOST only — never path or query (would leak).
+        ref_host = ""
+        ref = self.headers.get("Referer", "") or ""
+        if "://" in ref:
+            try:
+                ref_host = ref.split("://", 1)[1].split("/", 1)[0].split("?", 1)[0]
+            except (IndexError, ValueError):
+                ref_host = ""
+        analytics.record(event, page, self._client_key(), ref_host)
+        _json_response(self, 200, {"ok": True})
+
+    def _handle_waitlist(self) -> None:
+        # Same per-IP rate limit as the auth endpoint to prevent spam.
+        allowed, retry = _anchor_limiter.check(f"waitlist:{self._client_key()}")
+        if not allowed:
+            _json_response(self, 429, {"error": "too many requests", "retry_after_seconds": int(retry) + 1})
+            return
+        length = _read_content_length(self)
+        if length <= 0 or length > MAX_BODY_BYTES:
+            _json_response(self, 400, {"error": "invalid body size"})
+            return
+        try:
+            payload = json.loads(self.rfile.read(length).decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            _json_response(self, 400, {"error": "body must be JSON"})
+            return
+        email = payload.get("email", "")
+        interest = payload.get("interest", "personal")
+        if not isinstance(email, str) or not EMAIL_RE.match(email.strip()):
+            # Don't leak whether the address was valid.
+            _json_response(self, 200, {"ok": True})
+            return
+        waitlist.add(email.strip(), interest if isinstance(interest, str) else "personal")
+        _json_response(self, 200, {"ok": True, "message": "On the list."})
+
+    def _handle_btc_claim(self) -> None:
+        """Buyer self-reports a Bitcoin payment. Stored for manual fulfillment."""
+        allowed, retry = _anchor_limiter.check(f"btc_claim:{self._client_key()}")
+        if not allowed:
+            _json_response(self, 429, {"error": "too many requests", "retry_after_seconds": int(retry) + 1})
+            return
+        length = _read_content_length(self)
+        if length <= 0 or length > MAX_BODY_BYTES:
+            _json_response(self, 400, {"error": "invalid body size"})
+            return
+        try:
+            payload = json.loads(self.rfile.read(length).decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            _json_response(self, 400, {"error": "body must be JSON"})
+            return
+        ok, result = btc_claims.submit(
+            email      = payload.get("email", ""),
+            txid       = payload.get("txid", ""),
+            pack_size  = payload.get("pack_size", 0) if isinstance(payload.get("pack_size"), int) else 0,
+            usd        = payload.get("usd"),
+            btc_amount = payload.get("btc_amount"),
+            btc_address= payload.get("btc_address", "") if isinstance(payload.get("btc_address"), str) else "",
+            note       = payload.get("note", "") if isinstance(payload.get("note"), str) else "",
+            source_ip  = _truncate_ip(self._client_ip()),
+        )
+        if not ok:
+            _json_response(self, 400, {"error": result})
+            return
+        _json_response(self, 200, {"ok": True, "claim_id": result,
+                                   "message": "Got it. We verify on-chain and email your claim code within ~1 hour."})
+
+    def _parse_unsub_email(self) -> str:
+        """Extract ?e=<email> from the request path. Returns '' if absent/invalid."""
+        from urllib.parse import urlparse, parse_qs
+        qs = parse_qs(urlparse(self.path).query)
+        e = (qs.get("e") or [""])[0].strip()
+        if not e or not EMAIL_RE.match(e):
+            return ""
+        return e
+
+    def _handle_unsubscribe_get(self) -> None:
+        """Confirmation page for marketing-email unsubscribe.
+
+        CAN-SPAM, GDPR Art. 21, CASL, LGPD all accept a single-click flow.
+        We process the unsubscribe on GET too (idempotent) so users who
+        merely click the link from their inbox don't need a second action.
+        """
+        email = self._parse_unsub_email()
+        if not email:
+            self.send_error(400, "invalid email")
+            return
+        added = unsubscribe.add(email, source="link_get")
+        body = (
+            "<!doctype html><meta charset=utf-8>"
+            "<title>Unsubscribed — Orphograph</title>"
+            "<style>"
+            "body{font:14px/1.6 system-ui;background:#fdfaf3;color:#1f1d1a;"
+            "max-width:520px;margin:80px auto;padding:0 20px;}"
+            "h1{color:#4a9a73;font-weight:500;}"
+            ".muted{color:#837e75;}"
+            "a{color:#4a9a73;}"
+            "</style>"
+            "<h1>Done — you're unsubscribed.</h1>"
+            f"<p>We've removed <strong>{email}</strong> from all marketing "
+            "email. You will still receive <em>transactional</em> mail "
+            "tied to actions you take on the site (receipts, sign-in "
+            "links, pack codes) — those are required by the service "
+            "itself, not promotional.</p>"
+            "<p class=muted>If this was a mistake, just sign in again "
+            "or buy a pack and you'll be re-enrolled per your action.</p>"
+            f"<p>{'Confirmed.' if added else 'Already on the suppression list — no action needed.'}</p>"
+            "<p><a href='/'>Back to Orphograph</a></p>"
+        ).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        _security_headers(self)
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _handle_payout_status(self) -> None:
+        """JSON endpoint — founder-only view of hot BTC balance + sweep status.
+
+        Gated by ORPHO_FOUNDER_TOKEN via header `X-Orpho-Founder`. Customers
+        have no need to see this; exposing it publicly would leak the
+        founder's revenue cadence to anyone who polls. If the token is unset,
+        endpoint returns 404 (looks like the endpoint doesn't exist).
+        """
+        if payout_monitor is None:
+            self.send_error(404, "not found")
+            return
+        token = os.environ.get("ORPHO_FOUNDER_TOKEN", "").strip()
+        if not token:
+            self.send_error(404, "not found")
+            return
+        supplied = self.headers.get("X-Orpho-Founder", "").strip()
+        # Constant-time compare to avoid timing-side-channel leaks of the token.
+        import hmac as _hmac
+        if not _hmac.compare_digest(supplied, token):
+            self.send_error(404, "not found")  # Lie about endpoint existence.
+            return
+        _json_response(self, 200, payout_monitor.payout_status())
+
+    def _handle_founder_metrics(self) -> None:
+        """JSON endpoint — founder-only revenue metrics (MRR, ARR, churn, LTV).
+
+        Gated by ORPHO_FOUNDER_TOKEN via header `X-Orpho-Founder`. Returns:
+        {
+          "timestamp": "2026-05-14T...",
+          "period_days": 90,
+          "mrr": 1234.56,
+          "arr": 14814.72,
+          "churn_rate": 0.05,
+          "customers": { "active": 12, "churned_this_month": 2, "total": 14 },
+          "ltv": 15000.00
+        }
+        """
+        token = os.environ.get("ORPHO_FOUNDER_TOKEN", "").strip()
+        if not token:
+            self.send_error(404, "not found")
+            return
+        supplied = self.headers.get("X-Orpho-Founder", "").strip()
+        import hmac as _hmac
+        if not _hmac.compare_digest(supplied, token):
+            self.send_error(404, "not found")
+            return
+        # Import here to avoid circular dependency
+        import analytics
+        metrics = analytics.metrics(days_back=90)
+        _json_response(self, 200, metrics)
+
+    def _handle_founder_customer_lookup(self) -> None:
+        """JSON endpoint — founder-only customer lookup by email.
+
+        Query params: ?email=buyer@example.com
+        Returns customer profile: anchors, purchases, subscription, total spent.
+        """
+        token = os.environ.get("ORPHO_FOUNDER_TOKEN", "").strip()
+        if not token:
+            self.send_error(404, "not found")
+            return
+        supplied = self.headers.get("X-Orpho-Founder", "").strip()
+        import hmac as _hmac
+        if not _hmac.compare_digest(supplied, token):
+            self.send_error(404, "not found")
+            return
+
+        # Parse email from query string
+        from urllib.parse import urlparse, parse_qs
+        parsed = urlparse(self.path)
+        params = parse_qs(parsed.query)
+        email = (params.get("email") or [""])[0].strip()
+
+        if not email:
+            _json_response(self, 400, {"error": "email param required"})
+            return
+
+        # Import here to avoid circular dependency
+        import support_tools
+        customer = support_tools.lookup_customer(email)
+        if not customer:
+            _json_response(self, 404, {"error": "customer not found"})
+            return
+        _json_response(self, 200, customer)
+
+    def _handle_team_create(self) -> None:
+        email = self._session_email()
+        if not email:
+            _json_response(self, 401, {"error": "not authenticated"})
+            return
+        if not subscriptions.is_active(email):
+            _json_response(self, 402, {"error": "creating a team requires an active subscription"})
+            return
+        length = _read_content_length(self)
+        if length <= 0 or length > MAX_BODY_BYTES:
+            _json_response(self, 400, {"error": "invalid body size"})
+            return
+        try:
+            payload = json.loads(self.rfile.read(length).decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            _json_response(self, 400, {"error": "body must be JSON"})
+            return
+        name = (payload.get("team_name") or "").strip()[:80]
+        try:
+            team_id = teams.create_team(email, name or "My Team")
+        except ValueError as e:
+            _json_response(self, 400, {"error": str(e)})
+            return
+        _json_response(self, 200, {"ok": True, "team_id": team_id})
+
+    def _handle_team_invite(self) -> None:
+        email = self._session_email()
+        if not email:
+            _json_response(self, 401, {"error": "not authenticated"})
+            return
+        t = teams.team_for_member(email)
+        if not t or t.get("owner") != email:
+            _json_response(self, 403, {"error": "only the team owner can issue invites"})
+            return
+        if not subscriptions.is_active(email):
+            _json_response(self, 402, {"error": "active subscription required to issue invites"})
+            return
+        code = teams.issue_invite_code(t["team_id"], email)
+        if not code:
+            _json_response(self, 500, {"error": "could not issue invite"})
+            return
+        # Body may be empty; we don't need anything from it.
+        length = _read_content_length(self)
+        if 0 < length <= MAX_BODY_BYTES:
+            try:
+                self.rfile.read(length)
+            except OSError:
+                pass
+        site = os.environ.get("SITE_URL", "").rstrip("/")
+        share_url = f"{site}/team/join?code={code}" if site else f"/team/join?code={code}"
+        _json_response(self, 200, {
+            "ok": True,
+            "invite_code": code,
+            "share_url": share_url,
+            "expires_at": None,
+            "note": "Single-use. Share with the person you want to add.",
+        })
+
+    def _handle_team_redeem(self) -> None:
+        email = self._session_email()
+        if not email:
+            _json_response(self, 401, {"error": "not authenticated"})
+            return
+        length = _read_content_length(self)
+        if length <= 0 or length > MAX_BODY_BYTES:
+            _json_response(self, 400, {"error": "invalid body size"})
+            return
+        try:
+            payload = json.loads(self.rfile.read(length).decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            _json_response(self, 400, {"error": "body must be JSON"})
+            return
+        code = (payload.get("invite_code") or "").strip()
+        result = teams.redeem_invite_code(code, email)
+        status = 200 if result.get("ok") else 400
+        _json_response(self, status, result)
+
+    def _handle_team_remove(self) -> None:
+        email = self._session_email()
+        if not email:
+            _json_response(self, 401, {"error": "not authenticated"})
+            return
+        t = teams.team_for_member(email)
+        if not t or t.get("owner") != email:
+            _json_response(self, 403, {"error": "only the team owner can remove members"})
+            return
+        length = _read_content_length(self)
+        if length <= 0 or length > MAX_BODY_BYTES:
+            _json_response(self, 400, {"error": "invalid body size"})
+            return
+        try:
+            payload = json.loads(self.rfile.read(length).decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            _json_response(self, 400, {"error": "body must be JSON"})
+            return
+        member_email = (payload.get("member_email") or "").strip().lower()
+        if not member_email:
+            _json_response(self, 400, {"error": "member_email required"})
+            return
+        ok = teams.remove_member(t["team_id"], email, member_email)
+        _json_response(self, 200, {"ok": ok})
+
+    def _handle_team_leave(self) -> None:
+        email = self._session_email()
+        if not email:
+            _json_response(self, 401, {"error": "not authenticated"})
+            return
+        # Drain body (may be empty)
+        length = _read_content_length(self)
+        if 0 < length <= MAX_BODY_BYTES:
+            try:
+                self.rfile.read(length)
+            except OSError:
+                pass
+        ok = teams.leave_team(email)
+        _json_response(self, 200, {"ok": ok})
+
+    def _handle_toggle_receipt_privacy(self) -> None:
+        """POST /api/me/receipt/<id>/privacy — toggle private flag.
+
+        Owner-only: requires session cookie matching the receipt owner_id.
+        Body: { "private": true | false }
+        """
+        email = self._session_email()
+        if not email:
+            _json_response(self, 401, {"error": "not authenticated"})
+            return
+        if not subscriptions.is_active(email):
+            _json_response(self, 402, {"error": "private receipts require an active subscription"})
+            return
+        # Extract receipt id from path /api/me/receipt/<id>/privacy
+        prefix = "/api/me/receipt/"
+        suffix = "/privacy"
+        if not (self.path.startswith(prefix) and self.path.endswith(suffix)):
+            self.send_error(404)
+            return
+        rid = self.path[len(prefix):-len(suffix)]
+        if not RECEIPT_ID_RE.match(rid):
+            _json_response(self, 400, {"error": "invalid receipt id"})
+            return
+        length = _read_content_length(self)
+        if length <= 0 or length > MAX_BODY_BYTES:
+            _json_response(self, 400, {"error": "invalid body size"})
+            return
+        try:
+            payload = json.loads(self.rfile.read(length).decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            _json_response(self, 400, {"error": "body must be JSON"})
+            return
+        want_private = bool(payload.get("private", False))
+        # Load receipt + verify ownership
+        rfile = engine.RECEIPTS_DIR / rid / "receipt.json"
+        if not rfile.exists():
+            _json_response(self, 404, {"error": "receipt not found"})
+            return
+        try:
+            rec = json.loads(rfile.read_text())
+        except (OSError, json.JSONDecodeError):
+            _json_response(self, 500, {"error": "could not read receipt"})
+            return
+        viewer_id = auth.email_id(email)
+        expected_source = "sub:" + viewer_id
+        if rec.get("source") != expected_source:
+            # Don't reveal whether receipt exists for another owner
+            _json_response(self, 404, {"error": "receipt not found"})
+            return
+        rec["private"] = want_private
+        rec["owner_id"] = viewer_id if want_private else None
+        # Atomic write: a crash mid-write_text would leave a truncated
+        # receipt.json and permanently corrupt the user's verifiable proof.
+        # Write to a sibling tmp file, then os.replace (POSIX-atomic rename).
+        tmp = rfile.with_suffix(rfile.suffix + ".tmp")
+        try:
+            tmp.write_text(json.dumps(rec, indent=2))
+            os.replace(tmp, rfile)
+        except OSError as e:
+            sys.stderr.write(f"[privacy-toggle] atomic write failed for {rfile}: {e}\n")
+            try:
+                tmp.unlink(missing_ok=True)
+            except OSError:
+                pass
+            _json_response(self, 500, {"error": "could not update receipt"})
+            return
+        _json_response(self, 200, {
+            "ok": True,
+            "receipt_id": rid,
+            "private": want_private,
+        })
+
+    def _handle_founder_admin_toggles(self) -> None:
+        """JSON endpoint — view/manage operational admin toggles.
+
+        GET: returns current toggle state (founder-only, token-gated)
+        Response: {
+          "maintenance_mode": bool,
+          "checkout_disabled": bool,
+          "anchoring_disabled": bool,
+          "timestamp": "2026-05-15T..."
+        }
+        """
+        token = os.environ.get("ORPHO_FOUNDER_TOKEN", "").strip()
+        if not token:
+            self.send_error(404, "not found")
+            return
+        supplied = self.headers.get("X-Orpho-Founder", "").strip()
+        import hmac as _hmac
+        if not _hmac.compare_digest(supplied, token):
+            self.send_error(404, "not found")
+            return
+
+        _json_response(self, 200, {
+            "maintenance_mode": ORPHO_MAINTENANCE_MODE,
+            "checkout_disabled": ORPHO_DISABLE_CHECKOUT,
+            "anchoring_disabled": ORPHO_DISABLE_ANCHORING,
+            "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
+            "notice": "Toggles are controlled by environment variables. SSH into the server to change them: fly ssh console, then 'fly secrets set ORPHO_MAINTENANCE_MODE=1'",
+        })
+
+    def _handle_unsubscribe_post(self) -> None:
+        """RFC 8058 one-click POST endpoint.
+
+        Gmail / Yahoo / Microsoft bulk-sender programs require this exact
+        path: POST with List-Unsubscribe-Post: List-Unsubscribe=One-Click.
+        Body may be form-encoded or empty.
+        """
+        email = self._parse_unsub_email()
+        if not email:
+            _json_response(self, 400, {"error": "invalid email"})
+            return
+        # Drain body without reading large payloads.
+        length = _read_content_length(self)
+        if 0 < length <= 4096:
+            try:
+                self.rfile.read(length)
+            except OSError:
+                pass
+        unsubscribe.add(email, source="link_post")
+        _json_response(self, 200, {"ok": True})
+
+    def _handle_issue_api_key(self) -> None:
+        email = self._session_email()
+        if not email:
+            _json_response(self, 401, {"error": "not authenticated"})
+            return
+        if not subscriptions.is_active(email):
+            _json_response(self, 402, {"error": "API access requires an active subscription"})
+            return
+        key = api_keys.issue(email)
+        _json_response(self, 200, {
+            "ok": True,
+            "api_key": key,
+            "message": "Save this key now — we cannot show it again. Any previous key has been revoked.",
+        })
+
+    def _handle_revoke_api_key(self) -> None:
+        email = self._session_email()
+        if not email:
+            _json_response(self, 401, {"error": "not authenticated"})
+            return
+        revoked = api_keys.revoke(email)
+        _json_response(self, 200, {"ok": True, "revoked": revoked})
+
+    def _handle_cancel_subscription(self) -> None:
+        email = self._session_email()
+        if not email:
+            _json_response(self, 401, {"error": "not authenticated"})
+            return
+        sub_id = subscriptions.stripe_subscription_id_for(email)
+        if not sub_id:
+            _json_response(self, 404, {"error": "no active subscription found"})
+            return
+        result = stripe_api.cancel_at_period_end(sub_id)
+        if not result.get("ok"):
+            _json_response(self, 502, {"error": "stripe error", "detail": result.get("error")})
+            return
+        _json_response(self, 200, {
+            "ok": True,
+            "message": "Subscription will end at the period boundary; you keep access until then.",
+        })
+
+    def _handle_reactivate_subscription(self) -> None:
+        email = self._session_email()
+        if not email:
+            _json_response(self, 401, {"error": "not authenticated"})
+            return
+        sub_id = subscriptions.stripe_subscription_id_for(email)
+        if not sub_id:
+            _json_response(self, 404, {"error": "no subscription found"})
+            return
+        result = stripe_api.reactivate(sub_id)
+        if not result.get("ok"):
+            _json_response(self, 502, {"error": "stripe error", "detail": result.get("error")})
+            return
+        _json_response(self, 200, {"ok": True, "message": "Subscription reactivated."})
+
+    def _handle_account_delete(self) -> None:
+        email = self._session_email()
+        if not email:
+            _json_response(self, 401, {"error": "not authenticated"})
+            return
+        result = gdpr.delete_for_email(email)
+        # Tear down the active session too.
+        cookies = SimpleCookie()
+        cookies.load(self.headers.get("Cookie", "") or "")
+        sid = cookies.get(auth.cookie_name(COOKIE_SECURE)) or cookies.get("orpho_sid") or cookies.get("__Host-orpho_sid")
+        if sid:
+            auth.revoke_session(sid.value)
+        body = json.dumps({
+            "ok": True,
+            "email": email,
+            "events_appended": result["events_appended"],
+            "message": (
+                "Your data has been marked for deletion. Append-only ledgers retain "
+                "the deletion event for audit purposes; the email no longer resolves "
+                "to any active state."
+            ),
+        }, indent=2).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Set-Cookie", auth.clear_session_cookie(secure=COOKIE_SECURE))
+        _security_headers(self)
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _handle_signout(self) -> None:
+        cookies = SimpleCookie()
+        cookies.load(self.headers.get("Cookie", "") or "")
+        sid = cookies.get(auth.cookie_name(COOKIE_SECURE)) or cookies.get("orpho_sid") or cookies.get("__Host-orpho_sid")
+        if sid:
+            auth.revoke_session(sid.value)
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Set-Cookie", auth.clear_session_cookie(secure=COOKIE_SECURE))
+        body = json.dumps({"ok": True}).encode("utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        _security_headers(self)
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _handle_stripe_webhook(self) -> None:
+        length = _read_content_length(self)
+        if length < 0 or length > MAX_WEBHOOK_BODY_BYTES:
+            _json_response(self, 400, {"error": "invalid body size"})
+            return
+        payload = self.rfile.read(length) if length > 0 else b""
+        sig_header = self.headers.get("Stripe-Signature", "")
+        if not STRIPE_WEBHOOK_SECRET:
+            if not ALLOW_UNSIGNED_WEBHOOK_PROBE:
+                sys.stderr.write("[webhook] STRIPE_WEBHOOK_SECRET not set; rejecting unsigned webhook\n")
+                _json_response(self, 503, {"error": "webhook not configured"})
+                return
+            # Stripe's webhook URL validation POSTs a probe before registration.
+            # Returning 503 fails their reachability check ("URL couldn't be
+            # reached / not active"). 200 with a clear log line keeps the URL
+            # "alive" enough for Stripe to accept it, while signed real events
+            # would still be rejected as soon as the secret is configured.
+            sys.stderr.write("[webhook] STRIPE_WEBHOOK_SECRET not set; accepting probe but discarding event\n")
+            _json_response(self, 200, {"ok": False, "reason": "webhook not configured yet — probe accepted"})
+            return
+        if not stripe_webhook.verify_signature(payload, sig_header, STRIPE_WEBHOOK_SECRET):
+            _json_response(self, 400, {"error": "invalid signature"})
+            return
+        result = stripe_webhook.handle_event(payload)
+        _json_response(self, 200, result)
+
+
+def _list_anchors_for_email(
+    email: str,
+    limit: int = 50,
+    before: str | None = None,
+    with_more_flag: bool = False,
+    hash_prefix: str | None = None,
+    label_substr: str | None = None,
+    private_only: bool | None = None,
+):
+    """Return the most recent anchors anchored under this email's subscription.
+
+    Pack purchases are not joined here — Pack receipts go via email at anchor
+    time, so the dashboard scope is subscriber-only.
+
+    Cursor pagination: pass `before=<created_at>` to fetch the page strictly
+    older than that timestamp. When `with_more_flag=True`, returns
+    (rows, has_more) instead of just rows.
+
+    Vault filters (receipt vault feature):
+      - hash_prefix: case-insensitive hex prefix match on hash_hex
+      - label_substr: case-insensitive substring match on client_label
+      - private_only: if True, only private receipts; if False, only public;
+                      if None, both.
+    """
+    if not email:
+        return ([], False) if with_more_flag else []
+    expected_source = "sub:" + auth.email_id(email)
+    receipts_dir = engine.RECEIPTS_DIR
+    if not receipts_dir.exists():
+        return ([], False) if with_more_flag else []
+    rows: list[dict] = []
+    # Normalize filters once
+    norm_prefix = (hash_prefix or "").strip().lower()
+    norm_label = (label_substr or "").strip().lower()
+    for child in receipts_dir.iterdir():
+        if not child.is_dir():
+            continue
+        rfile = child / "receipt.json"
+        if not rfile.exists():
+            continue
+        try:
+            rec = json.loads(rfile.read_text())
+        except (OSError, json.JSONDecodeError):
+            continue
+        if rec.get("source") != expected_source:
+            continue
+        created = rec.get("created_at", "")
+        if before is not None and created >= before:
+            continue
+        # Vault filters
+        if norm_prefix and not (rec.get("hash_hex", "") or "").startswith(norm_prefix):
+            continue
+        if norm_label:
+            lbl = (rec.get("client_label") or "").lower()
+            if norm_label not in lbl:
+                continue
+        if private_only is True and not rec.get("private"):
+            continue
+        if private_only is False and rec.get("private"):
+            continue
+        rows.append({
+            "receipt_id": rec.get("receipt_id"),
+            "created_at": created,
+            "client_label": rec.get("client_label"),
+            "hash_hex": rec.get("hash_hex"),
+            "sha512_hex": rec.get("sha512_hex"),
+            "private": bool(rec.get("private", False)),
+            "calendars_ok": rec.get("calendars_ok"),
+            "calendars_total": rec.get("calendars_total"),
+            "status": rec.get("status", "pending"),
+            "btc_pinned_at": rec.get("btc_pinned_at"),
+        })
+    rows.sort(key=lambda r: r.get("created_at", ""), reverse=True)
+    page = rows[:limit]
+    if with_more_flag:
+        return page, len(rows) > limit
+    return page
+
+
+def _anchors_to_csv(anchors: list[dict]) -> str:
+    """RFC 4180 CSV of anchor records. Header row included.
+
+    Columns are the ones every B2B procurement workflow asks for:
+    when, what (label + hash), where on the chain (status + pinned),
+    redundancy (calendars).
+    """
+    buf = io.StringIO()
+    fields = [
+        "created_at_utc",
+        "receipt_id",
+        "client_label",
+        "sha256",
+        "sha512",
+        "calendars_ok",
+        "calendars_total",
+        "status",
+        "btc_pinned_at",
+    ]
+    writer = csv.writer(buf, lineterminator="\r\n")
+    writer.writerow(fields)
+    for a in anchors:
+        writer.writerow([
+            a.get("created_at", ""),
+            a.get("receipt_id", ""),
+            a.get("client_label") or "",
+            a.get("hash_hex", ""),
+            a.get("sha512_hex") or "",
+            a.get("calendars_ok", ""),
+            a.get("calendars_total", ""),
+            a.get("status", ""),
+            a.get("btc_pinned_at") or "",
+        ])
+    return buf.getvalue()
+
+
+def _seed_sample_receipt() -> None:
+    """Copy web/sample/ → <RECEIPTS_DIR>/<sample_id>/ on first boot if missing.
+
+    Keeps the canonical sample in one place (web/sample/, in git) while
+    making /api/verify/<sample_id> work in prod without git-tracking
+    the receipts/ dir. Targets engine.RECEIPTS_DIR which is env-configurable
+    so prod points at the mounted volume.
+    """
+    sample_meta = WEB_DIR / "sample" / "index.json"
+    if not sample_meta.exists():
+        return
+    import shutil
+    try:
+        meta = json.loads(sample_meta.read_text())
+    except (OSError, json.JSONDecodeError):
+        return
+    rid = meta.get("receipt_id")
+    if not rid:
+        return
+    target = engine.RECEIPTS_DIR / rid
+    if target.exists():
+        return
+    target.parent.mkdir(parents=True, exist_ok=True)
+    sample_dir = WEB_DIR / "sample"
+    target.mkdir()
+    for item in sample_dir.iterdir():
+        if item.name in ("index.json",):
+            continue
+        shutil.copy2(item, target / item.name, follow_symlinks=False)
+    sys.stderr.write(f"seeded sample receipt {rid} from {sample_dir} → {target}\n")
+
+
+def main() -> int:
+    WEB_DIR.mkdir(parents=True, exist_ok=True)
+    _seed_sample_receipt()
+    server = ThreadingHTTPServer((HOST, PORT), Handler)
+    sys.stderr.write(f"orphograph listening on http://{HOST}:{PORT}\n")
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        sys.stderr.write("\nshutting down\n")
+    finally:
+        server.server_close()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Orphograph — Privacy Policy</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<header>
+  <div class="brand"><a href="/">orphograph</a></div>
+  <nav><a href="/#pricing">pricing</a> <a href="/#faq">faq</a></nav>
+</header>
+
+<main>
+
+<section>
+  <h1>Privacy Policy</h1>
+  <p class="muted">Last updated: 2026-05-12.</p>
+
+  <h2>What we never see</h2>
+  <p>
+    <strong>Your files do not reach our server.</strong> Hashing happens in your
+    browser via <code>crypto.subtle</code>. Only the 32-byte SHA-256 digest is
+    sent to us. We cannot recover your file from the digest; nobody can. The
+    privacy claim is enforced by the structure of the protocol, not by our
+    promise to behave.
+  </p>
+
+  <h2>What we collect</h2>
+  <ul>
+    <li>
+      <strong>SHA-256 hashes you submit</strong>, plus the optional client label
+      (filename, max 200 chars) you choose to attach.
+    </li>
+    <li>
+      <strong>Truncated IP prefixes</strong> for rate limiting (we keep the
+      first three octets of IPv4 / 48 bits of IPv6 — enough to spot abuse,
+      not enough to identify individuals). Full IPs are not retained.
+    </li>
+    <li>
+      <strong>Email addresses for Pack purchases</strong>, supplied through
+      Stripe Checkout. We use these only to deliver the claim code and the
+      receipt, and to honor refund requests.
+    </li>
+    <li>
+      <strong>The anchored receipt itself</strong> — receipt ID, hash, timestamp,
+      OTS proof files. These are public-by-design: anyone with the receipt ID
+      can read them via <code>/api/receipt/&lt;id&gt;</code>. Don't anchor secrets
+      you wouldn't want a peer to verify.
+    </li>
+  </ul>
+
+  <h2>What we don't collect</h2>
+  <ul>
+    <li>No analytics scripts, no third-party trackers, no cookies for tracking.</li>
+    <li>No advertising IDs or fingerprinting.</li>
+    <li>No file contents.</li>
+    <li>No full IP addresses in logs or analytics.</li>
+  </ul>
+
+  <h2>Cookies and local storage</h2>
+  <p>
+    We use one <code>localStorage</code> entry, <code>orpho_pack_token</code>,
+    to remember your active Pack claim code across page loads. It's local to
+    your browser; we never read it from the server. Clear it any time via the
+    "remove" button on the Pack banner or your browser's site-data controls.
+  </p>
+
+  <h2>Third parties</h2>
+  <p>
+    <strong>Stripe</strong> processes Pack payments. They see your card details
+    and your email; we never do. See
+    <a href="https://stripe.com/privacy">stripe.com/privacy</a>.
+  </p>
+  <p>
+    <strong>Resend</strong> delivers transactional emails (Pack claim codes,
+    receipt copies). They see your email and the message contents. See
+    <a href="https://resend.com/legal/privacy-policy">resend.com/legal/privacy-policy</a>.
+  </p>
+  <p>
+    <strong>OpenTimestamps calendar servers</strong> receive your 32-byte hash
+    when we submit it. They batch many users' hashes into a single Bitcoin
+    transaction; they do not receive your IP (we proxy the submission).
+  </p>
+  <p>
+    <strong>Fly.io</strong> hosts our server. Their infrastructure logs may
+    capture connection metadata; we configure our application not to retain
+    full IPs.
+  </p>
+
+  <h2>Retention</h2>
+  <ul>
+    <li><strong>Anchor records</strong> (hashes, timestamps, OTS proofs): retained indefinitely. They are the product.</li>
+    <li><strong>Free-tier receipts</strong>: may be pruned from our servers 30 days after creation. Your local copy of the receipt JSON + .ots files remains independently verifiable forever.</li>
+    <li><strong>Email addresses</strong>: retained for the life of the associated Pack credit balance, plus 7 years for tax/refund records.</li>
+    <li><strong>Truncated IP prefixes in logs</strong>: 24 hours, then rotated.</li>
+  </ul>
+
+  <h2>Your rights</h2>
+  <p>
+    Email <a href="mailto:privacy@orphograph.com">privacy@orphograph.com</a> to
+    request a copy of the data associated with your email address, or to
+    request deletion. We respond within 30 days. EU/UK/California residents:
+    you have the rights granted by GDPR / UK-GDPR / CCPA respectively, and
+    we will honor them.
+  </p>
+
+  <h2>Children</h2>
+  <p>
+    Orphograph is not directed at children under 13. We do not knowingly
+    collect data from children under 13. If you believe we have, email
+    <a href="mailto:privacy@orphograph.com">privacy@orphograph.com</a> and
+    we will delete it.
+  </p>
+
+  <h2>Changes</h2>
+  <p>
+    We may update this policy; the "Last updated" date will change. Material
+    changes will be emailed to Pack purchasers when feasible.
+  </p>
+
+  <h2>Contact</h2>
+  <p>
+    Anonymous solo founder. Reach the privacy queue at
+    <a href="mailto:privacy@orphograph.com">privacy@orphograph.com</a>.
+  </p>
+</section>
+
+</main>
+
+<footer>
+  <small>
+    <a href="/">home</a> ·
+    <a href="/terms.html">Terms</a> ·
+    Powered by OpenTimestamps
+  </small>
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>How Orphograph compares — OpenTimestamps, OriginStamp, WordProof</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Honest side-by-side: Orphograph vs OpenTimestamps CLI vs OriginStamp vs WordProof vs Truepic. Same protocol, different wrappers. Pick what fits.">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<meta property="og:title" content="How Orphograph compares — file timestamping options">
+<meta property="og:description" content="Same OpenTimestamps protocol, different wrappers. Honest comparison.">
+<meta property="og:url" content="https://orphograph.com/compare.html">
+<meta property="og:type" content="article">
+<meta property="og:image" content="/og.svg">
+<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/compare.css">
+</head>
+<body>
+
+<header>
+  <div class="brand"><a href="/">orphograph</a></div>
+  <nav>
+    <a href="/">home</a>
+    <a href="/blog/">blog</a>
+    <a href="/verify/">verifier</a>
+    <a href="/compare.html">compare</a>
+  </nav>
+</header>
+
+<main>
+<section>
+  <h1>How Orphograph compares</h1>
+  <p class="lede">
+    Bitcoin-anchored file timestamping is a small market with a few
+    distinct shapes. Here's an honest read on who built what, for
+    whom, at what price. We use OpenTimestamps under the hood, same as
+    most of these — the differences are UX, target buyer, and trust
+    posture.
+  </p>
+
+  <h2>At a glance</h2>
+  <div class="compare-wrap">
+  <table class="compare-table">
+    <thead>
+      <tr>
+        <th>Feature</th>
+        <th class="us">Orphograph</th>
+        <th>OpenTimestamps (raw)</th>
+        <th>OriginStamp</th>
+        <th>WordProof</th>
+        <th>Truepic</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Free tier</td>
+        <td class="us">✓ 1 anchor/month</td>
+        <td>✓ unlimited (CLI)</td>
+        <td>✗</td>
+        <td>✗</td>
+        <td>✗</td>
+      </tr>
+      <tr>
+        <td>Browser UI (no CLI required)</td>
+        <td class="us">✓</td>
+        <td>✗ Python CLI only</td>
+        <td>✓</td>
+        <td>WordPress plugin</td>
+        <td>✓ camera attestation</td>
+      </tr>
+      <tr>
+        <td>Files never reach the server</td>
+        <td class="us">✓ WebCrypto hash client-side</td>
+        <td>✓ hash client-side</td>
+        <td>✓</td>
+        <td>✓</td>
+        <td>requires upload for camera attestation</td>
+      </tr>
+      <tr>
+        <td>Anchored to Bitcoin</td>
+        <td class="us">✓ via OpenTimestamps</td>
+        <td>✓ direct</td>
+        <td>✓ multi-chain</td>
+        <td>multi-chain</td>
+        <td>multi-chain</td>
+      </tr>
+      <tr>
+        <td>Open-source verifier</td>
+        <td class="us">✓ MIT, self-hosted at <a href="/verify/">/verify/</a></td>
+        <td>✓ MIT</td>
+        <td>✗</td>
+        <td>partial</td>
+        <td>✗</td>
+      </tr>
+      <tr>
+        <td>SHA-512 quantum-hedge sibling witness</td>
+        <td class="us">✓ in every receipt</td>
+        <td>✗</td>
+        <td>✗</td>
+        <td>✗</td>
+        <td>✗</td>
+      </tr>
+      <tr>
+        <td>Receipt verifies without the company</td>
+        <td class="us">✓ by design</td>
+        <td>✓ trivially</td>
+        <td>partial</td>
+        <td>partial</td>
+        <td>requires Truepic infrastructure</td>
+      </tr>
+      <tr>
+        <td>Bitcoin payment</td>
+        <td class="us">✓ direct, hardware-wallet pattern</td>
+        <td>n/a (free)</td>
+        <td>✗ (Stripe)</td>
+        <td>WordPress tokens</td>
+        <td>✗ enterprise contracts</td>
+      </tr>
+      <tr>
+        <td>Stripe / card payment</td>
+        <td class="us">✓ planned (activating)</td>
+        <td>n/a</td>
+        <td>✓ EUR/USD</td>
+        <td>✓</td>
+        <td>✓ enterprise</td>
+      </tr>
+      <tr>
+        <td>Court-admissible / eIDAS qualified</td>
+        <td class="us">✗ explicitly disclaimed</td>
+        <td>✗</td>
+        <td>✓ EU + CH</td>
+        <td>✗</td>
+        <td>✓ enterprise tier</td>
+      </tr>
+      <tr>
+        <td>Target buyer</td>
+        <td class="us">solo photographers + indie creators</td>
+        <td>developers</td>
+        <td>EU/CH enterprise (B2B-only since 2025 pivot)</td>
+        <td>WordPress publishers</td>
+        <td>enterprise + photojournalism</td>
+      </tr>
+      <tr>
+        <td>Entry price</td>
+        <td class="us">$0 / $7 pack / $5 mo</td>
+        <td>$0</td>
+        <td>CHF 25k setup + 120k/yr (enterprise)</td>
+        <td>€10/mo</td>
+        <td>enterprise contract ($$$)</td>
+      </tr>
+      <tr>
+        <td>Codebase size</td>
+        <td class="us">~6.8k LOC stdlib-only, auditable in an afternoon</td>
+        <td>~3k LOC across multiple repos</td>
+        <td>proprietary</td>
+        <td>proprietary</td>
+        <td>proprietary</td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h2>Picking the right one for you</h2>
+
+  <h3>If you're comfortable in a terminal</h3>
+  <p>
+    Use <a href="https://opentimestamps.org/">OpenTimestamps</a>
+    directly. It's free, open, and Bitcoin-anchored — same protocol
+    that powers Orphograph. <code>pip install opentimestamps-client &amp;&amp;
+    ots stamp file.jpg</code> is your full workflow. We exist to wrap
+    this for people who don't live in pip-install land.
+  </p>
+
+  <h3>If you publish on WordPress</h3>
+  <p>
+    <a href="https://wordproof.com/">WordProof</a>'s WordPress plugin
+    is built for you. €10/mo, integrates into your CMS. Different
+    blockchain (theirs, not Bitcoin) but the same core idea.
+  </p>
+
+  <h3>If you're an EU enterprise with legal-evidence needs</h3>
+  <p>
+    <a href="https://originstamp.com/">OriginStamp</a> pivoted B2B in
+    May 2025 and now offers qualified eIDAS timestamps with full
+    EU regulatory backing. CHF 25k setup is steep but if your
+    use case is litigation, it's the only option in this lineup that
+    legally clears that bar.
+  </p>
+
+  <h3>If you need camera-attestation provenance at the moment of
+    capture</h3>
+  <p>
+    <a href="https://truepic.com/">Truepic</a> partners with camera
+    OEMs (Sony, Leica, Nikon) for C2PA-conformant signed manifests
+    embedded into the image at capture time. Enterprise contracts.
+    Different shape from us — they prove WHO took the photo at
+    capture; we prove WHEN the file existed.
+  </p>
+
+  <h3>If you're a working photographer who wants the date locked to
+    Bitcoin without installing Python</h3>
+  <p>
+    <a href="/">That's us.</a> $7 for a 10-pack of anchors,
+    open-source verifier so your proofs outlive us, no upload, no
+    account required for the free tier. Built solo, audited solo,
+    written so the entire codebase fits in an afternoon read.
+  </p>
+
+  <h2>What we explicitly don't do</h2>
+  <ul>
+    <li><strong>Court admissibility.</strong> We're not an eIDAS qualified TSA. For litigation, see OriginStamp or a qualified attorney.</li>
+    <li><strong>Capture-time provenance.</strong> We anchor any file's hash; we don't sign it at the moment your camera shutter fires. (Roadmapped as "Orphograph Capture" — not yet built.)</li>
+    <li><strong>Authorship proof.</strong> Anyone with your file can anchor it. The temporal moat is "anchor before you publish."</li>
+    <li><strong>NFTs, tokens, or crypto-speculation.</strong> Bitcoin is the public ledger we anchor to; we don't mint anything, sell anything, or speculate on anything.</li>
+  </ul>
+
+  <h2>The trust thesis</h2>
+  <p>
+    Orphograph isn't the most powerful option in this list. It's the
+    smallest, most reviewable, and most explicitly bounded. Six
+    thousand lines of stdlib Python, three closed audits, open-source
+    verifier so your receipts work without us. We do one thing —
+    timestamp files cheaply — and we tell you exactly what it isn't.
+  </p>
+  <p>
+    Read <a href="/verify/verify.py">our verifier</a> (~100 lines)
+    in five minutes. If it stops being trustworthy, you stop trusting
+    us — your receipts still work.
+  </p>
+</section>
+</main>
+
+<footer>
+  <small>
+    <a href="/">home</a> ·
+    <a href="/blog/">blog</a> ·
+    <a href="/verify/">verifier</a> ·
+    <a href="/terms.html">Terms</a> ·
+    <a href="/privacy.html">Privacy</a> ·
+    <a href="/status.html">Status</a>
+  </small>
+</footer>
+
+</body>
+</html>

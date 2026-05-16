@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Learn — how Orphograph receipts work, and how to verify them yourself</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="A plain-English walkthrough of what an Orphograph receipt actually is, the three ways to verify one, and how to follow your timestamp all the way to a Bitcoin block — without trusting us.">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<meta property="og:title" content="Learn — verify your timestamp on the Bitcoin blockchain">
+<meta property="og:description" content="Three ways to verify an Orphograph receipt, from one click to fully trustless command-line verification against a Bitcoin node.">
+<meta property="og:image" content="/og.svg">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://orphograph.com/learn.html">
+<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/blog.css">
+<style>
+  .lvl-card { border:1px solid var(--panel-stroke); background:var(--panel); border-radius:14px; padding:24px; margin:18px 0; }
+  .lvl-tag  { display:inline-block; font-size:11px; letter-spacing:.08em; text-transform:uppercase; padding:4px 10px; border-radius:999px; margin-bottom:10px; }
+  .lvl-1    { background:#0b3b2a; color:#7be3b5; border:1px solid #1a5a44; }
+  .lvl-2    { background:#0b2e4a; color:#7bc4ff; border:1px solid #1a4a76; }
+  .lvl-3    { background:#3a2a0b; color:#ffcb7b; border:1px solid #6e521a; }
+  .lvl-card h3 { margin-top:6px; }
+  .step-row { display:flex; gap:14px; align-items:flex-start; margin:14px 0; }
+  .step-num { flex:0 0 32px; height:32px; border-radius:50%; background:var(--accent,#7be3b5); color:#062018; display:flex; align-items:center; justify-content:center; font-weight:600; }
+  .step-row p { margin:6px 0; }
+  pre.cmd { background:#0a0e14; border:1px solid #1a2230; border-radius:10px; padding:14px 16px; overflow-x:auto; font-size:13px; line-height:1.55; }
+  .callout { border-left:3px solid var(--accent,#7be3b5); padding:12px 16px; background:rgba(123,227,181,.04); border-radius:0 8px 8px 0; margin:18px 0; }
+  .glossary dt { font-weight:600; margin-top:14px; }
+  .glossary dd { margin:4px 0 0 0; color:var(--muted,#9aa6b2); }
+  .anchor-skip { font-size:13px; }
+  .anchor-skip a { margin-right:14px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand"><a href="/" style="color:inherit;text-decoration:none;">orphograph</a></div>
+  <nav>
+    <a href="/#how">how it works</a>
+    <a href="/#verify">verify</a>
+    <a href="/#pricing">pricing</a>
+    <a href="/learn.html" aria-current="page">learn</a>
+    <a href="/about.html">about</a>
+    <a href="/signin.html">sign in</a>
+  </nav>
+</header>
+
+<main>
+
+<article class="blog-post">
+<header class="post-header">
+<h1>How to verify an Orphograph receipt</h1>
+<p class="muted small">From "click one button" to "verify it against the Bitcoin blockchain on your own laptop, with our servers turned off." Pick the level of paranoia that fits the situation.</p>
+</header>
+
+<div class="post-body">
+
+<p class="anchor-skip">
+  Skip to:
+  <a href="#what">What you got</a>
+  <a href="#three-ways">Three ways to verify</a>
+  <a href="#chain">Follow it to the chain</a>
+  <a href="#why-trust">Why this is trustworthy</a>
+  <a href="#glossary">Glossary</a>
+  <a href="#faq">FAQ</a>
+</p>
+
+<h2 id="what">What you actually got when you anchored a file</h2>
+
+<p>
+  When you dropped a file on Orphograph, three things happened — and only one of them involved us:
+</p>
+
+<ol>
+  <li>
+    <strong>Your browser hashed the file.</strong> It produced a 64-character SHA-256
+    fingerprint (and a longer SHA-512 sibling). The file bytes <em>never left your machine.</em>
+    Only the fingerprint did.
+  </li>
+  <li>
+    <strong>The fingerprint was submitted to five independent OpenTimestamps calendars.</strong>
+    These are independent public servers that collect hashes from many
+    people, batch them into a single Merkle tree, and roughly once per
+    hour commit the root of that tree to a real Bitcoin transaction.
+  </li>
+  <li>
+    <strong>You received a receipt</strong> — a short ID like <code>o3WGD22T4UwqfCrb</code> plus
+    five small <code>.ots</code> proof files (one from each calendar). The receipt is the
+    portable evidence. The <code>.ots</code> files are what actually let you verify against
+    Bitcoin without us.
+  </li>
+</ol>
+
+<div class="callout">
+  <strong>The important sentence.</strong> Orphograph did not write to a blockchain. Orphograph submitted your hash to OpenTimestamps. OpenTimestamps wrote to Bitcoin. The receipt you hold tells Bitcoin's chain — through a chain of math — that your file existed before a specific block was mined.
+</div>
+
+<h2 id="three-ways">Three ways to verify, in order of trust</h2>
+
+<!-- LEVEL 1 -->
+<div class="lvl-card">
+  <span class="lvl-tag lvl-1">Level 1 · One click</span>
+  <h3>Open your receipt page</h3>
+
+  <p>
+    Every receipt has a public URL. If your receipt ID is <code>o3WGD22T4UwqfCrb</code>, the page is:
+  </p>
+
+  <pre class="cmd">https://orphograph.com/r/o3WGD22T4UwqfCrb</pre>
+
+  <p>What the page shows you:</p>
+
+  <ul>
+    <li>The SHA-256 (and SHA-512) hash that was anchored</li>
+    <li>How many of the five calendars confirmed it (e.g. <strong>5/5 OK</strong>)</li>
+    <li>The exact moment <strong>BTC pinned at</strong> — populated automatically once your hash makes it into a Bitcoin block (usually within an hour)</li>
+    <li>A re-hash widget: drop the original file on the page, your browser re-computes the SHA-256, and the page reports ✓ match or ✗ mismatch</li>
+    <li>Download links for all five <code>.ots</code> proof files</li>
+  </ul>
+
+  <p class="muted small">Level 1 trusts Orphograph to show you the truth. That's fine for most use cases — but if you ever need stronger evidence, Levels 2 and 3 don't need us at all.</p>
+</div>
+
+<!-- LEVEL 2 -->
+<div class="lvl-card">
+  <span class="lvl-tag lvl-2">Level 2 · Open-source verifier (no account, no server)</span>
+  <h3>Run our verifier locally</h3>
+
+  <p>
+    We publish a small open-source tool that does everything our server does, on your computer.
+    It hashes the file, reads the <code>.ots</code> files, talks to the OpenTimestamps calendars,
+    and tells you whether the chain of evidence is intact.
+  </p>
+
+  <div class="step-row">
+    <div class="step-num">1</div>
+    <div>
+      <p><strong>Get the verifier.</strong></p>
+      <pre class="cmd">git clone https://github.com/Orphograph/orphograph-verify
+cd orphograph-verify</pre>
+    </div>
+  </div>
+
+  <div class="step-row">
+    <div class="step-num">2</div>
+    <div>
+      <p><strong>Download the receipt bundle</strong> — from your receipt page, click "Download receipt + proofs (.zip)". This is a small archive containing the receipt JSON plus the five <code>.ots</code> files.</p>
+    </div>
+  </div>
+
+  <div class="step-row">
+    <div class="step-num">3</div>
+    <div>
+      <p><strong>Run the verifier</strong> against the original file plus the receipt:</p>
+      <pre class="cmd">./verify.sh my-original-file.jpg receipt-o3WGD22T4UwqfCrb.zip</pre>
+      <p>Output looks like:</p>
+      <pre class="cmd">[ok] SHA-256 matches receipt
+[ok] 5 / 5 calendar proofs valid
+[ok] earliest Bitcoin block: 824,193  (2026-05-16 17:42 UTC)
+PASS</pre>
+    </div>
+  </div>
+
+  <p class="muted small">Level 2 trusts the open-source code (you can read it) and the OpenTimestamps calendars (public infrastructure). It does <em>not</em> trust Orphograph's servers — they could be turned off and this still works.</p>
+</div>
+
+<!-- LEVEL 3 -->
+<div class="lvl-card">
+  <span class="lvl-tag lvl-3">Level 3 · Trustless · Verify against the Bitcoin blockchain directly</span>
+  <h3>Use the standard OpenTimestamps client</h3>
+
+  <p>
+    This is the path you take if you ever need to defend the timestamp in front of someone who doesn't trust Orphograph or OpenTimestamps. It uses only the official OpenTimestamps reference client and (optionally) your own Bitcoin node.
+  </p>
+
+  <div class="step-row">
+    <div class="step-num">1</div>
+    <div>
+      <p><strong>Install the OpenTimestamps client</strong> (one-time setup, ~30 seconds):</p>
+      <pre class="cmd">pip install opentimestamps-client</pre>
+      <p>This is software maintained by the OpenTimestamps project — no Orphograph code involved.</p>
+    </div>
+  </div>
+
+  <div class="step-row">
+    <div class="step-num">2</div>
+    <div>
+      <p><strong>Download any one of the five <code>.ots</code> proof files</strong> from your receipt page. Any one is sufficient; the five exist for redundancy.</p>
+    </div>
+  </div>
+
+  <div class="step-row">
+    <div class="step-num">3</div>
+    <div>
+      <p><strong>Verify the file against the proof:</strong></p>
+      <pre class="cmd">ots verify my-original-file.jpg.ots</pre>
+      <p>If the proof has already been pinned to Bitcoin (~1 hour after anchoring), you'll see something like:</p>
+      <pre class="cmd">Assuming target filename is 'my-original-file.jpg'
+Success! Bitcoin block 824193 attests existence as of 2026-05-16 17:42:11 UTC</pre>
+    </div>
+  </div>
+
+  <div class="step-row">
+    <div class="step-num">4</div>
+    <div>
+      <p><strong>(Optional, fully trustless mode)</strong> Verify against your own Bitcoin node instead of a public block explorer:</p>
+      <pre class="cmd">ots --bitcoin-node http://user:pass@127.0.0.1:8332 verify my-original-file.jpg.ots</pre>
+      <p>At this point, you are verifying your timestamp against a copy of the Bitcoin blockchain you downloaded yourself, with no third party in the loop. This is the strongest evidence proof-of-existence can produce.</p>
+    </div>
+  </div>
+
+  <p class="muted small">Level 3 trusts only Bitcoin's consensus and the OpenTimestamps reference code (audited, open source, in production since 2016). Orphograph could disappear tomorrow and this path still works for every receipt we ever issued.</p>
+</div>
+
+<h2 id="chain">How to follow your timestamp all the way into the Bitcoin chain</h2>
+
+<p>
+  Once an Orphograph receipt is <em>block-pinned</em>, you can walk the evidence chain by hand:
+</p>
+
+<ol>
+  <li>
+    Run <code>ots info my-file.ots</code> on any one of your <code>.ots</code> files. The output prints the Bitcoin block height the proof commits to (e.g. <code>block 824193</code>) and the transaction ID of the calendar's commitment transaction.
+  </li>
+  <li>
+    Open a public Bitcoin block explorer — for example
+    <a href="https://mempool.space" rel="noopener">mempool.space</a> or
+    <a href="https://blockstream.info" rel="noopener">blockstream.info</a> — and paste in that block height or transaction ID.
+  </li>
+  <li>
+    You will see the real Bitcoin transaction, with a real fee paid by the calendar operator, mined into a real block at a real time. That block's existence is what your timestamp commits to.
+  </li>
+  <li>
+    The Merkle path inside your <code>.ots</code> file is what links <em>your specific file's hash</em> to the root of that block's transaction. <code>ots verify</code> walks that path automatically; if you want to do it manually, the <a href="https://github.com/opentimestamps/opentimestamps-client" rel="noopener">OpenTimestamps client source</a> is the reference implementation.
+  </li>
+</ol>
+
+<div class="callout">
+  <strong>Plain-English version:</strong> Your <code>.ots</code> file is a recipe. The recipe says "take this hash, do this hashing sequence, and you'll get a number that appears inside Bitcoin block #824,193." Anyone with the original file and a copy of the Bitcoin chain can run the recipe and check.
+</div>
+
+<h2 id="why-trust">Why this evidence is trustworthy</h2>
+
+<ul>
+  <li><strong>Bitcoin's chain has not been reorganized beyond ~6 blocks in 16 years.</strong> A block from an hour ago is, for any practical purpose, immutable.</li>
+  <li><strong>OpenTimestamps has been in production since 2016</strong> and aggregates hashes from many independent users into the same Bitcoin commitments. Your hash is part of the same merkle root as thousands of other people's hashes — if the proof for one is good, it's good for all of them.</li>
+  <li><strong>The math is verifiable offline.</strong> Once you have the <code>.ots</code> file and a Bitcoin block header (87 bytes), no network is required to verify the timestamp.</li>
+  <li><strong>The five-calendar redundancy</strong> means that even if four of the five calendar operators vanish, the fifth's <code>.ots</code> file still verifies. Orphograph's role is just to make the original submission easy.</li>
+</ul>
+
+<h2 id="how-people-learn">If you want to go deeper</h2>
+
+<ul>
+  <li><a href="/about.html">About Orphograph</a> — who runs this, and the trust contract</li>
+  <li><a href="/compare.html">Orphograph vs NFTs, notaries, and certified mail</a></li>
+  <li><a href="/lp/opentimestamps-explained.html">OpenTimestamps, explained for non-cryptographers</a></li>
+  <li><a href="/lp/bitcoin-timestamp-file.html">How to timestamp a file on Bitcoin (long form)</a></li>
+  <li><a href="/docs/api.html">Developer API documentation</a></li>
+  <li>External: <a href="https://opentimestamps.org" rel="noopener">opentimestamps.org</a> — the open standard Orphograph uses</li>
+</ul>
+
+<h2 id="glossary">Glossary</h2>
+
+<dl class="glossary">
+  <dt>SHA-256</dt>
+  <dd>A one-way function. Feed in any file, get out a 64-character fingerprint. Change one byte of the file and the fingerprint becomes unrecognizable. Two different files cannot, in practice, produce the same fingerprint.</dd>
+
+  <dt>Hash</dt>
+  <dd>The fingerprint produced by SHA-256 (or SHA-512). The thing that gets timestamped — never the file itself.</dd>
+
+  <dt>OpenTimestamps (OTS)</dt>
+  <dd>An open standard and reference client for timestamping any data by anchoring its hash into the Bitcoin blockchain. Created in 2016. Independent of Orphograph.</dd>
+
+  <dt>Calendar</dt>
+  <dd>A public server that batches incoming hashes into a Merkle tree and commits the root to Bitcoin roughly once an hour. There are five calendars run by independent operators; Orphograph submits to all five for redundancy.</dd>
+
+  <dt>.ots file</dt>
+  <dd>A small (~1–2 KB) binary file containing the Merkle path from your hash up to a known Bitcoin transaction. It is the portable proof — keep it next to your original file forever.</dd>
+
+  <dt>Block-pinned</dt>
+  <dd>The state where the calendar's Bitcoin transaction has been mined into a block. Until that happens (usually within an hour), the receipt status reads "pending."</dd>
+
+  <dt>Receipt ID</dt>
+  <dd>The short, URL-safe identifier (e.g. <code>o3WGD22T4UwqfCrb</code>) for one anchoring event on Orphograph. Bookmarkable; resolves to a public receipt page.</dd>
+</dl>
+
+<h2 id="faq">Quick FAQ</h2>
+
+<p><strong>Does anyone see my file?</strong> No. Your browser hashes it locally; only the hash is submitted.</p>
+
+<p><strong>What if Orphograph shuts down?</strong> Receipts still verify. Run the OpenTimestamps client (Level 3) against the <code>.ots</code> files you downloaded — Bitcoin is the source of truth, not us.</p>
+
+<p><strong>How long does Bitcoin confirmation take?</strong> The calendar batches submit to Bitcoin roughly once an hour. After the transaction is mined and gets a few confirmations, your receipt's status flips from "pending" to "confirmed."</p>
+
+<p><strong>Can I prove the file existed <em>after</em> a certain date?</strong> No. A timestamp only proves "this existed by no later than block N." It cannot prove "this did not exist before block N." If you need that direction, the standard answer is "anchor the file at the moment you want to prove its earliest existence, and never sit on it."</p>
+
+<p><strong>Is this the same as an NFT?</strong> No. An NFT records ownership of a token. Orphograph records the existence of a file's exact bytes at a point in time. <a href="/compare.html">Full comparison →</a></p>
+
+<p><strong>What if a court asks?</strong> The OpenTimestamps protocol has been cited in academic and legal contexts since 2017. The Level 3 verification path produces an audit trail that any cryptography expert can independently confirm.</p>
+
+</div>
+</article>
+
+<section style="margin-top:48px; padding:32px; border:1px solid var(--panel-stroke); background:var(--panel); border-radius:14px; text-align:center;">
+  <h2 style="margin-top:0;">Have a receipt? Verify it now.</h2>
+  <p>Drop your file and paste the receipt ID — the page re-hashes locally in your browser and tells you if it matches.</p>
+  <p><a href="/#verify" class="btn primary">Open the verifier</a></p>
+</section>
+
+</main>
+
+<footer>
+  <p>
+    Orphograph · Bitcoin-anchored proof-of-existence ·
+    <a href="/about.html">about</a> ·
+    <a href="/learn.html">learn</a> ·
+    <a href="/compare.html">compare</a> ·
+    <a href="/docs/api.html">API</a> ·
+    <a href="/privacy.html">privacy</a> ·
+    <a href="/terms.html">terms</a>
+  </p>
+  <p class="muted small">Powered by OpenTimestamps · Receipts verify without us, by design.</p>
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Orphograph — The Broadsheet</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  :root{
+    --paper:#f1ead8;
+    --paper-2:#f9f3e3;
+    --ink:#15110d;
+    --rule:#5a4a35;
+    --muted:#5c5446;
+    --accent:#3a2f24;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--paper);color:var(--ink);
+    font-family:"EB Garamond","Iowan Old Style","Apple Garamond",Garamond,Georgia,serif;
+    font-size:17px;line-height:1.6;}
+  .sheet{max-width:1080px;margin:0 auto;padding:36px 32px 96px;}
+
+  .mast{border-top:3px double var(--rule);border-bottom:3px double var(--rule);
+    padding:22px 0;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:18px;}
+  .mast .left,.mast .right{font-size:11px;letter-spacing:0.22em;text-transform:uppercase;color:var(--muted);}
+  .mast .left{text-align:left;} .mast .right{text-align:right;}
+  .mast .center{text-align:center;}
+  .mast .wordmark{font-size:54px;letter-spacing:0.18em;text-transform:uppercase;font-weight:600;margin:0;}
+  .mast .sub{font-size:11px;letter-spacing:0.32em;text-transform:uppercase;color:var(--muted);margin-top:6px;}
+  .mast .seal{display:inline-block;width:36px;height:36px;vertical-align:middle;margin-right:8px;}
+
+  .hl{margin:30px 0 18px;text-align:center;}
+  .hl h2{font-size:30px;line-height:1.2;margin:0;font-weight:500;font-style:italic;}
+  .hl .deck{margin-top:8px;font-size:14px;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted);}
+
+  .cols{column-count:3;column-gap:36px;column-rule:1px solid #c9bda0;margin-top:14px;}
+  .cols p{margin:0 0 14px;text-align:justify;hyphens:auto;font-size:16px;line-height:1.6;}
+  .cols h3{font-size:13px;letter-spacing:0.22em;text-transform:uppercase;color:var(--accent);margin:18px 0 6px;font-weight:600;break-after:avoid;}
+  .dropcap::first-letter{font-size:48px;line-height:1;float:left;margin:4px 8px 0 0;font-weight:600;color:var(--accent);}
+
+  .panel{margin:36px 0;border:2px solid var(--rule);background:var(--paper-2);padding:24px;display:grid;grid-template-columns:1.2fr 1fr;gap:22px;align-items:center;}
+  .panel .drop{border:1px dashed var(--rule);padding:30px 18px;text-align:center;cursor:pointer;background:#fdf9eb;}
+  .panel .drop:hover{background:#f6eccf;}
+  .panel .drop strong{display:block;font-size:20px;font-variant:small-caps;letter-spacing:0.04em;}
+  .panel .drop em{font-style:normal;color:var(--muted);font-size:13px;}
+  .panel ol{margin:0;padding-left:18px;font-size:15px;line-height:1.6;}
+  .panel ol li{margin-bottom:6px;}
+
+  .ledger{margin:24px 0 0;border-top:1px solid var(--rule);border-bottom:1px solid var(--rule);padding:14px 0;
+    display:grid;grid-template-columns:repeat(5,1fr);gap:8px;text-align:center;}
+  .ledger .n{font-size:22px;font-variant-numeric:tabular-nums;color:var(--accent);}
+  .ledger .l{font-size:10px;letter-spacing:0.24em;text-transform:uppercase;color:var(--muted);margin-top:2px;}
+
+  .fees{margin:36px 0 0;display:grid;grid-template-columns:repeat(3,1fr);gap:14px;}
+  .fee{border:1.5px solid var(--rule);padding:18px;background:var(--paper-2);text-align:center;}
+  .fee .t{font-size:11px;letter-spacing:0.24em;text-transform:uppercase;color:var(--muted);}
+  .fee .p{font-size:28px;margin:6px 0 2px;}
+  .fee .d{font-size:13px;color:var(--muted);margin-bottom:10px;}
+  .fee a{display:inline-block;padding:7px 14px;border:1px solid var(--accent);color:var(--accent);text-decoration:none;font-size:11px;letter-spacing:0.22em;text-transform:uppercase;}
+  .fee a:hover{background:var(--accent);color:var(--paper);}
+
+  .clauses{margin:42px 0 0;border-top:3px double var(--rule);padding-top:22px;font-size:13px;color:var(--muted);}
+  .clauses p{margin:0 0 10px;line-height:1.6;}
+  .clauses strong{color:var(--ink);font-style:italic;}
+
+  .endline{margin-top:36px;text-align:center;font-size:11px;letter-spacing:0.28em;text-transform:uppercase;color:var(--muted);border-top:1px solid var(--rule);padding-top:18px;}
+
+  /* Timezone display */
+  .tz-block{margin-top:8px;font-size:13px;}
+  .tz-primary{list-style:none;padding:0;margin:0;display:grid;grid-template-columns:1fr 1fr;gap:4px 18px;}
+  .tz-row{display:flex;justify-content:space-between;gap:10px;font-family:"SF Mono","Menlo",monospace;padding:2px 0;}
+  .tz-row .tz-zone{color:var(--muted);font-size:11px;letter-spacing:0.14em;text-transform:uppercase;}
+  .tz-row .tz-val{font-variant-numeric:tabular-nums;}
+  .tz-row.tz-canonical .tz-val{color:var(--accent);font-weight:600;}
+  details.tz-featured-wrap, details.tz-all-wrap{margin-top:6px;border-top:1px dashed #c9bda0;padding-top:4px;}
+  details summary{cursor:pointer;font-size:11px;letter-spacing:0.18em;text-transform:uppercase;color:var(--muted);padding:3px 0;}
+  details summary:hover{color:var(--accent);}
+  .tz-featured, .tz-all{list-style:none;padding:0;margin:4px 0 0;max-height:220px;overflow-y:auto;}
+  .tz-filter{width:100%;padding:6px 8px;font-family:"EB Garamond",Garamond,serif;font-size:14px;background:var(--paper-2);border:1px solid #c9bda0;color:var(--ink);margin:4px 0;}
+
+  @media (max-width:760px){
+    .tz-primary{grid-template-columns:1fr;}
+    .cols{column-count:1;}
+    .panel{grid-template-columns:1fr;}
+    .ledger{grid-template-columns:repeat(2,1fr);}
+    .fees{grid-template-columns:1fr;}
+    .mast{grid-template-columns:1fr;text-align:center;}
+    .mast .left,.mast .right{text-align:center;}
+    .mast .wordmark{font-size:36px;}
+  }
+</style>
+</head>
+<body>
+<div class="sheet">
+
+<div class="mast">
+  <div class="left" id="masthead-date">Anno · MMXXVI<br><span class="tz-block" data-utc="2026-05-16T15:34:00Z" style="font-size:10px;display:block;margin-top:4px;"></span></div>
+  <div class="center">
+    <h1 class="wordmark">
+      <svg class="seal" viewBox="0 0 100 100" fill="none" stroke="#3a2f24" stroke-width="1.6">
+        <circle cx="50" cy="50" r="44"/>
+        <ellipse cx="50" cy="50" rx="44" ry="14"/>
+        <path d="M40 22 Q58 36 42 50 Q26 64 50 78" stroke-width="2"/>
+      </svg>
+      Orphograph
+    </h1>
+    <div class="sub">An Empirical Notary &nbsp;·&nbsp; Bitcoin Anchored</div>
+  </div>
+  <div class="right">A Bilateral Service<br>Submission &amp; Receipt</div>
+</div>
+
+<div class="hl">
+  <h2>"That a file existed by no later than this Bitcoin block."</h2>
+  <div class="deck">That is the entire claim · And it is verifiable by anyone</div>
+</div>
+
+<div class="cols">
+  <h3>The Office</h3>
+  <p class="dropcap">Orphograph is an empirical notary. Its sole function is to record, in a manner mathematically permanent and independently verifiable, that a file existed on or before a specific block of the Bitcoin blockchain. The office issues no opinion on authorship, ownership, or legality. It issues only the fact.</p>
+
+  <h3>What Crosses the Counter</h3>
+  <p>Only the SHA-256 fingerprint of your file crosses the counter — a 64-character number that is one-way and content-blind. The file itself remains on your machine and is read by your browser alone. The office cannot reconstruct it, identify it, or transmit it. There is no copy to lose, no archive to breach.</p>
+
+  <h3>Why the Chain</h3>
+  <p>Bitcoin has not reorganized beyond a handful of blocks in sixteen years of operation. A block from one hour ago is, for every practical purpose, immutable. By submitting your fingerprint to five independent OpenTimestamps calendars, we link it through public mathematics to a block whose proof-of-work cannot be undone.</p>
+
+  <h3>What Survives the Office</h3>
+  <p>The receipts. If this office closes, dies, or is forgotten, every receipt it ever issued continues to verify against the chain using open-source software. There is no proprietary verifier, no license, no key the office retains. The instrument outlives the institution. <em>That is the contract.</em></p>
+
+  <h3>What the Office Refuses</h3>
+  <p>Claims of court admissibility. Promises of legal weight. Statements about authorship. Sale of customer identity. Per-receipt blockchain fees. Hidden lock-in. Marketing language untethered from the cryptography. Anything that would require the customer to trust us in order for the instrument to work.</p>
+
+  <h3>Why It Is Cheap</h3>
+  <p>OpenTimestamps batches many fingerprints into a single Bitcoin transaction once per hour. The marginal on-chain cost of one additional fingerprint is, in arithmetic terms, zero. This is why the first three recordings every twenty-four hours are free — not as inducement, but as architecture.</p>
+</div>
+
+<div class="panel">
+  <div>
+    <h3 style="margin:0 0 10px;font-size:13px;letter-spacing:0.22em;text-transform:uppercase;color:var(--accent);">The Procedure</h3>
+    <ol>
+      <li>Place a file in the counter at right. Your browser reads it locally.</li>
+      <li>Your browser computes its SHA-256 fingerprint. The file does not move.</li>
+      <li>The fingerprint is submitted to five OpenTimestamps calendars.</li>
+      <li>You receive a receipt (a sixteen-character identifier) and five small <code>.ots</code> proof files.</li>
+      <li>Within roughly one hour, the fingerprint is committed to a Bitcoin block. The receipt's status flips from <em>pending</em> to <em>confirmed</em>.</li>
+    </ol>
+  </div>
+  <label class="drop" for="f">
+    <strong>Counter</strong>
+    <em>Place a file here</em>
+    <input id="f" type="file" hidden>
+  </label>
+</div>
+
+<div class="ledger">
+  <div><div class="n" id="c-anchors">—</div><div class="l">Files Recorded</div></div>
+  <div><div class="n" id="c-blocks">—</div><div class="l">Bitcoin Blocks</div></div>
+  <div><div class="n">5 / 5</div><div class="l">Calendars Live</div></div>
+  <div><div class="n">SHA‑256<br>SHA‑512</div><div class="l">Hash Functions</div></div>
+  <div><div class="n">$0.00</div><div class="l">Marginal On‑Chain</div></div>
+</div>
+
+<div class="fees">
+  <div class="fee">
+    <div class="t">First Party</div>
+    <div class="p">$0</div>
+    <div class="d">Three recordings each month, perpetual.</div>
+    <a href="#f">Begin</a>
+  </div>
+  <div class="fee">
+    <div class="t">Pack of Fifty</div>
+    <div class="p">$29</div>
+    <div class="d">One-time. No subscription. No expiry.</div>
+    <a href="/buy">Purchase</a>
+  </div>
+  <div class="fee">
+    <div class="t">Standing Order</div>
+    <div class="p">$9 <span style="font-size:13px;color:var(--muted);">per month</span></div>
+    <div class="d">Unrestricted recordings. Cancel at will.</div>
+    <a href="/buy?plan=pro">Subscribe</a>
+  </div>
+</div>
+
+<div class="clauses">
+  <p><strong>On legality.</strong> Orphograph does not assert that its receipts are court-admissible, legally binding, or substitutes for a sworn notary public. Its instrument is a verifiable cryptographic fact. The legal use of that fact in any jurisdiction is determined by counsel and the relevant court, not by this office.</p>
+  <p><strong>On privacy.</strong> Files are hashed in the customer's browser and never transmitted. The office retains no copy of the original. The receipt contains the fingerprint, the time of submission, and the calendar attestations — nothing more, unless the customer voluntarily attaches metadata.</p>
+  <p><strong>On survival.</strong> Receipts verify by reference to the Bitcoin blockchain, using open-source software (<a href="https://github.com/opentimestamps/opentimestamps-client" style="color:var(--accent);">OpenTimestamps</a>) that does not depend on this office continuing to exist. The instrument is portable to any future verifier.</p>
+</div>
+
+<div class="endline">
+  Verify a Receipt &nbsp;·&nbsp; Method &nbsp;·&nbsp; Office &nbsp;·&nbsp; Terms &nbsp;·&nbsp; Open Source
+</div>
+
+</div>
+<script src="/timezones.js"></script>
+</body>
+</html>

@@ -1,0 +1,113 @@
+#!/usr/bin/env python3
+"""credits.py — append-only credit ledger for Pack purchases.
+
+Identity model: no accounts. The claim_code returned by the Stripe
+webhook is the bearer token. Anyone with it can spend the credits.
+Email is metadata only (for receipt delivery + customer support).
+
+Append-only design: every event (add, consume) is a row. Balance is
+the sum of credits_delta for a given claim_code. This makes the
+ledger auditable, easy to back up, and robust against partial writes.
+
+Public API:
+    add_credits(claim_code, email, amount, source) -> None
+    consume_credit(claim_code) -> tuple[bool, int]  # (allowed, remaining)
+    balance(claim_code) -> int
+    new_claim_code() -> str
+"""
+from __future__ import annotations
+
+import json
+import os
+import secrets
+import threading
+from datetime import datetime, timezone
+from pathlib import Path
+
+from file_lock import locked
+
+ROOT = Path(__file__).resolve().parent.parent
+DATA_DIR = Path(os.environ.get("ORPHO_DATA_DIR", str(ROOT / "data") if (ROOT / "data").is_dir() else str(ROOT)))
+LEDGER_PATH = Path(os.environ.get("ORPHO_CREDIT_LEDGER", str(DATA_DIR / "credit_ledger.jsonl")))
+
+# Threading.RLock guards same-process callers from re-entering _append while
+# holding _lock for consume_credit. fcntl.flock guards multi-process callers
+# (e.g. two fly machines sharing a mounted volume) from interleaving writes.
+_lock = threading.RLock()
+
+
+def new_claim_code() -> str:
+    return "pk_" + secrets.token_urlsafe(12)
+
+
+def _append(row: dict) -> None:
+    with _lock:
+        with locked(LEDGER_PATH, mode="a", exclusive=True) as f:
+            f.write(json.dumps(row, separators=(",", ":")) + "\n")
+
+
+def add_credits(claim_code: str, email: str, amount: int, source: str) -> None:
+    if amount <= 0:
+        raise ValueError("amount must be positive")
+    _append({
+        "ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "claim_code": claim_code,
+        "email": email,
+        "credits_delta": int(amount),
+        "source": source,
+    })
+
+
+def _scan() -> dict[str, int]:
+    if not LEDGER_PATH.exists():
+        return {}
+    balances: dict[str, int] = {}
+    with LEDGER_PATH.open() as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            code = row.get("claim_code")
+            delta = int(row.get("credits_delta", 0))
+            if code:
+                balances[code] = balances.get(code, 0) + delta
+    return balances
+
+
+def balance(claim_code: str) -> int:
+    if not claim_code:
+        return 0
+    with _lock:
+        return _scan().get(claim_code, 0)
+
+
+def consume_credit(claim_code: str) -> tuple[bool, int]:
+    """Atomically check + decrement. Returns (consumed, balance_after).
+
+    Cross-process atomicity: holds an exclusive fcntl lock on the ledger
+    across the read+write critical section so two machines can't both
+    observe balance>0 and then each consume.
+    """
+    if not claim_code:
+        return False, 0
+    with _lock:
+        # Use a sentinel lockfile sibling so we can hold the lock across
+        # both the scan (read) and the append (write) without trying to
+        # nest fcntl on the same file descriptor.
+        lockfile = LEDGER_PATH.with_suffix(LEDGER_PATH.suffix + ".lock")
+        with locked(lockfile, mode="a", exclusive=True):
+            current = _scan().get(claim_code, 0)
+            if current <= 0:
+                return False, current
+            _append({
+                "ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                "claim_code": claim_code,
+                "email": "",
+                "credits_delta": -1,
+                "source": "anchor",
+            })
+            return True, current - 1

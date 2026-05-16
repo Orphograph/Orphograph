@@ -1,0 +1,36 @@
+{
+  "receipt_id": "o3WGD22T4UwqfCrb",
+  "created_at": "2026-05-16T15:21:38+00:00",
+  "hash_hex": "dbc906fb23cf442ce01369c7b552af26360164fa1fbe8df2f0c994ad9f421c48",
+  "sha512_hex": "38ff79369a2b4c4f42c3bd965046ce75fd342379f71f73e51f4b3bc6da29b9f11fa0c283fe821246c1b5e77dc8c6fee39a744dda9b51888207b63fa7647eec18",
+  "client_label": "orphograph-genesis-self-anchor",
+  "calendars_ok": 5,
+  "calendars_total": 5,
+  "low_redundancy": false,
+  "pack_consumed": false,
+  "pack_remaining": 0,
+  "subscription_active": false,
+  "successes": [
+    {
+      "calendar": "https://a.pool.opentimestamps.org",
+      "ots_path": "receipts/o3WGD22T4UwqfCrb/a.ots"
+    },
+    {
+      "calendar": "https://b.pool.opentimestamps.org",
+      "ots_path": "receipts/o3WGD22T4UwqfCrb/b.ots"
+    },
+    {
+      "calendar": "https://alice.btc.calendar.opentimestamps.org",
+      "ots_path": "receipts/o3WGD22T4UwqfCrb/alice.ots"
+    },
+    {
+      "calendar": "https://finney.calendar.eternitywall.com",
+      "ots_path": "receipts/o3WGD22T4UwqfCrb/finney.ots"
+    },
+    {
+      "calendar": "https://btc.calendar.catallaxy.com",
+      "ots_path": "receipts/o3WGD22T4UwqfCrb/btc.ots"
+    }
+  ],
+  "failures": []
+}

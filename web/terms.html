@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Orphograph — Terms of Service</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<header>
+  <div class="brand"><a href="/">orphograph</a></div>
+  <nav><a href="/#pricing">pricing</a> <a href="/#faq">faq</a></nav>
+</header>
+
+<main>
+
+<section>
+  <h1>Terms of Service</h1>
+  <p class="muted">Last updated: 2026-05-16.</p>
+
+  <h2>1. What you're getting</h2>
+  <p>
+    Orphograph hashes files in your browser and submits the resulting SHA-256
+    digest to OpenTimestamps calendars, which batch many users' hashes into
+    Bitcoin transactions. You receive a receipt that anyone can verify against
+    Bitcoin's chain using the open-source verifier on GitHub.
+  </p>
+
+  <h2>2. What you're NOT getting</h2>
+  <p>
+    We are not a qualified trust-service provider. Our receipts are
+    proof-of-existence, not legally-binding timestamps under eIDAS or any
+    national equivalent. We make no claim of court-admissibility. If you
+    need legally-binding timestamps for litigation, consult a qualified
+    digital-evidence specialist or a regulated notary.
+  </p>
+  <p>
+    Anchoring a hash does not establish authorship, ownership, originality,
+    or copyright. It establishes that a specific byte sequence existed at a
+    specific time.
+  </p>
+
+  <h2>3. Free tier</h2>
+  <p>
+    The free tier permits up to <strong>three (3) anchors per IP-prefix in
+    any rolling 24-hour window</strong>. The window is enforced by the
+    server's own UTC monotonic clock and is independent of the client
+    device's local time zone, system clock, regional settings, or
+    daylight-saving-time changes. Changing the time zone, system clock,
+    locale, or any client-side time setting does not extend, reset, or
+    otherwise affect the 24-hour window — the server alone is authoritative
+    for free-tier accounting.
+  </p>
+  <p>
+    Attempts to bypass the 24-hour window by rotating IP addresses,
+    abusing automated clients, or otherwise circumventing the rate-limit
+    are prohibited and may result in suspension of access without notice.
+    Free-tier receipts are anchored to the same calendars as paid receipts
+    and are verifiable the same way. Free-tier receipts may be pruned
+    from our servers after thirty (30) days; your locally-stored copy of
+    the receipt and the OTS proof files remains independently verifiable
+    against the Bitcoin blockchain regardless.
+  </p>
+
+  <h2>4. Pack ($7 one-time)</h2>
+  <p>
+    Buying a Pack grants 10 anchor credits associated with a single
+    bearer-token claim code. Credits never expire. The claim code is the
+    sole means of spending the credits — anyone with the code can use them.
+    Treat it like a gift-card number. Lost claim codes cannot be recovered.
+  </p>
+  <p>
+    Refunds: full refund within 7 days of purchase for unused credits.
+    Email <a href="mailto:hello@orphograph.com">hello@orphograph.com</a>.
+    Partially-used Packs are refunded pro-rata at our discretion.
+  </p>
+
+  <h2>5. Service availability</h2>
+  <p>
+    Orphograph is provided "as is." We may suspend or end the service at
+    any time. Because receipts are anchored to Bitcoin via standard
+    OpenTimestamps and our verifier is open source, your receipts remain
+    verifiable without us. We commit to keeping the verifier repo public
+    and the OTS protocol unmodified for as long as we operate.
+  </p>
+
+  <h2>6. Acceptable use</h2>
+  <p>
+    Do not use Orphograph to anchor hashes of files whose distribution is
+    unlawful in your jurisdiction. We do not see your files, so we cannot
+    police content — but we will cooperate with valid legal process
+    regarding ledger records of hashes and email addresses associated with
+    Pack purchases.
+  </p>
+
+  <h2>7. Liability</h2>
+  <p>
+    Our maximum liability to any user for any matter arising from your use
+    of Orphograph is limited to the total amount paid to us by that user
+    in the 12 months preceding the claim. We disclaim warranties of
+    merchantability and fitness for a particular purpose to the maximum
+    extent permitted by law.
+  </p>
+
+  <h2>8. Jurisdiction</h2>
+  <p>
+    These terms are governed by the laws of the Commonwealth of Puerto Rico
+    and the United States, without regard to conflict-of-laws principles.
+    Disputes will be resolved in the courts of Puerto Rico.
+  </p>
+
+  <h2>9. Changes</h2>
+  <p>
+    We may update these terms; the "Last updated" date will change. Continued
+    use after an update is acceptance of the new terms. Material changes will
+    be emailed to Pack purchasers when feasible.
+  </p>
+
+  <h2>10. Intellectual Property &amp; Permitted Use</h2>
+  <p>
+    <strong>All right, title, and interest</strong> in and to the
+    Orphograph wordmark, the Orphograph seal and logomark, the
+    institutional notarial aesthetic and design language, the original
+    source code of this service, the original copy of this site, the
+    receipt format, the office's identifier scheme, and any associated
+    documentation (collectively, the "<strong>Orphograph IP</strong>") are
+    owned by the operator of Orphograph and are protected by United States
+    and international copyright, trademark, and trade-dress law.
+    <strong>All rights are reserved.</strong>
+  </p>
+  <p>
+    Nothing in these Terms transfers any ownership of the Orphograph IP to
+    any user, customer, or visitor. Your access to the live service is a
+    <strong>limited, revocable, non-exclusive, non-transferable, and
+    non-sublicensable license</strong> to use the service in accordance
+    with these Terms — <em>and nothing more</em>.
+  </p>
+  <p>
+    Without prior express written permission from the operator, you may
+    <strong>not</strong>:
+  </p>
+  <ul>
+    <li>reproduce, mirror, fork, host, or redistribute the Orphograph site, codebase, or design;</li>
+    <li>use the Orphograph name, wordmark, seal, or any confusingly similar variant for any commercial or promotional purpose;</li>
+    <li>rebrand, white-label, resell, or wrap the Orphograph service as your own product;</li>
+    <li>scrape, harvest, or copy the Orphograph copy, layout, design, or any portion of the site for use in training, fine-tuning, evaluating, benchmarking, or generating output from any machine-learning system or generative model;</li>
+    <li>frame, embed, or reproduce the Orphograph interface inside another product or service;</li>
+    <li>use Orphograph's name, branding, or output in any manner that would suggest endorsement, partnership, or affiliation that does not exist;</li>
+    <li>circumvent any rate-limit, free-tier window, billing, or access control of the service.</li>
+  </ul>
+  <p>
+    <strong>What is <em>not</em> claimed.</strong> Orphograph asserts no
+    proprietary rights in the OpenTimestamps protocol, the Bitcoin
+    blockchain, the SHA-256 or SHA-512 hash functions, or any
+    well-established public cryptographic primitive — these are public
+    infrastructure. The <code>.ots</code> proof files produced by the
+    service are intentionally in a standard format that any third-party
+    OpenTimestamps verifier can read; the user is and remains free to
+    verify their own receipts using any such tool, independently of
+    Orphograph.
+  </p>
+  <p>
+    Permitted uses, by contrast, include: using the live service per
+    these Terms; saving and sharing receipts you have created;
+    independently verifying any Orphograph receipt with open-source
+    OpenTimestamps tooling; linking to <code>https://orphograph.com</code>
+    in editorial or news contexts; citing the service in academic or
+    journalistic writing with attribution; and any other use granted by
+    fair-use principles under United States copyright law.
+  </p>
+  <p>
+    Permission requests for any other use, including licensing inquiries,
+    partnership proposals, or written compliance review, should be sent
+    to <a href="mailto:hello@orphograph.com">hello@orphograph.com</a> with
+    "<em>Licensing</em>" in the subject. <strong>No silence shall be
+    construed as consent.</strong> Unauthorized use of the Orphograph IP
+    may be enforced under all applicable civil and statutory remedies,
+    including injunctive relief and recovery of attorneys' fees where
+    permitted by law.
+  </p>
+
+  <h2>11. Contact</h2>
+  <p>
+    <a href="mailto:hello@orphograph.com">hello@orphograph.com</a>.
+  </p>
+</section>
+
+</main>
+
+<footer>
+  <small>
+    <a href="/">home</a> ·
+    <a href="/privacy.html">Privacy</a> ·
+    Powered by OpenTimestamps
+  </small>
+</footer>
+
+</body>
+</html>

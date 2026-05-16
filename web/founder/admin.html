@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Orphograph — Founder Admin Status</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/style.css">
+<style>
+  body { background: #0a0e27; color: #e8e9f3; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  header { border-bottom: 1px solid #1a1f3a; padding: 1rem 2rem; }
+  main { padding: 2rem; max-width: 1200px; margin: 0 auto; }
+
+  .intro { background: #161d3c; border: 1px solid #2a3254; border-radius: 8px; padding: 1.5rem; margin-bottom: 2rem; }
+  .intro h2 { margin: 0 0 0.5rem 0; font-size: 1rem; }
+  .intro p { margin: 0; font-size: 0.9rem; color: #b0b5c8; }
+
+  .token-input { display: flex; gap: 0.5rem; margin-top: 1rem; }
+  .token-input input { flex: 1; padding: 0.5rem; background: #0a0e27; border: 1px solid #2a3254; border-radius: 4px; color: #e8e9f3; font-family: monospace; font-size: 0.9rem; }
+  .token-input button { padding: 0.5rem 1rem; background: #10b981; border: none; border-radius: 4px; color: white; cursor: pointer; font-weight: 500; }
+  .token-input button:hover { background: #059669; }
+
+  .overall-banner { background: #161d3c; border: 1px solid #2a3254; border-radius: 8px; padding: 1.5rem; margin-bottom: 2rem; display: flex; align-items: center; gap: 1.5rem; }
+  .overall-banner.green { border-color: #10b981; background: linear-gradient(180deg, #0a2c20 0%, #161d3c 100%); }
+  .overall-banner.amber { border-color: #f59e0b; background: linear-gradient(180deg, #2c2310 0%, #161d3c 100%); }
+  .overall-banner.red   { border-color: #ef4444; background: linear-gradient(180deg, #2c1010 0%, #161d3c 100%); }
+  .dot { width: 24px; height: 24px; border-radius: 50%; background: #8b92a9; flex-shrink: 0; box-shadow: 0 0 16px rgba(255,255,255,0.05); }
+  .overall-banner.green .dot { background: #10b981; box-shadow: 0 0 16px rgba(16,185,129,0.6); }
+  .overall-banner.amber .dot { background: #f59e0b; box-shadow: 0 0 16px rgba(245,158,11,0.6); }
+  .overall-banner.red .dot   { background: #ef4444; box-shadow: 0 0 16px rgba(239,68,68,0.6); }
+  .overall-headline { font-size: 1.25rem; font-weight: 600; margin: 0 0 0.25rem 0; }
+  .overall-sub { font-size: 0.85rem; color: #b0b5c8; margin: 0; }
+
+  .section-label { font-size: 0.85rem; color: #8b92a9; text-transform: uppercase; letter-spacing: 0.5px; margin: 0 0 0.75rem 0; }
+
+  .toggle-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+  .toggle-card { background: #161d3c; border: 1px solid #2a3254; border-radius: 8px; padding: 1.25rem; }
+  .toggle-card.on  { border-color: #ef4444; }
+  .toggle-card.off { border-color: #10b981; }
+  .toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+  .toggle-name { font-family: monospace; font-size: 0.9rem; color: #e8e9f3; }
+  .pill { display: inline-block; padding: 0.25rem 0.75rem; border-radius: 999px; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; background: #2a3254; color: #8b92a9; }
+  .pill.off { background: #064e3b; color: #6ee7b7; }
+  .pill.on  { background: #7f1d1d; color: #fecaca; }
+  .toggle-desc { font-size: 0.8rem; color: #8b92a9; margin: 0.5rem 0 0 0; }
+
+  .info-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+  .info-card { background: #161d3c; border: 1px solid #2a3254; border-radius: 8px; padding: 1.25rem; }
+  .info-card h3 { margin: 0 0 0.5rem 0; font-size: 0.75rem; color: #8b92a9; text-transform: uppercase; letter-spacing: 0.5px; }
+  .info-value { font-size: 1.5rem; font-weight: 600; color: #10b981; }
+  .info-sub { font-size: 0.75rem; color: #8b92a9; margin-top: 0.25rem; word-break: break-word; }
+
+  .source-row { display: flex; justify-content: space-between; font-size: 0.85rem; padding: 0.4rem 0; border-bottom: 1px solid #2a3254; }
+  .source-row:last-child { border-bottom: none; }
+  .source-row strong { color: #10b981; }
+
+  .instructions { background: #161d3c; border: 1px solid #2a3254; border-radius: 8px; padding: 1.5rem; margin-bottom: 2rem; }
+  .instructions h3 { margin: 0 0 0.75rem 0; font-size: 0.95rem; }
+  .instructions p  { margin: 0 0 0.75rem 0; font-size: 0.85rem; color: #b0b5c8; }
+  .cmd-label { color: #6ee7b7; margin-top: 1rem; }
+  pre.cmd { background: #0a0e27; border: 1px solid #2a3254; border-radius: 4px; padding: 1rem; margin: 0.5rem 0; color: #6ee7b7; font-size: 0.85rem; overflow-x: auto; }
+
+  .loading { text-align: center; padding: 2rem; color: #8b92a9; }
+  .spinner { display: inline-block; width: 20px; height: 20px; border: 2px solid #2a3254; border-top-color: #10b981; border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .error-message { background: #7f1d1d; border: 1px solid #991b1b; border-radius: 4px; padding: 1rem; color: #fecaca; margin-bottom: 2rem; }
+
+  .footer-bar { display: flex; justify-content: space-between; align-items: center; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #2a3254; color: #8b92a9; font-size: 0.8rem; }
+  .refresh-btn { padding: 0.4rem 0.9rem; background: #3b82f6; border: none; border-radius: 4px; color: white; cursor: pointer; font-size: 0.85rem; }
+  .refresh-btn:hover { background: #2563eb; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand"><a href="/">orphograph</a></div>
+  <nav><a href="/web/founder/metrics.html">metrics</a> <a href="/web/founder/support.html">support</a> <a href="/">home</a></nav>
+</header>
+
+<main>
+
+<section class="intro">
+  <h2>Founder Admin Status</h2>
+  <p>Read-only view of operational toggles and platform health. Toggles are env-controlled — see instructions below to change them.</p>
+  <div class="token-input">
+    <input type="password" id="founder-token" placeholder="Paste your ORPHO_FOUNDER_TOKEN here...">
+    <button id="load-btn">Load Status</button>
+  </div>
+</section>
+
+<div id="error-box"></div>
+
+<div id="loading" class="loading" style="display: none;">
+  <div class="spinner"></div>
+  <p>Loading status...</p>
+</div>
+
+<div id="admin-content" style="display: none;">
+
+  <div class="overall-banner" id="overall-banner">
+    <div class="dot"></div>
+    <div>
+      <p class="overall-headline" id="overall-headline">—</p>
+      <p class="overall-sub" id="overall-sub">—</p>
+    </div>
+    <div style="margin-left: auto;">
+      <button class="refresh-btn" id="refresh-btn">Refresh now</button>
+    </div>
+  </div>
+
+  <h3 class="section-label">Operational Toggles</h3>
+  <div class="toggle-grid" id="toggle-grid"></div>
+
+  <h3 class="section-label">Health Snapshot</h3>
+  <div class="info-grid">
+    <div class="info-card">
+      <h3>Uptime</h3>
+      <div class="info-value" id="uptime-val">—</div>
+      <div class="info-sub" id="boot-at">—</div>
+    </div>
+    <div class="info-card">
+      <h3>Version</h3>
+      <div class="info-value" style="font-size: 1.1rem; font-family: monospace;" id="version-val">—</div>
+      <div class="info-sub">app build</div>
+    </div>
+    <div class="info-card">
+      <h3>Calendars Reachable</h3>
+      <div class="info-value" id="calendars-val">—</div>
+      <div class="info-sub" id="calendars-sub">OpenTimestamps pool</div>
+    </div>
+    <div class="info-card">
+      <h3>BTC Oracle</h3>
+      <div class="info-value" style="font-size: 1.1rem;" id="btc-val">—</div>
+      <div class="info-sub" id="btc-source">—</div>
+    </div>
+  </div>
+
+  <h3 class="section-label">Anchor Stats</h3>
+  <div class="info-grid">
+    <div class="info-card">
+      <h3>Total Anchors</h3>
+      <div class="info-value" id="anchors-total">—</div>
+      <div class="info-sub">lifetime</div>
+    </div>
+    <div class="info-card">
+      <h3>Last 24h</h3>
+      <div class="info-value" id="anchors-24h">—</div>
+      <div class="info-sub">rolling window</div>
+    </div>
+    <div class="info-card">
+      <h3>Last 7d</h3>
+      <div class="info-value" id="anchors-7d">—</div>
+      <div class="info-sub">rolling window</div>
+    </div>
+    <div class="info-card">
+      <h3>By Source</h3>
+      <div id="anchors-by-source" style="margin-top: 0.5rem;"></div>
+    </div>
+  </div>
+
+  <div class="instructions">
+    <h3>How to flip a toggle in production</h3>
+    <p>Toggles are environment-controlled and require a re-deploy via Fly secrets. There is no in-app write path on purpose — this page is read-only.</p>
+    <p class="cmd-label">Enable maintenance mode:</p>
+    <pre class="cmd">fly secrets set ORPHO_MAINTENANCE_MODE=1
+fly deploy --remote-only</pre>
+    <p class="cmd-label">Disable checkout (sale freeze, anchoring stays live):</p>
+    <pre class="cmd">fly secrets set ORPHO_DISABLE_CHECKOUT=1
+fly deploy --remote-only</pre>
+    <p class="cmd-label">Disable anchoring (calendars down or rate-limited):</p>
+    <pre class="cmd">fly secrets set ORPHO_DISABLE_ANCHORING=1
+fly deploy --remote-only</pre>
+    <p class="cmd-label">Restore normal operations (clear a flag):</p>
+    <pre class="cmd">fly secrets unset ORPHO_MAINTENANCE_MODE
+fly deploy --remote-only</pre>
+  </div>
+
+  <div class="footer-bar">
+    <span>Auto-refreshes every 30s.</span>
+    <span>Last refresh: <span id="last-refresh">—</span></span>
+  </div>
+
+</div>
+
+<script>
+(function() {
+  'use strict';
+  var REFRESH_MS = 30000;
+  var refreshTimer = null;
+  function $(id) { return document.getElementById(id); }
+
+  function showError(msg) {
+    var box = $('error-box');
+    box.textContent = '';
+    var div = document.createElement('div');
+    div.className = 'error-message';
+    div.textContent = msg;
+    box.appendChild(div);
+  }
+  function clearError() { $('error-box').textContent = ''; }
+  function getToken() { return ($('founder-token').value || '').trim(); }
+
+  function formatUptime(sec) {
+    if (typeof sec !== 'number' || sec < 0) return '—';
+    var d = Math.floor(sec / 86400);
+    var h = Math.floor((sec % 86400) / 3600);
+    var m = Math.floor((sec % 3600) / 60);
+    if (d > 0) return d + 'd ' + h + 'h';
+    if (h > 0) return h + 'h ' + m + 'm';
+    return m + 'm';
+  }
+
+  function fetchJSON(url, token) {
+    var opts = token ? { headers: { 'X-Orpho-Founder': token } } : {};
+    return fetch(url, opts).then(function(r) {
+      if (r.status === 401 || r.status === 403 || r.status === 404) {
+        var err = new Error('not authorized (HTTP ' + r.status + ')');
+        err.notAuthorized = true;
+        throw err;
+      }
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    });
+  }
+
+  function renderToggles(toggles) {
+    var grid = $('toggle-grid');
+    grid.textContent = '';
+    var rows = [
+      { key: 'maintenance_mode',  label: 'ORPHO_MAINTENANCE_MODE',
+        desc: 'All non-founder routes return 503. The most severe toggle.' },
+      { key: 'checkout_disabled', label: 'ORPHO_DISABLE_CHECKOUT',
+        desc: 'Stripe checkout blocked. Anchoring continues for existing customers.' },
+      { key: 'anchoring_disabled', label: 'ORPHO_DISABLE_ANCHORING',
+        desc: 'New anchor submissions blocked. Verify endpoints still serve.' }
+    ];
+    rows.forEach(function(row) {
+      var on = !!toggles[row.key];
+      var card = document.createElement('div');
+      card.className = 'toggle-card ' + (on ? 'on' : 'off');
+      var top = document.createElement('div');
+      top.className = 'toggle-row';
+      var name = document.createElement('span');
+      name.className = 'toggle-name';
+      name.textContent = row.label;
+      var pill = document.createElement('span');
+      pill.className = 'pill ' + (on ? 'on' : 'off');
+      pill.textContent = on ? 'ON' : 'OFF';
+      top.appendChild(name); top.appendChild(pill);
+      var desc = document.createElement('p');
+      desc.className = 'toggle-desc';
+      desc.textContent = row.desc;
+      card.appendChild(top); card.appendChild(desc);
+      grid.appendChild(card);
+    });
+  }
+
+  function renderOverall(toggles) {
+    var banner = $('overall-banner');
+    banner.classList.remove('green', 'amber', 'red');
+    if (toggles.maintenance_mode) {
+      banner.classList.add('red');
+      $('overall-headline').textContent = 'MAINTENANCE MODE — site is serving 503 to customers';
+      $('overall-sub').textContent = 'All non-founder routes are blocked. Disable the flag and re-deploy to recover.';
+    } else {
+      var onCount = (toggles.checkout_disabled ? 1 : 0) + (toggles.anchoring_disabled ? 1 : 0);
+      if (onCount === 0) {
+        banner.classList.add('green');
+        $('overall-headline').textContent = 'All systems normal';
+        $('overall-sub').textContent = 'Maintenance off, checkout open, anchoring live.';
+      } else {
+        banner.classList.add('amber');
+        $('overall-headline').textContent = 'Degraded — ' + onCount + ' toggle' + (onCount === 1 ? '' : 's') + ' ON';
+        $('overall-sub').textContent = 'Customer-facing path partially disabled. Review toggles below.';
+      }
+    }
+  }
+
+  function renderHealth(health) {
+    $('uptime-val').textContent = formatUptime(health.uptime_sec);
+    $('boot-at').textContent = 'boot ' + (health.boot_at || '—');
+    $('version-val').textContent = health.version || '—';
+    var cal = health.calendars || [];
+    var reachable = 0;
+    for (var i = 0; i < cal.length; i++) { if (cal[i] && cal[i].reachable) reachable++; }
+    $('calendars-val').textContent = reachable + ' / ' + cal.length;
+    var names = [];
+    for (var j = 0; j < cal.length; j++) {
+      var c = cal[j] || {};
+      var short = (c.url || '').replace(/^https?:\/\//, '').split('.')[0];
+      names.push(short + (c.reachable ? ' ok' : ' DOWN'));
+    }
+    $('calendars-sub').textContent = names.join(' · ') || 'OpenTimestamps pool';
+    var oracle = health.btc_oracle || {};
+    if (oracle.available && typeof oracle.usd_per_btc === 'number') {
+      $('btc-val').textContent = '$' + Math.round(oracle.usd_per_btc).toLocaleString();
+      $('btc-source').textContent = 'source: ' + (oracle.source || 'unknown');
+    } else {
+      $('btc-val').textContent = 'unavailable';
+      $('btc-source').textContent = 'no oracle response';
+    }
+  }
+
+  function renderStats(stats) {
+    var a = stats.anchors || {};
+    $('anchors-total').textContent = (a.total != null ? a.total : '—');
+    $('anchors-24h').textContent = (a.last_24h != null ? a.last_24h : '—');
+    $('anchors-7d').textContent = (a.last_7d != null ? a.last_7d : '—');
+    var byBox = $('anchors-by-source');
+    byBox.textContent = '';
+    var rows = [['Free', a.free_anchors], ['Pack', a.pack_anchors], ['Sub/API', a.sub_anchors]];
+    rows.forEach(function(r) {
+      var row = document.createElement('div');
+      row.className = 'source-row';
+      var lbl = document.createElement('span'); lbl.textContent = r[0];
+      var val = document.createElement('strong'); val.textContent = (r[1] != null ? r[1] : '—');
+      row.appendChild(lbl); row.appendChild(val);
+      byBox.appendChild(row);
+    });
+  }
+
+  function loadAll() {
+    var token = getToken();
+    if (!token) {
+      showError('Please paste your founder token above.');
+      $('loading').style.display = 'none';
+      $('admin-content').style.display = 'none';
+      return;
+    }
+    localStorage.setItem('orpho_founder_token', token);
+    if ($('admin-content').style.display !== 'block') $('loading').style.display = 'block';
+    clearError();
+
+    Promise.all([
+      fetchJSON('/api/founder/admin/toggles', token),
+      fetchJSON('/api/health', null),
+      fetchJSON('/api/stats', null)
+    ]).then(function(results) {
+      renderOverall(results[0]);
+      renderToggles(results[0]);
+      renderHealth(results[1]);
+      renderStats(results[2]);
+      $('last-refresh').textContent = new Date().toLocaleTimeString();
+      $('loading').style.display = 'none';
+      $('admin-content').style.display = 'block';
+    }).catch(function(err) {
+      $('loading').style.display = 'none';
+      if (err && err.notAuthorized) {
+        showError('Not authorized — token rejected or admin endpoint unreachable. Verify ORPHO_FOUNDER_TOKEN matches the server secret.');
+      } else {
+        showError('Failed to load admin status: ' + (err && err.message ? err.message : 'unknown error'));
+      }
+      $('admin-content').style.display = 'none';
+    });
+  }
+
+  function startAutoRefresh() {
+    if (refreshTimer) clearInterval(refreshTimer);
+    refreshTimer = setInterval(loadAll, REFRESH_MS);
+  }
+
+  window.addEventListener('DOMContentLoaded', function() {
+    var saved = localStorage.getItem('orpho_founder_token');
+    if (saved) $('founder-token').value = saved;
+    $('load-btn').addEventListener('click', function() { loadAll(); startAutoRefresh(); });
+    $('refresh-btn').addEventListener('click', loadAll);
+    $('founder-token').addEventListener('change', function(e) {
+      localStorage.setItem('orpho_founder_token', e.target.value);
+    });
+    if (saved) { loadAll(); startAutoRefresh(); }
+  });
+})();
+</script>
+
+</main>
+
+<footer>
+  <small>
+    <a href="/">home</a> · <a href="/privacy.html">Privacy</a> · <a href="/terms.html">Terms</a> ·
+    Founder admin status — token-gated, read-only
+  </small>
+</footer>
+
+</body>
+</html>

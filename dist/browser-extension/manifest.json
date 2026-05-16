@@ -1,0 +1,36 @@
+{
+  "manifest_version": 3,
+  "name": "Orphograph — Right-click to Anchor",
+  "short_name": "Orphograph",
+  "version": "0.1.0",
+  "description": "Right-click any image or downloadable file and anchor its hash to Bitcoin via Orphograph. Files never leave your machine — only the hash is sent.",
+  "default_locale": "en",
+  "homepage_url": "https://orphograph.com",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "permissions": [
+    "contextMenus",
+    "notifications",
+    "storage",
+    "downloads"
+  ],
+  "host_permissions": [
+    "https://orphograph.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Orphograph — anchor a file",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
+  }
+}

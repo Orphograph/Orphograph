@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Open-source verifier — Orphograph</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<header>
+  <div class="brand"><a href="/">orphograph</a></div>
+  <nav>
+    <a href="/">home</a>
+    <a href="/docs/api.html">api</a>
+    <a href="/status.html">status</a>
+  </nav>
+</header>
+
+<main>
+<section>
+  <h1>Open-source verifier</h1>
+  <p class="lede">
+    A 100-line, MIT-licensed Python file that validates Orphograph
+    receipts against the public Bitcoin chain — without trusting any
+    Orphograph infrastructure. The trust artifact, hosted at the
+    canonical URL.
+  </p>
+
+  <h2>Download</h2>
+  <ul>
+    <li><a href="/verify/verify.py" download>verify.py</a> — single Python 3.9+ file, no dependencies</li>
+    <li><a href="/verify/README.md" download>README.md</a> — usage + design</li>
+    <li><a href="/verify/LICENSE" download>LICENSE</a> — MIT</li>
+    <li><a href="/verify/orphograph-verify-0.1.tar.gz" download>orphograph-verify-0.1.tar.gz</a> — all four files + bundled sample receipt</li>
+  </ul>
+
+  <h2>One-liner usage</h2>
+  <pre><code># Download just the verifier:
+curl -O https://orphograph.com/verify/verify.py
+
+# Verify any receipt + original file:
+python3 verify.py path/to/receipt.json --file path/to/original
+
+# Exit code 0 = valid, 3 = file mismatch, 4 = ots proof failed</code></pre>
+
+  <h2>Try it on the bundled sample</h2>
+  <pre><code>curl -O https://orphograph.com/verify/orphograph-verify-0.1.tar.gz
+tar xzf orphograph-verify-0.1.tar.gz
+python3 verify.py examples/sample/receipt.json --file examples/sample/sample.txt</code></pre>
+  <p class="muted small">
+    Expected output: all 5 .ots proofs marked <code>[OK]</code>,
+    file hash matches, SHA-512 sibling matches. Exit code 0.
+  </p>
+
+  <h2>Why is this hosted on orphograph.com instead of GitHub?</h2>
+  <p>
+    Same trust property, narrower attack surface. The verifier is
+    served as plain static files from the canonical domain — same
+    place the service runs, audited under the same security posture
+    (see <a href="/status.html">/status</a> and our
+    <a href="/terms.html">terms</a>). If we shut down, the files
+    are MIT-licensed: clone them, mirror them, anchor them to
+    Bitcoin via Orphograph itself for meta-trust.
+  </p>
+
+  <h2>Read the source</h2>
+  <p>
+    The whole verifier:
+    <a href="/verify/verify.py">verify.py</a> (~100 lines).
+    Audit it in five minutes. There are no dependencies, no hidden
+    network calls, no telemetry. SHA-256 of the file is in the
+    tarball's manifest below — anchor your downloaded copy with
+    Orphograph itself if you want a tamper-evident timestamp.
+  </p>
+
+  <h2>License</h2>
+  <p>
+    MIT. Use the verifier in your own products, fork it, vendor it,
+    distribute it. Full text at <a href="/verify/LICENSE">/verify/LICENSE</a>.
+  </p>
+</section>
+</main>
+
+<footer>
+  <small>
+    <a href="/">home</a> ·
+    <a href="/terms.html">Terms</a> ·
+    <a href="/privacy.html">Privacy</a> ·
+    <a href="/status.html">Status</a>
+  </small>
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Open alternative to Adobe Content Credentials / C2PA — Orphograph</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="A vendor-neutral, open alternative to C2PA Content Credentials for solo creators. Bitcoin-anchored timestamps, no certificate authority, no Adobe sign-in.">
+<link rel="canonical" href="https://orphograph.com/lp/c2pa-alternative.html">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<meta property="og:title" content="Open alternative to Adobe Content Credentials / C2PA">
+<meta property="og:description" content="Independent provenance for creators who don't want their proof of authorship tied to a single vendor's certificate authority.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://orphograph.com/lp/c2pa-alternative.html">
+<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/blog.css">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "What does C2PA actually prove?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "C2PA Content Credentials cryptographically sign a manifest of capture and edit history using a certificate issued by a participating vendor. Verifying the signature requires trusting the vendor's certificate authority and the chain of intermediaries."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "How is Orphograph different from C2PA?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Orphograph anchors a SHA-256 of your file to the Bitcoin blockchain via OpenTimestamps. Verification depends on the Bitcoin chain rather than any vendor-issued certificate. There is no certificate authority that can revoke your proof, expire your credential, or change pricing."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Can I use both?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes. C2PA and Orphograph solve overlapping but distinct problems. C2PA describes capture and edit history. Orphograph proves the file's bytes existed at a specific time. Many creators export from a C2PA-enabled camera and then anchor the export through Orphograph for a vendor-independent timestamp layer."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Does Orphograph work for video and audio?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes. SHA-256 is content-agnostic. Any file format — RAW, JPEG, PNG, MP4, WAV, FLAC, PDF, ZIP — produces a hash. The receipt verifies the bytes you anchored, not a file extension."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "What's the failure mode of vendor-CA provenance?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "A certificate authority can revoke its own certs, charge for verification access, sunset a product line, or change its terms. The proof becomes worth whatever the vendor decides it's worth. Bitcoin-anchored proofs do not have a vendor in that position."
+      }
+    }
+  ]
+}
+</script>
+</head>
+<body>
+
+<header>
+  <div class="brand"><a href="/">orphograph</a></div>
+  <nav>
+    <a href="/#how">how it works</a>
+    <a href="/#pricing">pricing</a>
+    <a href="/lp/">guides</a>
+    <a href="/about.html">about</a>
+    <a href="/signin.html">sign in</a>
+  </nav>
+</header>
+
+<main class="blog-post">
+
+<article class="post-header">
+  <h1>An open alternative to Content Credentials / C2PA</h1>
+  <p class="post-meta muted">Vendor-neutral provenance for creators who don't want their proof tied to a single CA.</p>
+</article>
+
+<section class="post-body">
+
+<p>
+  The Coalition for Content Provenance and Authenticity (C2PA) is a
+  good standard with one structural problem from the perspective of a
+  solo creator: it requires a certificate authority. Adobe Content
+  Credentials, Leica's built-in C2PA signing, and the various
+  camera-vendor implementations all chain back to vendor-issued
+  certificates. That works fine until the vendor changes pricing,
+  sunsets a product, revokes a cert, or simply goes out of business.
+  Your proof becomes a credential issued by an absent party.
+</p>
+<p>
+  Orphograph solves the same "prove this file existed and is mine"
+  problem with a different trust root. Instead of a vendor CA, we
+  anchor your file's SHA-256 hash to Bitcoin. Verification depends on
+  the Bitcoin chain, not on any company continuing to operate.
+</p>
+
+<h2>Where C2PA is strong</h2>
+<p>
+  C2PA does something Orphograph doesn't: it describes the full
+  capture-and-edit history of a file. If you shot a photo on a Leica
+  M11, edited in Photoshop, exported with Content Credentials enabled,
+  the signed manifest records the camera model, the edit operations,
+  and the signing identity. That's genuinely useful — and we don't try
+  to replace it.
+</p>
+<p>
+  Where C2PA gets uncomfortable is its dependency structure. The
+  manifest is signed using a certificate. The certificate is issued by
+  a participating organization. Verifying the signature later requires
+  the certificate chain to still be valid and reachable. If the issuer
+  is gone, the verification path becomes brittle.
+</p>
+
+<h2>Where Orphograph is strong</h2>
+<p>
+  Our proof has one root: the Bitcoin blockchain. To forge an
+  Orphograph receipt, you would need to either find a SHA-256
+  collision (cryptographically infeasible) or re-mine the Bitcoin chain
+  from the anchored block onward (economically infeasible at
+  approximately the GDP of a mid-sized country). No certificate
+  authority can revoke your proof. No company's bankruptcy can
+  invalidate it. The verifier code is open source and small enough to
+  audit in an afternoon.
+</p>
+<p>
+  We also don't lock you to a file format. SHA-256 treats every file as
+  a bag of bytes. RAW, JPEG, MP4, FLAC, PDF, ZIP — all anchor through
+  the same flow with the same receipt shape.
+</p>
+
+<h2>Using both together</h2>
+<p>
+  Many creators use C2PA at capture and Orphograph at delivery. The
+  C2PA manifest describes the lineage; the Orphograph receipt locks the
+  final exported file's hash to a Bitcoin block. If the C2PA chain ever
+  breaks because of a vendor change, the Orphograph anchor still proves
+  the file's bytes were on disk by date X — independent of any CA.
+</p>
+
+<h2>What we don't claim</h2>
+<p>
+  We don't claim this is legal evidence on its own. We don't claim it
+  proves you took the photo — only that <em>some file with these exact
+  bytes</em> existed at the anchored time. We don't certify identity. If
+  you need bound-identity provenance, C2PA's signing model is a better
+  fit. If you need <em>vendor-independent</em> timestamp evidence,
+  Orphograph is the cheaper, more durable answer.
+</p>
+
+<div class="post-footer" style="margin: 36px 0; padding: 24px; background: var(--accent-soft); border: 1px solid var(--accent-stroke); border-radius: 12px;">
+  <h2 style="margin-top:0;">Anchor your first file — free</h2>
+  <p>Drop a file, get a vendor-neutral Bitcoin timestamp. No certificate authority, no expiring credentials.</p>
+  <p><a class="btn" href="/#drop" style="display:inline-block; padding: 10px 18px; border: 1px solid var(--accent); color: var(--accent); border-radius: 8px; text-decoration: none;">Start now →</a></p>
+</div>
+
+<h2 id="faq">FAQ</h2>
+<div class="faq">
+  <h3>What does C2PA actually prove?</h3>
+  <p>It cryptographically signs a manifest of capture and edit history using a vendor-issued certificate. Verification requires the certificate authority and its chain to remain reachable.</p>
+
+  <h3>How is Orphograph different?</h3>
+  <p>We anchor a SHA-256 of your file to Bitcoin. Verification depends on the Bitcoin chain, not on any vendor's CA. No certificate to expire, no authority to charge for verification.</p>
+
+  <h3>Can I use both?</h3>
+  <p>Yes — and many creators do. C2PA describes lineage, Orphograph locks the export's bytes to a block. The two layers are complementary.</p>
+
+  <h3>Does this work for video and audio?</h3>
+  <p>Yes. SHA-256 is content-agnostic. RAW, JPEG, MP4, WAV, FLAC, PDF, ZIP — all anchor the same way.</p>
+
+  <h3>What's the failure mode of vendor-CA provenance?</h3>
+  <p>A CA can revoke certs, change terms, charge for verification, or wind down a product. The proof's value drops to whatever the vendor decides. A Bitcoin anchor has no vendor in that position.</p>
+</div>
+
+</section>
+
+</main>
+
+<footer>
+  <small>
+    <a href="/">← Home</a> ·
+    <a href="/lp/">More guides</a> ·
+    <a href="/about.html">About</a> ·
+    <a href="/privacy.html">Privacy</a> ·
+    We never see your file
+  </small>
+</footer>
+
+</body>
+</html>

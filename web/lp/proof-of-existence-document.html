@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Cryptographic proof a document existed at a date — Orphograph</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Create a cryptographic proof that a document, PDF, or text file existed at a specific date. SHA-256 in your browser, anchored to Bitcoin via OpenTimestamps.">
+<link rel="canonical" href="https://orphograph.com/lp/proof-of-existence-document.html">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<meta property="og:title" content="Cryptographic proof a document existed at a date">
+<meta property="og:description" content="A Bitcoin-anchored proof-of-existence for any document. Verifiable for decades, vendor-independent.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://orphograph.com/lp/proof-of-existence-document.html">
+<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/blog.css">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "What does proof-of-existence actually demonstrate?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "It demonstrates that a file with exactly these bytes existed on or before the anchored Bitcoin block time. It does not prove authorship or identity, only that the content existed by that moment."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Can I anchor a PDF without revealing its contents?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes. SHA-256 is computed locally in your browser. Only the 32-byte hash leaves your machine; the document's contents stay private. The hash reveals nothing about what the document says."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "How is this different from a notarized PDF?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "A notary verifies your identity and witnesses your signature. Orphograph verifies that a file with specific bytes existed at a specific moment, with no identity check. Different tools for different problems."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "How long does the proof remain verifiable?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "As long as the Bitcoin chain exists — that is, for the foreseeable future. The receipt and .ots files are self-contained and do not require Orphograph or any other intermediary to verify."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "What if I edit the document later?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "The original anchor only matches the exact bytes you anchored. If you revise the document, anchor the revision separately — both proofs are valid for their respective contents."
+      }
+    }
+  ]
+}
+</script>
+</head>
+<body>
+
+<header>
+  <div class="brand"><a href="/">orphograph</a></div>
+  <nav>
+    <a href="/#how">how it works</a>
+    <a href="/#pricing">pricing</a>
+    <a href="/lp/">guides</a>
+    <a href="/about.html">about</a>
+    <a href="/signin.html">sign in</a>
+  </nav>
+</header>
+
+<main class="blog-post">
+
+<article class="post-header">
+  <h1>Cryptographic proof a document existed at a date</h1>
+  <p class="post-meta muted">For drafts, contracts, research notes, business plans — anything where the date matters and you want a third-party-verifiable anchor.</p>
+</article>
+
+<section class="post-body">
+
+<p>
+  "Proof of existence" is a precise cryptographic claim: <em>this exact
+  file's bytes existed on or before this exact moment</em>. It does
+  not assert authorship. It does not assert identity. It does not
+  assert that the document was true. What it asserts — and what no
+  notary, lawyer, or email-timestamp can match — is a binding between
+  content and time anchored in a public ledger that no single party
+  controls.
+</p>
+<p>
+  For drafts, research notebooks, contracts, prior-art disclosures,
+  internal memos, expert reports, and any document whose value depends
+  on its date, that's often the only claim you actually need.
+</p>
+
+<h2>The mechanism, briefly</h2>
+<p>
+  Your browser hashes the document with SHA-256 — a 32-byte fingerprint
+  unique to those exact bytes. The hash is submitted to five
+  OpenTimestamps calendars. Each calendar aggregates many hashes into a
+  Merkle tree and writes the root of the tree to a Bitcoin transaction.
+  The Bitcoin block's timestamp becomes the timestamp for every hash
+  inside the tree.
+</p>
+<p>
+  You receive a small JSON receipt plus five binary <code>.ots</code>
+  proof files. To verify later, anyone with the original document, the
+  receipt, and the open-source verifier can confirm the timestamp
+  directly against the Bitcoin chain. No Orphograph server is required
+  in that path.
+</p>
+
+<h2>Privacy is structural, not a policy</h2>
+<p>
+  Document contents stay on your machine. SHA-256 happens in the
+  browser via WebCrypto. Only the hash is transmitted. The hash reveals
+  nothing about what the document says — you could anchor a 200-page
+  research report or a one-line confession and the hash looks the
+  same: 64 hex characters. This is not a privacy promise we enforce
+  with logs and policies; it's structural, because there is no upload
+  path in the code.
+</p>
+
+<h2>Use cases worth the 30 seconds</h2>
+<ul>
+  <li>
+    <strong>Draft priority.</strong> You're writing a paper, a book, a
+    business plan. Anchor each significant revision. If a dispute about
+    timing arises, you can demonstrate which version existed when.
+  </li>
+  <li>
+    <strong>Contract delivery.</strong> The signed PDF the client
+    received on Tuesday. Anchor it Tuesday morning. If the version is
+    ever challenged, the hash settles which bytes are authentic.
+  </li>
+  <li>
+    <strong>Research notes.</strong> Lab notebooks, interview
+    transcripts, anything where temporal sequence matters for credit
+    or for cross-checking later claims.
+  </li>
+  <li>
+    <strong>Internal memos.</strong> Decisions documented on the day
+    they were made. Useful in any after-the-fact review.
+  </li>
+  <li>
+    <strong>Expert reports.</strong> Establish that the report existed
+    in its final form before any opposing party could have influenced
+    its contents.
+  </li>
+</ul>
+
+<h2>The honest limitations</h2>
+<p>
+  We don't sell this as legal evidence. It's strong cryptographic
+  evidence. In litigation, a digital-evidence specialist would want to
+  see your receipt embedded in a broader chain-of-custody: who held
+  the document, how it was stored, how it was produced. The receipt
+  doesn't replace that workflow — it strengthens one specific link in
+  it. Talk to a specialist if your situation is high-stakes.
+</p>
+
+<div class="post-footer" style="margin: 36px 0; padding: 24px; background: var(--accent-soft); border: 1px solid var(--accent-stroke); border-radius: 12px;">
+  <h2 style="margin-top:0;">Anchor your first file — free</h2>
+  <p>Drop a PDF or text file, get a Bitcoin-anchored receipt. The document never uploads.</p>
+  <p><a class="btn" href="/#drop" style="display:inline-block; padding: 10px 18px; border: 1px solid var(--accent); color: var(--accent); border-radius: 8px; text-decoration: none;">Start now →</a></p>
+</div>
+
+<h2 id="faq">FAQ</h2>
+<div class="faq">
+  <h3>What does proof-of-existence actually demonstrate?</h3>
+  <p>That a file with exactly these bytes existed by the anchored block time. It does not claim authorship or identity.</p>
+
+  <h3>Can I anchor a PDF without revealing its contents?</h3>
+  <p>Yes. SHA-256 is computed locally; only the 32-byte hash leaves your machine. The hash reveals nothing about the document.</p>
+
+  <h3>How is this different from a notarized PDF?</h3>
+  <p>A notary verifies identity and witnesses a signing. Orphograph proves bytes-existed-by-time. Different problems, different tools.</p>
+
+  <h3>How long does the proof last?</h3>
+  <p>As long as the Bitcoin chain. The receipt is self-contained and verifies without Orphograph.</p>
+
+  <h3>What if I edit the document later?</h3>
+  <p>The original anchor only matches the exact bytes you anchored. Anchor the revision separately if the new version matters too.</p>
+</div>
+
+</section>
+
+</main>
+
+<footer>
+  <small>
+    <a href="/">← Home</a> ·
+    <a href="/lp/">More guides</a> ·
+    <a href="/about.html">About</a> ·
+    <a href="/privacy.html">Privacy</a> ·
+    We never see your file
+  </small>
+</footer>
+
+</body>
+</html>

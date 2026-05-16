@@ -1,0 +1,43 @@
+# fly.toml app configuration file generated for orphograph on 2026-05-16T03:07:41Z
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'orphograph'
+primary_region = 'iad'
+
+[build]
+
+[env]
+  HOST = '0.0.0.0'
+  MIN_CALENDARS_OK = '3'
+  ORPHO_DATA_DIR = '/app/data'
+  ORPHO_TRUST_PROXY_HEADERS = '1'
+  PORT = '8080'
+  RATE_LIMIT_PER_HOUR = '10'
+  RESEND_FROM = 'Orphograph <hello@orphograph.com>'
+  SITE_URL = 'https://orphograph.com'
+
+[[mounts]]
+  source = 'orphograph_data'
+  destination = '/app/data'
+  initial_size = '1gb'
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = 'off'
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    interval = '30s'
+    timeout = '5s'
+    grace_period = '10s'
+    method = 'GET'
+    path = '/api/health'
+
+[[vm]]
+  cpu_kind = 'shared'
+  cpus = 1
+  memory_mb = 512

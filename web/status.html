@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Status — Orphograph</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/status.css">
+</head>
+<body>
+
+<header>
+  <div class="brand"><a href="/">orphograph</a></div>
+  <nav><a href="/">home</a> <a href="/api/health">raw JSON</a></nav>
+</header>
+
+<main>
+<section>
+  <h1>Status</h1>
+  <p class="muted">
+    Public operational signals. Auto-refreshes every 30 seconds.
+    No PII is exposed on this page.
+  </p>
+
+  <div class="status-grid">
+    <div class="card">
+      <div class="card-label">Service</div>
+      <div class="card-value" id="ok">…</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Version</div>
+      <div class="card-value mono" id="version">…</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Uptime</div>
+      <div class="card-value" id="uptime">…</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Receipts on disk</div>
+      <div class="card-value" id="receipts">…</div>
+    </div>
+  </div>
+
+  <h2>Last activity</h2>
+  <dl class="kv">
+    <dt>Last anchor</dt><dd id="last-anchor">…</dd>
+    <dt>Last OTS upgrade</dt><dd id="last-upgrade">…</dd>
+    <dt>Last expiry sweep</dt><dd id="last-expiry">…</dd>
+    <dt>Checked at</dt><dd id="checked">…</dd>
+  </dl>
+
+  <h2>OpenTimestamps calendars</h2>
+  <table id="calendars" class="status-table">
+    <thead><tr><th>Calendar</th><th>Reachable</th></tr></thead>
+    <tbody></tbody>
+  </table>
+</section>
+</main>
+
+<footer>
+  <small><a href="/">home</a> · <a href="/terms.html">Terms</a> · <a href="/privacy.html">Privacy</a></small>
+</footer>
+
+<script src="/status.js"></script>
+</body>
+</html>

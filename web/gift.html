@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Gift an Orphograph Pack</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Buy an Orphograph Pack and gift it to a friend, photographer, or journalist. The recipient gets a claim code by email — no account required.">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/style.css">
+<style>
+  .gift-form {
+    max-width: 540px;
+    margin: 32px auto;
+    background: var(--panel);
+    border: 1px solid var(--panel-stroke);
+    border-radius: 14px;
+    padding: 28px;
+  }
+  .gift-form label {
+    display: block;
+    font-size: 12px;
+    color: var(--muted);
+    margin: 14px 0 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .gift-form input,
+  .gift-form textarea {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 10px 12px;
+    border: 1px solid var(--panel-stroke);
+    border-radius: 8px;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+  }
+  .gift-form textarea { min-height: 90px; resize: vertical; }
+  .gift-form .btn {
+    margin-top: 22px;
+    width: 100%;
+    padding: 12px;
+    font-size: 15px;
+  }
+  .gift-form .hint { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .gift-summary { padding: 14px; background: var(--bg); border-radius: 10px; margin-bottom: 18px; }
+  .gift-summary strong { display: block; font-size: 18px; margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<header class="topnav">
+  <a href="/" class="brand"><strong>Orphograph</strong></a>
+  <nav>
+    <a href="/verify/">Verify</a>
+    <a href="/docs/api.html">Docs</a>
+    <a href="/about.html">About</a>
+  </nav>
+</header>
+
+<main>
+  <h1>Gift an Orphograph Pack</h1>
+  <p class="muted">
+    Pay <strong>$7</strong> and we'll email a <strong>10-anchor Pack</strong>
+    claim code to the recipient. No account required on either side. The
+    Pack never expires.
+  </p>
+
+  <form id="gift-form" class="gift-form">
+    <div class="gift-summary">
+      <strong>10 anchors · $7 one-time</strong>
+      <span class="muted small">never expires · privacy-first · receipts verifiable forever</span>
+    </div>
+
+    <label for="gift-to">Recipient's email</label>
+    <input id="gift-to" type="email" placeholder="friend@example.com" required autocomplete="off">
+    <p class="hint">We send the claim code here. The recipient activates with one click.</p>
+
+    <label for="gift-from">Your email (for the receipt)</label>
+    <input id="gift-from" type="email" placeholder="you@example.com" required autocomplete="email">
+
+    <label for="gift-message">Optional message to the recipient</label>
+    <textarea id="gift-message" maxlength="500" placeholder="Saw this and thought of you — proof-of-existence for your photo work."></textarea>
+    <p class="hint">Up to 500 characters. Plain text only.</p>
+
+    <button id="gift-buy" type="submit" class="btn">Continue to Stripe checkout — $7</button>
+    <p id="gift-error" class="hint" style="color:#b03a3a;display:none;"></p>
+    <p class="hint" style="margin-top:14px">
+      You'll be redirected to Stripe. The recipient gets the Pack as soon as
+      Stripe confirms payment (usually under a minute).
+    </p>
+  </form>
+
+  <section class="muted small" style="max-width:540px;margin:0 auto 60px;padding:0 8px">
+    <h2 style="font-size:14px">How gifting works</h2>
+    <ol>
+      <li>You pay $7 on Stripe.</li>
+      <li>We email the recipient a Pack claim code (with your message attached).</li>
+      <li>The recipient clicks the activation link — the Pack is loaded into their browser.</li>
+      <li>They can anchor 10 files. No account needed. Each anchor produces a Bitcoin-verified receipt.</li>
+    </ol>
+    <p>
+      Files never leave the recipient's machine. The recipient gets the same
+      privacy guarantees as a self-buy. If they lose the claim code, send
+      this email to support@orphograph.com and we'll re-issue.
+    </p>
+  </section>
+</main>
+
+<footer>
+  <small>
+    <a href="/">Home</a> · <a href="/privacy.html">Privacy</a> · <a href="/terms.html">Terms</a>
+  </small>
+</footer>
+
+<script src="/gift.js"></script>
+</body>
+</html>

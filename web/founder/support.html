@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Orphograph — Founder Support Tools</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/style.css">
+<style>
+  body { background: #0a0e27; color: #e8e9f3; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+
+  header { border-bottom: 1px solid #1a1f3a; padding: 1rem 2rem; }
+
+  main { padding: 2rem; max-width: 1200px; margin: 0 auto; }
+
+  .intro {
+    background: #161d3c;
+    border: 1px solid #2a3254;
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+  }
+
+  .intro h2 { margin: 0 0 0.5rem 0; font-size: 1rem; }
+  .intro p { margin: 0; font-size: 0.9rem; color: #b0b5c8; }
+
+  .token-input {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 1rem;
+  }
+
+  .token-input input {
+    flex: 1;
+    padding: 0.5rem;
+    background: #0a0e27;
+    border: 1px solid #2a3254;
+    border-radius: 4px;
+    color: #e8e9f3;
+    font-family: monospace;
+    font-size: 0.9rem;
+  }
+
+  .token-input button {
+    padding: 0.5rem 1rem;
+    background: #10b981;
+    border: none;
+    border-radius: 4px;
+    color: white;
+    cursor: pointer;
+    font-weight: 500;
+  }
+
+  .token-input button:hover { background: #059669; }
+
+  .search-box {
+    background: #161d3c;
+    border: 1px solid #2a3254;
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+  }
+
+  .search-box h3 { margin: 0 0 1rem 0; font-size: 1rem; }
+
+  .search-input {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .search-input input {
+    flex: 1;
+    padding: 0.75rem;
+    background: #0a0e27;
+    border: 1px solid #2a3254;
+    border-radius: 4px;
+    color: #e8e9f3;
+    font-size: 0.95rem;
+  }
+
+  .search-input button {
+    padding: 0.75rem 1.5rem;
+    background: #3b82f6;
+    border: none;
+    border-radius: 4px;
+    color: white;
+    cursor: pointer;
+    font-weight: 500;
+  }
+
+  .search-input button:hover { background: #2563eb; }
+
+  .customer-profile {
+    background: #161d3c;
+    border: 1px solid #2a3254;
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+  }
+
+  .customer-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    border-bottom: 1px solid #2a3254;
+    padding-bottom: 1rem;
+  }
+
+  .customer-email {
+    font-size: 1.1rem;
+    font-weight: 500;
+  }
+
+  .customer-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .stat {
+    text-align: center;
+    padding: 1rem;
+    background: #0a0e27;
+    border-radius: 4px;
+    border: 1px solid #2a3254;
+  }
+
+  .stat-value {
+    display: block;
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: #10b981;
+  }
+
+  .stat-label {
+    font-size: 0.75rem;
+    color: #8b92a9;
+    text-transform: uppercase;
+    margin-top: 0.5rem;
+  }
+
+  .section {
+    margin-bottom: 2rem;
+  }
+
+  .section h3 {
+    font-size: 0.9rem;
+    color: #b0b5c8;
+    text-transform: uppercase;
+    border-bottom: 1px solid #2a3254;
+    padding-bottom: 0.5rem;
+    margin: 0 0 1rem 0;
+  }
+
+  .items-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .items-list li {
+    padding: 0.75rem;
+    background: #0a0e27;
+    border: 1px solid #2a3254;
+    border-radius: 4px;
+    margin-bottom: 0.5rem;
+    font-size: 0.9rem;
+  }
+
+  .items-list li strong {
+    color: #10b981;
+  }
+
+  .refund-section {
+    background: #1a1f3a;
+    border: 1px solid #ef4444;
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-top: 2rem;
+  }
+
+  .refund-section h3 {
+    color: #ef4444;
+    margin: 0 0 1rem 0;
+    border: none;
+    text-transform: none;
+    font-size: 1rem;
+  }
+
+  .refund-form {
+    display: grid;
+    gap: 1rem;
+  }
+
+  .form-group {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .form-group label {
+    font-size: 0.9rem;
+    color: #b0b5c8;
+    margin-bottom: 0.5rem;
+  }
+
+  .form-group input, .form-group select, .form-group textarea {
+    padding: 0.75rem;
+    background: #0a0e27;
+    border: 1px solid #2a3254;
+    border-radius: 4px;
+    color: #e8e9f3;
+    font-size: 0.9rem;
+  }
+
+  .form-group textarea {
+    min-height: 60px;
+    resize: vertical;
+  }
+
+  .form-actions {
+    display: flex;
+    gap: 1rem;
+    margin-top: 1rem;
+  }
+
+  .btn-refund {
+    padding: 0.75rem 1.5rem;
+    background: #ef4444;
+    border: none;
+    border-radius: 4px;
+    color: white;
+    cursor: pointer;
+    font-weight: 500;
+    flex: 1;
+  }
+
+  .btn-refund:hover { background: #dc2626; }
+
+  .btn-cancel {
+    padding: 0.75rem 1.5rem;
+    background: #2a3254;
+    border: none;
+    border-radius: 4px;
+    color: #b0b5c8;
+    cursor: pointer;
+    font-weight: 500;
+  }
+
+  .btn-cancel:hover { background: #3a4264; }
+
+  .loading {
+    text-align: center;
+    padding: 2rem;
+    color: #8b92a9;
+  }
+
+  .spinner {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 2px solid #2a3254;
+    border-top-color: #10b981;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  .error-message {
+    background: #7f1d1d;
+    border: 1px solid #991b1b;
+    border-radius: 4px;
+    padding: 1rem;
+    color: #fecaca;
+    margin-bottom: 2rem;
+  }
+
+  .success-message {
+    background: #065f46;
+    border: 1px solid #047857;
+    border-radius: 4px;
+    padding: 1rem;
+    color: #a7f3d0;
+    margin-bottom: 2rem;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand"><a href="/">orphograph</a></div>
+  <nav><a href="/account.html">account</a> <a href="/">home</a></nav>
+</header>
+
+<main>
+
+<section class="intro">
+  <h2>Support Tools</h2>
+  <p>Customer lookup, refunds, and ledger audit. Founder-only access.</p>
+  <div class="token-input">
+    <input type="password" id="founder-token" placeholder="Paste your ORPHO_FOUNDER_TOKEN here...">
+    <button onclick="authorizeTools()">Authorize</button>
+  </div>
+</section>
+
+<div id="error-box"></div>
+<div id="success-box"></div>
+
+<div id="auth-required" style="display: block;">
+  <div class="search-box" style="text-align: center; color: #8b92a9;">
+    Please authorize with your founder token above to access support tools.
+  </div>
+</div>
+
+<div id="tools-panel" style="display: none;">
+
+  <div class="search-box">
+    <h3>Customer Lookup</h3>
+    <div class="search-input">
+      <input type="email" id="search-email" placeholder="buyer@example.com">
+      <button onclick="lookupCustomer()">Search</button>
+    </div>
+  </div>
+
+  <div id="loading" class="loading" style="display: none;">
+    <div class="spinner"></div>
+    <p>Loading customer data...</p>
+  </div>
+
+  <div id="customer-data" style="display: none;">
+    <div class="customer-profile">
+      <div class="customer-header">
+        <div>
+          <div style="color: #8b92a9; font-size: 0.85rem;">Customer</div>
+          <div class="customer-email" id="customer-email">—</div>
+        </div>
+        <button class="btn-cancel" onclick="clearCustomer()">Clear</button>
+      </div>
+
+      <div class="customer-stats">
+        <div class="stat">
+          <span class="stat-value" id="stat-anchors">0</span>
+          <span class="stat-label">Anchors</span>
+        </div>
+        <div class="stat">
+          <span class="stat-value" id="stat-purchases">0</span>
+          <span class="stat-label">Purchases</span>
+        </div>
+        <div class="stat">
+          <span class="stat-value">$<span id="stat-spent">0</span></span>
+          <span class="stat-label">Total Spent</span>
+        </div>
+      </div>
+
+      <div class="section">
+        <h3>Recent Anchors</h3>
+        <ul class="items-list" id="anchors-list">
+        </ul>
+      </div>
+
+      <div class="section">
+        <h3>Purchase History</h3>
+        <ul class="items-list" id="purchases-list">
+        </ul>
+      </div>
+
+      <div id="subscription-section" class="section" style="display: none;">
+        <h3>Subscription</h3>
+        <div id="subscription-info" style="padding: 1rem; background: #0a0e27; border-radius: 4px; border: 1px solid #2a3254;"></div>
+      </div>
+
+      <div class="refund-section">
+        <h3>Process Refund</h3>
+        <p style="margin-top: 0; color: #b0b5c8; font-size: 0.9rem;">
+          Refund a specific charge and issue manual credits if needed.
+        </p>
+        <div class="refund-form">
+          <div class="form-group">
+            <label>Charge ID (from Purchase History)</label>
+            <input type="text" id="charge-id" placeholder="ch_...">
+          </div>
+          <div class="form-group">
+            <label>Reason</label>
+            <select id="refund-reason">
+              <option value="">— Select reason —</option>
+              <option value="support">Customer support</option>
+              <option value="duplicate">Duplicate charge</option>
+              <option value="technical">Technical issue</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Notes</label>
+            <textarea id="refund-notes" placeholder="Optional notes for the ledger..."></textarea>
+          </div>
+          <div class="form-actions">
+            <button class="btn-refund" onclick="processRefund()">Process Refund</button>
+            <button class="btn-cancel" onclick="clearRefundForm()">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+let authorizedToken = '';
+
+function authorizeTools() {
+  const token = document.getElementById('founder-token').value.trim();
+  if (!token) {
+    showError('Please paste your founder token first.');
+    return;
+  }
+  authorizedToken = token;
+  document.getElementById('auth-required').style.display = 'none';
+  document.getElementById('tools-panel').style.display = 'block';
+  localStorage.setItem('orpho_founder_token', token);
+}
+
+async function lookupCustomer() {
+  const email = document.getElementById('search-email').value.trim();
+  if (!email) {
+    showError('Please enter an email address.');
+    return;
+  }
+
+  document.getElementById('loading').style.display = 'block';
+  document.getElementById('customer-data').style.display = 'none';
+  clearMessages();
+
+  try {
+    const response = await fetch('/api/founder/customer?email=' + encodeURIComponent(email), {
+      headers: { 'X-Orpho-Founder': authorizedToken }
+    });
+
+    if (response.status === 404) {
+      showError('Customer not found: ' + email);
+      document.getElementById('loading').style.display = 'none';
+      return;
+    }
+
+    if (!response.ok) {
+      throw new Error('HTTP ' + response.status);
+    }
+
+    const customer = await response.json();
+    displayCustomer(customer);
+  } catch (err) {
+    showError('Failed to look up customer: ' + err.message);
+  } finally {
+    document.getElementById('loading').style.display = 'none';
+  }
+}
+
+function displayCustomer(customer) {
+  document.getElementById('customer-email').textContent = customer.email;
+  document.getElementById('stat-anchors').textContent = customer.anchor_count;
+  document.getElementById('stat-purchases').textContent = customer.purchases.length;
+  document.getElementById('stat-spent').textContent = customer.total_spent.toFixed(2);
+
+  // Anchors
+  const anchorsList = document.getElementById('anchors-list');
+  anchorsList.textContent = '';
+  if (customer.anchors.length === 0) {
+    const li = document.createElement('li');
+    li.textContent = 'No anchors yet';
+    li.style.color = '#8b92a9';
+    anchorsList.appendChild(li);
+  } else {
+    customer.anchors.slice(0, 5).forEach(anchor => {
+      const li = document.createElement('li');
+      const label = anchor.label ? ' — ' + anchor.label : '';
+      li.textContent = anchor.hash + label;
+      anchorsList.appendChild(li);
+    });
+  }
+
+  // Purchases
+  const purchasesList = document.getElementById('purchases-list');
+  purchasesList.textContent = '';
+  if (customer.purchases.length === 0) {
+    const li = document.createElement('li');
+    li.textContent = 'No purchases';
+    li.style.color = '#8b92a9';
+    purchasesList.appendChild(li);
+  } else {
+    customer.purchases.forEach(purchase => {
+      const li = document.createElement('li');
+      const date = new Date(purchase.created).toLocaleDateString();
+      li.textContent = '$' + purchase.amount + ' — ' + date + ' (ID: ' + purchase.charge_id + ')';
+      purchasesList.appendChild(li);
+    });
+  }
+
+  // Subscription
+  const subSection = document.getElementById('subscription-section');
+  if (customer.subscription) {
+    subSection.style.display = 'block';
+    const info = document.getElementById('subscription-info');
+    info.textContent = 'Status: ' + customer.subscription.status;
+  } else {
+    subSection.style.display = 'none';
+  }
+
+  document.getElementById('customer-data').style.display = 'block';
+}
+
+function clearCustomer() {
+  document.getElementById('customer-data').style.display = 'none';
+  document.getElementById('search-email').value = '';
+  clearRefundForm();
+}
+
+function clearRefundForm() {
+  document.getElementById('charge-id').value = '';
+  document.getElementById('refund-reason').value = '';
+  document.getElementById('refund-notes').value = '';
+}
+
+function processRefund() {
+  const chargeId = document.getElementById('charge-id').value.trim();
+  const reason = document.getElementById('refund-reason').value.trim();
+  if (!chargeId) {
+    showError('Please select a charge ID to refund.');
+    return;
+  }
+  if (!reason) {
+    showError('Please select a refund reason.');
+    return;
+  }
+  showSuccess('Refund functionality coming soon. For now, use: scripts/refund_pack.py --charge-id ' + chargeId);
+}
+
+function showError(msg) {
+  const box = document.getElementById('error-box');
+  const div = document.createElement('div');
+  div.className = 'error-message';
+  div.textContent = msg;
+  box.textContent = '';
+  box.appendChild(div);
+}
+
+function showSuccess(msg) {
+  const box = document.getElementById('success-box');
+  const div = document.createElement('div');
+  div.className = 'success-message';
+  div.textContent = msg;
+  box.textContent = '';
+  box.appendChild(div);
+}
+
+function clearMessages() {
+  document.getElementById('error-box').textContent = '';
+  document.getElementById('success-box').textContent = '';
+}
+
+// Restore token from localStorage
+window.addEventListener('DOMContentLoaded', function() {
+  const saved = localStorage.getItem('orpho_founder_token');
+  if (saved) {
+    document.getElementById('founder-token').value = saved;
+  }
+});
+</script>
+
+</main>
+
+<footer>
+  <small>
+    <a href="/">home</a> · <a href="/privacy.html">Privacy</a> · <a href="/terms.html">Terms</a> ·
+    Founder support tools — token-gated
+  </small>
+</footer>
+
+</body>
+</html>
