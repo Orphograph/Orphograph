@@ -309,6 +309,82 @@
 
   /* ── Selection ──────────────────────────────────────────────────── */
   ::selection{background:rgba(184, 131, 90, 0.25);}
+
+  /* ── Mobile polish (≤880px) ─────────────────────────────────────── */
+  @media (max-width:880px){
+    .wrap{padding:0 20px;}
+    /* Sticky nav: keep brand + CTA visible, drop tertiary links */
+    header.nav .row{height:54px;}
+    header.nav .brand{font-size:15px;letter-spacing:0.18em;}
+    header.nav .brand img{width:24px;height:24px;}
+    header.nav nav a:not(.cta):not([href="#tiers"]):not([href="/learn.html"]){display:none;}
+    header.nav .cta{padding:8px 14px;font-size:12.5px;}
+    /* Hero: seal card FIRST on mobile for visual anchor; tighter padding */
+    .hero{padding:36px 0 32px;}
+    .hero-grid{display:flex;flex-direction:column-reverse;gap:24px;}
+    .hero h1{font-size:34px;line-height:1.08;margin-bottom:16px;}
+    .hero .lede{font-size:16px;margin-bottom:20px;}
+    .hero .seal-card{max-width:280px;margin:0 auto;padding:22px;}
+    .hero .seal-card img{width:130px;margin-bottom:14px;}
+    .hero .seal-card .wordmark{font-size:18px;letter-spacing:0.28em;}
+    .hero .chips span{font-size:11.5px;padding:6px 10px;}
+    /* Action card: single column, more compact */
+    .action{padding:18px 0 36px;}
+    .action-card{padding:22px;gap:22px;border-radius:18px;}
+    .action h2{font-size:24px;}
+    .action p.sub{font-size:14.5px;margin-bottom:16px;}
+    .action ol li{padding-left:36px;font-size:14px;}
+    .action ol li::before{width:24px;height:24px;font-size:12px;}
+    .drop{min-height:200px;padding:28px 18px;}
+    .drop strong{font-size:20px;}
+    .drop em{font-size:13px;}
+    /* Bigger touch targets on mobile */
+    .drop button{padding:13px 24px;font-size:15px;}
+    .tier .cta, header.nav .cta{min-height:44px;}
+    /* Ledger: stack 2 columns on phone */
+    .ledger-section{padding:8px 0 24px;}
+    .ledger > div{padding:18px 10px;}
+    .ledger .n{font-size:22px;}
+    .ledger .l{font-size:9.5px;letter-spacing:0.18em;}
+    /* Section bands: tighter vertical rhythm */
+    section.band{padding:56px 0;}
+    section.band > .wrap > .head{margin-bottom:32px;}
+    section.band h2{font-size:28px;}
+    section.band p.head-sub{font-size:15.5px;}
+    /* Cards: a bit more compact, full-width single column */
+    .feature, .tier, .level{padding:24px 20px;}
+    .feature h3, .tier .t-name, .level h3{font-size:18px;}
+    .tier .t-price{font-size:38px;}
+    .tier.featured{transform:none;}
+    .tz{padding:36px 0;}
+    .tz-card{padding:22px;border-radius:18px;}
+    .tz-card h3{font-size:18px;}
+    .clauses{padding:28px 0 48px;}
+    .clause-card{padding-top:24px;gap:18px;}
+    .clause{font-size:13px;}
+    footer.site{padding:24px 0 48px;}
+    footer.site nav{gap:6px 14px;}
+    footer.site nav a{font-size:12.5px;}
+  }
+  @media (max-width:480px){
+    .hero h1{font-size:30px;}
+    .hero .seal-card{max-width:240px;padding:18px;}
+    .hero .seal-card img{width:110px;}
+    section.band h2{font-size:24px;}
+    .action ol li{font-size:13.5px;}
+    .ledger .n{font-size:18px;}
+    /* Wrap two stat tiles per row neatly */
+    .ledger > div:nth-child(4) .n{font-size:13px;letter-spacing:0.04em;}
+  }
+  /* Respect motion preferences */
+  @media (prefers-reduced-motion: reduce){
+    *,*::before,*::after{
+      animation-duration:0.01ms !important;
+      animation-iteration-count:1 !important;
+      transition-duration:0.01ms !important;
+      scroll-behavior:auto !important;
+    }
+  }
 </style>
 </head>
 <body>

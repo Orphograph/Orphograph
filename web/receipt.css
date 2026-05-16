@@ -19,7 +19,11 @@
   margin-bottom: 24px;
 }
 .card-header h1 { font-size: 26px; font-weight: 400; margin: 0 0 4px; letter-spacing: 0; }
-.brand-stamp { text-align: right; opacity: 0.85; }
+.brand-stamp { text-align: right; opacity: 0.95; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.brand-stamp .receipt-seal { width: 72px; height: auto; filter: drop-shadow(0 2px 8px rgba(40,28,12,0.12)); }
+@media print {
+  .brand-stamp .receipt-seal { width: 64px; opacity: 1; filter: none; }
+}
 .small { font-size: 12px; line-height: 1.4; }
 
 dl.kv { display: grid; grid-template-columns: 220px 1fr; gap: 12px 24px; margin: 0 0 32px; }
