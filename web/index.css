@@ -83,16 +83,20 @@
   .hero h1 em{font-style:italic;color:var(--ink-2);font-family:var(--serif);}
   .hero .lede{font-size:19px;color:var(--muted);max-width:600px;margin:0 0 32px;line-height:1.55;}
   .hero .seal-card{
-    background:var(--paper-card);
-    border-radius:var(--radius-lg);
-    padding:30px;
-    box-shadow:var(--shadow-3);
+    /* No card chrome — the transparent seal sits directly on the cream
+       page so it reads as part of the brand mark, not a pasted graphic. */
+    background:transparent;border:0;box-shadow:none;padding:0;
     display:flex;flex-direction:column;align-items:center;text-align:center;
     transition:transform .3s cubic-bezier(.2,.8,.2,1);
   }
-  .hero .seal-card:hover{transform:translateY(-4px) rotate(-0.3deg);}
-  .hero .seal-card img{width:170px;height:auto;display:block;margin-bottom:18px;
-    filter:drop-shadow(0 4px 18px rgba(60,40,20,0.06));}
+  .hero .seal-card:hover{transform:translateY(-3px);}
+  .hero .seal-card img{
+    width:220px;height:auto;display:block;margin-bottom:18px;
+    /* Soft layered drop-shadow that picks up the warm paper tone — keeps
+       the seal grounded without a hard rectangle frame. */
+    filter:drop-shadow(0 8px 24px rgba(60,40,20,0.12))
+           drop-shadow(0 2px 6px rgba(60,40,20,0.08));
+  }
   .hero .seal-card .wordmark{font-family:var(--serif);font-size:22px;letter-spacing:0.34em;text-transform:uppercase;color:var(--ink);font-weight:500;line-height:1;margin-bottom:10px;}
   .hero .seal-card .rule{width:64px;height:1px;background:var(--line);margin:4px auto 10px;}
   .hero .seal-card .tag{font-size:10px;letter-spacing:0.32em;text-transform:uppercase;color:var(--muted-2);margin-bottom:8px;}
