@@ -101,7 +101,7 @@ def submit(
     }
     line = json.dumps(record, separators=(",", ":")) + "\n"
     with _lock:
-        with file_lock.locked(LEDGER, "a") as f:
+        with file_lock.locked(LEDGER, mode="a") as f:
             f.write(line)
     # Founder-visible log line (no plaintext email written to disk).
     sys.stderr.write(f"[btc_claim] new {claim_id} email={email} txid={txid} pack={pack_size}\n")

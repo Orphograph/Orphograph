@@ -87,27 +87,15 @@ class _IdCollector(HTMLParser):
 
 
 REQUIRED_IDS = {
-    # drop zone + receipt card
-    "drop", "file", "pick",
-    "receipt", "r-id", "r-hash", "r-time", "r-cals", "r-warn",
-    "download", "copy", "share", "view-receipt",
-    # sample card the landing fetches into
-    "sample", "s-id", "s-hash", "s-file", "s-verify", "s-receipt-dl", "s-share", "s-out",
-    # pricing
-    "pricing", "buy-pack",
-    # personal tier toggle
-    "billing-monthly", "billing-annual", "personal-price", "personal-cadence",
-    "personal-equiv", "buy-personal", "coupon-pill",
-    # verify form
-    "v-file", "v-id", "v-go", "v-out",
-    # pack banner
-    "pack-banner", "pack-balance-text", "pack-clear",
-    # FAQ
-    "faq",
-    # email field for paid receipts
-    "email-row", "notify-email",
-    # verifier link in FAQ + footer
-    "verifier-link", "verifier-link-footer",
+    # Institutional homepage (v0.1+) IDs that v2.js depends on.
+    # If you rename or remove any of these in web/index.html, the
+    # drop zone, status panel, or live ledger strip will silently
+    # stop working — keep this set in sync with v2.js's getElementById
+    # calls.
+    "drop", "drop-input", "drop-btn",
+    "status",
+    "c-anchors", "c-blocks",
+    "latest-tz-block",
 }
 
 
