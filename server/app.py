@@ -2081,9 +2081,41 @@ def _seed_sample_receipt() -> None:
     sys.stderr.write(f"seeded sample receipt {rid} from {sample_dir} → {target}\n")
 
 
+def _start_upgrade_scheduler() -> None:
+    """Background thread that runs upgrade_worker on a cadence.
+
+    Without this the OTS calendars never get re-polled, so receipts stay
+    in 'pending' status indefinitely even after Bitcoin pinning happens.
+    Cadence: first run 60s after startup (give the server time to come up),
+    then every hour. The worker is fcntl-safe and idempotent, so even if
+    two machines run it concurrently it won't corrupt the ledger.
+    """
+    import threading
+    import upgrade_worker
+    interval = int(os.environ.get("ORPHO_UPGRADE_INTERVAL_SEC", "3600"))
+    initial_delay = int(os.environ.get("ORPHO_UPGRADE_INITIAL_DELAY_SEC", "60"))
+
+    def loop() -> None:
+        time.sleep(initial_delay)
+        while True:
+            try:
+                summary = upgrade_worker.upgrade_all()
+                sys.stderr.write(
+                    f"[upgrade] scanned={summary['scanned']} upgraded={summary['upgraded']} "
+                    f"skipped={summary['skipped']}\n"
+                )
+            except Exception as exc:  # noqa: BLE001 — worker errors must not kill the thread
+                sys.stderr.write(f"[upgrade] error: {type(exc).__name__}: {exc}\n")
+            time.sleep(interval)
+
+    t = threading.Thread(target=loop, name="upgrade-worker", daemon=True)
+    t.start()
+
+
 def main() -> int:
     WEB_DIR.mkdir(parents=True, exist_ok=True)
     _seed_sample_receipt()
+    _start_upgrade_scheduler()
     server = ThreadingHTTPServer((HOST, PORT), Handler)
     sys.stderr.write(f"orphograph listening on http://{HOST}:{PORT}\n")
     try:
