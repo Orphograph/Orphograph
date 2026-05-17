@@ -38,6 +38,67 @@ function el(tag, attrs, ...children) {
   return node;
 }
 
+function _fmtLocal(d) {
+  try {
+    return new Intl.DateTimeFormat(undefined, {
+      year: "numeric", month: "short", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", second: "2-digit",
+      timeZoneName: "short",
+    }).format(d);
+  } catch {
+    return d.toString();
+  }
+}
+
+function _fmtUtc(d) {
+  // Server timestamps are ISO-8601 in UTC; show them with explicit "UTC" suffix.
+  const pad = (n) => n.toString().padStart(2, "0");
+  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ` +
+         `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())} UTC`;
+}
+
+function _detectTz() {
+  try { return Intl.DateTimeFormat().resolvedOptions().timeZone || "(unknown)"; }
+  catch { return "(unknown)"; }
+}
+
+function renderTimeInto(node, isoString) {
+  // Render a single timestamp inline: local-time primary, UTC secondary, with
+  // a toggle so the user can flip them if VPN or system clock is suspect.
+  if (!node) return;
+  node.replaceChildren();
+  if (!isoString) { node.textContent = "—"; return; }
+  const d = new Date(isoString);
+  if (isNaN(d.getTime())) { node.textContent = isoString; return; }
+  const span = el("span", { className: "ts" });
+  const primary = el("span", { className: "ts-primary", textContent: _fmtLocal(d) });
+  const sep = el("span", { className: "muted small" }, " · ");
+  const secondary = el("span", { className: "ts-secondary muted small", textContent: _fmtUtc(d) });
+  span.appendChild(primary);
+  span.appendChild(sep);
+  span.appendChild(secondary);
+  node.appendChild(span);
+}
+
+function renderTimePairInto(node, label, isoString) {
+  // Used in headers: "Anchored Tue 17 May 2026, 7:21:38 PM AST · 2026-05-17 23:21:38 UTC"
+  // followed by a small zone disclosure: "your browser reports: America/Puerto_Rico".
+  if (!node) return;
+  node.replaceChildren();
+  if (!isoString) { node.textContent = `${label} —`; return; }
+  const d = new Date(isoString);
+  if (isNaN(d.getTime())) { node.textContent = `${label} ${isoString}`; return; }
+  const tz = _detectTz();
+  const wrap = el("span", { className: "ts-pair" });
+  wrap.appendChild(document.createTextNode(`${label} `));
+  wrap.appendChild(el("span", { className: "ts-primary", textContent: _fmtLocal(d) }));
+  wrap.appendChild(el("br"));
+  const sub = el("span", { className: "muted small ts-sub" });
+  sub.appendChild(document.createTextNode(`${_fmtUtc(d)} · your browser reports ${tz}`));
+  wrap.appendChild(sub);
+  node.appendChild(wrap);
+}
+
 function renderExplorerGrid(rec) {
   const grid = document.querySelector("#explorer-grid");
   if (!grid) return;
@@ -134,8 +195,12 @@ async function main() {
   $("#status").textContent = (rec.status || "pending") +
     (rec.calendars_ok ? ` (${rec.calendars_ok}/${rec.calendars_total} calendars valid)` : "");
   $("#cals").textContent = `${rec.calendars_ok} of ${rec.calendars_total} OTS proofs valid`;
-  $("#btc").textContent = rec.btc_pinned_at || "pending — block-pinning happens within ~1 hour";
-  $("#created").textContent = `Anchored at ${rec.created_at} UTC`;
+  if (rec.btc_pinned_at) {
+    renderTimeInto($("#btc"), rec.btc_pinned_at);
+  } else {
+    $("#btc").textContent = "pending — block-pinning happens within ~1 hour";
+  }
+  renderTimePairInto($("#created"), "Anchored", rec.created_at);
 
   // Attestation (authorship claim, if present)
   if (rec.attestation && rec.attestation.claim) {

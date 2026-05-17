@@ -13,7 +13,7 @@
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://orphograph.com/">
 <meta name="twitter:card" content="summary_large_image">
-<link rel="stylesheet" href="/index.css?v=5">
+<link rel="stylesheet" href="/index.css?v=6">
 </head>
 <body>
 
@@ -84,6 +84,15 @@
       </label>
     </div>
     <div class="status-line" id="status"></div>
+    <div class="sticky-status" id="sticky-status" hidden></div>
+    <section class="recent-receipts" id="recent-receipts" hidden>
+      <h3>Your recent receipts <span class="muted small">— from this browser</span></h3>
+      <p class="muted small">
+        Stored locally. Anyone with the receipt URL can view it; nothing
+        identifies you to us. Clear browser data to remove this list.
+      </p>
+      <div class="recent-list" id="recent-receipts-body"></div>
+    </section>
   </div>
 </section>
 

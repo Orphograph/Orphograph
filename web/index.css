@@ -71,8 +71,8 @@
      Horizontal: seal on the LEFT, wordmark stack on the RIGHT.
      No card. No white background. The transparent seal floats directly
      on the cream paper. On mobile the seal stacks above the text. */
-  .masthead{padding:64px 0 24px;background:transparent;}
-  .lockup{display:flex;align-items:center;gap:28px;max-width:780px;}
+  .masthead{padding:48px 0 18px;background:transparent;}
+  .lockup{display:flex;align-items:center;gap:14px;max-width:780px;}
   .lockup-seal{
     width:150px;height:auto;flex-shrink:0;display:block;
     background:transparent;
@@ -119,9 +119,9 @@
   }
   .hero .chips span::before{content:"";width:6px;height:6px;background:var(--confirm);border-radius:50%;}
   @media (max-width:880px){
-    .masthead{padding:36px 0 16px;}
-    .lockup{flex-direction:column;align-items:center;text-align:center;gap:18px;max-width:none;}
-    .lockup-seal{width:140px;}
+    .masthead{padding:24px 0 8px;}
+    .lockup{flex-direction:column;align-items:center;text-align:center;gap:8px;max-width:none;}
+    .lockup-seal{width:120px;}
     .lockup-text{align-items:center;}
     .lockup-wordmark{font-size:26px;letter-spacing:0.26em;}
     .lockup-rule{max-width:220px;}
@@ -387,3 +387,52 @@
 section.band.band-glow{
   background:linear-gradient(180deg, transparent, rgba(255,255,255,0.4) 50%, transparent);
 }
+
+/* ── Sticky in-flight status banner ───────────────────────────────────
+   Shown to the user while an anchor is in progress, or after it lands.
+   Survives reload via localStorage hydrate. */
+.sticky-status{
+  margin-top:18px;padding:12px 16px;border-radius:8px;
+  font-size:14px;line-height:1.45;
+  background:rgba(255,255,255,0.7);border:1px solid var(--line-soft);
+  color:var(--ink);
+}
+.sticky-status[data-kind="success"]{
+  background:rgba(180,210,180,0.25);border-color:rgba(110,150,110,0.4);
+}
+.sticky-status[data-kind="error"]{
+  background:rgba(230,190,190,0.30);border-color:rgba(180,90,90,0.45);
+}
+.sticky-status[data-kind="warn"]{
+  background:rgba(230,215,170,0.30);border-color:rgba(180,150,80,0.45);
+}
+
+/* ── Recent receipts panel (localStorage) ────────────────────────────
+   Lists receipts created from this browser. Pure client-side; no PII
+   leaves the machine. */
+.recent-receipts{
+  margin-top:24px;padding:18px 20px;border-radius:10px;
+  background:rgba(255,255,255,0.45);border:1px solid var(--line-soft);
+}
+.recent-receipts h3{
+  font-family:var(--serif);font-size:17px;font-weight:500;margin:0 0 6px;
+  letter-spacing:0;
+}
+.recent-receipts p{margin:0 0 14px;}
+.recent-list{display:flex;flex-direction:column;gap:6px;}
+.recent-row{
+  display:flex;flex-direction:column;gap:2px;
+  padding:10px 12px;border-radius:6px;
+  background:rgba(255,255,255,0.6);border:1px solid var(--line-soft);
+  text-decoration:none;color:var(--ink);
+  transition:background-color 0.15s ease, border-color 0.15s ease;
+}
+.recent-row:hover{
+  background:rgba(255,255,255,0.85);border-color:var(--line);
+}
+.recent-id{font-size:13.5px;color:var(--ink);}
+.recent-meta{font-size:12px;}
+
+/* ── Local-time pair (ts-primary + UTC sibling) ──────────────────── */
+.ts-primary{font-weight:500;color:var(--ink);}
+.ts-sub{display:block;margin-top:2px;}

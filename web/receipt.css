@@ -21,19 +21,23 @@
 .card-header h1 { font-size: 26px; font-weight: 400; margin: 0 0 4px; letter-spacing: 0; }
 .brand-stamp {
   text-align: right; opacity: 0.95;
-  display: flex; flex-direction: column; align-items: flex-end; gap: 8px;
+  display: flex; flex-direction: column; align-items: flex-end; gap: 4px;
   background: transparent;
 }
 .brand-stamp .receipt-seal {
-  /* Transparent PNG (170x285) — let the natural aspect carry, no width/height
-     attribute on the <img> tag so the browser doesn't squish into a square. */
-  width: 64px; height: auto; display: block;
+  /* Source PNG is 170x285. Globe content occupies rows 20-186 (verified via
+     PIL alpha histogram); empty space below. Render at 72x72 square. With
+     object-fit:cover the image scales to 72x120.7; object-position 16%
+     pulls the visible window down so the globe center (scaled row 43.6)
+     lands at the square center. */
+  width: 72px; height: 72px; display: block;
+  object-fit: cover; object-position: center 16%;
   background: transparent;
   filter: drop-shadow(0 4px 14px rgba(60,40,20,0.10))
           drop-shadow(0 1px 3px rgba(60,40,20,0.06));
 }
 @media print {
-  .brand-stamp .receipt-seal { width: 60px; opacity: 1; filter: none; }
+  .brand-stamp .receipt-seal { width: 68px; height: 68px; opacity: 1; filter: none; }
 }
 .small { font-size: 12px; line-height: 1.4; }
 

@@ -2,6 +2,176 @@
 
 const $ = (sel) => document.querySelector(sel);
 const PACK_KEY = "orpho_pack_token";
+const RECENT_KEY = "orpho_recent_receipts";
+const STATE_KEY = "orpho_anchor_state";
+const RECENT_MAX = 20;
+
+// ─── Local-time rendering ──────────────────────────────────────────────
+// Server timestamps arrive as ISO-8601 UTC. Browser users see their local
+// time as the primary read; UTC stays visible underneath so a VPN or skewed
+// system clock is debuggable. Browser timezone is disclosed so the user can
+// notice if it's wrong.
+function _fmtLocal(d) {
+  try {
+    return new Intl.DateTimeFormat(undefined, {
+      year: "numeric", month: "short", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", second: "2-digit",
+      timeZoneName: "short",
+    }).format(d);
+  } catch { return d.toString(); }
+}
+function _fmtUtc(d) {
+  const pad = (n) => n.toString().padStart(2, "0");
+  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ` +
+         `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())} UTC`;
+}
+function _detectTz() {
+  try { return Intl.DateTimeFormat().resolvedOptions().timeZone || "(unknown)"; }
+  catch { return "(unknown)"; }
+}
+function renderTimeInto(node, isoString) {
+  if (!node) return;
+  node.replaceChildren();
+  if (!isoString) { node.textContent = "—"; return; }
+  const d = new Date(isoString);
+  if (isNaN(d.getTime())) { node.textContent = isoString; return; }
+  const tz = _detectTz();
+  const local = document.createElement("span");
+  local.className = "ts-primary";
+  local.textContent = _fmtLocal(d);
+  const sub = document.createElement("span");
+  sub.className = "muted small";
+  sub.textContent = ` · ${_fmtUtc(d)} · zone ${tz}`;
+  node.appendChild(local);
+  node.appendChild(sub);
+}
+
+// ─── Recent receipts (localStorage) ────────────────────────────────────
+function saveRecentReceipt(record) {
+  try {
+    const list = loadRecentReceipts();
+    // Skip if same receipt is already at the head.
+    if (list.length && list[0].receipt_id === record.receipt_id) return;
+    list.unshift({
+      receipt_id: record.receipt_id,
+      sha256_prefix: (record.hash_hex || "").slice(0, 12),
+      label: record.client_label || "",
+      created_at: record.created_at,
+      calendars_ok: record.calendars_ok,
+      calendars_total: record.calendars_total,
+      status: record.status || "pending",
+    });
+    localStorage.setItem(RECENT_KEY, JSON.stringify(list.slice(0, RECENT_MAX)));
+  } catch {}
+}
+function loadRecentReceipts() {
+  try {
+    const raw = localStorage.getItem(RECENT_KEY);
+    if (!raw) return [];
+    const list = JSON.parse(raw);
+    return Array.isArray(list) ? list : [];
+  } catch { return []; }
+}
+function renderRecentReceipts() {
+  const host = $("#recent-receipts");
+  const body = $("#recent-receipts-body");
+  if (!host || !body) return;
+  const list = loadRecentReceipts();
+  if (!list.length) { host.hidden = true; return; }
+  host.hidden = false;
+  body.replaceChildren();
+  for (const r of list) {
+    const row = document.createElement("a");
+    row.className = "recent-row";
+    row.href = `/r/${r.receipt_id}`;
+    const idCell = document.createElement("span");
+    idCell.className = "mono recent-id";
+    idCell.textContent = r.receipt_id;
+    const meta = document.createElement("span");
+    meta.className = "muted small recent-meta";
+    const d = r.created_at ? new Date(r.created_at) : null;
+    const when = (d && !isNaN(d.getTime())) ? _fmtLocal(d) : (r.created_at || "");
+    const status = r.status || "pending";
+    meta.textContent = `${when} · ${status} · ${r.calendars_ok || 0}/${r.calendars_total || 5} cals` +
+                       (r.label ? ` · ${r.label}` : "");
+    row.appendChild(idCell);
+    row.appendChild(meta);
+    body.appendChild(row);
+  }
+}
+
+// ─── Reload-resilient anchor state ─────────────────────────────────────
+// We persist the current anchor phase to localStorage so a mid-flight reload
+// shows the user where they were and what's still happening. Cleared on done
+// or after a hard timeout.
+function saveAnchorState(phase, ctx) {
+  try {
+    localStorage.setItem(STATE_KEY, JSON.stringify({
+      phase, ts: Date.now(), ...ctx,
+    }));
+  } catch {}
+}
+function loadAnchorState() {
+  try {
+    const raw = localStorage.getItem(STATE_KEY);
+    if (!raw) return null;
+    const s = JSON.parse(raw);
+    // Stale state >15min old is discarded — page loaded after a closed tab.
+    if (Date.now() - (s.ts || 0) > 15 * 60 * 1000) return null;
+    return s;
+  } catch { return null; }
+}
+function clearAnchorState() {
+  try { localStorage.removeItem(STATE_KEY); } catch {}
+}
+function showStatusBanner(text, kind) {
+  const el = $("#sticky-status");
+  if (!el) return;
+  el.hidden = false;
+  el.dataset.kind = kind || "info";
+  el.textContent = text;
+}
+function hideStatusBanner() {
+  const el = $("#sticky-status");
+  if (el) el.hidden = true;
+}
+
+// ─── BTC confirmation polling ──────────────────────────────────────────
+// After a successful anchor, ping /api/verify/<id> every 90s. When status
+// flips from "pending" to "partial" or "pinned", update the receipt card
+// and the recent-receipts panel.
+let _pinPollTimer = null;
+function startPinPolling(receiptId) {
+  if (_pinPollTimer) clearInterval(_pinPollTimer);
+  let attempts = 0;
+  const maxAttempts = 80;  // ~2 hours at 90s — calendars usually land in 1h.
+  _pinPollTimer = setInterval(async () => {
+    attempts += 1;
+    if (attempts > maxAttempts) { clearInterval(_pinPollTimer); _pinPollTimer = null; return; }
+    try {
+      const r = await fetch(`/api/verify/${encodeURIComponent(receiptId)}`);
+      if (!r.ok) return;
+      const rec = await r.json();
+      if (rec.status && rec.status !== "pending") {
+        clearInterval(_pinPollTimer); _pinPollTimer = null;
+        // Update recent-receipts entry with new status.
+        try {
+          const list = loadRecentReceipts();
+          const idx = list.findIndex(x => x.receipt_id === receiptId);
+          if (idx >= 0) {
+            list[idx].status = rec.status;
+            localStorage.setItem(RECENT_KEY, JSON.stringify(list));
+            renderRecentReceipts();
+          }
+        } catch {}
+        showStatusBanner(
+          `Bitcoin confirmation landed for ${receiptId} — status is now "${rec.status}".`,
+          "success",
+        );
+      }
+    } catch {}
+  }, 90 * 1000);
+}
 
 function track(event, page) {
   // Fire-and-forget — silent on any failure. Same-origin only.
@@ -139,8 +309,16 @@ function showReceipt(record) {
   $("#receipt").hidden = false;
   $("#r-id").textContent = record.receipt_id;
   $("#r-hash").textContent = record.hash_hex;
-  $("#r-time").textContent = record.created_at;
+  renderTimeInto($("#r-time"), record.created_at);
   $("#r-cals").textContent = `${record.calendars_ok} of ${record.calendars_total} succeeded`;
+  saveRecentReceipt(record);
+  renderRecentReceipts();
+  clearAnchorState();
+  showStatusBanner(
+    `Receipt ${record.receipt_id} issued. Watching for Bitcoin confirmation…`,
+    "success",
+  );
+  startPinPolling(record.receipt_id);
 
   const warn = $("#r-warn");
   if (warn) {
@@ -178,8 +356,12 @@ async function anchorFile(file) {
   track("anchor_start", "landing");
   $("#status").hidden = false;
   setStep("hash", "active");
+  saveAnchorState("hashing", { filename: file.name, size: file.size });
+  showStatusBanner(`Hashing ${file.name} locally…`, "info");
   const { sha256: hash, sha512 } = await dualHash(file);
   setStep("hash", "done");
+  saveAnchorState("posting", { filename: file.name, sha256_prefix: hash.slice(0, 12) });
+  showStatusBanner(`Submitting fingerprint to OpenTimestamps calendars…`, "info");
 
   const includeFilename = !!$("#include-filename")?.checked;
   const body = {
@@ -257,10 +439,13 @@ async function anchorFile(file) {
     const err = await resp.json().catch(() => ({ error: "unknown error" }));
     if (resp.status === 429) {
       const sec = err.retry_after_seconds || 60;
+      showStatusBanner(`Rate limit reached. Try again in ${sec}s or buy a Pack.`, "error");
       alert(`Rate limit reached (${err.limit_per_hour || "?"} per hour). Try again in ${sec}s, or buy a Pack to skip the limit.`);
     } else {
+      showStatusBanner(`Anchor failed: ${err.error || resp.statusText}`, "error");
       alert("Anchor failed: " + (err.error || resp.statusText));
     }
+    clearAnchorState();
     return;
   }
   const record = await resp.json();
@@ -268,6 +453,27 @@ async function anchorFile(file) {
   track("anchor_done", "landing");
   showReceipt(record);
   if (record.pack_consumed) refreshPackBanner();
+}
+
+// On page load: if a recent in-flight state survived a reload, surface it.
+function hydrateAnchorStateOnLoad() {
+  const s = loadAnchorState();
+  if (!s) return;
+  if (s.phase === "hashing") {
+    showStatusBanner(
+      `A previous anchor of "${s.filename || "your file"}" was hashing when this page reloaded. ` +
+      `The file never leaves your browser, so you'll need to drop it again to resume.`,
+      "warn",
+    );
+  } else if (s.phase === "posting") {
+    showStatusBanner(
+      `A previous anchor was submitting to OpenTimestamps when this page reloaded. ` +
+      `If the server accepted it, the receipt should appear under "Recent receipts" below within a minute.`,
+      "warn",
+    );
+  }
+  // Clear so we don't re-show stale banners on subsequent navigations.
+  clearAnchorState();
 }
 
 function readCoupon() {
@@ -671,6 +877,8 @@ refreshPackBanner();
 wireSampleCard();
 wireWaitlistForms();
 detectSignedIn();
+renderRecentReceipts();
+hydrateAnchorStateOnLoad();
 track("page_view", "landing");
 
 const buyPackBtn = $("#buy-pack");
