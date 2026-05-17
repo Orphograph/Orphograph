@@ -74,7 +74,68 @@ async function fetchStatus(orderId) {
   } catch { return null; }
 }
 
+// Stripe success/cancel branch: when buyers land here from Stripe Checkout,
+// the URL has ?stripe_session=cs_…&status=success (or ?stripe=canceled).
+// We render a confirmation block instead of trying to look up a BTC order.
+function stripeSessionFromUrl() {
+  return new URLSearchParams(location.search).get("stripe_session") || "";
+}
+function stripeWasCanceled() {
+  return new URLSearchParams(location.search).get("stripe") === "canceled";
+}
+async function showStripeConfirmation(sessionId) {
+  $("#loading").hidden = true;
+  $("#order").hidden = true;
+  // Reuse the #settled card — it already conveys "transaction complete."
+  const settledEl = $("#settled");
+  if (settledEl) {
+    settledEl.hidden = false;
+    // Replace any BTC-specific copy with Stripe-specific success copy.
+    const h = settledEl.querySelector("h1, h2");
+    if (h) h.textContent = "Payment received.";
+    const p = settledEl.querySelector("p");
+    if (p) {
+      p.textContent =
+        "Your Pack code has been emailed. It also lives in your account at /account.html. " +
+        "If it does not arrive within a few minutes, check spam, then email hello@orphograph.com.";
+    }
+    const a = $("#tx-link");
+    if (a) {
+      a.textContent = "View receipt page →";
+      a.href = "/account.html";
+    }
+  }
+  // Best-effort: ask the server to verify the session before showing success.
+  // If verification fails (bad id, payment_status != paid), we still show
+  // something rather than a broken page — the webhook is the source of truth.
+  try {
+    const r = await fetch("/api/stripe/session?id=" + encodeURIComponent(sessionId));
+    if (r.ok) {
+      const j = await r.json();
+      if (j && j.payment_status && j.payment_status !== "paid") {
+        const p = settledEl && settledEl.querySelector("p");
+        if (p) p.textContent =
+          "Stripe reports this session is " + j.payment_status + ". " +
+          "If you completed payment, your Pack code will arrive shortly — the webhook is final source of truth.";
+      }
+    }
+  } catch (e) { /* keep the optimistic success view */ }
+}
+function showStripeCanceled() {
+  $("#loading").hidden = true;
+  $("#order").hidden = true;
+  $("#error").hidden = false;
+  $("#error-message").textContent =
+    "Checkout was canceled. Your card was not charged. " +
+    "Head back to the home page to try again.";
+}
+
 async function main() {
+  // Stripe branch takes priority — it adds query strings, not path segments.
+  if (stripeWasCanceled()) { showStripeCanceled(); return; }
+  const ssid = stripeSessionFromUrl();
+  if (ssid) { await showStripeConfirmation(ssid); return; }
+
   const orderId = orderIdFromUrl();
   if (!orderId) { showError("Bad URL. Start over from the home page."); return; }
   const order = await fetchStatus(orderId);

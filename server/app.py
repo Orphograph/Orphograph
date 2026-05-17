@@ -397,6 +397,15 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/config":
             _json_response(self, 200, public_config.snapshot())
             return
+        if path == "/api/stripe/session":
+            # Read-only confirmation lookup. buy.js calls this on the
+            # success-redirect page to show the buyer something specific
+            # before the webhook has finished minting their Pack code.
+            # The webhook is still the source of truth — this endpoint is
+            # cosmetic but important for the "did my payment go through?"
+            # moment.
+            self._handle_stripe_session_status()
+            return
         # Maintenance mode: allow only health/stats and static pages (founder dashboards stay live)
         if ORPHO_MAINTENANCE_MODE and not path.startswith(("/web/founder/", "/status.html")):
             _json_response(self, 503, {
@@ -1832,6 +1841,52 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _handle_stripe_session_status(self) -> None:
+        """GET /api/stripe/session?id=cs_... — read-only lookup for the
+        post-Checkout confirmation page.
+
+        Returns a small, safe subset of the Stripe Session object:
+          { id, payment_status, mode, customer_email, amount_total, currency }
+
+        Used by web/buy.js after Stripe redirects the buyer to
+        /buy.html?stripe_session=cs_...&status=success. The webhook is the
+        source of truth for credit issuance — this endpoint exists only so
+        the buyer sees something specific instead of a generic page while
+        the webhook is in flight.
+        """
+        if not stripe_api.is_configured():
+            _json_response(self, 503, {"error": "Stripe not configured"})
+            return
+        # Light rate-limit so this can't be used as a session-id oracle
+        allowed, _ = _anchor_limiter.check(f"stripe-session:{self._client_key()}")
+        if not allowed:
+            _json_response(self, 429, {"error": "rate limit exceeded"})
+            return
+        from urllib.parse import parse_qs, urlparse
+        query = parse_qs(urlparse(self.path).query)
+        sid_list = query.get("id", [])
+        sid = sid_list[0] if sid_list else ""
+        # Stripe session IDs are cs_test_… or cs_live_… plus alphanumerics
+        if not sid or not sid.startswith("cs_") or len(sid) > 256 or not all(c.isalnum() or c == "_" for c in sid):
+            _json_response(self, 400, {"error": "invalid session id"})
+            return
+        result = stripe_api._request("GET", f"/checkout/sessions/{sid}")
+        if not result.get("ok"):
+            status = result.get("status", 502)
+            _json_response(self, status if status in (400, 404) else 502, {"error": result.get("error", "stripe error")})
+            return
+        data = result.get("data") or {}
+        # Whitelist what we expose — never echo Stripe's full session blob
+        _json_response(self, 200, {
+            "id": data.get("id"),
+            "payment_status": data.get("payment_status"),
+            "status": data.get("status"),
+            "mode": data.get("mode"),
+            "customer_email": (data.get("customer_details") or {}).get("email") or data.get("customer_email"),
+            "amount_total": data.get("amount_total"),
+            "currency": data.get("currency"),
+        })
+
     def _handle_stripe_checkout(self) -> None:
         """Create a Stripe Checkout Session and return its hosted URL.
 
@@ -1841,6 +1896,7 @@ class Handler(BaseHTTPRequestHandler):
         Response:
             200 → { "url": "https://checkout.stripe.com/c/pay/cs_..." }
             400 → { "error": "..." }
+            429 → if the per-IP rate limit is exceeded
             503 → if Stripe is not configured
 
         The buyer's browser redirects to the `url`. After payment, Stripe
@@ -1852,6 +1908,24 @@ class Handler(BaseHTTPRequestHandler):
             return
         if ORPHO_DISABLE_CHECKOUT:
             _json_response(self, 503, {"error": "Checkout is temporarily disabled"})
+            return
+
+        # Rate-limit: every other public POST gates on _anchor_limiter; this
+        # one was missing it. Trivial unrestricted loop would create unbounded
+        # cs_… sessions and pressure our Stripe API quota. Per-IP-prefix key.
+        allowed, retry_after = _anchor_limiter.check(f"stripe:{self._client_key()}")
+        if not allowed:
+            self.send_response(429)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Retry-After", str(int(retry_after) + 1))
+            body = json.dumps({
+                "error": "rate limit exceeded",
+                "retry_after_seconds": int(retry_after) + 1,
+            }).encode("utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            _security_headers(self)
+            self.end_headers()
+            self.wfile.write(body)
             return
 
         length = _read_content_length(self)
@@ -1881,13 +1955,20 @@ class Handler(BaseHTTPRequestHandler):
             })
             return
 
-        # Build absolute success/cancel URLs. Prefer SITE_URL env, fall back
-        # to the request's Host header. Both URLs MUST be HTTPS for production.
+        # Build absolute success/cancel URLs. SITE_URL is the authoritative
+        # source in production; the loopback fallback is dev-only. We fail
+        # closed if SITE_URL is unset in a production environment (per the
+        # hardening review — relying on Host header is a proxy/SSRF foot-gun).
         site = os.environ.get("SITE_URL", "").rstrip("/")
         if not site:
-            host = self.headers.get("Host", "orphograph.com")
-            scheme = "https" if not host.startswith("127.") and not host.startswith("localhost") else "http"
-            site = f"{scheme}://{host}"
+            host = self.headers.get("Host", "")
+            is_loopback = host.startswith("127.") or host.startswith("localhost") or host.startswith("[::1]")
+            if os.environ.get("ORPHO_ENV", "").lower() == "production" and not is_loopback:
+                sys.stderr.write("[stripe] SITE_URL not set in production; refusing to build success_url from Host header\n")
+                _json_response(self, 503, {"error": "checkout misconfigured (SITE_URL unset)"})
+                return
+            scheme = "http" if is_loopback else "https"
+            site = f"{scheme}://{host or 'orphograph.com'}"
         success_url = f"{site}/buy.html?stripe_session={{CHECKOUT_SESSION_ID}}&status=success"
         cancel_url = f"{site}/?stripe=canceled"
 
