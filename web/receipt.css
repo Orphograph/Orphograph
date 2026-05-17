@@ -19,10 +19,21 @@
   margin-bottom: 24px;
 }
 .card-header h1 { font-size: 26px; font-weight: 400; margin: 0 0 4px; letter-spacing: 0; }
-.brand-stamp { text-align: right; opacity: 0.95; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
-.brand-stamp .receipt-seal { width: 72px; height: auto; filter: drop-shadow(0 2px 8px rgba(40,28,12,0.12)); }
+.brand-stamp {
+  text-align: right; opacity: 0.95;
+  display: flex; flex-direction: column; align-items: flex-end; gap: 8px;
+  background: transparent;
+}
+.brand-stamp .receipt-seal {
+  /* Transparent PNG (170x285) — let the natural aspect carry, no width/height
+     attribute on the <img> tag so the browser doesn't squish into a square. */
+  width: 64px; height: auto; display: block;
+  background: transparent;
+  filter: drop-shadow(0 4px 14px rgba(60,40,20,0.10))
+          drop-shadow(0 1px 3px rgba(60,40,20,0.06));
+}
 @media print {
-  .brand-stamp .receipt-seal { width: 64px; opacity: 1; filter: none; }
+  .brand-stamp .receipt-seal { width: 60px; opacity: 1; filter: none; }
 }
 .small { font-size: 12px; line-height: 1.4; }
 
