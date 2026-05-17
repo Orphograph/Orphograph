@@ -887,6 +887,9 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/api/stripe/webhook":
             self._handle_stripe_webhook()
             return
+        if self.path == "/api/stripe/checkout":
+            self._handle_stripe_checkout()
+            return
         # Maintenance mode: block user-facing requests but allow critical ops
         if ORPHO_MAINTENANCE_MODE:
             _json_response(self, 503, {
@@ -1828,6 +1831,81 @@ class Handler(BaseHTTPRequestHandler):
         _security_headers(self)
         self.end_headers()
         self.wfile.write(body)
+
+    def _handle_stripe_checkout(self) -> None:
+        """Create a Stripe Checkout Session and return its hosted URL.
+
+        Request body (JSON):
+            { "plan": "pack" | "pro", "email"?: "user@example.com" }
+
+        Response:
+            200 → { "url": "https://checkout.stripe.com/c/pay/cs_..." }
+            400 → { "error": "..." }
+            503 → if Stripe is not configured
+
+        The buyer's browser redirects to the `url`. After payment, Stripe
+        sends a `checkout.session.completed` webhook to /api/stripe/webhook,
+        which mints the Pack code or activates the subscription.
+        """
+        if not stripe_api.is_configured():
+            _json_response(self, 503, {"error": "Stripe is not configured on this server"})
+            return
+        if ORPHO_DISABLE_CHECKOUT:
+            _json_response(self, 503, {"error": "Checkout is temporarily disabled"})
+            return
+
+        length = _read_content_length(self)
+        if length <= 0 or length > MAX_BODY_BYTES:
+            _json_response(self, 400, {"error": "invalid body size"})
+            return
+        try:
+            payload = json.loads(self.rfile.read(length).decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            _json_response(self, 400, {"error": "body must be JSON"})
+            return
+
+        plan = (payload.get("plan") or "").strip().lower()
+        email = (payload.get("email") or "").strip()
+        if plan == "pack":
+            price_id = os.environ.get("STRIPE_PRICE_PACK", "")
+            mode = "payment"
+        elif plan in ("pro", "sub", "subscription", "standing", "standing_order"):
+            price_id = os.environ.get("STRIPE_PRICE_SUB", "")
+            mode = "subscription"
+        else:
+            _json_response(self, 400, {"error": "plan must be 'pack' or 'pro'"})
+            return
+        if not price_id:
+            _json_response(self, 503, {
+                "error": f"Stripe price not configured (STRIPE_PRICE_{'PACK' if plan == 'pack' else 'SUB'} unset)",
+            })
+            return
+
+        # Build absolute success/cancel URLs. Prefer SITE_URL env, fall back
+        # to the request's Host header. Both URLs MUST be HTTPS for production.
+        site = os.environ.get("SITE_URL", "").rstrip("/")
+        if not site:
+            host = self.headers.get("Host", "orphograph.com")
+            scheme = "https" if not host.startswith("127.") and not host.startswith("localhost") else "http"
+            site = f"{scheme}://{host}"
+        success_url = f"{site}/buy.html?stripe_session={{CHECKOUT_SESSION_ID}}&status=success"
+        cancel_url = f"{site}/?stripe=canceled"
+
+        result = stripe_api.create_checkout_session(
+            price_id=price_id,
+            mode=mode,
+            success_url=success_url,
+            cancel_url=cancel_url,
+            customer_email=email if "@" in email else "",
+        )
+        if not result.get("ok"):
+            _json_response(self, 502, {"error": result.get("error", "stripe error")})
+            return
+        data = result.get("data") or {}
+        _json_response(self, 200, {
+            "url": data.get("url"),
+            "session_id": data.get("id"),
+        })
 
     def _handle_stripe_webhook(self) -> None:
         length = _read_content_length(self)

@@ -12,6 +12,7 @@ Inert if STRIPE_SECRET_KEY is unset — every call returns a clear
 Public API:
     cancel_at_period_end(subscription_id) -> dict
     reactivate(subscription_id) -> dict
+    create_checkout_session(price_id, mode, success_url, cancel_url, ...) -> dict
     is_configured() -> bool
 """
 from __future__ import annotations
@@ -81,3 +82,56 @@ def reactivate(subscription_id: str) -> dict:
         return {"ok": False, "error": "missing subscription id"}
     return _request("POST", f"/subscriptions/{subscription_id}",
                     form={"cancel_at_period_end": "false"})
+
+
+def create_checkout_session(
+    *,
+    price_id: str,
+    mode: str,
+    success_url: str,
+    cancel_url: str,
+    customer_email: str = "",
+    client_reference_id: str = "",
+) -> dict:
+    """Create a Stripe Checkout Session.
+
+    mode: "payment" for one-time (Pack), "subscription" for recurring (Standing Order).
+
+    Returns {"ok": True, "data": {"id": "cs_…", "url": "https://checkout.stripe.com/…"}}
+    on success, or {"ok": False, "error": "…"} on failure.
+
+    The url field is the hosted Checkout page we redirect the buyer to. The
+    session id is included in the webhook payload's data.object.id when the
+    customer completes payment, which is how server/stripe_webhook.py
+    correlates the inbound event back to this purchase.
+    """
+    if not price_id:
+        return {"ok": False, "error": "missing price id"}
+    if mode not in ("payment", "subscription"):
+        return {"ok": False, "error": "mode must be 'payment' or 'subscription'"}
+
+    # Stripe API uses repeated-form-field syntax for nested arrays.
+    form: dict[str, str] = {
+        "mode": mode,
+        "success_url": success_url,
+        "cancel_url": cancel_url,
+        "line_items[0][price]": price_id,
+        "line_items[0][quantity]": "1",
+        # Auto-tax keeps us out of the "you owe back-tax" trap. Enabled
+        # only if Stripe Tax is set up on the account; harmless otherwise.
+        "automatic_tax[enabled]": "true",
+        # Let customers update their billing address — required when
+        # automatic_tax is on (Stripe needs a destination to compute tax).
+        "billing_address_collection": "auto",
+    }
+    if customer_email:
+        form["customer_email"] = customer_email
+    if client_reference_id:
+        form["client_reference_id"] = client_reference_id
+    # For one-time Pack purchases, collect a phone+email and persist as
+    # a Customer object so the buyer can come back later. For subs this
+    # already happens automatically.
+    if mode == "payment":
+        form["customer_creation"] = "if_required"
+
+    return _request("POST", "/checkout/sessions", form=form)

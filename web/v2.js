@@ -196,4 +196,52 @@
       if (input.files && input.files[0]) anchorFile(input.files[0]);
     });
   }
+
+  // ── Stripe Checkout buttons (data-checkout="pack" | "pro") ─────────
+  // Click handler hits /api/stripe/checkout, gets a hosted Checkout URL,
+  // then redirects the browser to it. Stripe handles card entry and on
+  // success fires the webhook that mints the Pack code / activates sub.
+  async function startCheckout(plan, button) {
+    const originalLabel = button.textContent;
+    button.textContent = "Loading…";
+    button.style.pointerEvents = "none";
+    try {
+      const r = await fetch("/api/stripe/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan }),
+      });
+      if (!r.ok) {
+        const body = await r.text();
+        let msg = "Checkout temporarily unavailable.";
+        try {
+          const j = JSON.parse(body);
+          if (j && j.error) msg = j.error;
+        } catch (e) {}
+        alert(msg);
+        button.textContent = originalLabel;
+        button.style.pointerEvents = "";
+        return;
+      }
+      const j = await r.json();
+      if (j && j.url) {
+        window.location.href = j.url;
+        return;
+      }
+      alert("Checkout response missing url.");
+      button.textContent = originalLabel;
+      button.style.pointerEvents = "";
+    } catch (e) {
+      alert("Network error opening checkout: " + (e && e.message ? e.message : e));
+      button.textContent = originalLabel;
+      button.style.pointerEvents = "";
+    }
+  }
+  document.querySelectorAll("[data-checkout]").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      const plan = btn.dataset.checkout;
+      if (plan === "pack" || plan === "pro") startCheckout(plan, btn);
+    });
+  });
 })();
