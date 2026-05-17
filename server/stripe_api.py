@@ -33,9 +33,41 @@ def is_configured() -> bool:
     return bool(STRIPE_SECRET_KEY)
 
 
+def _categorize_http_error(code: int) -> tuple[str, bool, bool]:
+    """Map Stripe HTTP status → (category, retryable, operator_alert).
+
+    Categories let callers map upstream Stripe errors to specific customer
+    messages instead of a generic 502.
+
+    - auth_error    → 401/403: STRIPE_SECRET_KEY rotated / revoked. STOP THE LINE.
+    - card_declined → 402: actionable by the buyer (retry with different card)
+    - invalid_request → 400: our bug (bad price ID, missing param). Log + 502.
+    - rate_limited  → 429: bounce; client may retry with Retry-After
+    - stripe_outage → 5xx: Stripe is having issues. Retryable. Surface friendly msg.
+    - http_error    → anything else 4xx
+    """
+    if code in (401, 403):
+        return ("auth_error", False, True)
+    if code == 402:
+        return ("card_declined", False, False)
+    if code == 429:
+        return ("rate_limited", True, False)
+    if 500 <= code < 600:
+        return ("stripe_outage", True, False)
+    if code == 400:
+        return ("invalid_request", False, False)
+    if 400 <= code < 500:
+        return ("http_error", False, False)
+    return ("http_error", False, False)
+
+
 def _request(method: str, path: str, form: dict | None = None) -> dict:
     if not STRIPE_SECRET_KEY:
-        return {"ok": False, "error": "Stripe API not configured (STRIPE_SECRET_KEY unset)"}
+        return {
+            "ok": False,
+            "category": "not_configured",
+            "error": "Stripe API not configured (STRIPE_SECRET_KEY unset)",
+        }
     data = urllib.parse.urlencode(form or {}).encode("utf-8") if form else None
     req = urllib.request.Request(
         STRIPE_BASE + path,
@@ -52,16 +84,76 @@ def _request(method: str, path: str, form: dict | None = None) -> dict:
             return {"ok": True, "data": json.loads(body) if body else {}}
     except urllib.error.HTTPError as e:
         body = e.read().decode("utf-8", errors="replace") if hasattr(e, "read") else ""
-        sys.stderr.write(f"[stripe_api] HTTP {e.code}: {body[:300]}\n")
         try:
             err = json.loads(body)
-            msg = err.get("error", {}).get("message", str(e))
+            stripe_msg = err.get("error", {}).get("message") or ""
+            stripe_code = err.get("error", {}).get("code") or ""
+            decline_code = err.get("error", {}).get("decline_code") or ""
         except (json.JSONDecodeError, ValueError):
-            msg = f"HTTP {e.code}"
-        return {"ok": False, "error": msg, "status": e.code}
-    except (urllib.error.URLError, OSError) as e:
-        sys.stderr.write(f"[stripe_api] {type(e).__name__}: {e}\n")
-        return {"ok": False, "error": f"{type(e).__name__}"}
+            stripe_msg = ""
+            stripe_code = ""
+            decline_code = ""
+        category, retryable, operator_alert = _categorize_http_error(e.code)
+        # Auth errors page the operator — STRIPE_SECRET_KEY may be rotated/revoked.
+        if operator_alert:
+            sys.stderr.write(
+                f"[stripe_api] ALERT: auth failure ({e.code}) — STRIPE_SECRET_KEY may be invalid. path={path}\n"
+            )
+        else:
+            sys.stderr.write(
+                f"[stripe_api] HTTP {e.code} ({category}) path={path} body={body[:200]}\n"
+            )
+        # Customer-facing message — never leak our internal Stripe error verbatim
+        # for auth/server errors. Card-declined we DO want the buyer to see.
+        if category == "auth_error":
+            customer_msg = "Payment system misconfigured. We've been notified."
+        elif category == "card_declined":
+            customer_msg = stripe_msg or "Your card was declined. Try a different card."
+        elif category == "rate_limited":
+            customer_msg = "Too many requests. Try again in a minute."
+        elif category == "stripe_outage":
+            customer_msg = "Stripe is having issues — try again in a minute, or pay via Bitcoin."
+        elif category == "invalid_request":
+            customer_msg = stripe_msg or "Request rejected by Stripe (invalid parameters)."
+        else:
+            customer_msg = stripe_msg or f"Payment error ({e.code})."
+        return {
+            "ok": False,
+            "category": category,
+            "error": customer_msg,
+            "status": e.code,
+            "retryable": retryable,
+            "operator_alert": operator_alert,
+            "stripe_code": stripe_code,
+            "decline_code": decline_code,
+        }
+    except urllib.error.URLError as e:
+        # DNS failure, connection-refused, TLS handshake — Stripe unreachable
+        sys.stderr.write(
+            f"[stripe_api] URLError path={path} reason={getattr(e, 'reason', e)}\n"
+        )
+        return {
+            "ok": False,
+            "category": "network_error",
+            "error": "Could not reach payment provider — please retry.",
+            "retryable": True,
+        }
+    except TimeoutError:
+        sys.stderr.write(f"[stripe_api] timeout path={path}\n")
+        return {
+            "ok": False,
+            "category": "timeout",
+            "error": "Payment provider timed out — please retry.",
+            "retryable": True,
+        }
+    except OSError as e:
+        sys.stderr.write(f"[stripe_api] OSError path={path} {type(e).__name__}: {e}\n")
+        return {
+            "ok": False,
+            "category": "network_error",
+            "error": "Network error reaching payment provider.",
+            "retryable": True,
+        }
 
 
 def cancel_at_period_end(subscription_id: str) -> dict:
@@ -117,13 +209,15 @@ def create_checkout_session(
         "cancel_url": cancel_url,
         "line_items[0][price]": price_id,
         "line_items[0][quantity]": "1",
-        # Auto-tax keeps us out of the "you owe back-tax" trap. Enabled
-        # only if Stripe Tax is set up on the account; harmless otherwise.
-        "automatic_tax[enabled]": "true",
-        # Let customers update their billing address — required when
-        # automatic_tax is on (Stripe needs a destination to compute tax).
-        "billing_address_collection": "auto",
     }
+    # Gated automatic-tax: enabled only when STRIPE_AUTOMATIC_TAX=1.
+    # Defaults OFF because Stripe Tax must be registered in every buyer
+    # jurisdiction; without that, non-US buyers hit tax_calculation_failed
+    # and see our generic 502. Enable once tax registrations are in place
+    # for the buyer countries you sell into.
+    if os.environ.get("STRIPE_AUTOMATIC_TAX", "0") == "1":
+        form["automatic_tax[enabled]"] = "true"
+        form["billing_address_collection"] = "auto"
     if customer_email:
         form["customer_email"] = customer_email
     if client_reference_id:

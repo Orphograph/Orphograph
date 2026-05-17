@@ -54,7 +54,6 @@
   }
   header.nav .row{display:flex;align-items:center;justify-content:space-between;height:60px;}
   header.nav .brand{display:flex;align-items:center;gap:10px;color:var(--ink);font-family:var(--serif);font-size:18px;letter-spacing:0.24em;text-transform:uppercase;}
-  header.nav .brand img{width:28px;height:28px;}
   header.nav nav{display:flex;align-items:center;gap:6px;}
   header.nav nav a{font-size:13.5px;color:var(--muted);padding:8px 12px;border-radius:8px;border-bottom:0;transition:background .15s ease, color .15s ease;}
   header.nav nav a:hover{background:rgba(58,47,36,0.06);color:var(--ink);}
@@ -318,7 +317,6 @@
     /* Sticky nav: keep brand + CTA visible, drop tertiary links */
     header.nav .row{height:54px;}
     header.nav .brand{font-size:15px;letter-spacing:0.18em;}
-    header.nav .brand img{width:24px;height:24px;}
     header.nav nav a:not(.cta):not([href="#tiers"]):not([href="/learn.html"]){display:none;}
     header.nav .cta{padding:8px 14px;font-size:12.5px;}
     /* Hero text only — masthead handled by its own block above */

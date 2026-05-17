@@ -2167,10 +2167,26 @@ def _start_upgrade_scheduler() -> None:
 
     Without this the OTS calendars never get re-polled, so receipts stay
     in 'pending' status indefinitely even after Bitcoin pinning happens.
+
     Cadence: first run 60s after startup (give the server time to come up),
-    then every hour. The worker is fcntl-safe and idempotent, so even if
-    two machines run it concurrently it won't corrupt the ledger.
+    then every hour.
+
+    Concurrency note: `fcntl.flock` in upgrade_worker / file_lock is host-
+    local — on Fly each machine has its own filesystem, so the lock does
+    NOT prevent two VMs from running the worker simultaneously. The worker
+    is idempotent so concurrent runs won't corrupt state, but they would
+    triple our outbound OTS-calendar traffic at higher VM counts.
+
+    Leader-election today is opt-in via the ORPHO_UPGRADE_LEADER env var:
+    set it to "1" on exactly one Fly machine (or one local process). On
+    every other machine the scheduler is a no-op. The default is "1" so
+    the single-VM case works without extra config. When you scale past
+    one machine, set ORPHO_UPGRADE_LEADER=0 on all but one.
     """
+    is_leader = os.environ.get("ORPHO_UPGRADE_LEADER", "1") == "1"
+    if not is_leader:
+        sys.stderr.write("[upgrade] disabled on this machine (ORPHO_UPGRADE_LEADER != 1)\n")
+        return
     import threading
     import upgrade_worker
     interval = int(os.environ.get("ORPHO_UPGRADE_INTERVAL_SEC", "3600"))
