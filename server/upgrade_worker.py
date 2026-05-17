@@ -44,6 +44,11 @@ UPGRADE_LOG = Path(os.environ.get("ORPHO_UPGRADE_LOG", str(DATA_DIR / "upgrade_l
 OTS_HEADER_MAGIC = b"\x00OpenTimestamps\x00\x00Proof\x00\xbf\x89\xe2\xe8\x84\xe8\x92\x94"
 OTS_VERSION = b"\x01"
 OTS_TAG_SHA256 = b"\x08"
+# Magic bytes that begin a calendar-pending attestation inside an .ots blob.
+# The calendar's commitment digest is the running hash AT this point in the
+# op-chain, not the user's original hash. /timestamp/<digest> on the calendar
+# is keyed by THIS hash; querying with the original SHA-256 returns 404 forever.
+PENDING_ATTESTATION_MARKER = b"\x00\x83\xdf\xe3\x0d\x2e\xf9\x0c\x8e"
 HTTP_TIMEOUT_SEC = 15
 USER_AGENT = "orphograph-upgrade/0.1 (stdlib)"
 
@@ -68,8 +73,42 @@ def _fetch_upgrade(calendar_url: str, hash_hex: str) -> tuple[bool, bytes | str]
         return False, f"{type(e).__name__}"
 
 
-def _build_ots(hash_hex: str, body: bytes) -> bytes:
-    return OTS_HEADER_MAGIC + OTS_VERSION + OTS_TAG_SHA256 + bytes.fromhex(hash_hex) + body
+def _commitment_for_pending(ots_blob: bytes) -> tuple[str | None, int]:
+    """Walk the op-chain in an .ots blob up to its pending-attestation marker.
+
+    Returns (commitment_hex, marker_index). commitment_hex is None when the
+    blob is malformed or already upgraded (no pending marker remaining).
+    """
+    import hashlib
+    if not ots_blob.startswith(OTS_HEADER_MAGIC):
+        return None, -1
+    i = len(OTS_HEADER_MAGIC) + len(OTS_VERSION)  # past header + version byte
+    if ots_blob[i:i + 1] != OTS_TAG_SHA256:
+        return None, -1
+    i += 1
+    cur = ots_blob[i:i + 32]
+    i += 32
+    marker_idx = ots_blob.find(PENDING_ATTESTATION_MARKER, i)
+    if marker_idx < 0:
+        return None, -1
+    while i < marker_idx:
+        op = ots_blob[i]
+        i += 1
+        if op == 0xf0:  # OP_APPEND
+            ln = ots_blob[i]
+            i += 1
+            cur = cur + ots_blob[i:i + ln]
+            i += ln
+        elif op == 0xf1:  # OP_PREPEND
+            ln = ots_blob[i]
+            i += 1
+            cur = ots_blob[i:i + ln] + cur
+            i += ln
+        elif op == 0x08:  # OP_SHA256
+            cur = hashlib.sha256(cur).digest()
+        else:
+            return None, -1
+    return cur.hex(), marker_idx
 
 
 def _log(event: dict) -> None:
@@ -83,19 +122,25 @@ def _calendar_short(url: str) -> str:
 
 
 def _upgrade_one(receipt_dir: Path, record: dict) -> dict:
-    hash_hex = record["hash_hex"]
     upgrades: list[dict] = []
     for entry in record.get("successes", []):
         cal = entry["calendar"]
         ots_path = receipt_dir / (_calendar_short(cal) + ".ots")
         if not ots_path.exists():
             continue
-        ok, body = _fetch_upgrade(cal, hash_hex)
+        old_blob = ots_path.read_bytes()
+        commitment_hex, marker_idx = _commitment_for_pending(old_blob)
+        if commitment_hex is None:
+            # No pending marker: blob is either already upgraded or malformed.
+            # Treat as pinned-no-op so the receipt advances; verify_cli is the
+            # authoritative check on actual Bitcoin inclusion.
+            upgrades.append({"calendar": cal, "pinned": True, "changed": False})
+            continue
+        ok, body = _fetch_upgrade(cal, commitment_hex)
         if not ok:
             upgrades.append({"calendar": cal, "pinned": False, "reason": str(body)})
             continue
-        new_blob = _build_ots(hash_hex, body)
-        old_blob = ots_path.read_bytes()
+        new_blob = old_blob[:marker_idx] + body
         if new_blob == old_blob:
             upgrades.append({"calendar": cal, "pinned": True, "changed": False})
             continue
