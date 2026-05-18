@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  com.orphograph.audit.plist.template
+
+  Biweekly safety re-audit of the class of issues closed in the 2026-05-18
+  premortem (TLS, /api/health, css cache key, genesis receipt status, OTS
+  calendars, kill-switches, HMAC git history, stuck receipts, Stripe drift,
+  Fly memory tier, test suite, inline secrets).
+
+  Writes a markdown report to deploy/AUDIT_REPORTS/YYYY-MM-DD.md. No email,
+  no Telegram, no push — founder reviews on disk when they want.
+
+  Replace placeholders before loading:
+    {{PYTHON}}        absolute path to the Python 3.9+ interpreter
+                      (e.g. /usr/bin/python3 or /opt/homebrew/bin/python3)
+    {{SCRIPT_PATH}}   absolute path to scripts/biweekly_safety_audit.py
+                      (e.g. /Users/<you>/orphograph/scripts/biweekly_safety_audit.py)
+    {{REPO_ROOT}}     absolute path to the orphograph repo root
+                      (e.g. /Users/<you>/orphograph)
+
+  Cadence:
+    launchd has no native "every 14 days" trigger, so this fires on the 1st
+    and the 15th of every month at 09:00 local — twice a month, ~14 days
+    apart. Close enough for a biweekly drift audit. Skip dates by leaving
+    the machine asleep; launchd will catch up at next wake.
+
+  Install (after substitution):
+    launchctl bootstrap gui/$UID scripts/com.orphograph.audit.plist
+    launchctl enable      gui/$UID/com.orphograph.audit
+    launchctl kickstart -k gui/$UID/com.orphograph.audit   # smoke-test
+
+  Sequoia caveat:
+    launchctl bootstrap is known to return IO error 5 on macOS 15+ in some
+    user-session setups (see ~/.claude/CLAUDE.md feedback_launchd_io_error_5).
+    If you hit that, fall back to a nohup Python sleeper:
+       nohup python3 -c "import subprocess, time; \
+         [subprocess.run(['{{PYTHON}}','{{SCRIPT_PATH}}']) or time.sleep(60*60*24*14) for _ in iter(int,1)]" \
+         >> {{REPO_ROOT}}/logs/audit.out.log 2>&1 &
+
+  Uninstall:
+    launchctl bootout gui/$UID/com.orphograph.audit
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.orphograph.audit</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>{{PYTHON}}</string>
+        <string>{{SCRIPT_PATH}}</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>{{REPO_ROOT}}</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin</string>
+    </dict>
+
+    <!--
+      launchd: fire on the 1st and 15th of every month at 09:00 local.
+      This is the closest approximation to "every 14 days" that
+      StartCalendarInterval supports natively (no native nDay period).
+    -->
+    <key>StartCalendarInterval</key>
+    <array>
+        <dict>
+            <key>Day</key>
+            <integer>1</integer>
+            <key>Hour</key>
+            <integer>9</integer>
+            <key>Minute</key>
+            <integer>0</integer>
+        </dict>
+        <dict>
+            <key>Day</key>
+            <integer>15</integer>
+            <key>Hour</key>
+            <integer>9</integer>
+            <key>Minute</key>
+            <integer>0</integer>
+        </dict>
+    </array>
+
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>StandardOutPath</key>
+    <string>{{REPO_ROOT}}/logs/audit.out.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>{{REPO_ROOT}}/logs/audit.err.log</string>
+
+    <key>ProcessType</key>
+    <string>Background</string>
+</dict>
+</plist>

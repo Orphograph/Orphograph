@@ -267,6 +267,48 @@ def send_login_link_email(to: str, token: str) -> bool:
     return _send(to, subject, text, html)
 
 
+def send_pin_email(to: str, receipt: dict) -> bool:
+    """Notify a customer that their receipt has been Bitcoin-anchored.
+
+    Fires once, from the upgrade worker, when btc_pinned_at first gets set
+    on a record that has a notify_email. Honest-framing rule: if not all
+    calendars confirmed, the body says "N of M calendars confirmed" rather
+    than claiming a clean pin. Transactional only — no marketing CTA.
+    """
+    rid = receipt.get("receipt_id", "")
+    btc_pinned_at = receipt.get("btc_pinned_at", "")
+    # pinned_count/pinned_total are set by the upgrade worker AFTER it walks
+    # each .ots calendar and counts which ones actually came back upgraded.
+    # Fall back to calendars_ok / calendars_total only if the worker hasn't
+    # populated the pin-specific fields (defensive — should always be set).
+    pinned_count = int(receipt.get("pinned_count", receipt.get("calendars_ok", 0)))
+    total = int(receipt.get("pinned_total", receipt.get("calendars_total", 0)))
+    status = receipt.get("status", "")
+    receipt_url = f"{SITE_URL}/r/{rid}"
+    subject = "Your Orphograph receipt is now Bitcoin-anchored"
+    if status == "partial" or (total and pinned_count < total):
+        confirmation_line = f"Anchored to Bitcoin via {pinned_count} of {total} calendars confirmed."
+    else:
+        confirmation_line = f"Anchored to Bitcoin via {pinned_count} of {total} calendars confirmed."
+    text = (
+        f"Your Orphograph receipt is now Bitcoin-anchored.\n\n"
+        f"Receipt: {rid}\n"
+        f"Bitcoin pin time (UTC): {btc_pinned_at}\n"
+        f"{confirmation_line}\n\n"
+        f"View receipt: {receipt_url}\n"
+    )
+    html = (
+        f"<p>Your Orphograph receipt is now Bitcoin-anchored.</p>"
+        f"<ul>"
+        f"<li><strong>Receipt:</strong> <code>{rid}</code></li>"
+        f"<li><strong>Bitcoin pin time (UTC):</strong> {btc_pinned_at}</li>"
+        f"<li>{confirmation_line}</li>"
+        f"</ul>"
+        f"<p><a href=\"{receipt_url}\">View receipt</a></p>"
+    )
+    return _send(to, subject, text, html, transactional=True, category="pin_notification")
+
+
 def send_receipt_email(to: str, receipt: dict) -> bool:
     rid = receipt.get("receipt_id", "")
     created_at = receipt.get("created_at", "")

@@ -121,7 +121,47 @@ def _calendar_short(url: str) -> str:
     return url.split("//", 1)[1].split(".", 1)[0]
 
 
+def _send_pin_email_if_needed(record: dict) -> None:
+    """Fire transactional pin-notification email exactly once per receipt.
+
+    Trigger conditions (all required):
+      - record has a notify_email opted-in by the customer at anchor time
+      - btc_pinned_at was just set on this run (the transition itself)
+      - pin_email_sent_at is not already on the record (idempotency)
+      - Resend API returns 2xx; otherwise we log to stderr and leave
+        pin_email_sent_at unset so the next worker run can retry.
+
+    Crashes/exceptions from the mailer are swallowed — credit-grant
+    integrity beats notification. Pin-email is best-effort.
+    """
+    notify_email = record.get("notify_email")
+    if not isinstance(notify_email, str) or not notify_email.strip():
+        return
+    if record.get("pin_email_sent_at"):
+        return
+    if not record.get("btc_pinned_at"):
+        return
+    # Lazy-import the mailer so unit tests that don't exercise email can
+    # avoid module-load side effects (Resend env, etc.).
+    try:
+        import mailer  # type: ignore
+    except ImportError:
+        sys.stderr.write("[upgrade:pin_email] mailer import failed\n")
+        return
+    try:
+        ok = mailer.send_pin_email(notify_email.strip(), record)
+    except Exception as e:  # noqa: BLE001 — never crash the upgrade worker
+        sys.stderr.write(f"[upgrade:pin_email] {type(e).__name__}: {e}\n")
+        return
+    if ok:
+        record["pin_email_sent_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
 def _upgrade_one(receipt_dir: Path, record: dict) -> dict:
+    # Snapshot pre-state so we can detect the pending→pinned/partial
+    # transition AFTER calendars have been queried. Email fires once on
+    # the transition, not on subsequent runs.
+    was_pinned_before = bool(record.get("btc_pinned_at"))
     upgrades: list[dict] = []
     for entry in record.get("successes", []):
         cal = entry["calendar"]
@@ -158,6 +198,17 @@ def _upgrade_one(receipt_dir: Path, record: dict) -> dict:
     record["status"] = status
     if pinned_count > 0 and not record.get("btc_pinned_at"):
         record["btc_pinned_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    # Pin counters live alongside btc_pinned_at on the record. calendars_ok
+    # on the original receipt reflects ACCEPTANCE at anchor time; these new
+    # fields reflect Bitcoin PIN confirmation, which can be a strict subset.
+    record["pinned_count"] = pinned_count
+    record["pinned_total"] = len(record.get("successes", []))
+    # Email the customer exactly on the pending→pinned/partial transition.
+    # was_pinned_before guards against re-sending if btc_pinned_at was
+    # already populated on a prior run. _send_pin_email_if_needed also
+    # checks pin_email_sent_at for belt-and-suspenders idempotency.
+    if not was_pinned_before and record.get("btc_pinned_at"):
+        _send_pin_email_if_needed(record)
     (receipt_dir / "receipt.json").write_text(json.dumps(record, indent=2))
     return {
         "receipt_id": record["receipt_id"],

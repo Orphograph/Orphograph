@@ -438,9 +438,10 @@ section.band.band-glow{
 .ts-sub{display:block;margin-top:2px;}
 
 /* ── Tier badge (above the drop zone) ──────────────────────────────── */
-.drop-column{display:flex;flex-direction:column;gap:12px;}
+.drop-column{display:flex;flex-direction:column;gap:10px;}
 .tier-badge{
-  display:flex;align-items:baseline;justify-content:space-between;gap:10px;
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  flex-wrap:wrap;
   padding:10px 14px;border-radius:8px;
   background:rgba(255,255,255,0.55);border:1px solid var(--line-soft);
   font-size:13px;
@@ -451,8 +452,45 @@ section.band.band-glow{
 .tier-badge[data-tier="pack"]{
   background:rgba(180,210,180,0.20);border-color:rgba(110,150,110,0.35);
 }
+.tier-badge-row{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;flex:1 1 auto;}
 .tier-badge-label{font-weight:500;color:var(--ink);letter-spacing:0.02em;}
 .tier-badge-detail{color:var(--muted);font-size:12.5px;}
+.tier-badge-link{
+  background:transparent;border:0;padding:2px 0;margin:0;
+  color:var(--accent,#7a5a2c);font:inherit;font-size:12.5px;
+  text-decoration:underline;cursor:pointer;letter-spacing:0.01em;
+}
+.tier-badge-link:hover{opacity:0.75;}
+.tier-badge-link:focus{outline:1px solid var(--accent,#7a5a2c);outline-offset:2px;}
+.tier-explainer{
+  margin:0;color:var(--muted);font-size:12.5px;line-height:1.45;
+}
+.pack-form{
+  display:flex;flex-direction:column;gap:6px;
+  padding:12px 14px;border-radius:8px;
+  background:rgba(255,255,255,0.55);border:1px solid var(--line-soft);
+}
+.pack-form-label{font-size:12.5px;color:var(--muted);}
+.pack-form-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+.pack-form-input{
+  flex:1 1 200px;min-width:0;
+  padding:8px 10px;border-radius:6px;
+  border:1px solid var(--line-soft);background:#fff;
+  font:inherit;font-size:13px;color:var(--ink);
+}
+.pack-form-input:focus{outline:1px solid var(--accent,#7a5a2c);outline-offset:1px;}
+.pack-form-submit,.pack-form-cancel{
+  padding:8px 14px;border-radius:6px;font:inherit;font-size:13px;cursor:pointer;
+}
+.pack-form-submit{
+  background:var(--ink,#222);color:#fff;border:1px solid var(--ink,#222);
+}
+.pack-form-cancel{
+  background:transparent;color:var(--ink);border:1px solid var(--line-soft);
+}
+.pack-form-msg{margin:2px 0 0;font-size:12.5px;color:var(--muted);}
+.pack-form-msg[data-kind="error"]{color:#9a3a3a;}
+.pack-form-msg[data-kind="success"]{color:#2f6a2f;}
 
 /* ── Ops banner (kill-switch state from /api/config) ───────────────── */
 .ops-banner{

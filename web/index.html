@@ -13,7 +13,7 @@
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://orphograph.com/">
 <meta name="twitter:card" content="summary_large_image">
-<link rel="stylesheet" href="/index.css?v=7">
+<link rel="stylesheet" href="/index.css?v=8">
 </head>
 <body>
 
@@ -76,9 +76,23 @@
       </div>
       <div class="drop-column">
         <div class="tier-badge" id="tier-badge" data-tier="free">
-          <span class="tier-badge-label">Free tier</span>
-          <span class="tier-badge-detail" id="tier-badge-detail">3 anchors per 24 hours · no payment required</span>
+          <div class="tier-badge-row">
+            <span class="tier-badge-label">Free tier</span>
+            <span class="tier-badge-detail" id="tier-badge-detail">3 anchors per 24 hours · no payment required</span>
+          </div>
+          <button type="button" class="tier-badge-link" id="tier-badge-link" hidden>Got a Pack code?</button>
+          <button type="button" class="tier-badge-link" id="tier-badge-clear" hidden>Switch to Free tier</button>
         </div>
+        <p class="tier-explainer" id="tier-explainer">Anchors don't charge anything until you buy a Pack. The free tier is permanent.</p>
+        <form class="pack-form" id="pack-form" hidden>
+          <label class="pack-form-label" for="pack-form-input">Enter your Pack code</label>
+          <div class="pack-form-row">
+            <input class="pack-form-input" id="pack-form-input" type="text" inputmode="text" autocomplete="off" spellcheck="false" placeholder="pk_…">
+            <button type="submit" class="pack-form-submit">Apply</button>
+            <button type="button" class="pack-form-cancel" id="pack-form-cancel">Cancel</button>
+          </div>
+          <p class="pack-form-msg" id="pack-form-msg" hidden></p>
+        </form>
         <label class="drop" for="drop-input" id="drop">
           <div class="icon" aria-hidden="true">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
@@ -280,6 +294,6 @@
 </footer>
 
 <script src="/timezones.js"></script>
-<script src="/v2.js"></script>
+<script src="/v2.js?v=2"></script>
 </body>
 </html>

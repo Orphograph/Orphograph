@@ -8,6 +8,393 @@
 
   const $ = (id) => document.getElementById(id);
 
+  // ── localStorage keys for recent-receipts + anchor-state ──────────
+  const RECENT_KEY = "orpho_recent_receipts";
+  const STATE_KEY = "orpho_anchor_state";
+  const RECENT_MAX = 20;
+
+  // ── Local-time rendering helpers ──────────────────────────────────
+  // Server timestamps arrive as ISO-8601 UTC. Browser users see their
+  // local time as primary; UTC stays visible underneath so a VPN or
+  // skewed system clock is debuggable. Browser timezone is disclosed so
+  // the user can notice if it's wrong.
+  function _fmtLocal(d) {
+    try {
+      return new Intl.DateTimeFormat(undefined, {
+        year: "numeric", month: "short", day: "2-digit",
+        hour: "2-digit", minute: "2-digit", second: "2-digit",
+        timeZoneName: "short",
+      }).format(d);
+    } catch (e) { return d.toString(); }
+  }
+  function _fmtUtc(d) {
+    const pad = (n) => n.toString().padStart(2, "0");
+    return d.getUTCFullYear() + "-" + pad(d.getUTCMonth() + 1) + "-" + pad(d.getUTCDate()) + " " +
+           pad(d.getUTCHours()) + ":" + pad(d.getUTCMinutes()) + ":" + pad(d.getUTCSeconds()) + " UTC";
+  }
+  function _detectTz() {
+    try { return Intl.DateTimeFormat().resolvedOptions().timeZone || "(unknown)"; }
+    catch (e) { return "(unknown)"; }
+  }
+  function renderTimeInto(node, isoString) {
+    if (!node) return;
+    while (node.firstChild) node.removeChild(node.firstChild);
+    if (!isoString) { node.textContent = "—"; return; }
+    const d = new Date(isoString);
+    if (isNaN(d.getTime())) { node.textContent = isoString; return; }
+    const tz = _detectTz();
+    const local = document.createElement("span");
+    local.className = "ts-primary";
+    local.textContent = _fmtLocal(d);
+    const sub = document.createElement("span");
+    sub.className = "muted small";
+    sub.textContent = " · " + _fmtUtc(d) + " · zone " + tz;
+    node.appendChild(local);
+    node.appendChild(sub);
+  }
+
+  // ── Recent receipts (localStorage) ────────────────────────────────
+  function loadRecentReceipts() {
+    try {
+      const raw = localStorage.getItem(RECENT_KEY);
+      if (!raw) return [];
+      const list = JSON.parse(raw);
+      return Array.isArray(list) ? list : [];
+    } catch (e) { return []; }
+  }
+  function saveRecentReceipt(record) {
+    try {
+      const list = loadRecentReceipts();
+      // Skip if same receipt is already at the head.
+      if (list.length && list[0].receipt_id === record.receipt_id) return;
+      list.unshift({
+        receipt_id: record.receipt_id,
+        sha256_prefix: (record.hash_hex || "").slice(0, 12),
+        label: record.client_label || "",
+        created_at: record.created_at,
+        calendars_ok: record.calendars_ok,
+        calendars_total: record.calendars_total,
+        status: record.status || "pending",
+      });
+      localStorage.setItem(RECENT_KEY, JSON.stringify(list.slice(0, RECENT_MAX)));
+    } catch (e) {}
+  }
+  function renderRecentReceipts() {
+    const host = document.getElementById("recent-receipts");
+    const body = document.getElementById("recent-receipts-body");
+    if (!host || !body) return;
+    const list = loadRecentReceipts();
+    if (!list.length) { host.hidden = true; return; }
+    host.hidden = false;
+    while (body.firstChild) body.removeChild(body.firstChild);
+    for (const r of list) {
+      const row = document.createElement("a");
+      row.className = "recent-row";
+      row.href = "/r/" + r.receipt_id;
+      const idCell = document.createElement("span");
+      idCell.className = "mono recent-id";
+      idCell.textContent = r.receipt_id;
+      const meta = document.createElement("span");
+      meta.className = "muted small recent-meta";
+      const d = r.created_at ? new Date(r.created_at) : null;
+      const when = (d && !isNaN(d.getTime())) ? _fmtLocal(d) : (r.created_at || "");
+      const st = r.status || "pending";
+      meta.textContent = when + " · " + st + " · " +
+        (r.calendars_ok || 0) + "/" + (r.calendars_total || 5) + " cals" +
+        (r.label ? " · " + r.label : "");
+      row.appendChild(idCell);
+      row.appendChild(meta);
+      body.appendChild(row);
+    }
+  }
+
+  // ── Reload-resilient anchor state ─────────────────────────────────
+  // We persist the current anchor phase to localStorage so a mid-flight
+  // reload shows the user where they were and what's still happening.
+  // Cleared on done or after a hard timeout.
+  function saveAnchorState(phase, ctx) {
+    try {
+      const payload = { phase: phase, ts: Date.now() };
+      if (ctx) {
+        for (const k in ctx) {
+          if (Object.prototype.hasOwnProperty.call(ctx, k)) payload[k] = ctx[k];
+        }
+      }
+      localStorage.setItem(STATE_KEY, JSON.stringify(payload));
+    } catch (e) {}
+  }
+  function loadAnchorState() {
+    try {
+      const raw = localStorage.getItem(STATE_KEY);
+      if (!raw) return null;
+      const s = JSON.parse(raw);
+      // Stale state >15min old is discarded.
+      if (Date.now() - (s.ts || 0) > 15 * 60 * 1000) return null;
+      return s;
+    } catch (e) { return null; }
+  }
+  function clearAnchorState() {
+    try { localStorage.removeItem(STATE_KEY); } catch (e) {}
+  }
+
+  // ── Sticky status banner ──────────────────────────────────────────
+  function showStatusBanner(text, kind) {
+    const el = document.getElementById("sticky-status");
+    if (!el) return;
+    el.hidden = false;
+    el.dataset.kind = kind || "info";
+    el.textContent = text;
+  }
+  function hideStatusBanner() {
+    const el = document.getElementById("sticky-status");
+    if (el) el.hidden = true;
+  }
+
+  // ── BTC confirmation polling ──────────────────────────────────────
+  // After a successful anchor, ping /api/verify/<id> every 90s. When
+  // status flips from "pending" to "partial" or "pinned", update the
+  // recent-receipts panel and notify via the sticky banner.
+  let _pinPollTimer = null;
+  function startPinPolling(receiptId) {
+    if (_pinPollTimer) clearInterval(_pinPollTimer);
+    let attempts = 0;
+    const maxAttempts = 80; // ~2 hours at 90s — calendars usually land in 1h.
+    _pinPollTimer = setInterval(async () => {
+      attempts += 1;
+      if (attempts > maxAttempts) {
+        clearInterval(_pinPollTimer); _pinPollTimer = null; return;
+      }
+      try {
+        const r = await fetch("/api/verify/" + encodeURIComponent(receiptId));
+        if (!r.ok) return;
+        const rec = await r.json();
+        if (rec.status && rec.status !== "pending") {
+          clearInterval(_pinPollTimer); _pinPollTimer = null;
+          // Update recent-receipts entry with new status.
+          try {
+            const list = loadRecentReceipts();
+            const idx = list.findIndex((x) => x.receipt_id === receiptId);
+            if (idx >= 0) {
+              list[idx].status = rec.status;
+              localStorage.setItem(RECENT_KEY, JSON.stringify(list));
+              renderRecentReceipts();
+            }
+          } catch (e) {}
+          showStatusBanner(
+            "Bitcoin confirmation landed for " + receiptId + " — status is now \"" + rec.status + "\".",
+            "success"
+          );
+        }
+      } catch (e) {}
+    }, 90 * 1000);
+  }
+
+  // ── Ops banner (kill-switch surface) ──────────────────────────────
+  async function renderOpsBanner() {
+    const banner = document.getElementById("ops-banner");
+    if (!banner) return;
+    try {
+      const r = await fetch("/api/config", { credentials: "same-origin" });
+      if (!r.ok) return;
+      const cfg = await r.json();
+      const t = (cfg && cfg.toggles) || {};
+      if (t.maintenance_mode) {
+        banner.hidden = false;
+        banner.dataset.kind = "error";
+        banner.textContent = "Maintenance mode is on. New anchors and checkout are paused. Existing receipts continue to verify against Bitcoin without us.";
+        return;
+      }
+      if (t.anchoring_disabled && t.checkout_disabled) {
+        banner.hidden = false;
+        banner.dataset.kind = "warn";
+        banner.textContent = "Anchoring and checkout are paused right now. Existing receipts are unaffected.";
+        return;
+      }
+      if (t.anchoring_disabled) {
+        banner.hidden = false;
+        banner.dataset.kind = "warn";
+        banner.textContent = "Anchoring is paused right now. Existing receipts are unaffected; we'll be back shortly.";
+        return;
+      }
+      if (t.checkout_disabled) {
+        banner.hidden = false;
+        banner.dataset.kind = "warn";
+        banner.textContent = "Checkout is paused right now. Free-tier anchoring still works.";
+        return;
+      }
+      banner.hidden = true;
+    } catch (e) {
+      // Network failure on /api/config is not user-facing.
+    }
+  }
+
+  // ── Hydrate in-flight anchor state on page load ───────────────────
+  function hydrateAnchorStateOnLoad() {
+    const s = loadAnchorState();
+    if (!s) return;
+    if (s.phase === "hashing") {
+      showStatusBanner(
+        "A previous anchor of \"" + (s.filename || "your file") + "\" was hashing when this page reloaded. " +
+        "The file never leaves your browser, so you'll need to drop it again to resume.",
+        "warn"
+      );
+    } else if (s.phase === "posting") {
+      showStatusBanner(
+        "A previous anchor was submitting to OpenTimestamps when this page reloaded. " +
+        "If the server accepted it, the receipt should appear under \"Recent receipts\" below within a minute.",
+        "warn"
+      );
+    }
+    // Clear so we don't re-show stale banners on subsequent navigations.
+    clearAnchorState();
+  }
+
+  // ── Pack-token storage + tier badge ───────────────────────────────
+  // Persisted in localStorage so a Pack code survives reload. Hash
+  // fragment (#pack=pk_…) is consumed once on load; query string
+  // (?pack=…) is migrated and stripped so the bearer cred isn't logged.
+  const PACK_KEY = "orph_pack_token";
+  const PACK_RE = /^pk_[A-Za-z0-9_-]+$/;
+
+  function packToken() {
+    try { return localStorage.getItem(PACK_KEY) || ""; }
+    catch (e) { return ""; }
+  }
+  function setPackToken(code) {
+    try {
+      if (code) localStorage.setItem(PACK_KEY, code);
+      else localStorage.removeItem(PACK_KEY);
+    } catch (e) { /* localStorage disabled — pack will not persist */ }
+  }
+  function ingestPackFromUrl() {
+    let pack = "";
+    const hash = (location.hash || "").replace(/^#/, "");
+    const hashParams = new URLSearchParams(hash);
+    if (hashParams.get("pack")) pack = hashParams.get("pack");
+    if (!pack) {
+      const qs = new URLSearchParams(location.search);
+      if (qs.get("pack")) {
+        pack = qs.get("pack");
+        qs.delete("pack");
+        history.replaceState({}, "", location.pathname +
+          (qs.toString() ? "?" + qs.toString() : "") + location.hash);
+      }
+    } else {
+      hashParams.delete("pack");
+      const rest = hashParams.toString();
+      history.replaceState({}, "", location.pathname + location.search +
+        (rest ? "#" + rest : ""));
+    }
+    if (pack && PACK_RE.test(pack)) setPackToken(pack);
+  }
+
+  async function renderTierBadge() {
+    const badge = $("tier-badge");
+    if (!badge) return;
+    const label = badge.querySelector(".tier-badge-label");
+    const detail = $("tier-badge-detail");
+    const linkBtn = $("tier-badge-link");
+    const clearBtn = $("tier-badge-clear");
+    const explainer = $("tier-explainer");
+    const code = packToken();
+    if (code) {
+      badge.dataset.tier = "pack";
+      if (label) label.textContent = "Pack active";
+      if (detail) detail.textContent = "code " + code.slice(0, 8) + "… · credits never expire";
+      if (linkBtn) linkBtn.hidden = true;
+      if (clearBtn) clearBtn.hidden = false;
+      if (explainer) explainer.hidden = true;
+      // best-effort balance refresh
+      try {
+        const r = await fetch("/api/pack/balance/" + encodeURIComponent(code));
+        if (r.ok) {
+          const j = await r.json();
+          const bal = (j && typeof j.balance === "number") ? j.balance : null;
+          if (bal != null && detail) {
+            detail.textContent = "code " + code.slice(0, 8) + "… · " + bal + " anchors remaining";
+          }
+        }
+      } catch (e) { /* network failure — keep static copy */ }
+      return;
+    }
+    badge.dataset.tier = "free";
+    if (label) label.textContent = "Free tier";
+    if (detail) detail.textContent = "3 anchors per 24 hours · no payment required";
+    if (linkBtn) linkBtn.hidden = false;
+    if (clearBtn) clearBtn.hidden = true;
+    if (explainer) explainer.hidden = false;
+  }
+
+  function wirePackForm() {
+    const linkBtn = $("tier-badge-link");
+    const clearBtn = $("tier-badge-clear");
+    const form = $("pack-form");
+    const input = $("pack-form-input");
+    const cancel = $("pack-form-cancel");
+    const msg = $("pack-form-msg");
+
+    function showMsg(text, kind) {
+      if (!msg) return;
+      msg.textContent = text;
+      msg.dataset.kind = kind || "";
+      msg.hidden = !text;
+    }
+    function openForm() {
+      if (!form) return;
+      form.hidden = false;
+      showMsg("", "");
+      if (input) { input.value = ""; input.focus(); }
+    }
+    function closeForm() {
+      if (!form) return;
+      form.hidden = true;
+      showMsg("", "");
+    }
+
+    if (linkBtn) linkBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      openForm();
+    });
+    if (cancel) cancel.addEventListener("click", (e) => {
+      e.preventDefault();
+      closeForm();
+    });
+    if (clearBtn) clearBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      setPackToken("");
+      renderTierBadge();
+    });
+    if (form) form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const raw = input ? input.value.trim() : "";
+      if (!PACK_RE.test(raw)) {
+        showMsg("That doesn't look like a Pack code. Codes start with pk_ followed by letters, digits, dashes, or underscores.", "error");
+        return;
+      }
+      showMsg("Checking…", "");
+      try {
+        const r = await fetch("/api/pack/balance/" + encodeURIComponent(raw));
+        if (!r.ok) {
+          showMsg("Code not found. Check the email we sent when you bought the Pack.", "error");
+          return;
+        }
+        const j = await r.json();
+        const bal = (j && typeof j.balance === "number") ? j.balance : null;
+        if (bal == null) {
+          showMsg("Could not read the balance for that code.", "error");
+          return;
+        }
+        setPackToken(raw);
+        showMsg("Pack applied · " + bal + " anchors remaining.", "success");
+        await renderTierBadge();
+        // collapse the form after a short pause so the success state is legible
+        setTimeout(closeForm, 900);
+      } catch (err) {
+        showMsg("Network error checking that code. Try again.", "error");
+      }
+    });
+  }
+
   function fmtNum(n) {
     if (n == null) return "—";
     return Number(n).toLocaleString("en-US");
@@ -107,6 +494,8 @@
       "The file is not being uploaded — only its fingerprint will leave your machine.",
       ""
     );
+    saveAnchorState("hashing", { filename: file.name, size: file.size });
+    showStatusBanner("Hashing " + file.name + " locally…", "info");
 
     let sha256, sha512;
     try {
@@ -116,11 +505,15 @@
       ]);
     } catch (e) {
       setStatusSimple("Could not read the file.", String(e && e.message ? e.message : e), "error");
+      showStatusBanner("Anchor failed: could not read the file.", "error");
+      clearAnchorState();
       return;
     }
 
     setStatusSimple("Fingerprint computed.", "Submitting to five OpenTimestamps calendars…", "");
     status.appendChild(makeField("SHA-256 · " + sha256));
+    saveAnchorState("posting", { filename: file.name, sha256_prefix: sha256.slice(0, 12) });
+    showStatusBanner("Submitting fingerprint to OpenTimestamps calendars…", "info");
 
     try {
       const r = await fetch("/api/anchor", {
@@ -139,6 +532,8 @@
           "Server returned " + r.status + ". " + txt.slice(0, 200),
           "error"
         );
+        showStatusBanner("Anchor failed: server returned " + r.status + ".", "error");
+        clearAnchorState();
         return;
       }
       const j = await r.json();
@@ -165,8 +560,37 @@
         "  ·  Bitcoin confirmation arrives within ~1 hour."
       ));
       status.appendChild(p);
+
+      // Optional: render created_at in local time if the server provided it.
+      if (j.created_at) {
+        const tnode = document.createElement("div");
+        tnode.className = "field";
+        renderTimeInto(tnode, j.created_at);
+        status.appendChild(tnode);
+      }
+
+      // Persist + surface the receipt so the user has a reload-safe trail.
+      const recordForStorage = {
+        receipt_id: j.receipt_id,
+        hash_hex: sha256,
+        client_label: "v2-homepage",
+        created_at: j.created_at,
+        calendars_ok: ok,
+        calendars_total: total,
+        status: j.status || "pending",
+      };
+      saveRecentReceipt(recordForStorage);
+      renderRecentReceipts();
+      clearAnchorState();
+      showStatusBanner(
+        "Receipt issued. Watching for Bitcoin confirmation…",
+        "success"
+      );
+      startPinPolling(j.receipt_id);
     } catch (e) {
       setStatusSimple("Network error.", String(e && e.message ? e.message : e), "error");
+      showStatusBanner("Anchor failed: " + String(e && e.message ? e.message : e), "error");
+      clearAnchorState();
     }
   }
 
@@ -244,4 +668,22 @@
       if (plan === "pack" || plan === "pro") startCheckout(plan, btn);
     });
   });
+
+  // ── Tier badge init ────────────────────────────────────────────
+  ingestPackFromUrl();
+  renderTierBadge();
+  wirePackForm();
+
+  // ── Recent receipts, ops banner, anchor-state hydration ─────────
+  renderRecentReceipts();
+  renderOpsBanner();
+  hydrateAnchorStateOnLoad();
+
+  // Expose hideStatusBanner so a future UI affordance (e.g. dismiss
+  // button on #sticky-status) can clear the banner. Touching window
+  // here keeps the IIFE encapsulated otherwise.
+  if (typeof window !== "undefined") {
+    window.Orphograph = window.Orphograph || {};
+    window.Orphograph.hideStatusBanner = hideStatusBanner;
+  }
 })();

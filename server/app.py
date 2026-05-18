@@ -47,6 +47,8 @@ import mailer  # noqa: E402
 import stats  # noqa: E402
 import stripe_api  # noqa: E402
 import stripe_webhook  # noqa: E402
+import nowpayments_api  # noqa: E402
+import nowpayments_webhook  # noqa: E402
 import subscriptions  # noqa: E402
 import teams  # noqa: E402
 import unsubscribe  # noqa: E402
@@ -104,6 +106,7 @@ ANCHOR_RATE_REFILL = ANCHOR_RATE_CAPACITY / 86400.0
 ANCHOR_RATE_WINDOW_LABEL = "24h"
 MIN_CALENDARS_OK = int(os.environ.get("MIN_CALENDARS_OK", "3"))
 STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
+NOWPAYMENTS_IPN_SECRET = os.environ.get("NOWPAYMENTS_IPN_SECRET", "")
 DATA_DIR = Path(os.environ.get("ORPHO_DATA_DIR", str(ROOT / "data") if (ROOT / "data").is_dir() else str(ROOT)))
 RATE_LIMIT_SNAPSHOT = Path(os.environ.get(
     "ORPHO_RATE_LIMIT_SNAPSHOT", str(DATA_DIR / "rate_limit_state.json")
@@ -900,6 +903,12 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/api/stripe/checkout":
             self._handle_stripe_checkout()
             return
+        if self.path == "/api/nowpayments/webhook":
+            self._handle_nowpayments_webhook()
+            return
+        if self.path == "/api/nowpayments/create":
+            self._handle_nowpayments_create()
+            return
         # Maintenance mode: block user-facing requests but allow critical ops
         if ORPHO_MAINTENANCE_MODE:
             _json_response(self, 503, {
@@ -1068,6 +1077,20 @@ class Handler(BaseHTTPRequestHandler):
             if EMAIL_RE.match(candidate):
                 # email delivery is a paid-tier benefit; inert if RESEND_API_KEY unset
                 mailer.send_receipt_email(candidate, record)
+                # Persist on the record so the upgrade worker can email the
+                # customer when the BTC pin actually lands (~1h later). Saved
+                # only AFTER format validation so the on-disk value is always
+                # a syntactically valid address.
+                try:
+                    receipt_path = engine.RECEIPTS_DIR / record["receipt_id"] / "receipt.json"
+                    on_disk = json.loads(receipt_path.read_text())
+                    on_disk["notify_email"] = candidate
+                    receipt_path.write_text(json.dumps(on_disk, indent=2))
+                    record["notify_email"] = candidate
+                except (OSError, json.JSONDecodeError):
+                    # Persistence failure is non-fatal: the user still got
+                    # the immediate receipt email; pin-time email is best-effort.
+                    pass
         _json_response(self, 200, {
             "receipt_id": record["receipt_id"],
             "created_at": record["created_at"],
@@ -2014,6 +2037,112 @@ class Handler(BaseHTTPRequestHandler):
             return
         result = stripe_webhook.handle_event(payload)
         _json_response(self, 200, result)
+
+    # ---------- NOWPayments (non-custodial crypto checkout) ----------
+
+    def _handle_nowpayments_webhook(self) -> None:
+        """IPN: NOWPayments POSTs payment-state updates.
+
+        HMAC-SHA512 signature in `x-nowpayments-sig` header is verified
+        against NOWPAYMENTS_IPN_SECRET before any state change.
+        """
+        length = _read_content_length(self)
+        if length < 0 or length > MAX_WEBHOOK_BODY_BYTES:
+            _json_response(self, 400, {"error": "invalid body size"})
+            return
+        payload = self.rfile.read(length) if length > 0 else b""
+        sig_header = self.headers.get("x-nowpayments-sig", "") or self.headers.get(
+            "X-Nowpayments-Sig", ""
+        )
+        if not NOWPAYMENTS_IPN_SECRET:
+            sys.stderr.write(
+                "[nowpayments_webhook] NOWPAYMENTS_IPN_SECRET not set; rejecting IPN\n"
+            )
+            _json_response(self, 503, {"error": "webhook not configured"})
+            return
+        if not sig_header:
+            _json_response(self, 400, {"error": "missing signature"})
+            return
+        if not nowpayments_webhook.verify_signature(payload, sig_header, NOWPAYMENTS_IPN_SECRET):
+            _json_response(self, 400, {"error": "invalid signature"})
+            return
+        result = nowpayments_webhook.handle_event(payload)
+        _json_response(self, 200, result)
+
+    def _handle_nowpayments_create(self) -> None:
+        """Buyer-initiated: create an invoice and return its hosted URL.
+
+        Body: {"currency": "usdc", "plan": "writer_pack"|"pack_50", "email": "<optional>"}
+        Returns 200 {url, order_id} on success, 503 when not configured.
+        """
+        if ORPHO_DISABLE_CHECKOUT:
+            _json_response(self, 503, {"error": "checkout disabled"})
+            return
+        if not nowpayments_api.is_configured():
+            _json_response(self, 503, {
+                "ok": False, "reason": "nowpayments_not_configured",
+                "error": "Crypto checkout is not currently enabled.",
+            })
+            return
+        length = _read_content_length(self)
+        if length < 0 or length > MAX_BODY_BYTES:
+            _json_response(self, 400, {"error": "invalid body size"})
+            return
+        raw = self.rfile.read(length) if length > 0 else b""
+        try:
+            body = json.loads(raw.decode("utf-8")) if raw else {}
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            _json_response(self, 400, {"error": "bad json"})
+            return
+        if not isinstance(body, dict):
+            _json_response(self, 400, {"error": "bad json shape"})
+            return
+        currency = str(body.get("currency", "")).strip().lower()
+        plan = str(body.get("plan", "")).strip().lower()
+        email = str(body.get("email", "")).strip()
+        if plan not in nowpayments_api.PLANS:
+            _json_response(self, 400, {"error": "unknown plan"})
+            return
+        if currency not in nowpayments_api.SUPPORTED_CURRENCIES:
+            _json_response(self, 400, {"error": "unsupported currency"})
+            return
+        plan_meta = nowpayments_api.PLANS[plan]
+        # Order id is opaque + unguessable so retries/lookups are safe to
+        # leak in URLs. We use the same token shape as receipt ids.
+        order_id = "np_" + secrets.token_urlsafe(10)
+        result = nowpayments_api.create_invoice(
+            amount_usd=float(plan_meta["price_usd"]),
+            currency=currency,
+            order_id=order_id,
+            customer_email=email if "@" in email else None,
+        )
+        if not result.get("ok"):
+            _json_response(self, 502, {
+                "ok": False,
+                "error": "Crypto payment provider unavailable.",
+                "reason": result.get("reason", ""),
+            })
+            return
+        data = result.get("data") or {}
+        invoice_url = (
+            data.get("invoice_url")
+            or data.get("invoiceUrl")
+            or data.get("url")
+            or ""
+        )
+        if not invoice_url:
+            _json_response(self, 502, {
+                "ok": False,
+                "error": "Payment provider returned no invoice URL.",
+            })
+            return
+        _json_response(self, 200, {
+            "ok": True,
+            "url": invoice_url,
+            "order_id": order_id,
+            "plan": plan,
+            "currency": currency,
+        })
 
 
 def _list_anchors_for_email(
