@@ -13,7 +13,7 @@
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://orphograph.com/">
 <meta name="twitter:card" content="summary_large_image">
-<link rel="stylesheet" href="/index.css?v=6">
+<link rel="stylesheet" href="/index.css?v=7">
 </head>
 <body>
 
@@ -73,16 +73,23 @@
           <li>Within ~1 hour, the fingerprint is committed to a Bitcoin block. The receipt is final.</li>
         </ol>
       </div>
-      <label class="drop" for="drop-input" id="drop">
-        <div class="icon" aria-hidden="true">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      <div class="drop-column">
+        <div class="tier-badge" id="tier-badge" data-tier="free">
+          <span class="tier-badge-label">Free tier</span>
+          <span class="tier-badge-detail" id="tier-badge-detail">3 anchors per 24 hours · no payment required</span>
         </div>
-        <strong>Place a file</strong>
-        <em>Drag it here, or tap to choose. Read locally. Only the fingerprint is submitted.</em>
-        <button type="button" id="drop-btn">Choose a file</button>
-        <input id="drop-input" type="file" hidden>
-      </label>
+        <label class="drop" for="drop-input" id="drop">
+          <div class="icon" aria-hidden="true">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          </div>
+          <strong>Place a file</strong>
+          <em>Drag it here, or tap to choose. Read locally. Only the fingerprint is submitted.</em>
+          <button type="button" id="drop-btn">Choose a file</button>
+          <input id="drop-input" type="file" hidden>
+        </label>
+      </div>
     </div>
+    <div class="ops-banner" id="ops-banner" hidden></div>
     <div class="status-line" id="status"></div>
     <div class="sticky-status" id="sticky-status" hidden></div>
     <section class="recent-receipts" id="recent-receipts" hidden>
@@ -166,7 +173,7 @@
         <ul>
           <li>50 anchor credits</li>
           <li>Use them anytime</li>
-          <li>Pay in BTC or card</li>
+          <li>Pay by card (more options soon)</li>
           <li>Gift to a friend</li>
         </ul>
         <a href="#" class="cta" data-checkout="pack">Purchase</a>

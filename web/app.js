@@ -455,6 +455,65 @@ async function anchorFile(file) {
   if (record.pack_consumed) refreshPackBanner();
 }
 
+// ─── Tier badge + ops banner (truth-in-advertising) ─────────────────
+// Tier badge tells the user which tier they're on RIGHT NOW so they don't
+// wonder "do I owe money?" before dropping a file. Ops banner reads
+// /api/config so flipping a kill switch is user-visible.
+function renderTierBadge() {
+  const badge = $("#tier-badge");
+  const detail = $("#tier-badge-detail");
+  const label = badge?.querySelector(".tier-badge-label");
+  if (!badge || !detail || !label) return;
+  const code = packToken();
+  if (code) {
+    badge.dataset.tier = "pack";
+    label.textContent = "Pack active";
+    detail.textContent = `code ${code.slice(0, 8)}… · credits never expire`;
+    return;
+  }
+  badge.dataset.tier = "free";
+  label.textContent = "Free tier";
+  detail.textContent = "3 anchors per 24 hours · no payment required";
+}
+
+async function renderOpsBanner() {
+  const banner = $("#ops-banner");
+  if (!banner) return;
+  try {
+    const r = await fetch("/api/config", { credentials: "same-origin" });
+    if (!r.ok) return;
+    const cfg = await r.json();
+    const t = cfg?.toggles || {};
+    if (t.maintenance_mode) {
+      banner.hidden = false;
+      banner.dataset.kind = "error";
+      banner.textContent = "Maintenance mode is on. New anchors and checkout are paused. Existing receipts continue to verify against Bitcoin without us.";
+      return;
+    }
+    if (t.anchoring_disabled && t.checkout_disabled) {
+      banner.hidden = false;
+      banner.dataset.kind = "warn";
+      banner.textContent = "Anchoring and checkout are paused right now. Existing receipts are unaffected.";
+      return;
+    }
+    if (t.anchoring_disabled) {
+      banner.hidden = false;
+      banner.dataset.kind = "warn";
+      banner.textContent = "Anchoring is paused right now. Existing receipts are unaffected; we'll be back shortly.";
+      return;
+    }
+    if (t.checkout_disabled) {
+      banner.hidden = false;
+      banner.dataset.kind = "warn";
+      banner.textContent = "Checkout is paused right now. Free-tier anchoring still works.";
+      return;
+    }
+    banner.hidden = true;
+  } catch {
+    // Network failure on /api/config is not user-facing. Leave banner hidden.
+  }
+}
+
 // On page load: if a recent in-flight state survived a reload, surface it.
 function hydrateAnchorStateOnLoad() {
   const s = loadAnchorState();
@@ -878,6 +937,8 @@ wireSampleCard();
 wireWaitlistForms();
 detectSignedIn();
 renderRecentReceipts();
+renderTierBadge();
+renderOpsBanner();
 hydrateAnchorStateOnLoad();
 track("page_view", "landing");
 

@@ -192,8 +192,23 @@ async function main() {
   $("#sha256").textContent = rec.hash_hex;
   $("#sha512").textContent = rec.sha512_hex || "(none — receipt predates SHA-512 sibling)";
   $("#label").textContent = rec.client_label || "(none)";
-  $("#status").textContent = (rec.status || "pending") +
-    (rec.calendars_ok ? ` (${rec.calendars_ok}/${rec.calendars_total} calendars valid)` : "");
+  // Friendly status copy. "partial" with 3/5 still meets MIN_CALENDARS_OK=3
+  // (cryptographically anchored to Bitcoin via 3 independent calendars), but
+  // the bare word "partial" reads as broken — replace with clearer text.
+  const _rawStatus = rec.status || "pending";
+  const _cok = rec.calendars_ok || 0;
+  const _ctot = rec.calendars_total || 5;
+  let _friendly;
+  if (_rawStatus === "pinned") {
+    _friendly = `Anchored to Bitcoin · all ${_ctot} calendars confirmed`;
+  } else if (_rawStatus === "partial") {
+    _friendly = `Anchored to Bitcoin · ${_cok} of ${_ctot} calendars confirmed`;
+  } else if (_rawStatus === "pending") {
+    _friendly = `Pending Bitcoin confirmation · ${_cok} of ${_ctot} calendars stamped`;
+  } else {
+    _friendly = `${_rawStatus} (${_cok}/${_ctot} calendars)`;
+  }
+  $("#status").textContent = _friendly;
   $("#cals").textContent = `${rec.calendars_ok} of ${rec.calendars_total} OTS proofs valid`;
   if (rec.btc_pinned_at) {
     renderTimeInto($("#btc"), rec.btc_pinned_at);
