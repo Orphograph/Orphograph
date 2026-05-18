@@ -14,6 +14,7 @@ Public API:
     consume_credit(claim_code) -> tuple[bool, int]  # (allowed, remaining)
     balance(claim_code) -> int
     new_claim_code() -> str
+    revoke_credits_by_source(source_substring, revoke_source) -> list[dict]
 """
 from __future__ import annotations
 
@@ -83,6 +84,80 @@ def balance(claim_code: str) -> int:
         return 0
     with _lock:
         return _scan().get(claim_code, 0)
+
+
+def revoke_credits_by_source(source_substring: str, revoke_source: str) -> list[dict]:
+    """Revoke unused credits for every claim_code minted with a matching source.
+
+    `source_substring` is matched against the `source` field of original
+    add_credits rows (e.g. "stripe:cs_abc" matches both
+    `stripe:cs_abc` and `stripe-gift:cs_abc`). For each claim_code touched
+    we compute (issued_for_source - already_consumed) and append a single
+    negative ledger entry tagged with `revoke_source`.
+
+    Idempotent: if a revoke row with the same `revoke_source` already exists
+    for a claim_code, that code is skipped. Already-consumed credits stay
+    consumed — we only zero what's still unused, capped at unused balance.
+
+    Returns a list of {claim_code, revoked} dicts describing what changed.
+    """
+    if not source_substring or not revoke_source:
+        return []
+    if not LEDGER_PATH.exists():
+        return []
+
+    with _lock:
+        # Use the same sentinel lockfile as consume_credit so the read+write
+        # critical section is atomic vs. concurrent spends and other revokes.
+        lockfile = LEDGER_PATH.with_suffix(LEDGER_PATH.suffix + ".lock")
+        with locked(lockfile, mode="a", exclusive=True):
+            # First pass: find claim_codes whose ORIGINAL minting source
+            # contains source_substring, and collect per-code totals.
+            matching_codes: set[str] = set()
+            balances: dict[str, int] = {}
+            already_revoked: set[str] = set()
+            with LEDGER_PATH.open() as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        row = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    code = row.get("claim_code")
+                    if not code:
+                        continue
+                    src = row.get("source", "") or ""
+                    delta = int(row.get("credits_delta", 0))
+                    # A positive delta whose source contains the substring
+                    # marks this code as originating from the refunded session.
+                    if delta > 0 and source_substring in src:
+                        matching_codes.add(code)
+                    # If the same revoke_source has already been written for
+                    # this code, mark it so we skip (idempotency).
+                    if src == revoke_source:
+                        already_revoked.add(code)
+                    balances[code] = balances.get(code, 0) + delta
+
+            results: list[dict] = []
+            for code in sorted(matching_codes):
+                if code in already_revoked:
+                    results.append({"claim_code": code, "revoked": 0, "skipped": "already_revoked"})
+                    continue
+                unused = balances.get(code, 0)
+                if unused <= 0:
+                    results.append({"claim_code": code, "revoked": 0, "skipped": "no_unused"})
+                    continue
+                _append({
+                    "ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                    "claim_code": code,
+                    "email": "",
+                    "credits_delta": -unused,
+                    "source": revoke_source,
+                })
+                results.append({"claim_code": code, "revoked": unused})
+            return results
 
 
 def consume_credit(claim_code: str) -> tuple[bool, int]:

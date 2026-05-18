@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Orphograph for Writers — Anchor a Chain of Draft Versions</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#f6f1e3">
+<meta name="description" content="Paste each version of your draft as you write. Only the Merkle root of the chain leaves your browser. Bitcoin-anchored receipt at session end.">
+<link rel="icon" type="image/png" href="/favicon.png?v=6">
+<meta property="og:title" content="Orphograph for Writers">
+<meta property="og:description" content="Anchor a chain of draft versions to Bitcoin. The text stays in your browser.">
+<meta property="og:image" content="/seal.png?v=6">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://orphograph.com/writers.html">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="stylesheet" href="/index.css?v=6">
+<link rel="stylesheet" href="/writers.css?v=1">
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap row">
+    <a href="/" class="brand">Orphograph</a>
+    <nav>
+      <a href="/learn.html">Method</a>
+      <a href="/writers.html">For Writers</a>
+      <a href="/about.html">Office</a>
+      <a href="/signin.html">Sign in</a>
+      <a href="#workbench" class="cta">Begin</a>
+    </nav>
+  </div>
+</header>
+
+<!-- ────────────────────────────────── MASTHEAD ─────────────────────────── -->
+<section class="masthead">
+  <div class="wrap">
+    <div class="lockup">
+      <img class="lockup-seal" src="/seal.png?v=6" alt="Orphograph seal">
+      <div class="lockup-text">
+        <div class="lockup-wordmark">Orphograph</div>
+        <div class="lockup-rule"></div>
+        <div class="lockup-tag">For Writers &middot; Draft Chain</div>
+        <div class="lockup-est">Est. 2026</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ────────────────────────────────── HERO ─────────────────────────────── -->
+<section class="hero">
+  <div class="wrap">
+    <h1>Anchor a chain of draft versions to Bitcoin.</h1>
+    <p class="lede">Paste each version of your draft as you write. Only the Merkle root of the chain leaves your browser.</p>
+    <div class="chips">
+      <span>Hashing in the browser</span>
+      <span>One 32-byte root on anchor</span>
+      <span>Receipt verifies offline</span>
+    </div>
+  </div>
+</section>
+
+<!-- ────────────────────────────────── WORKBENCH ────────────────────────── -->
+<section class="action" id="workbench">
+  <div class="wrap">
+    <div class="action-card writers-card">
+      <div>
+        <h2>The procedure</h2>
+        <p class="sub">Paste a version. Add it. Paste the next. When you're done, anchor the chain.</p>
+        <ol>
+          <li>Paste the current version of your draft into the box.</li>
+          <li>Press <em>Add this version to the chain</em>. The browser hashes it locally with <code>SHA-256</code> and <code>SHA-512</code>.</li>
+          <li>The box clears. Continue writing; paste the next version when ready.</li>
+          <li>When you're done, press <em>Anchor my chain</em>. A Merkle root is computed and submitted to five OpenTimestamps calendars.</li>
+          <li>You receive a receipt and a downloadable session manifest. Both verify offline against Bitcoin.</li>
+        </ol>
+      </div>
+
+      <div class="writers-pane">
+        <div class="tier-badge" id="tier-badge" data-tier="free">
+          <span class="tier-badge-label">Free tier</span>
+          <span class="tier-badge-detail">3 anchors per 24 hours &middot; no payment required</span>
+        </div>
+
+        <label for="draft-input" class="writers-label">Current draft version</label>
+        <textarea id="draft-input" rows="10" placeholder="Paste this version of your draft here. Nothing is sent until you press Anchor."></textarea>
+
+        <div class="writers-controls">
+          <button type="button" id="add-version-btn" class="btn-primary">Add this version to the chain</button>
+          <button type="button" id="reset-session-btn" class="btn-ghost">Start a new session</button>
+        </div>
+
+        <div class="writers-meter">
+          <span id="version-count">0 versions added</span>
+          <span class="dot">·</span>
+          <span id="session-id-label">session not started</span>
+        </div>
+
+        <div class="writers-list" id="versions-list" hidden>
+          <h3>Chain so far <span class="muted small">— versions in this browser only</span></h3>
+          <ol id="versions-body" class="versions-ol"></ol>
+        </div>
+
+        <div class="writers-anchor-row">
+          <button type="button" id="anchor-chain-btn" class="btn-primary big" disabled>Anchor my chain</button>
+        </div>
+
+        <div class="status-line" id="writers-status"></div>
+
+        <div class="writers-receipt" id="writers-receipt" hidden>
+          <h3>Receipt</h3>
+          <p class="receipt-id" id="receipt-id-line"></p>
+          <p><a id="receipt-link" href="#" rel="noopener">Open receipt page</a></p>
+          <p>
+            <button type="button" id="download-manifest-btn" class="btn-ghost">Download session manifest (JSON)</button>
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ────────────────────────────────── VERIFY ───────────────────────────── -->
+<section class="band">
+  <div class="wrap">
+    <div class="head">
+      <div class="eyebrow">Verification</div>
+      <h2>Verify a previous session.</h2>
+      <p class="head-sub">Paste a saved manifest, or drop the JSON file. The browser recomputes the Merkle root from the version hashes and compares it to the receipt.</p>
+    </div>
+    <div class="verify-card">
+      <label for="verify-input" class="writers-label">Session manifest (JSON)</label>
+      <textarea id="verify-input" rows="8" placeholder="Paste the contents of a saved session manifest here, or drop the .json file onto this box."></textarea>
+      <div class="writers-controls">
+        <button type="button" id="verify-file-btn" class="btn-ghost">Choose a file…</button>
+        <input id="verify-file-input" type="file" accept="application/json,.json" hidden>
+        <button type="button" id="verify-btn" class="btn-primary">Verify this manifest</button>
+      </div>
+      <div class="status-line" id="verify-status"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ────────────────────────────────── WHAT THIS IS ─────────────────────── -->
+<section class="band band-glow">
+  <div class="wrap">
+    <div class="head">
+      <div class="eyebrow">The office</div>
+      <h2>What this is.</h2>
+      <p class="head-sub">A description of observable behavior. No promises of what cannot happen — only an account of what does.</p>
+    </div>
+    <div class="feature-grid">
+      <div class="feature">
+        <div class="num">01</div>
+        <h3>Local hashing</h3>
+        <p>Each pasted version is hashed in your browser via the Web Crypto API. The list of hashes is held in this tab's memory and in this browser's <code>localStorage</code>. No version of the draft is sent to the office.</p>
+      </div>
+      <div class="feature">
+        <div class="num">02</div>
+        <h3>One root crosses the counter</h3>
+        <p>When you anchor, the version hashes are combined into a single Merkle root — a 32-byte number. The root is submitted to five independent OpenTimestamps calendars. Within roughly an hour, it is committed inside a Bitcoin block.</p>
+      </div>
+      <div class="feature">
+        <div class="num">03</div>
+        <h3>Receipt survives the office</h3>
+        <p>The downloadable session manifest contains every version hash, the Merkle root, and the receipt identifier. Anyone with the manifest can re-derive the root and verify it against Bitcoin using open-source tools, without contacting this server.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ────────────────────────────────── WHAT THIS ISN'T ──────────────────── -->
+<section class="band">
+  <div class="wrap">
+    <div class="head">
+      <div class="eyebrow">Honesty</div>
+      <h2>What this isn't.</h2>
+    </div>
+    <div class="honesty">
+      <p><strong>Evidence of process, not proof of authorship.</strong> A receipt shows that a sequence of text states existed in a particular order, on or before a Bitcoin block. It does not, by itself, identify the human who typed.</p>
+      <p>A scripted typist could simulate a drafting cadence. The instrument records what it is given; it does not adjudicate intent. The artifact is corroborating evidence, not a verdict.</p>
+      <p>Not legal evidence absent expert testimony. Admissibility in any proceeding is determined by counsel and the relevant court — not by this office. Not a substitute for retained counsel where stakes are material.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ────────────────────────────────── PRICING ──────────────────────────── -->
+<section class="band band-glow" id="pricing">
+  <div class="wrap">
+    <div class="head">
+      <div class="eyebrow">Schedule of fees</div>
+      <h2>Two tiers. No subscription.</h2>
+      <p class="head-sub">Free tier resets every twenty-four hours by the server's clock. The paid Pack uses the same calendars and the same chain.</p>
+    </div>
+    <div class="tiers writers-tiers">
+      <div class="tier">
+        <div class="t-name">Free</div>
+        <div class="t-price">$0</div>
+        <p class="t-desc">For trying it out and for light use, perpetual.</p>
+        <ul>
+          <li>3 anchored sessions every 24 hours</li>
+          <li>Full Bitcoin attestation</li>
+          <li>All 5 calendars</li>
+          <li>Verify any manifest, anytime</li>
+        </ul>
+        <a href="#workbench" class="cta">Begin</a>
+      </div>
+      <div class="tier featured">
+        <span class="ribbon">Writer Pack</span>
+        <div class="t-name">Writer Pack</div>
+        <div class="t-price">$19<small> one-time</small></div>
+        <p class="t-desc">Ten anchored sessions. Credits never expire.</p>
+        <ul>
+          <li>10 anchored sessions</li>
+          <li>Never expires</li>
+          <li>Pay by card</li>
+          <li>Same calendars, same chain</li>
+        </ul>
+        <a href="/buy.html?sku=writer-pack" class="cta">Purchase</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ────────────────────────────────── FAQ ──────────────────────────────── -->
+<section class="band">
+  <div class="wrap" style="max-width:760px;">
+    <div class="head">
+      <div class="eyebrow">Questions</div>
+      <h2>FAQ</h2>
+    </div>
+    <div class="faq">
+      <details>
+        <summary>What actually gets sent over the network?</summary>
+        <p>One Merkle root per anchor — a 32-byte (64-hex-character) <code>SHA-256</code> output — together with its <code>SHA-512</code> sibling and a static label. No draft text, no version hashes, no filenames.</p>
+      </details>
+      <details>
+        <summary>Where are the versions stored?</summary>
+        <p>In this browser's <code>localStorage</code>, keyed by a random 16-character session identifier. They are not synced anywhere. Clearing browser data removes them. If you want a permanent copy, download the session manifest after anchoring.</p>
+      </details>
+      <details>
+        <summary>What does the receipt prove?</summary>
+        <p>That the Merkle root of your chain of version hashes existed on or before a specific Bitcoin block. By construction, that fixes the order and content of every version included in the root before that block. It is corroborating evidence of a drafting process. It is not, on its own, identification of the author.</p>
+      </details>
+      <details>
+        <summary>What happens if Orphograph shuts down?</summary>
+        <p>The downloaded session manifest plus the <code>.ots</code> proof files (available from the receipt page) verify offline against the public Bitcoin blockchain using the open-source <a href="https://github.com/opentimestamps/opentimestamps-client" rel="noopener">OpenTimestamps client</a>. No Orphograph server is in the loop.</p>
+      </details>
+      <details>
+        <summary>How do I verify someone else's session?</summary>
+        <p>Ask for their session manifest (a small JSON file). Paste it into the verify box above, or drop the file. The browser will recompute the Merkle root from the listed version hashes and compare it to the root recorded in the receipt. To go further, fetch the <code>.ots</code> proofs from the receipt page and run them through the OpenTimestamps client against Bitcoin.</p>
+      </details>
+      <details>
+        <summary>Why a chain instead of a single anchor at the end?</summary>
+        <p>A single anchor of a finished draft proves only that the finished draft existed. A chain of version hashes records the order in which intermediate states existed — an account of editing over time. The Merkle root commits to all of it at once, with one transaction's worth of footprint.</p>
+      </details>
+      <details>
+        <summary>Will this hold up in court?</summary>
+        <p>It may or may not. Admissibility depends on jurisdiction, counsel, opposing counsel, and the trier of fact. Treat the artifact as one piece of corroborating evidence, not a verdict, and consult an attorney where stakes are real.</p>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- ────────────────────────────────── FOOTER ────────────────────────────── -->
+<footer class="site">
+  <div class="wrap row">
+    <div class="brand">Orphograph &nbsp;·&nbsp; For Writers</div>
+    <nav>
+      <a href="/">Home</a>
+      <a href="/learn.html">Method</a>
+      <a href="/verify/">Verify a receipt</a>
+      <a href="/about.html">Office</a>
+      <a href="/privacy.html">Privacy</a>
+      <a href="/terms.html">Terms</a>
+      <a href="/status.html">Status</a>
+    </nav>
+  </div>
+</footer>
+
+<script src="/writers.js?v=1"></script>
+</body>
+</html>

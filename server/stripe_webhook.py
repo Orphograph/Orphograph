@@ -148,6 +148,60 @@ def handle_event(payload: bytes) -> dict:
             _mark_processed(event_id, result)
             return result
 
+        # Refund or dispute → revoke any unused Pack credits minted for the
+        # originating checkout session. Already-consumed credits stay
+        # consumed (anchors already happened). Without this, a refunded
+        # buyer keeps spendable credits = money leak.
+        if event_type in {"charge.refunded", "charge.dispute.created"}:
+            obj = event.get("data", {}).get("object", {}) or {}
+            obj_meta = obj.get("metadata", {}) or {}
+            # Stripe's `charge` and `dispute` objects carry their own
+            # metadata, but the link to our checkout session is usually
+            # on the payment_intent. Try the cheap places first.
+            session_id = (
+                obj_meta.get("checkout_session_id")
+                or obj_meta.get("session_id")
+                or ""
+            )
+            if not session_id:
+                # payment_intent may be expanded into an object or a bare id.
+                pi = obj.get("payment_intent")
+                if isinstance(pi, dict):
+                    pi_meta = pi.get("metadata", {}) or {}
+                    session_id = (
+                        pi_meta.get("checkout_session_id")
+                        or pi_meta.get("session_id")
+                        or ""
+                    )
+            if not session_id:
+                sys.stderr.write(
+                    f"[stripe_webhook] {event_type} event {event_id} had no "
+                    f"recoverable session_id; cannot revoke credits\n"
+                )
+                result = {"ok": True, "no_session_id": True, "event_type": event_type}
+                _mark_processed(event_id, result)
+                return result
+
+            prefix = (
+                "stripe-refund" if event_type == "charge.refunded" else "stripe-dispute"
+            )
+            revoke_source = f"{prefix}:{session_id}"
+            revoked = credits.revoke_credits_by_source(
+                source_substring=session_id, revoke_source=revoke_source,
+            )
+            sys.stderr.write(
+                f"[stripe_webhook] {event_type} session={session_id}: "
+                f"revoked={revoked}\n"
+            )
+            result = {
+                "ok": True,
+                "event_type": event_type,
+                "session_id": session_id,
+                "revoked": revoked,
+            }
+            _mark_processed(event_id, result)
+            return result
+
         if event_type != "checkout.session.completed":
             result = {"ok": True, "ignored": event_type}
             _mark_processed(event_id, result)

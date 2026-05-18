@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  com.orphograph.reconcile.plist.template
+
+  Daily Stripe ↔ credit-ledger reconciliation. Compares the last 7 days of
+  Stripe events to the local credit_ledger.jsonl and writes a Markdown
+  report to data/reconciliation_<ISO_DATE>.md. Read-only.
+
+  Replace placeholders before loading:
+    {{PYTHON}}              absolute path to the Python interpreter
+                            (e.g. /usr/bin/python3 or /usr/local/bin/python3)
+    {{SCRIPT_PATH}}         absolute path to scripts/reconcile_stripe_ledger.py
+                            (e.g. /opt/orphograph/scripts/reconcile_stripe_ledger.py)
+    {{WORKING_DIR}}         absolute path to the orphograph project root
+                            (e.g. /opt/orphograph)
+    {{STRIPE_SECRET_KEY}}   the live Stripe secret key (sk_live_…)
+
+  Install (do NOT run blindly — review first):
+    sudo cp com.orphograph.reconcile.plist /Library/LaunchDaemons/
+    sudo launchctl bootstrap system /Library/LaunchDaemons/com.orphograph.reconcile.plist
+
+  Cron cadence: every day at 09:00 local time on the Fly machine.
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.orphograph.reconcile</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>{{PYTHON}}</string>
+        <string>{{SCRIPT_PATH}}</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>{{WORKING_DIR}}</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>STRIPE_SECRET_KEY</key>
+        <string>{{STRIPE_SECRET_KEY}}</string>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin</string>
+    </dict>
+
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>9</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>StandardOutPath</key>
+    <string>{{WORKING_DIR}}/logs/reconcile.out.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>{{WORKING_DIR}}/logs/reconcile.err.log</string>
+</dict>
+</plist>
