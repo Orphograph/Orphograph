@@ -72,6 +72,12 @@ def _request(method: str, path: str, body: dict | None = None) -> dict:
             "Authorization": f"Bearer {key}",
             "Content-Type": "application/json",
             "Accept": "application/json",
+            # NOWPayments hosts api.nowpayments.io behind Cloudflare which
+            # blocks unspecified or python-urllib User-Agents as bots
+            # (Cloudflare error 1010). A browser-shaped UA passes through.
+            "User-Agent": "Mozilla/5.0 (compatible; OrphographServer/0.1; +https://orphograph.com)",
+            "Accept-Encoding": "gzip, deflate",
+            "Accept-Language": "en-US,en;q=0.9",
         },
     )
     try:
