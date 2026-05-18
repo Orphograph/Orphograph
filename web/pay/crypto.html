@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <title>Pay in crypto — Orphograph</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="description" content="Buy an Orphograph credit pack in USDC, SOL, XRP, ETH, USDT, LTC, DOGE, or MATIC. Hosted by NOWPayments — non-custodial.">
+<meta name="description" content="Buy an Orphograph credit pack in BTC, USDC, SOL, XRP, ETH, USDT, LTC, DOGE, or MATIC. Hosted by NOWPayments — non-custodial.">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="stylesheet" href="/style.css">
 <style>
@@ -98,7 +98,7 @@
   <h1>Pay in crypto</h1>
   <p style="color:var(--text-soft);">
     Hosted invoice. Non-custodial: NOWPayments holds the gateway keys
-    and settles us in USDC. Pick a coin and a pack, then complete on
+    and settles us in BTC. Pick a coin and a pack, then complete on
     NOWPayments. Your claim code lands in your inbox once the
     on-chain payment confirms.
   </p>
@@ -108,6 +108,7 @@
       <div class="field">
         <label for="coin">Coin</label>
         <select id="coin" name="coin" required>
+          <option value="btc">BTC</option>
           <option value="usdc">USDC</option>
           <option value="sol">SOL</option>
           <option value="xrp">XRP</option>
@@ -118,7 +119,7 @@
           <option value="matic">MATIC</option>
         </select>
         <ul class="coin-list">
-          <li>USDC</li><li>SOL</li><li>XRP</li><li>ETH</li>
+          <li>BTC</li><li>USDC</li><li>SOL</li><li>XRP</li><li>ETH</li>
           <li>USDT</li><li>LTC</li><li>DOGE</li><li>MATIC</li>
         </ul>
       </div>

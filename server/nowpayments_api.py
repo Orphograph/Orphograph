@@ -31,7 +31,7 @@ HTTP_TIMEOUT = 12
 # vs usdcmatic) but for an MVP we accept the bare ticker and let the
 # customer pick the network in NOWPayments' hosted invoice UI.
 SUPPORTED_CURRENCIES = (
-    "usdc", "sol", "xrp", "eth", "usdt", "ltc", "doge", "matic",
+    "btc", "usdc", "sol", "xrp", "eth", "usdt", "ltc", "doge", "matic",
 )
 
 # Plan -> credit-pack metadata.

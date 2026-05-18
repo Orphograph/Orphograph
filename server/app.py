@@ -398,6 +398,17 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/stats":
             _json_response(self, 200, stats.snapshot())
             return
+        # NOWPayments validates the webhook URL by issuing a GET first; respond
+        # 200 so their setup wizard accepts the URL. POSTs go through the
+        # signed-IPN handler in do_POST.
+        if path == "/api/nowpayments/webhook":
+            _json_response(self, 200, {
+                "ok": True,
+                "endpoint": "nowpayments_ipn",
+                "method": "POST",
+                "signature_header": "x-nowpayments-sig",
+            })
+            return
         if path == "/api/config":
             _json_response(self, 200, public_config.snapshot())
             return
