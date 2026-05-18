@@ -159,7 +159,10 @@ def handle_event(payload: bytes) -> dict:
                 return result
 
             claim_code = credits.new_claim_code()
-            source = f"nowpayments:{invoice_id or order_id}"
+            # Include BOTH invoice_id and order_id in the source so that
+            # later refund IPNs (which arrive with the order_id we issued)
+            # can locate this row via substring match.
+            source = f"nowpayments:{invoice_id or order_id}:{order_id}"
             credits.add_credits(
                 claim_code=claim_code,
                 email=customer_email,

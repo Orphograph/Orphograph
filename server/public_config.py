@@ -72,5 +72,6 @@ def snapshot() -> dict:
             "creator_tier_live": bool(os.environ.get("CREATOR_TIER_LIVE", "")),
             "private_receipts": True,  # always available to subscribers
             "receipt_vault": True,     # always available to subscribers
+            "nowpayments_enabled": bool(os.environ.get("NOWPAYMENTS_API_KEY", "").strip()),
         },
     }

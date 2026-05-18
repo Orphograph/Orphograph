@@ -194,6 +194,7 @@ let STRIPE_PERSONAL_ANNUAL_URL = "";
 let PERSONAL_MONTHLY_USD = 5;
 let PERSONAL_ANNUAL_USD = 60;
 let ANNUAL_SAVINGS_USD = (PERSONAL_MONTHLY_USD * 12) - PERSONAL_ANNUAL_USD;
+let NOWPAYMENTS_ENABLED = false;
 
 async function loadPublicConfig() {
   try {
@@ -210,7 +211,27 @@ async function loadPublicConfig() {
       PERSONAL_ANNUAL_USD = cfg.pricing.personal_annual_usd ?? PERSONAL_ANNUAL_USD;
       ANNUAL_SAVINGS_USD = (PERSONAL_MONTHLY_USD * 12) - PERSONAL_ANNUAL_USD;
     }
+    if (cfg.features) {
+      NOWPAYMENTS_ENABLED = cfg.features.nowpayments_enabled === true;
+    }
   } catch {}
+}
+
+function wireCryptoPayLink() {
+  // Toggle the "Pay in crypto (8 coins)" link next to the Stripe Pack
+  // button based on the public config feature flag. Hidden by default so
+  // founders can stage NOWPayments without surfacing it publicly.
+  const link = document.querySelector("#crypto-pay-link");
+  const wrap = document.querySelector("#crypto-pay-link-wrap");
+  if (!link) return;
+  if (NOWPAYMENTS_ENABLED) {
+    link.hidden = false;
+    link.href = "/pay/crypto.html";
+    if (wrap) wrap.hidden = false;
+  } else {
+    link.hidden = true;
+    if (wrap) wrap.hidden = true;
+  }
 }
 
 function _hexOf(digest) {
@@ -928,6 +949,7 @@ ingestPackFromUrl();
 loadPublicConfig().finally(() => {
   wireBuyPack();
   wireBuyPackBtc();
+  wireCryptoPayLink();
   wireBillingToggle();
 });
 wireVerifierLinks();

@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Pay in crypto — Orphograph</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Buy an Orphograph credit pack in USDC, SOL, XRP, ETH, USDT, LTC, DOGE, or MATIC. Hosted by NOWPayments — non-custodial.">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/style.css">
+<style>
+  .pay-wrap { max-width: 640px; margin: 40px auto; padding: 0 18px; }
+  .pay-card {
+    border: 1px solid var(--panel-stroke);
+    background: var(--panel);
+    border-radius: 14px;
+    padding: 28px;
+  }
+  .field { display: flex; flex-direction: column; gap: 6px; margin: 14px 0; }
+  .field label {
+    font-size: 13px;
+    color: var(--text-soft);
+    letter-spacing: 0.02em;
+  }
+  .field select, .field input {
+    padding: 10px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--panel-stroke);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 15px;
+    font-family: inherit;
+  }
+  .pack-pick { display: flex; gap: 8px; flex-wrap: wrap; margin: 6px 0 14px; }
+  .pack-pick button {
+    flex: 1 1 auto;
+    min-width: 140px;
+    padding: 12px;
+    border: 1px solid var(--panel-stroke);
+    background: transparent;
+    color: var(--text);
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    font-family: inherit;
+  }
+  .pack-pick button.active {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+  .pay-submit {
+    width: 100%;
+    padding: 13px;
+    background: var(--accent);
+    color: #ffffff;
+    border: 0;
+    border-radius: 8px;
+    font-size: 15px;
+    font-weight: 500;
+    cursor: pointer;
+    font-family: inherit;
+    margin-top: 10px;
+  }
+  .pay-submit:disabled { opacity: 0.6; cursor: progress; }
+  .pay-msg {
+    margin: 14px 0 0;
+    font-size: 13px;
+    color: var(--text-soft);
+    min-height: 18px;
+  }
+  .pay-msg.error { color: var(--bad); }
+  .coin-list {
+    display: flex; flex-wrap: wrap; gap: 6px;
+    margin: 8px 0 0;
+    list-style: none; padding: 0;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .coin-list li {
+    padding: 3px 9px;
+    background: var(--panel);
+    border: 1px solid var(--panel-stroke);
+    border-radius: 999px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand"><a href="/" style="color:inherit;text-decoration:none;">orphograph</a></div>
+  <nav>
+    <a href="/#pricing">pricing</a>
+    <a href="/">home</a>
+  </nav>
+</header>
+
+<main class="pay-wrap">
+  <h1>Pay in crypto</h1>
+  <p style="color:var(--text-soft);">
+    Hosted invoice. Non-custodial: NOWPayments holds the gateway keys
+    and settles us in USDC. Pick a coin and a pack, then complete on
+    NOWPayments. Your claim code lands in your inbox once the
+    on-chain payment confirms.
+  </p>
+
+  <div class="pay-card">
+    <form id="crypto-form" novalidate>
+      <div class="field">
+        <label for="coin">Coin</label>
+        <select id="coin" name="coin" required>
+          <option value="usdc">USDC</option>
+          <option value="sol">SOL</option>
+          <option value="xrp">XRP</option>
+          <option value="eth">ETH</option>
+          <option value="usdt">USDT</option>
+          <option value="ltc">LTC</option>
+          <option value="doge">DOGE</option>
+          <option value="matic">MATIC</option>
+        </select>
+        <ul class="coin-list">
+          <li>USDC</li><li>SOL</li><li>XRP</li><li>ETH</li>
+          <li>USDT</li><li>LTC</li><li>DOGE</li><li>MATIC</li>
+        </ul>
+      </div>
+
+      <div class="field">
+        <label>Pack</label>
+        <div class="pack-pick" id="pack-pick">
+          <button type="button" data-plan="writer_pack" class="active">
+            $19 · Writer Pack (10 anchors)
+          </button>
+          <button type="button" data-plan="pack_50">
+            $29 · Pack of 50 (50 anchors)
+          </button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="email">Email (we send the claim code here)</label>
+        <input
+          type="email"
+          id="email"
+          name="email"
+          placeholder="you@example.com"
+          autocomplete="email"
+          maxlength="254"
+        >
+      </div>
+
+      <button type="submit" class="pay-submit" id="pay-submit">
+        Continue to NOWPayments
+      </button>
+
+      <p id="pay-msg" class="pay-msg" aria-live="polite"></p>
+    </form>
+  </div>
+
+  <p style="margin-top:24px;color:var(--muted);font-size:13px;text-align:center;">
+    Prefer card?
+    <a href="/#pricing">Stripe checkout is here.</a>
+    Want pure Bitcoin? <a href="/pay/btc.html">Pay with BTC →</a>
+  </p>
+</main>
+
+<footer>
+  <small>
+    <a href="/">Home</a> ·
+    <a href="/terms.html">Terms</a> ·
+    <a href="/privacy.html">Privacy</a> ·
+    <a href="mailto:hello@orphograph.com">Contact</a>
+  </small>
+</footer>
+
+<script src="/pay/crypto.js"></script>
+</body>
+</html>
