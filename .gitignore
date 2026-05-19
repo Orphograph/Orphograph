@@ -109,3 +109,12 @@ deploy/FOUNDER_TODO.md
 web/seal-source.png
 web/seal-top.png
 web/letterhead-full.png
+
+# PyPI build artifacts — generated locally before publish, never committed
+mcp/dist/
+mcp/build/
+mcp/*.egg-info/
+verifier-js/node_modules/
+*.tar.gz
+*.whl
+

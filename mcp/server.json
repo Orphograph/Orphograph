@@ -1,0 +1,75 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
+  "name": "io.github.Orphograph/orphograph",
+  "description": "Anchor a file's fingerprint to the Bitcoin chain via Orphograph. The file does not leave the device — only the SHA-256 fingerprint crosses the wire.",
+  "version": "0.1.0",
+  "repository": {
+    "url": "https://github.com/Orphograph/Orphograph",
+    "source": "github",
+    "subfolder": "mcp"
+  },
+  "websiteUrl": "https://orphograph.com/mcp.html",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "identifier": "orphograph-mcp",
+      "version": "0.1.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "ORPHO_API_KEY",
+          "description": "Optional API key issued from https://orphograph.com/account.html. Without it, anchors are subject to the free-tier rate limit (three anchors per twenty-four hours per IP). With it, the customer's subscription or Pack credits apply.",
+          "isRequired": false,
+          "isSecret": true
+        },
+        {
+          "name": "ORPHO_BASE_URL",
+          "description": "Base URL for the Orphograph API. Defaults to https://orphograph.com. Override only for testing or self-hosted instances.",
+          "isRequired": false,
+          "default": "https://orphograph.com"
+        }
+      ]
+    }
+  ],
+  "_meta": {
+    "categories": ["security", "utility", "blockchain"],
+    "tools": [
+      {
+        "name": "orphograph_anchor_file",
+        "description": "Anchor a local file to the Bitcoin chain via Orphograph. The file body never leaves the device; SHA-256 + SHA-512 fingerprints are transmitted, the receipt and Bitcoin commitment are returned.",
+        "inputSchema": {
+          "type": "object",
+          "required": ["path"],
+          "properties": {
+            "path": { "type": "string" },
+            "label": { "type": "string" },
+            "c2pa_manifest_hash": { "type": "string" }
+          }
+        }
+      },
+      {
+        "name": "orphograph_verify_receipt",
+        "description": "Verify an existing Orphograph receipt against the calendars and Bitcoin chain. Returns the anchored hashes, calendar attestation counts, and Bitcoin-commitment time when available.",
+        "inputSchema": {
+          "type": "object",
+          "required": ["receipt_id"],
+          "properties": {
+            "receipt_id": { "type": "string" }
+          }
+        }
+      },
+      {
+        "name": "orphograph_list_vault",
+        "description": "List the signed-in subscriber's anchored receipts. Requires ORPHO_API_KEY in the environment.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "limit": { "type": "integer", "minimum": 1, "maximum": 500 }
+          }
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,49 @@
+# CODEOWNERS — Orphograph
+#
+# Declares the authority responsible for each portion of the codebase.
+# Used by GitHub branch protection to require review approvals from the
+# named owner on any PR touching the matching paths. Doubles as a
+# public, durable assertion of authorship — which has independent
+# evidentiary value for trademark and copyright disputes.
+#
+# Last revised: 2026-05-18
+
+# Default owner for everything not matched by a more specific rule
+*                       @Orphograph
+
+# The notary protocol engine — sha-locked canonical surface
+/server/engine.py       @Orphograph
+/server/auth.py         @Orphograph
+/server/mailer.py       @Orphograph
+/server/stripe_*.py     @Orphograph
+/server/nowpayments_*.py @Orphograph
+/server/webhooks.py     @Orphograph
+/server/receipt_pdf.py  @Orphograph
+
+# MCP server (the launch artifact, 2026-05-18)
+/mcp/                   @Orphograph
+/web/mcp/               @Orphograph
+/web/mcp.html           @Orphograph
+
+# Brand assets — wordmark, seal, masthead copy
+/web/seal.*             @Orphograph
+/web/favicon.*          @Orphograph
+/web/og.svg             @Orphograph
+/web/index.html         @Orphograph
+/web/index.css          @Orphograph
+
+# Legal + policy surfaces
+/LICENSE                @Orphograph
+/web/terms.html         @Orphograph
+/web/privacy.html       @Orphograph
+/web/continuity.html    @Orphograph
+/web/changelog.html     @Orphograph
+/web/roadmap.html       @Orphograph
+/web/method/            @Orphograph
+/web/vs/                @Orphograph
+
+# CI / deploy
+/.github/               @Orphograph
+/fly.toml               @Orphograph
+/Dockerfile             @Orphograph
+/scripts/               @Orphograph

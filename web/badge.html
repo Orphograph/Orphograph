@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Orphograph — Verifier Badge</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#f6f1e3">
+<meta name="description" content="Embed an Orphograph verifier badge on a portfolio, blog, or README. The badge displays the public receipt id and links to the canonical receipt page.">
+<link rel="icon" type="image/png" href="/favicon.png?v=6">
+<meta property="og:title" content="Orphograph — Verifier Badge">
+<meta property="og:description" content="Embed a Bitcoin-anchored verifier badge on any page.">
+<meta property="og:url" content="https://orphograph.com/badge.html">
+<meta property="og:type" content="article">
+<meta property="og:image" content="https://orphograph.com/seal.png?v=6">
+<link rel="canonical" href="https://orphograph.com/badge.html">
+<link rel="stylesheet" href="/index.css?v=8">
+<style>
+  .badge-wrap { max-width: 760px; margin: 0 auto; padding: 0 24px 64px; }
+  h1.badge-h1 { font-family: var(--serif); font-size: 38px; font-weight: 500; margin: 32px 0 6px; color: var(--ink); }
+  p.badge-lede { font-size: 17px; color: var(--ink-2); line-height: 1.65; margin: 0 0 8px; }
+  .badge-section { margin-top: 36px; }
+  .badge-section h2 { font-family: var(--serif); font-size: 22px; font-weight: 500; color: var(--ink); margin: 0 0 4px; letter-spacing: 0.01em; }
+  .badge-section h3 { font-family: var(--serif); font-size: 17px; font-weight: 500; color: var(--ink); margin: 18px 0 6px; }
+  .badge-section .section-rule { border-top: 1px solid var(--ink); width: 32px; margin: 10px 0 18px; opacity: 0.6; }
+  .badge-section p { color: var(--ink-2); line-height: 1.7; font-size: 15px; }
+  .badge-section ul { color: var(--ink-2); line-height: 1.75; font-size: 15px; padding-left: 22px; }
+  pre.snippet { background: var(--paper-soft); border: 1px solid var(--line-soft); border-radius: var(--radius-sm); padding: 14px 16px; overflow-x: auto; font: 13px/1.55 var(--mono); color: var(--ink-2); }
+  .demo-box { display: flex; align-items: center; gap: 14px; padding: 18px; border: 1px solid var(--line-soft); border-radius: var(--radius); background: var(--paper-soft); margin: 12px 0; }
+  code.inline { font: 12px/1.4 var(--mono); background: var(--paper-soft); border: 1px solid var(--line-soft); padding: 1px 6px; border-radius: 4px; color: var(--ink-2); }
+  .pre-label { font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); margin: 48px 0 8px; }
+</style>
+<meta name="copyright" content="© 2026 Orphograph. Code MIT — see /LICENSE. The Orphograph wordmark and seal are reserved.">
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap row">
+    <a href="/" class="brand">Orphograph</a>
+    <nav>
+      <a href="/learn.html">Method</a>
+      <a href="/writers.html">Writers</a>
+      <a href="/#tiers">Pricing</a>
+      <a href="/about.html">Office</a>
+      <a href="/signin.html">Sign in</a>
+      <a href="/#drop" class="cta">Anchor a file</a>
+    </nav>
+  </div>
+</header>
+
+<main class="badge-wrap">
+
+  <p class="pre-label">Verifier Badge</p>
+  <h1 class="badge-h1">A small public mark, linked to the receipt.</h1>
+  <p class="badge-lede">
+    The badge is a discreet visual cue that a work has been anchored
+    to Bitcoin through the office. It is intended for portfolios,
+    blogs, and source repositories, where a single click leads to the
+    canonical receipt page and the full record of attestations.
+  </p>
+
+  <section class="badge-section">
+    <h2>What the badge does</h2>
+    <div class="section-rule"></div>
+    <p>
+      The badge is a visual mark that the file behind it has been
+      anchored to the Bitcoin chain through the office. It carries
+      one piece of information — the public receipt identifier — and
+      links to the receipt page at <code class="inline">/r/&lt;id&gt;</code>,
+      where the OpenTimestamps proofs are presented in full and are
+      independently verifiable against the chain. The badge itself
+      is decorative; the receipt is the instrument.
+    </p>
+  </section>
+
+  <section class="badge-section">
+    <h2>How to embed</h2>
+    <div class="section-rule"></div>
+    <p>
+      Three patterns are supported. Each renders the same canonical
+      link to <code class="inline">/r/&lt;id&gt;</code> and may be
+      pasted into the surface that fits the host context.
+    </p>
+
+    <h3>SVG image, in HTML</h3>
+    <p>The pure-SVG form. No JavaScript on the embedding page, no extra fetches, suitable for any static site, RSS reader, or email client.</p>
+<pre class="snippet"><code>&lt;a href="https://orphograph.com/r/{ID}"&gt;
+  &lt;img src="https://orphograph.com/api/badge/{ID}.svg"
+       alt="Verified on Bitcoin via Orphograph"
+       width="220" height="40"&gt;
+&lt;/a&gt;</code></pre>
+
+    <h3>Markdown</h3>
+    <p>For source-controlled READMEs and Markdown-rendered blogs.</p>
+<pre class="snippet"><code>[![Verified on Bitcoin via Orphograph](https://orphograph.com/api/badge/{ID}.svg)](https://orphograph.com/r/{ID})</code></pre>
+
+    <h3>HTML widget, with live verification</h3>
+    <p>
+      A script tag that renders a small in-page pill after itself.
+      The widget reads the receipt id from its
+      <code class="inline">data-receipt</code> attribute, validates
+      it, draws a cream-and-serif pill, and best-effort queries the
+      office for a live VERIFIED status. If the live check is
+      unavailable from the embedding origin, the pill displays
+      <code class="inline">PENDING</code> and the receipt page
+      remains the authoritative source.
+    </p>
+<pre class="snippet"><code>&lt;script src="https://orphograph.com/widget.js"
+        data-receipt="{ID}"
+        async&gt;&lt;/script&gt;</code></pre>
+  </section>
+
+  <section class="badge-section">
+    <h2>Verifying the badge</h2>
+    <div class="section-rule"></div>
+    <p>
+      The badge is a visual reference and not itself an attestation.
+      The verifiable instrument is the receipt at
+      <code class="inline">/r/&lt;id&gt;</code>, which presents the
+      five OpenTimestamps attestations and the on-chain commitment.
+      A reader who wishes to confirm a badge follows its link and
+      reads the receipt; an OpenTimestamps client or the MIT-licensed
+      verifier may be used to confirm the receipt against Bitcoin
+      directly, without contacting the office.
+    </p>
+  </section>
+
+  <section class="badge-section">
+    <h2>Privacy</h2>
+    <div class="section-rule"></div>
+    <p>
+      The badge renders only the public receipt identifier, which is
+      already the last path segment of the receipt URL. No filename,
+      no fingerprint, no customer email, and no network address is
+      written into the badge or queryable through it. The widget's
+      live-status request reads only the receipt's public status and
+      sends no cookies.
+    </p>
+  </section>
+
+  <section class="badge-section">
+    <h2>Customization</h2>
+    <div class="section-rule"></div>
+    <p>The SVG badge accepts two query-string parameters:</p>
+    <ul>
+      <li><code class="inline">?variant=light</code> (default) or <code class="inline">?variant=dark</code> — the cream paper or the ink reverse.</li>
+      <li><code class="inline">?size=small</code>, <code class="inline">?size=medium</code> (default), or <code class="inline">?size=large</code> — three preset widths suitable for inline use, sidebars, and hero placements respectively.</li>
+    </ul>
+    <p>
+      The parameters compose. Example:
+      <code class="inline">/api/badge/{ID}.svg?variant=dark&amp;size=large</code>.
+    </p>
+  </section>
+
+  <section class="badge-section">
+    <h2>Live demo</h2>
+    <div class="section-rule"></div>
+    <p>The badge below references a known-good receipt:</p>
+    <div class="demo-box">
+      <a href="/r/ZlZXKD4CGxkOzx-T">
+        <img src="/api/badge/ZlZXKD4CGxkOzx-T.svg"
+             alt="Verified on Bitcoin via Orphograph"
+             width="300" height="80">
+      </a>
+    </div>
+    <p>The same receipt rendered with the live-verifying widget:</p>
+    <div class="demo-box">
+      <script src="/widget.js" data-receipt="ZlZXKD4CGxkOzx-T" async></script>
+    </div>
+    <p>
+      A full side-by-side gallery, with light and dark variants and
+      all three patterns rendered live, is available on the
+      <a href="/badge-demo.html">badge demo page</a>.
+    </p>
+  </section>
+
+  <section class="badge-section">
+    <h2>Attribution</h2>
+    <div class="section-rule"></div>
+    <p>
+      If the badge appears on a third-party site, an attribution
+      link to <a href="https://orphograph.com">https://orphograph.com</a>
+      is appreciated but is not required. The badge itself links to
+      the receipt page, which carries the wordmark.
+    </p>
+  </section>
+
+  <p style="color:var(--muted);font-size:13px;margin-top:48px;">
+    Questions about the badge may be put to the office at
+    <a href="mailto:hello@orphograph.com" style="color:var(--confirm);">hello@orphograph.com</a>.
+  </p>
+</main>
+
+<footer>
+  <div class="wrap" style="text-align:center;color:var(--muted);font-size:13px;padding:32px 0;">
+    <p>Orphograph · An empirical notary.</p>
+    <p style="margin-top:8px;">
+      <a href="/" style="color:var(--muted);">Home</a> ·
+      <a href="/method" style="color:var(--muted);">Method</a> ·
+      <a href="/badge-demo.html" style="color:var(--muted);">Badge demo</a> ·
+      <a href="/vs/c2pa.html" style="color:var(--muted);">Compare</a> ·
+      <a href="/terms.html" style="color:var(--muted);">Terms</a> ·
+      <a href="/privacy.html" style="color:var(--muted);">Privacy</a>
+    </p>
+  </div>
+</footer>
+
+<script src="/statusbar.js" defer></script>
+</body>
+</html>

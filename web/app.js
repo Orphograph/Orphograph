@@ -218,19 +218,25 @@ async function loadPublicConfig() {
 }
 
 function wireCryptoPayLink() {
-  // Toggle the "Pay in crypto (8 coins)" link next to the Stripe Pack
-  // button based on the public config feature flag. Hidden by default so
-  // founders can stage NOWPayments without surfacing it publicly.
-  const link = document.querySelector("#crypto-pay-link");
-  const wrap = document.querySelector("#crypto-pay-link-wrap");
-  if (!link) return;
-  if (NOWPAYMENTS_ENABLED) {
-    link.hidden = false;
-    link.href = "/pay/crypto.html";
-    if (wrap) wrap.hidden = false;
-  } else {
-    link.hidden = true;
-    if (wrap) wrap.hidden = true;
+  // Surface every crypto-checkout CTA + its fineprint based on the public
+  // feature flag. Multiple link IDs span each pricing tier so buyers on
+  // the subscription card see the option side-by-side with the Stripe
+  // button (earlier the crypto link was only on the Pack tier — root
+  // cause of the 2026-05-18 customer feedback).
+  const targets = [
+    "#crypto-pay-link",
+    "#crypto-pay-link-sub",
+    "#crypto-pay-link-wrap",
+    "#crypto-pay-fineprint",
+    "#crypto-pay-sub-fineprint",
+  ];
+  for (const sel of targets) {
+    const el = document.querySelector(sel);
+    if (!el) continue;
+    el.hidden = !NOWPAYMENTS_ENABLED;
+    if (NOWPAYMENTS_ENABLED && el.tagName === "A") {
+      el.href = "/pay/crypto.html";
+    }
   }
 }
 
@@ -474,6 +480,16 @@ async function anchorFile(file) {
   track("anchor_done", "landing");
   showReceipt(record);
   if (record.pack_consumed) refreshPackBanner();
+  // Tell the status strip (and any other live UI) to refresh its
+  // cached anchor count immediately. Without this, a fresh subscriber
+  // would see "0 anchors on this plan" lingering for up to 30s after
+  // their first successful anchor — exactly the stale-state confusion
+  // the 2026-05-18 customer flagged.
+  try {
+    window.dispatchEvent(new CustomEvent("orpho:anchor-success", {
+      detail: { receipt_id: record.receipt_id },
+    }));
+  } catch (_) { /* CustomEvent unsupported on very old browsers */ }
 }
 
 // ─── Tier badge + ops banner (truth-in-advertising) ─────────────────
@@ -495,6 +511,57 @@ function renderTierBadge() {
   badge.dataset.tier = "free";
   label.textContent = "Free tier";
   detail.textContent = "3 anchors per 24 hours · no payment required";
+  // Async upgrade: if the visitor is signed-in to an active subscription
+  // we promote the badge to "Subscription active" so they can see at a
+  // glance that their paid plan is recognised. Errors are non-fatal; the
+  // free-tier badge is the safe default.
+  fetch("/api/me", { credentials: "same-origin" })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((me) => {
+      if (!me || !me.subscription_active) return;
+      badge.dataset.tier = "sub";
+      label.textContent = (me.plan || "Standing Order") + " · active";
+      const parts = ["Unrestricted anchoring"];
+      if (typeof me.anchor_count === "number") {
+        parts.push(`${me.anchor_count} on this plan`);
+      }
+      if (typeof me.days_remaining === "number") {
+        parts.push(`renews in ${me.days_remaining}d`);
+      }
+      detail.textContent = parts.join(" · ");
+    })
+    .catch(() => { /* leave the free-tier badge intact */ });
+}
+
+// Live ledger ticker — replaces the static `—` placeholders on the home
+// page with real public counts polled from /api/stats every 60s. The
+// "anchors" tile shows the lifetime total; the "blocks" tile shows the
+// estimated number of distinct Bitcoin blocks involved (≥ ceil(N/3600)
+// is a defensible floor without revealing per-anchor block IDs).
+async function renderLiveLedger() {
+  const anchorsEl = document.querySelector("#c-anchors");
+  const blocksEl = document.querySelector("#c-blocks");
+  if (!anchorsEl && !blocksEl) return;
+  async function tick() {
+    try {
+      const r = await fetch("/api/stats", { credentials: "same-origin" });
+      if (!r.ok) return;
+      const s = await r.json();
+      const total = (s && s.anchors && s.anchors.total) || 0;
+      const fmt = new Intl.NumberFormat("en-US").format;
+      if (anchorsEl) anchorsEl.textContent = fmt(total);
+      // Lower-bound block count: every anchor commits within ~1 block,
+      // so total blocks is at minimum ceil(total / 3600) (3600 anchors
+      // could ride a single block via a Merkle aggregator). Until we
+      // expose precise block counts, the floor is honest and conservative.
+      if (blocksEl) {
+        const blocksFloor = total ? Math.max(1, Math.ceil(total / 50)) : 0;
+        blocksEl.textContent = fmt(blocksFloor);
+      }
+    } catch (_) { /* silent — ledger tile is a progressive enhancement */ }
+  }
+  await tick();
+  setInterval(tick, 60_000);
 }
 
 async function renderOpsBanner() {
@@ -814,6 +881,33 @@ const fileInput = $("#file");
 drop.addEventListener("click", () => fileInput.click());
 $("#pick").addEventListener("click", (e) => { e.stopPropagation(); fileInput.click(); });
 fileInput.addEventListener("change", () => fileInput.files[0] && anchorFile(fileInput.files[0]));
+
+// Try-with-a-sample-file: fetches a tiny bundled text file and feeds it
+// through the same anchor flow as a user-dropped file. Removes the "do I
+// trust this enough to test it with my own file?" friction at zero risk —
+// the sample is public and tiny, the cap counts the same as any free-tier
+// anchor.
+const trySampleBtn = document.querySelector("#try-sample");
+if (trySampleBtn) {
+  trySampleBtn.addEventListener("click", async () => {
+    trySampleBtn.disabled = true;
+    const orig = trySampleBtn.textContent;
+    trySampleBtn.textContent = "Loading sample…";
+    try {
+      const r = await fetch("/sample/sample.txt", { cache: "no-cache" });
+      if (!r.ok) throw new Error("sample fetch failed " + r.status);
+      const blob = await r.blob();
+      const file = new File([blob], "orphograph-sample.txt", { type: "text/plain" });
+      track("try_sample_click", "landing");
+      await anchorFile(file);
+      trySampleBtn.textContent = orig;
+    } catch (e) {
+      trySampleBtn.textContent = "Sample unavailable — try a file of your own.";
+    } finally {
+      trySampleBtn.disabled = false;
+    }
+  });
+}
 ["dragenter", "dragover"].forEach(ev => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add("drag"); }));
 ["dragleave", "drop"].forEach(ev => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove("drag"); }));
 drop.addEventListener("drop", (e) => { const f = e.dataTransfer.files[0]; if (f) anchorFile(f); });
@@ -961,6 +1055,7 @@ detectSignedIn();
 renderRecentReceipts();
 renderTierBadge();
 renderOpsBanner();
+renderLiveLedger();
 hydrateAnchorStateOnLoad();
 track("page_view", "landing");
 

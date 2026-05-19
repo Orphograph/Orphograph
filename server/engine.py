@@ -102,6 +102,7 @@ def anchor_hash(
     owner_id: str | None = None,
     attestation: dict | None = None,
     metadata: dict | None = None,
+    c2pa_manifest_hash: str | None = None,
 ) -> dict:
     """Anchor a client-supplied SHA-256 hex digest. Returns the receipt record.
 
@@ -119,6 +120,14 @@ def anchor_hash(
         sha512_hex = sha512_hex.strip().lower()
         if not _is_hex(sha512_hex, 128):
             raise ValueError("sha512_hex must be 128 lowercase hex characters")
+    # Optional C2PA manifest reference. The customer pre-computes the
+    # SHA-256 of the C2PA manifest JSON (or of the embedded JUMBF block)
+    # and supplies it here; the receipt records the relationship without
+    # the office ever seeing the manifest itself.
+    if c2pa_manifest_hash is not None:
+        c2pa_manifest_hash = c2pa_manifest_hash.strip().lower()
+        if not _is_hex(c2pa_manifest_hash, 64):
+            raise ValueError("c2pa_manifest_hash must be 64 lowercase hex characters")
     hash_bytes = bytes.fromhex(hash_hex)
 
     receipt_id = _new_receipt_id()
@@ -191,6 +200,11 @@ def anchor_hash(
         # is itself anchored to Bitcoin — anyone disputing it later would
         # need to forge the receipt's full content, not just the hash.
         "attestation": _sanitize_attestation(attestation),
+        # Optional C2PA assertion: the hash of a Coalition for Content
+        # Provenance and Authenticity manifest the anchorer wishes the
+        # receipt to reference. The manifest itself stays with the file;
+        # only its fingerprint is recorded here. Coexistence-first design.
+        "c2pa_manifest_hash": c2pa_manifest_hash,
         # Optional metadata: client-extracted EXIF / file metadata. Strong
         # corroborating evidence in disputes (camera serial, capture time,
         # GPS). Caller is responsible for redacting fields they don't want

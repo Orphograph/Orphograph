@@ -40,6 +40,8 @@ import referrals
 import subscriptions
 from file_lock import locked
 
+ENABLE_AUTO_SIGNIN_TOKEN = os.environ.get("ORPHO_AUTO_SIGNIN_ON_CHECKOUT", "1") == "1"
+
 
 PACK_CREDITS = int(os.environ.get("PACK_CREDIT_COUNT", "10"))
 ROOT = Path(__file__).resolve().parent.parent
@@ -134,7 +136,14 @@ def handle_event(payload: bytes) -> dict:
             sub_id = obj.get("id", "")
             customer = obj.get("customer", "")
             status = "canceled" if event_type == "customer.subscription.deleted" else obj.get("status", "")
+            # Stripe's 2024+ billing API moved current_period_end from the
+            # top-level subscription object onto the subscription_item.
+            # Fall back to the top-level value for older API versions.
             current_period_end = obj.get("current_period_end")
+            if current_period_end is None:
+                items = ((obj.get("items") or {}).get("data") or [])
+                if items:
+                    current_period_end = items[0].get("current_period_end")
             cancel_at_period_end = bool(obj.get("cancel_at_period_end", False))
             subscriptions.record_subscription_event(
                 stripe_customer=customer,
@@ -237,11 +246,27 @@ def handle_event(payload: bytes) -> dict:
             subscriptions.record_customer_email(stripe_customer, customer_email)
 
         # If this checkout was for a subscription rather than a one-time Pack,
-        # don't mint Pack credits — the subscription will deliver value instead.
+        # don't mint Pack credits — the subscription delivers value via the
+        # signed-in account instead. Without a welcome email, the customer
+        # has no obvious path to reach their account (they didn't create one
+        # — they just paid Stripe), so this send is load-bearing for UX.
         if session.get("mode") == "subscription":
-            # Email omitted from the response body; only Stripe sees these,
-            # but we avoid having it round-trip through any cache or replay UI.
-            result = {"ok": True, "subscription_checkout": True}
+            # Plan label: best-effort read of the line item's price metadata.
+            plan_label = "Standing Order"
+            try:
+                amount_total = int(session.get("amount_total") or 0)
+                if amount_total >= 5000:
+                    plan_label = "Personal annual"
+                elif amount_total >= 500:
+                    plan_label = "Standing Order"
+            except (TypeError, ValueError):
+                pass
+            sent = mailer.send_subscription_welcome_email(customer_email, plan_label=plan_label)
+            sys.stderr.write(
+                f"[stripe_webhook] subscription welcome sent for session {session_id} "
+                f"({masked}) plan={plan_label} (email_sent={sent})\n"
+            )
+            result = {"ok": True, "subscription_checkout": True, "welcome_email_sent": sent}
             _mark_processed(event_id, result)
             return result
 

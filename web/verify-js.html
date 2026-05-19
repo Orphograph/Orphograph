@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Orphograph — Independent Verifier</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#f6f1e3">
+<meta name="description" content="An independent, fully client-side verifier. Confirm an Orphograph receipt against the file it attests, without trusting this office. Works offline once saved.">
+<link rel="icon" type="image/png" href="/favicon.png?v=6">
+<meta property="og:title" content="Orphograph — Independent Verifier">
+<meta property="og:description" content="A self-contained verifier that confirms a receipt against the file, without trusting this office.">
+<meta property="og:url" content="https://orphograph.com/verify-js.html">
+<meta property="og:type" content="article">
+<meta property="og:image" content="https://orphograph.com/seal.png?v=6">
+<link rel="canonical" href="https://orphograph.com/verify-js.html">
+<link rel="stylesheet" href="/index.css?v=8">
+<style>
+  :root {
+    --bg: #f6f1e3;
+    --ink: #1a1a1a;
+    --ink-2: #2e2e2e;
+    --muted-local: #6a6258;
+    --line: #d8cfb8;
+    --valid: #4a9a73;
+    --mismatch: #b04a3a;
+    --serif-local: Georgia, "Times New Roman", serif;
+    --sans-local: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+  html, body { background: var(--bg); color: var(--ink); font-family: var(--sans-local); margin: 0; }
+  .v-wrap { max-width: 760px; margin: 0 auto; padding: 0 24px 64px; }
+  h1.v-h1 { font-family: var(--serif-local); font-size: 38px; font-weight: 500; margin: 32px 0 6px; color: var(--ink); }
+  p.v-lede { font-size: 17px; color: var(--ink-2); line-height: 1.65; margin: 0 0 8px; }
+  .v-eyebrow { font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted-local); margin: 48px 0 8px; }
+  h2.v-h2 { font-family: var(--serif-local); font-size: 22px; font-weight: 500; color: var(--ink); margin: 36px 0 10px; }
+  .v-rule { border-top: 1px solid var(--ink); width: 32px; margin: 10px 0 18px; opacity: 0.6; }
+
+  .v-zone {
+    border: 1.5px dashed var(--line);
+    border-radius: 6px;
+    background: rgba(255,255,255,0.35);
+    padding: 28px 22px;
+    margin: 14px 0 22px;
+    text-align: center;
+    cursor: pointer;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+  }
+  .v-zone:hover { background: rgba(255,255,255,0.55); border-color: #b9af96; }
+  .v-zone.over { background: rgba(74,154,115,0.08); border-color: var(--valid); }
+  .v-zone-label { font-family: var(--serif-local); font-size: 18px; color: var(--ink); margin: 0 0 6px; }
+  .v-zone-hint { color: var(--muted-local); font-size: 13.5px; margin: 0; }
+  .v-zone-status { margin-top: 10px; font-size: 13.5px; color: var(--ink-2); word-break: break-all; }
+  .v-zone textarea {
+    width: 100%;
+    min-height: 120px;
+    margin-top: 12px;
+    box-sizing: border-box;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 10px 12px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12.5px;
+    background: #fbf8ee;
+    color: var(--ink-2);
+    resize: vertical;
+  }
+  .v-actions { display: flex; gap: 10px; flex-wrap: wrap; margin: 8px 0 24px; }
+  .v-btn {
+    border: 1px solid var(--ink);
+    background: var(--ink);
+    color: var(--bg);
+    padding: 10px 18px;
+    border-radius: 4px;
+    font-size: 14px;
+    cursor: pointer;
+    font-family: var(--sans-local);
+    letter-spacing: 0.02em;
+  }
+  .v-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .v-btn.secondary { background: transparent; color: var(--ink); }
+  .v-result {
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 20px 22px;
+    margin: 18px 0;
+    background: rgba(255,255,255,0.45);
+  }
+  .v-result.valid { border-left: 4px solid var(--valid); }
+  .v-result.mismatch { border-left: 4px solid var(--mismatch); }
+  .v-result.pending { border-left: 4px solid var(--line); }
+  .v-verdict { font-family: var(--serif-local); font-size: 22px; margin: 0 0 8px; }
+  .v-verdict.valid { color: var(--valid); }
+  .v-verdict.mismatch { color: var(--mismatch); }
+  .v-row { font-size: 13.5px; color: var(--ink-2); margin: 6px 0; line-height: 1.55; }
+  .v-row .k { color: var(--muted-local); display: inline-block; min-width: 140px; }
+  .v-row .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-all; }
+  .v-note { color: var(--muted-local); font-size: 13.5px; line-height: 1.7; margin: 18px 0; }
+  .v-note a { color: var(--valid); }
+  .v-callout {
+    background: rgba(74,154,115,0.06);
+    border-left: 3px solid var(--valid);
+    padding: 14px 18px;
+    margin: 22px 0;
+    border-radius: 0 6px 6px 0;
+    color: var(--ink-2);
+    font-size: 14.5px;
+    line-height: 1.65;
+  }
+  .v-save {
+    border-top: 1px solid var(--line);
+    margin-top: 40px;
+    padding-top: 22px;
+    color: var(--muted-local);
+    font-size: 13.5px;
+    line-height: 1.7;
+  }
+  .v-fetch-row { margin: 8px 0 0; font-size: 13px; color: var(--muted-local); }
+  .v-fetch-row input {
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 6px 10px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12.5px;
+    background: #fbf8ee;
+    color: var(--ink-2);
+    margin-right: 6px;
+    min-width: 220px;
+  }
+</style>
+<meta name="copyright" content="© 2026 Orphograph. MIT — see /LICENSE">
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap row">
+    <a href="/" class="brand">Orphograph</a>
+    <nav>
+      <a href="/learn.html">Method</a>
+      <a href="/writers.html">Writers</a>
+      <a href="/#tiers">Pricing</a>
+      <a href="/about.html">Office</a>
+      <a href="/signin.html">Sign in</a>
+      <a href="/#drop" class="cta">Anchor a file</a>
+    </nav>
+  </div>
+</header>
+
+<main class="v-wrap">
+
+  <p class="v-eyebrow">Independent Verifier</p>
+  <h1 class="v-h1">Confirm a receipt without trusting this office.</h1>
+  <p class="v-lede">
+    The instrument below verifies the binding between a file and an Orphograph receipt entirely within the reader's browser. No data is transmitted; the page itself may be saved to disk and used when this office is unreachable.
+  </p>
+
+  <div class="v-callout">
+    <strong>Scope of this page.</strong> The verifier attests that the file's mathematical fingerprint matches the fingerprint recorded in the receipt. The Bitcoin-chain attestation is borne by the receipt's <span class="mono">.ots</span> files and is confirmed separately, by the published Python verifier or any OpenTimestamps client.
+  </div>
+
+  <h2 class="v-h2">Step one — the file</h2>
+  <div class="v-rule"></div>
+  <div id="fileZone" class="v-zone" role="button" tabindex="0" aria-label="Drop the file here or click to select">
+    <p class="v-zone-label">Drop the file here, or click to select.</p>
+    <p class="v-zone-hint">The file is read locally; nothing is uploaded.</p>
+    <p id="fileStatus" class="v-zone-status"></p>
+    <input id="filePicker" type="file" style="display:none">
+  </div>
+
+  <h2 class="v-h2">Step two — the receipt</h2>
+  <div class="v-rule"></div>
+  <div id="receiptZone" class="v-zone" role="button" tabindex="0" aria-label="Drop the receipt JSON here, click to select, or paste below">
+    <p class="v-zone-label">Drop the receipt JSON here, or click to select.</p>
+    <p class="v-zone-hint">A JSON receipt as issued by Orphograph, or paste its text below.</p>
+    <textarea id="receiptPaste" placeholder='Paste receipt JSON here, or only the receipt_id (e.g. ChvTMbYLIACHEHJT) to use the optional fetch below.' spellcheck="false"></textarea>
+    <p id="receiptStatus" class="v-zone-status"></p>
+    <input id="receiptPicker" type="file" accept=".json,application/json,text/plain" style="display:none">
+  </div>
+  <div class="v-fetch-row">
+    Optional: if only a receipt id is pasted above, the office's public endpoint may be queried.
+    <br>
+    <input id="fetchId" type="text" placeholder="receipt_id" spellcheck="false">
+    <button id="fetchBtn" class="v-btn secondary" type="button">Fetch receipt</button>
+    <span id="fetchStatus" style="margin-left:8px;"></span>
+  </div>
+
+  <div class="v-actions">
+    <button id="verifyBtn" class="v-btn" type="button" disabled>Verify</button>
+    <button id="resetBtn" class="v-btn secondary" type="button">Reset</button>
+  </div>
+
+  <div id="result" class="v-result pending" aria-live="polite">
+    <p class="v-verdict">Awaiting a file and a receipt.</p>
+    <p class="v-row">Once both are present, the verifier will compute SHA-256 locally and compare it to the fingerprint recorded in the receipt. If the receipt also carries SHA-512, the sibling check is performed as well.</p>
+  </div>
+
+  <h2 class="v-h2">What this page does not do</h2>
+  <div class="v-rule"></div>
+  <p class="v-note">
+    The page verifies the file&rarr;receipt binding. It does not verify the Bitcoin-chain attestation that the receipt carries. For end-to-end verification against the chain, the receipt's <span class="mono">.ots</span> files are checked by the standalone verifier published at
+    <a href="https://github.com/Orphograph/Orphograph">github.com/Orphograph/Orphograph</a>, or by the OpenTimestamps command-line client. The two checks together constitute full independent verification.
+  </p>
+  <p class="v-note">
+    This page is intentionally self-contained: a single HTML document, no external scripts, no build step. Once saved to disk, it remains a working verifier even if this office is offline or no longer reachable.
+  </p>
+
+  <div class="v-save">
+    <strong>To keep an offline copy.</strong> Right-click anywhere on this page and choose Save As. The resulting file is self-contained and verifies receipts even when this office is unreachable.
+  </div>
+
+</main>
+
+<footer>
+  <div class="wrap" style="text-align:center;color:var(--muted);font-size:13px;padding:32px 0;">
+    <p>Orphograph &middot; An empirical notary.</p>
+    <p style="margin-top:8px;">
+      <a href="/" style="color:var(--muted);">Home</a> &middot;
+      <a href="/learn.html" style="color:var(--muted);">Method</a> &middot;
+      <a href="/faq.html" style="color:var(--muted);">FAQ</a> &middot;
+      <a href="/vs/c2pa.html" style="color:var(--muted);">Compare</a> &middot;
+      <a href="/terms.html" style="color:var(--muted);">Terms</a> &middot;
+      <a href="/privacy.html" style="color:var(--muted);">Privacy</a>
+    </p>
+  </div>
+</footer>
+
+<script>
+(function () {
+  "use strict";
+
+  var state = {
+    file: null,
+    fileSha256: null,
+    fileSha512: null,
+    receipt: null,
+    receiptRaw: ""
+  };
+
+  var fileZone = document.getElementById("fileZone");
+  var filePicker = document.getElementById("filePicker");
+  var fileStatus = document.getElementById("fileStatus");
+  var receiptZone = document.getElementById("receiptZone");
+  var receiptPicker = document.getElementById("receiptPicker");
+  var receiptStatus = document.getElementById("receiptStatus");
+  var receiptPaste = document.getElementById("receiptPaste");
+  var verifyBtn = document.getElementById("verifyBtn");
+  var resetBtn = document.getElementById("resetBtn");
+  var resultBox = document.getElementById("result");
+  var fetchBtn = document.getElementById("fetchBtn");
+  var fetchId = document.getElementById("fetchId");
+  var fetchStatus = document.getElementById("fetchStatus");
+
+  function bufToHex(buf) {
+    var bytes = new Uint8Array(buf);
+    var hex = "";
+    for (var i = 0; i < bytes.length; i++) {
+      var h = bytes[i].toString(16);
+      if (h.length === 1) h = "0" + h;
+      hex += h;
+    }
+    return hex;
+  }
+
+  function setText(el, s) {
+    while (el.firstChild) el.removeChild(el.firstChild);
+    el.appendChild(document.createTextNode(s));
+  }
+
+  function fmtBytes(n) {
+    if (n < 1024) return n + " bytes";
+    if (n < 1024 * 1024) return (n / 1024).toFixed(1) + " KB";
+    return (n / (1024 * 1024)).toFixed(2) + " MB";
+  }
+
+  function updateVerifyEnabled() {
+    verifyBtn.disabled = !(state.file && state.receipt);
+  }
+
+  function clearResult() {
+    while (resultBox.firstChild) resultBox.removeChild(resultBox.firstChild);
+    resultBox.className = "v-result pending";
+    var p = document.createElement("p");
+    p.className = "v-verdict";
+    p.appendChild(document.createTextNode("Awaiting a file and a receipt."));
+    resultBox.appendChild(p);
+    var p2 = document.createElement("p");
+    p2.className = "v-row";
+    p2.appendChild(document.createTextNode("Once both are present, the verifier will compute SHA-256 locally and compare it to the fingerprint recorded in the receipt. If the receipt also carries SHA-512, the sibling check is performed as well."));
+    resultBox.appendChild(p2);
+  }
+
+  function setFile(f) {
+    state.file = f;
+    state.fileSha256 = null;
+    state.fileSha512 = null;
+    setText(fileStatus, "Selected: " + f.name + " (" + fmtBytes(f.size) + ")");
+    updateVerifyEnabled();
+  }
+
+  function parseReceiptText(txt) {
+    var t = (txt || "").trim();
+    if (!t) return null;
+    try {
+      var obj = JSON.parse(t);
+      if (obj && typeof obj === "object") return obj;
+    } catch (e) {
+      // not JSON; ignore
+    }
+    return null;
+  }
+
+  function describeReceipt(r) {
+    var hash = (r && (r.hash_hex || r.sha256_hex || r.sha256)) || "";
+    var rid = (r && (r.receipt_id || r.id || r.receiptId)) || "";
+    var parts = [];
+    if (rid) parts.push("receipt_id: " + rid);
+    if (hash) parts.push("hash_hex: " + hash.slice(0, 16) + "...");
+    return parts.join(" | ");
+  }
+
+  function setReceipt(obj, sourceLabel) {
+    state.receipt = obj;
+    var msg = sourceLabel ? sourceLabel + " parsed." : "Receipt parsed.";
+    var desc = describeReceipt(obj);
+    setText(receiptStatus, msg + (desc ? "  " + desc : ""));
+    updateVerifyEnabled();
+  }
+
+  function rejectReceipt(msg) {
+    state.receipt = null;
+    setText(receiptStatus, msg);
+    updateVerifyEnabled();
+  }
+
+  // File drop zone
+  fileZone.addEventListener("click", function () { filePicker.click(); });
+  fileZone.addEventListener("keydown", function (e) {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); filePicker.click(); }
+  });
+  filePicker.addEventListener("change", function () {
+    if (filePicker.files && filePicker.files[0]) setFile(filePicker.files[0]);
+  });
+  ["dragenter", "dragover"].forEach(function (evt) {
+    fileZone.addEventListener(evt, function (e) {
+      e.preventDefault(); e.stopPropagation();
+      fileZone.classList.add("over");
+    });
+  });
+  ["dragleave", "drop"].forEach(function (evt) {
+    fileZone.addEventListener(evt, function (e) {
+      e.preventDefault(); e.stopPropagation();
+      fileZone.classList.remove("over");
+    });
+  });
+  fileZone.addEventListener("drop", function (e) {
+    var dt = e.dataTransfer;
+    if (dt && dt.files && dt.files[0]) setFile(dt.files[0]);
+  });
+
+  // Receipt drop zone (avoid stealing clicks on the textarea/input)
+  receiptZone.addEventListener("click", function (e) {
+    if (e.target === receiptPaste || e.target.tagName === "TEXTAREA" || e.target.tagName === "INPUT") return;
+    receiptPicker.click();
+  });
+  receiptPicker.addEventListener("change", function () {
+    if (receiptPicker.files && receiptPicker.files[0]) {
+      var rf = receiptPicker.files[0];
+      var reader = new FileReader();
+      reader.onload = function () {
+        var txt = String(reader.result || "");
+        receiptPaste.value = txt;
+        var obj = parseReceiptText(txt);
+        if (obj) setReceipt(obj, "Receipt file");
+        else rejectReceipt("Receipt file did not parse as JSON.");
+      };
+      reader.onerror = function () { rejectReceipt("Could not read the selected file."); };
+      reader.readAsText(rf);
+    }
+  });
+  ["dragenter", "dragover"].forEach(function (evt) {
+    receiptZone.addEventListener(evt, function (e) {
+      e.preventDefault(); e.stopPropagation();
+      receiptZone.classList.add("over");
+    });
+  });
+  ["dragleave", "drop"].forEach(function (evt) {
+    receiptZone.addEventListener(evt, function (e) {
+      e.preventDefault(); e.stopPropagation();
+      receiptZone.classList.remove("over");
+    });
+  });
+  receiptZone.addEventListener("drop", function (e) {
+    var dt = e.dataTransfer;
+    if (!dt) return;
+    if (dt.files && dt.files[0]) {
+      var rf = dt.files[0];
+      var reader = new FileReader();
+      reader.onload = function () {
+        var txt = String(reader.result || "");
+        receiptPaste.value = txt;
+        var obj = parseReceiptText(txt);
+        if (obj) setReceipt(obj, "Receipt file");
+        else rejectReceipt("Dropped file did not parse as JSON.");
+      };
+      reader.readAsText(rf);
+      return;
+    }
+    var txt = dt.getData && dt.getData("text");
+    if (txt) {
+      receiptPaste.value = txt;
+      var obj2 = parseReceiptText(txt);
+      if (obj2) setReceipt(obj2, "Pasted receipt");
+      else rejectReceipt("Dropped text did not parse as JSON.");
+    }
+  });
+  receiptPaste.addEventListener("input", function () {
+    var txt = receiptPaste.value;
+    if (!txt.trim()) {
+      state.receipt = null;
+      setText(receiptStatus, "");
+      updateVerifyEnabled();
+      return;
+    }
+    var obj = parseReceiptText(txt);
+    if (obj) setReceipt(obj, "Pasted receipt");
+    else {
+      // Maybe the user pasted only a receipt_id; do not reject loudly.
+      state.receipt = null;
+      setText(receiptStatus, "Pasted text is not JSON. If it is a receipt id, use the optional fetch below.");
+      // Pre-fill the fetch field
+      var trimmed = txt.trim();
+      if (trimmed.length > 0 && trimmed.length < 64 && /^[A-Za-z0-9_\-]+$/.test(trimmed)) {
+        fetchId.value = trimmed;
+      }
+      updateVerifyEnabled();
+    }
+  });
+
+  // Optional fetch by receipt_id
+  fetchBtn.addEventListener("click", function () {
+    var id = (fetchId.value || "").trim();
+    if (!id) {
+      setText(fetchStatus, "No receipt_id provided.");
+      return;
+    }
+    if (!/^[A-Za-z0-9_\-]{4,64}$/.test(id)) {
+      setText(fetchStatus, "Receipt id has an unexpected shape; fetch was not attempted.");
+      return;
+    }
+    setText(fetchStatus, "Fetching...");
+    try {
+      var url = "https://orphograph.com/api/verify/" + encodeURIComponent(id);
+      fetch(url, { method: "GET", credentials: "omit", cache: "no-store" })
+        .then(function (r) {
+          if (!r.ok) throw new Error("HTTP " + r.status);
+          return r.text();
+        })
+        .then(function (txt) {
+          var obj = parseReceiptText(txt);
+          if (!obj) throw new Error("Response was not JSON.");
+          receiptPaste.value = txt;
+          setReceipt(obj, "Fetched receipt");
+          setText(fetchStatus, "Fetched.");
+        })
+        .catch(function (err) {
+          setText(fetchStatus, "Fetch did not succeed: " + (err && err.message ? err.message : String(err)));
+        });
+    } catch (err) {
+      setText(fetchStatus, "Fetch was not attempted in this environment.");
+    }
+  });
+
+  // Verification
+  function digest(name, buf) {
+    return crypto.subtle.digest(name, buf).then(bufToHex);
+  }
+
+  function readFileBuf(f) {
+    return new Promise(function (resolve, reject) {
+      var reader = new FileReader();
+      reader.onload = function () { resolve(reader.result); };
+      reader.onerror = function () { reject(new Error("Could not read the file.")); };
+      reader.readAsArrayBuffer(f);
+    });
+  }
+
+  function renderResult(out) {
+    while (resultBox.firstChild) resultBox.removeChild(resultBox.firstChild);
+    resultBox.className = "v-result " + (out.valid ? "valid" : "mismatch");
+
+    var verdict = document.createElement("p");
+    verdict.className = "v-verdict " + (out.valid ? "valid" : "mismatch");
+    verdict.appendChild(document.createTextNode(out.headline));
+    resultBox.appendChild(verdict);
+
+    function addRow(k, v, mono) {
+      var p = document.createElement("p");
+      p.className = "v-row";
+      var ks = document.createElement("span");
+      ks.className = "k";
+      ks.appendChild(document.createTextNode(k));
+      var vs = document.createElement("span");
+      if (mono) vs.className = "mono";
+      vs.appendChild(document.createTextNode(v));
+      p.appendChild(ks);
+      p.appendChild(vs);
+      resultBox.appendChild(p);
+    }
+
+    addRow("File", out.fileName || "(unnamed)");
+    addRow("File size", fmtBytes(out.fileSize || 0));
+    addRow("Local SHA-256", out.localSha256 || "—", true);
+    addRow("Receipt hash_hex", out.receiptSha256 || "(absent)", true);
+    addRow("SHA-256 match", out.sha256Match ? "yes" : "no");
+
+    if (out.receiptSha512 || out.localSha512) {
+      addRow("Local SHA-512", out.localSha512 || "—", true);
+      addRow("Receipt sha512_hex", out.receiptSha512 || "(absent)", true);
+      addRow("SHA-512 match", out.sha512Match ? "yes" : (out.receiptSha512 ? "no" : "(not checked)"));
+    }
+
+    if (out.receiptId) addRow("receipt_id", out.receiptId, true);
+    if (out.anchoredAt) addRow("Receipt asserts", out.anchoredAt);
+
+    var note = document.createElement("p");
+    note.className = "v-row";
+    note.style.marginTop = "14px";
+    note.style.color = "var(--muted-local)";
+    note.appendChild(document.createTextNode(out.note));
+    resultBox.appendChild(note);
+  }
+
+  verifyBtn.addEventListener("click", function () {
+    if (!state.file || !state.receipt) return;
+    verifyBtn.disabled = true;
+    var setBusy = function () {
+      while (resultBox.firstChild) resultBox.removeChild(resultBox.firstChild);
+      resultBox.className = "v-result pending";
+      var p = document.createElement("p");
+      p.className = "v-verdict";
+      p.appendChild(document.createTextNode("Computing local fingerprints..."));
+      resultBox.appendChild(p);
+    };
+    setBusy();
+
+    var receipt = state.receipt;
+    var receiptSha256 = receipt.hash_hex || receipt.sha256_hex || receipt.sha256 || "";
+    var receiptSha512 = receipt.sha512_hex || receipt.sha512 || "";
+    var receiptId = receipt.receipt_id || receipt.id || receipt.receiptId || "";
+    var anchoredAt = receipt.bitcoin_block_time || receipt.anchored_at || receipt.attested_at || receipt.issued_at || "";
+
+    receiptSha256 = (receiptSha256 || "").toLowerCase();
+    receiptSha512 = (receiptSha512 || "").toLowerCase();
+
+    readFileBuf(state.file).then(function (buf) {
+      var p256 = digest("SHA-256", buf);
+      var p512 = receiptSha512 ? digest("SHA-512", buf) : Promise.resolve("");
+      return Promise.all([p256, p512]);
+    }).then(function (hashes) {
+      var localSha256 = (hashes[0] || "").toLowerCase();
+      var localSha512 = (hashes[1] || "").toLowerCase();
+      state.fileSha256 = localSha256;
+      state.fileSha512 = localSha512;
+
+      var sha256Match = !!receiptSha256 && localSha256 === receiptSha256;
+      var sha512Match = !!receiptSha512 && localSha512 === receiptSha512;
+
+      var allRequired = sha256Match && (receiptSha512 ? sha512Match : true);
+      var valid = !!receiptSha256 && allRequired;
+
+      var headline, note;
+      if (!receiptSha256) {
+        headline = "Receipt incomplete";
+        note = "The supplied receipt has no hash_hex field; nothing can be compared. Confirm that the JSON is an Orphograph receipt.";
+      } else if (valid) {
+        headline = "Match — the file corresponds to the receipt.";
+        note = receiptSha512
+          ? "SHA-256 and SHA-512 both match. For full chain-level verification, run the receipt's .ots files through the published Python verifier or any OpenTimestamps client."
+          : "SHA-256 matches. The receipt does not carry SHA-512; the single-hash check is sufficient for binding. For chain-level verification, see the .ots files.";
+      } else {
+        headline = "Mismatch — the file does not correspond to the receipt.";
+        note = "The local fingerprint differs from the fingerprint recorded in the receipt. The file may have been modified, or the receipt belongs to a different file.";
+      }
+
+      renderResult({
+        valid: valid,
+        headline: headline,
+        note: note,
+        fileName: state.file.name,
+        fileSize: state.file.size,
+        localSha256: localSha256,
+        localSha512: localSha512 || "",
+        receiptSha256: receiptSha256,
+        receiptSha512: receiptSha512,
+        sha256Match: sha256Match,
+        sha512Match: sha512Match,
+        receiptId: receiptId,
+        anchoredAt: anchoredAt
+      });
+
+      verifyBtn.disabled = false;
+    }).catch(function (err) {
+      while (resultBox.firstChild) resultBox.removeChild(resultBox.firstChild);
+      resultBox.className = "v-result mismatch";
+      var p = document.createElement("p");
+      p.className = "v-verdict mismatch";
+      p.appendChild(document.createTextNode("The verifier could not complete."));
+      resultBox.appendChild(p);
+      var p2 = document.createElement("p");
+      p2.className = "v-row";
+      p2.appendChild(document.createTextNode((err && err.message ? err.message : String(err))));
+      resultBox.appendChild(p2);
+      verifyBtn.disabled = false;
+    });
+  });
+
+  resetBtn.addEventListener("click", function () {
+    state.file = null;
+    state.receipt = null;
+    state.fileSha256 = null;
+    state.fileSha512 = null;
+    filePicker.value = "";
+    receiptPicker.value = "";
+    receiptPaste.value = "";
+    fetchId.value = "";
+    setText(fileStatus, "");
+    setText(receiptStatus, "");
+    setText(fetchStatus, "");
+    clearResult();
+    updateVerifyEnabled();
+  });
+
+  // Feature probe
+  if (!window.crypto || !crypto.subtle || !crypto.subtle.digest) {
+    setText(fileStatus, "This browser does not expose WebCrypto SubtleCrypto; verification cannot run.");
+    verifyBtn.disabled = true;
+  }
+})();
+</script>
+
+<script src="/statusbar.js" defer></script>
+</body>
+</html>

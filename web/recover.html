@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Orphograph — Recover an issued instrument</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#f6f1e3">
+<meta name="description" content="A customer who paid and did not receive their claim instrument or sign-in link may recover here without contacting the office.">
+<link rel="icon" type="image/png" href="/favicon.png?v=6">
+<link rel="canonical" href="https://orphograph.com/recover.html">
+<meta property="og:title" content="Orphograph — Recover an issued instrument">
+<meta property="og:url" content="https://orphograph.com/recover.html">
+<meta property="og:type" content="article">
+<meta property="og:image" content="https://orphograph.com/seal.png?v=6">
+<meta name="copyright" content="© 2026 Orphograph. MIT — see /LICENSE">
+<link rel="stylesheet" href="/index.css?v=8">
+<style>
+  .rec-wrap { max-width: 640px; margin: 0 auto; padding: 0 24px 64px; }
+  .rec-wrap h1 { font-family: var(--serif); font-size: 34px; font-weight: 500; margin: 32px 0 8px; }
+  .rec-lede { font-size: 16px; color: var(--ink-2); line-height: 1.7; margin: 0 0 28px; }
+  .rec-form { background: rgba(74,154,115,0.04); border: 1px solid var(--line-soft); border-radius: 8px; padding: 24px; }
+  .rec-form label { display: block; font-size: 13px; color: var(--muted-2); letter-spacing: 0.04em; text-transform: uppercase; margin-top: 14px; margin-bottom: 6px; }
+  .rec-form input { width: 100%; padding: 11px 14px; border: 1px solid var(--line-soft); border-radius: 4px; font: inherit; font-size: 15px; background: var(--paper-soft); color: var(--ink); box-sizing: border-box; }
+  .rec-form input:focus { outline: none; border-color: var(--confirm); }
+  .rec-form .hint { font-size: 12.5px; color: var(--muted); margin: 4px 0 0; font-style: italic; }
+  .rec-form .submit { margin-top: 22px; padding: 12px 26px; background: #1a1a1a; color: var(--paper-soft); border: 0; border-radius: 4px; font-family: var(--serif); font-size: 15px; letter-spacing: 0.03em; cursor: pointer; }
+  .rec-form .submit:hover { background: #000; }
+  .rec-form .submit:disabled { opacity: 0.6; cursor: progress; }
+  #rec-result { margin-top: 18px; padding: 14px 16px; border-radius: 4px; font-size: 14.5px; line-height: 1.6; display: none; }
+  #rec-result.ok { background: rgba(74,154,115,0.10); border-left: 3px solid var(--confirm); color: var(--ink); }
+  #rec-result.err { background: rgba(176,74,58,0.10); border-left: 3px solid var(--bad); color: var(--ink); }
+  #rec-result.wait { background: rgba(212,168,42,0.12); border-left: 3px solid #b8860b; color: var(--ink); }
+  .rec-faq { margin-top: 40px; font-size: 14.5px; color: var(--ink-2); line-height: 1.7; }
+  .rec-faq h3 { font-family: var(--serif); font-size: 17px; font-weight: 500; color: var(--ink); margin: 24px 0 4px; }
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap row">
+    <a href="/" class="brand">Orphograph</a>
+    <nav>
+      <a href="/faq.html">FAQ</a>
+      <a href="/continuity.html">Continuity</a>
+      <a href="/signin.html">Sign in</a>
+      <a href="/#drop" class="cta">Anchor a file</a>
+    </nav>
+  </div>
+</header>
+
+<main class="rec-wrap">
+
+  <p style="font-size:12px;letter-spacing:0.18em;text-transform:uppercase;color:var(--muted);margin:48px 0 8px;">Recovery</p>
+  <h1>Recover an issued instrument.</h1>
+  <p class="rec-lede">
+    If payment has been received but the corresponding claim instrument or sign-in instrument has not arrived in your inbox, this form re-issues it to the address on file. No duplicate instrument is minted; the original claim code is preserved. The session identifier appears in the payment-confirmation email Stripe sent you, or in the URL after checkout (the segment beginning <code>cs_…</code>).
+  </p>
+
+  <form class="rec-form" id="rec-form" novalidate>
+    <label for="rec-session">Stripe session identifier</label>
+    <input type="text" id="rec-session" name="stripe_session_id" placeholder="cs_live_…" autocomplete="off" spellcheck="false" required>
+    <p class="hint">Found in the Stripe checkout-success URL or your Stripe email receipt. Begins with <code>cs_live_</code>.</p>
+
+    <label for="rec-email">Email on file</label>
+    <input type="email" id="rec-email" name="email" placeholder="you@example.com" autocomplete="email" required>
+    <p class="hint">Must match the address used at checkout. Mismatches are rejected.</p>
+
+    <button class="submit" type="submit" id="rec-submit">Issue replacement</button>
+    <div id="rec-result" role="status" aria-live="polite"></div>
+  </form>
+
+  <section class="rec-faq">
+    <h3>Is a new instrument minted?</h3>
+    <p>No. If a claim code was already issued for the session, the same code is re-sent. If the payment is recorded but a code has not yet been minted (the webhook may not have completed processing), the office is notified and you are asked to retry in a few minutes — never is a duplicate code minted.</p>
+
+    <h3>What about subscriptions?</h3>
+    <p>For an active subscription, the recovery instrument is a fresh one-click sign-in link valid for twenty-four hours. The link supersedes any earlier sign-in instrument; following it lands directly on the account ledger.</p>
+
+    <h3>What if the email does not arrive?</h3>
+    <p>Email may be delayed by the receiving provider for up to fifteen minutes. Check the spam folder. If after thirty minutes no instrument has arrived, write to <a href="mailto:hello@orphograph.com">hello@orphograph.com</a> with the session identifier — that mailbox is read directly by the office.</p>
+
+    <h3>Why is the session identifier required?</h3>
+    <p>It binds the recovery to a specific payment and prevents the form from being used to enumerate other customers. Without it the recovery cannot proceed. The identifier was issued to you by Stripe and is private.</p>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap" style="text-align:center;color:var(--muted);font-size:13px;padding:32px 0;">
+    <p>Orphograph · An empirical notary.</p>
+    <p style="margin-top:8px;">
+      <a href="/" style="color:var(--muted);">Home</a> ·
+      <a href="/faq.html" style="color:var(--muted);">FAQ</a> ·
+      <a href="/continuity.html" style="color:var(--muted);">Continuity</a> ·
+      <a href="/terms.html" style="color:var(--muted);">Terms</a> ·
+      <a href="/privacy.html" style="color:var(--muted);">Privacy</a>
+    </p>
+  </div>
+</footer>
+
+<script>
+(function () {
+  "use strict";
+  var form = document.getElementById("rec-form");
+  var sessionEl = document.getElementById("rec-session");
+  var emailEl = document.getElementById("rec-email");
+  var submitBtn = document.getElementById("rec-submit");
+  var resultEl = document.getElementById("rec-result");
+
+  function showResult(kind, text) {
+    resultEl.className = kind;
+    resultEl.textContent = text;
+    resultEl.style.display = "block";
+  }
+
+  form.addEventListener("submit", function (ev) {
+    ev.preventDefault();
+    var sid = (sessionEl.value || "").trim();
+    var email = (emailEl.value || "").trim();
+    if (!sid || !email) {
+      showResult("err", "Both fields are required.");
+      return;
+    }
+    if (!/^cs_(test|live)_[A-Za-z0-9_]+$/.test(sid)) {
+      showResult("err", "Session identifier is not in the expected format. It begins with cs_live_ or cs_test_.");
+      return;
+    }
+    submitBtn.disabled = true;
+    showResult("wait", "Verifying with the payment processor…");
+    fetch("/api/recover", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ stripe_session_id: sid, email: email })
+    })
+      .then(function (r) { return r.json().then(function (j) { return { status: r.status, body: j }; }); })
+      .then(function (res) {
+        submitBtn.disabled = false;
+        if (res.status === 200 && res.body && res.body.ok) {
+          showResult("ok", res.body.message || "The replacement instrument has been issued.");
+          sessionEl.value = "";
+        } else if (res.status === 202 && res.body && res.body.retryable) {
+          showResult("wait", res.body.message || "Payment is on file but fulfillment has not yet completed. Try again in five minutes.");
+        } else {
+          showResult("err", (res.body && res.body.error) ? res.body.error : "Recovery could not be completed. Verify the session identifier and the email match exactly.");
+        }
+      })
+      .catch(function () {
+        submitBtn.disabled = false;
+        showResult("err", "Network interruption. Try again in a moment.");
+      });
+  });
+})();
+</script>
+
+<script src="/statusbar.js" defer></script>
+</body>
+</html>

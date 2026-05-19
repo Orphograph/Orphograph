@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Orphograph — Frequently Asked</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#f6f1e3">
+<meta name="description" content="Frequently asked questions about Orphograph — what is anchored, what is private, what the receipt proves, what it does not.">
+<link rel="icon" type="image/png" href="/favicon.png?v=6">
+<meta property="og:title" content="Orphograph — Frequently Asked">
+<meta property="og:description" content="What is anchored. What is private. What the receipt proves.">
+<meta property="og:url" content="https://orphograph.com/faq.html">
+<meta property="og:type" content="article">
+<meta property="og:image" content="https://orphograph.com/seal.png?v=6">
+<link rel="canonical" href="https://orphograph.com/faq.html">
+<link rel="stylesheet" href="/index.css?v=8">
+<style>
+  .faq-wrap { max-width: 760px; margin: 0 auto; padding: 0 24px 64px; }
+  .faq-item { border-bottom: 1px solid var(--line-soft); padding: 22px 0; }
+  .faq-item:last-child { border-bottom: 0; }
+  .faq-q { font-family: var(--serif); font-size: 21px; font-weight: 500; color: var(--ink); margin: 0 0 10px; line-height: 1.35; }
+  .faq-a { color: var(--ink-2); line-height: 1.7; margin: 0; font-size: 15px; }
+  .faq-a + .faq-a { margin-top: 10px; }
+  h1.faq-h1 { font-family: var(--serif); font-size: 38px; font-weight: 500; margin: 32px 0 6px; color: var(--ink); }
+  p.faq-lede { font-size: 17px; color: var(--ink-2); line-height: 1.65; margin: 0 0 8px; }
+  .faq-section { margin-top: 36px; }
+  .faq-section h2 { font-family: var(--serif); font-size: 22px; font-weight: 500; color: var(--ink); margin: 0 0 4px; letter-spacing: 0.01em; }
+  .faq-section .faq-section-rule { border-top: 1px solid var(--ink); width: 32px; margin: 10px 0 18px; opacity: 0.6; }
+</style>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {"@type":"Question","name":"Does the file leave my machine?","acceptedAnswer":{"@type":"Answer","text":"No. The browser computes the file's SHA-256 and SHA-512 fingerprints locally; only those fingerprints are submitted to the calendars and ultimately committed to Bitcoin. The file itself is never transmitted."}},
+    {"@type":"Question","name":"What does the receipt prove?","acceptedAnswer":{"@type":"Answer","text":"That a file with this fingerprint existed by the time of the recorded Bitcoin block. Nothing is claimed about authorship, ownership, originality, or content."}},
+    {"@type":"Question","name":"Why Bitcoin?","acceptedAnswer":{"@type":"Answer","text":"Bitcoin has not reorganized beyond a handful of blocks in sixteen years. A block from an hour ago is, for any practical purpose, immutable. Orphograph commits to that chain via the OpenTimestamps protocol, which aggregates many fingerprints into a single transaction so the marginal cost per anchor is effectively zero."}},
+    {"@type":"Question","name":"How is the receipt verified later?","acceptedAnswer":{"@type":"Answer","text":"The receipt files (.ots) are verified against the Bitcoin chain directly. A one-hundred-line MIT-licensed verifier is published, and any OpenTimestamps client will also verify a receipt. Verification does not require Orphograph; if this office were to close, every receipt remains independently checkable."}},
+    {"@type":"Question","name":"How long does it take?","acceptedAnswer":{"@type":"Answer","text":"Calendar attestations are immediate; a receipt is issued within a few seconds. Commitment to a Bitcoin block typically arrives within the next block, approximately one hour. The receipt remains valid throughout that interval; the second notice formalizes the on-chain commitment."}},
+    {"@type":"Question","name":"What if the file is renamed or modified later?","acceptedAnswer":{"@type":"Answer","text":"Any change to the file produces a different fingerprint and therefore would not verify against the original receipt. The receipt attests to the exact bytes that were present at the time of anchoring; nothing more, nothing less."}},
+    {"@type":"Question","name":"Can the receipt be used in court?","acceptedAnswer":{"@type":"Answer","text":"Orphograph issues no opinion on evidentiary admissibility. The receipt is a mathematical attestation that a fingerprint existed by a given block, verifiable against the public Bitcoin chain. How a given jurisdiction weighs that attestation is a matter for counsel."}},
+    {"@type":"Question","name":"Is there an account requirement?","acceptedAnswer":{"@type":"Answer","text":"The free tier requires no account. Paid tiers use email-based sign-in for the receipt vault and unlimited anchoring; no password is created or stored."}},
+    {"@type":"Question","name":"What is recorded about me?","acceptedAnswer":{"@type":"Answer","text":"For free-tier visitors, only a truncated network address is retained for rate-limiting, and only briefly. For account-holders, the email used at sign-in and a non-reversible identifier derived from it. No file names, no content, no full IP addresses, no behavioral profiles."}},
+    {"@type":"Question","name":"Does Orphograph attest that a file is human-made or not AI-generated?","acceptedAnswer":{"@type":"Answer","text":"No. The receipt records that a file existed at a given moment. Whether the file was created by a person, a model, or any other process is outside the scope of what is attested."}},
+    {"@type":"Question","name":"Can I anchor a Bitcoin transaction directly instead of using calendars?","acceptedAnswer":{"@type":"Answer","text":"A premium direct-transaction option is on the roadmap for cases where the standard one-block-window is unsuitable. For the common case, the OpenTimestamps aggregator path is more cost-efficient and equally final."}},
+    {"@type":"Question","name":"What happens to the receipt if Orphograph closes?","acceptedAnswer":{"@type":"Answer","text":"Every receipt remains verifiable against the Bitcoin chain using the published MIT verifier or any OpenTimestamps client. The receipt is the instrument; this office is the issuer, not the trust anchor."}}
+  ]
+}
+</script>
+<meta name="copyright" content="© 2026 Orphograph. MIT — see /LICENSE">
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap row">
+    <a href="/" class="brand">Orphograph</a>
+    <nav>
+      <a href="/learn.html">Method</a>
+      <a href="/writers.html">Writers</a>
+      <a href="/#tiers">Pricing</a>
+      <a href="/about.html">Office</a>
+      <a href="/signin.html">Sign in</a>
+      <a href="/#drop" class="cta">Anchor a file</a>
+    </nav>
+  </div>
+</header>
+
+<main class="faq-wrap">
+
+  <p style="font-size:12px;letter-spacing:0.18em;text-transform:uppercase;color:var(--muted);margin:48px 0 8px;">Frequently Asked</p>
+  <h1 class="faq-h1">Common questions, considered answers.</h1>
+  <p class="faq-lede">
+    The following are the questions most frequently put to the office. Where the answer is technical, it is exact; where the answer involves a judgement that lies outside our authority, that limit is stated plainly.
+  </p>
+
+  <section class="faq-section">
+    <h2>What is anchored</h2>
+    <div class="faq-section-rule"></div>
+
+    <div class="faq-item">
+      <p class="faq-q">Does the file leave my machine?</p>
+      <p class="faq-a">No. The browser computes the file's SHA-256 and SHA-512 fingerprints locally; only those fingerprints are submitted to the calendars and ultimately committed to Bitcoin. The file itself is never transmitted.</p>
+    </div>
+
+    <div class="faq-item">
+      <p class="faq-q">What does the receipt prove?</p>
+      <p class="faq-a">That a file with this fingerprint existed by the time of the recorded Bitcoin block. Nothing is claimed about authorship, ownership, originality, or content.</p>
+    </div>
+
+    <div class="faq-item">
+      <p class="faq-q">What if the file is renamed or modified later?</p>
+      <p class="faq-a">Any change to the file produces a different fingerprint and would not verify against the original receipt. The receipt attests to the exact bytes that were present at the time of anchoring; nothing more, nothing less.</p>
+    </div>
+  </section>
+
+  <section class="faq-section">
+    <h2>Mechanics</h2>
+    <div class="faq-section-rule"></div>
+
+    <div class="faq-item">
+      <p class="faq-q">Why Bitcoin?</p>
+      <p class="faq-a">Bitcoin has not reorganized beyond a handful of blocks in sixteen years. A block from an hour ago is, for any practical purpose, immutable. Orphograph commits to that chain via the OpenTimestamps protocol, which aggregates many fingerprints into a single transaction so the marginal cost per anchor is effectively zero.</p>
+    </div>
+
+    <div class="faq-item">
+      <p class="faq-q">How long does it take?</p>
+      <p class="faq-a">Calendar attestations are immediate; a receipt is issued within a few seconds. Commitment to a Bitcoin block typically arrives within the next block, approximately one hour. The receipt remains valid throughout that interval; a second notice formalizes the on-chain commitment.</p>
+    </div>
+
+    <div class="faq-item">
+      <p class="faq-q">How is the receipt verified later?</p>
+      <p class="faq-a">The receipt files (.ots) are verified against the Bitcoin chain directly. A one-hundred-line MIT-licensed verifier is published, and any OpenTimestamps client will also verify a receipt. Verification does not require Orphograph; if this office were to close, every receipt remains independently checkable.</p>
+    </div>
+
+    <div class="faq-item">
+      <p class="faq-q">Can I anchor a Bitcoin transaction directly instead of using calendars?</p>
+      <p class="faq-a">A premium direct-transaction option is on the roadmap for cases where the standard one-block-window is unsuitable. For the common case, the OpenTimestamps aggregator path is more cost-efficient and equally final.</p>
+    </div>
+  </section>
+
+  <section class="faq-section">
+    <h2>Privacy</h2>
+    <div class="faq-section-rule"></div>
+
+    <div class="faq-item">
+      <p class="faq-q">What is recorded about me?</p>
+      <p class="faq-a">For free-tier visitors, only a truncated network address is retained for rate-limiting, and only briefly. For account-holders, the email used at sign-in and a non-reversible identifier derived from it. No file names, no content, no full network addresses, no behavioural profiles.</p>
+    </div>
+
+    <div class="faq-item">
+      <p class="faq-q">Is there an account requirement?</p>
+      <p class="faq-a">The free tier requires no account. Paid tiers use email-based sign-in for the receipt vault and unrestricted anchoring; no password is created or stored.</p>
+    </div>
+  </section>
+
+  <section class="faq-section">
+    <h2>Limits of the attestation</h2>
+    <div class="faq-section-rule"></div>
+
+    <div class="faq-item">
+      <p class="faq-q">Does Orphograph attest that a file is human-made or not AI-generated?</p>
+      <p class="faq-a">No. The receipt records that a file existed at a given moment. Whether the file was created by a person, a model, or any other process is outside the scope of what is attested.</p>
+    </div>
+
+    <div class="faq-item">
+      <p class="faq-q">Can the receipt be used in court?</p>
+      <p class="faq-a">Orphograph issues no opinion on evidentiary admissibility. The receipt is a mathematical attestation that a fingerprint existed by a given block, verifiable against the public Bitcoin chain. How a given jurisdiction weighs that attestation is a matter for counsel.</p>
+    </div>
+
+    <div class="faq-item">
+      <p class="faq-q">What happens to the receipt if Orphograph closes?</p>
+      <p class="faq-a">Every receipt remains verifiable against the Bitcoin chain using the published MIT verifier or any OpenTimestamps client. The receipt is the instrument; this office is the issuer, not the trust anchor.</p>
+    </div>
+  </section>
+
+  <p style="color:var(--muted);font-size:13px;margin-top:48px;">
+    A question not answered here may be put to the office at <a href="mailto:hello@orphograph.com" style="color:var(--confirm);">hello@orphograph.com</a>. Updates to this page are themselves anchored; the receipt is listed in the page footer of the latest revision.
+  </p>
+</main>
+
+<footer>
+  <div class="wrap" style="text-align:center;color:var(--muted);font-size:13px;padding:32px 0;">
+    <p>Orphograph · An empirical notary.</p>
+    <p style="margin-top:8px;">
+      <a href="/" style="color:var(--muted);">Home</a> ·
+      <a href="/method" style="color:var(--muted);">Method</a> ·
+      <a href="/vs/c2pa.html" style="color:var(--muted);">Compare</a> ·
+      <a href="/terms.html" style="color:var(--muted);">Terms</a> ·
+      <a href="/privacy.html" style="color:var(--muted);">Privacy</a>
+    </p>
+  </div>
+</footer>
+
+<script src="/statusbar.js" defer></script>
+</body>
+</html>

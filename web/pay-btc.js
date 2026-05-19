@@ -6,7 +6,7 @@
 (function () {
   "use strict";
   const ADDR = "bc1qclvjjmwmr294rydv4x0dc787nx9jd8j4ny4jaz";
-  let currentUsd = 7;
+  let currentUsd = 19;
   let currentSats = null;
   let btcUsd = null;
 

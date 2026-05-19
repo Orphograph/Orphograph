@@ -86,40 +86,73 @@ function stripeWasCanceled() {
 async function showStripeConfirmation(sessionId) {
   $("#loading").hidden = true;
   $("#order").hidden = true;
-  // Reuse the #settled card — it already conveys "transaction complete."
   const settledEl = $("#settled");
-  if (settledEl) {
-    settledEl.hidden = false;
-    // Replace any BTC-specific copy with Stripe-specific success copy.
-    const h = settledEl.querySelector("h1, h2");
-    if (h) h.textContent = "Payment received.";
-    const p = settledEl.querySelector("p");
-    if (p) {
-      p.textContent =
-        "Your Pack code has been emailed. It also lives in your account at /account.html. " +
-        "If it does not arrive within a few minutes, check spam, then email hello@orphograph.com.";
-    }
-    const a = $("#tx-link");
-    if (a) {
-      a.textContent = "View receipt page →";
-      a.href = "/account.html";
-    }
-  }
-  // Best-effort: ask the server to verify the session before showing success.
-  // If verification fails (bad id, payment_status != paid), we still show
-  // something rather than a broken page — the webhook is the source of truth.
+  if (!settledEl) return;
+  settledEl.hidden = false;
+
+  let mode = "";
+  let customerEmail = "";
+  let paymentStatus = "";
   try {
     const r = await fetch("/api/stripe/session?id=" + encodeURIComponent(sessionId));
     if (r.ok) {
       const j = await r.json();
-      if (j && j.payment_status && j.payment_status !== "paid") {
-        const p = settledEl && settledEl.querySelector("p");
-        if (p) p.textContent =
-          "Stripe reports this session is " + j.payment_status + ". " +
-          "If you completed payment, your Pack code will arrive shortly — the webhook is final source of truth.";
-      }
+      mode = (j && j.mode) || "";
+      customerEmail = (j && j.customer_email) || "";
+      paymentStatus = (j && j.payment_status) || "";
     }
-  } catch (e) { /* keep the optimistic success view */ }
+  } catch (e) { /* fall back to generic copy below */ }
+
+  const h = settledEl.querySelector("h1, h2");
+  const p = settledEl.querySelector("p");
+  const a = $("#tx-link");
+
+  if (paymentStatus && paymentStatus !== "paid") {
+    if (h) h.textContent = "Payment pending.";
+    if (p) p.textContent =
+      "Stripe reports this session is " + paymentStatus + ". " +
+      "If you completed payment, your access will arrive shortly — the webhook is the source of truth. Check back in a few minutes.";
+    if (a) { a.textContent = ""; a.removeAttribute("href"); }
+    return;
+  }
+
+  if (mode === "subscription") {
+    if (h) h.textContent = "Subscription active.";
+    if (p) {
+      while (p.firstChild) p.removeChild(p.firstChild);
+      p.appendChild(document.createTextNode(
+        "Your subscription is active. There is no claim code — sign in with your email to start anchoring on your plan. "
+      ));
+      if (customerEmail) {
+        p.appendChild(document.createTextNode("Use "));
+        const code = document.createElement("code");
+        code.textContent = customerEmail;
+        p.appendChild(code);
+        p.appendChild(document.createTextNode(" on the sign-in page. "));
+      } else {
+        p.appendChild(document.createTextNode(
+          "Use the same email you paid with on the sign-in page. "
+        ));
+      }
+      p.appendChild(document.createTextNode(
+        "A welcome email is on its way; if you don't see it, check spam, then proceed to sign-in below."
+      ));
+    }
+    if (a) {
+      a.textContent = "Sign in to your account →";
+      a.href = "/signin.html";
+    }
+    return;
+  }
+
+  // Default: one-time Pack purchase.
+  if (h) h.textContent = "Payment received.";
+  if (p) p.textContent =
+    "Your Pack code has been emailed. If it doesn't arrive within a few minutes, check spam — then reply to the welcome email or head to your account.";
+  if (a) {
+    a.textContent = "Open your account →";
+    a.href = "/account.html";
+  }
 }
 function showStripeCanceled() {
   $("#loading").hidden = true;

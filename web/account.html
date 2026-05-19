@@ -7,6 +7,7 @@
 <meta name="robots" content="noindex">
 <link rel="icon" type="image/png" href="/favicon.png?v=6">
 <link rel="stylesheet" href="/style.css">
+<meta name="copyright" content="© 2026 Orphograph. MIT — see /LICENSE">
 </head>
 <body>
 
@@ -23,13 +24,31 @@
   <h1>Account</h1>
   <dl class="kv">
     <dt>Email</dt><dd id="email" class="mono">loading…</dd>
+    <dt>Plan</dt><dd id="plan-label">…</dd>
     <dt>Subscription</dt><dd id="sub-status">…</dd>
     <dt>Next renewal</dt><dd id="renewal">…</dd>
+    <dt>Anchors on this plan</dt><dd id="anchor-count">…</dd>
   </dl>
+  <p class="hint" id="access-explainer" style="margin-top:10px;">
+    Your subscription has no claim code. Your signed-in account
+    <em>is</em> the access — drop a file on the home page and it
+    anchors without rate limits. Claim codes only exist for one-time
+    Packs (and for friends you gift a Pack to).
+  </p>
   <div class="sub-actions">
     <button id="cancel-sub" class="danger" hidden>Cancel subscription</button>
     <button id="reactivate-sub" hidden>Reactivate subscription</button>
+    <button id="refund-request-btn" class="btn-secondary" hidden>Request a refund</button>
     <span id="sub-action-msg" class="muted small" hidden></span>
+  </div>
+  <div id="refund-form" hidden style="margin-top:10px;">
+    <label class="muted small" for="refund-reason">Reason (optional, retained for the office record only):</label>
+    <textarea id="refund-reason" maxlength="500" rows="3" style="display:block;width:100%;margin-top:6px;"></textarea>
+    <div style="margin-top:8px;">
+      <button id="refund-submit" class="btn">Submit request</button>
+      <button id="refund-cancel" class="btn-secondary" type="button">Cancel</button>
+    </div>
+    <p id="refund-msg" class="muted small" hidden style="margin-top:8px;"></p>
   </div>
 </section>
 
@@ -53,6 +72,36 @@
     <p class="muted small">This is the only time you'll see this key. Save it now.</p>
     <code id="api-key-new" class="mono"></code>
     <button id="api-key-copy">Copy</button>
+  </div>
+</section>
+
+<section id="webhooks-section" hidden>
+  <h2>Webhooks</h2>
+  <p class="hint">
+    Subscribers receive HMAC-signed POST notifications on
+    <code>anchor.created</code> and <code>anchor.btc_pinned</code> events, and on
+    <code>subscription.renewed</code> at each billing cycle rollover. Each delivery
+    carries an <code>X-Orpho-Signature</code> header in the format
+    <code>t=&lt;unix&gt;,v1=&lt;hmac-sha256-hex&gt;</code> (Stripe-compatible).
+    Verify the signature with the secret issued at registration before trusting
+    the payload.
+  </p>
+  <div id="webhooks-empty" class="hint" hidden>No webhooks registered on this account.</div>
+  <table id="webhooks-table" class="anchors" hidden>
+    <thead>
+      <tr><th>Endpoint URL</th><th>Secret</th><th>Registered (UTC)</th><th></th></tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+  <form id="webhook-add-form" class="inline-form" style="margin-top:12px;">
+    <input id="webhook-url-input" type="url" placeholder="https://example.com/webhooks/orphograph" required autocomplete="off">
+    <button type="submit" class="btn">Register</button>
+    <span id="webhook-msg" class="muted small" hidden></span>
+  </form>
+  <div id="webhook-reveal" class="reveal-card" hidden>
+    <p class="muted small">This is the only time you'll see this secret. Save it now.</p>
+    <code id="webhook-secret-new" class="mono"></code>
+    <button id="webhook-secret-copy">Copy</button>
   </div>
 </section>
 
@@ -167,5 +216,6 @@
 </footer>
 
 <script src="/account.js"></script>
+<script src="/statusbar.js" defer></script>
 </body>
 </html>

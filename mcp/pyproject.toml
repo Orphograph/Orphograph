@@ -1,0 +1,56 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "orphograph-mcp"
+version = "0.1.0"
+description = "Model Context Protocol server for Orphograph — anchor a file's fingerprint to the Bitcoin chain without the file leaving the device."
+readme = "README.md"
+license = { text = "MIT" }
+authors = [
+    { name = "Orphograph", email = "hello@orphograph.com" },
+]
+requires-python = ">=3.9"
+keywords = [
+    "mcp", "model-context-protocol", "bitcoin",
+    "opentimestamps", "notary", "timestamp", "anchor",
+    "provenance", "privacy",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security",
+    "Topic :: Utilities",
+]
+
+# Stdlib only — no runtime dependencies on PyPI. This is part of the
+# Orphograph trust contract: the server you install must be auditable
+# in a sitting.
+dependencies = []
+
+[project.urls]
+Homepage      = "https://orphograph.com"
+Documentation = "https://orphograph.com/mcp.html"
+Repository    = "https://github.com/Orphograph/Orphograph"
+Issues        = "https://github.com/Orphograph/Orphograph/issues"
+
+[project.scripts]
+orphograph-mcp = "orphograph_mcp:main"
+
+# MCP Registry verification — this value must match the `name` field in
+# the `server.json` submitted to the registry. Because GitHub OAuth is
+# the chosen authentication, the name must begin with the org's GitHub
+# namespace: `io.github.Orphograph/`.
+[tool.orphograph]
+mcp_name = "io.github.Orphograph/orphograph"
+
+[tool.setuptools]
+py-modules = ["orphograph_mcp"]

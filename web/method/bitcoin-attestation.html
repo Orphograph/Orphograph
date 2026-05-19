@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Orphograph — What a Bitcoin block actually attests to</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#f6f1e3">
+<meta name="description" content="A precise account of the attestation a single Bitcoin block carries: the proof-of-work chain as an ordering oracle, the Merkle commitment, the role of OpenTimestamps aggregation, confirmation depth, and the bounds of what the receipt actually proves. Published as defensive prior art.">
+<meta property="og:title" content="Orphograph — What a Bitcoin block actually attests to">
+<meta property="og:description" content="The chain as an ordering oracle: what is committed, what is not, and the bounds on the attestation.">
+<meta property="og:url" content="https://orphograph.com/method/bitcoin-attestation.html">
+<meta property="og:type" content="article">
+<meta property="og:image" content="https://orphograph.com/seal.png?v=6">
+<link rel="canonical" href="https://orphograph.com/method/bitcoin-attestation.html">
+<link rel="icon" type="image/png" href="/favicon.png?v=6">
+<link rel="stylesheet" href="/index.css?v=8">
+<style>
+  .arch-wrap { max-width: 820px; margin: 0 auto; padding: 0 24px 64px; }
+  .arch-wrap h1 { font-family: var(--serif); font-size: 36px; font-weight: 500; margin: 32px 0 6px; }
+  .arch-wrap h2 { font-family: var(--serif); font-size: 22px; font-weight: 500; margin: 36px 0 4px; color: var(--ink); }
+  .arch-rule { border-top: 1px solid var(--ink); width: 32px; margin: 8px 0 16px; opacity: 0.6; }
+  .arch-wrap p, .arch-wrap li { color: var(--ink-2); line-height: 1.75; font-size: 15.5px; }
+  .arch-wrap code { background: rgba(74,154,115,0.08); padding: 2px 6px; border-radius: 3px; font-size: 0.92em; }
+  .arch-wrap pre { background: #f1ead7; border: 1px solid #d9d2c0; border-radius: 6px; padding: 14px 16px; overflow-x: auto; font-size: 13px; line-height: 1.55; }
+  .arch-lede { font-size: 17px; line-height: 1.7; color: var(--ink-2); margin: 0 0 24px; }
+  .arch-callout { background: rgba(74,154,115,0.06); border-left: 3px solid var(--confirm); padding: 16px 20px; margin: 24px 0; border-radius: 0 6px 6px 0; }
+  .arch-callout p { margin: 0; }
+</style>
+<meta name="copyright" content="© 2026 Orphograph. Code under MIT (see /LICENSE). Brand, content, and design — all rights reserved.">
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap row">
+    <a href="/" class="brand">Orphograph</a>
+    <nav>
+      <a href="/learn.html">Method</a>
+      <a href="/faq.html">FAQ</a>
+      <a href="/vs/c2pa.html">vs. C2PA</a>
+      <a href="/continuity.html">Continuity</a>
+      <a href="/#tiers">Pricing</a>
+      <a href="/signin.html">Sign in</a>
+      <a href="/#drop" class="cta">Anchor a file</a>
+    </nav>
+  </div>
+</header>
+
+<main class="arch-wrap">
+
+  <p style="font-size:12px;letter-spacing:0.18em;text-transform:uppercase;color:var(--muted);margin:48px 0 8px;">Method · Bitcoin attestation</p>
+  <h1>What a Bitcoin block actually attests to.</h1>
+  <p class="arch-lede">
+    The receipts the office issues derive their evidentiary weight from a particular property of the Bitcoin chain, and from that property alone. The purpose of the present document is to state, with precision, what that property is, what it is not, and how the receipt inherits exactly so much of it as the protocol can soundly convey. The page is published as defensive prior art and is itself anchored on issuance.
+  </p>
+
+  <section>
+    <h2>1 · The chain as an ordering oracle</h2>
+    <div class="arch-rule"></div>
+    <p>An ordering oracle, for the purposes of this document, is a publicly observable mechanism that produces a totally ordered sequence of records such that, once a record appears at position N in the sequence, the cost of altering the sequence to remove or relocate that record grows without bound as further records accumulate. The oracle does not vouch for the truthfulness of the records; it vouches only for the order in which they were observed by the consensus of its participants.</p>
+    <p>The Bitcoin proof-of-work chain is such an oracle. Each block in the chain references the cryptographic hash of its predecessor. To displace a block at depth N from the tip, an adversary must reconstruct the chain from that depth forward at a hash rate exceeding the honest network's hash rate over the same interval. The economic cost of doing so scales with the depth N and with the hash-rate of the honest network, and is — by the design of the system — substantially in excess of any plausible reward for the displacement of an arbitrary fingerprint.</p>
+    <p>The protocol invokes Bitcoin in precisely this capacity. The chain is not asked to certify the contents of any record. The chain is asked only to certify that, by the time block N closed, a particular Merkle root had been observed by the network and incorporated into the canonical sequence. That observation is the substance of the attestation; the rest is a consequence of it.</p>
+  </section>
+
+  <section>
+    <h2>2 · What a single block commits to</h2>
+    <div class="arch-rule"></div>
+    <p>A Bitcoin block consists of a header and a list of transactions. The header contains, among other fields, a Merkle root computed over the transactions in that block. The Merkle root is a single 256-bit value such that any change to any transaction — to any byte of any transaction — yields, with overwhelming probability, a different root. The header is the object the proof-of-work hash is computed over; it is the header, and through it the Merkle root, that the chain commits to.</p>
+    <p>What the block does <em>not</em> commit to is the content of those transactions beyond their fingerprints. The block carries the transactions only as the leaves of the tree that yields the root; an observer wishing to learn what a particular transaction does must obtain the transaction itself. The root certifies that the transaction was present at the time the block closed, but not what the transaction asserts about the world outside the chain.</p>
+    <p>This distinction is the foundation of the protocol's privacy posture. A receipt carries no information about the file it attests beyond the file's own fingerprint; the chain, accordingly, learns nothing about the file beyond that same fingerprint, and indeed less, since the fingerprint reaches the chain only after aggregation with thousands of others.</p>
+  </section>
+
+  <section>
+    <h2>3 · The role of the OpenTimestamps protocol</h2>
+    <div class="arch-rule"></div>
+    <p>If each anchored fingerprint were committed to the chain in its own transaction, the per-anchor cost would track the cost of a Bitcoin transaction, which under load conditions can rise into the dollars. The OpenTimestamps protocol resolves this by interposing an aggregation step. A calendar operator collects digests submitted to it during an aggregation interval, constructs a Merkle tree whose leaves are the submitted digests, and commits only the root of that tree to the chain in a single transaction. Each submitter receives a per-digest proof path — a sequence of hash operations that, when applied to the original digest in the order recorded, reconstructs the committed root.</p>
+    <p>The economic consequence is that the marginal Bitcoin cost per anchor is the cost of one transaction divided by the number of anchors in the batch. With aggregator batches in the thousands per hour, that marginal cost is fractions of a cent and tends toward zero as load grows. The cryptographic consequence is that an anchor inherits the same finality as the block its calendar committed to — the proof path reduces verification to the question of whether the root the path reconstructs matches the root the chain recorded.</p>
+    <p>The protocol does not modify the OpenTimestamps format in any respect. The <code>.ots</code> files the office distributes are the same files that any OpenTimestamps client produces and any OpenTimestamps client verifies. The office is one participant among many in a public protocol; the protocol is the trust anchor, not the office.</p>
+  </section>
+
+  <section>
+    <h2>4 · Confirmation depth and reorganization risk</h2>
+    <div class="arch-rule"></div>
+    <p>A Bitcoin block is committed only in a probabilistic sense at the moment of its first appearance at the tip of the chain. As successor blocks accumulate, the cost of displacing the block by an honest-majority reorganization grows; by convention, six successor blocks is treated as the threshold beyond which displacement is no longer a practical concern. The receipt accordingly records the block height at which the commitment was observed, and a confirmation count, so that any later reader may decide for themselves what depth of confirmation suffices for their purpose.</p>
+    <p>The empirical record bears the conventional threshold out. In the sixteen years since the genesis block, the Bitcoin chain has not undergone a reorganization extending beyond a small handful of blocks. The deepest accidental reorganization observed in the chain's history was a several-block divergence resolved within a single subsequent block. There has been no observed reorganization deep enough to displace a transaction confirmed by more than six successor blocks. The argument for treating a block from an hour ago as effectively immutable is therefore not theoretical; it is the cumulative observed behaviour of the network across more than a decade of continuous operation.</p>
+    <p>The office accordingly treats a calendar commitment confirmed by the next block as a sound attestation for any practical purpose, and notes in the receipt the confirmation count at which the binding was established. A reader who requires stricter assurance may wait for further confirmations and re-verify; the receipt does not expire and does not require any further action by the office for that further verification to succeed.</p>
+  </section>
+
+  <section>
+    <h2>5 · The lower bound on the time of existence</h2>
+    <div class="arch-rule"></div>
+    <p>To say "a fingerprint existed by the time of block N" is to make a one-sided claim. The block height N, together with the timestamp recorded in the block header, establishes an upper bound on the moment at which the fingerprint must already have been in the possession of the submitter — for if the submitter had not held the file by that moment, no submission could have produced the digest the block now binds. The chain therefore certifies that, no later than the closing time of block N, the bytes whose fingerprint matches the recorded digest existed somewhere.</p>
+    <p>The chain does not certify any lower bound. The file may have existed for an arbitrary period before its fingerprint was submitted. A receipt issued today for a file written ten years ago is sound; the chain proves the file existed by today's block height, not that it was created today. The receipt is therefore a guarantee of "no later than"; it is not a guarantee of "no earlier than".</p>
+    <p>For the common application — a writer or a photographer wishing to establish that a specific arrangement of bytes was in their possession before some later event — the one-sided guarantee is exactly the guarantee required. The disputant arrives after the fact; the receipt establishes that the bytes preceded the dispute. Whether the bytes also preceded some other event is a separate question, and one the protocol does not pretend to answer.</p>
+  </section>
+
+  <section>
+    <h2>6 · Issuance time and commitment time</h2>
+    <div class="arch-rule"></div>
+    <p>Two distinct moments are recorded in the lifecycle of a receipt. The first is issuance: the moment at which the calendars accept the submission and return their per-digest aggregation paths. This moment is immediate from the customer's perspective; a receipt is produced within a few seconds of the submission, and at that point the calendars have committed — by their own signatures — that the fingerprint was observed at that calendar at that time.</p>
+    <p>The second moment is commitment: the moment at which the calendar's aggregated Merkle root appears in a Bitcoin block. Under typical network conditions, this follows issuance by approximately one hour, corresponding to the expected interval between Bitcoin blocks. Once commitment has occurred, the per-digest proof path is upgraded by the calendar to extend all the way to the on-chain root; the receipt's chain-attested status is then independent of the calendar's continued operation.</p>
+    <p>Between issuance and commitment, the receipt's evidentiary weight rests on the calendar's signature; after commitment, it rests on the chain itself. Both are recorded; the receipt is therefore self-describing as to which standing it currently holds.</p>
+  </section>
+
+  <section>
+    <h2>7 · The bounds of the attestation</h2>
+    <div class="arch-rule"></div>
+    <p>The chain attests to one fact and one fact only. It attests that bytes with a particular fingerprint existed at or before the moment a particular block closed. It is appropriate, in closing this disclosure, to enumerate what the attestation does <em>not</em> establish:</p>
+    <ul>
+      <li>The attestation does not establish authorship. The fingerprint of a file says nothing about who composed the bytes that produced it.</li>
+      <li>The attestation does not establish ownership. The fingerprint says nothing about who held the rights, the original, or the means of distribution.</li>
+      <li>The attestation does not establish originality. A fingerprint may match a derivative, a transcription, a copy, or the original; the chain cannot distinguish among them.</li>
+      <li>The attestation does not establish identity of the submitter. The submitter is anonymous to the chain; only the fingerprint, and the time at which it was observed, are recorded.</li>
+      <li>The attestation does not establish the means of creation. Whether the bytes were produced by a person, by a model, by a camera, or by any other process is outside the scope of what is attested.</li>
+    </ul>
+    <p>These limits are not deficiencies of the protocol; they are the boundary of what is honestly recoverable from a fingerprint and an ordering oracle. A receipt that overreached would be a worse instrument, not a better one. The office regards the precise statement of those bounds as part of the instrument's value.</p>
+  </section>
+
+  <section>
+    <h2>8 · Publication date and prior-art status</h2>
+    <div class="arch-rule"></div>
+    <p>The page is first published on 2026-05-19. It is anchored to the Bitcoin chain on publication using the protocol it describes; the receipt identifier for this revision is recorded in the footer below. Subsequent revisions are anchored separately; their receipts are appended to the same footer record. The combination of detailed disclosure, MIT licensing of the verifier, and a chain-anchored publication date establishes this page as prior art for the methods and the framing it contains.</p>
+  </section>
+
+  <section>
+    <h2>Citations and verification</h2>
+    <div class="arch-rule"></div>
+    <ul>
+      <li><a href="/method/architecture.html">Architecture of the protocol</a></li>
+      <li><a href="/faq.html">Frequently asked</a></li>
+      <li><a href="/vs/c2pa.html">Comparison with C2PA</a></li>
+      <li><a href="https://github.com/Orphograph/Orphograph">github.com/Orphograph/Orphograph</a></li>
+      <li><a href="https://opentimestamps.org/">opentimestamps.org</a></li>
+    </ul>
+  </section>
+
+  <p style="color:var(--muted);font-size:13px;margin-top:48px;border-top:1px solid var(--line-soft);padding-top:18px;">
+    Publication receipt for this revision: pending Bitcoin commitment (the receipt id is recorded once issuance completes).
+  </p>
+</main>
+
+<footer>
+  <div class="wrap" style="text-align:center;color:var(--muted);font-size:13px;padding:32px 0;">
+    <p>Orphograph · An empirical notary.</p>
+    <p style="margin-top:8px;">
+      <a href="/" style="color:var(--muted);">Home</a> ·
+      <a href="/method" style="color:var(--muted);">Method</a> ·
+      <a href="/faq.html" style="color:var(--muted);">FAQ</a> ·
+      <a href="/vs/c2pa.html" style="color:var(--muted);">Compare</a> ·
+      <a href="/continuity.html" style="color:var(--muted);">Continuity</a>
+    </p>
+  </div>
+</footer>
+
+<script src="/statusbar.js" defer></script>
+</body>
+</html>

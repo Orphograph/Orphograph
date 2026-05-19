@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Orphograph — Architecture of the protocol</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#f6f1e3">
+<meta name="description" content="A technical description of the Orphograph protocol — client-side hashing, multi-calendar OpenTimestamps aggregation, Bitcoin commitment, and the structural privacy contract. Published as defensive prior art.">
+<meta property="og:title" content="Orphograph — Architecture of the protocol">
+<meta property="og:description" content="A technical disclosure of the method.">
+<meta property="og:url" content="https://orphograph.com/method/architecture.html">
+<meta property="og:type" content="article">
+<meta property="og:image" content="https://orphograph.com/seal.png?v=6">
+<link rel="canonical" href="https://orphograph.com/method/architecture.html">
+<link rel="icon" type="image/png" href="/favicon.png?v=6">
+<link rel="stylesheet" href="/index.css?v=8">
+<style>
+  .arch-wrap { max-width: 820px; margin: 0 auto; padding: 0 24px 64px; }
+  .arch-wrap h1 { font-family: var(--serif); font-size: 36px; font-weight: 500; margin: 32px 0 6px; }
+  .arch-wrap h2 { font-family: var(--serif); font-size: 22px; font-weight: 500; margin: 36px 0 4px; color: var(--ink); }
+  .arch-rule { border-top: 1px solid var(--ink); width: 32px; margin: 8px 0 16px; opacity: 0.6; }
+  .arch-wrap p, .arch-wrap li { color: var(--ink-2); line-height: 1.75; font-size: 15.5px; }
+  .arch-wrap code { background: rgba(74,154,115,0.08); padding: 2px 6px; border-radius: 3px; font-size: 0.92em; }
+  .arch-wrap pre { background: #f1ead7; border: 1px solid #d9d2c0; border-radius: 6px; padding: 14px 16px; overflow-x: auto; font-size: 13px; line-height: 1.55; }
+  .arch-lede { font-size: 17px; line-height: 1.7; color: var(--ink-2); margin: 0 0 24px; }
+  .arch-callout { background: rgba(74,154,115,0.06); border-left: 3px solid var(--confirm); padding: 16px 20px; margin: 24px 0; border-radius: 0 6px 6px 0; }
+  .arch-callout p { margin: 0; }
+</style>
+<meta name="copyright" content="© 2026 Orphograph. MIT — see /LICENSE">
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap row">
+    <a href="/" class="brand">Orphograph</a>
+    <nav>
+      <a href="/learn.html">Method</a>
+      <a href="/faq.html">FAQ</a>
+      <a href="/vs/c2pa.html">vs. C2PA</a>
+      <a href="/continuity.html">Continuity</a>
+      <a href="/#tiers">Pricing</a>
+      <a href="/signin.html">Sign in</a>
+      <a href="/#drop" class="cta">Anchor a file</a>
+    </nav>
+  </div>
+</header>
+
+<main class="arch-wrap">
+
+  <p style="font-size:12px;letter-spacing:0.18em;text-transform:uppercase;color:var(--muted);margin:48px 0 8px;">Method · Architecture</p>
+  <h1>The protocol, in detail.</h1>
+  <p class="arch-lede">
+    The following is the canonical technical description of the Orphograph protocol as of the date of publication. It is intended to serve both as documentation and, where useful, as defensive prior art. The page is itself anchored on issuance; the receipt identifier for this revision is recorded in the footer.
+  </p>
+
+  <section>
+    <h2>1 · Scope of attestation</h2>
+    <div class="arch-rule"></div>
+    <p>An Orphograph receipt attests precisely the following: a file whose SHA-256 fingerprint matches the recorded <code>hash_hex</code> existed by the time of the recorded Bitcoin block. No claim is made — and the protocol is structurally incapable of supporting any claim — regarding the file's authorship, ownership, originality, identity of submitter, location of submission, or the means by which the file was created (whether by a person, a model, or any other process).</p>
+  </section>
+
+  <section>
+    <h2>2 · Client-side hashing</h2>
+    <div class="arch-rule"></div>
+    <p>The browser computes the file's fingerprints using the platform Web Cryptography API. For a file of any size the procedure is:</p>
+<pre><code>const buf = await file.arrayBuffer();
+const [s256, s512] = await Promise.all([
+  crypto.subtle.digest("SHA-256", buf),
+  crypto.subtle.digest("SHA-512", buf),
+]);
+const sha256_hex = hex(s256);
+const sha512_hex = hex(s512);
+// Only the hex digests are transmitted in the subsequent POST.</code></pre>
+    <p>For large files the protocol supports a chunked-read variant that streams the file in megabyte-sized increments, computing both digests in a single pass without loading the file into memory. The Model Context Protocol server (<code>mcp/orphograph_mcp.py</code>) uses this variant when operating on local filesystem paths.</p>
+    <p>At no point during the hashing operation does the protocol issue a network request. The file body is not transmitted, not copied to disk, not exposed to extensions, and not made available to any code other than the WebCrypto primitive itself. The only data that leaves the originating process is the resulting hex digest.</p>
+  </section>
+
+  <section>
+    <h2>3 · The SHA-512 sibling — a quantum hedge</h2>
+    <div class="arch-rule"></div>
+    <p>OpenTimestamps commits a SHA-256 digest to the Bitcoin chain. The Orphograph receipt records the SHA-256 alongside a sibling SHA-512 of the same file. To forge a file-to-receipt binding, an attacker must produce a second file whose SHA-256 AND SHA-512 collide with the original — a much harder problem than producing either collision alone.</p>
+    <p>The argument matters because Grover's algorithm halves the effective bits of preimage resistance under a hypothetical large-scale quantum computer. SHA-256 falls from approximately 2^256 to 2^128 effective work; SHA-512 falls from 2^512 to 2^256. The dual-hash receipt preserves attack cost in the post-quantum range for the foreseeable future. The sibling witness is the protocol's hedge against an advance that current research does not anticipate within decades, but the cost of preparing for it is zero.</p>
+  </section>
+
+  <section>
+    <h2>4 · Calendar aggregation</h2>
+    <div class="arch-rule"></div>
+    <p>The OpenTimestamps protocol aggregates many submitted digests into a Merkle tree. The Merkle root is committed in a single Bitcoin transaction; each submitted digest receives a per-digest proof path (a sequence of hash operations that, when applied to the digest, reconstructs the committed root). The proof path is what the Orphograph protocol distributes as the <code>.ots</code> file.</p>
+    <p>The marginal Bitcoin cost per anchor is therefore the cost of one transaction divided by the number of anchors in the batch. With aggregator batches in the thousands per hour, the per-anchor on-chain cost is fractions of a cent and falls toward zero as load grows.</p>
+  </section>
+
+  <section>
+    <h2>5 · Multi-calendar redundancy</h2>
+    <div class="arch-rule"></div>
+    <p>Each anchor is submitted to five independently operated OpenTimestamps calendars: <code>a.pool.opentimestamps.org</code>, <code>b.pool.opentimestamps.org</code>, <code>alice.btc.calendar.opentimestamps.org</code>, <code>finney.calendar.eternitywall.com</code>, and <code>btc.calendar.catallaxy.com</code>. Each calendar produces its own <code>.ots</code> proof path against the calendar's own Bitcoin commitment.</p>
+    <p>The receipt is considered valid when ANY single calendar's proof verifies. Failure of one calendar — whether through transient unreachability, deliberate refusal, or permanent operator exit — does not invalidate the receipt. This is the structural guarantee against calendar-operator hostility.</p>
+  </section>
+
+  <section>
+    <h2>6 · The .ots proof format</h2>
+    <div class="arch-rule"></div>
+    <p>An <code>.ots</code> file is a binary sequence of hash operations (<code>op_sha256</code>, <code>op_append</code>, <code>op_prepend</code>, and several others) which, when applied in order to the original digest, yields the Merkle root that the calendar published to the Bitcoin chain in its commitment transaction. A verifier executes the operations against a held copy of the file's digest, compares the resulting hash against the publicly-readable Bitcoin commitment, and accepts or rejects the receipt accordingly.</p>
+    <p>The format is independently documented at <a href="https://github.com/opentimestamps/python-opentimestamps">github.com/opentimestamps/python-opentimestamps</a>; the Orphograph distribution of the receipt does not modify the OTS format in any way.</p>
+  </section>
+
+  <section>
+    <h2>7 · Receipt envelope</h2>
+    <div class="arch-rule"></div>
+    <p>The receipt JSON has the following shape (with optional fields shown):</p>
+<pre><code>{
+  "receipt_id":      "&lt;16-char url-safe&gt;",
+  "created_at":      "&lt;UTC ISO-8601&gt;",
+  "hash_hex":        "&lt;64-char SHA-256 hex&gt;",
+  "sha512_hex":      "&lt;128-char SHA-512 hex&gt;",
+  "client_label":    "&lt;optional human-readable string, ≤200 chars&gt;",
+  "source":          "free | pack:&lt;prefix&gt; | sub:&lt;hmac-id&gt; | api:&lt;prefix&gt;",
+  "calendars_ok":    N,
+  "calendars_total": M,
+  "successes":       [ { "calendar": URL, "ots_path": "...", "ots_bytes": N }, ... ],
+  "failures":        [ ... ],
+  "c2pa_manifest_hash": "&lt;optional 64-char SHA-256 hex&gt;",
+  "private":         true | false,
+  "owner_id":        "&lt;HMAC-keyed identifier, 16 hex chars, or null&gt;",
+  "btc_pinned_at":   "&lt;UTC ISO-8601 once committed, else null&gt;",
+  "pinned_count":    N,
+  "pinned_total":    M
+}</code></pre>
+  </section>
+
+  <section>
+    <h2>8 · HMAC-keyed identifiers for private receipts</h2>
+    <div class="arch-rule"></div>
+    <p>Subscribers who mark a receipt private have their email address transformed at receipt time using a HMAC function with a per-installation secret known only to the office. The output is recorded as <code>owner_id</code>; the plaintext email is never written to disk in association with the receipt.</p>
+    <p>Access to a private receipt requires presentation of a valid session cookie whose underlying email, when transformed by the same HMAC, matches the stored <code>owner_id</code>. An attacker who obtained the receipt vault by other means cannot dictionary-attack the receipt-to-email mapping without also obtaining the per-installation HMAC secret.</p>
+  </section>
+
+  <section>
+    <h2>9 · Verification independence</h2>
+    <div class="arch-rule"></div>
+    <p>Verification of an Orphograph receipt requires:</p>
+    <ul>
+      <li>a copy of the original file (held by the customer),</li>
+      <li>the receipt JSON and the <code>.ots</code> proof files (held by the customer, or available at <code>orphograph.com/r/&lt;id&gt;</code>),</li>
+      <li>any OpenTimestamps client OR the 100-line MIT-licensed verifier at <a href="https://github.com/Orphograph/Orphograph">github.com/Orphograph/Orphograph</a> OR the single-file browser verifier at <a href="/verify-js.html">/verify-js.html</a>.</li>
+    </ul>
+    <p>Notably absent from this list is any call to Orphograph's servers. The office issues the instrument; the chain is the trust anchor. The continuity statement at <a href="/continuity.html">/continuity.html</a> expands on the operational implications.</p>
+  </section>
+
+  <section>
+    <h2>10 · C2PA coexistence mode</h2>
+    <div class="arch-rule"></div>
+    <p>When a customer holds a Coalition for Content Provenance and Authenticity (C2PA) manifest for the same file, the SHA-256 of that manifest may be recorded on the Orphograph receipt as <code>c2pa_manifest_hash</code>. The receipt then references both attestations without disclosing the content of either. The two systems are complementary: C2PA documents how an asset was captured and edited; Orphograph attests when its fingerprint existed. A reader presented with both has the complete provenance picture; a reader presented with only Orphograph has the date-of-existence; a reader presented with only C2PA has the chain of capture.</p>
+  </section>
+
+  <section>
+    <h2>11 · Failure modes and operational continuity</h2>
+    <div class="arch-rule"></div>
+    <p>The protocol's robustness is enumerated against the following failure scenarios:</p>
+    <ul>
+      <li><strong>Calendar unavailability.</strong> Five-calendar redundancy ensures any single failure is invisible to the customer.</li>
+      <li><strong>This office becoming unreachable.</strong> Every receipt verifies against the Bitcoin chain independently. See <a href="/continuity.html">/continuity.html</a>.</li>
+      <li><strong>Bitcoin fee-market degradation.</strong> Aggregation amortises per-block transaction fees across all customers anchored in that block, keeping per-anchor cost negligible even under sustained fee pressure.</li>
+      <li><strong>Receipt vault data loss.</strong> The vault is convenience storage; the customer-held original file plus the <code>.ots</code> proof are sufficient to reconstruct the verification path.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>12 · What is stored, what is not</h2>
+    <div class="arch-rule"></div>
+    <p>The office persists, per anchor: the receipt JSON, the per-calendar <code>.ots</code> proof files, the HMAC-keyed <code>owner_id</code> when the receipt is private, the <code>source</code> attribution. The office persists, per account-holder: the email used at sign-in, the HMAC-keyed identifier derived from it, the Stripe customer identifier for billing.</p>
+    <p>The office does NOT persist: file contents, file paths, file names, plaintext owner email tied to a private receipt, full network addresses (only truncated /24 prefixes, briefly, for rate-limiting), browser or device fingerprints, behavioural profiles, page-level analytics tied to individual visitors.</p>
+  </section>
+
+  <section>
+    <h2>13 · Publication date and prior-art status</h2>
+    <div class="arch-rule"></div>
+    <p>This document was first published on 2026-05-18. It is anchored to the Bitcoin chain on publication using the protocol it describes; the receipt identifier for this revision is recorded in the footer below. Subsequent revisions are anchored separately; their receipts are appended to the same footer record.</p>
+    <p>The combination of detailed disclosure, MIT licensing of the verifier and protocol code, and a Bitcoin-anchored publication date establishes this page as prior art for the methods described. Any later filing — by any party — that claims novelty on these methods is rebuttable by reference to this publication.</p>
+  </section>
+
+  <section>
+    <h2>Citations and verification</h2>
+    <div class="arch-rule"></div>
+    <ul>
+      <li><a href="/verify-js.html">Standalone independent verifier (single HTML file)</a></li>
+      <li><a href="/vs/c2pa.html">Comparison with C2PA</a></li>
+      <li><a href="/faq.html">Frequently asked</a></li>
+      <li><a href="/continuity.html">Continuity statement</a></li>
+      <li><a href="/mcp.html">Model Context Protocol server</a></li>
+      <li><a href="/docs/webhooks.html">Webhook integration</a></li>
+      <li><a href="https://github.com/Orphograph/Orphograph">github.com/Orphograph/Orphograph</a></li>
+      <li><a href="https://opentimestamps.org/">opentimestamps.org</a></li>
+    </ul>
+  </section>
+
+  <p style="color:var(--muted);font-size:13px;margin-top:48px;border-top:1px solid var(--line-soft);padding-top:18px;">
+    Publication receipt for this revision: <a href="/r/sHGk_kgKi9YdlLBB" style="color:var(--confirm);">sHGk_kgKi9YdlLBB</a>. Anchored 2026-05-18. The receipt verifies independently against the Bitcoin chain.
+  </p>
+</main>
+
+<footer>
+  <div class="wrap" style="text-align:center;color:var(--muted);font-size:13px;padding:32px 0;">
+    <p>Orphograph · An empirical notary.</p>
+    <p style="margin-top:8px;">
+      <a href="/" style="color:var(--muted);">Home</a> ·
+      <a href="/faq.html" style="color:var(--muted);">FAQ</a> ·
+      <a href="/vs/c2pa.html" style="color:var(--muted);">Compare</a> ·
+      <a href="/roadmap.html" style="color:var(--muted);">Roadmap</a> ·
+      <a href="/continuity.html" style="color:var(--muted);">Continuity</a>
+    </p>
+  </div>
+</footer>
+
+<script src="/statusbar.js" defer></script>
+</body>
+</html>

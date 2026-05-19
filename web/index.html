@@ -14,6 +14,7 @@
 <meta property="og:url" content="https://orphograph.com/">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="stylesheet" href="/index.css?v=8">
+<meta name="copyright" content="© 2026 Orphograph. MIT — see /LICENSE">
 </head>
 <body>
 
@@ -102,6 +103,9 @@
           <button type="button" id="drop-btn">Choose a file</button>
           <input id="drop-input" type="file" hidden>
         </label>
+        <p class="try-sample-line">
+          First time? <button type="button" id="try-sample" class="try-sample-btn">Try with a sample file →</button>
+        </p>
       </div>
     </div>
     <div class="ops-banner" id="ops-banner" hidden></div>
@@ -159,6 +163,68 @@
   </div>
 </section>
 
+<!-- ────────────────────────────────── WHO ──────────────────────────────── -->
+<section class="band">
+  <div class="wrap">
+    <div class="head">
+      <div class="eyebrow">Whom it serves</div>
+      <h2>A record that a file existed by a given moment is useful to anyone whose work depends on time.</h2>
+      <p class="head-sub">
+        The office issues the same instrument regardless of profession. Among those who have anchored or would reasonably anchor are practitioners of the following crafts — by no means an exhaustive list.
+      </p>
+    </div>
+    <div class="who-grid">
+      <div class="who-col">
+        <h3>Creative work</h3>
+        <ul>
+          <li>Photographers · illustrators · designers · animators</li>
+          <li>Filmmakers · videographers · sound engineers</li>
+          <li>Musicians · composers · producers</li>
+          <li>Painters · sculptors · printmakers</li>
+          <li>Game designers · level designers</li>
+          <li>Web designers · UX designers · typographers</li>
+        </ul>
+      </div>
+      <div class="who-col">
+        <h3>Written work</h3>
+        <ul>
+          <li>Novelists · poets · essayists · screenwriters</li>
+          <li>Journalists · reporters · investigative writers</li>
+          <li>Translators · ghostwriters · editors</li>
+          <li>Academics · researchers · doctoral candidates</li>
+          <li>Bloggers · newsletter authors · serialists</li>
+          <li>Speechwriters · librettists · playwrights</li>
+        </ul>
+      </div>
+      <div class="who-col">
+        <h3>Technical work</h3>
+        <ul>
+          <li>Software engineers · open-source maintainers</li>
+          <li>Data analysts · scientists · statisticians</li>
+          <li>Architects · civil and structural engineers</li>
+          <li>Mechanical · electrical · acoustic engineers</li>
+          <li>Inventors · prototypers · industrial designers</li>
+          <li>Reverse-engineers · security researchers</li>
+        </ul>
+      </div>
+      <div class="who-col">
+        <h3>Professional &amp; civic</h3>
+        <ul>
+          <li>Attorneys · paralegals · evidentiary custodians</li>
+          <li>Notaries · executors · trustees</li>
+          <li>Auditors · compliance officers · accountants</li>
+          <li>Consultants · analysts · advisors</li>
+          <li>Educators · professors · curriculum authors</li>
+          <li>Estate planners · genealogists · archivists</li>
+        </ul>
+      </div>
+    </div>
+    <p class="who-note">
+      The instrument is the same in every case: a Bitcoin-anchored attestation that a file with a particular fingerprint existed by the recorded block. Its evidentiary weight is a matter for the practitioner and, where relevant, counsel.
+    </p>
+  </div>
+</section>
+
 <!-- ────────────────────────────────── TIERS ────────────────────────────── -->
 <section class="band band-glow" id="tiers">
   <div class="wrap">
@@ -188,11 +254,17 @@
         <ul>
           <li>50 anchor credits</li>
           <li>Use them anytime</li>
-          <li>Pay by card (more options soon)</li>
+          <li>Card or crypto</li>
           <li>Gift to a friend</li>
         </ul>
-        <a href="#" class="cta" data-checkout="pack">Purchase</a>
-        <a href="/pay/crypto.html" class="cta-link" id="crypto-pay-link" hidden>Pay in crypto (8 coins)</a>
+        <div class="cta-row">
+          <a href="#" class="cta" data-checkout="pack">Pay by card</a>
+          <a href="/pay/crypto.html" class="cta cta-alt" id="crypto-pay-link" hidden>Pay with crypto</a>
+        </div>
+        <p class="cta-fineprint" id="crypto-pay-fineprint" hidden>BTC, USDC, SOL, XRP, ETH, USDT, LTC, DOGE, MATIC — non-custodial via NOWPayments</p>
+        <p class="cta-fineprint" style="margin-top:6px;">
+          Need fewer? <a href="/pay/crypto.html" style="color:inherit;text-decoration:underline;">Writer Pack — 10 anchors, $19</a> (crypto only at this time).
+        </p>
       </div>
       <div class="tier">
         <div class="t-name">Standing Order</div>
@@ -204,7 +276,11 @@
           <li>Receipt vault</li>
           <li>API access</li>
         </ul>
-        <a href="#" class="cta" data-checkout="pro">Subscribe</a>
+        <div class="cta-row">
+          <a href="#" class="cta" data-checkout="pro">Pay by card</a>
+          <a href="/pay/crypto.html" class="cta cta-alt" id="crypto-pay-link-sub" hidden>Pay with crypto</a>
+        </div>
+        <p class="cta-fineprint" id="crypto-pay-sub-fineprint" hidden>Crypto path = Pack of Fifty (equivalent value; recurring crypto coming).</p>
       </div>
     </div>
   </div>
@@ -284,8 +360,20 @@
     <nav>
       <a href="/learn.html">Method</a>
       <a href="/about.html">Office</a>
-      <a href="/compare.html">Compare</a>
+      <a href="/faq.html">FAQ</a>
+      <a href="/vs/c2pa.html">vs. C2PA</a>
+      <a href="/ios.html">iOS</a>
+      <a href="/mcp.html">MCP server</a>
+      <a href="/verify-js.html">Independent verifier</a>
+      <a href="/badge.html">Badge</a>
       <a href="/docs/api.html">API</a>
+      <a href="/docs/webhooks.html">Webhooks</a>
+      <a href="/changelog.html">Changelog</a>
+      <a href="/roadmap.html">Roadmap</a>
+      <a href="/method/architecture.html">Architecture</a>
+      <a href="/continuity.html">Continuity</a>
+      <a href="/recover.html">Recover</a>
+      <a href="/legal/">Legal</a>
       <a href="/terms.html">Terms</a>
       <a href="/privacy.html">Privacy</a>
       <a href="/status.html">Status</a>
@@ -296,5 +384,6 @@
 
 <script src="/timezones.js"></script>
 <script src="/v2.js?v=2"></script>
+<script src="/statusbar.js" defer></script>
 </body>
 </html>

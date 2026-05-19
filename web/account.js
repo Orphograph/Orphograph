@@ -19,14 +19,25 @@ async function main() {
   }
 
   $("#email").textContent = me.email;
+  const planEl = $("#plan-label");
+  if (planEl) planEl.textContent = me.plan || (me.subscription_active ? "Standing Order" : "Free tier");
   $("#sub-status").textContent = me.subscription_active ? "Active" : "Not active";
   const renewal = me.subscription_status && me.subscription_status.current_period_end;
   if (renewal) {
     const d = new Date(renewal * 1000);
-    $("#renewal").textContent = d.toISOString().replace("T", " ").slice(0, 19) + " UTC";
+    const iso = d.toISOString().slice(0, 10);
+    const days = typeof me.days_remaining === "number" ? ` (in ${me.days_remaining} day${me.days_remaining === 1 ? "" : "s"})` : "";
+    $("#renewal").textContent = iso + days;
   } else {
-    $("#renewal").textContent = "(none)";
+    $("#renewal").textContent = "—";
   }
+  const acEl = $("#anchor-count");
+  if (acEl) {
+    const n = typeof me.anchor_count === "number" ? me.anchor_count : 0;
+    acEl.textContent = `${n} (unlimited under this plan)`;
+  }
+  const explainerEl = $("#access-explainer");
+  if (explainerEl && !me.subscription_active) explainerEl.hidden = true;
 
   $("#signout-link").addEventListener("click", async (e) => {
     e.preventDefault();
@@ -46,6 +57,51 @@ async function main() {
 
   if (isActive && !isCancelling) cancelBtn.hidden = false;
   if (isCancelling || subStatus.status === "canceled") reactivateBtn.hidden = false;
+
+  // Refund-request self-serve button — visible while any paid sub
+  // record exists so a customer can put the request on the office's
+  // desk without having to find a contact address.
+  const refundBtn = $("#refund-request-btn");
+  const refundForm = $("#refund-form");
+  const refundReason = $("#refund-reason");
+  const refundSubmit = $("#refund-submit");
+  const refundCancel = $("#refund-cancel");
+  const refundMsg = $("#refund-msg");
+  if (refundBtn && (isActive || subStatus.status)) {
+    refundBtn.hidden = false;
+    refundBtn.addEventListener("click", () => {
+      refundForm.hidden = false;
+      refundBtn.hidden = true;
+    });
+    refundCancel.addEventListener("click", () => {
+      refundForm.hidden = true;
+      refundBtn.hidden = false;
+      refundMsg.hidden = true;
+    });
+    refundSubmit.addEventListener("click", async () => {
+      refundSubmit.disabled = true;
+      refundMsg.hidden = false;
+      refundMsg.textContent = "Submitting…";
+      try {
+        const r = await fetch("/api/me/refund-request", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reason: (refundReason.value || "").slice(0, 500) }),
+        });
+        const j = await r.json();
+        if (r.ok) {
+          refundMsg.textContent = j.message || "Request received.";
+          refundReason.value = "";
+        } else {
+          refundMsg.textContent = j.error || "Could not submit the request just now.";
+        }
+      } catch (e) {
+        refundMsg.textContent = "Network interruption — try again in a moment.";
+      } finally {
+        refundSubmit.disabled = false;
+      }
+    });
+  }
 
   const setMsg = (text, kind) => {
     msgEl.hidden = false;
@@ -176,6 +232,9 @@ async function main() {
         setTimeout(() => { copyBtn.textContent = "Copy"; }, 2500);
       } catch {}
     });
+
+    // Webhooks — same active-subscription gating as the API section.
+    setupWebhooks();
   }
 
   let anchors = [];
@@ -283,6 +342,141 @@ async function main() {
   //   localStorage.setItem("orpho_founder_token", "<the token you set as ORPHO_FOUNDER_TOKEN on the server>")
   // Customers never see this panel — the server returns 404 without the token.
   setupFounderPanel();
+}
+
+async function setupWebhooks() {
+  const section = $("#webhooks-section");
+  const table = $("#webhooks-table");
+  const tbody = table.querySelector("tbody");
+  const emptyEl = $("#webhooks-empty");
+  const form = $("#webhook-add-form");
+  const urlInput = $("#webhook-url-input");
+  const msgEl = $("#webhook-msg");
+  const reveal = $("#webhook-reveal");
+  const revealSecret = $("#webhook-secret-new");
+  const copyBtn = $("#webhook-secret-copy");
+
+  section.hidden = false;
+
+  function setMsg(text, kind) {
+    msgEl.hidden = false;
+    msgEl.textContent = text;
+    msgEl.style.color = kind === "error" ? "var(--bad)" : "var(--accent)";
+  }
+
+  async function refresh() {
+    let data;
+    try {
+      const r = await fetch("/api/me/webhooks");
+      if (!r.ok) {
+        emptyEl.hidden = false;
+        emptyEl.textContent = "Could not load webhooks.";
+        table.hidden = true;
+        return;
+      }
+      data = await r.json();
+    } catch {
+      emptyEl.hidden = false;
+      emptyEl.textContent = "Network error loading webhooks.";
+      table.hidden = true;
+      return;
+    }
+
+    const hooks = (data && data.webhooks) || [];
+    tbody.replaceChildren();
+    if (!hooks.length) {
+      table.hidden = true;
+      emptyEl.hidden = false;
+      emptyEl.textContent = "No webhooks registered on this account.";
+      return;
+    }
+    emptyEl.hidden = true;
+    table.hidden = false;
+
+    for (const w of hooks) {
+      const tr = document.createElement("tr");
+      const td = (text, mono) => {
+        const c = document.createElement("td");
+        if (mono) c.className = "mono";
+        c.textContent = text;
+        return c;
+      };
+      tr.appendChild(td(w.url || "", true));
+      tr.appendChild(td(w.secret_prefix || "", true));
+      const created = (w.created_at || "").replace("T", " ").slice(0, 19);
+      tr.appendChild(td(created || "—"));
+      const actionTd = document.createElement("td");
+      const rm = document.createElement("button");
+      rm.type = "button";
+      rm.className = "btn-link";
+      rm.textContent = "Remove";
+      rm.dataset.url = w.url || "";
+      rm.addEventListener("click", async () => {
+        if (!confirm("Remove this webhook? Deliveries will stop immediately.")) return;
+        rm.disabled = true;
+        try {
+          const r = await fetch("/api/me/webhooks/delete", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ url: rm.dataset.url }),
+          });
+          const j = await r.json().catch(() => ({}));
+          if (r.ok && j.ok) {
+            setMsg("Webhook removed.", "ok");
+            await refresh();
+          } else {
+            setMsg(j.error || "Could not remove webhook.", "error");
+          }
+        } catch {
+          setMsg("Network error.", "error");
+        } finally {
+          rm.disabled = false;
+        }
+      });
+      actionTd.appendChild(rm);
+      tr.appendChild(actionTd);
+      tbody.appendChild(tr);
+    }
+  }
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const url = (urlInput.value || "").trim();
+    if (!url) return;
+    const submitBtn = form.querySelector("button[type=submit]");
+    submitBtn.disabled = true;
+    try {
+      const r = await fetch("/api/me/webhooks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (r.ok && j.ok) {
+        revealSecret.textContent = j.secret || "";
+        reveal.hidden = false;
+        urlInput.value = "";
+        setMsg("Webhook registered.", "ok");
+        await refresh();
+      } else {
+        setMsg(j.error || "Could not register webhook.", "error");
+      }
+    } catch {
+      setMsg("Network error.", "error");
+    } finally {
+      submitBtn.disabled = false;
+    }
+  });
+
+  copyBtn.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(revealSecret.textContent);
+      copyBtn.textContent = "Copied ✓";
+      setTimeout(() => { copyBtn.textContent = "Copy"; }, 2500);
+    } catch {}
+  });
+
+  await refresh();
 }
 
 function renderTeam(me) {

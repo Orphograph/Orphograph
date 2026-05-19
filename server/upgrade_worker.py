@@ -155,6 +155,25 @@ def _send_pin_email_if_needed(record: dict) -> None:
         return
     if ok:
         record["pin_email_sent_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    # Webhook dispatch for `anchor.btc_pinned`. Done after the email
+    # send so an email-side failure does not block notifying integrators
+    # — and done only on the same transition the email path uses, so
+    # both surfaces fire exactly once.
+    try:
+        import webhooks  # type: ignore
+        site_url = os.environ.get("SITE_URL", "https://orphograph.com").rstrip("/")
+        rid = record.get("receipt_id", "")
+        webhooks.dispatch("anchor.btc_pinned", notify_email.strip(), {
+            "receipt_id": rid,
+            "hash_hex": record.get("hash_hex"),
+            "btc_pinned_at": record.get("btc_pinned_at"),
+            "pinned_count": int(record.get("pinned_count", 0)),
+            "pinned_total": int(record.get("pinned_total", 0)),
+            "status": record.get("status"),
+            "receipt_url": f"{site_url}/r/{rid}",
+        })
+    except Exception as e:  # noqa: BLE001 — never crash the upgrade worker
+        sys.stderr.write(f"[upgrade:webhook] {type(e).__name__}: {e}\n")
 
 
 def _upgrade_one(receipt_dir: Path, record: dict) -> dict:

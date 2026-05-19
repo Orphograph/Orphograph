@@ -86,6 +86,43 @@ def balance(claim_code: str) -> int:
         return _scan().get(claim_code, 0)
 
 
+def find_claim_code_by_source(source_substring: str) -> dict | None:
+    """Return the most recent {claim_code, email, source, ts} row whose
+    `source` contains `source_substring`, or None.
+
+    Used by the /api/recover endpoint to look up an already-minted claim
+    code for a paid Stripe session — idempotent recovery without
+    minting a second code. Substring match so both `stripe:cs_abc...`
+    and `stripe-gift:cs_abc...` are found.
+    """
+    if not source_substring or not LEDGER_PATH.exists():
+        return None
+    latest = None
+    with LEDGER_PATH.open() as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            src = row.get("source") or ""
+            if source_substring in src and int(row.get("credits_delta", 0)) > 0:
+                # First positive (mint) row wins per claim_code; keep most recent
+                # overall in case of unusual ledger interleavings.
+                latest = row
+    if latest is None:
+        return None
+    return {
+        "claim_code": latest.get("claim_code"),
+        "email": latest.get("email"),
+        "source": latest.get("source"),
+        "ts": latest.get("ts"),
+        "credits_delta": int(latest.get("credits_delta", 0)),
+    }
+
+
 def revoke_credits_by_source(source_substring: str, revoke_source: str) -> list[dict]:
     """Revoke unused credits for every claim_code minted with a matching source.
 

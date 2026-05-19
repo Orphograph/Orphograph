@@ -53,6 +53,7 @@ import subscriptions  # noqa: E402
 import teams  # noqa: E402
 import unsubscribe  # noqa: E402
 import waitlist  # noqa: E402
+import webhooks  # noqa: E402
 import btc_claims  # noqa: E402
 try:
     import payout_monitor  # noqa: E402
@@ -150,6 +151,20 @@ def _security_headers(handler: BaseHTTPRequestHandler) -> None:
         "img-src 'self' data:; connect-src 'self'; "
         "frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
     )
+    # CORS: /api/verify/* and the embeddable badge SVG are intentionally
+    # cross-origin-readable. Both surface only public-receipt fields that
+    # are already publicly reachable via /r/<id> and /api/badge/<id>.svg,
+    # so adding Access-Control-Allow-Origin: * does not change the
+    # disclosure surface. Required for the embeddable widget at
+    # /badge.html to function on third-party sites.
+    try:
+        rpath = getattr(handler, "path", "") or ""
+        if rpath.startswith("/api/verify/") or rpath.startswith("/api/badge/"):
+            handler.send_header("Access-Control-Allow-Origin", "*")
+            handler.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
+            handler.send_header("Access-Control-Max-Age", "86400")
+    except Exception:
+        pass
 
 
 def _read_content_length(handler: BaseHTTPRequestHandler) -> int:
@@ -392,6 +407,23 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):  # noqa: N802
         path = self.path.split("?", 1)[0]
+        # /LICENSE — the static handler rejects extensionless files (no
+        # MIME match). Serve the LICENSE file explicitly as text/plain so
+        # the every-page "(c) Orphograph. MIT — see /LICENSE" footer
+        # reference resolves correctly.
+        if path == "/LICENSE":
+            try:
+                license_bytes = (WEB_DIR / "LICENSE").read_bytes()
+                self.send_response(200)
+                self.send_header("Content-Type", "text/plain; charset=utf-8")
+                self.send_header("Content-Length", str(len(license_bytes)))
+                self.send_header("Cache-Control", "public, max-age=3600")
+                _security_headers(self)
+                self.end_headers()
+                self.wfile.write(license_bytes)
+            except OSError:
+                self.send_error(404, "LICENSE not found")
+            return
         if path == "/api/health":
             _json_response(self, 200, health.snapshot())
             return
@@ -595,14 +627,35 @@ class Handler(BaseHTTPRequestHandler):
             _json_response(self, 200, {"claim_code": code, "balance": credits.balance(code)})
             return
         if path.startswith("/r/"):
-            # Print-friendly receipt view — page is static; JS reads the ID from
-            # the URL and fetches /api/verify/<id>. Validate shape before serving
-            # so we don't render a page for an obviously-bad ID.
+            # Print-friendly receipt view. JS reads the ID from the URL
+            # and fetches /api/verify/<id>; we additionally template the
+            # OG meta tags so social-card unfurlers (X, LinkedIn, Slack,
+            # iMessage) show the receipt ID in the preview tile. Without
+            # this, every receipt URL shares the same generic preview
+            # and there is no organic-distribution lift from a shared
+            # receipt.
             rid = path[len("/r/"):].rstrip("/")
             if not RECEIPT_ID_RE.match(rid):
                 self.send_error(400, "invalid receipt id")
                 return
-            _serve_static(self, "/receipt.html")
+            try:
+                html_path = WEB_DIR / "receipt.html"
+                body = html_path.read_text()
+                # Whitelisted substitution — `rid` already passed the
+                # RECEIPT_ID_RE shape gate above, so no HTML-escape pass
+                # is required, but we still avoid injecting raw user
+                # input by limiting substitution to the validated id.
+                body = body.replace("{{RECEIPT_ID}}", rid)
+                payload = body.encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(payload)))
+                self.send_header("Cache-Control", "public, max-age=300")
+                _security_headers(self)
+                self.end_headers()
+                self.wfile.write(payload)
+            except OSError:
+                _serve_static(self, "/receipt.html")
             return
         if path.startswith("/buy/"):
             # BTC payment page — page is static; JS reads order_id from URL.
@@ -711,8 +764,20 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_error(404, "link expired or already used")
                 return
             sid, _exp = auth.create_session(redeemed["email"])
+            # `?next=…` lets the caller pick the landing page after sign-in
+            # so a welcome email can drop the user directly on the home
+            # anchoring UI instead of forcing them through /account.html.
+            # Whitelist: must be a same-site, single-segment-leading path
+            # (no scheme, no host, no protocol-relative). Falls back to
+            # /account.html on any rejection — open-redirect defense.
+            from urllib.parse import parse_qs, urlparse
+            qs = parse_qs(urlparse(self.path).query)
+            next_raw = (qs.get("next", [""])[0] or "").strip()
+            location = "/account.html"
+            if next_raw.startswith("/") and not next_raw.startswith("//") and "\n" not in next_raw and "\r" not in next_raw and len(next_raw) < 200:
+                location = next_raw
             self.send_response(303)
-            self.send_header("Location", "/account.html")
+            self.send_header("Location", location)
             self.send_header("Set-Cookie", auth.build_session_cookie(sid, secure=COOKIE_SECURE))
             self.send_header("Cache-Control", "no-store")
             _security_headers(self)
@@ -727,14 +792,41 @@ class Handler(BaseHTTPRequestHandler):
             team_role = None
             if team:
                 team_role = "owner" if team.get("owner") == email else "member"
+            sub_status = subscriptions.status_for(email) or {}
+            sub_active = _subscription_active_for(email)
+            # Anchor count under this subscription. Uses the count-only
+            # fast path so /api/me does not become tail-latency for every
+            # page nav via the status strip.
+            anchor_count = _count_anchors_for_email(email)
+            # Days remaining on the current Stripe period, if known.
+            days_remaining: int | None = None
+            cpe = sub_status.get("current_period_end")
+            if cpe:
+                try:
+                    days_remaining = max(0, int((float(cpe) - datetime.now(timezone.utc).timestamp()) / 86400))
+                except (TypeError, ValueError):
+                    days_remaining = None
+            # Plan label inferred from the Stripe customer record.
+            plan_label = "Standing Order" if sub_active else None
             _json_response(self, 200, {
                 "email": email,
-                "subscription_active": _subscription_active_for(email),
-                "subscription_status": subscriptions.status_for(email),
+                "signed_in": True,
+                "plan": plan_label,
+                "subscription_active": sub_active,
+                "subscription_status": sub_status or None,
+                "days_remaining": days_remaining,
+                "anchor_count": anchor_count,
                 "api_key_prefix": api_keys.active_key_prefix(email),
                 "team": team,
                 "team_role": team_role,
             })
+            return
+        if path == "/api/me/webhooks":
+            email = self._session_email()
+            if not email:
+                _json_response(self, 401, {"error": "not authenticated"})
+                return
+            _json_response(self, 200, {"webhooks": webhooks.list_for_email(email)})
             return
         if path == "/api/me/referral-code":
             email = self._session_email()
@@ -871,6 +963,80 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
             return
+        if path == "/api/me/anchors.jsonld":
+            # JSON-LD vault export in a C2PA-compatible shape: each anchor
+            # is a CreativeWork attested by a TimeStamp activity that
+            # references its Bitcoin commitment and the issuing office.
+            # Downstream verifiers built against C2PA's JSON-LD vocabulary
+            # can ingest this directly.
+            email = self._session_email()
+            if not email:
+                _json_response(self, 401, {"error": "not authenticated"})
+                return
+            anchors = _list_anchors_for_email(email, limit=10000)
+            site = os.environ.get("SITE_URL", "https://orphograph.com").rstrip("/")
+            graph = []
+            for rec in anchors:
+                rid = rec.get("receipt_id", "")
+                created = rec.get("created_at", "")
+                pinned = rec.get("btc_pinned_at") or None
+                node: dict = {
+                    "@type": "CreativeWork",
+                    "@id": f"{site}/r/{rid}",
+                    "identifier": rid,
+                    "sha256": rec.get("hash_hex"),
+                    "dateCreated": created,
+                    "additionalType": "https://orphograph.com/vocab#anchored-fingerprint",
+                    "potentialAction": {
+                        "@type": "VerifyAction",
+                        "target": f"{site}/r/{rid}",
+                        "name": "Verify against the Bitcoin chain",
+                    },
+                }
+                if rec.get("sha512_hex"):
+                    node["sha512"] = rec["sha512_hex"]
+                if rec.get("client_label"):
+                    node["name"] = rec["client_label"]
+                if rec.get("c2pa_manifest_hash"):
+                    node["c2paManifestHash"] = rec["c2pa_manifest_hash"]
+                if pinned:
+                    node["bitcoinCommittedAt"] = pinned
+                    node["pinnedCalendars"] = int(rec.get("pinned_count", 0))
+                    node["totalCalendars"] = int(rec.get("pinned_total", rec.get("calendars_total", 0)))
+                graph.append(node)
+            doc = {
+                "@context": {
+                    "@vocab": "https://schema.org/",
+                    "sha256": "https://orphograph.com/vocab#sha256",
+                    "sha512": "https://orphograph.com/vocab#sha512",
+                    "c2paManifestHash": "https://orphograph.com/vocab#c2paManifestHash",
+                    "bitcoinCommittedAt": "https://orphograph.com/vocab#bitcoinCommittedAt",
+                    "pinnedCalendars": "https://orphograph.com/vocab#pinnedCalendars",
+                    "totalCalendars": "https://orphograph.com/vocab#totalCalendars",
+                },
+                "@type": "Collection",
+                "name": "Orphograph receipt vault",
+                "publisher": {
+                    "@type": "Organization",
+                    "name": "Orphograph",
+                    "url": site,
+                },
+                "dateModified": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                "size": len(graph),
+                "hasPart": graph,
+            }
+            body = json.dumps(doc, indent=2).encode("utf-8")
+            ts = datetime.now(timezone.utc).strftime("%Y%m%d")
+            filename = f"orphograph_vault_{ts}.jsonld"
+            self.send_response(200)
+            self.send_header("Content-Type", "application/ld+json; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
+            self.send_header("Cache-Control", "no-store")
+            _security_headers(self)
+            self.end_headers()
+            self.wfile.write(body)
+            return
         if path == "/api/me/export":
             email = self._session_email()
             if not email:
@@ -966,6 +1132,18 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/api/me/api-key/revoke":
             self._handle_revoke_api_key()
             return
+        if self.path == "/api/me/webhooks":
+            self._handle_webhook_register()
+            return
+        if self.path == "/api/me/webhooks/delete":
+            self._handle_webhook_delete()
+            return
+        if self.path == "/api/me/refund-request":
+            self._handle_refund_request()
+            return
+        if self.path == "/api/recover":
+            self._handle_recover_payment()
+            return
         if self.path == "/api/me/affiliate/payout":
             self._handle_affiliate_payout()
             return
@@ -1048,6 +1226,10 @@ class Handler(BaseHTTPRequestHandler):
         # sanitizes (allowlist + size caps); unknown fields are dropped.
         attestation = payload.get("attestation") if isinstance(payload.get("attestation"), dict) else None
         metadata = payload.get("metadata") if isinstance(payload.get("metadata"), dict) else None
+        # Optional C2PA manifest hash — the engine validates shape before
+        # accepting. Coexistence-first: an Orphograph receipt can reference
+        # a C2PA manifest hash so verifiers see both attestations.
+        c2pa_manifest_hash = payload.get("c2pa_manifest_hash") if isinstance(payload.get("c2pa_manifest_hash"), str) else None
         if isinstance(client_label, str):
             client_label = client_label[:200]
         else:
@@ -1078,30 +1260,54 @@ class Handler(BaseHTTPRequestHandler):
                 owner_id=owner_id if want_private else None,
                 attestation=attestation,
                 metadata=metadata,
+                c2pa_manifest_hash=c2pa_manifest_hash,
             )
         except ValueError as e:
             _json_response(self, 400, {"error": str(e)})
             return
         low_redundancy = record["calendars_ok"] < MIN_CALENDARS_OK
-        if isinstance(notify_email, str) and pack_consumed:
+        # Receipt email: fires for any paid path (Pack consumed, active
+        # subscription, or active API key). Previously this was Pack-only,
+        # which silently dropped receipts for subscribers — exact 2026-05-18
+        # customer complaint ("x1 purchased … wasn't sent"). For subscribers
+        # who didn't pass an explicit notify_email, fall back to their
+        # signed-in account email so they at least get the receipt.
+        candidate = ""
+        if isinstance(notify_email, str):
             candidate = notify_email[:200].strip()
-            if EMAIL_RE.match(candidate):
-                # email delivery is a paid-tier benefit; inert if RESEND_API_KEY unset
-                mailer.send_receipt_email(candidate, record)
-                # Persist on the record so the upgrade worker can email the
-                # customer when the BTC pin actually lands (~1h later). Saved
-                # only AFTER format validation so the on-disk value is always
-                # a syntactically valid address.
-                try:
-                    receipt_path = engine.RECEIPTS_DIR / record["receipt_id"] / "receipt.json"
-                    on_disk = json.loads(receipt_path.read_text())
-                    on_disk["notify_email"] = candidate
-                    receipt_path.write_text(json.dumps(on_disk, indent=2))
-                    record["notify_email"] = candidate
-                except (OSError, json.JSONDecodeError):
-                    # Persistence failure is non-fatal: the user still got
-                    # the immediate receipt email; pin-time email is best-effort.
-                    pass
+        if not candidate and subscription_active and subscriber_email:
+            candidate = subscriber_email
+        is_paid_anchor = pack_consumed or subscription_active or api_key_active
+        if candidate and is_paid_anchor and EMAIL_RE.match(candidate):
+            mailer.send_receipt_email(candidate, record)
+        # Webhook dispatch — fire-and-forget on background threads.
+        # Subscribers and API-key holders receive anchor.created; Pack-only
+        # buyers do not, since Pack-only sessions have no signed-in
+        # identity to dispatch under.
+        if subscription_active and subscriber_email:
+            webhooks.dispatch("anchor.created", subscriber_email, {
+                "receipt_id": record["receipt_id"],
+                "hash_hex": record["hash_hex"],
+                "sha512_hex": record.get("sha512_hex"),
+                "created_at": record["created_at"],
+                "client_label": record.get("client_label"),
+                "calendars_ok": record["calendars_ok"],
+                "calendars_total": record["calendars_total"],
+                "private": want_private,
+                "receipt_url": f"{os.environ.get('SITE_URL', 'https://orphograph.com').rstrip('/')}/r/{record['receipt_id']}",
+            })
+            # Persist on the record so the upgrade worker can email the
+            # customer when the BTC pin actually lands (~1h later). Saved
+            # only AFTER format validation so the on-disk value is always
+            # a syntactically valid address.
+            try:
+                receipt_path = engine.RECEIPTS_DIR / record["receipt_id"] / "receipt.json"
+                on_disk = json.loads(receipt_path.read_text())
+                on_disk["notify_email"] = candidate
+                receipt_path.write_text(json.dumps(on_disk, indent=2))
+                record["notify_email"] = candidate
+            except (OSError, json.JSONDecodeError):
+                pass
         _json_response(self, 200, {
             "receipt_id": record["receipt_id"],
             "created_at": record["created_at"],
@@ -1798,6 +2004,277 @@ class Handler(BaseHTTPRequestHandler):
         revoked = api_keys.revoke(email)
         _json_response(self, 200, {"ok": True, "revoked": revoked})
 
+    def _handle_webhook_register(self) -> None:
+        email = self._session_email()
+        if not email:
+            _json_response(self, 401, {"error": "not authenticated"})
+            return
+        # Subscriber-tier benefit: webhooks ride on the same gate as
+        # private receipts and API keys. Free tier cannot register.
+        if not _subscription_active_for(email):
+            _json_response(self, 402, {"error": "webhooks require an active subscription"})
+            return
+        length = _read_content_length(self)
+        if length <= 0 or length > MAX_BODY_BYTES:
+            _json_response(self, 400, {"error": "invalid body size"})
+            return
+        try:
+            payload = json.loads(self.rfile.read(length).decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            _json_response(self, 400, {"error": "body must be JSON"})
+            return
+        url = (payload.get("url") or "").strip()
+        result = webhooks.register(email=email, url=url)
+        if not result.get("ok"):
+            _json_response(self, 400, {"error": result.get("reason", "register_failed")})
+            return
+        # The secret is returned ONCE here; clients must persist it.
+        _json_response(self, 200, result)
+
+    def _handle_recover_payment(self) -> None:
+        """Customer self-serve recovery: a customer who paid (Stripe) but
+        never received their claim-code email or welcome email can recover
+        without contacting support.
+
+        Inputs: { stripe_session_id, email }
+        Behavior:
+          - Validates session_id shape
+          - Rate-limits per IP (cheap to abuse otherwise)
+          - Verifies Stripe says the session is paid AND the email
+            matches the customer_email Stripe holds (cross-customer-leak guard)
+          - For one-time-Pack mode: looks up the EXISTING claim_code from
+            the credits ledger by source containing session_id; re-sends
+            via mailer.send_pack_claim_email; NEVER mints a new code
+          - For subscription mode: issues a fresh magic-link via
+            auth.issue_link_token (auto-supersedes prior tokens) and
+            sends the welcome email with that link
+          - All errors return a generic message — no PII leak in failure cases
+        """
+        # Light per-IP rate limit
+        allowed, _ = _anchor_limiter.check(f"recover:{self._client_key()}")
+        if not allowed:
+            _json_response(self, 429, {"error": "too many requests"})
+            return
+        length = _read_content_length(self)
+        if length <= 0 or length > MAX_BODY_BYTES:
+            _json_response(self, 400, {"error": "invalid request"})
+            return
+        try:
+            payload = json.loads(self.rfile.read(length).decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            _json_response(self, 400, {"error": "invalid request"})
+            return
+        sid = (payload.get("stripe_session_id") or "").strip()
+        provided_email = (payload.get("email") or "").strip().lower()
+        # Strict shape check on the session id. Stripe ids are cs_test_ or
+        # cs_live_ followed by alphanumerics + underscores.
+        if not sid.startswith(("cs_test_", "cs_live_")) or len(sid) > 256 \
+           or not all(c.isalnum() or c == "_" for c in sid):
+            _json_response(self, 400, {"error": "invalid request"})
+            return
+        if not provided_email or "@" not in provided_email or len(provided_email) > 254:
+            _json_response(self, 400, {"error": "invalid request"})
+            return
+        if not stripe_api.is_configured():
+            _json_response(self, 503, {"error": "recovery temporarily unavailable"})
+            return
+        # Fetch the session from Stripe and verify it is paid + email matches.
+        result = stripe_api._request("GET", f"/checkout/sessions/{sid}")
+        if not result.get("ok"):
+            _json_response(self, 404, {"error": "session not found or not accessible"})
+            return
+        data = result.get("data") or {}
+        payment_status = data.get("payment_status")
+        if payment_status != "paid":
+            _json_response(self, 400, {"error": "session is not in a paid state"})
+            return
+        stripe_email = ((data.get("customer_details") or {}).get("email") or data.get("customer_email") or "").strip().lower()
+        if not stripe_email or stripe_email != provided_email:
+            # Generic message — never confirm/deny which side mismatched.
+            _json_response(self, 400, {"error": "session and email do not match"})
+            return
+        mode = data.get("mode") or ""
+
+        if mode == "subscription":
+            # No claim code to re-send. Issue a fresh magic-link sign-in
+            # instrument; auth.issue_link_token auto-supersedes any prior
+            # token, so re-running this is idempotent.
+            token, _exp = auth.issue_link_token(provided_email)
+            sent = mailer.send_subscription_welcome_email(
+                to=provided_email,
+                plan_label="Standing Order",
+                signin_token=token,
+            )
+            sys.stderr.write(
+                f"[recover] subscription path session={sid} "
+                f"email={auth.mask_email(provided_email)} email_sent={sent}\n"
+            )
+            _json_response(self, 200, {
+                "ok": True,
+                "mode": "subscription",
+                "message": (
+                    "A fresh sign-in instrument has been sent to the address "
+                    "on file. The instrument is valid for twenty-four hours."
+                ),
+            })
+            return
+
+        # One-time Pack: look up the existing claim_code minted for this session.
+        ledger_row = credits.find_claim_code_by_source(sid)
+        if not ledger_row:
+            # Paid session but no claim code yet — webhook may not have
+            # processed yet, or there is a real fulfillment gap. Either
+            # way: do NOT mint speculatively. Log for founder + ask
+            # customer to retry in a few minutes.
+            sys.stderr.write(
+                f"[recover] NO CLAIM FOUND for paid session {sid} "
+                f"email={auth.mask_email(provided_email)} — likely webhook race or fulfillment gap\n"
+            )
+            try:
+                gap_path = Path(os.environ.get(
+                    "ORPHO_RECOVERY_GAP_LOG",
+                    str(ROOT / "data" / "recovery_gaps.jsonl"),
+                ))
+                gap_path.parent.mkdir(parents=True, exist_ok=True)
+                with gap_path.open("a") as f:
+                    f.write(json.dumps({
+                        "ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                        "session_id": sid,
+                        "email": provided_email,
+                        "payment_status": payment_status,
+                        "mode": mode,
+                    }, separators=(",", ":")) + "\n")
+            except OSError:
+                pass
+            _json_response(self, 202, {
+                "ok": False,
+                "retryable": True,
+                "message": (
+                    "Payment is on file but fulfillment has not yet completed. "
+                    "Try again in five minutes; the office has been notified."
+                ),
+            })
+            return
+
+        claim_code = ledger_row["claim_code"]
+        credit_count = ledger_row.get("credits_delta", 0)
+        sent = mailer.send_pack_claim_email(provided_email, claim_code, credit_count)
+        sys.stderr.write(
+            f"[recover] resent claim_code for session={sid} "
+            f"email={auth.mask_email(provided_email)} email_sent={sent}\n"
+        )
+        _json_response(self, 200, {
+            "ok": True,
+            "mode": "payment",
+            "message": (
+                "The claim instrument has been re-sent to the address on file. "
+                "It is the same instrument originally issued — no duplicate has been minted."
+            ),
+        })
+
+    def _handle_refund_request(self) -> None:
+        """Customer-initiated refund request — does NOT process the refund.
+
+        The actual Stripe refund still happens manually in the dashboard.
+        This endpoint exists so the customer has a self-serve way to put
+        the request on the founder's desk without having to find an
+        email address; it appends to a refund_requests.jsonl ledger and
+        emails the founder via Resend. Reply to the customer is a
+        formal-tone acknowledgement, not a promise of outcome.
+        """
+        email = self._session_email()
+        if not email:
+            _json_response(self, 401, {"error": "not authenticated"})
+            return
+        # Rate-limit so a single account cannot spam the ledger / inbox.
+        allowed, _ = _anchor_limiter.check(f"refund:{auth.email_id(email)}")
+        if not allowed:
+            _json_response(self, 429, {"error": "too many requests"})
+            return
+        length = _read_content_length(self)
+        if length < 0 or length > MAX_BODY_BYTES:
+            _json_response(self, 400, {"error": "invalid body size"})
+            return
+        payload = {}
+        if length > 0:
+            try:
+                payload = json.loads(self.rfile.read(length).decode("utf-8"))
+            except (UnicodeDecodeError, json.JSONDecodeError):
+                payload = {}
+        reason = ""
+        if isinstance(payload.get("reason"), str):
+            reason = payload["reason"][:500].strip()
+        sub_id = subscriptions.stripe_subscription_id_for(email)
+        # Append to ledger.
+        ledger_path = Path(os.environ.get(
+            "ORPHO_REFUND_LEDGER",
+            str(ROOT / "data" / "refund_requests.jsonl"),
+        ))
+        ledger_path.parent.mkdir(parents=True, exist_ok=True)
+        row = {
+            "ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "email": email,
+            "stripe_sub": sub_id or "",
+            "reason": reason,
+        }
+        try:
+            with ledger_path.open("a") as f:
+                f.write(json.dumps(row, separators=(",", ":")) + "\n")
+        except OSError as e:
+            sys.stderr.write(f"[refund-request] ledger write failed: {e}\n")
+        # Notify founder via Resend so the request lands in the inbox.
+        # HTML-escape every interpolation point — `reason` is customer-
+        # controlled free text up to 500 chars; without escaping, a
+        # malicious reason could embed tracking pixels or spoofed
+        # internal-formatting content in the founder's mail client.
+        # `email` and `sub_id` come from validated server state, but we
+        # escape them defensively (cheap and matches the established
+        # pattern in mailer.send_pack_gift_email).
+        from html import escape as _h
+        try:
+            founder_to = os.environ.get("ORPHO_FOUNDER_EMAIL", "hello@orphograph.com")
+            safe_email = _h(email)
+            safe_sub = _h(sub_id or "(none on file)")
+            safe_reason = _h(reason or "(none provided)").replace("\n", "<br>")
+            mailer._send(
+                founder_to,
+                f"Orphograph — refund request from {auth.mask_email(email)}",
+                f"Customer: {email}\nSubscription: {sub_id or '(none on file)'}\nReason:\n{reason or '(none provided)'}\n",
+                f"<p><strong>Customer:</strong> {safe_email}</p>"
+                f"<p><strong>Subscription:</strong> {safe_sub}</p>"
+                f"<p><strong>Reason:</strong><br>{safe_reason}</p>",
+                transactional=True,
+                category="refund_request_internal",
+            )
+        except Exception as e:  # noqa: BLE001
+            sys.stderr.write(f"[refund-request] founder notify failed: {type(e).__name__}\n")
+        # Customer-facing acknowledgement in the formal voice.
+        _json_response(self, 200, {
+            "ok": True,
+            "message": (
+                "The request has been received and registered. "
+                "A reply is issued within one business day."
+            ),
+        })
+
+    def _handle_webhook_delete(self) -> None:
+        email = self._session_email()
+        if not email:
+            _json_response(self, 401, {"error": "not authenticated"})
+            return
+        length = _read_content_length(self)
+        if length <= 0 or length > MAX_BODY_BYTES:
+            _json_response(self, 400, {"error": "invalid body size"})
+            return
+        try:
+            payload = json.loads(self.rfile.read(length).decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            _json_response(self, 400, {"error": "body must be JSON"})
+            return
+        url = (payload.get("url") or "").strip()
+        ok = webhooks.delete(email=email, url=url)
+        _json_response(self, 200 if ok else 404, {"ok": ok})
+
     def _handle_cancel_subscription(self) -> None:
         email = self._session_email()
         if not email:
@@ -2154,6 +2631,37 @@ class Handler(BaseHTTPRequestHandler):
             "plan": plan,
             "currency": currency,
         })
+
+
+def _count_anchors_for_email(email: str) -> int:
+    """Fast O(receipts) count of anchors owned by this email.
+
+    Reads only `source` from each receipt.json (small field at the top
+    via streaming json parse fallback to full-load), skipping body parse
+    when possible. Replaces the previous "list 10000 then len()" pattern
+    which was a tail-latency offender on /api/me and added 2.5s+ to every
+    page navigation via the status strip.
+    """
+    if not email:
+        return 0
+    expected_source = "sub:" + auth.email_id(email)
+    receipts_dir = engine.RECEIPTS_DIR
+    if not receipts_dir.exists():
+        return 0
+    count = 0
+    for child in receipts_dir.iterdir():
+        if not child.is_dir():
+            continue
+        rfile = child / "receipt.json"
+        if not rfile.exists():
+            continue
+        try:
+            rec = json.loads(rfile.read_text())
+        except (OSError, json.JSONDecodeError):
+            continue
+        if rec.get("source") == expected_source:
+            count += 1
+    return count
 
 
 def _list_anchors_for_email(

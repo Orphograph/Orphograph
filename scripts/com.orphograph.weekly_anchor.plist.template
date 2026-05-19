@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+Launchd job to re-anchor key Orphograph artifacts weekly. The
+accumulating receipt chain is evidentiary value for trademark,
+copyright, and patent priority — see docs/adr/0003.
+
+Install:
+  cp scripts/com.orphograph.weekly_anchor.plist.template \
+     ~/Library/LaunchAgents/com.orphograph.weekly_anchor.plist
+  # Edit ~/Library/LaunchAgents/com.orphograph.weekly_anchor.plist:
+  #   - Replace REPO_ROOT with the absolute path to the orphograph repo
+  #   - Replace API_KEY_HERE with your Orphograph API key from /account.html
+  #     (so the anchors land in your subscription vault, not the free tier)
+  launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.orphograph.weekly_anchor.plist
+  launchctl enable gui/$(id -u)/com.orphograph.weekly_anchor
+
+Sequoia note: if `launchctl bootstrap` returns IO error 5, fall back to
+running the script via a nohup-Python sleeper loop. The script itself
+does not depend on launchd.
+
+Runs every 7 days at the configured StartCalendarInterval (Sunday 03:30
+local time by default).
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.orphograph.weekly_anchor</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/python3</string>
+        <string>REPO_ROOT/scripts/weekly_anchor.py</string>
+    </array>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>ORPHO_BASE_URL</key>
+        <string>https://orphograph.com</string>
+        <key>ORPHO_API_KEY</key>
+        <string>API_KEY_HERE</string>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin</string>
+    </dict>
+
+    <key>WorkingDirectory</key>
+    <string>REPO_ROOT</string>
+
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Weekday</key>
+        <integer>0</integer>
+        <key>Hour</key>
+        <integer>3</integer>
+        <key>Minute</key>
+        <integer>30</integer>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>StandardOutPath</key>
+    <string>REPO_ROOT/outbox/weekly_anchor.stdout.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>REPO_ROOT/outbox/weekly_anchor.stderr.log</string>
+
+    <key>ProcessType</key>
+    <string>Background</string>
+</dict>
+</plist>

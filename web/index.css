@@ -166,6 +166,10 @@
     letter-spacing:0.01em;box-shadow:var(--shadow-1);transition:transform .15s ease, box-shadow .15s ease, background .15s ease;
   }
   .drop button:hover{background:#000;transform:translateY(-1px);box-shadow:var(--shadow-2);}
+  .try-sample-line{text-align:center;font-size:13px;color:var(--muted);margin:14px 0 0;}
+  .try-sample-btn{background:transparent;border:0;color:var(--confirm);font:inherit;font-size:13px;cursor:pointer;padding:4px 6px;text-decoration:underline;text-underline-offset:3px;}
+  .try-sample-btn:hover{color:#3d8060;}
+  .try-sample-btn:disabled{opacity:0.6;cursor:wait;}
 
   .status-line{
     margin-top:18px;padding:16px 20px;background:rgba(255,255,255,0.7);
@@ -242,8 +246,35 @@
     transition:background .15s ease, transform .15s ease;
   }
   .tier .cta:hover{background:#000;transform:translateY(-1px);color:var(--paper-soft);border-bottom:0;}
+  /* "Whom it serves" — illustrative professions panel */
+  .who-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:28px;margin-top:8px;}
+  .who-col h3{font-family:var(--serif);font-size:15px;font-weight:500;color:var(--ink);margin:0 0 10px;letter-spacing:0.01em;}
+  .who-col ul{list-style:none;padding:0;margin:0;}
+  .who-col li{font-size:13.5px;color:var(--ink-2);line-height:1.65;padding:3px 0;border-bottom:1px solid var(--line-soft);}
+  .who-col li:last-child{border-bottom:0;}
+  .who-note{font-size:13.5px;color:var(--muted);margin:28px 0 0;line-height:1.7;font-style:italic;}
+  @media (max-width:980px){.who-grid{grid-template-columns:repeat(2,1fr);gap:22px;}}
+  @media (max-width:560px){.who-grid{grid-template-columns:1fr;gap:18px;}}
   .tier.featured .cta{background:var(--accent-warm);}
   .tier.featured .cta:hover{background:#a37047;}
+  /* Side-by-side checkout buttons (card | crypto) — row layout with a
+     subtle outline on the secondary so neither dominates the other. */
+  .tier .cta-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:auto;}
+  .tier .cta-row .cta{flex:1 1 auto;min-width:140px;padding:11px 18px;font-size:13.5px;}
+  .tier .cta.cta-alt{
+    background:transparent;color:var(--ink);
+    border:1px solid var(--ink);
+  }
+  .tier .cta.cta-alt:hover{
+    background:var(--ink);color:var(--paper-soft);
+    border-color:var(--ink);
+  }
+  .tier.featured .cta.cta-alt{background:transparent;color:var(--ink);border:1px solid var(--ink);}
+  .tier.featured .cta.cta-alt:hover{background:var(--ink);color:var(--paper-soft);}
+  .tier .cta-fineprint{
+    font-size:11px;color:var(--muted);letter-spacing:0.02em;
+    margin:10px 0 0;line-height:1.4;text-align:center;
+  }
   @media (max-width:880px){
     .tiers{grid-template-columns:1fr;}
     .tier.featured{transform:none;}

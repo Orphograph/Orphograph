@@ -106,13 +106,36 @@ def record_subscription_event(
     })
 
 
+def _customers_for_email(email: str) -> set[str]:
+    """Return every stripe_customer ID ever mapped to this email.
+
+    The customer→email map is the source of truth for the email link;
+    subscription events sometimes arrive BEFORE that mapping is written
+    (Stripe dispatch order is not guaranteed), so the sub row's own
+    `email` field can be empty even though the customer is real.
+    """
+    out: set[str] = set()
+    if not email:
+        return out
+    for row in _read_all(CUSTOMER_MAP):
+        if row.get("email") == email and row.get("stripe_customer"):
+            out.add(row["stripe_customer"])
+    return out
+
+
 def _latest_for_email(email: str) -> dict | None:
     if not email:
         return None
     rows = _read_all(SUB_LEDGER)
+    customers = _customers_for_email(email)
     latest = None
     for row in rows:
-        if row.get("email") == email:
+        # Match by stored email first, falling back to the customer→email
+        # map so out-of-order events (subscription.created before
+        # checkout.session.completed) still resolve correctly.
+        row_email = row.get("email")
+        row_customer = row.get("stripe_customer")
+        if row_email == email or (not row_email and row_customer in customers):
             latest = row
     return latest
 

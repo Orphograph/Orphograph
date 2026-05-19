@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Orphograph and C2PA — coexistence</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#f6f1e3">
+<meta name="description" content="How an Orphograph receipt behaves when a C2PA manifest is present on a file. A factual description of coexistence between the two attestations.">
+<link rel="icon" type="image/png" href="/favicon.png?v=6">
+<meta property="og:title" content="Orphograph and C2PA — coexistence">
+<meta property="og:description" content="How an Orphograph receipt behaves when a C2PA manifest is present on a file.">
+<meta property="og:url" content="https://orphograph.com/vs/c2pa.html">
+<meta property="og:type" content="article">
+<meta property="og:image" content="https://orphograph.com/seal.png?v=6">
+<link rel="canonical" href="https://orphograph.com/vs/c2pa.html">
+<link rel="stylesheet" href="/index.css?v=8">
+<style>
+  .vs-wrap { max-width: 760px; margin: 0 auto; padding: 0 24px 64px; }
+  .vs-callout { background: rgba(74,154,115,0.06); border-left: 3px solid var(--confirm); padding: 16px 20px; margin: 24px 0; border-radius: 0 6px 6px 0; }
+  .vs-callout p { margin: 0; color: var(--ink-2); }
+  .vs-foot { color: var(--muted); font-size: 13.5px; line-height: 1.7; margin-top: 36px; }
+  .vs-foot a { color: var(--confirm); }
+  h1.vs-h1 { font-family: var(--serif); font-size: 38px; font-weight: 500; margin: 32px 0 6px; color: var(--ink); }
+  p.vs-lede { font-size: 17px; color: var(--ink-2); line-height: 1.65; margin: 0 0 8px; }
+  .vs-wrap p { color: var(--ink-2); line-height: 1.75; font-size: 15.5px; }
+  .vs-wrap h2 { font-family: var(--serif); font-size: 24px; font-weight: 500; margin-top: 40px; color: var(--ink); }
+</style>
+<meta name="copyright" content="© 2026 Orphograph. MIT — see /LICENSE">
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap row">
+    <a href="/" class="brand">Orphograph</a>
+    <nav>
+      <a href="/learn.html">Method</a>
+      <a href="/writers.html">Writers</a>
+      <a href="/#tiers">Pricing</a>
+      <a href="/about.html">Office</a>
+      <a href="/signin.html">Sign in</a>
+      <a href="/#drop" class="cta">Anchor a file</a>
+    </nav>
+  </div>
+</header>
+
+<main class="vs-wrap">
+
+  <p style="font-size:12px;letter-spacing:0.18em;text-transform:uppercase;color:var(--muted);margin:48px 0 8px;">Coexistence</p>
+  <h1 class="vs-h1">Orphograph and C2PA together.</h1>
+  <p class="vs-lede">
+    The C2PA specification describes a manifest of provenance that travels with a file. Orphograph issues a receipt that attests, against the Bitcoin chain, that a particular fingerprint existed by a particular moment. The two records answer different questions, and they may be held side by side.
+  </p>
+
+  <h2>What the office records when a C2PA manifest is present</h2>
+  <p>
+    Orphograph anchors the SHA-256 and SHA-512 fingerprints of the file as it stands at the moment of submission. When a C2PA manifest is embedded in the file, the manifest is part of the bytes being fingerprinted, and the receipt therefore attests to the existence of that exact file — manifest included — by the recorded Bitcoin block.
+  </p>
+  <p>
+    No element of the manifest is inspected, transcribed, or retained by the office. The manifest is not opened. The file does not leave the browser. The receipt records that the file with this fingerprint existed; it does not interpret the manifest's contents.
+  </p>
+
+  <h2>Referencing a manifest hash in a receipt</h2>
+  <p>
+    For users who wish to make the relationship explicit, an Orphograph receipt may optionally include a reference to the hash of a C2PA manifest. The reference is recorded in the receipt's JSON sidecar; the underlying anchor remains the file's fingerprint. The result is two complementary records: a manifest describing how the asset was captured and edited, and a Bitcoin-anchored attestation that the file existed by a given moment.
+  </p>
+
+  <div class="vs-callout">
+    <p>The C2PA manifest describes the provenance chain of an asset. An Orphograph receipt attests to the date of existence of a file. Neither displaces the other. A reader presented with both has the chain of provenance and an independent attestation of when that file existed — without exposing the file itself to any public chain.</p>
+  </div>
+
+  <h2>When a date-of-existence attestation is what the matter requires</h2>
+  <p>
+    Where the question at hand is simply when a particular file existed — before a particular training run, before a particular dispute, before a particular content claim — Orphograph's instrument is well-suited. The file does not leave the user's device. The capture device, the location, and any other elements that may be present in a manifest are not disclosed. The trust anchor is Bitcoin itself, independent of the office's continued operation.
+  </p>
+
+  <h2>When a provenance manifest is what the matter requires</h2>
+  <p>
+    Where the asset is to be published with a documented capture-and-edit history, and where downstream readers are expected to interrogate that history, a C2PA manifest is the appropriate record. Orphograph does not produce such manifests, and does not claim to. An Orphograph receipt may, however, be issued for the file once its manifest is in place, supplying an independent date-of-existence attestation alongside.
+  </p>
+
+  <p class="vs-foot">
+    Further reading. Orphograph's <a href="/method">Method</a> describes the protocol in full. The C2PA specification and the OpenTimestamps documentation are published by their respective bodies. This page will be revised as either standard evolves.
+  </p>
+</main>
+
+<footer>
+  <div class="wrap" style="text-align:center;color:var(--muted);font-size:13px;padding:32px 0;">
+    <p>Orphograph · An empirical notary.</p>
+    <p style="margin-top:8px;">
+      <a href="/" style="color:var(--muted);">Home</a> ·
+      <a href="/method" style="color:var(--muted);">Method</a> ·
+      <a href="/terms.html" style="color:var(--muted);">Terms</a> ·
+      <a href="/privacy.html" style="color:var(--muted);">Privacy</a>
+    </p>
+  </div>
+</footer>
+
+<script src="/statusbar.js" defer></script>
+</body>
+</html>
