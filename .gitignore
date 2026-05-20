@@ -118,3 +118,7 @@ verifier-js/node_modules/
 *.tar.gz
 *.whl
 
+
+# Founder-private drafts, anchor history, compliance scans, strategic notes.
+# This directory contains personal PII and outreach drafts that should not be public.
+outbox/
