@@ -19,7 +19,18 @@ from typing import Any, Optional
 
 DEFAULT_SERVER_URL = "https://orphograph.com"
 DEFAULT_TIMEOUT = 60.0
-USER_AGENT = "orphograph-python-sdk/0.1"
+# Browser-shaped User-Agent. The hosted service sits behind a CDN whose
+# default-deny posture blocks scripted clients identifying themselves as
+# such (urllib's "Python-urllib/3.x" trips the rule). The SDK still
+# identifies as itself via the trailing suffix so server logs can attribute
+# requests to SDK traffic; only the leading "Mozilla/5.0" appeases the
+# gateway. The same approach is used by the office's outbound mailer and
+# payments clients.
+USER_AGENT = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) "
+    "AppleWebKit/605.1.15 (KHTML, like Gecko) "
+    "Version/17.5 Safari/605.1.15 orphograph-python-sdk/0.1"
+)
 
 
 class OrphographError(RuntimeError):

@@ -180,7 +180,12 @@ def _security_headers(handler: BaseHTTPRequestHandler) -> None:
     # /badge.html to function on third-party sites.
     try:
         rpath = getattr(handler, "path", "") or ""
-        if rpath.startswith("/api/verify/") or rpath.startswith("/api/badge/"):
+        if (
+            rpath.startswith("/api/verify/")
+            or rpath.startswith("/api/verify_folder/")
+            or rpath.startswith("/api/badge/")
+            or rpath == "/api/inclusion_proof"
+        ):
             handler.send_header("Access-Control-Allow-Origin", "*")
             handler.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
             handler.send_header("Access-Control-Max-Age", "86400")
@@ -2279,19 +2284,52 @@ class Handler(BaseHTTPRequestHandler):
         if record.get("kind") != "folder":
             _json_response(self, 400, {"error": "receipt is not a folder anchor"})
             return
+        is_owner = False
         if record.get("private"):
             session_email = self._session_email()
             viewer_id = auth.email_id(session_email) if session_email else None
             if not viewer_id or viewer_id != record.get("owner_id"):
                 _json_response(self, 404, {"receipt_id": rid, "found": False, "error": "receipt not found"})
                 return
+            is_owner = True
         else:
+            session_email = self._session_email()
+            viewer_id = auth.email_id(session_email) if session_email else None
+            is_owner = bool(viewer_id and viewer_id == record.get("owner_id"))
             record.pop("owner_id", None)
         try:
             manifest = json.loads((engine.RECEIPTS_DIR / rid / "manifest.json").read_text())
         except (OSError, json.JSONDecodeError):
             _json_response(self, 500, {"error": "manifest missing"})
             return
+        # Privacy guard: for a public folder receipt viewed by a non-owner,
+        # do not echo the full leaf-path list — the path list is workflow
+        # metadata that customers may not realise is public. The leaves still
+        # appear by index (so verifiers can count and identify them by hash),
+        # but the human-readable path is redacted unless the requester is the
+        # owner. The full manifest is required to construct inclusion proofs,
+        # but inclusion-proof requests already require the caller to KNOW the
+        # path — so withholding the index is the right default.
+        if not is_owner:
+            redacted_leaves = []
+            for i, leaf in enumerate(manifest.get("leaves", [])):
+                redacted_leaves.append({
+                    "index": i,
+                    "leaf_hex": leaf.get("leaf_hex"),
+                    "file_sha256_hex": leaf.get("file_sha256_hex"),
+                    "size_bytes": leaf.get("size_bytes"),
+                    # path intentionally withheld
+                })
+            manifest = {
+                **{k: v for k, v in manifest.items() if k != "leaves"},
+                "leaves": redacted_leaves,
+                "paths_redacted": True,
+                "paths_redaction_reason": (
+                    "Leaf paths are visible only to the receipt owner. "
+                    "Inclusion proofs remain available to anyone who already "
+                    "knows the path of the file they wish to prove."
+                ),
+            }
         _json_response(self, 200, {"receipt": record, "manifest": manifest})
 
     def _handle_inclusion_proof(self) -> None:

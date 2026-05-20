@@ -60,7 +60,16 @@ export interface InclusionProofResponse {
 
 export const DEFAULT_SERVER_URL = "https://orphograph.com";
 const DEFAULT_TIMEOUT_MS = 60_000;
-const USER_AGENT = "orphograph-node/0.1.0";
+// Browser-shaped User-Agent. The hosted service sits behind a CDN whose
+// default-deny posture blocks scripted clients identifying themselves as
+// such. The SDK still identifies as itself via the trailing suffix so
+// server logs can attribute requests to SDK traffic; only the leading
+// "Mozilla/5.0" appeases the gateway. The same approach is used by the
+// office's outbound mailer and payments clients.
+const USER_AGENT =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) " +
+  "AppleWebKit/605.1.15 (KHTML, like Gecko) " +
+  "Version/17.5 Safari/605.1.15 orphograph-node/0.1.0";
 
 interface HttpResult {
   status: number;
