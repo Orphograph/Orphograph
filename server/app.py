@@ -45,7 +45,14 @@ import gdpr  # noqa: E402
 import health  # noqa: E402
 import mailer  # noqa: E402
 import merkle  # noqa: E402
-import manifest_signature  # noqa: E402
+# Optional module — additive signature feature. MUST NOT crash app startup if
+# its Ed25519 backend is missing in the build. Set to None on failure so
+# dependent code paths feature-flag themselves off.
+try:
+    import manifest_signature  # noqa: E402
+except Exception as _e:  # noqa: BLE001
+    sys.stderr.write(f"[startup] manifest_signature unavailable: {_e}\n")
+    manifest_signature = None  # type: ignore[assignment]
 import stats  # noqa: E402
 import stripe_api  # noqa: E402
 import stripe_webhook  # noqa: E402
@@ -57,7 +64,13 @@ import unsubscribe  # noqa: E402
 import waitlist  # noqa: E402
 import webhooks  # noqa: E402
 import btc_claims  # noqa: E402
-import verticals  # noqa: E402
+# Optional module — vertical landing pages. MUST NOT crash app startup if a
+# YAML backend is missing in the build. None disables /verticals/* routes.
+try:
+    import verticals  # noqa: E402
+except Exception as _e:  # noqa: BLE001
+    sys.stderr.write(f"[startup] verticals unavailable: {_e}\n")
+    verticals = None  # type: ignore[assignment]
 try:
     import payout_monitor  # noqa: E402
 except ImportError:  # pragma: no cover
@@ -1094,6 +1107,9 @@ class Handler(BaseHTTPRequestHandler):
         # branch precedes the static fallback so /verticals/<slug>.html is
         # served from the YAML rather than from the on-disk file (if any).
         if path.startswith("/verticals/") and path.endswith(".html"):
+            if verticals is None:
+                self.send_error(404, "Vertical not found")
+                return
             slug = path[len("/verticals/"):-len(".html")]
             if slug and "/" not in slug:
                 body = verticals.render_html(slug)
@@ -2162,6 +2178,12 @@ class Handler(BaseHTTPRequestHandler):
         sig_verified: bool | None = None
         signer_kid: str | None = None
         if isinstance(manifest.get("signature"), dict):
+            if manifest_signature is None:
+                _json_response(self, 503, {
+                    "error": "manifest signature verification unavailable in this build",
+                    "detail": "Anchor the manifest without a signature block, or use a build with Ed25519 support.",
+                })
+                return
             ok, reason = manifest_signature.verify_manifest_signature(manifest)
             if not ok:
                 _json_response(self, 400, {
