@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Orphograph — Why Bitcoin-anchored hashes carry legal weight</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#f6f1e3">
+<meta name="description" content="A plain-English summary of the rules of evidence, electronic-records statutes, and standards that make a Bitcoin-anchored cryptographic hash useful in real-world disputes — with the statutory citations available for the technically curious.">
+<meta property="og:title" content="Orphograph — Why Bitcoin-anchored hashes carry legal weight">
+<meta property="og:description" content="The doctrinal grounding for cryptographic timestamping in plain English, with statutory citations below.">
+<meta property="og:url" content="https://orphograph.com/method/evidence-law.html">
+<meta property="og:type" content="article">
+<meta property="og:image" content="https://orphograph.com/seal.png?v=6">
+<link rel="canonical" href="https://orphograph.com/method/evidence-law.html">
+<link rel="icon" type="image/png" href="/favicon.png?v=6">
+<link rel="stylesheet" href="/index.css?v=8">
+<style>
+  .arch-wrap { max-width: 820px; margin: 0 auto; padding: 0 24px 64px; }
+  .arch-wrap h1 { font-family: var(--serif); font-size: 36px; font-weight: 500; margin: 32px 0 6px; }
+  .arch-wrap h2 { font-family: var(--serif); font-size: 22px; font-weight: 500; margin: 36px 0 4px; color: var(--ink); }
+  .arch-rule { border-top: 1px solid var(--ink); width: 32px; margin: 8px 0 16px; opacity: 0.6; }
+  .arch-wrap p, .arch-wrap li { color: var(--ink-2); line-height: 1.75; font-size: 15.5px; }
+  .arch-wrap code { background: rgba(74,154,115,0.08); padding: 2px 6px; border-radius: 3px; font-size: 0.92em; }
+  .arch-lede { font-size: 17px; line-height: 1.7; color: var(--ink-2); margin: 0 0 24px; }
+  .arch-callout { background: rgba(74,154,115,0.06); border-left: 3px solid var(--confirm); padding: 16px 20px; margin: 24px 0; border-radius: 0 6px 6px 0; }
+  .arch-callout p { margin: 0; }
+  .means-bullets { list-style: none; padding: 0; margin: 16px 0 32px; }
+  .means-bullets li { padding: 8px 0 8px 24px; position: relative; }
+  .means-bullets li::before { content: "·"; position: absolute; left: 4px; color: var(--confirm); font-size: 22px; line-height: 1; top: 6px; }
+  details.legal { margin: 18px 0; border: 1px solid #d9d2c0; border-radius: 6px; background: #faf6e9; }
+  details.legal[open] { padding-bottom: 14px; }
+  details.legal summary { padding: 14px 18px; font-family: var(--serif); cursor: pointer; font-size: 15px; color: var(--ink); }
+  details.legal[open] summary { border-bottom: 1px solid #e5dec9; margin-bottom: 14px; }
+  details.legal .body { padding: 0 18px; }
+  details.legal .body p { font-size: 14.5px; }
+  details.legal .body code { font-size: 0.88em; }
+  .disclaimer-block { margin-top: 48px; padding: 20px 24px; background: #f1ead7; border-radius: 6px; font-size: 14px; line-height: 1.65; color: var(--muted); }
+</style>
+<meta name="copyright" content="© 2026 Orphograph. Code under MIT (see /LICENSE). Brand, content, and design — all rights reserved.">
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap row">
+    <a href="/" class="brand">Orphograph</a>
+    <nav>
+      <a href="/learn.html">Method</a>
+      <a href="/faq.html">FAQ</a>
+      <a href="/continuity.html">Continuity</a>
+      <a href="/#tiers">Pricing</a>
+      <a href="/signin.html">Sign in</a>
+      <a href="/#drop" class="cta">Anchor a file</a>
+    </nav>
+  </div>
+</header>
+
+<main class="arch-wrap">
+
+  <p style="font-size:12px;letter-spacing:0.18em;text-transform:uppercase;color:var(--muted);margin:48px 0 8px;">Method · Evidence law</p>
+  <h1>Why a Bitcoin-anchored hash matters.</h1>
+  <p class="arch-lede">
+    A receipt is only useful if a real-world process — a court, an adjuster, an auditor, a regulator — is willing to treat it as evidence. This page describes, in plain English, the existing rules and statutes that already make Bitcoin-anchored cryptographic hashes useful, with the citations below for anyone who wants them. The office does not give legal advice; this is a description of the landscape, not a promise about any outcome.
+  </p>
+
+  <section>
+    <h2>1 · The short version</h2>
+    <div class="arch-rule"></div>
+    <ul class="means-bullets">
+      <li>Anyone can challenge a digital file by saying "you edited it later." A receipt makes that claim testable instead of a he-said-she-said.</li>
+      <li>The rules of evidence already account for electronic records. They do not require the records to live in a courtroom — they require them to be authenticatable.</li>
+      <li>A Bitcoin-anchored hash is one of the cleaner ways to authenticate, because the time-stamp comes from a public ledger no one party controls.</li>
+      <li>Several states and a major international framework have written cryptographic-ledger language directly into their statutes.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>2 · The doctrines, in plain English</h2>
+    <div class="arch-rule"></div>
+
+    <p><strong>Authentication.</strong> Before a piece of evidence reaches the merits of a case, the side offering it has to show it is what they say it is. For a digital file, that means showing the file presented today is the same file from the date it claims. A cryptographic hash that matches a record on a public chain is one of the few mechanisms that can answer this question without trusting the side that made the file.</p>
+
+    <p><strong>Self-authentication of electronic records.</strong> The federal rules of evidence in the United States were updated to recognise that a record produced by a reliable digital process can authenticate itself if its method of generation is described and supported. A receipt that ties a file's SHA-256 fingerprint to a Bitcoin block is the kind of thing that rule was written for.</p>
+
+    <p><strong>Best evidence.</strong> Old rules about "original documents" do not exclude electronic ones. A printout, a saved copy, or a fingerprint-plus-receipt can all serve as the original for a file that exists only as a stream of bits. The question shifts from "is this the paper original" to "can you authenticate the digital one."</p>
+
+    <p><strong>Spoliation.</strong> When a party has reason to anticipate a dispute and then fails to preserve relevant electronic evidence, courts can sanction them — instructions to the jury, exclusion of evidence, even adverse-inference rulings. Anchoring files at the time of capture is one way to make the preservation point unimpeachable, because the time of capture is no longer the party's word; it is on the chain.</p>
+
+    <p><strong>Electronic signatures and records.</strong> Federal statute and the model state code adopted in most states make electronic records and signatures legally effective for the same purposes as paper. The question of <em>which</em> electronic record is the real one is exactly what cryptographic timestamping helps answer.</p>
+  </section>
+
+  <section>
+    <h2>3 · Statutes that name the ledger directly</h2>
+    <div class="arch-rule"></div>
+
+    <p>A handful of jurisdictions have moved past "electronic records are valid" and written language that specifically contemplates blockchain or distributed-ledger evidence. The exact mechanics vary; the common direction is that records preserved on a sufficiently public chain are presumed authentic for purposes of admissibility, shifting the burden to the side disputing them.</p>
+
+    <p>Several states have enacted such language: Vermont's rules of evidence were amended to add a blockchain provision; Arizona, Illinois, and Tennessee each have an electronic-transactions statute that recognises blockchain-recorded data. The European Union's electronic identification and trust services framework was updated in 2024 to include a "qualified electronic ledger" service category, with full applicability phased in through 2026. A handful of other jurisdictions are in motion. None of this is a substitute for the rules of evidence; it is a tailwind that points the same direction.</p>
+  </section>
+
+  <section>
+    <h2>4 · How real-world processes use this</h2>
+    <div class="arch-rule"></div>
+
+    <p>The doctrines above are not abstract. They show up whenever someone has to prove something happened on a particular day, against a counter-party who would prefer the date to be ambiguous. A few recurring patterns:</p>
+
+    <p><strong>Insurance and inspection disputes.</strong> A claim turns on whether the damage was present on the day of the visit. A receipt anchored at the visit's end answers the date question independently of the inspector's calendar.</p>
+
+    <p><strong>Construction defect and storm-restoration work.</strong> Carriers, lenders, and homeowners disagree about which photographs represent which date and which job site. A folder anchored at the end of the visit makes the photo set a single attested unit.</p>
+
+    <p><strong>Legal evidence packets.</strong> Discovery production, chain-of-custody for digital exhibits, and the periodic dispute over whether a screenshot was altered after the fact — all of these benefit from a fingerprint that was recorded before the dispute began.</p>
+
+    <p><strong>Authorship questions in publishing.</strong> A writer, illustrator, or photographer who anchored a draft or a raw file at the time of creation has a dated record that pre-exists any later claim of imitation, lift, or AI re-generation.</p>
+
+    <p><strong>Audit and period-end accounting.</strong> Closing a fiscal period and anchoring its trial balance, source documents, and reconciliations gives a lender or an auditor a tamper-evident snapshot of the closed period, distinct from anything that happens to the working file afterward.</p>
+
+    <p><strong>Regulatory disclosure regimes.</strong> Where a transparency requirement applies — for example, the European framework that obliges deployers of generative systems to disclose origin — a cryptographic receipt for human-generated work is a portable, verifier-neutral way to support the disclosure.</p>
+  </section>
+
+  <section>
+    <h2>5 · How Orphograph fits into this, precisely</h2>
+    <div class="arch-rule"></div>
+
+    <p>The office issues two things, and only two things: a SHA-256 fingerprint of a file, computed on the customer's device, and a Bitcoin-anchored proof that the fingerprint was submitted at the recorded time. The receipt is verifiable by anyone with a Bitcoin node and the open-source verifier; no call to the office is required.</p>
+
+    <p>What the receipt accomplishes is the <em>narrow</em> claim — existence by time T — which is the building block the doctrines above operate on. The receipt does not certify authorship, ownership, lawful capture, or accuracy. Those claims belong to the customer and their counsel. The office's role is to make the narrow claim provable so the broader claims have something to rest on.</p>
+
+    <div class="arch-callout">
+      <p>The instrument is technical evidence, not a legal opinion. Whether a particular receipt is admissible in a particular forum is a question for that forum's rules and the customer's counsel. The office's published method, the open verifier, and the public Bitcoin chain are designed to make the technical record as clean as possible.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>6 · For the technically curious — the citations</h2>
+    <div class="arch-rule"></div>
+
+    <details class="legal">
+      <summary>Federal Rules of Evidence — authentication and self-authentication</summary>
+      <div class="body">
+        <p>Federal Rule of Evidence 901 sets the general authentication requirement: "the proponent must produce evidence sufficient to support a finding that the item is what the proponent claims it is." Rule 901(b)(9) addresses processes and systems — testimony that a process produces an accurate result is itself sufficient.</p>
+        <p>Federal Rule of Evidence 902(13) and (14), added by the 2017 amendments, address self-authentication of electronic records: certified records generated by an electronic process or system, and certified data copied from an electronic device, storage medium, or file, are self-authenticating when accompanied by a certification of a qualified person. The Advisory Committee Note expressly contemplates hash-value verification as a method by which the qualified person establishes that the copy is what the record purports to be.</p>
+      </div>
+    </details>
+
+    <details class="legal">
+      <summary>Best evidence rule — Rule 1001 et seq.</summary>
+      <div class="body">
+        <p>Federal Rule of Evidence 1001 defines a "writing," "recording," and "original" in terms broad enough to include electronic data. Rule 1003 permits duplicates to the same extent as originals unless a genuine question about authenticity is raised — and the cryptographic-hash inquiry is the modern way to resolve such a question.</p>
+      </div>
+    </details>
+
+    <details class="legal">
+      <summary>Spoliation — FRCP 37(e) and 18 U.S.C. § 1519</summary>
+      <div class="body">
+        <p>Federal Rule of Civil Procedure 37(e), as amended in 2015, provides courts with a graduated set of remedies — additional measures, instructions to the jury, presumption that the lost information was unfavourable, or dismissal — when electronically stored information that should have been preserved is lost because a party failed to take reasonable steps to preserve it.</p>
+        <p>18 U.S.C. § 1519 criminalises the knowing alteration, destruction, mutilation, concealment, falsification, or making of a false entry in any record with the intent to impede, obstruct, or influence the investigation or proper administration of any matter within the jurisdiction of any federal department or agency. The provision is broad and routinely applied to electronic records.</p>
+      </div>
+    </details>
+
+    <details class="legal">
+      <summary>ESIGN Act and UETA — electronic-records validity</summary>
+      <div class="body">
+        <p>The Electronic Signatures in Global and National Commerce Act, 15 U.S.C. §§ 7001–7031, gives electronic signatures and records the same legal effect as their paper counterparts for transactions in or affecting interstate or foreign commerce. The Uniform Electronic Transactions Act, adopted with variations in the substantial majority of U.S. states, does the parallel work at the state level.</p>
+      </div>
+    </details>
+
+    <details class="legal">
+      <summary>State blockchain-evidence statutes</summary>
+      <div class="body">
+        <p>Vermont — Vt. Stat. Ann. tit. 12, § 1913: digital records electronically registered in a blockchain are self-authenticating under the state's rules of evidence, in conjunction with the customary indicia of reliability.</p>
+        <p>Arizona — Ariz. Rev. Stat. § 44-7061: records secured through blockchain technology, and signatures secured through blockchain technology, are considered to be in electronic form and to be an electronic record or electronic signature. Smart contracts may exist in commerce and are not denied legal effect, validity, or enforceability solely because they contain a blockchain term.</p>
+        <p>Illinois — the Blockchain Technology Act, 205 ILCS 730/, provides that a smart contract, record, or signature may not be denied legal effect or enforceability solely because a blockchain was used to create, store, or verify it; and a blockchain record satisfies a legal requirement that the record be in writing or be retained, when retrieval reproduces the information accurately.</p>
+        <p>Tennessee — Tenn. Code Ann. § 47-10-201: similar treatment for distributed-ledger records and smart contracts.</p>
+        <p>Other states — Wyoming, Nevada, Ohio, and several others have adopted related provisions; the specific scope varies. The drafting is uneven across jurisdictions and continues to evolve.</p>
+      </div>
+    </details>
+
+    <details class="legal">
+      <summary>European Union — eIDAS 2.0 and the qualified electronic ledger</summary>
+      <div class="body">
+        <p>Regulation (EU) 2024/1183, amending the eIDAS Regulation, entered into force on 20 May 2024 with full applicability on 2 August 2026 for several provisions. The amendment adds Article 45l defining a new trust-service category — the "qualified electronic ledger" — for distributed-ledger records, with conformity-assessment requirements set out in the implementing acts. The office does not claim status as a qualified trust service provider; the Article is cited here as part of the legal landscape that recognises ledger-based timestamping.</p>
+        <p>Articles 41–43 of the underlying Regulation continue to address electronic time-stamps and qualified electronic time-stamps; a qualified electronic time-stamp issued by a qualified trust service provider enjoys the presumption of accuracy of the date and time it indicates and the integrity of the data to which the date and time are bound.</p>
+      </div>
+    </details>
+
+    <details class="legal">
+      <summary>The academic foundation — Haber and Stornetta, 1991</summary>
+      <div class="body">
+        <p>Stuart Haber and W. Scott Stornetta, "How to time-stamp a digital document," <em>Journal of Cryptology</em>, vol. 3, no. 2 (1991), pp. 99–111. The paper introduces the cryptographic linking and trusted-aggregate approaches that underlie every modern digital time-stamping system, including the family of methods this office uses. The construction has been cited in expert testimony on the reliability of cryptographic time-stamping in a variety of jurisdictions.</p>
+      </div>
+    </details>
+
+    <details class="legal">
+      <summary>The protocol — OpenTimestamps and RFC 6962</summary>
+      <div class="body">
+        <p>OpenTimestamps is a free, open-source protocol that aggregates client-submitted hashes into a Merkle tree and commits the root to the Bitcoin chain. A receipt is a sequence of hash operations that, applied to the original file's SHA-256, reproduces the on-chain commitment. Verification is performed by any party holding a Bitcoin node and the open-source client; no third party is required to attest.</p>
+        <p>RFC 6962 standardises the structure of the Merkle tree the office uses for folder anchoring, including the leaf and internal-node domain-separation prefixes (0x00 and 0x01 respectively) and the rule that a lone last node at an odd level is promoted unchanged. The same construction underlies the Certificate Transparency log family RFC 9162 standardised in 2021.</p>
+      </div>
+    </details>
+  </section>
+
+  <div class="disclaimer-block">
+    <p><strong>Disclaimer.</strong> The office is not a law firm, not a qualified electronic-trust-service provider, and not a financial advisor. The summaries above describe rules and statutes in plain English; they are not legal advice and do not establish an attorney–client relationship. The doctrine in any particular jurisdiction may differ from the broad sketch above, and statutes are amended over time. A customer with an actual dispute should consult counsel admitted in the relevant jurisdiction.</p>
+  </div>
+
+</main>
+
+<footer class="footer">
+  <div class="wrap">
+    <p>© 2026 Orphograph. Code under MIT — see <a href="/LICENSE">/LICENSE</a>. Brand, content, and design — all rights reserved.</p>
+  </div>
+</footer>
+
+</body>
+</html>

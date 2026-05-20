@@ -14,6 +14,61 @@
 <meta property="og:url" content="https://orphograph.com/">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="stylesheet" href="/index.css?v=8">
+<style>
+  .hero .plain-subtitle{
+    font-family: var(--serif);
+    font-size: 20px;
+    line-height: 1.55;
+    color: var(--ink);
+    margin: 0 0 22px;
+    max-width: 620px;
+    font-weight: 500;
+  }
+  .hero .means{
+    margin: 28px 0 0;
+    max-width: 600px;
+  }
+  .hero .means-title{
+    font-family: var(--serif);
+    font-size: 13px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 10px;
+  }
+  .hero .means-rule{
+    border-top: 1px solid var(--ink);
+    width: 28px;
+    margin: 0 0 12px;
+    opacity: 0.55;
+  }
+  .hero .means-list{
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  .hero .means-list li{
+    color: var(--ink-2);
+    font-size: 16px;
+    line-height: 1.6;
+    padding: 4px 0;
+    position: relative;
+    padding-left: 18px;
+  }
+  .hero .means-list li::before{
+    content: "·";
+    position: absolute;
+    left: 4px;
+    top: -2px;
+    color: var(--ink);
+    font-size: 22px;
+    line-height: 1;
+  }
+  @media (max-width: 640px){
+    .hero .plain-subtitle{font-size: 17px;}
+    .hero .means-list li{font-size: 15px;}
+  }
+</style>
 <meta name="copyright" content="© 2026 Orphograph. MIT — see /LICENSE">
 </head>
 <body>
@@ -51,12 +106,22 @@
 <section class="hero">
   <div class="wrap">
     <h1>Proof a file existed —<br><em>before anyone could argue otherwise.</em></h1>
+    <p class="plain-subtitle">Make a permanent, tamper-evident record of your photos, documents, or work — the file never leaves your device.</p>
     <p class="lede">An empirical notary. Drop a file in your browser; receive a Bitcoin-anchored fingerprint that records it existed by no later than the next block. The file itself never leaves your machine.</p>
     <div class="chips">
       <span>Client-side hashing</span>
       <span>5 independent calendars</span>
       <span>Verifies without us</span>
     </div>
+    <section class="means" aria-label="What this means for you">
+      <p class="means-title">What this means for you</p>
+      <div class="means-rule"></div>
+      <ul class="means-list">
+        <li>Your file never leaves your device.</li>
+        <li>The receipt lasts on the Bitcoin chain.</li>
+        <li>Anyone can verify it later — no account, no login.</li>
+      </ul>
+    </section>
   </div>
 </section>
 
@@ -379,6 +444,7 @@
       <a href="/changelog.html">Changelog</a>
       <a href="/roadmap.html">Roadmap</a>
       <a href="/method/architecture.html">Architecture</a>
+      <a href="/method/evidence-law.html">Evidence law</a>
       <a href="/continuity.html">Continuity</a>
       <a href="/recover.html">Recover</a>
       <a href="/legal/">Legal</a>

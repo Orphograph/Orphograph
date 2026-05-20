@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  com.orphograph.watchdog.plist.template
+
+  launchd schedule for scripts/orphograph_watchdog.py. Every 5 minutes the
+  watchdog probes orphograph.com and /api/health; on UNHEALTHY it inspects
+  `fly status` and starts or restarts the app machine without founder
+  intervention.
+
+  This file is a TEMPLATE. It is intentionally NOT installed by any agent
+  or script. The founder copies it into ~/Library/LaunchAgents/ and
+  bootstraps it themselves, because on Sequoia (macOS 15+) `launchctl
+  bootstrap` periodically returns IO error 5 in user sessions and the
+  fallback path differs per environment.
+
+  Install (founder runs manually when ready):
+    cp scripts/com.orphograph.watchdog.plist.template \
+       ~/Library/LaunchAgents/com.orphograph.watchdog.plist
+    launchctl bootstrap gui/$UID ~/Library/LaunchAgents/com.orphograph.watchdog.plist
+    launchctl enable        gui/$UID/com.orphograph.watchdog
+    launchctl kickstart -k  gui/$UID/com.orphograph.watchdog   # smoke
+
+  Uninstall:
+    launchctl bootout gui/$UID/com.orphograph.watchdog
+    rm ~/Library/LaunchAgents/com.orphograph.watchdog.plist
+
+  Sequoia IO error 5 fallback (nohup sleeper, restart on logout):
+    nohup python3 -c "import subprocess, time; \
+      [subprocess.run(['/opt/homebrew/bin/python3', \
+        '/Users/founder/orphograph/scripts/orphograph_watchdog.py']) \
+        or time.sleep(300) for _ in iter(int, 1)]" \
+      >> ~/Library/Logs/orphograph_watchdog.log 2>&1 &
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.orphograph.watchdog</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/opt/homebrew/bin/python3</string>
+        <string>/Users/founder/orphograph/scripts/orphograph_watchdog.py</string>
+    </array>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin</string>
+    </dict>
+
+    <key>StartInterval</key>
+    <integer>300</integer>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <false/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/founder/Library/Logs/orphograph_watchdog.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/founder/Library/Logs/orphograph_watchdog.log</string>
+
+    <key>ProcessType</key>
+    <string>Background</string>
+</dict>
+</plist>
