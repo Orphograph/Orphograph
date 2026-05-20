@@ -284,10 +284,13 @@ class UpgradeEmailTest(unittest.TestCase):
         self.assertEqual(result["status"], "partial")
         self.assertIn("payload", captured)
         payload = captured["payload"]
-        self.assertEqual(
-            payload["subject"],
-            "Your Orphograph receipt is now Bitcoin-anchored",
-        )
+        # Subject was rewritten in the institutional-notary tone refresh:
+        # "Orphograph — Receipt <rid> committed to Bitcoin". The exact
+        # phrasing is tested below by structure, not by literal match.
+        subject = payload["subject"]
+        self.assertIn("Orphograph", subject)
+        self.assertIn("rid_partial", subject)
+        self.assertIn("Bitcoin", subject)
         text = payload["text"]
         self.assertIn("3 of 5 calendars", text)
         # We never call it "pinned" when partial — honest framing.
