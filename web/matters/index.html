@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Orphograph — One receipt per filing. Show one exhibit later.</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#f6f1e3">
+<meta name="description" content="A matter's exhibits as of a filing date are sealed together as one receipt. Any single exhibit can be proven part of that set on any future date, without disclosing the rest.">
+<meta property="og:title" content="Orphograph — One receipt per filing">
+<meta property="og:description" content="Seal a matter's exhibits at the moment of filing. Show one exhibit later without showing the rest.">
+<meta property="og:url" content="https://orphograph.com/matters/">
+<meta property="og:type" content="article">
+<meta property="og:image" content="https://orphograph.com/seal.png?v=6">
+<link rel="canonical" href="https://orphograph.com/matters/">
+<link rel="icon" type="image/png" href="/favicon.png?v=6">
+<link rel="stylesheet" href="/index.css?v=8">
+<style>
+  .arch-wrap { max-width: 760px; margin: 0 auto; padding: 0 24px 64px; }
+  .arch-wrap h1 { font-family: var(--serif); font-size: 34px; font-weight: 500; line-height: 1.2; margin: 32px 0 12px; }
+  .arch-wrap h2 { font-family: var(--serif); font-size: 22px; font-weight: 500; margin: 36px 0 4px; color: var(--ink); }
+  .arch-rule { border-top: 1px solid var(--ink); width: 32px; margin: 8px 0 16px; opacity: 0.6; }
+  .arch-wrap p, .arch-wrap li { color: var(--ink-2); line-height: 1.75; font-size: 16px; }
+  .arch-wrap .means li { padding: 4px 0; }
+  .arch-wrap code { background: rgba(74,154,115,0.08); padding: 2px 6px; border-radius: 3px; font-size: 0.92em; }
+  .arch-lede { font-size: 17px; line-height: 1.7; color: var(--ink-2); margin: 0 0 24px; }
+  .arch-wrap details { margin: 12px 0; padding: 14px 18px; background: rgba(0,0,0,0.02); border: 1px solid var(--line-soft); border-radius: 6px; }
+  .arch-wrap details > summary { cursor: pointer; font-family: var(--serif); font-size: 14px; letter-spacing: 0.06em; color: var(--ink); padding: 4px 0; }
+  .arch-wrap details[open] { background: rgba(0,0,0,0.03); }
+  .arch-wrap details .sub { font-family: var(--serif); font-size: 18px; margin: 18px 0 4px; color: var(--ink); }
+  .arch-disclaimer { font-size: 13px; line-height: 1.65; color: var(--muted); margin: 40px 0 0; padding: 16px 18px; border-top: 1px solid var(--line-soft); }
+  .arch-faq h3 { font-family: var(--serif); font-size: 16px; margin: 18px 0 2px; color: var(--ink); }
+  .arch-faq p { margin: 0 0 8px; }
+  .arch-kicker { font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); margin: 48px 0 6px; }
+</style>
+<meta name="copyright" content="© 2026 Orphograph. Code under MIT (see /LICENSE). Brand, content, and design — all rights reserved.">
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap row">
+    <a href="/" class="brand">Orphograph</a>
+    <nav>
+      <a href="/learn.html">Method</a>
+      <a href="/faq.html">FAQ</a>
+      <a href="/#tiers">Pricing</a>
+      <a href="/signin.html">Sign in</a>
+      <a href="/#drop" class="cta">Anchor a file</a>
+    </nav>
+  </div>
+</header>
+
+<main class="arch-wrap">
+
+  <p class="arch-kicker">For solo and small-firm counsel</p>
+  <h1>One receipt covers a whole exhibit set. Show one exhibit later without showing the rest.</h1>
+  <p class="arch-lede">
+    A matter's exhibits as of a filing date are sealed together in one step. Any single exhibit can be proven part of that set on any future date.
+  </p>
+
+  <section>
+    <h2>What this means for you</h2>
+    <div class="arch-rule"></div>
+    <ul class="means">
+      <li>Your exhibits never leave your device.</li>
+      <li>One receipt covers the whole exhibit set at the moment of filing.</li>
+      <li>Show one exhibit later without showing the rest.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>How it works</h2>
+    <div class="arch-rule"></div>
+    <p>Each exhibit gets a fingerprint — a 64-character code that changes if a single byte of the file changes. The fingerprints are computed on your own machine, not uploaded.</p>
+    <p>The fingerprints for the filing are combined into one fingerprint for the whole folder. That combined fingerprint is the only thing the office sees.</p>
+    <p>The combined fingerprint is anchored to the Bitcoin chain. Anyone, on any future date, can confirm the folder existed by the moment of that block — and that a single exhibit was part of it — without ever seeing the other exhibits.</p>
+  </section>
+
+  <section>
+    <h2>For the technically curious</h2>
+    <div class="arch-rule"></div>
+    <details>
+      <summary>Show the cryptographic detail</summary>
+      <div class="sub">The matter folder, as an anchored unit</div>
+      <p>The natural unit is one folder per filing, anchored at the moment of filing. The folder contains the documentary exhibits, the photographs, the screenshots, the recordings, and any other artifact the firm intends to introduce in connection with the filing. Successive filings produce successive anchored folders, each one a snapshot of the exhibit set as it stood at that date.</p>
+      <p>The desktop or browser tool computes a SHA-256 fingerprint of each artifact, binds the artifact's relative path into a leaf hash, and assembles the leaves into a Merkle tree whose root is submitted to the OpenTimestamps calendars. The artifacts themselves never leave the firm's device. For documents the firm considers confidential at the path level, the folder may be anchored under a hash-labeled scheme in which the recorded path is the artifact's own digest, leaving no human-readable filename in the manifest.</p>
+      <div class="sub">Selective disclosure at trial</div>
+      <p>Opposing counsel moves to exclude a single text-message screenshot on grounds of post-hoc fabrication. The firm produces an inclusion proof that the screenshot was a leaf of the anchored exhibit folder as of the filing date six months earlier. The remaining exhibits — those not yet introduced, or those that pertain to other strategic threads — are not exposed by the proof. The receipt does not establish that the screenshot is genuine; it establishes that the bytes of the screenshot, under the recorded relative path, existed by the time of the recorded Bitcoin block.</p>
+      <div class="sub">What the office records</div>
+      <p>The office persists, per anchored filing, the Merkle root, the canonical ordering rule applied, the per-leaf relative paths, the per-file SHA-256 digests, the per-file byte sizes, the Bitcoin attestation for the root, and, when supplied, an optional attorney signature under a did:key identifier or a capture-credential issued under a published trust list. Bar-number metadata, where supplied, is recorded as an attribute on the signature, not as a claim of accreditation by the office.</p>
+    </details>
+  </section>
+
+  <section class="arch-faq">
+    <h2>Questions</h2>
+    <div class="arch-rule"></div>
+    <h3>Where do my exhibits go?</h3>
+    <p>Nowhere. The fingerprints are computed on your own machine. The office only ever sees the combined fingerprint for the folder.</p>
+    <h3>Is this a chain-of-custody affidavit?</h3>
+    <p>No. The receipt records that a particular byte sequence under a particular relative path was anchored by a particular Bitcoin block. The chain-of-custody narrative remains the province of counsel and the witness.</p>
+    <h3>Can I anchor under sealed or confidential filenames?</h3>
+    <p>Yes. The folder may be anchored under a hash-labeled scheme in which the recorded path is the artifact's own digest, in which case the manifest carries no human-readable filename information at all.</p>
+    <h3>Does this establish authenticity?</h3>
+    <p>The receipt establishes that the disclosed artifact existed by the time of the recorded Bitcoin block and was a leaf of the anchored set. Authenticity in the evidentiary sense is a separate determination governed by the applicable rules of evidence and the court.</p>
+  </section>
+
+  <p class="arch-disclaimer">
+    Orphograph anchors evidence of existence; it does not certify authorship, ownership, or legality. Each user retains responsibility for the underlying files, their consent to capture, and their handling under applicable law. The office is not a law firm, not a regulated medical-records system, not a qualified electronic trust service, and not a legal or financial advisor. No claim of admissibility under any rule of evidence is asserted; no implication is made that the receipt substitutes for chain-of-custody affidavits or for the licensed judgement of counsel; independent attorney review is required before any productized claim of evidentiary utility.
+  </p>
+
+</main>
+
+</body>
+</html>

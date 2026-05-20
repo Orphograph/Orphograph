@@ -303,7 +303,7 @@ def verify_receipt(receipt_id: str) -> dict:
             "hash_match": hash_match,
             "ok": magic_ok and hash_match,
         })
-    return {
+    out = {
         "receipt_id": receipt_id,
         "found": True,
         "created_at": record["created_at"],
@@ -320,6 +320,23 @@ def verify_receipt(receipt_id: str) -> dict:
         "btc_pinned_at": record.get("btc_pinned_at"),
         "checks": checks,
     }
+    # Folder anchors carry three extra fields so verifiers can fetch the
+    # manifest in addition to the .ots files. Only surface them when set
+    # so single-file receipts remain shape-stable.
+    if record.get("kind"):
+        out["kind"] = record["kind"]
+    if record.get("leaf_count") is not None:
+        out["leaf_count"] = record["leaf_count"]
+    if record.get("merkle_algorithm"):
+        out["merkle_algorithm"] = record["merkle_algorithm"]
+    # Optional Ed25519 authorship signature. Only surface when a signature
+    # was actually presented at anchor time — single-file receipts and folder
+    # anchors with no signature remain shape-stable.
+    if "signature_verified" in record:
+        out["signature_verified"] = bool(record["signature_verified"])
+    if record.get("signer_kid"):
+        out["signer_kid"] = record["signer_kid"]
+    return out
 
 
 def verify_hash_against_receipt(receipt_id: str, hash_hex: str) -> dict:

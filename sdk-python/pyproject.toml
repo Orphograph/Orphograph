@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "orphograph"
+version = "0.1.0"
+description = "Anchor folders to Bitcoin via the Orphograph hosted service. File contents stay on the local machine."
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.9"
+authors = [
+    { name = "the Orphograph contributors" },
+]
+keywords = ["bitcoin", "opentimestamps", "merkle", "notarization", "provenance"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security :: Cryptography",
+    "Topic :: System :: Archiving",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://orphograph.com"
+Documentation = "https://orphograph.com/method/architecture.html"
+
+[project.scripts]
+orphograph = "orphograph._cli:main"
+
+[tool.setuptools]
+packages = ["orphograph"]
+
+[tool.setuptools.package-data]
+orphograph = ["py.typed"]

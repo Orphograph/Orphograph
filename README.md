@@ -42,14 +42,20 @@ beyond `curl` and `shasum`.
    (no orphograph code, MIT, ~100 lines of stdlib Python):
 
    ```bash
-   python3 dist/orphograph-verify/verify.py \
-       receipts/<receipt_id>/receipt.json \
-       --file ~/Pictures/my-photo.jpg
+   # Single file with an inclusion proof:
+   python3 dist/orphograph-verify/verify.py file \
+       --file ~/Pictures/my-photo.jpg \
+       --proof receipts/<receipt_id>/proof.json
+   # Whole folder against its manifest:
+   python3 dist/orphograph-verify/verify.py folder \
+       --dir ~/Pictures/evidence \
+       --manifest receipts/<receipt_id>/manifest.json
    ```
 
-   The verifier re-hashes the file locally, parses the `.ots` proof files,
-   and confirms the embedded SHA-256 matches. Bitcoin confirmation lag is
-   ~1 hour; after that the receipt is final.
+   The verifier re-hashes the file (or walks the folder) locally and
+   confirms the result reproduces the manifest's root. Add `--ots
+   <path>.ots` to also invoke the OpenTimestamps client and check the
+   chain witness references the same root.
 
 ---
 

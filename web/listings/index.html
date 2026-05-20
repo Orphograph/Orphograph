@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Orphograph — One receipt per listing date. Show one photo later.</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#f6f1e3">
+<meta name="description" content="A listing's photographic record on a given date is sealed together as one receipt. Any single image can be proven part of that set on any future date, without disclosing the rest.">
+<meta property="og:title" content="Orphograph — One receipt per listing date">
+<meta property="og:description" content="Seal a listing's photos at a chosen date. Show one photo later without showing the rest.">
+<meta property="og:url" content="https://orphograph.com/listings/">
+<meta property="og:type" content="article">
+<meta property="og:image" content="https://orphograph.com/seal.png?v=6">
+<link rel="canonical" href="https://orphograph.com/listings/">
+<link rel="icon" type="image/png" href="/favicon.png?v=6">
+<link rel="stylesheet" href="/index.css?v=8">
+<style>
+  .arch-wrap { max-width: 760px; margin: 0 auto; padding: 0 24px 64px; }
+  .arch-wrap h1 { font-family: var(--serif); font-size: 34px; font-weight: 500; line-height: 1.2; margin: 32px 0 12px; }
+  .arch-wrap h2 { font-family: var(--serif); font-size: 22px; font-weight: 500; margin: 36px 0 4px; color: var(--ink); }
+  .arch-rule { border-top: 1px solid var(--ink); width: 32px; margin: 8px 0 16px; opacity: 0.6; }
+  .arch-wrap p, .arch-wrap li { color: var(--ink-2); line-height: 1.75; font-size: 16px; }
+  .arch-wrap .means li { padding: 4px 0; }
+  .arch-wrap code { background: rgba(74,154,115,0.08); padding: 2px 6px; border-radius: 3px; font-size: 0.92em; }
+  .arch-lede { font-size: 17px; line-height: 1.7; color: var(--ink-2); margin: 0 0 24px; }
+  .arch-wrap details { margin: 12px 0; padding: 14px 18px; background: rgba(0,0,0,0.02); border: 1px solid var(--line-soft); border-radius: 6px; }
+  .arch-wrap details > summary { cursor: pointer; font-family: var(--serif); font-size: 14px; letter-spacing: 0.06em; color: var(--ink); padding: 4px 0; }
+  .arch-wrap details[open] { background: rgba(0,0,0,0.03); }
+  .arch-wrap details .sub { font-family: var(--serif); font-size: 18px; margin: 18px 0 4px; color: var(--ink); }
+  .arch-disclaimer { font-size: 13px; line-height: 1.65; color: var(--muted); margin: 40px 0 0; padding: 16px 18px; border-top: 1px solid var(--line-soft); }
+  .arch-faq h3 { font-family: var(--serif); font-size: 16px; margin: 18px 0 2px; color: var(--ink); }
+  .arch-faq p { margin: 0 0 8px; }
+  .arch-kicker { font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); margin: 48px 0 6px; }
+</style>
+<meta name="copyright" content="© 2026 Orphograph. Code under MIT (see /LICENSE). Brand, content, and design — all rights reserved.">
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap row">
+    <a href="/" class="brand">Orphograph</a>
+    <nav>
+      <a href="/learn.html">Method</a>
+      <a href="/faq.html">FAQ</a>
+      <a href="/#tiers">Pricing</a>
+      <a href="/signin.html">Sign in</a>
+      <a href="/#drop" class="cta">Anchor a file</a>
+    </nav>
+  </div>
+</header>
+
+<main class="arch-wrap">
+
+  <p class="arch-kicker">For listing agents and brokers</p>
+  <h1>One receipt covers a whole listing date. Show one photo later without showing the rest.</h1>
+  <p class="arch-lede">
+    A listing's photographic record on a chosen date is sealed together in one step. Any single image can be proven part of that set on any future date.
+  </p>
+
+  <section>
+    <h2>What this means for you</h2>
+    <div class="arch-rule"></div>
+    <ul class="means">
+      <li>Your listing photos never leave your device.</li>
+      <li>One receipt covers the listing as of the chosen anchor date.</li>
+      <li>Show one photo later without showing the rest.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>How it works</h2>
+    <div class="arch-rule"></div>
+    <p>Each image gets a fingerprint — a 64-character code that changes if a single byte of the file changes. The fingerprints are computed on your own machine, not uploaded.</p>
+    <p>The fingerprints for the listing date are combined into one fingerprint for the whole folder. That combined fingerprint is the only thing the office sees.</p>
+    <p>The combined fingerprint is anchored to the Bitcoin chain. Anyone, on any future date, can confirm the folder existed by the moment of that block — and that a single image was part of it — without ever seeing the other photos.</p>
+  </section>
+
+  <section>
+    <h2>For the technically curious</h2>
+    <div class="arch-rule"></div>
+    <details>
+      <summary>Show the cryptographic detail</summary>
+      <div class="sub">The listing folder, as an anchored unit</div>
+      <p>The natural unit is one folder per anchor point in the listing's life — the listing-walk folder, anchored at the moment the listing goes active; the inspection-day folder, anchored at the moment of contract; the closing-day folder, anchored at recordation. The MLS photo set is the typical core; the agent's full walkthrough is the typical superset.</p>
+      <p>The desktop or browser tool computes a SHA-256 fingerprint of each image, binds the relative path into a leaf hash, and assembles the leaves into a Merkle tree whose root is submitted to the OpenTimestamps calendars. The images themselves never leave the device. Successive anchor points within a single listing produce successive anchored folders.</p>
+      <div class="sub">Selective disclosure after closing</div>
+      <p>Eight months after closing, the buyer alleges that the basement showed a water stain at listing time. The agent produces an inclusion proof for the four basement photographs in the listing-walk folder anchored on the day the listing went active. Other rooms in the seller's house, and the agent's other active listings on the same day, are not exposed by the proof. The receipt does not establish that the property was free of defects; it establishes that the disclosed photographs, under the recorded relative paths, were part of the anchored listing-walk set as of the recorded Bitcoin block.</p>
+      <div class="sub">What the office records</div>
+      <p>The office persists, per anchored listing folder, the Merkle root, the canonical ordering rule applied, the per-leaf relative paths, the per-file SHA-256 digests, the per-file byte sizes, the Bitcoin attestation for the root, and, when supplied, an optional agent signature under a did:key identifier or a capture-credential issued under a published trust list. Real-estate-license-number metadata, where supplied, is recorded as an attribute on the signature, not as a claim of accreditation by the office.</p>
+    </details>
+  </section>
+
+  <section class="arch-faq">
+    <h2>Questions</h2>
+    <div class="arch-rule"></div>
+    <h3>Where do my listing photos go?</h3>
+    <p>Nowhere. The fingerprints are computed on your own machine. The office only ever sees the combined fingerprint for the folder.</p>
+    <h3>Does this cure a defective disclosure form?</h3>
+    <p>No. The receipt records that a particular set of images existed by the time of the recorded Bitcoin block. The disclosure form itself remains the responsibility of the agent and counsel.</p>
+    <h3>Can I anchor multiple dates in one listing's life?</h3>
+    <p>Yes. A separate folder may be anchored at any anchor point — listing-walk, inspection day, closing day, or any other date the agent and counsel choose. Each receives its own root and its own Bitcoin attestation.</p>
+    <h3>Will this integrate with my MLS feed?</h3>
+    <p>The receipt is independent of any MLS data feed. The agent anchors whichever folder represents the listing's photographic state at the chosen anchor point; the receipt is portable and travels with the listing.</p>
+  </section>
+
+  <p class="arch-disclaimer">
+    Orphograph anchors evidence of existence; it does not certify authorship, ownership, or legality. Each user retains responsibility for the underlying files, their consent to capture, and their handling under applicable law. The office is not a law firm, not a regulated medical-records system, not a qualified electronic trust service, and not a legal or financial advisor. No claim of compliance with any state's real-estate-disclosure statute is asserted; independent counsel review is required before any productized claim of disclosure-litigation utility.
+  </p>
+
+</main>
+
+</body>
+</html>

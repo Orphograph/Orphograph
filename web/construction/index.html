@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Orphograph — One receipt per visit. Prove any single photo later.</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#f6f1e3">
+<meta name="description" content="Each day's job-site photos are sealed together as one receipt. Any single image can be proven part of that day's set on any future date, without disclosing the rest.">
+<meta property="og:title" content="Orphograph — One receipt per visit">
+<meta property="og:description" content="One receipt covers a whole day on site. Show one photo later without showing the rest.">
+<meta property="og:url" content="https://orphograph.com/construction/">
+<meta property="og:type" content="article">
+<meta property="og:image" content="https://orphograph.com/seal.png?v=6">
+<link rel="canonical" href="https://orphograph.com/construction/">
+<link rel="icon" type="image/png" href="/favicon.png?v=6">
+<link rel="stylesheet" href="/index.css?v=8">
+<style>
+  .arch-wrap { max-width: 760px; margin: 0 auto; padding: 0 24px 64px; }
+  .arch-wrap h1 { font-family: var(--serif); font-size: 34px; font-weight: 500; line-height: 1.2; margin: 32px 0 12px; }
+  .arch-wrap h2 { font-family: var(--serif); font-size: 22px; font-weight: 500; margin: 36px 0 4px; color: var(--ink); }
+  .arch-rule { border-top: 1px solid var(--ink); width: 32px; margin: 8px 0 16px; opacity: 0.6; }
+  .arch-wrap p, .arch-wrap li { color: var(--ink-2); line-height: 1.75; font-size: 16px; }
+  .arch-wrap .means li { padding: 4px 0; }
+  .arch-wrap code { background: rgba(74,154,115,0.08); padding: 2px 6px; border-radius: 3px; font-size: 0.92em; }
+  .arch-lede { font-size: 17px; line-height: 1.7; color: var(--ink-2); margin: 0 0 24px; }
+  .arch-wrap details { margin: 12px 0; padding: 14px 18px; background: rgba(0,0,0,0.02); border: 1px solid var(--line-soft); border-radius: 6px; }
+  .arch-wrap details > summary { cursor: pointer; font-family: var(--serif); font-size: 14px; letter-spacing: 0.06em; color: var(--ink); padding: 4px 0; }
+  .arch-wrap details[open] { background: rgba(0,0,0,0.03); }
+  .arch-wrap details .sub { font-family: var(--serif); font-size: 18px; margin: 18px 0 4px; color: var(--ink); }
+  .arch-disclaimer { font-size: 13px; line-height: 1.65; color: var(--muted); margin: 40px 0 0; padding: 16px 18px; border-top: 1px solid var(--line-soft); }
+  .arch-faq h3 { font-family: var(--serif); font-size: 16px; margin: 18px 0 2px; color: var(--ink); }
+  .arch-faq p { margin: 0 0 8px; }
+  .arch-kicker { font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); margin: 48px 0 6px; }
+</style>
+<meta name="copyright" content="© 2026 Orphograph. Code under MIT (see /LICENSE). Brand, content, and design — all rights reserved.">
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap row">
+    <a href="/" class="brand">Orphograph</a>
+    <nav>
+      <a href="/learn.html">Method</a>
+      <a href="/faq.html">FAQ</a>
+      <a href="/#tiers">Pricing</a>
+      <a href="/signin.html">Sign in</a>
+      <a href="/#drop" class="cta">Anchor a file</a>
+    </nav>
+  </div>
+</header>
+
+<main class="arch-wrap">
+
+  <p class="arch-kicker">For general contractors</p>
+  <h1>One receipt covers a whole day on site. Show one photo later without showing the rest.</h1>
+  <p class="arch-lede">
+    Each visit's photos are sealed together in one step. Any single image can be proven part of that day's set on any future date.
+  </p>
+
+  <section>
+    <h2>What this means for you</h2>
+    <div class="arch-rule"></div>
+    <ul class="means">
+      <li>Your photos never leave your device.</li>
+      <li>One receipt covers the whole job-site visit.</li>
+      <li>Show one photo later without showing the rest.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>How it works</h2>
+    <div class="arch-rule"></div>
+    <p>Each photo gets a fingerprint — a 64-character code that changes if a single byte of the file changes. The fingerprints are computed on your own machine, not uploaded.</p>
+    <p>The fingerprints for the day are combined into one fingerprint for the whole folder. That combined fingerprint is the only thing the office sees.</p>
+    <p>The combined fingerprint is anchored to the Bitcoin chain. Anyone, on any future date, can confirm the folder existed by the moment of that block — and that a single image was part of it — without ever seeing the other photos.</p>
+  </section>
+
+  <section>
+    <h2>For the technically curious</h2>
+    <div class="arch-rule"></div>
+    <details>
+      <summary>Show the cryptographic detail</summary>
+      <div class="sub">The construction folder, as an anchored unit</div>
+      <p>The natural unit is one folder per job site per day, anchored at end-of-shift. A larger unit — one folder per phase or per milestone — is reasonable when assembling closeout packets. The folder contains every photograph the field crew captured during the visit, ordered by the relative path under which it was filed.</p>
+      <p>The office never sees the photographs. The desktop or browser tool computes a SHA-256 fingerprint of each file, binds the file's relative path into a leaf hash under RFC 6962 domain separation, and assembles the leaves into a Merkle tree whose root is submitted to the OpenTimestamps calendars. The bytes of the photographs themselves do not cross the wire.</p>
+      <p>The root is then anchored to a Bitcoin block, and an OpenTimestamps proof for that root is delivered back to the contractor. The proof is sufficient, on its own, to demonstrate that the anchored folder existed by the time of the recorded block.</p>
+      <div class="sub">Selective disclosure in the field</div>
+      <p>A claim arises months after the slab pour that the rebar spacing was non-compliant on a specific date. The contractor produces the single photograph of the rebar mat under the slab, together with an inclusion proof — approximately log2 N sibling hashes — that demonstrates the image was a leaf of the anchored end-of-day folder for that exact date. The remaining contents of the folder are not exposed by the proof.</p>
+      <div class="sub">What the office records</div>
+      <p>The office persists, per anchored folder, the Merkle root, the canonical ordering rule applied, the per-leaf relative paths, the per-file SHA-256 digests, the per-file byte sizes, the Bitcoin attestation for the root, and, when supplied, an optional device signature under a did:key identifier or a capture-credential issued under a published trust list. A contractor for whom path names are themselves sensitive may anchor under a hash-labeled scheme in which the recorded path is the file's own digest.</p>
+    </details>
+  </section>
+
+  <section class="arch-faq">
+    <h2>Questions</h2>
+    <div class="arch-rule"></div>
+    <h3>Where do my photos go?</h3>
+    <p>Nowhere. The fingerprints are computed on your own machine. The office only ever sees the combined fingerprint for the folder.</p>
+    <h3>What does one receipt cover?</h3>
+    <p>One day's photos for one job site, sealed as one set. Per-phase or per-milestone folders are also fine.</p>
+    <h3>Can I show just one photo later?</h3>
+    <p>Yes. You can disclose a single image and prove it belonged to that day's set, without disclosing any of the other photos.</p>
+    <h3>What if a photo is altered after anchoring?</h3>
+    <p>A single changed byte produces a different fingerprint, which breaks the proof. Any independent check spots the mismatch.</p>
+  </section>
+
+  <p class="arch-disclaimer">
+    Orphograph anchors evidence of existence; it does not certify authorship, ownership, or legality. Each user retains responsibility for the underlying files, their consent to capture, and their handling under applicable law. The office is not a law firm, not a regulated medical-records system, not a qualified electronic trust service, and not a legal or financial advisor. No claim of compliance with any state's lien-law evidentiary standard is asserted; independent counsel review is required before any productized claim of evidentiary utility.
+  </p>
+
+</main>
+
+</body>
+</html>

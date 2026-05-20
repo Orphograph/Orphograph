@@ -44,6 +44,8 @@ import auth  # noqa: E402
 import gdpr  # noqa: E402
 import health  # noqa: E402
 import mailer  # noqa: E402
+import merkle  # noqa: E402
+import manifest_signature  # noqa: E402
 import stats  # noqa: E402
 import stripe_api  # noqa: E402
 import stripe_webhook  # noqa: E402
@@ -55,6 +57,7 @@ import unsubscribe  # noqa: E402
 import waitlist  # noqa: E402
 import webhooks  # noqa: E402
 import btc_claims  # noqa: E402
+import verticals  # noqa: E402
 try:
     import payout_monitor  # noqa: E402
 except ImportError:  # pragma: no cover
@@ -73,6 +76,11 @@ MAX_WEBHOOK_BODY_BYTES = 256 * 1024
 REQUEST_TIMEOUT_SEC = 30
 MAX_BATCH_BODY_BYTES = 64 * 1024
 MAX_BATCH_ITEMS = 50
+# Folder-anchor manifests carry one entry per file. 8 MiB ≈ 50K files at
+# ~150 bytes/leaf (path + 64-hex file digest + 64-hex leaf hex + size).
+# Larger folders are a v2 problem (paginated/chunked upload).
+MAX_FOLDER_MANIFEST_BYTES = 8 * 1024 * 1024
+MAX_FOLDER_LEAVES = 50_000
 RECEIPT_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")  # secrets.token_urlsafe(12) shape
 TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]{16,64}$")
 EMAIL_RE = re.compile(r"^[^@\s,]{1,64}@[^@\s,]{1,255}$")
@@ -590,6 +598,16 @@ class Handler(BaseHTTPRequestHandler):
                 return
             _json_response(self, 200, record)
             return
+        if path.startswith("/api/verify_folder/"):
+            rid = path[len("/api/verify_folder/"):]
+            if not RECEIPT_ID_RE.match(rid):
+                _json_response(self, 400, {"error": "invalid receipt id"})
+                return
+            self._handle_verify_folder(rid)
+            return
+        if path == "/api/inclusion_proof":
+            self._handle_inclusion_proof()
+            return
         if path.startswith("/api/badge/") and path.endswith(".svg"):
             # Embeddable verification badge. Single GET, public, cacheable.
             # Privacy: badge_svg.render() reads only receipt_id + created_at
@@ -1071,6 +1089,26 @@ class Handler(BaseHTTPRequestHandler):
             # Public landing for the affiliate program.
             _serve_static(self, "/affiliate.html")
             return
+        # Vertical landing pages — rendered from config/verticals/<slug>.yml.
+        # Reachable by direct URL only; not linked from the homepage. This
+        # branch precedes the static fallback so /verticals/<slug>.html is
+        # served from the YAML rather than from the on-disk file (if any).
+        if path.startswith("/verticals/") and path.endswith(".html"):
+            slug = path[len("/verticals/"):-len(".html")]
+            if slug and "/" not in slug:
+                body = verticals.render_html(slug)
+                if body is not None:
+                    payload = body.encode("utf-8")
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/html; charset=utf-8")
+                    self.send_header("Content-Length", str(len(payload)))
+                    self.send_header("Cache-Control", "public, max-age=600")
+                    _security_headers(self)
+                    self.end_headers()
+                    self.wfile.write(payload)
+                    return
+                self.send_error(404, "Vertical not found")
+                return
         _serve_static(self, path)
 
     def do_POST(self):  # noqa: N802
@@ -1164,6 +1202,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         if self.path == "/api/anchor/batch":
             self._handle_anchor_batch()
+            return
+        if self.path == "/api/anchor_folder":
+            self._handle_anchor_folder()
             return
         if self.path != "/api/anchor":
             self.send_error(404, "not found")
@@ -2030,6 +2071,261 @@ class Handler(BaseHTTPRequestHandler):
             return
         # The secret is returned ONCE here; clients must persist it.
         _json_response(self, 200, result)
+
+    def _handle_anchor_folder(self) -> None:
+        """Anchor a folder-Merkle root.
+
+        Body: { manifest: <orphograph-merkle-v1-rfc6962 manifest>, client_label? }
+        The server reconstructs the tree from the supplied manifest, verifies
+        the recomputed root matches manifest.root_hex, then submits the root
+        to OpenTimestamps via the existing single-hash anchoring path. The
+        manifest is persisted alongside the receipt under
+        ``RECEIPTS_DIR/<rid>/manifest.json`` so inclusion proofs can be
+        served later without rebuilding from the original folder.
+        """
+        if ORPHO_DISABLE_ANCHORING:
+            _json_response(self, 503, {
+                "error": "anchoring temporarily unavailable",
+                "detail": "Calendar service unavailable. Anchoring is temporarily disabled.",
+            })
+            return
+        # Authentication / paid-path: same precedence as /api/anchor.
+        pack_token = self.headers.get("X-Pack-Token", "").strip()
+        pack_consumed = False
+        if pack_token:
+            pack_consumed, _ = credits.consume_credit(pack_token)
+        api_key = self.headers.get("X-Orpho-Api-Key", "").strip()
+        api_key_email = api_keys.email_for_key(api_key) if api_key else None
+        api_key_active = bool(api_key_email and _subscription_active_for(api_key_email))
+        subscriber_email = api_key_email or (self._session_email() if not pack_consumed else None)
+        subscription_active = api_key_active or _subscription_active_for(subscriber_email)
+        if not pack_consumed and not subscription_active:
+            allowed, retry_after = _anchor_limiter.check(self._client_key())
+            if not allowed:
+                self.send_response(429)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Retry-After", str(int(retry_after) + 1))
+                body = json.dumps({
+                    "error": "rate limit exceeded",
+                    "retry_after_seconds": int(retry_after) + 1,
+                    "limit_per_day": ANCHOR_RATE_CAPACITY,
+                    "hint": "Buy a Pack or sign in to anchor without rate limits.",
+                }).encode("utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                _security_headers(self)
+                self.end_headers()
+                self.wfile.write(body)
+                return
+        length = _read_content_length(self)
+        if length <= 0 or length > MAX_FOLDER_MANIFEST_BYTES:
+            _json_response(self, 400, {"error": "invalid body size"})
+            return
+        raw = self.rfile.read(length)
+        try:
+            payload = json.loads(raw.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            _json_response(self, 400, {"error": "body must be JSON"})
+            return
+        # Accept either { manifest: {...}, client_label?: "..." } or the raw
+        # manifest as the top-level object. The frontend currently posts the
+        # raw manifest; future API consumers may wrap it. The
+        # algorithm-tag check is unambiguous because the wrapper shape has no
+        # "algorithm" field.
+        if isinstance(payload.get("manifest"), dict):
+            manifest = payload["manifest"]
+        elif payload.get("algorithm") == merkle.ALGORITHM:
+            manifest = payload
+        else:
+            _json_response(self, 400, {"error": "manifest is required"})
+            return
+        leaves = manifest.get("leaves")
+        if not isinstance(leaves, list) or not leaves or len(leaves) > MAX_FOLDER_LEAVES:
+            _json_response(self, 400, {
+                "error": "manifest leaves must be a non-empty list",
+                "max_leaves": MAX_FOLDER_LEAVES,
+            })
+            return
+        # Reconstruct the tree from the manifest. from_manifest re-derives
+        # every leaf from (path, file_sha256) and the full set of internal
+        # nodes, then refuses to instantiate if the recomputed root does not
+        # equal manifest.root_hex. This protects against a tampered manifest
+        # in which the leaves do not actually commit to the stated root.
+        try:
+            tree = merkle.MerkleTree.from_manifest(manifest)
+        except (KeyError, TypeError, ValueError) as e:
+            _json_response(self, 400, {"error": f"manifest invalid: {e}"})
+            return
+        # Optional Ed25519 authorship signature. The signature block is
+        # additive: a manifest with no signature anchors exactly as before.
+        # If a signature IS present, it MUST verify — a manifest that claims
+        # a signature but fails verification is worse than no signature.
+        sig_verified: bool | None = None
+        signer_kid: str | None = None
+        if isinstance(manifest.get("signature"), dict):
+            ok, reason = manifest_signature.verify_manifest_signature(manifest)
+            if not ok:
+                _json_response(self, 400, {
+                    "error": "manifest signature invalid",
+                    "detail": reason,
+                })
+                return
+            sig_verified = True
+            signer_kid = manifest["signature"].get("kid")
+        root_hex = tree.root_hex()
+        client_label = payload.get("client_label")
+        if isinstance(client_label, str):
+            client_label = client_label[:200]
+        else:
+            client_label = None
+        if pack_consumed:
+            source = f"pack:{pack_token[:8]}"
+        elif api_key_active:
+            source = f"api:{api_key[:10]}"
+        elif subscription_active:
+            source = "sub:" + auth.email_id(subscriber_email)
+        else:
+            source = "free"
+        want_private = bool(payload.get("private", False)) and subscription_active
+        try:
+            record = engine.anchor_hash(
+                root_hex,
+                client_label=client_label,
+                source=source,
+                private=want_private,
+                owner_id=auth.email_id(subscriber_email) if (want_private and subscriber_email) else None,
+            )
+        except ValueError as e:
+            _json_response(self, 400, {"error": str(e)})
+            return
+        # Persist the manifest alongside the receipt. The receipt's hash_hex
+        # already equals manifest.root_hex, so the OTS anchor binds every
+        # leaf transitively: tamper with a single path or file digest, the
+        # root changes, the anchor no longer verifies.
+        rid = record["receipt_id"]
+        manifest_to_store = dict(manifest)
+        manifest_to_store["receipt_id"] = rid
+        manifest_to_store["kind"] = "folder"
+        try:
+            mpath = engine.RECEIPTS_DIR / rid / "manifest.json"
+            mpath.write_text(json.dumps(manifest_to_store, indent=2))
+            try:
+                os.chmod(mpath, 0o600)
+            except OSError:
+                pass
+        except OSError as e:
+            _json_response(self, 500, {"error": f"could not persist manifest: {e}"})
+            return
+        # Mark the receipt itself as a folder anchor so verifiers know to
+        # fetch the manifest in addition to the .ots files.
+        try:
+            rfile = engine.RECEIPTS_DIR / rid / "receipt.json"
+            on_disk = json.loads(rfile.read_text())
+            on_disk["kind"] = "folder"
+            on_disk["leaf_count"] = len(leaves)
+            on_disk["merkle_algorithm"] = merkle.ALGORITHM
+            if sig_verified is not None:
+                on_disk["signature_verified"] = sig_verified
+                on_disk["signer_kid"] = signer_kid
+            rfile.write_text(json.dumps(on_disk, indent=2))
+        except OSError:
+            pass
+        response_body = {
+            "receipt_id": rid,
+            "root_hex": root_hex,
+            "leaf_count": len(leaves),
+            "kind": "folder",
+            "merkle_algorithm": merkle.ALGORITHM,
+            "calendars_ok": record["calendars_ok"],
+            "calendars_total": record["calendars_total"],
+            "created_at": record["created_at"],
+        }
+        if sig_verified is not None:
+            response_body["signature_verified"] = sig_verified
+            response_body["signer_kid"] = signer_kid
+        _json_response(self, 200, response_body)
+
+    def _handle_verify_folder(self, rid: str) -> None:
+        """Return the receipt + manifest for a folder anchor.
+
+        Private folder receipts gate on the session cookie identically to
+        single-file private receipts.
+        """
+        record = engine.verify_receipt(rid)
+        if not record.get("found"):
+            _json_response(self, 404, {"receipt_id": rid, "found": False, "error": "receipt not found"})
+            return
+        if record.get("kind") != "folder":
+            _json_response(self, 400, {"error": "receipt is not a folder anchor"})
+            return
+        if record.get("private"):
+            session_email = self._session_email()
+            viewer_id = auth.email_id(session_email) if session_email else None
+            if not viewer_id or viewer_id != record.get("owner_id"):
+                _json_response(self, 404, {"receipt_id": rid, "found": False, "error": "receipt not found"})
+                return
+        else:
+            record.pop("owner_id", None)
+        try:
+            manifest = json.loads((engine.RECEIPTS_DIR / rid / "manifest.json").read_text())
+        except (OSError, json.JSONDecodeError):
+            _json_response(self, 500, {"error": "manifest missing"})
+            return
+        _json_response(self, 200, {"receipt": record, "manifest": manifest})
+
+    def _handle_inclusion_proof(self) -> None:
+        """Return an inclusion proof for one path in a folder anchor.
+
+        Query: ?receipt_id=<rid>&path=<posix-rel-path>
+        Returns: { receipt_id, root_hex, path, file_sha256_hex, proof: [...] }
+        The proof lets a third party verify locally that a specific file
+        belonged to the anchored folder without seeing any other path.
+        """
+        from urllib.parse import urlparse, parse_qs
+        qs = parse_qs(urlparse(self.path).query)
+        rid = (qs.get("receipt_id", [""])[0]).strip()
+        rel_path = (qs.get("path", [""])[0]).strip()
+        if not RECEIPT_ID_RE.match(rid):
+            _json_response(self, 400, {"error": "invalid receipt id"})
+            return
+        if not rel_path or len(rel_path) > 4096 or "\x00" in rel_path:
+            _json_response(self, 400, {"error": "invalid path"})
+            return
+        record = engine.verify_receipt(rid)
+        if not record.get("found") or record.get("kind") != "folder":
+            _json_response(self, 404, {"error": "folder receipt not found"})
+            return
+        if record.get("private"):
+            session_email = self._session_email()
+            viewer_id = auth.email_id(session_email) if session_email else None
+            if not viewer_id or viewer_id != record.get("owner_id"):
+                _json_response(self, 404, {"error": "folder receipt not found"})
+                return
+        try:
+            manifest = json.loads((engine.RECEIPTS_DIR / rid / "manifest.json").read_text())
+        except (OSError, json.JSONDecodeError):
+            _json_response(self, 500, {"error": "manifest missing"})
+            return
+        try:
+            tree = merkle.MerkleTree.from_manifest(manifest)
+            proof = tree.inclusion_proof(rel_path)
+        except ValueError as e:
+            _json_response(self, 404, {"error": str(e)})
+            return
+        # Pull the file's SHA-256 from the manifest entry so the verifier
+        # can reconstruct the leaf locally without contacting the server again.
+        file_hex = None
+        for leaf in manifest.get("leaves", []):
+            if leaf.get("path") == rel_path:
+                file_hex = leaf.get("file_sha256_hex")
+                break
+        _json_response(self, 200, {
+            "receipt_id": rid,
+            "root_hex": manifest.get("root_hex"),
+            "path": rel_path,
+            "file_sha256_hex": file_hex,
+            "merkle_algorithm": manifest.get("algorithm"),
+            "proof": proof,
+        })
 
     def _handle_recover_payment(self) -> None:
         """Customer self-serve recovery: a customer who paid (Stripe) but

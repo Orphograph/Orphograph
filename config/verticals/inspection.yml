@@ -1,0 +1,61 @@
+slug: inspection
+route: /inspection/
+title: One receipt per inspection. Prove any single image later.
+nav_label: Inspection
+audience: Property and casualty adjusters, independent inspection firms, carrier claims teams.
+
+hero:
+  headline: One receipt covers a whole inspection. Show one image later without showing the rest.
+  subhead: Each inspection's photos are sealed together in one step. Any single image can be proven part of that set on any future date.
+
+what_this_means:
+  - Your inspection photos never leave your device.
+  - One receipt covers the whole inspection.
+  - Show one image later without showing the rest.
+
+how_it_works:
+  - Each image gets a fingerprint — a 64-character code that changes if a single byte of the file changes. The fingerprints are computed on your own machine, not uploaded.
+  - The fingerprints for the inspection are combined into one fingerprint for the whole folder. That combined fingerprint is the only thing the office sees.
+  - The combined fingerprint is anchored to the Bitcoin chain. Anyone, on any future date, can confirm the folder existed by the moment of that block — and that a single image was part of it — without ever seeing the other photos.
+
+technical_detail:
+  summary: Show the cryptographic detail
+  sections:
+    - title: The inspection folder, as an anchored unit
+      body: |
+        The natural unit is one folder per inspection, anchored at the close of the inspection. A homeowner inspection commonly produces dozens to a few hundred images; a commercial loss can reach several thousand. The folder contains the photographs taken at the inspection, ordered by the relative path under which the adjuster or inspector filed them.
+
+        The desktop or browser tool computes a SHA-256 fingerprint of each image, binds the relative path into a leaf hash, and assembles the leaves into a Merkle tree whose root is submitted to the OpenTimestamps calendars. The file contents themselves never leave the device.
+
+        A property underwriting inspection prior to binding is anchored under the same construction; the folder records the bound condition of the building at the moment of binding, and is the reference against which post-binding claim figures can later be compared.
+    - title: Selective disclosure in litigation
+      body: |
+        In litigation eighteen months after a fire claim, the insured disputes the adjuster's pre-loss interior assessment of the kitchen. The carrier produces the three photographs documenting the kitchen on the inspection date, each accompanied by an inclusion proof against the anchored inspection folder.
+
+        The insured's bedroom, the family's belongings, and the unrelated rooms remain undisclosed. The verifier learns that the disclosed photographs belonged to the anchored inspection set and learns nothing else about the set.
+    - title: What the office records
+      body: |
+        The office persists, per anchored inspection, the Merkle root, the canonical ordering rule applied, the per-leaf relative paths, the per-file SHA-256 digests, the per-file byte sizes, the Bitcoin attestation for the root, and, when supplied, an optional device signature under a did:key identifier or a capture-credential issued under a published trust list. Adjuster-credential metadata, where supplied, is recorded as an attribute on the signature, not as a claim of accreditation by the office.
+
+faq:
+  - q: Where do my inspection photos go?
+    a: Nowhere. The fingerprints are computed on your own machine. The office only ever sees the combined fingerprint for the folder.
+  - q: What does one receipt cover?
+    a: One inspection, sealed as one set. The natural anchor moment is the close of the inspection.
+  - q: Can I disclose just one image later?
+    a: Yes. You can disclose a single image and prove it belonged to that inspection's set, without disclosing any of the other photos.
+  - q: Is the receipt admissible under any rule of evidence?
+    a: No claim of admissibility is asserted. The receipt is a Bitcoin-anchored attestation of existence by a recorded block; admission in any specific proceeding is a matter for counsel and the court.
+
+pricing_placeholder: STRIPE_PRICE_INSPECTION
+
+disclaimer: |
+  Orphograph anchors evidence of existence; it does not certify authorship,
+  ownership, or legality. Each user retains responsibility for the underlying
+  files, their consent to capture, and their handling under applicable law.
+  The office is not a law firm, not a regulated medical-records system, not a
+  qualified electronic trust service, and not a legal or financial advisor.
+  No claim of regulatory compliance with state insurance codes is asserted;
+  no claim of admissibility under any rule of evidence is asserted;
+  independent counsel review is required before any productized claim of
+  claims-handling utility.

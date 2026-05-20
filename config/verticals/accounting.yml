@@ -1,0 +1,61 @@
+slug: accounting
+route: /workpapers/
+title: One receipt per closed period. Prove any single schedule later.
+nav_label: Accounting
+audience: Partners at small CPA firms, owners of bookkeeping practices, and controllers at mid-sized companies.
+
+hero:
+  headline: One receipt covers a whole closed period. Show one schedule later without showing the rest.
+  subhead: A firm's closed workpaper set for a single period is sealed together in one step. Any single schedule can be proven part of that set on any future date.
+
+what_this_means:
+  - Your workpapers never leave your device.
+  - One receipt covers the closed workpaper set for the period.
+  - Show one schedule later without showing the rest.
+
+how_it_works:
+  - Each workpaper gets a fingerprint — a 64-character code that changes if a single byte of the file changes. The fingerprints are computed on your own machine, not uploaded.
+  - The fingerprints for the period are combined into one fingerprint for the whole folder. That combined fingerprint is the only thing the office sees.
+  - The combined fingerprint is anchored to the Bitcoin chain. Anyone, on any future date, can confirm the folder existed by the moment of that block — and that a single schedule was part of it — without ever seeing the other workpapers.
+
+technical_detail:
+  summary: Show the cryptographic detail
+  sections:
+    - title: The workpaper folder, as an anchored unit
+      body: |
+        The natural unit is one folder per closed period, anchored at the moment of partner sign-off. The folder contains the trial balance, the supporting reconciliations, the bank statements, the schedules, the analytical procedures, and the signed engagement materials. The period may be a month, a quarter, or a year, as the firm's close cycle dictates.
+
+        The desktop or browser tool computes a SHA-256 fingerprint of each workpaper, binds the relative path into a leaf hash, and assembles the leaves into a Merkle tree whose root is submitted to the OpenTimestamps calendars. The workpapers themselves never leave the firm's device.
+
+        A firm with multiple clients anchored on the same date produces one folder receipt per client, per period; each receipt is independent and binds only the workpapers in its own folder.
+    - title: Selective disclosure under partner-level review
+      body: |
+        Two years after a return is filed, a partner-level review questions one schedule. The firm produces an inclusion proof for that schedule in the anchored closed-workpaper folder for the relevant period. The unrelated reconciliations, the client's other accounts, and the firm's other clients' workpapers from the same period are not exposed by the proof.
+
+        The receipt does not establish that the schedule was correctly prepared; it establishes that the schedule, under the recorded relative path, existed by the time of the recorded Bitcoin block.
+    - title: What the office records
+      body: |
+        The office persists, per anchored closed-workpaper folder, the Merkle root, the canonical ordering rule applied, the per-leaf relative paths, the per-file SHA-256 digests, the per-file byte sizes, the Bitcoin attestation for the root, and, when supplied, an optional partner signature under a did:key identifier or a capture-credential issued under a published trust list. CPA-license-number metadata, where supplied, is recorded as an attribute on the signature, not as a claim of accreditation by the office.
+
+faq:
+  - q: Where do my workpapers go?
+    a: Nowhere. The fingerprints are computed on your own machine. The office only ever sees the combined fingerprint for the folder.
+  - q: Is this a substitute for workpaper-retention obligations?
+    a: No. The retention obligations imposed by professional standards, by the state board of accountancy, and by the applicable tax authority remain the responsibility of the firm.
+  - q: Does the receipt say the return was correctly prepared?
+    a: No. The receipt records that the workpaper set existed by the recorded Bitcoin block. The professional judgement applied to the engagement remains the responsibility of the firm and its licensed partners.
+  - q: Can the firm anchor multiple clients' folders on the same date?
+    a: Yes. Each client's workpaper folder is anchored as a separate Merkle root and receives its own receipt. An inclusion proof from one folder does not disclose anything about another.
+
+pricing_placeholder: STRIPE_PRICE_ACCOUNTING
+
+disclaimer: |
+  Orphograph anchors evidence of existence; it does not certify authorship,
+  ownership, or legality. Each user retains responsibility for the underlying
+  files, their consent to capture, and their handling under applicable law.
+  The office is not a law firm, not a regulated medical-records system, not a
+  qualified electronic trust service, and not a legal or financial advisor.
+  No claim of compliance with any board of accountancy, professional-standards
+  body, or tax-authority requirement is asserted; independent attorney review
+  experienced in accountant-professional-liability matters is required before
+  any productized claim of workpaper-integrity utility.

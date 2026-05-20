@@ -1,0 +1,51 @@
+{
+  "name": "orphograph",
+  "version": "0.1.0",
+  "description": "Anchor a folder of evidence to the Bitcoin chain via the Orphograph hosted service. File contents never leave the local machine; only the manifest and the Merkle root are transmitted.",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "bin": {
+    "orphograph": "./dist/cli.js"
+  },
+  "files": [
+    "dist/",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "pretest": "tsc",
+    "test": "node --experimental-strip-types --test test/*.test.ts",
+    "prepublishOnly": "tsc"
+  },
+  "keywords": [
+    "bitcoin",
+    "merkle",
+    "rfc6962",
+    "sha256",
+    "opentimestamps",
+    "provenance",
+    "notary",
+    "orphograph"
+  ],
+  "homepage": "https://orphograph.com",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Orphograph/Orphograph"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "@types/node": "^20.11.0"
+  }
+}

@@ -2,107 +2,100 @@
 
 Standalone verifier for [Orphograph](https://orphograph.com) receipts.
 
-If Orphograph's domain disappears tomorrow, this 100-line Python file is all
-you need to prove that a file existed at a moment in time. It validates
-the OpenTimestamps `.ots` proofs in a receipt against the embedded hash,
-and (optionally) re-hashes the original file to confirm it produced
-that receipt.
+If Orphograph's domain disappears tomorrow, this directory is all you
+need to prove that a file — or a whole folder — existed at a moment in
+time. It re-derives the Merkle root of a folder, walks an inclusion
+proof for a single file, and (optionally) invokes the OpenTimestamps
+reference client to confirm that the Bitcoin-chain witness references
+the same root.
 
-Stdlib only. No dependencies. No network calls.
+Stdlib only. No `pip install`. No network calls (except for the
+optional `ots verify` sub-check, which is performed by the OpenTimestamps
+reference client when present, not by this script).
 
-## Why this repo exists
+## Why this directory exists
 
 Orphograph is a service that hashes files in your browser and anchors
 those hashes to the Bitcoin blockchain via OpenTimestamps. The crypto
-is open; the convenience is what we sell.
+is open; the convenience is what is sold.
 
-But "we sell convenience" only matters if the underlying proof outlives
-our company. This verifier is published as MIT so that:
+That convenience only matters if the underlying proof outlives the
+company that issued it. This verifier is published as MIT so that:
 
-1. You can audit it. No proprietary verifier-only formats — your receipt
-   is just `receipt.json` + 5 standard OTS proof files.
-2. You can run it offline, without us.
-3. If we vanish, you still have everything you need.
+1. The format is auditable. A receipt is `receipt.json` plus standard
+   `.ots` proof files; a folder anchor adds a `manifest.json`.
+2. It runs offline.
+3. If the service is unavailable, the receipt still verifies.
 
-That's the deal.
+## Layout
 
-## Install
-
-```bash
-git clone https://github.com/orphograph/orphograph-verify
-cd orphograph-verify
+```
+verify.py       — entry point with two subcommands (file / folder)
+merkle.py       — vendored copy of server/merkle.py (RFC 6962, banner notes)
+README.md       — this file
+LICENSE         — MIT
+examples/       — sample receipts and folders for smoke-testing
 ```
 
-That's it. The verifier is a single Python 3.9+ file. No `pip install` needed.
+The vendored `merkle.py` carries a sha256 banner at the top so the
+copy can be re-derived from the source of truth at any time.
 
 ## Usage
 
-Verify the proofs in a receipt are well-formed and match the receipt's hash:
+### Verify a single file via an inclusion proof
 
-```bash
-python3 verify.py path/to/receipt.json
+```
+python3 verify.py file --file path/to/original.jpg \
+                       --proof path/to/proof.json \
+                       [--ots path/to/root.ots]
 ```
 
-Verify the proofs **and** re-hash a file to confirm it produced that receipt:
+The proof JSON is the document returned by the Orphograph
+`/api/inclusion_proof` endpoint (or any equivalent producer). It
+carries the relative path, the expected root hex, the file's
+SHA-256, and the list of sibling hashes that walk the leaf up to the
+root.
 
-```bash
-python3 verify.py path/to/receipt.json --file path/to/original-file
+The verifier re-hashes the local file, cross-checks against the
+proof's recorded `file_sha256_hex` when present, and then walks the
+proof bottom-up using the RFC 6962 algorithm defined in `merkle.py`.
+
+### Verify a whole folder via its manifest
+
+```
+python3 verify.py folder --dir path/to/folder \
+                         --manifest path/to/manifest.json \
+                         [--ots path/to/root.ots]
 ```
 
-Exit codes:
-- `0` — receipt valid (and file matches, if `--file` given)
-- `2` — receipt or file not found
-- `3` — file hash does not match the receipt
-- `4` — one or more OTS proofs failed validation
+The verifier walks the local directory through the same RFC 6962
+algorithm the server uses, computes the root, and compares it to the
+`root_hex` recorded in the manifest. A mismatch is a `FAIL`; an
+exact match is an `OK`.
 
-## Try it on the bundled sample
+### Optional OpenTimestamps sub-check
 
-The `examples/sample/` directory contains a real receipt anchored
-on 2026-05-12.
+When `--ots` is supplied, the verifier invokes `ots verify <file>`
+via subprocess (list-form, never via a shell) and inspects the
+output for the manifest's `root_hex`. A present root indicates the
+chain witness references the same anchor the verifier just
+reproduced.
 
-```bash
-python3 verify.py examples/sample/receipt.json --file examples/sample/sample.txt
+Install the OpenTimestamps reference client when needed:
+
 ```
-
-You should see all five `.ots` proofs marked `OK` and the file hash
-match. Tamper with `sample.txt` (add a space, anything) and the file
-match will flip to `NO`.
-
-## Quantum-hedge dual hashing
-
-Receipts created after 2026-05-12 include an optional `sha512_hex` field
-alongside the SHA-256 hash that gets anchored to Bitcoin. The OTS
-protocol requires SHA-256 (calendars don't accept other hashes), but
-the SHA-512 sibling rides along in the receipt as an independent
-witness.
-
-When you run `verify.py … --file <original>`, the verifier checks both
-hashes. To forge a file matching the receipt, an attacker would need
-simultaneous collisions in SHA-256 *and* SHA-512 — substantially
-harder than either alone. SHA-256 under Grover's algorithm retains
-~128-bit effective security; SHA-512 retains ~256-bit. Together they
-are a deliberate post-quantum hedge.
-
-If your receipt has no `sha512_hex` field (older receipts), the
-verifier checks SHA-256 only, which is still NIST-acceptable.
-
-## Upgrading proofs to a full Bitcoin merkle proof
-
-The `.ots` files in a fresh receipt are "calendar-pending" — they
-prove your hash was submitted to an OpenTimestamps calendar, which
-will batch it into a Bitcoin transaction within ~1 hour.
-
-To upgrade a receipt to a fully block-attested Bitcoin proof, run:
-
-```bash
 pip install opentimestamps-client
-ots upgrade examples/sample/*.ots
 ```
 
-This contacts the calendar servers and rewrites each `.ots` file to
-include the Bitcoin block attestation. After that, `ots verify
-*.ots` against the original file will confirm against the chain
-without trusting any single calendar.
+If the binary is not on `PATH`, the verifier reports the absence and
+returns exit code 4 — the core Merkle check is unaffected.
+
+## Exit codes
+
+- `0` — verification succeeded
+- `2` — invalid arguments or missing input files
+- `3` — file or folder did not reproduce the recorded root
+- `4` — OpenTimestamps sub-check failed (root not present in `ots verify` output)
 
 ## License
 

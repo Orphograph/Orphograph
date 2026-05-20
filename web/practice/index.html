@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Orphograph — One receipt per business day. Show one record later.</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#f6f1e3">
+<meta name="description" content="A practice's non-clinical operational record for one business day is sealed together as one receipt. Any single entry can be proven part of that set on any future date, without disclosing the rest.">
+<meta property="og:title" content="Orphograph — One receipt per business day">
+<meta property="og:description" content="Seal the day's non-clinical operational records. Show one entry later without showing the rest.">
+<meta property="og:url" content="https://orphograph.com/practice/">
+<meta property="og:type" content="article">
+<meta property="og:image" content="https://orphograph.com/seal.png?v=6">
+<link rel="canonical" href="https://orphograph.com/practice/">
+<link rel="icon" type="image/png" href="/favicon.png?v=6">
+<link rel="stylesheet" href="/index.css?v=8">
+<style>
+  .arch-wrap { max-width: 760px; margin: 0 auto; padding: 0 24px 64px; }
+  .arch-wrap h1 { font-family: var(--serif); font-size: 34px; font-weight: 500; line-height: 1.2; margin: 32px 0 12px; }
+  .arch-wrap h2 { font-family: var(--serif); font-size: 22px; font-weight: 500; margin: 36px 0 4px; color: var(--ink); }
+  .arch-rule { border-top: 1px solid var(--ink); width: 32px; margin: 8px 0 16px; opacity: 0.6; }
+  .arch-wrap p, .arch-wrap li { color: var(--ink-2); line-height: 1.75; font-size: 16px; }
+  .arch-wrap .means li { padding: 4px 0; }
+  .arch-wrap code { background: rgba(74,154,115,0.08); padding: 2px 6px; border-radius: 3px; font-size: 0.92em; }
+  .arch-lede { font-size: 17px; line-height: 1.7; color: var(--ink-2); margin: 0 0 24px; }
+  .arch-wrap details { margin: 12px 0; padding: 14px 18px; background: rgba(0,0,0,0.02); border: 1px solid var(--line-soft); border-radius: 6px; }
+  .arch-wrap details > summary { cursor: pointer; font-family: var(--serif); font-size: 14px; letter-spacing: 0.06em; color: var(--ink); padding: 4px 0; }
+  .arch-wrap details[open] { background: rgba(0,0,0,0.03); }
+  .arch-wrap details .sub { font-family: var(--serif); font-size: 18px; margin: 18px 0 4px; color: var(--ink); }
+  .arch-disclaimer { font-size: 13px; line-height: 1.65; color: var(--muted); margin: 40px 0 0; padding: 16px 18px; border-top: 1px solid var(--line-soft); }
+  .arch-faq h3 { font-family: var(--serif); font-size: 16px; margin: 18px 0 2px; color: var(--ink); }
+  .arch-faq p { margin: 0 0 8px; }
+  .arch-kicker { font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); margin: 48px 0 6px; }
+</style>
+<meta name="copyright" content="© 2026 Orphograph. Code under MIT (see /LICENSE). Brand, content, and design — all rights reserved.">
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap row">
+    <a href="/" class="brand">Orphograph</a>
+    <nav>
+      <a href="/learn.html">Method</a>
+      <a href="/faq.html">FAQ</a>
+      <a href="/#tiers">Pricing</a>
+      <a href="/signin.html">Sign in</a>
+      <a href="/#drop" class="cta">Anchor a file</a>
+    </nav>
+  </div>
+</header>
+
+<main class="arch-wrap">
+
+  <p class="arch-kicker">For practice administrators and operations managers</p>
+  <h1>One receipt covers a whole business day of operational records. Show one record later without showing the rest.</h1>
+  <p class="arch-lede">
+    A practice's non-clinical operational record for a single business day is sealed together in one step. Any single entry can be proven part of that set on any future date.
+  </p>
+
+  <section>
+    <h2>What this means for you</h2>
+    <div class="arch-rule"></div>
+    <ul class="means">
+      <li>Your operational records never leave your device.</li>
+      <li>One receipt covers the non-clinical operational record for the business day.</li>
+      <li>Show one record later without showing the rest.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>How it works</h2>
+    <div class="arch-rule"></div>
+    <p>Each operational record gets a fingerprint — a 64-character code that changes if a single byte of the file changes. The fingerprints are computed on your own machine, not uploaded.</p>
+    <p>The fingerprints for the day are combined into one fingerprint for the whole folder. That combined fingerprint is the only thing the office sees.</p>
+    <p>The combined fingerprint is anchored to the Bitcoin chain. Anyone, on any future date, can confirm the folder existed by the moment of that block — and that a single record was part of it — without ever seeing the other records.</p>
+  </section>
+
+  <section>
+    <h2>For the technically curious</h2>
+    <div class="arch-rule"></div>
+    <details>
+      <summary>Show the cryptographic detail</summary>
+      <div class="sub">The operational folder, as an anchored unit</div>
+      <p>The natural unit is one folder per business day, anchored at end-of-business. The folder contains the non-clinical operational record — billing-batch totals, equipment-maintenance logs, premises-condition photographs, training-completion attestations, and similar operational artifacts. Clinical records remain in the clinical electronic health record; the folder is the operational shell around them.</p>
+      <p>The desktop or browser tool computes a SHA-256 fingerprint of each artifact, binds the relative path into a leaf hash, and assembles the leaves into a Merkle tree whose root is submitted to the OpenTimestamps calendars. The artifacts themselves never leave the practice's device. Patient-identifying information is not the subject of the receipt; the receipt is for the operational shell, and the boundary is stated on this page.</p>
+      <div class="sub">Selective disclosure under audit</div>
+      <p>In an audit of a payer-network agreement, the auditor requests the equipment-calibration log for a specific date eighteen months earlier. The practice produces an inclusion proof for the calibration entry in that day's operational folder. The rest of the day's operational record is not exposed by the proof. The receipt does not establish that the calibration was correct or that the equipment met any particular regulatory standard; it establishes that the calibration entry, under the recorded relative path, existed by the time of the recorded Bitcoin block.</p>
+      <div class="sub">What the office records</div>
+      <p>The office persists, per anchored operational folder, the Merkle root, the canonical ordering rule applied, the per-leaf relative paths, the per-file SHA-256 digests, the per-file byte sizes, the Bitcoin attestation for the root, and, when supplied, an optional practice-administrator signature under a did:key identifier or a capture-credential issued under a published trust list. No clinical credential is asserted by the receipt; the receipt is operational, not clinical.</p>
+    </details>
+  </section>
+
+  <section class="arch-faq">
+    <h2>Questions</h2>
+    <div class="arch-rule"></div>
+    <h3>Where do my operational records go?</h3>
+    <p>Nowhere. The fingerprints are computed on your own machine. The office only ever sees the combined fingerprint for the folder.</p>
+    <h3>Does this apply to patient health information?</h3>
+    <p>No. The receipt is for the operational shell around clinical records. Clinical records remain in the clinical electronic health record, where they are governed by the applicable clinical-records regime.</p>
+    <h3>Is this a substitute for a records-retention obligation?</h3>
+    <p>No. The retention obligations imposed by the applicable regulator, payer, or licensing authority remain the responsibility of the practice.</p>
+    <h3>Can I anchor under hashed paths to avoid recording operational filenames?</h3>
+    <p>Yes. The folder may be anchored under a hash-labeled scheme in which the recorded path is the artifact's own digest, in which case the manifest carries no human-readable filename information at all.</p>
+  </section>
+
+  <p class="arch-disclaimer">
+    Orphograph anchors evidence of existence; it does not certify authorship, ownership, or legality. Each user retains responsibility for the underlying files, their consent to capture, and their handling under applicable law. The office is not a law firm, not a regulated medical-records system, not a qualified electronic trust service, and not a legal or financial advisor. No claim of compliance with any clinical-records regime, payer-network requirement, or licensing standard is asserted; no claim is made that the receipt applies to patient health information; independent privacy and security counsel review is required before any productized claim of healthcare-operations utility.
+  </p>
+
+</main>
+
+</body>
+</html>

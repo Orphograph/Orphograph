@@ -1,0 +1,62 @@
+slug: healthcare
+route: /practice/
+title: One receipt per business day. Prove any single operational record later.
+nav_label: Healthcare
+audience: Operations managers, practice administrators, and records officers at small clinics and offices.
+
+hero:
+  headline: One receipt covers a whole business day of operational records. Show one record later without showing the rest.
+  subhead: A practice's non-clinical operational record for a single business day is sealed together in one step. Any single entry can be proven part of that set on any future date.
+
+what_this_means:
+  - Your operational records never leave your device.
+  - One receipt covers the non-clinical operational record for the business day.
+  - Show one record later without showing the rest.
+
+how_it_works:
+  - Each operational record gets a fingerprint — a 64-character code that changes if a single byte of the file changes. The fingerprints are computed on your own machine, not uploaded.
+  - The fingerprints for the day are combined into one fingerprint for the whole folder. That combined fingerprint is the only thing the office sees.
+  - The combined fingerprint is anchored to the Bitcoin chain. Anyone, on any future date, can confirm the folder existed by the moment of that block — and that a single record was part of it — without ever seeing the other records.
+
+technical_detail:
+  summary: Show the cryptographic detail
+  sections:
+    - title: The operational folder, as an anchored unit
+      body: |
+        The natural unit is one folder per business day, anchored at end-of-business. The folder contains the non-clinical operational record — billing-batch totals, equipment-maintenance logs, premises-condition photographs, training-completion attestations, and similar operational artifacts. Clinical records remain in the clinical electronic health record; the folder is the operational shell around them.
+
+        The desktop or browser tool computes a SHA-256 fingerprint of each artifact, binds the relative path into a leaf hash, and assembles the leaves into a Merkle tree whose root is submitted to the OpenTimestamps calendars. The artifacts themselves never leave the practice's device.
+
+        Patient-identifying information is not the subject of the receipt. The receipt is for the operational shell — the records the practice maintains about its own operations — and the boundary is stated on this page.
+    - title: Selective disclosure under audit
+      body: |
+        In an audit of a payer-network agreement, the auditor requests the equipment-calibration log for a specific date eighteen months earlier. The practice produces an inclusion proof for the calibration entry in that day's operational folder. The rest of the day's operational record is not exposed by the proof.
+
+        The receipt does not establish that the calibration was correct or that the equipment met any particular regulatory standard; it establishes that the calibration entry, under the recorded relative path, existed by the time of the recorded Bitcoin block.
+    - title: What the office records
+      body: |
+        The office persists, per anchored operational folder, the Merkle root, the canonical ordering rule applied, the per-leaf relative paths, the per-file SHA-256 digests, the per-file byte sizes, the Bitcoin attestation for the root, and, when supplied, an optional practice-administrator signature under a did:key identifier or a capture-credential issued under a published trust list. No clinical credential is asserted by the receipt; the receipt is operational, not clinical.
+
+faq:
+  - q: Where do my operational records go?
+    a: Nowhere. The fingerprints are computed on your own machine. The office only ever sees the combined fingerprint for the folder.
+  - q: Does this apply to patient health information?
+    a: No. The receipt is for the operational shell around clinical records. Clinical records remain in the clinical electronic health record, where they are governed by the applicable clinical-records regime.
+  - q: Is this a substitute for a records-retention obligation?
+    a: No. The retention obligations imposed by the applicable regulator, payer, or licensing authority remain the responsibility of the practice.
+  - q: Can I anchor under hashed paths to avoid recording operational filenames?
+    a: Yes. The folder may be anchored under a hash-labeled scheme in which the recorded path is the artifact's own digest, in which case the manifest carries no human-readable filename information at all.
+
+pricing_placeholder: STRIPE_PRICE_HEALTHCARE
+
+disclaimer: |
+  Orphograph anchors evidence of existence; it does not certify authorship,
+  ownership, or legality. Each user retains responsibility for the underlying
+  files, their consent to capture, and their handling under applicable law.
+  The office is not a law firm, not a regulated medical-records system, not a
+  qualified electronic trust service, and not a legal or financial advisor.
+  No claim of compliance with any clinical-records regime, payer-network
+  requirement, or licensing standard is asserted; no claim is made that the
+  receipt applies to patient health information; independent privacy and
+  security counsel review is required before any productized claim of
+  healthcare-operations utility.

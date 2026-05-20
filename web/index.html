@@ -106,6 +106,14 @@
         <p class="try-sample-line">
           First time? <button type="button" id="try-sample" class="try-sample-btn">Try with a sample file →</button>
         </p>
+        <div class="folder-anchor">
+          <button type="button" id="anchor-folder-btn" class="btn-secondary">
+            Anchor a folder
+          </button>
+          <p class="hint">Every file is hashed locally. One receipt covers the whole folder. Any one file later verifies independently with a small inclusion proof.</p>
+          <div id="folder-progress" hidden></div>
+          <div id="folder-receipt" hidden></div>
+        </div>
       </div>
     </div>
     <div class="ops-banner" id="ops-banner" hidden></div>
@@ -384,6 +392,7 @@
 
 <script src="/timezones.js"></script>
 <script src="/v2.js?v=2"></script>
+<script type="module" src="/folder.js"></script>
 <script src="/statusbar.js" defer></script>
 </body>
 </html>

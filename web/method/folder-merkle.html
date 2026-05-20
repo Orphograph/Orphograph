@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Orphograph — Folder anchoring by Merkle root</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#f6f1e3">
+<meta name="description" content="A technical description of the folder-anchoring extension to the Orphograph protocol — a single Bitcoin-anchored root over a working set, with inclusion proofs for selective disclosure of individual files. Published as defensive prior art.">
+<meta property="og:title" content="Orphograph — Folder anchoring by Merkle root">
+<meta property="og:description" content="One receipt over an entire working set, with selective disclosure of any single file.">
+<meta property="og:url" content="https://orphograph.com/method/folder-merkle.html">
+<meta property="og:type" content="article">
+<meta property="og:image" content="https://orphograph.com/seal.png?v=6">
+<link rel="canonical" href="https://orphograph.com/method/folder-merkle.html">
+<link rel="icon" type="image/png" href="/favicon.png?v=6">
+<link rel="stylesheet" href="/index.css?v=8">
+<style>
+  .arch-wrap { max-width: 820px; margin: 0 auto; padding: 0 24px 64px; }
+  .arch-wrap h1 { font-family: var(--serif); font-size: 36px; font-weight: 500; margin: 32px 0 6px; }
+  .arch-wrap h2 { font-family: var(--serif); font-size: 22px; font-weight: 500; margin: 36px 0 4px; color: var(--ink); }
+  .arch-rule { border-top: 1px solid var(--ink); width: 32px; margin: 8px 0 16px; opacity: 0.6; }
+  .arch-wrap p, .arch-wrap li { color: var(--ink-2); line-height: 1.75; font-size: 15.5px; }
+  .arch-wrap code { background: rgba(74,154,115,0.08); padding: 2px 6px; border-radius: 3px; font-size: 0.92em; }
+  .arch-wrap pre { background: #f1ead7; border: 1px solid #d9d2c0; border-radius: 6px; padding: 14px 16px; overflow-x: auto; font-size: 13px; line-height: 1.55; }
+  .arch-lede { font-size: 17px; line-height: 1.7; color: var(--ink-2); margin: 0 0 24px; }
+  .arch-callout { background: rgba(74,154,115,0.06); border-left: 3px solid var(--confirm); padding: 16px 20px; margin: 24px 0; border-radius: 0 6px 6px 0; }
+  .arch-callout p { margin: 0; }
+</style>
+<meta name="copyright" content="© 2026 Orphograph. Code under MIT (see /LICENSE). Brand, content, and design — all rights reserved.">
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap row">
+    <a href="/" class="brand">Orphograph</a>
+    <nav>
+      <a href="/learn.html">Method</a>
+      <a href="/faq.html">FAQ</a>
+      <a href="/vs/c2pa.html">vs. C2PA</a>
+      <a href="/continuity.html">Continuity</a>
+      <a href="/#tiers">Pricing</a>
+      <a href="/signin.html">Sign in</a>
+      <a href="/#drop" class="cta">Anchor a file</a>
+    </nav>
+  </div>
+</header>
+
+<main class="arch-wrap">
+
+  <p style="font-size:12px;letter-spacing:0.18em;text-transform:uppercase;color:var(--muted);margin:48px 0 8px;">Method · Folder Merkle</p>
+  <h1>Folder anchoring by Merkle root.</h1>
+  <p class="arch-lede">
+    The single-file receipt is the elementary instrument the office issues. The present document describes the protocol's extension to working sets — directories of files anchored as a single object, with the structural option to later disclose any one file and prove its membership without revealing the rest. The page is published as defensive prior art and is itself anchored on issuance.
+  </p>
+
+  <section>
+    <h2>1 · The single-file case and its limit</h2>
+    <div class="arch-rule"></div>
+    <p>An Orphograph receipt for a single file proves that the exact byte sequence whose SHA-256 fingerprint matches the recorded digest existed by the time of the recorded Bitcoin block. That proposition is sound, and for many uses it is sufficient. It is not, however, sufficient for the common working-set case, in which a customer holds a directory — a job's photographs, a manuscript's chapters, a matter's exhibits, a contractor's daily progress images — and wishes for a single attestation to cover the entire set. The customer further wishes to retain the option of later disclosing only one item from the set, with mathematical proof that the disclosed item belonged to the anchored set and no other inference about the remaining contents.</p>
+    <p>Issuing one receipt per file does not yield this guarantee. A pile of receipts does not, in itself, bind the files to one another; the customer cannot show that the disclosed item was part of the same submission as the others without revealing the others. The protocol therefore requires a structure that commits to the set as a whole and yet supports per-element disclosure. The Merkle tree, as standardized in RFC 6962, is that structure.</p>
+  </section>
+
+  <section>
+    <h2>2 · The Merkle tree as the natural extension</h2>
+    <div class="arch-rule"></div>
+    <p>A binary hash tree is the construction in which each leaf is the hash of a record, each internal node is the hash of the concatenation of its two children, and the root is a single fixed-size value whose definition transitively binds every leaf. The construction is the structure underlying Git's commit identifiers, the Certificate Transparency append-only log defined in RFC 6962 and updated in RFC 9162, the per-block transaction commitment in the Bitcoin block header itself, the content-addressed object graph of IPFS, and the transparency log behind Sigstore. The construction is neither novel nor proprietary; it is the standard primitive for committing to a set with the option of per-element proof.</p>
+    <p>The OpenTimestamps protocol already operates a Merkle tree internally. The calendars aggregate the digests submitted to them during an aggregation interval, construct a tree over those submissions, and commit only the root to the Bitcoin chain in a single transaction. Each submitter then receives a per-digest proof path. The folder-anchoring extension applies the same primitive one level higher: the customer builds a tree over the files in a folder, submits only the resulting root to the calendars, and receives an OpenTimestamps receipt that anchors that root to the chain. Diagrammatically: leaf hashes → folder root → OpenTimestamps aggregation → Bitcoin block.</p>
+  </section>
+
+  <section>
+    <h2>3 · Domain separation</h2>
+    <div class="arch-rule"></div>
+    <p>Leaves and internal nodes are not hashed under the same input shape. A leaf is prefixed with a single byte of value <code>0x00</code> before being passed to SHA-256; an internal node is prefixed with a single byte of value <code>0x01</code>. The convention is the one adopted by RFC 6962 and is termed domain separation.</p>
+    <p>The argument for domain separation is one of second-preimage resistance. Without it, the byte sequence that constitutes an internal-node value would be indistinguishable, in its hash input, from the byte sequence of a file whose contents happened to match. An adversary could in principle construct a file whose bytes are the concatenation of two child hashes and present that file as a leaf whose hash collides with a known internal node, thereby corrupting an inclusion proof. The single-byte prefix removes the ambiguity at negligible cost.</p>
+  </section>
+
+  <section>
+    <h2>4 · Path binding</h2>
+    <div class="arch-rule"></div>
+    <p>The leaf hash binds the file's relative path together with the file's content fingerprint. The construction is:</p>
+<pre><code>leaf = SHA-256( 0x00 || utf8(rel_path) || 0x00 || sha256(file_bytes) )</code></pre>
+    <p>The interior <code>0x00</code> separator between the path and the file digest is a second domain marker and removes ambiguity between paths of differing length. The consequence is deliberate: two receipts produced for the same byte sequence under different filenames yield different leaves and therefore different roots. The protocol treats the relative path as evidentiary metadata, not as an arbitrary label. A photograph filed as <code>2026-05-20/IMG_0042.cr3</code> and the same bytes filed as <code>misc.cr3</code> are, under the folder receipt, distinguishable artifacts.</p>
+    <p>Customers who consider the path itself to be sensitive may anchor under a hash-only labeling scheme, in which the recorded path is the file's own digest. The protocol does not require any particular naming policy; it records, faithfully, the policy the customer chose.</p>
+  </section>
+
+  <section>
+    <h2>5 · Canonical ordering</h2>
+    <div class="arch-rule"></div>
+    <p>Two parties producing trees over the same set of files must produce the same root, or the receipt is not reproducible by an independent verifier. The protocol fixes ordering as the lexicographic UTF-8 byte order of the POSIX relative path. The path is normalized to forward slashes; case is preserved; Unicode is left unnormalized beyond the requirement that the bytes used in the leaf hash are the bytes recorded in the manifest.</p>
+    <p>The default exclude list is recorded in the manifest so a verifier reproduces the exact set the customer anchored. The default excludes are: <code>.DS_Store</code>, <code>Thumbs.db</code>, <code>desktop.ini</code>, <code>.git/*</code>, <code>node_modules/*</code>, <code>__pycache__/*</code>, <code>*.tmp</code>, <code>*.swp</code>, <code>*.swo</code>, and <code>~$*</code>. A customer who anchors a folder under a non-default exclude list records that list in the manifest; the verifier reproduces ordering and exclusion from the manifest alone.</p>
+  </section>
+
+  <section>
+    <h2>6 · Odd-level promotion</h2>
+    <div class="arch-rule"></div>
+    <p>At each level of the tree, pairs of adjacent nodes are combined to produce the next level. When the level contains an odd number of nodes, the final node has no sibling. RFC 6962 specifies that the lone last node is promoted to the next level unchanged; it is not paired with itself, and it is not duplicated.</p>
+    <p>The argument for promotion over duplication is, again, second-preimage resistance. Under a duplicate-the-last-node rule, an adversary can construct two distinct sets of leaves that yield the same root, by appending a particular crafted leaf to one set and exploiting the duplication. The Bitcoin protocol's own historical Merkle rule used duplication and inherited the corresponding ambiguity. RFC 6962 documents the lesson, and the folder-anchoring extension adopts the RFC 6962 rule. The customer's manifest records the rule it used; the verifier applies the same rule.</p>
+  </section>
+
+  <section>
+    <h2>7 · What the customer submits, what crosses the wire</h2>
+    <div class="arch-rule"></div>
+    <p>The browser, or the local command-line tool, computes every leaf hash and every interior node hash on the customer's machine. The data that crosses the wire to the office consists of the manifest — the ordered list of relative paths, per-file SHA-256 fingerprints, per-file leaf hashes, and per-file byte sizes — together with the resulting root. The file content itself is never transmitted. The office never holds, copies, or observes the bytes of any file in the anchored set.</p>
+    <p>A trade-off attends this design: the path names and the file sizes are part of the receipt that the office persists, and are therefore visible to the office in the way ordinary receipt metadata is visible. Customers for whom path names are themselves sensitive may anchor under hash-labeled paths, as noted above, in which case the manifest carries no human-readable filename information at all.</p>
+  </section>
+
+  <section>
+    <h2>8 · Inclusion proofs and selective disclosure</h2>
+    <div class="arch-rule"></div>
+    <p>The structure's central evidentiary property is this. For any file in the anchored set, the customer can produce an <em>inclusion proof</em> consisting of approximately log₂ N sibling hashes — one per level of the tree — that, when combined with the file's own leaf hash in the documented order, reconstructs the anchored root. A third party in possession of the original file, the inclusion proof, and the OpenTimestamps receipt for the root can verify that this specific file belonged to the anchored set without learning anything about the other files in the set.</p>
+    <p>The proof's size scales logarithmically with the set's size. For a folder of ten thousand files, the proof is approximately fourteen sibling hashes — well under a single kilobyte, small enough to attach to a single email or dispute filing.</p>
+  </section>
+
+  <section>
+    <h2>9 · Tamper detection</h2>
+    <div class="arch-rule"></div>
+    <p>A single-bit modification to any file in the set produces a different file digest, which produces a different leaf hash, which propagates upward and produces a different root. A renaming of any file — even one preserving the bytes — produces a different leaf, because the path is bound into the leaf. An insertion or deletion of a file shifts the leaves of the tree and likewise alters the root. The structure is intentionally rigid: any modification of the anchored set produces a mismatch that any independent verifier observes upon recomputation.</p>
+    <p>The rigidity is the point. A folder receipt is useful precisely because it cannot be partially renounced; the customer cannot, after the fact, claim that one file was always different. The set is what was anchored, and the set is what the verifier reconstructs.</p>
+  </section>
+
+  <section>
+    <h2>10 · Verification independence</h2>
+    <div class="arch-rule"></div>
+    <p>The standalone verifier extends naturally to the folder case. The customer, or a third party reviewing the receipt, holds the original file, the inclusion proof, the manifest, and the OpenTimestamps proof for the root. The verifier recomputes the file's leaf hash from its bytes and its recorded path, walks the inclusion proof to reconstruct the root, and checks that root against the OpenTimestamps Bitcoin commitment. No call to the office is required for verification at any point. The receipt is the instrument; the chain is the trust anchor.</p>
+    <p>The independent verifier at <a href="/verify-js.html">/verify-js.html</a> handles the single-file case in browser cryptography today; the folder extension preserves the same property.</p>
+  </section>
+
+  <section>
+    <h2>11 · Trade-offs and the v1 boundary</h2>
+    <div class="arch-rule"></div>
+    <p>The first published version of the folder-anchoring extension makes the following choices explicit. The tree is a single-pass RFC 6962 binary hash tree over the canonically ordered set of leaves; no incremental-append log is provided in v1. Empty folders are not supported as leaves; a folder must contain at least one file that survives the exclude list. Symbolic links are not followed; a symlink encountered during enumeration is recorded in the manifest as a symlink with its target string but is not dereferenced. Browser-side cryptography reads each file into memory once during hashing; a folder containing files larger than browser memory permits is handled by the desktop command-line tool, which streams each file in megabyte chunks and never exceeds a fixed working-set size.</p>
+    <p>The boundaries are stated plainly because the boundary is part of the instrument. A receipt that overreached the v1 protocol would be a worse receipt, not a better one.</p>
+  </section>
+
+  <section>
+    <h2>12 · Publication date and prior-art status</h2>
+    <div class="arch-rule"></div>
+    <p>This document was first published on 2026-05-20. It is anchored to the Bitcoin chain on publication using the protocol it describes; the receipt identifier for this revision is recorded in the footer below once issuance completes. Subsequent revisions are anchored separately; their receipts are appended to the same footer record. The combination of detailed disclosure, MIT licensing of the verifier and protocol code, and a Bitcoin-anchored publication date establishes this page as prior art for the methods described. Any later filing — by any party — that claims novelty on the construction described here is rebuttable by reference to this publication.</p>
+  </section>
+
+  <section>
+    <h2>Citations and verification</h2>
+    <div class="arch-rule"></div>
+    <ul>
+      <li><a href="/method/architecture.html">Architecture of the protocol</a></li>
+      <li><a href="/method/bitcoin-attestation.html">What a Bitcoin block actually attests to</a></li>
+      <li><a href="/faq.html">Frequently asked</a></li>
+      <li><a href="/verify-js.html">Standalone independent verifier (single HTML file)</a></li>
+      <li><a href="https://github.com/Orphograph/Orphograph">github.com/Orphograph/Orphograph</a></li>
+      <li><a href="https://datatracker.ietf.org/doc/html/rfc6962">RFC 6962 — Certificate Transparency</a></li>
+      <li><a href="https://opentimestamps.org/">opentimestamps.org</a></li>
+    </ul>
+  </section>
+
+  <p style="color:var(--muted);font-size:13px;margin-top:48px;border-top:1px solid var(--line-soft);padding-top:18px;">
+    Publication receipt for this revision: pending Bitcoin commitment (the receipt id is recorded once issuance completes).
+  </p>
+</main>
+
+<footer>
+  <div class="wrap" style="text-align:center;color:var(--muted);font-size:13px;padding:32px 0;">
+    <p>Orphograph · An empirical notary.</p>
+    <p style="margin-top:8px;">
+      <a href="/" style="color:var(--muted);">Home</a> ·
+      <a href="/method" style="color:var(--muted);">Method</a> ·
+      <a href="/faq.html" style="color:var(--muted);">FAQ</a> ·
+      <a href="/vs/c2pa.html" style="color:var(--muted);">Compare</a> ·
+      <a href="/continuity.html" style="color:var(--muted);">Continuity</a>
+    </p>
+  </div>
+</footer>
+
+<script src="/statusbar.js" defer></script>
+</body>
+</html>
