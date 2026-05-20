@@ -198,6 +198,31 @@ def append_log(entry: dict) -> None:
         pass
 
 
+def _previous_tick_was_unhealthy() -> bool:
+    """Return True if the most recent prior log entry was UNHEALTHY or ALERT.
+
+    Used to require TWO consecutive failure ticks before any restart action,
+    so a single transient probe failure does not trigger a no-op restart of
+    the production machine.
+    """
+    if not os.path.exists(LOG_PATH):
+        return False
+    try:
+        with open(LOG_PATH, "r", encoding="utf-8") as fh:
+            lines = fh.readlines()
+    except OSError:
+        return False
+    for line in reversed(lines):
+        try:
+            row = json.loads(line)
+        except ValueError:
+            continue
+        status = row.get("status")
+        if status in ("HEALTHY", "UNHEALTHY", "ALERT"):
+            return status in ("UNHEALTHY", "ALERT")
+    return False
+
+
 def _recent_failures(window_s: int = ALERT_WINDOW_S) -> int:
     """Count consecutive trailing UNHEALTHY entries within window_s."""
     if not os.path.exists(LOG_PATH):
@@ -292,7 +317,15 @@ def run_once() -> int:
         append_log(entry)
         return 0
 
-    # Unhealthy path.
+    # Unhealthy path. Require TWO consecutive UNHEALTHY ticks before any
+    # restart action — a single transient probe failure (cold start,
+    # transient packet loss, CDN hiccup) should NOT be enough to kick
+    # production. The previous tick is read from the JSONL trail.
+    prev_was_unhealthy = _previous_tick_was_unhealthy()
+    if not prev_was_unhealthy:
+        entry["action_taken"] = "deferred:first_unhealthy_tick"
+        append_log(entry)
+        return 1
     try:
         action = attempt_recovery(codes)
     except Exception as exc:  # noqa: BLE001 (defensive: never crash watchdog)

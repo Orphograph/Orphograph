@@ -120,6 +120,17 @@ class WatchdogTests(unittest.TestCase):
 
     # ---------- 2. unhealthy + stopped → start ---------- #
     def test_unhealthy_stopped_invokes_machine_start(self) -> None:
+        # Two-strike rule: seed the log with one prior UNHEALTHY tick so
+        # the current tick is the SECOND consecutive failure and recovery
+        # action fires (single transient failures no longer trigger).
+        with open(watchdog.LOG_PATH, "w", encoding="utf-8") as fh:
+            fh.write(json.dumps({
+                "timestamp_utc": "2026-05-20T00:00:00Z",
+                "status": "UNHEALTHY",
+                "response_codes": {"https://orphograph.com/": 503,
+                                   "https://orphograph.com/api/health": 503},
+                "action_taken": "deferred:first_unhealthy_tick",
+            }) + "\n")
         srun = mock.Mock(
             side_effect=[
                 _completed(_fly_status_json("stopped"), 0),  # fly status
@@ -140,6 +151,15 @@ class WatchdogTests(unittest.TestCase):
 
     # ---------- 3. unhealthy + started → restart --skip-health-checks ---------- #
     def test_unhealthy_started_invokes_machine_restart_skip_health(self) -> None:
+        # Two-strike rule: seed prior UNHEALTHY so this is the SECOND consecutive.
+        with open(watchdog.LOG_PATH, "w", encoding="utf-8") as fh:
+            fh.write(json.dumps({
+                "timestamp_utc": "2026-05-20T00:00:00Z",
+                "status": "UNHEALTHY",
+                "response_codes": {"https://orphograph.com/": 502,
+                                   "https://orphograph.com/api/health": 502},
+                "action_taken": "deferred:first_unhealthy_tick",
+            }) + "\n")
         srun = mock.Mock(
             side_effect=[
                 _completed(_fly_status_json("started"), 0),
