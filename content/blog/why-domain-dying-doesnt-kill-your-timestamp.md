@@ -13,17 +13,15 @@ The number-one question every working photographer asks before
 paying anything for a timestamping service: **what happens to my
 proof if your company disappears?**
 
-This is a reasonable thing to ask. The graveyard of
-crypto/blockchain notarization services is large enough to be a
-genre of its own:
+This is a reasonable thing to ask. Earlier consumer-facing
+timestamping services have appeared, attracted some traction, and
+then either shut down, let their certificates lapse, or pivoted to
+enterprise-only sales channels. The pattern is consistent enough
+that any prospective customer is right to wonder what happens to
+their receipt when the operator of the service is no longer around
+to vouch for it.
 
-- **Proof of Existence (poex.io)** — abandoned, SSL expired 2021
-- **Stampery** — failed / pivoted
-- **Po.et** — pivoted, then folded
-- **OriginStamp** — still operating but pivoted B2B-enterprise in
-  May 2025, abandoning the consumer tier
-
-If you anchored 500 photos through one of those services before it
+If you anchored five hundred photos through such a service before it
 disappeared, what would you have? Probably a forgotten password to a
 defunct login page and a vague memory that you'd "done something."
 

@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+Launchd job: daily Bitcoin-anchor of the meaningful repo state.
+Runs scripts/auto_anchor_repo.py once a day at 23:55 local time. The
+script POSTs a folder-Merkle manifest to /api/anchor_folder (private)
+and appends a one-line provenance record to outbox/AUTO_ANCHOR_HISTORY.jsonl.
+
+Install:
+  cp scripts/com.orphograph.auto_anchor.plist.template \
+     ~/Library/LaunchAgents/com.orphograph.auto_anchor.plist
+  # Edit ~/Library/LaunchAgents/com.orphograph.auto_anchor.plist:
+  #   - Replace REPO_ROOT with the absolute path to the orphograph repo
+  #   - Optionally set ORPHO_AUTO_ANCHOR_KEY to bypass the free-tier rate
+  #     limit (account API key from /account.html). Without it the daily
+  #     anchor lands on the free tier and is naturally rate-limited.
+  launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.orphograph.auto_anchor.plist
+  launchctl enable gui/$(id -u)/com.orphograph.auto_anchor
+
+Sequoia note: if `launchctl bootstrap` returns IO error 5, fall back to a
+nohup-Python sleeper loop. The script itself does not depend on launchd.
+
+Disable temporarily:
+  Comment out the StartCalendarInterval block (or run
+  `launchctl disable gui/$(id -u)/com.orphograph.auto_anchor`).
+
+Logs: ~/Library/Logs/orphograph_auto_anchor.log
+History: REPO_ROOT/outbox/AUTO_ANCHOR_HISTORY.jsonl
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.orphograph.auto_anchor</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/opt/homebrew/bin/python3</string>
+        <string>REPO_ROOT/scripts/auto_anchor_repo.py</string>
+    </array>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>ORPHO_BASE_URL</key>
+        <string>https://orphograph.com</string>
+        <key>ORPHO_AUTO_ANCHOR_KEY</key>
+        <string></string>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    </dict>
+
+    <key>WorkingDirectory</key>
+    <string>REPO_ROOT</string>
+
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>23</integer>
+        <key>Minute</key>
+        <integer>55</integer>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/USERNAME_HERE/Library/Logs/orphograph_auto_anchor.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/USERNAME_HERE/Library/Logs/orphograph_auto_anchor.log</string>
+
+    <key>ProcessType</key>
+    <string>Background</string>
+</dict>
+</plist>

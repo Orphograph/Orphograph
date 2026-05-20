@@ -57,16 +57,15 @@ Available for written interviews via hello@orphograph.com.
 
 **Solo founder, stdlib-only, sub-6000-LOC.** The whole stack is
 small enough to audit in an afternoon. There are zero third-party
-runtime dependencies (no npm packages, no pip dependencies, no
-SaaS vendor lock-in beyond Stripe + Resend + Fly). Trust through
+runtime dependencies in the anchoring engine. Trust through
 reviewability.
 
-**The AI-provenance market is real but nobody quite has the
-right shape yet.** Truepic raised $37.2M for the enterprise
-side, GPTZero hit $24M ARR on deepfake detection, but the
-indie-photographer-doesn't-want-to-install-Python tier is
-underserved. Originality.ai's $2.3M ARR shows there's real money
-in adjacent text-AI verification — the photo equivalent is open.
+**The provenance market is real but unevenly served.** Existing
+offerings concentrate either on enterprise-grade content credentials
+for large publishers or on AI-detection scoring for institutional
+buyers; the independent creator who simply wants a dated, tamper-
+evident receipt of a file they made — without installing developer
+tools — is the underserved segment.
 
 **Open-source verifier as the trust mechanism.** The verifier is
 MIT-licensed on GitHub. The pitch is "the receipt outlives the

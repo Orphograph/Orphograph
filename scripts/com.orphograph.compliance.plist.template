@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+Launchd job: daily brand-rule compliance sweep of the Orphograph repo.
+Runs scripts/compliance_scan.py once a day at 09:00 local time and writes
+a JSON report into outbox/. Non-zero exit indicates a high-severity hit
+that needs founder review before any artifact ships externally.
+
+Install:
+  cp scripts/com.orphograph.compliance.plist.template \
+     ~/Library/LaunchAgents/com.orphograph.compliance.plist
+  # Edit ~/Library/LaunchAgents/com.orphograph.compliance.plist:
+  #   - Replace REPO_ROOT with the absolute path to the orphograph repo
+  launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.orphograph.compliance.plist
+  launchctl enable gui/$(id -u)/com.orphograph.compliance
+
+Sequoia note: if `launchctl bootstrap` returns IO error 5, fall back to a
+nohup-Python sleeper loop that re-runs the script every 24h. The script
+itself does not depend on launchd.
+
+Disable temporarily:
+  Comment out the StartCalendarInterval block (or run
+  `launchctl disable gui/$(id -u)/com.orphograph.compliance`).
+
+Logs: ~/Library/Logs/orphograph_compliance.log
+Reports: REPO_ROOT/outbox/compliance_scan_<UTC-date>.json
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.orphograph.compliance</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/opt/homebrew/bin/python3</string>
+        <string>REPO_ROOT/scripts/compliance_scan.py</string>
+    </array>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    </dict>
+
+    <key>WorkingDirectory</key>
+    <string>REPO_ROOT</string>
+
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>9</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/USERNAME_HERE/Library/Logs/orphograph_compliance.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/USERNAME_HERE/Library/Logs/orphograph_compliance.log</string>
+
+    <key>ProcessType</key>
+    <string>Background</string>
+</dict>
+</plist>
