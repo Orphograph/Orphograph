@@ -31,6 +31,12 @@ jobs:
   deploy:
     needs: test
     runs-on: ubuntu-latest
+    # Skip the deploy step cleanly when the FLY_API_TOKEN secret is absent.
+    # The founder currently deploys via local `fly deploy` against a CLI
+    # token kept in the local keychain. CI runs the test suite as the safety
+    # net; the deploy is intentionally not automated until the founder
+    # rotates a long-lived CI-scoped deploy token into the GitHub secret.
+    if: ${{ vars.CI_DEPLOY_ENABLED == 'true' }}
     steps:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
