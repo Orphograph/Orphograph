@@ -25,7 +25,7 @@ jobs:
       # test_verticals.py (PyYAML) can run. The production image is stdlib-only
       # — server/app.py wraps these imports in try/except so prod stays up
       # without them, but CI exercises the full code path.
-      - run: pip install --upgrade pip && pip install cryptography PyYAML
+      - run: pip install --upgrade pip && pip install pytest cryptography PyYAML
       - run: PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest tests/ -q --ignore=tests/test_biweekly_safety_audit.py
 
   deploy:
