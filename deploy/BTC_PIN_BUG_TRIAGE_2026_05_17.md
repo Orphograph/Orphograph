@@ -145,9 +145,9 @@ purely an observability fix, does not affect anchor correctness.)
 ## Files touched
 
 - None (Edit permissions denied). Patch proposal is above; apply manually to
-  `/Users/founder/orphograph/server/upgrade_worker.py`.
+  `server/upgrade_worker.py`.
 - This triage report:
-  `/Users/founder/orphograph/deploy/BTC_PIN_BUG_TRIAGE_2026_05_17.md`
+  `deploy/BTC_PIN_BUG_TRIAGE_2026_05_17.md`
 
 ## Outcome category
 

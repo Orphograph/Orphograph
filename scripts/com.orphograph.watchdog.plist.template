@@ -27,7 +27,7 @@
   Sequoia IO error 5 fallback (nohup sleeper, restart on logout):
     nohup python3 -c "import subprocess, time; \
       [subprocess.run(['/opt/homebrew/bin/python3', \
-        '/Users/founder/orphograph/scripts/orphograph_watchdog.py']) \
+        '/Users/REPLACE_ME_HOMEDIR/orphograph/scripts/orphograph_watchdog.py']) \
         or time.sleep(300) for _ in iter(int, 1)]" \
       >> ~/Library/Logs/orphograph_watchdog.log 2>&1 &
 -->
@@ -41,7 +41,7 @@
     <key>ProgramArguments</key>
     <array>
         <string>/opt/homebrew/bin/python3</string>
-        <string>/Users/founder/orphograph/scripts/orphograph_watchdog.py</string>
+        <string>/Users/REPLACE_ME_HOMEDIR/orphograph/scripts/orphograph_watchdog.py</string>
     </array>
 
     <key>EnvironmentVariables</key>
@@ -60,10 +60,10 @@
     <false/>
 
     <key>StandardOutPath</key>
-    <string>/Users/founder/Library/Logs/orphograph_watchdog.log</string>
+    <string>/Users/REPLACE_ME_HOMEDIR/Library/Logs/orphograph_watchdog.log</string>
 
     <key>StandardErrorPath</key>
-    <string>/Users/founder/Library/Logs/orphograph_watchdog.log</string>
+    <string>/Users/REPLACE_ME_HOMEDIR/Library/Logs/orphograph_watchdog.log</string>
 
     <key>ProcessType</key>
     <string>Background</string>

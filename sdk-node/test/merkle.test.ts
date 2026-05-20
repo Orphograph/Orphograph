@@ -270,7 +270,10 @@ test("TypeScript root matches Python reference (3-file fixture)", async (t) => {
     t.skip("python3 not available");
     return;
   }
-  const serverDir = "/Users/founder/orphograph/server";
+  // Locate the sibling `server/` dir of this repo without hard-coding any
+  // absolute path. Walk up from this test file: sdk-node/test/ → sdk-node/ →
+  // repo root → server/.
+  const serverDir = join(import.meta.dirname ?? __dirname, "..", "..", "server");
   const fix = makeFixture([
     { path: "a.txt", content: "hello\n" },
     { path: "sub/b.txt", content: "world\n" },
@@ -308,7 +311,10 @@ test("TypeScript root matches Python reference (5-file odd fixture)", async (t) 
     t.skip("python3 not available");
     return;
   }
-  const serverDir = "/Users/founder/orphograph/server";
+  // Locate the sibling `server/` dir of this repo without hard-coding any
+  // absolute path. Walk up from this test file: sdk-node/test/ → sdk-node/ →
+  // repo root → server/.
+  const serverDir = join(import.meta.dirname ?? __dirname, "..", "..", "server");
   const files = [];
   for (let i = 0; i < 5; i++) {
     files.push({ path: `f${i}.txt`, content: `file-${i}\n` });
