@@ -40,7 +40,14 @@ import json
 from typing import Tuple
 
 # Try to use the system cryptography library; fall back to vendored stdlib-only
-# RFC 8032 reference implementation if unavailable.
+# RFC 8032 reference implementation if unavailable; fall back AGAIN to a
+# disabled mode if neither is present. Disabled mode never silently accepts
+# a signed manifest — it rejects signed manifests with a clear "signature
+# verification unavailable" reason, so the trust contract cannot regress.
+_HAVE_CRYPTOGRAPHY = False
+_HAVE_REF = False
+_ref = None  # type: ignore[assignment]
+
 try:
     from cryptography.hazmat.primitives.asymmetric.ed25519 import (
         Ed25519PrivateKey,
@@ -56,11 +63,23 @@ try:
 
     _HAVE_CRYPTOGRAPHY = True
 except Exception:  # pragma: no cover - exercised only when cryptography missing
-    _HAVE_CRYPTOGRAPHY = False
     try:
         from . import _ed25519 as _ref  # type: ignore
+        _HAVE_REF = True
     except (ImportError, ValueError):
-        import _ed25519 as _ref  # type: ignore
+        try:
+            import _ed25519 as _ref  # type: ignore
+            _HAVE_REF = True
+        except ImportError:
+            # Neither backend available. The module still loads — signing and
+            # verification will return graceful "unavailable" results when
+            # called. Unsigned manifests anchor and verify normally.
+            _ref = None  # type: ignore[assignment]
+
+
+def signature_backend_available() -> bool:
+    """Return True iff Ed25519 sign/verify is wired up in this build."""
+    return _HAVE_CRYPTOGRAPHY or _HAVE_REF
 
 
 # ---------------------------------------------------------------------- base58
@@ -181,6 +200,11 @@ def canonical_manifest_bytes(manifest: dict) -> bytes:
 
 def _sign_raw(message: bytes, private_key_bytes: bytes) -> Tuple[bytes, bytes]:
     """Return (signature_64_bytes, public_key_32_bytes) for a 32-byte seed."""
+    if not signature_backend_available():
+        raise RuntimeError(
+            "Ed25519 signing not available in this build: install 'cryptography' "
+            "or place server/_ed25519.py alongside this module."
+        )
     if len(private_key_bytes) != 32:
         raise ValueError("Ed25519 private key (seed) must be exactly 32 bytes")
     if _HAVE_CRYPTOGRAPHY:
@@ -194,7 +218,15 @@ def _sign_raw(message: bytes, private_key_bytes: bytes) -> Tuple[bytes, bytes]:
 
 
 def _verify_raw(message: bytes, signature: bytes, public_key_bytes: bytes) -> bool:
-    """Return True iff ``signature`` is a valid Ed25519 sig of ``message``."""
+    """Return True iff ``signature`` is a valid Ed25519 sig of ``message``.
+
+    When no Ed25519 backend is available in this build, returns False — the
+    safe default. Callers that need to distinguish "wrong signature" from
+    "verification unavailable" should check :func:`signature_backend_available`
+    first.
+    """
+    if not signature_backend_available():
+        return False
     if len(public_key_bytes) != 32 or len(signature) != 64:
         return False
     if _HAVE_CRYPTOGRAPHY:
