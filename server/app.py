@@ -104,6 +104,7 @@ ALLOWED_STATIC_SUFFIXES = {
     ".html", ".css", ".js", ".svg", ".png", ".ico", ".webmanifest",
     ".json", ".txt", ".ots",  # sample receipt assets under web/sample/
     ".py", ".md", ".tar", ".gz",  # self-hosted OSS verifier under web/verify/
+    ".zip",  # offline verifier kit under web/dist/orphograph-verify.zip
 }
 
 # 10 anchors/hour/IP by default; refills at 10/3600 = ~0.00278 tokens/sec
