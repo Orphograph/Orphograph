@@ -122,12 +122,17 @@ def test_landing_does_not_load_third_party_scripts(live_server):
     sneaks in (would be blocked by CSP, but better to catch at build time)."""
     with urllib.request.urlopen(live_server + "/") as r:
         html = r.read().decode()
-    # one <script src="/app.js"> is expected; reject any other script tag pattern
+    # Acceptable script tags on the homepage:
+    #   1. <script src="/...">     — self-hosted JS files
+    #   2. <script type="application/ld+json"> — structured-data block.
+    #      Not executable JavaScript; CSP `script-src 'self'` does not apply
+    #      to non-executable script types per the CSP spec (Level 3, §6.6).
     import re
     scripts = re.findall(r"<script\b[^>]*>", html)
-    assert all('src="/' in s or "src='/" in s for s in scripts), (
-        f"non-self script tag found: {scripts}"
-    )
+    for s in scripts:
+        is_self_src = ('src="/' in s) or ("src='/" in s)
+        is_jsonld = 'type="application/ld+json"' in s or "type='application/ld+json'" in s
+        assert is_self_src or is_jsonld, f"disallowed script tag: {s}"
 
 
 def test_sample_index_serves_and_has_sha512(live_server):
