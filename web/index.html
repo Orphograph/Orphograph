@@ -154,6 +154,50 @@
   .trust-strip a:hover{ color: var(--ink-2); }
 </style>
 <meta name="copyright" content="© 2026 Orphograph. MIT — see /LICENSE">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": "https://orphograph.com/#org",
+      "name": "Orphograph",
+      "url": "https://orphograph.com/",
+      "logo": "https://orphograph.com/seal.png?v=6",
+      "description": "An empirical notary that issues Bitcoin-anchored receipts of file existence without the file leaving the customer's device.",
+      "email": "hello@orphograph.com",
+      "contactPoint": [
+        {
+          "@type": "ContactPoint",
+          "contactType": "security",
+          "email": "security@orphograph.com",
+          "url": "https://orphograph.com/SECURITY.md"
+        },
+        {
+          "@type": "ContactPoint",
+          "contactType": "general inquiry",
+          "email": "hello@orphograph.com"
+        }
+      ]
+    },
+    {
+      "@type": "WebSite",
+      "@id": "https://orphograph.com/#site",
+      "url": "https://orphograph.com/",
+      "name": "Orphograph",
+      "publisher": { "@id": "https://orphograph.com/#org" }
+    },
+    {
+      "@type": "Service",
+      "@id": "https://orphograph.com/#service",
+      "name": "Bitcoin-anchored file timestamping",
+      "description": "Compute a SHA-256 fingerprint of a file in the browser, submit only the fingerprint, and receive a Bitcoin-chain-anchored receipt that the file existed at the recorded time.",
+      "provider": { "@id": "https://orphograph.com/#org" },
+      "areaServed": "Worldwide"
+    }
+  ]
+}
+</script>
 </head>
 <body>
 
@@ -530,8 +574,10 @@
   <div class="wrap row">
     <div class="brand">Orphograph &nbsp;·&nbsp; Bitcoin-Anchored Notary</div>
     <nav>
+      <a href="/what-is-this.html">First time?</a>
       <a href="/learn.html">Method</a>
       <a href="/about.html">Office</a>
+      <a href="/press.html">Press</a>
       <a href="/about-the-office.html">About the office</a>
       <a href="/faq.html">FAQ</a>
       <a href="/vs/c2pa.html">vs. C2PA</a>

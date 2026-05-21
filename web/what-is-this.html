@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Orphograph — What is this receipt?</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#f6f1e3">
+<meta name="description" content="A plain-English explanation for first-time recipients who arrived at Orphograph by clicking a /r/ receipt URL. What the receipt proves, what it does not prove, and how to verify it independently.">
+<meta property="og:title" content="Orphograph — What is this receipt?">
+<meta property="og:description" content="You received a Bitcoin-anchored receipt. Here is what that means, in plain English.">
+<meta property="og:url" content="https://orphograph.com/what-is-this.html">
+<meta property="og:type" content="article">
+<meta property="og:image" content="https://orphograph.com/seal.png?v=6">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Orphograph — What is this receipt?">
+<link rel="canonical" href="https://orphograph.com/what-is-this.html">
+<link rel="icon" type="image/png" href="/favicon.png?v=6">
+<link rel="stylesheet" href="/index.css?v=8">
+<style>
+  .arch-wrap { max-width: 820px; margin: 0 auto; padding: 0 24px 64px; }
+  .arch-wrap h1 { font-family: var(--serif); font-size: 36px; font-weight: 500; margin: 32px 0 6px; line-height: 1.2; }
+  .arch-wrap h2 { font-family: var(--serif); font-size: 22px; font-weight: 500; margin: 36px 0 4px; color: var(--ink); }
+  .arch-rule { border-top: 1px solid var(--ink); width: 32px; margin: 8px 0 16px; opacity: 0.6; }
+  .arch-wrap p, .arch-wrap li { color: var(--ink-2); line-height: 1.75; font-size: 15.5px; }
+  .arch-wrap code { background: rgba(74,154,115,0.08); padding: 2px 6px; border-radius: 3px; font-size: 0.92em; }
+  .arch-lede { font-size: 17px; line-height: 1.7; color: var(--ink-2); margin: 0 0 24px; }
+  .arch-callout { background: rgba(74,154,115,0.06); border-left: 3px solid var(--confirm); padding: 16px 20px; margin: 24px 0; border-radius: 0 6px 6px 0; }
+  .arch-callout p { margin: 0; }
+  .disclaimer-block { margin-top: 48px; padding: 20px 24px; background: #f1ead7; border-radius: 6px; font-size: 14px; line-height: 1.65; color: var(--muted); }
+</style>
+<meta name="copyright" content="© 2026 Orphograph. Code under MIT (see /LICENSE). Brand, content, and design — all rights reserved.">
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap row">
+    <a href="/" class="brand">Orphograph</a>
+    <nav>
+      <a href="/learn.html">Method</a>
+      <a href="/faq.html">FAQ</a>
+      <a href="/method/evidence-law.html">Evidence law</a>
+      <a href="/continuity.html">Continuity</a>
+      <a href="/status.html">Status</a>
+      <a href="/signin.html">Sign in</a>
+    </nav>
+  </div>
+</header>
+
+<main class="arch-wrap">
+
+  <p style="font-size:12px;letter-spacing:0.18em;text-transform:uppercase;color:var(--muted);margin:48px 0 8px;">For first-time recipients</p>
+  <h1>You received a Bitcoin-anchored receipt. Here is what that means.</h1>
+  <p class="arch-lede">
+    The link in your hand opens a page that shows a 64-character fingerprint of a file (or a folder of files), the date that fingerprint was committed to the Bitcoin chain, and a way to confirm that date is genuine. The file itself is not contained in the link; only the proof that the file existed by a certain moment and has not changed since.
+  </p>
+
+  <section>
+    <h2>Three things this receipt does prove</h2>
+    <div class="arch-rule"></div>
+    <p><strong>The file existed before the recorded date.</strong> The 64-character fingerprint shown on the receipt page is a SHA-256 hash, a value that can only be produced from the exact bytes of a specific file. That hash was submitted to a public, distributed timestamping network and committed to a Bitcoin block whose date is fixed by the chain. The file therefore existed, in its present form, by the time that block was mined.</p>
+    <p><strong>The exact bytes have not changed since.</strong> Changing even a single byte of the file changes the SHA-256 hash entirely. If the file you receive today matches the hash on the receipt, it is bit-for-bit identical to the file that was anchored on the recorded date.</p>
+    <p><strong>The Bitcoin chain confirms it independently.</strong> The date is not asserted by the office or by any private database. It is asserted by the Bitcoin block header, which thousands of independent operators worldwide preserve. The office could not have forged or backdated the receipt; the chain would refuse to confirm any such attempt.</p>
+  </section>
+
+  <section>
+    <h2>Three things this receipt does NOT prove</h2>
+    <div class="arch-rule"></div>
+    <p><strong>It does not prove who created the file.</strong> A fingerprint binds a file to a date; it does not bind the file to an author. Authorship is established by other means — affidavits, custody records, identifying metadata, witnesses — that lie outside the receipt itself.</p>
+    <p><strong>It does not prove the file is true.</strong> The file may be a photograph, a contract, a report, a transcript, or a spreadsheet; the receipt attests only that the bytes existed on the recorded date. The accuracy of what the file says is a separate question, decided by whoever evaluates the file's contents.</p>
+    <p><strong>It does not prove the file was lawfully obtained.</strong> A receipt records the existence of bytes at a moment; it does not record the chain of custody that produced those bytes, nor the legal authority under which they were collected. Lawfulness of acquisition is a separate question for the relevant forum and counsel.</p>
+  </section>
+
+  <section>
+    <h2>How to verify it yourself</h2>
+    <div class="arch-rule"></div>
+    <p><strong>Step 1 — Look at the receipt page.</strong> Click the URL you were given. The page displays the date the fingerprint was anchored, the 64-character SHA-256 fingerprint, and links to public block explorers. Compare the date to your records; compare the fingerprint, if you have the original file, by computing its SHA-256 with any standard tool.</p>
+    <p><strong>Step 2 — For independent verification.</strong> Download the MIT-licensed verifier at <a href="/dist/orphograph-verify.zip">/dist/orphograph-verify.zip</a> and follow the README inside. The verifier is a small, self-contained program that recomputes the proof against the Bitcoin chain on your machine. It does not call back to the office.</p>
+    <p><strong>Step 3 — For a deeper check.</strong> The protocol underneath is OpenTimestamps, a public, open standard. The standard OpenTimestamps client can be run against the <code>.ots</code> file linked from the receipt page; instructions are at <a href="https://opentimestamps.org/">opentimestamps.org</a>. This step requires a Bitcoin node or a third-party block explorer; the verifier in step 2 is sufficient for most purposes.</p>
+  </section>
+
+  <section>
+    <h2>Who runs Orphograph</h2>
+    <div class="arch-rule"></div>
+    <p>The office is independent. It operates the protocol — the submission interface, the calendar coordination, the receipt-page hosting — but it cannot alter, revoke, or backdate any receipt that has already been issued. The proof lives on the Bitcoin chain, which the office does not control. If the office were to disappear tomorrow, your receipt would still verify against the chain using the MIT-licensed tool described above. The protocol is the instrument; the chain is the trust anchor; the office is the typist.</p>
+  </section>
+
+  <section>
+    <h2>For lawyers and adjusters</h2>
+    <div class="arch-rule"></div>
+    <p>A separate page describes the doctrinal grounding — the rules of evidence governing electronic records, the state and federal electronic-records statutes, and the small but growing body of state-level blockchain-evidence laws that already address cryptographic timestamping by name. See <a href="/method/evidence-law.html">/method/evidence-law.html</a>. The office does not give legal advice; whether the receipt is admissible in any particular proceeding is a question for that proceeding's rules and the parties' counsel.</p>
+  </section>
+
+  <section>
+    <h2>Questions</h2>
+    <div class="arch-rule"></div>
+    <p>Correspondence: <a href="mailto:hello@orphograph.com">hello@orphograph.com</a>. Security reports and coordinated disclosure: see <a href="/SECURITY.md">/SECURITY.md</a>. Current service state and any ongoing incidents: see <a href="/status.html">/status.html</a>.</p>
+  </section>
+
+  <div class="disclaimer-block">
+    <p><strong>Disclaimer.</strong> The office is not a law firm, not a regulated medical-records system, not a qualified electronic trust service, and not a financial advisor. The receipt is technical evidence; whether it is admissible in any particular forum is a question for that forum's rules and your counsel. Nothing on this page constitutes legal, financial, or professional advice, and nothing on this page establishes a professional relationship with the reader. The plain-English summaries above describe the protocol and the general legal landscape; they do not promise any particular outcome in any particular dispute.</p>
+  </div>
+
+</main>
+
+<footer>
+  <div class="wrap" style="text-align:center;color:var(--muted);font-size:13px;padding:32px 0;">
+    <p>Orphograph · An empirical notary.</p>
+    <p style="margin-top:8px;">
+      <a href="/" style="color:var(--muted);">Home</a> ·
+      <a href="/method/evidence-law.html" style="color:var(--muted);">Evidence law</a> ·
+      <a href="/faq.html" style="color:var(--muted);">FAQ</a> ·
+      <a href="/status.html" style="color:var(--muted);">Status</a> ·
+      <a href="/continuity.html" style="color:var(--muted);">Continuity</a>
+    </p>
+  </div>
+</footer>
+
+</body>
+</html>

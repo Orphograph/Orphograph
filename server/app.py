@@ -1132,6 +1132,32 @@ class Handler(BaseHTTPRequestHandler):
                     return
                 self.send_error(404, "Vertical not found")
                 return
+        # RFC 9116 — security.txt. Served explicitly so the Content-Type
+        # is unambiguous (text/plain; charset=utf-8) and so the path is
+        # never refused by the static-handler's suffix allowlist. The
+        # short-URL form /security.txt 301-redirects to the canonical
+        # /.well-known/security.txt per RFC 9116 §3.
+        if path == "/security.txt":
+            self.send_response(301)
+            self.send_header("Location", "/.well-known/security.txt")
+            self.send_header("Content-Length", "0")
+            _security_headers(self)
+            self.end_headers()
+            return
+        if path == "/.well-known/security.txt":
+            try:
+                body_bytes = (WEB_DIR / ".well-known" / "security.txt").read_bytes()
+            except OSError:
+                self.send_error(404, "Not found")
+                return
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain; charset=utf-8")
+            self.send_header("Content-Length", str(len(body_bytes)))
+            self.send_header("Cache-Control", "public, max-age=3600")
+            _security_headers(self)
+            self.end_headers()
+            self.wfile.write(body_bytes)
+            return
         # SEO discoverability — sitemap.xml and robots.txt are served
         # explicitly with the correct Content-Type and a 1h cache. The
         # files live in web/; we bypass the generic static handler so
