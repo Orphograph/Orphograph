@@ -48,6 +48,10 @@ EXPECTED_URLS = [
     "https://orphograph.com/workpapers/",
     "https://orphograph.com/docs/api.html",
     "https://orphograph.com/docs/webhooks.html",
+    "https://orphograph.com/blog/",
+    "https://orphograph.com/blog/prove-a-photo-was-not-edited.html",
+    "https://orphograph.com/blog/date-stamp-a-document-permanently.html",
+    "https://orphograph.com/blog/prove-i-created-something-before-someone-else.html",
 ]
 
 SITEMAP_NS = "{http://www.sitemaps.org/schemas/sitemap/0.9}"

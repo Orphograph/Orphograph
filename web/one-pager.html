@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Orphograph — Bitcoin-anchored proof a file existed</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#f6f1e3">
+<meta name="description" content="A one-page description of Orphograph: an empirical notary that anchors a file's fingerprint to Bitcoin so a receipt can be verified without the office.">
+<meta property="og:title" content="Orphograph — Bitcoin-anchored proof a file existed">
+<meta property="og:description" content="The instrument records a file's fingerprint to a public chain. The receipt verifies forever, with or without the office.">
+<meta property="og:url" content="https://orphograph.com/one-pager.html">
+<meta property="og:type" content="article">
+<meta property="og:image" content="https://orphograph.com/seal.png?v=6">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="canonical" href="https://orphograph.com/one-pager.html">
+<link rel="icon" type="image/png" href="/favicon.png?v=6">
+<link rel="stylesheet" href="/index.css?v=8">
+<style>
+  .arch-wrap { max-width: 820px; margin: 0 auto; padding: 0 24px 64px; }
+  .arch-wrap h1 { font-family: var(--serif); font-size: 34px; font-weight: 500; line-height: 1.25; margin: 32px 0 10px; color: var(--ink); }
+  .arch-wrap h2 { font-family: var(--serif); font-size: 22px; font-weight: 500; margin: 36px 0 4px; color: var(--ink); }
+  .arch-wrap .sub-headline { font-family: var(--serif); font-size: 18px; line-height: 1.6; color: var(--ink-2); margin: 0 0 26px; max-width: 720px; }
+  .arch-rule { border-top: 1px solid var(--ink); width: 32px; margin: 8px 0 16px; opacity: 0.6; }
+  .arch-wrap p, .arch-wrap li { color: var(--ink-2); line-height: 1.7; font-size: 15.5px; }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 28px; }
+  .chips span { display: inline-block; padding: 6px 12px; border: 1px solid rgba(58,47,36,0.18); border-radius: 999px; font-family: var(--serif); font-size: 13.5px; color: var(--muted); letter-spacing: 0.03em; background: rgba(255,255,255,0.4); }
+
+  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin: 18px 0 28px; }
+  .step-card { background: #faf6e9; border: 1px solid #e5dec9; border-radius: 6px; padding: 18px 18px 16px; }
+  .step-num { font-family: var(--serif); font-size: 13px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); margin: 0 0 8px; }
+  .step-action { font-family: var(--serif); font-size: 17px; color: var(--ink); margin: 0 0 8px; line-height: 1.4; }
+  .step-because { font-size: 14px; color: var(--muted); margin: 0; line-height: 1.55; }
+  @media (max-width: 680px) { .steps { grid-template-columns: 1fr; } }
+
+  .compare { width: 100%; border-collapse: collapse; margin: 16px 0 28px; font-size: 14.5px; }
+  .compare thead th { text-align: left; font-family: var(--serif); font-weight: 500; padding: 10px 14px; background: #f1ead7; color: var(--ink); border-bottom: 1px solid #d9d2c0; font-size: 14px; letter-spacing: 0.04em; }
+  .compare tbody td { padding: 11px 14px; border-bottom: 1px solid #ece4d0; color: var(--ink-2); vertical-align: top; line-height: 1.55; }
+  .compare tbody tr:last-child td { border-bottom: 0; }
+  .compare .col-yes { background: rgba(74,154,115,0.05); }
+  .compare .col-no { background: rgba(58,47,36,0.03); }
+
+  .pricing { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin: 16px 0 28px; }
+  .price-tier { background: var(--paper-card, #ffffff); border: 1px solid #d9d2c0; border-radius: 6px; padding: 18px 18px 16px; }
+  .price-name { font-family: var(--serif); font-size: 16px; color: var(--ink); margin: 0 0 6px; }
+  .price-cost { font-family: var(--serif); font-size: 22px; color: var(--ink); margin: 0 0 10px; font-weight: 500; }
+  .price-cost small { font-size: 13px; color: var(--muted); }
+  .price-body { font-size: 14px; color: var(--ink-2); line-height: 1.55; margin: 0; }
+  @media (max-width: 680px) { .pricing { grid-template-columns: 1fr; } }
+
+  .cta-row { margin: 24px 0 20px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+  .cta-primary { display: inline-block; padding: 12px 22px; background: var(--ink); color: var(--paper-soft); font-family: var(--serif); font-size: 15px; letter-spacing: 0.04em; border-radius: 4px; border-bottom: 0; }
+  .cta-primary:hover { color: var(--paper-soft); border-bottom: 0; background: #2c2620; }
+  .trust-strip { font-family: var(--serif); font-size: 13.5px; color: var(--muted); margin: 16px 0 0; letter-spacing: 0.03em; }
+  .trust-strip a { color: var(--ink-2); border-bottom: 1px solid rgba(58,47,36,0.25); }
+
+  .disclaimer-block { margin-top: 48px; padding: 20px 24px; background: #f1ead7; border-radius: 6px; font-size: 14px; line-height: 1.65; color: var(--muted); }
+</style>
+<meta name="copyright" content="© 2026 Orphograph. Code under MIT (see /LICENSE). Brand, content, and design — all rights reserved.">
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap row">
+    <a href="/" class="brand">Orphograph</a>
+    <nav>
+      <a href="/learn.html">Method</a>
+      <a href="/faq.html">FAQ</a>
+      <a href="/continuity.html">Continuity</a>
+      <a href="/#tiers">Pricing</a>
+      <a href="/signin.html">Sign in</a>
+      <a href="/#drop" class="cta">Anchor a file</a>
+    </nav>
+  </div>
+</header>
+
+<main class="arch-wrap">
+
+  <p style="font-size:12px;letter-spacing:0.18em;text-transform:uppercase;color:var(--muted);margin:48px 0 8px;">One-pager</p>
+  <h1>Bitcoin-anchored proof a file existed — without the file leaving your device.</h1>
+  <p class="sub-headline">The instrument records your file's fingerprint to a public chain. The receipt verifies forever, with or without the office.</p>
+
+  <div class="chips">
+    <span>Photo edits disputed</span>
+    <span>Document dates challenged</span>
+    <span>Originality contested</span>
+  </div>
+
+  <section>
+    <h2>How it works in three steps</h2>
+    <div class="arch-rule"></div>
+    <div class="steps">
+      <div class="step-card">
+        <p class="step-num">Step 1</p>
+        <p class="step-action">Drop a file at orphograph.com.</p>
+        <p class="step-because">The browser computes a SHA-256 fingerprint locally; the file stays on the device.</p>
+      </div>
+      <div class="step-card">
+        <p class="step-num">Step 2</p>
+        <p class="step-action">The office anchors only its fingerprint to Bitcoin.</p>
+        <p class="step-because">Five independent OpenTimestamps calendars route the hash into a Bitcoin block, typically within the hour.</p>
+      </div>
+      <div class="step-card">
+        <p class="step-num">Step 3</p>
+        <p class="step-action">You receive a receipt that verifies for as long as the chain exists.</p>
+        <p class="step-because">The receipt can be checked by any third party against Bitcoin, using the open-source MIT verifier.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>What the receipt proves, and what it does not</h2>
+    <div class="arch-rule"></div>
+    <table class="compare" role="table">
+      <thead>
+        <tr>
+          <th class="col-yes">What the receipt proves</th>
+          <th class="col-no">What it does not prove</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="col-yes">The exact bytes of the file existed by no later than the recorded Bitcoin block.</td>
+          <td class="col-no">Who created the file or who owns the rights to it.</td>
+        </tr>
+        <tr>
+          <td class="col-yes">No edit has been made to those bytes after the anchor; any change breaks the hash.</td>
+          <td class="col-no">That the content of the file is true, accurate, or original to any author.</td>
+        </tr>
+        <tr>
+          <td class="col-yes">The fingerprint is recorded on a public, append-only ledger no single party controls.</td>
+          <td class="col-no">That the file was created at any time earlier than the anchored block.</td>
+        </tr>
+        <tr>
+          <td class="col-yes">The receipt is independently verifiable, with or without the office still existing.</td>
+          <td class="col-no">A legal outcome in any jurisdiction — courts and adjusters reach their own conclusions.</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Pricing</h2>
+    <div class="arch-rule"></div>
+    <div class="pricing">
+      <div class="price-tier">
+        <p class="price-name">Free</p>
+        <p class="price-cost">$0</p>
+        <p class="price-body">Three anchors per day per IP. Anonymous. Receipts last 30 days.</p>
+      </div>
+      <div class="price-tier">
+        <p class="price-name">Standing Order</p>
+        <p class="price-cost">$9<small> / mo</small></p>
+        <p class="price-body">Unlimited anchors. Persistent receipts. Optional folder anchoring. Optional manifest signature.</p>
+      </div>
+      <div class="price-tier">
+        <p class="price-name">Folder + selective disclosure</p>
+        <p class="price-cost">$49<small> / mo</small></p>
+        <p class="price-body">Workflow path included with the $9/mo Standing Order; per-vertical packaging starts at $49/mo (placeholder — actual Stripe price IDs in config/verticals/*.yml).</p>
+      </div>
+    </div>
+  </section>
+
+  <div class="cta-row">
+    <a href="https://orphograph.com/#drop" class="cta-primary">Anchor your first file</a>
+  </div>
+
+  <p class="trust-strip">
+    MIT verifier · Open-source on GitHub · The office is replaceable. <a href="/method/evidence-law.html">How it holds up in evidence</a>.
+  </p>
+
+  <div class="disclaimer-block">
+    <p><strong>Disclaimer.</strong> The office is not a law firm, not a qualified electronic-trust-service provider, and not a financial advisor. The descriptions above describe a technical instrument and its current pricing; they are not legal advice and do not establish an attorney–client relationship. Doctrine in any particular jurisdiction may differ from the broad sketch above, and statutes are amended over time. A customer with an actual dispute should consult counsel admitted in the relevant jurisdiction.</p>
+  </div>
+
+</main>
+
+<footer class="footer">
+  <div class="wrap">
+    <p>© 2026 Orphograph. Code under MIT — see <a href="/LICENSE">/LICENSE</a>. Brand, content, and design — all rights reserved.</p>
+  </div>
+</footer>
+
+<!-- STATUS: ready to ship -->
+</body>
+</html>

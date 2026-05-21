@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>How to date-stamp a document permanently — Orphograph</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#f6f1e3">
+<meta name="description" content="A plain-English guide to placing a permanent, third-party-verifiable date on a digital document — using a cryptographic fingerprint anchored to the Bitcoin chain, with no expiry and no trusted intermediary.">
+<meta property="og:title" content="How to date-stamp a document permanently">
+<meta property="og:description" content="A method for placing a permanent, verifier-neutral date on a document — the bytes you have today, on the public chain, forever.">
+<meta property="og:url" content="https://orphograph.com/blog/date-stamp-a-document-permanently.html">
+<meta property="og:type" content="article">
+<meta property="og:image" content="https://orphograph.com/seal.png?v=6">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="How to date-stamp a document permanently">
+<meta name="twitter:description" content="A method for placing a permanent, verifier-neutral date on a document.">
+<link rel="canonical" href="https://orphograph.com/blog/date-stamp-a-document-permanently.html">
+<link rel="icon" type="image/png" href="/favicon.png?v=6">
+<link rel="stylesheet" href="/index.css?v=8">
+<style>
+  .arch-wrap { max-width: 760px; margin: 0 auto; padding: 0 24px 64px; }
+  .arch-wrap h1 { font-family: var(--serif); font-size: 34px; font-weight: 500; margin: 32px 0 6px; line-height: 1.2; }
+  .arch-wrap h2 { font-family: var(--serif); font-size: 22px; font-weight: 500; margin: 36px 0 4px; color: var(--ink); }
+  .arch-wrap h3 { font-family: var(--serif); font-size: 17px; font-weight: 500; margin: 24px 0 2px; color: var(--ink); }
+  .arch-rule { border-top: 1px solid var(--ink); width: 32px; margin: 8px 0 16px; opacity: 0.6; }
+  .arch-wrap p, .arch-wrap li { color: var(--ink-2); line-height: 1.75; font-size: 15.5px; }
+  .arch-wrap code { background: rgba(74,154,115,0.08); padding: 2px 6px; border-radius: 3px; font-size: 0.92em; }
+  .arch-lede { font-size: 17px; line-height: 1.7; color: var(--ink-2); margin: 0 0 24px; }
+  .arch-callout { background: rgba(74,154,115,0.06); border-left: 3px solid var(--confirm); padding: 16px 20px; margin: 24px 0; border-radius: 0 6px 6px 0; }
+  .arch-callout p { margin: 0; }
+  .means-bullets { list-style: none; padding: 0; margin: 16px 0 32px; }
+  .means-bullets li { padding: 8px 0 8px 24px; position: relative; }
+  .means-bullets li::before { content: "·"; position: absolute; left: 4px; color: var(--confirm); font-size: 22px; line-height: 1; top: 6px; }
+  .disclaimer-block { margin-top: 48px; padding: 20px 24px; background: #f1ead7; border-radius: 6px; font-size: 14px; line-height: 1.65; color: var(--muted); }
+  .post-meta { font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); margin: 48px 0 8px; }
+  .post-foot { color: var(--muted); font-size: 13px; margin-top: 48px; border-top: 1px solid var(--line-soft); padding-top: 18px; }
+</style>
+<meta name="copyright" content="© 2026 Orphograph. Code under MIT (see /LICENSE). Brand, content, and design — all rights reserved.">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Article",
+  "headline": "How to date-stamp a document permanently",
+  "description": "A plain-English guide to placing a permanent, third-party-verifiable date on a digital document using a cryptographic fingerprint anchored to the Bitcoin chain.",
+  "datePublished": "2026-05-21",
+  "dateModified": "2026-05-21",
+  "author": { "@type": "Organization", "name": "Orphograph" },
+  "publisher": {
+    "@type": "Organization",
+    "name": "Orphograph",
+    "logo": { "@type": "ImageObject", "url": "https://orphograph.com/seal.png" }
+  },
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://orphograph.com/blog/date-stamp-a-document-permanently.html"
+  }
+}
+</script>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap row">
+    <a href="/" class="brand">Orphograph</a>
+    <nav>
+      <a href="/learn.html">Method</a>
+      <a href="/faq.html">FAQ</a>
+      <a href="/continuity.html">Continuity</a>
+      <a href="/#tiers">Pricing</a>
+      <a href="/signin.html">Sign in</a>
+      <a href="/#drop" class="cta">Anchor a file</a>
+    </nav>
+  </div>
+</header>
+
+<main class="arch-wrap">
+
+  <p class="post-meta">Blog · Document timestamping</p>
+  <h1>How to date-stamp a document permanently.</h1>
+  <p class="arch-lede">
+    Reduce the document to a short cryptographic fingerprint on your own device, then submit only that fingerprint through a public timestamping protocol that writes it into a Bitcoin block. The block becomes part of the public ledger; the fingerprint is then permanently associated with the moment that block was mined. The document itself is never transmitted. Anyone with the document and the resulting receipt can verify the date, against the public chain, with no expiry and no trusted middleman.</p>
+
+  <section>
+    <h2>The short version</h2>
+    <div class="arch-rule"></div>
+    <ul class="means-bullets">
+      <li>Compute a SHA-256 fingerprint of the document on your own device.</li>
+      <li>Submit the fingerprint through OpenTimestamps, the open public protocol that aggregates submissions into a single Bitcoin transaction.</li>
+      <li>Keep the resulting receipt alongside the document. Any party can later verify that the document existed by the time of the recorded Bitcoin block.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>What actually proves it</h2>
+    <div class="arch-rule"></div>
+    <p>A document — a contract, a draft, a memo, a manuscript — is a sequence of bytes. A cryptographic hash function reduces those bytes to a short fixed-length fingerprint. Two documents that differ by even a single byte produce different fingerprints. The function is one-way: the fingerprint reveals nothing about the document, but any copy can be checked against it in seconds.</p>
+    <p>The Bitcoin chain is a public sequence of blocks. Every block carries a timestamp and a transaction-level commitment, and once a block is buried under additional blocks, rewriting it is for practical purposes impossible. When a document's fingerprint is committed to a specific block, that fingerprint — and by extension the document whose bytes produce it — is permanently associated with a public moment that no single party can backdate or revoke.</p>
+    <p>The mechanism that connects the two is OpenTimestamps. The protocol aggregates many fingerprints into a Merkle tree and commits only the root to the chain. A receipt is the small set of hash operations that, applied to the document's own fingerprint, reproduces the on-chain root. A verifier reads the receipt, reads the chain, and either agrees or does not.</p>
+  </section>
+
+  <section>
+    <h2>The step-by-step</h2>
+    <div class="arch-rule"></div>
+    <p><strong>1.</strong> Save the final version of the document. PDF, DOCX, plain text, image, and source archive all work — what is anchored is the byte sequence, not the format.</p>
+    <p><strong>2.</strong> Open the office at <a href="/">orphograph.com</a> and drop the file onto the anchor area. The browser computes the fingerprint locally. The document itself does not leave the device.</p>
+    <p><strong>3.</strong> The office submits the fingerprint through OpenTimestamps. Within roughly an hour, the protocol's calendars confirm a Bitcoin block has been mined containing the aggregate commitment.</p>
+    <p><strong>4.</strong> Download the receipt. Store it with the document in any backup the document already lives in — drive, archive, evidence folder. The receipt is a small file; it can sit beside the document indefinitely.</p>
+    <p><strong>5.</strong> When the date matters, hand the document and the receipt to any verifier. The independent verifier at <a href="/docs/verify.html">/docs/verify.html</a> reads both and returns a binary verdict: the recorded fingerprint matches the document, and the recorded Bitcoin block matches the public chain.</p>
+    <p>For a working set — a folder of contracts, exhibits, drafts, or workpapers — the same procedure applies once over the whole set using the folder extension at <a href="/method/folder-merkle.html">/method/folder-merkle.html</a>. One receipt covers the entire set; any single document inside it can be later proven to belong without revealing the rest.</p>
+  </section>
+
+  <section>
+    <h2>Common questions</h2>
+    <div class="arch-rule"></div>
+
+    <h3>Is a Bitcoin-anchored date admissible as evidence?</h3>
+    <p>Electronic-records authentication is addressed in the federal rules of evidence, in the model state code adopted by most states, and in several explicit blockchain-evidence statutes. Bitcoin-anchored receipts have been used in real disputes to authenticate the date of a digital record. The landscape is described at <a href="/method/evidence-law.html">/method/evidence-law.html</a>. Admissibility in any specific forum is a question for that forum and the customer's counsel.</p>
+
+    <h3>Does the office see the contents of the document?</h3>
+    <p>No. The fingerprint is computed in the browser or the local command-line tool. Only the fingerprint, a short opaque string, is transmitted. The document itself stays on the customer's device. The architecture is described at <a href="/about-the-office.html">/about-the-office.html</a>.</p>
+
+    <h3>What if the office is no longer operating?</h3>
+    <p>The receipt continues to verify against the Bitcoin chain without any participation from the office. The open-source verifier and the underlying OpenTimestamps protocol are both free and public. The chain is the trust anchor; the office is the convenience layer.</p>
+
+    <h3>How much does it cost?</h3>
+    <p>The free tier covers a small number of anchors per day, which is enough for most personal and small-business use. Paid tiers cover higher volumes and folder anchoring for working sets. Pricing is on the homepage.</p>
+
+    <h3>How long does the date last?</h3>
+    <p>As long as the Bitcoin chain endures and the document's bytes are preserved. The receipt does not expire. There is no annual renewal. There is no central authority that can rescind the record.</p>
+  </section>
+
+  <section>
+    <h2>What this does not prove</h2>
+    <div class="arch-rule"></div>
+    <p>The receipt proves one narrow thing: the document existed in its present byte form by the recorded moment. It does not prove who wrote the document. It does not prove the contents are true. It does not prove the document was created lawfully or that the customer holds rights in it. It does not prove anything about events that occurred after the recorded moment. The receipt establishes a dated-existence floor; the broader claims belong to the customer and their counsel.</p>
+  </section>
+
+  <section>
+    <h2>Try it</h2>
+    <div class="arch-rule"></div>
+    <p>The office is at <a href="/">orphograph.com</a>. A walk-through of a first anchor is at <a href="/docs/quickstart.html">/docs/quickstart.html</a>. The architectural method is at <a href="/method/folder-merkle.html">/method/folder-merkle.html</a>. The independent verifier is at <a href="/docs/verify.html">/docs/verify.html</a>. The doctrinal grounding is at <a href="/method/evidence-law.html">/method/evidence-law.html</a>.</p>
+  </section>
+
+  <p class="post-foot">
+    Published 2026-05-21. Architectural method: <a href="/method/folder-merkle.html">Folder anchoring by Merkle root</a>.
+  </p>
+
+  <div class="disclaimer-block">
+    <p><strong>Disclaimer.</strong> The office is not a law firm, not a qualified electronic-trust-service provider, and not a financial advisor. The summaries above describe a technical method in plain English; they are not legal advice and do not establish an attorney–client relationship. The doctrine in any particular jurisdiction may differ from the broad sketch above, and statutes are amended over time. A customer with an actual dispute should consult counsel admitted in the relevant jurisdiction.</p>
+  </div>
+
+</main>
+
+<footer class="footer">
+  <div class="wrap">
+    <p>© 2026 Orphograph. Code under MIT — see <a href="/LICENSE">/LICENSE</a>. Brand, content, and design — all rights reserved.</p>
+  </div>
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>How to prove you created something before someone else — Orphograph</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#f6f1e3">
+<meta name="description" content="A plain-English method for establishing priority of creation — proving a draft, sketch, manuscript, or design existed in your hands before someone else's competing claim. Bitcoin-anchored, third-party-verifiable, permanent.">
+<meta property="og:title" content="How to prove you created something before someone else">
+<meta property="og:description" content="A method for establishing dated priority of a draft, sketch, manuscript, or design, verifiable by any third party.">
+<meta property="og:url" content="https://orphograph.com/blog/prove-i-created-something-before-someone-else.html">
+<meta property="og:type" content="article">
+<meta property="og:image" content="https://orphograph.com/seal.png?v=6">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="How to prove you created something before someone else">
+<meta name="twitter:description" content="A method for establishing dated priority of a draft, sketch, manuscript, or design.">
+<link rel="canonical" href="https://orphograph.com/blog/prove-i-created-something-before-someone-else.html">
+<link rel="icon" type="image/png" href="/favicon.png?v=6">
+<link rel="stylesheet" href="/index.css?v=8">
+<style>
+  .arch-wrap { max-width: 760px; margin: 0 auto; padding: 0 24px 64px; }
+  .arch-wrap h1 { font-family: var(--serif); font-size: 34px; font-weight: 500; margin: 32px 0 6px; line-height: 1.2; }
+  .arch-wrap h2 { font-family: var(--serif); font-size: 22px; font-weight: 500; margin: 36px 0 4px; color: var(--ink); }
+  .arch-wrap h3 { font-family: var(--serif); font-size: 17px; font-weight: 500; margin: 24px 0 2px; color: var(--ink); }
+  .arch-rule { border-top: 1px solid var(--ink); width: 32px; margin: 8px 0 16px; opacity: 0.6; }
+  .arch-wrap p, .arch-wrap li { color: var(--ink-2); line-height: 1.75; font-size: 15.5px; }
+  .arch-wrap code { background: rgba(74,154,115,0.08); padding: 2px 6px; border-radius: 3px; font-size: 0.92em; }
+  .arch-lede { font-size: 17px; line-height: 1.7; color: var(--ink-2); margin: 0 0 24px; }
+  .arch-callout { background: rgba(74,154,115,0.06); border-left: 3px solid var(--confirm); padding: 16px 20px; margin: 24px 0; border-radius: 0 6px 6px 0; }
+  .arch-callout p { margin: 0; }
+  .means-bullets { list-style: none; padding: 0; margin: 16px 0 32px; }
+  .means-bullets li { padding: 8px 0 8px 24px; position: relative; }
+  .means-bullets li::before { content: "·"; position: absolute; left: 4px; color: var(--confirm); font-size: 22px; line-height: 1; top: 6px; }
+  .disclaimer-block { margin-top: 48px; padding: 20px 24px; background: #f1ead7; border-radius: 6px; font-size: 14px; line-height: 1.65; color: var(--muted); }
+  .post-meta { font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); margin: 48px 0 8px; }
+  .post-foot { color: var(--muted); font-size: 13px; margin-top: 48px; border-top: 1px solid var(--line-soft); padding-top: 18px; }
+</style>
+<meta name="copyright" content="© 2026 Orphograph. Code under MIT (see /LICENSE). Brand, content, and design — all rights reserved.">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Article",
+  "headline": "How to prove you created something before someone else",
+  "description": "A plain-English method for establishing priority of creation — proving a draft, sketch, manuscript, or design existed in your hands before a competing claim.",
+  "datePublished": "2026-05-21",
+  "dateModified": "2026-05-21",
+  "author": { "@type": "Organization", "name": "Orphograph" },
+  "publisher": {
+    "@type": "Organization",
+    "name": "Orphograph",
+    "logo": { "@type": "ImageObject", "url": "https://orphograph.com/seal.png" }
+  },
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://orphograph.com/blog/prove-i-created-something-before-someone-else.html"
+  }
+}
+</script>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap row">
+    <a href="/" class="brand">Orphograph</a>
+    <nav>
+      <a href="/learn.html">Method</a>
+      <a href="/faq.html">FAQ</a>
+      <a href="/continuity.html">Continuity</a>
+      <a href="/#tiers">Pricing</a>
+      <a href="/signin.html">Sign in</a>
+      <a href="/#drop" class="cta">Anchor a file</a>
+    </nav>
+  </div>
+</header>
+
+<main class="arch-wrap">
+
+  <p class="post-meta">Blog · Priority of creation</p>
+  <h1>How to prove you created something before someone else.</h1>
+  <p class="arch-lede">
+    The reliable answer to a priority dispute is a dated, third-party-verifiable record of the work as it existed at the moment of creation. Compute a cryptographic fingerprint of the draft — the manuscript, the sketch, the design file, the code archive — on your own device, and anchor that fingerprint into the Bitcoin chain through an open public protocol. Later, when a competing claim appears, you can show that the bytes in your possession existed by the recorded block. The bytes themselves never leave your device; the dated record is public and permanent.</p>
+
+  <section>
+    <h2>The short version</h2>
+    <div class="arch-rule"></div>
+    <ul class="means-bullets">
+      <li>Save the work as a single file or folder — manuscript, illustration, source archive, design export, audio master.</li>
+      <li>Compute a SHA-256 fingerprint of the file (or a Merkle root over the folder) on your own device.</li>
+      <li>Submit the fingerprint through OpenTimestamps so it is anchored into the Bitcoin chain. Keep the receipt with the work.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>What actually proves it</h2>
+    <div class="arch-rule"></div>
+    <p>Priority disputes — over a book idea, a melody, an illustration, a brand mark, a piece of source code — turn on which party held the work first. The work itself, however polished, cannot speak to its own date; metadata inside a file can be edited; an email to oneself can be backdated; a private cloud drive can be re-stamped. What is needed is a record of the work whose date no party to the dispute could have manipulated.</p>
+    <p>A cryptographic fingerprint of the work, anchored to the Bitcoin chain, is exactly such a record. The fingerprint is short, irreversible, and unique to the bytes that produced it. The Bitcoin chain is a public ledger of which data existed by the time of which block. If your fingerprint is in a block from before the other party's earliest plausible date, the chronology is settled at the level of the bytes.</p>
+    <p>A third party — an editor, a counsel, a forum, a publisher — verifies the claim with three inputs: the original file, the receipt, and access to the public Bitcoin chain. The verifier needs no account with the office and no trust in any single party. The chain decides.</p>
+  </section>
+
+  <section>
+    <h2>The step-by-step</h2>
+    <div class="arch-rule"></div>
+    <p><strong>1.</strong> Save the canonical version of the work. For a manuscript, the working file; for an illustration, the master layered file; for a piece of code, a clean source archive; for a musical work, the master export. The exact bytes are what gets dated.</p>
+    <p><strong>2.</strong> Open the office at <a href="/">orphograph.com</a> and drop the file onto the anchor area. The fingerprint is computed locally; the file itself does not leave the device.</p>
+    <p><strong>3.</strong> The office submits the fingerprint through OpenTimestamps. A Bitcoin block is mined containing the aggregate commitment within roughly an hour.</p>
+    <p><strong>4.</strong> Download the receipt. Save it alongside the work, in whatever backup the work already lives in. The receipt is small and self-contained.</p>
+    <p><strong>5.</strong> Re-anchor on meaningful milestones — outline, first draft, revision passes, final master. Each anchor is independent. A sequence of anchored milestones tells a chronological story that is itself harder to dispute than any single anchor.</p>
+    <p><strong>6.</strong> For projects that involve dozens or thousands of working files — a novel with research notes, an illustration with reference plates, a software repository — anchor the whole folder using the extension at <a href="/method/folder-merkle.html">/method/folder-merkle.html</a>. One receipt covers the set; any single file inside can later be proven to belong without exposing the rest.</p>
+    <p><strong>7.</strong> When a competing claim appears, hand the file and the receipt to any independent verifier. The verifier at <a href="/docs/verify.html">/docs/verify.html</a> recomputes the fingerprint and checks the chain. The verdict is binary.</p>
+  </section>
+
+  <section>
+    <h2>Common questions</h2>
+    <div class="arch-rule"></div>
+
+    <h3>Will a court actually treat this as evidence?</h3>
+    <p>The federal rules of evidence and the model state code already address electronic records and self-authentication by reliable digital process; several states and the European trust-services framework name distributed-ledger records explicitly. The receipt is a clean technical record on which counsel can build the argument. The landscape is described at <a href="/method/evidence-law.html">/method/evidence-law.html</a>. Admissibility in a specific forum is a question for that forum and the customer's counsel.</p>
+
+    <h3>Does the office see the work?</h3>
+    <p>No. The fingerprint is computed on the customer's device. Only the fingerprint — a short opaque string — is transmitted. The work itself stays where it was. The reasoning is at <a href="/about-the-office.html">/about-the-office.html</a> and <a href="/method/folder-merkle.html">/method/folder-merkle.html</a>.</p>
+
+    <h3>What if the office is gone by the time the dispute appears?</h3>
+    <p>The receipt continues to verify against the Bitcoin chain. The open-source verifier and the underlying OpenTimestamps protocol are both free and public. The chain is the trust anchor; the office is the convenience layer.</p>
+
+    <h3>How much does it cost?</h3>
+    <p>The free tier covers a small number of anchors per day, which is enough for most independent creators. Paid tiers cover higher volumes and folder anchoring for working sets. Pricing is on the homepage.</p>
+
+    <h3>How long is the proof good for?</h3>
+    <p>As long as the Bitcoin chain endures and the bytes of the work are preserved. The receipt does not expire. There is no annual renewal and no central authority that can rescind the record.</p>
+  </section>
+
+  <section>
+    <h2>What this does not prove</h2>
+    <div class="arch-rule"></div>
+    <p>The receipt proves one narrow thing: the work, in its present byte form, existed by the recorded moment. It does not prove the work is original to the customer; another party may have created it earlier and not anchored it. It does not prove ownership of the underlying intellectual property; that question is a matter of substantive law. It does not prove lawful creation, lawful use of references, or rights cleared from collaborators. The receipt establishes a dated-existence floor against which any competing claim must measure itself; the broader claims belong to the customer and their counsel.</p>
+  </section>
+
+  <section>
+    <h2>Try it</h2>
+    <div class="arch-rule"></div>
+    <p>The office is at <a href="/">orphograph.com</a>. A walk-through of a first anchor is at <a href="/docs/quickstart.html">/docs/quickstart.html</a>. The architectural method is at <a href="/method/folder-merkle.html">/method/folder-merkle.html</a>. The independent verifier is at <a href="/docs/verify.html">/docs/verify.html</a>. The doctrinal grounding is at <a href="/method/evidence-law.html">/method/evidence-law.html</a>.</p>
+  </section>
+
+  <p class="post-foot">
+    Published 2026-05-21. Architectural method: <a href="/method/folder-merkle.html">Folder anchoring by Merkle root</a>.
+  </p>
+
+  <div class="disclaimer-block">
+    <p><strong>Disclaimer.</strong> The office is not a law firm, not a qualified electronic-trust-service provider, and not a financial advisor. The summaries above describe a technical method in plain English; they are not legal advice and do not establish an attorney–client relationship. The doctrine in any particular jurisdiction may differ from the broad sketch above, and statutes are amended over time. A customer with an actual dispute should consult counsel admitted in the relevant jurisdiction.</p>
+  </div>
+
+</main>
+
+<footer class="footer">
+  <div class="wrap">
+    <p>© 2026 Orphograph. Code under MIT — see <a href="/LICENSE">/LICENSE</a>. Brand, content, and design — all rights reserved.</p>
+  </div>
+</footer>
+
+</body>
+</html>

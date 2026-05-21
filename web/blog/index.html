@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Orphograph — Blog</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#f6f1e3">
+<meta name="description" content="Practical guides on cryptographic timestamping, photographic and document authenticity, and priority-of-creation disputes — from the Orphograph office.">
+<meta property="og:title" content="Orphograph — Blog">
+<meta property="og:description" content="Practical guides on cryptographic timestamping, photographic and document authenticity, and priority-of-creation disputes.">
+<meta property="og:url" content="https://orphograph.com/blog/">
+<meta property="og:type" content="website">
+<meta property="og:image" content="https://orphograph.com/seal.png?v=6">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Orphograph — Blog">
+<link rel="canonical" href="https://orphograph.com/blog/">
+<link rel="icon" type="image/png" href="/favicon.png?v=6">
+<link rel="stylesheet" href="/index.css?v=8">
+<style>
+  .arch-wrap { max-width: 760px; margin: 0 auto; padding: 0 24px 64px; }
+  .arch-wrap h1 { font-family: var(--serif); font-size: 36px; font-weight: 500; margin: 32px 0 6px; }
+  .arch-wrap h2 { font-family: var(--serif); font-size: 22px; font-weight: 500; margin: 32px 0 4px; color: var(--ink); }
+  .arch-rule { border-top: 1px solid var(--ink); width: 32px; margin: 8px 0 16px; opacity: 0.6; }
+  .arch-wrap p, .arch-wrap li { color: var(--ink-2); line-height: 1.75; font-size: 15.5px; }
+  .arch-lede { font-size: 17px; line-height: 1.7; color: var(--ink-2); margin: 0 0 24px; }
+  .post-meta { font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); margin: 48px 0 8px; }
+  .post-list { list-style: none; padding: 0; margin: 32px 0; }
+  .post-list li { padding: 24px 0; border-top: 1px solid var(--line-soft); }
+  .post-list li:last-child { border-bottom: 1px solid var(--line-soft); }
+  .post-list h2 { margin: 0 0 8px; }
+  .post-list a.title { color: var(--ink); text-decoration: none; }
+  .post-list a.title:hover { text-decoration: underline; }
+  .post-list .date { font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); margin: 0 0 6px; }
+</style>
+<meta name="copyright" content="© 2026 Orphograph. Code under MIT (see /LICENSE). Brand, content, and design — all rights reserved.">
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap row">
+    <a href="/" class="brand">Orphograph</a>
+    <nav>
+      <a href="/learn.html">Method</a>
+      <a href="/faq.html">FAQ</a>
+      <a href="/continuity.html">Continuity</a>
+      <a href="/#tiers">Pricing</a>
+      <a href="/signin.html">Sign in</a>
+      <a href="/#drop" class="cta">Anchor a file</a>
+    </nav>
+  </div>
+</header>
+
+<main class="arch-wrap">
+
+  <p class="post-meta">Blog</p>
+  <h1>The blog.</h1>
+  <p class="arch-lede">
+    Plain-English guides from the office. Each post answers one question a reader is already asking — how to date a document, how to prove a photograph is unaltered, how to establish that a draft pre-existed a competing claim — and ties the answer to the published architectural method.
+  </p>
+
+  <ul class="post-list">
+
+    <li>
+      <p class="date">2026-05-21</p>
+      <h2><a class="title" href="/blog/prove-a-photo-was-not-edited.html">How to prove a photo was not edited.</a></h2>
+      <p>A practical method for showing a photograph is byte-for-byte identical to the file that existed at a recorded moment. Compute a SHA-256 fingerprint of the photograph on the device, submit only the fingerprint through a public timestamping protocol, and keep the receipt with the file. Any later copy of the photograph can be checked against the recorded fingerprint by an independent verifier with no trusted intermediary in the loop.</p>
+    </li>
+
+    <li>
+      <p class="date">2026-05-21</p>
+      <h2><a class="title" href="/blog/date-stamp-a-document-permanently.html">How to date-stamp a document permanently.</a></h2>
+      <p>A method for placing a permanent, third-party-verifiable date on a digital document. Reduce the document to a short cryptographic fingerprint on the device, then anchor that fingerprint to the Bitcoin chain through OpenTimestamps. The document itself is never transmitted; the date does not expire; any party with the document and the receipt can verify the result against the public chain.</p>
+    </li>
+
+    <li>
+      <p class="date">2026-05-21</p>
+      <h2><a class="title" href="/blog/prove-i-created-something-before-someone-else.html">How to prove you created something before someone else.</a></h2>
+      <p>A method for establishing dated priority in a creation dispute — a manuscript, an illustration, a piece of code, a design master. Anchor the work as it stands today, re-anchor on milestones, and use the resulting chain of dated receipts to show that the bytes in the customer's possession existed before any competing claim. Verifiable by any third party against the public chain.</p>
+    </li>
+
+  </ul>
+
+  <p style="color:var(--muted);font-size:13px;margin-top:48px;border-top:1px solid var(--line-soft);padding-top:18px;">
+    The architectural method underlying all three posts is described at <a href="/method/folder-merkle.html">/method/folder-merkle.html</a>; the doctrinal grounding is at <a href="/method/evidence-law.html">/method/evidence-law.html</a>.
+  </p>
+
+</main>
+
+<footer class="footer">
+  <div class="wrap">
+    <p>© 2026 Orphograph. Code under MIT — see <a href="/LICENSE">/LICENSE</a>. Brand, content, and design — all rights reserved.</p>
+  </div>
+</footer>
+
+</body>
+</html>
