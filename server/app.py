@@ -105,6 +105,7 @@ ALLOWED_STATIC_SUFFIXES = {
     ".json", ".txt", ".ots",  # sample receipt assets under web/sample/
     ".py", ".md", ".tar", ".gz",  # self-hosted OSS verifier under web/verify/
     ".zip",  # offline verifier kit under web/dist/orphograph-verify.zip
+    ".xml",  # sitemap.xml for SEO discoverability
 }
 
 # 10 anchors/hour/IP by default; refills at 10/3600 = ~0.00278 tokens/sec
@@ -1131,6 +1132,30 @@ class Handler(BaseHTTPRequestHandler):
                     return
                 self.send_error(404, "Vertical not found")
                 return
+        # SEO discoverability — sitemap.xml and robots.txt are served
+        # explicitly with the correct Content-Type and a 1h cache. The
+        # files live in web/; we bypass the generic static handler so
+        # the response shape (and Content-Type) is unambiguous.
+        if path in ("/sitemap.xml", "/robots.txt"):
+            try:
+                rel = path.lstrip("/")
+                body_bytes = (WEB_DIR / rel).read_bytes()
+            except OSError:
+                self.send_error(404, "Not found")
+                return
+            content_type = (
+                "application/xml; charset=utf-8"
+                if path == "/sitemap.xml"
+                else "text/plain; charset=utf-8"
+            )
+            self.send_response(200)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(body_bytes)))
+            self.send_header("Cache-Control", "public, max-age=3600")
+            _security_headers(self)
+            self.end_headers()
+            self.wfile.write(body_bytes)
+            return
         _serve_static(self, path)
 
     def do_POST(self):  # noqa: N802

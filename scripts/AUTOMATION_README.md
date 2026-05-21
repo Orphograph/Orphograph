@@ -1,12 +1,15 @@
 # Daily Compliance + Auto-Anchor Automation
 
-Two scheduled jobs that protect the founder's two hard editorial rules and
-keep a Bitcoin-anchored provenance trail of every meaningful repo state.
+Three scheduled jobs that protect the founder's two hard editorial
+rules, keep a Bitcoin-anchored provenance trail of every meaningful
+repo state, and watch the public package registries for newly-published
+``orphograph`` releases.
 
 | Job | Script | Schedule | Plist template |
 |---|---|---|---|
 | Brand-rule compliance sweep | `scripts/compliance_scan.py` | Daily 09:00 local | `scripts/com.orphograph.compliance.plist.template` |
 | Repo folder-anchor | `scripts/auto_anchor_repo.py` | Daily 23:55 local | `scripts/com.orphograph.auto_anchor.plist.template` |
+| Publish-cascade watcher | `scripts/publish_watcher.py` | Every 30 min | `scripts/com.orphograph.publish_watcher.plist.template` |
 
 Both jobs are stdlib-only Python. Neither binds a port. Neither logs
 PII, leaf paths, or full receipt bodies.
@@ -52,6 +55,60 @@ Hashes the meaningful repo state into one folder-Merkle root via
 Without an API key the script anchors under the free tier (3/day/IP)
 and self-throttles. With `ORPHO_AUTO_ANCHOR_KEY` set, the anchor lands
 in the founder's subscription vault and there is no rate limit.
+
+### Publish-cascade watcher
+
+Polls `https://pypi.org/pypi/orphograph/json` and
+`https://registry.npmjs.org/orphograph` once per launchd tick (every 30
+minutes). The first time a new version is observed the watcher:
+
+- Downloads the artefact files listed in the registry response (wheel
+  + sdist for PyPI, tarball for npm).
+- Hashes them, builds a folder-Merkle root via `server/merkle.py`, and
+  POSTs the manifest to `/api/anchor_folder` with `private: true`.
+- Appends one JSONL line to `outbox/PUBLISH_STATE_PYPI.json` or
+  `outbox/PUBLISH_STATE_NPM.json` with the version, file names, file
+  SHA-256s, manifest root, and anchor receipt id.
+- Updates `outbox/HOMEPAGE_BADGES.json` with the version + install
+  hint + receipt id so a downstream consumer (the homepage renderer)
+  can pick up the badge without redeploying the script.
+
+Idempotent: rerunning in the same minute is safe because both state
+files dedupe by version. The watcher always exits 0 — a transient
+network failure must not disable the launchd job. Errors are logged to
+stderr (which launchd captures into the log file below).
+
+Install:
+
+```bash
+cp scripts/com.orphograph.publish_watcher.plist.template \
+   ~/Library/LaunchAgents/com.orphograph.publish_watcher.plist
+# Edit the plist: replace every REPLACE_ME_HOMEDIR with your macOS
+# short username; optionally set ORPHO_AUTO_ANCHOR_KEY.
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.orphograph.publish_watcher.plist
+launchctl enable    gui/$(id -u)/com.orphograph.publish_watcher
+```
+
+Disable temporarily:
+
+```bash
+launchctl disable gui/$(id -u)/com.orphograph.publish_watcher
+```
+
+Uninstall:
+
+```bash
+launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/com.orphograph.publish_watcher.plist
+rm ~/Library/LaunchAgents/com.orphograph.publish_watcher.plist
+```
+
+State files (all under `outbox/`):
+
+- `PUBLISH_STATE_PYPI.json` — JSONL, one record per PyPI release.
+- `PUBLISH_STATE_NPM.json` — JSONL, one record per npm release.
+- `HOMEPAGE_BADGES.json` — single JSON object, last-write-wins per registry.
+
+Log: `~/Library/Logs/orphograph_publish_watcher.log`.
 
 ## 2. Install (manual; not done by any agent)
 

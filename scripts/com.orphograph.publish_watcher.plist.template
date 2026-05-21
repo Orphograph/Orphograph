@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  com.orphograph.publish_watcher.plist.template
+
+  launchd schedule for scripts/publish_watcher.py. Every 30 minutes the
+  watcher polls the PyPI JSON API and the npm registry for the
+  `orphograph` package. The first time a new version is observed the
+  watcher downloads the artefact files, hashes them, builds a folder
+  Merkle root, POSTs it to /api/anchor_folder (private), and appends a
+  one-line record to outbox/PUBLISH_STATE_PYPI.json (or _NPM.json). It
+  also updates outbox/HOMEPAGE_BADGES.json so a downstream consumer can
+  pick up the new install-hint without a redeploy.
+
+  This file is a TEMPLATE. It is intentionally NOT installed by any
+  agent or script. The founder copies it into ~/Library/LaunchAgents/
+  and bootstraps it themselves; on Sequoia (macOS 15+) `launchctl
+  bootstrap` periodically returns IO error 5 in user sessions and the
+  fallback path differs per environment.
+
+  Install (founder runs manually):
+    cp scripts/com.orphograph.publish_watcher.plist.template \
+       ~/Library/LaunchAgents/com.orphograph.publish_watcher.plist
+    # Edit ~/Library/LaunchAgents/com.orphograph.publish_watcher.plist:
+    #   - replace every REPLACE_ME_HOMEDIR with your macOS short username
+    #     (the path segment after /Users/), e.g. franciscoefrain.rodriguezrivera
+    #   - optionally fill ORPHO_AUTO_ANCHOR_KEY to bypass the free tier
+    launchctl bootstrap gui/$UID ~/Library/LaunchAgents/com.orphograph.publish_watcher.plist
+    launchctl enable        gui/$UID/com.orphograph.publish_watcher
+    launchctl kickstart -k  gui/$UID/com.orphograph.publish_watcher   # smoke
+
+  Disable temporarily:
+    launchctl disable gui/$UID/com.orphograph.publish_watcher
+
+  Uninstall:
+    launchctl bootout gui/$UID/com.orphograph.publish_watcher
+    rm ~/Library/LaunchAgents/com.orphograph.publish_watcher.plist
+
+  Sequoia IO error 5 fallback (nohup sleeper loop):
+    nohup python3 -c "import subprocess, time; \
+      [subprocess.run(['/opt/homebrew/bin/python3', \
+        '/Users/REPLACE_ME_HOMEDIR/orphograph/scripts/publish_watcher.py']) \
+        or time.sleep(1800) for _ in iter(int, 1)]" \
+      >> ~/Library/Logs/orphograph_publish_watcher.log 2>&1 &
+
+  Logs: ~/Library/Logs/orphograph_publish_watcher.log
+  State: REPO_ROOT/outbox/PUBLISH_STATE_PYPI.json
+         REPO_ROOT/outbox/PUBLISH_STATE_NPM.json
+         REPO_ROOT/outbox/HOMEPAGE_BADGES.json
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.orphograph.publish_watcher</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/opt/homebrew/bin/python3</string>
+        <string>/Users/REPLACE_ME_HOMEDIR/orphograph/scripts/publish_watcher.py</string>
+    </array>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>ORPHO_BASE_URL</key>
+        <string>https://orphograph.com</string>
+        <key>ORPHO_AUTO_ANCHOR_KEY</key>
+        <string></string>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    </dict>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/REPLACE_ME_HOMEDIR/orphograph</string>
+
+    <key>StartInterval</key>
+    <integer>1800</integer>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <false/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/REPLACE_ME_HOMEDIR/Library/Logs/orphograph_publish_watcher.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/REPLACE_ME_HOMEDIR/Library/Logs/orphograph_publish_watcher.log</string>
+
+    <key>ProcessType</key>
+    <string>Background</string>
+</dict>
+</plist>

@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /r/
+Disallow: /a/
+Disallow: /data/
+Disallow: /admin/
+
+Sitemap: https://orphograph.com/sitemap.xml

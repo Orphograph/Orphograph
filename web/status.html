@@ -135,34 +135,7 @@
   </div>
 </footer>
 
-<script>
-(function() {
-  var t0 = performance.now();
-  var pill = document.getElementById('status-pill');
-  var detail = document.getElementById('status-detail');
-  var rtt = document.getElementById('status-rtt');
-  fetch('/api/health', { method: 'GET', cache: 'no-store' })
-    .then(function(r) {
-      var dt = (performance.now() - t0).toFixed(0);
-      if (r.status === 200) {
-        pill.className = 'status-pill ok';
-        pill.textContent = 'reachable';
-        detail.textContent = 'HTTP 200';
-      } else {
-        pill.className = 'status-pill fail';
-        pill.textContent = 'degraded';
-        detail.textContent = 'HTTP ' + r.status;
-      }
-      rtt.textContent = dt + ' ms';
-    })
-    .catch(function() {
-      pill.className = 'status-pill fail';
-      pill.textContent = 'unreachable';
-      detail.textContent = 'no response';
-      rtt.textContent = '—';
-    });
-})();
-</script>
+<script src="/status-page.js" defer></script>
 
 </body>
 </html>

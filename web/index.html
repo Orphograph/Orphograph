@@ -68,6 +68,90 @@
     .hero .plain-subtitle{font-size: 17px;}
     .hero .means-list li{font-size: 15px;}
   }
+  /* Live status badge (header) */
+  .live-status-badge{
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-right: 6px;
+    padding: 5px 10px;
+    border-radius: 999px;
+    background: rgba(58,47,36,0.04);
+    border: 1px solid rgba(58,47,36,0.10);
+    font-size: 12px;
+    color: var(--muted);
+    font-family: var(--serif);
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    text-decoration: none;
+    border-bottom: 0;
+    transition: background .15s ease, color .15s ease;
+    line-height: 1;
+  }
+  .live-status-badge:hover{
+    background: rgba(58,47,36,0.08);
+    color: var(--ink);
+  }
+  .live-status-badge .dot{
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--muted-2);
+    flex: 0 0 7px;
+    display: inline-block;
+  }
+  .live-status-badge[data-state="live"] .dot{ background: var(--confirm); }
+  .live-status-badge[data-state="degraded"] .dot{ background: #b25845; }
+  .live-status-badge[data-state="live"]{ color: var(--ink-2); }
+  /* Plain examples block */
+  .hero .examples{
+    margin: 22px 0 0;
+    max-width: 620px;
+  }
+  .hero .examples > summary{
+    list-style: none;
+    cursor: pointer;
+    font-family: var(--serif);
+    font-size: 13px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 4px 0;
+    outline: none;
+  }
+  .hero .examples > summary::-webkit-details-marker{display:none;}
+  .hero .examples > summary::before{
+    content: "+ ";
+    color: var(--ink-2);
+  }
+  .hero .examples[open] > summary::before{ content: "− "; }
+  .hero .examples-body{
+    border-top: 1px solid var(--ink);
+    width: 28px;
+    margin: 10px 0 14px;
+    opacity: 0.55;
+  }
+  .hero .examples p{
+    color: var(--ink-2);
+    font-size: 15px;
+    line-height: 1.6;
+    margin: 0 0 12px;
+  }
+  .hero .examples p:last-child{ margin-bottom: 0; }
+  /* Trust strip */
+  .trust-strip{
+    text-align: center;
+    font-size: 12.5px;
+    color: var(--muted);
+    padding: 10px 20px 22px;
+    font-family: var(--serif);
+    letter-spacing: 0.02em;
+  }
+  .trust-strip a{
+    color: var(--muted);
+    border-bottom: 1px dotted rgba(107,99,84,0.45);
+  }
+  .trust-strip a:hover{ color: var(--ink-2); }
 </style>
 <meta name="copyright" content="© 2026 Orphograph. MIT — see /LICENSE">
 </head>
@@ -82,6 +166,7 @@
       <a href="#tiers">Pricing</a>
       <a href="/about.html">Office</a>
       <a href="/signin.html">Sign in</a>
+      <a href="/status.html" id="live-status-badge" class="live-status-badge" data-state="checking" aria-label="Live service status"><span class="dot" aria-hidden="true"></span><span class="label">checking</span></a>
       <a href="#drop" class="cta">Anchor a file</a>
     </nav>
   </div>
@@ -122,8 +207,22 @@
         <li>Anyone can verify it later — no account, no login.</li>
       </ul>
     </section>
+    <details class="examples">
+      <summary>Examples of what people anchor</summary>
+      <div class="examples-body"></div>
+      <p>A photograph you took on your phone or camera. Drop it at the counter; the office anchors only the fingerprint; the file itself never leaves your device.</p>
+      <p>A folder of photographs from one event — a wedding, a site visit, a long afternoon. One receipt covers the whole folder, and any single photograph can later be checked on its own. The office anchors only the fingerprint; the file itself never leaves your device.</p>
+      <p>A document or contract in its final form. The receipt records that exact wording existed by the recorded block, with no later edits. The office anchors only the fingerprint; the file itself never leaves your device.</p>
+      <p>A spreadsheet or set of records that closes a period — a month, a quarter, a season. Each row stays exactly as you saved it. The office anchors only the fingerprint; the file itself never leaves your device.</p>
+      <p>An audio recording or interview, in the original file your device produced. Length and format do not matter. The office anchors only the fingerprint; the file itself never leaves your device.</p>
+    </details>
   </div>
 </section>
+
+<!-- ────────────────────────────────── TRUST STRIP ──────────────────────── -->
+<div class="trust-strip">
+  Source code under MIT. Receipts verifiable without the office. Method documented at <a href="/learn.html">/method/</a>.
+</div>
 
 <!-- ────────────────────────────────── ACTION ───────────────────────────── -->
 <section class="action">
@@ -441,6 +540,9 @@
       <a href="/badge.html">Badge</a>
       <a href="/docs/api.html">API</a>
       <a href="/docs/webhooks.html">Webhooks</a>
+      <a href="/docs/install.html">Install</a>
+      <a href="/docs/quickstart.html">Quickstart</a>
+      <a href="/docs/verify.html">Verify a receipt</a>
       <a href="/changelog.html">Changelog</a>
       <a href="/roadmap.html">Roadmap</a>
       <a href="/method/architecture.html">Architecture</a>
@@ -466,5 +568,6 @@
 <script src="/v2.js?v=2"></script>
 <script type="module" src="/folder.js"></script>
 <script src="/statusbar.js" defer></script>
+<script src="/status-badge.js" defer></script>
 </body>
 </html>
