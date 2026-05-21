@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  com.orphograph.morning_check.plist.template
+
+  launchd LaunchAgent for scripts/morning_check.py — runs at every login
+  (RunAtLoad=true) and every four hours thereafter, so the founder sees a
+  one-line website / revenue / feedback snapshot the moment they open the
+  laptop, and a fresh check throughout the day.
+
+  RunAtLoad in a LaunchAgent (not a LaunchDaemon) fires once per gui/$UID
+  session — i.e. once per macOS login, which is what the founder asked for.
+  StartInterval=14400 gives one tick every four hours afterwards.
+
+  This file is a TEMPLATE. Per the established Orphograph pattern (see
+  com.orphograph.watchdog.plist.template), the founder copies it into
+  ~/Library/LaunchAgents/ and bootstraps it manually because on Sequoia
+  (macOS 15+) `launchctl bootstrap` periodically returns IO error 5 and
+  the fallback path differs per environment.
+
+  Install:
+    cp scripts/com.orphograph.morning_check.plist.template \
+       ~/Library/LaunchAgents/com.orphograph.morning_check.plist
+    launchctl bootstrap gui/$UID ~/Library/LaunchAgents/com.orphograph.morning_check.plist
+    launchctl enable        gui/$UID/com.orphograph.morning_check
+    launchctl kickstart -k  gui/$UID/com.orphograph.morning_check   # smoke
+
+  Uninstall:
+    launchctl bootout gui/$UID/com.orphograph.morning_check
+    rm ~/Library/LaunchAgents/com.orphograph.morning_check.plist
+
+  Output lands at:
+    ~/Library/Logs/orphograph_morning_check.jsonl   (append-only)
+    macOS Notification Center                       (only when alerts pending)
+
+  The founder token is read at runtime from ~/.orphograph_secrets.env
+  (line ORPHO_FOUNDER_TOKEN=...). If the file is absent the script falls
+  back to public /api/health only and is still useful as a site-up probe.
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.orphograph.morning_check</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/opt/homebrew/bin/python3</string>
+        <string>/Users/franciscoefrain.rodriguezrivera/orphograph/scripts/morning_check.py</string>
+    </array>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin</string>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>StartInterval</key>
+    <integer>14400</integer>
+
+    <key>KeepAlive</key>
+    <false/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/franciscoefrain.rodriguezrivera/Library/Logs/orphograph_morning_check.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/franciscoefrain.rodriguezrivera/Library/Logs/orphograph_morning_check.log</string>
+
+    <key>ProcessType</key>
+    <string>Background</string>
+</dict>
+</plist>

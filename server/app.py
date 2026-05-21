@@ -23,7 +23,7 @@ import re
 import secrets
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -1105,6 +1105,11 @@ class Handler(BaseHTTPRequestHandler):
             # Founder-only — view operational admin toggles (maintenance, checkout, anchoring).
             self._handle_founder_admin_toggles()
             return
+        if path == "/api/founder/morning-summary":
+            # Founder-only — aggregated one-call snapshot (health + revenue + pending feedback).
+            # Designed for the login-trigger morning-check script.
+            self._handle_founder_morning_summary()
+            return
         if path in ("/affiliate", "/affiliate/"):
             # Public landing for the affiliate program.
             _serve_static(self, "/affiliate.html")
@@ -2072,6 +2077,110 @@ class Handler(BaseHTTPRequestHandler):
             "anchoring_disabled": ORPHO_DISABLE_ANCHORING,
             "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
             "notice": "Toggles are controlled by environment variables. SSH into the server to change them: fly ssh console, then 'fly secrets set ORPHO_MAINTENANCE_MODE=1'",
+        })
+
+    def _handle_founder_morning_summary(self) -> None:
+        """JSON endpoint — single-call snapshot for the login-trigger morning-check script.
+
+        Gated by ORPHO_FOUNDER_TOKEN via header X-Orpho-Founder. Aggregates the
+        three pieces of state the founder asked to see on every login:
+          1. Website health (counts, ledger_bytes, uptime, last-anchor age)
+          2. Paying customers (MRR, active count, churned-this-month)
+          3. Customer feedback (pending refund requests, recent support events)
+        """
+        token = os.environ.get("ORPHO_FOUNDER_TOKEN", "").strip()
+        if not token:
+            self.send_error(404, "not found")
+            return
+        supplied = self.headers.get("X-Orpho-Founder", "").strip()
+        import hmac as _hmac
+        if not _hmac.compare_digest(supplied, token):
+            self.send_error(404, "not found")
+            return
+
+        now_utc = datetime.now(timezone.utc)
+        today_iso = now_utc.date().isoformat()
+
+        # 1. Health snapshot
+        try:
+            import health as _health
+            hs = _health.snapshot()
+        except Exception as e:  # noqa: BLE001
+            hs = {"error": f"{type(e).__name__}"}
+
+        # 2. Revenue snapshot
+        try:
+            import analytics as _analytics
+            metrics = _analytics.metrics(days_back=30)
+        except Exception as e:  # noqa: BLE001
+            metrics = {"error": f"{type(e).__name__}"}
+
+        # 3. Feedback / inbox snapshot — count pending refund_requests + recent events
+        feedback = {"refund_requests_pending": 0, "refund_requests_today": 0,
+                    "recent_events_24h": 0}
+        try:
+            ledger_path = Path(os.environ.get(
+                "ORPHO_REFUND_LEDGER",
+                str(ROOT / "data" / "refund_requests.jsonl"),
+            ))
+            if ledger_path.exists():
+                pending = 0
+                today_n = 0
+                with ledger_path.open() as f:
+                    for line in f:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        try:
+                            rec = json.loads(line)
+                        except json.JSONDecodeError:
+                            continue
+                        pending += 1
+                        if str(rec.get("ts", "")).startswith(today_iso):
+                            today_n += 1
+                feedback["refund_requests_pending"] = pending
+                feedback["refund_requests_today"] = today_n
+        except OSError:
+            pass
+
+        try:
+            events_path = ROOT / "data" / "events.jsonl"
+            if events_path.exists():
+                cutoff = now_utc - timedelta(hours=24)
+                n = 0
+                # Read only the last 4 KiB — events are append-only and we just
+                # want a magnitude estimate, not a full scan.
+                with events_path.open("rb") as f:
+                    f.seek(0, 2)
+                    end = f.tell()
+                    f.seek(max(0, end - 65536))
+                    tail = f.read().decode("utf-8", errors="ignore")
+                for line in tail.splitlines():
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        rec = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    ts = rec.get("ts") or rec.get("timestamp")
+                    if not ts:
+                        continue
+                    try:
+                        when = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+                    except ValueError:
+                        continue
+                    if when >= cutoff:
+                        n += 1
+                feedback["recent_events_24h"] = n
+        except OSError:
+            pass
+
+        _json_response(self, 200, {
+            "timestamp": now_utc.isoformat() + "Z",
+            "health": hs,
+            "revenue": metrics,
+            "feedback": feedback,
         })
 
     def _handle_unsubscribe_post(self) -> None:
