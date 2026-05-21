@@ -2,67 +2,167 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Status — Orphograph</title>
+<title>Orphograph — Service status and transparency record</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#f6f1e3">
+<meta name="description" content="A plain-English summary of how the office monitors itself, how a visitor or customer can verify the live state of the service, and where the public record of recent automated checks lives.">
+<meta property="og:title" content="Orphograph — Service status">
+<meta property="og:description" content="The office's transparency record: health checks, verifier integrity, and on-chain attestation.">
+<meta property="og:url" content="https://orphograph.com/status.html">
+<meta property="og:type" content="article">
+<meta property="og:image" content="https://orphograph.com/seal.png?v=6">
+<link rel="canonical" href="https://orphograph.com/status.html">
 <link rel="icon" type="image/png" href="/favicon.png?v=6">
-<link rel="stylesheet" href="/style.css">
-<link rel="stylesheet" href="/status.css">
-<meta name="copyright" content="© 2026 Orphograph. MIT — see /LICENSE">
+<link rel="stylesheet" href="/index.css?v=8">
+<style>
+  .arch-wrap { max-width: 820px; margin: 0 auto; padding: 0 24px 64px; }
+  .arch-wrap h1 { font-family: var(--serif); font-size: 36px; font-weight: 500; margin: 32px 0 6px; }
+  .arch-wrap h2 { font-family: var(--serif); font-size: 22px; font-weight: 500; margin: 36px 0 4px; color: var(--ink); }
+  .arch-rule { border-top: 1px solid var(--ink); width: 32px; margin: 8px 0 16px; opacity: 0.6; }
+  .arch-wrap p, .arch-wrap li { color: var(--ink-2); line-height: 1.75; font-size: 15.5px; }
+  .arch-lede { font-size: 17px; line-height: 1.7; color: var(--ink-2); margin: 0 0 24px; }
+  .status-grid { display: grid; grid-template-columns: 1fr auto; gap: 14px 24px; margin: 24px 0; padding: 18px 22px; background: #faf6e9; border-radius: 8px; border: 1px solid #e5dec9; font-size: 15px; }
+  .status-grid .label { font-family: var(--serif); }
+  .status-grid .value { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 13px; color: var(--ink); word-break: break-all; }
+  .status-pill { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 500; letter-spacing: 0.04em; vertical-align: middle; }
+  .status-pill.pending { background: rgba(74,154,115,0.10); color: var(--confirm); border: 1px solid var(--confirm); }
+  .status-pill.fail { background: rgba(190,80,80,0.12); color: #be5050; border: 1px solid #be5050; }
+  .status-pill.ok { background: rgba(74,154,115,0.18); color: var(--confirm); border: 1px solid var(--confirm); }
+  .ledger-table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+  .ledger-table th { text-align: left; font-family: var(--serif); font-weight: 500; padding: 8px 12px; border-bottom: 1px solid #d9d2c0; font-size: 14px; color: var(--ink); }
+  .ledger-table td { padding: 8px 12px; border-bottom: 1px solid #ede6cf; font-size: 14px; color: var(--ink-2); }
+  .ledger-table code { font-size: 12px; word-break: break-all; }
+  .self-check-block { background: rgba(74,154,115,0.06); border-left: 3px solid var(--confirm); padding: 16px 20px; margin: 24px 0; border-radius: 0 6px 6px 0; }
+  .self-check-block p { margin: 0; }
+</style>
+<meta name="copyright" content="© 2026 Orphograph. Code under MIT (see /LICENSE). Brand, content, and design — all rights reserved.">
 </head>
 <body>
 
-<header>
-  <div class="brand"><a href="/">orphograph</a></div>
-  <nav><a href="/">home</a> <a href="/api/health">raw JSON</a></nav>
+<header class="nav">
+  <div class="wrap row">
+    <a href="/" class="brand">Orphograph</a>
+    <nav>
+      <a href="/learn.html">Method</a>
+      <a href="/faq.html">FAQ</a>
+      <a href="/continuity.html">Continuity</a>
+      <a href="/#tiers">Pricing</a>
+      <a href="/signin.html">Sign in</a>
+      <a href="/#drop" class="cta">Anchor a file</a>
+    </nav>
+  </div>
 </header>
 
-<main>
-<section>
-  <h1>Status</h1>
-  <p class="muted">
-    Public operational signals. Auto-refreshes every 30 seconds.
-    No PII is exposed on this page.
+<main class="arch-wrap">
+
+  <p style="font-size:12px;letter-spacing:0.18em;text-transform:uppercase;color:var(--muted);margin:48px 0 8px;">Status &middot; Transparency record</p>
+  <h1>How the office watches itself.</h1>
+  <p class="arch-lede">
+    A service that issues notarial records about other people's files should be willing to publish its own. This page describes, in plain English, the three independent checks the office runs against itself, where the results live, and how a visitor can confirm the live state without trusting anything on this page.
   </p>
 
-  <div class="status-grid">
-    <div class="card">
-      <div class="card-label">Service</div>
-      <div class="card-value" id="ok">…</div>
+  <section>
+    <h2>1 &middot; Live state, right now</h2>
+    <div class="arch-rule"></div>
+    <p>The strip below updates on page load by hitting the public health endpoint from your own browser. If the endpoint is reachable you will see <span class="status-pill ok">reachable</span>; if not, <span class="status-pill fail">unreachable</span>. The check happens in your browser; the office sees only that you loaded the endpoint, the same way any visitor would.</p>
+    <div class="status-grid">
+      <div class="label">Service endpoint</div>
+      <div class="value"><code>https://orphograph.com/api/health</code></div>
+      <div class="label">Last response</div>
+      <div class="value"><span id="status-pill" class="status-pill pending">checking</span> <span id="status-detail"></span></div>
+      <div class="label">Round-trip from your browser</div>
+      <div class="value" id="status-rtt">&mdash;</div>
     </div>
-    <div class="card">
-      <div class="card-label">Version</div>
-      <div class="card-value mono" id="version">…</div>
-    </div>
-    <div class="card">
-      <div class="card-label">Uptime</div>
-      <div class="card-value" id="uptime">…</div>
-    </div>
-    <div class="card">
-      <div class="card-label">Receipts on disk</div>
-      <div class="card-value" id="receipts">…</div>
-    </div>
-  </div>
+  </section>
 
-  <h2>Last activity</h2>
-  <dl class="kv">
-    <dt>Last anchor</dt><dd id="last-anchor">…</dd>
-    <dt>Last OTS upgrade</dt><dd id="last-upgrade">…</dd>
-    <dt>Last expiry sweep</dt><dd id="last-expiry">…</dd>
-    <dt>Checked at</dt><dd id="checked">…</dd>
-  </dl>
+  <section>
+    <h2>2 &middot; The three independent checks</h2>
+    <div class="arch-rule"></div>
 
-  <h2>OpenTimestamps calendars</h2>
-  <table id="calendars" class="status-table">
-    <thead><tr><th>Calendar</th><th>Reachable</th></tr></thead>
-    <tbody></tbody>
-  </table>
-</section>
+    <p><strong>Continuous probe (every five minutes).</strong> A small process running on the founder's machine fetches <code>/</code> and <code>/api/health</code> every five minutes. On the second consecutive failure it asks the host to restart the production machine; on the third it raises an alert. The probe writes a per-tick record to an append-only log; the script is the one anyone can audit at <code>scripts/orphograph_watchdog.py</code> in the public repository.</p>
+
+    <p><strong>On-demand transparency probe.</strong> A workflow runs against the live site from a different network than the founder's machine and verifies that every documented page returns 200 OK and that the served HTML contains none of the deny-listed terms. The workflow is at <code>.github/workflows/pii_probe.yml</code> and may be re-run by anyone with repository access; results land in the public Actions log.</p>
+
+    <p><strong>Daily on-chain attestation.</strong> Each day the repository's working state is hashed into a Merkle root and the root is submitted to OpenTimestamps, which commits it to the Bitcoin chain. The receipt history is recorded locally with the founder; the on-chain commitments are recoverable by anyone from the Bitcoin block at the recorded time. This is the same instrument the office sells to customers, applied to the office's own working set.</p>
+  </section>
+
+  <section>
+    <h2>3 &middot; How a visitor can confirm the office without trusting this page</h2>
+    <div class="arch-rule"></div>
+    <p>The office does not ask anyone to trust the strip in section 1. Three steps reproduce the public state without any reference to this page:</p>
+    <ol>
+      <li>Open a terminal and run <code>curl -sS -o /dev/null -w "%{http_code}\n" https://orphograph.com/api/health</code>. A response code of 200 confirms the service is reachable.</li>
+      <li>Inspect the public source. The repository contains the watchdog script, the transparency-probe workflow, and the verifier itself. None of the three depend on any service the office runs.</li>
+      <li>For a customer with a receipt: run the MIT verifier under <code>dist/orphograph-verify/</code>. It reads the receipt and reproduces the Bitcoin proof locally with no call to the office.</li>
+    </ol>
+
+    <div class="self-check-block">
+      <p>The principle that supports the rest is the same one the office sells to customers: a public, neutral chain is a stronger witness than any vendor's word. The office is willing to be witnessed by it on the same terms it asks customers to accept.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>4 &middot; Where the records live</h2>
+    <div class="arch-rule"></div>
+    <table class="ledger-table">
+      <thead>
+        <tr><th>Record</th><th>Location</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Live health endpoint</td><td><code>orphograph.com/api/health</code></td></tr>
+        <tr><td>Continuous-probe script</td><td><code>github.com/Orphograph/Orphograph &mdash; scripts/orphograph_watchdog.py</code></td></tr>
+        <tr><td>Transparency probe</td><td><code>github.com/Orphograph/Orphograph &mdash; .github/workflows/pii_probe.yml</code></td></tr>
+        <tr><td>Daily auto-anchor script</td><td><code>github.com/Orphograph/Orphograph &mdash; scripts/auto_anchor_repo.py</code></td></tr>
+        <tr><td>Open-source verifier</td><td><code>github.com/Orphograph/Orphograph &mdash; dist/orphograph-verify/</code></td></tr>
+        <tr><td>Public deploy log</td><td><code>github.com/Orphograph/Orphograph/actions</code></td></tr>
+        <tr><td>Offline verifier kit</td><td><code>orphograph.com/dist/orphograph-verify.zip</code></td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>5 &middot; Disclosures</h2>
+    <div class="arch-rule"></div>
+    <p>The office uses one hosting provider, one transactional-mail provider, one payment processor, and one optional cryptocurrency payment processor, listed at <a href="/legal/" style="color:var(--confirm);">/legal/</a>. An outage at any of these may affect the office's ability to issue new receipts. Already-issued receipts do not depend on the office for verification &mdash; that is the property the protocol is designed to provide.</p>
+    <p>Security findings and policy questions belong at <a href="mailto:security@orphograph.com" style="color:var(--confirm);">security@orphograph.com</a>; everything else at <a href="mailto:hello@orphograph.com" style="color:var(--confirm);">hello@orphograph.com</a>. No personal email address of any individual operator is published as a formal channel; see <a href="https://github.com/Orphograph/Orphograph/blob/master/SECURITY.md" style="color:var(--confirm);">SECURITY.md</a>.</p>
+  </section>
+
 </main>
 
-<footer>
-  <small><a href="/">home</a> · <a href="/terms.html">Terms</a> · <a href="/privacy.html">Privacy</a></small>
+<footer class="footer">
+  <div class="wrap">
+    <p>&copy; 2026 Orphograph. Code under MIT &mdash; see <a href="/LICENSE">/LICENSE</a>. Brand, content, and design &mdash; all rights reserved.</p>
+  </div>
 </footer>
 
-<script src="/status.js"></script>
+<script>
+(function() {
+  var t0 = performance.now();
+  var pill = document.getElementById('status-pill');
+  var detail = document.getElementById('status-detail');
+  var rtt = document.getElementById('status-rtt');
+  fetch('/api/health', { method: 'GET', cache: 'no-store' })
+    .then(function(r) {
+      var dt = (performance.now() - t0).toFixed(0);
+      if (r.status === 200) {
+        pill.className = 'status-pill ok';
+        pill.textContent = 'reachable';
+        detail.textContent = 'HTTP 200';
+      } else {
+        pill.className = 'status-pill fail';
+        pill.textContent = 'degraded';
+        detail.textContent = 'HTTP ' + r.status;
+      }
+      rtt.textContent = dt + ' ms';
+    })
+    .catch(function() {
+      pill.className = 'status-pill fail';
+      pill.textContent = 'unreachable';
+      detail.textContent = 'no response';
+      rtt.textContent = '—';
+    });
+})();
+</script>
+
 </body>
 </html>
