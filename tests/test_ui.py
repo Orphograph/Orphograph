@@ -160,12 +160,14 @@ def test_health_endpoint_returns_extended_snapshot(live_server):
 def test_status_page_loads_without_pii(live_server):
     with urllib.request.urlopen(live_server + "/status.html") as r:
         html = r.read().decode()
-    assert "<h1>Status</h1>" in html
-    # The page is just chrome; the actual values come from /api/health via JS.
-    # We just verify the elements the JS expects are present.
-    for needle in ('id="ok"', 'id="version"', 'id="uptime"', 'id="receipts"',
-                   'id="last-anchor"', 'id="calendars"'):
-        assert needle in html
+    # Status page was rewritten as a transparency record (plain-English lede +
+    # three independent checks). The H1 changed; instead of asserting a literal
+    # heading string, verify the structural pieces the page MUST contain: the
+    # live-health JS hook, the disclosure block, and the brand contact.
+    assert "transparency record" in html.lower() or "watches itself" in html.lower()
+    for needle in ('id="status-pill"', 'id="status-detail"', 'id="status-rtt"',
+                   '/api/health', 'security@orphograph.com'):
+        assert needle in html, f"status page missing {needle!r}"
 
 
 def test_app_js_syntax_via_node_if_available():
