@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  com.orphograph.canary_scan.plist.template
+
+  Daily launchd job that runs scripts/canary_scan.py. The script searches
+  the public web for the leak canary string and raises a macOS notification
+  if it ever appears anywhere — meaning ~/.orphograph_secrets.env (or its
+  encrypted vault) has been exfiltrated.
+
+  Install:
+    cp scripts/com.orphograph.canary_scan.plist.template \
+       ~/Library/LaunchAgents/com.orphograph.canary_scan.plist
+    launchctl bootstrap gui/$UID ~/Library/LaunchAgents/com.orphograph.canary_scan.plist
+    launchctl enable        gui/$UID/com.orphograph.canary_scan
+    launchctl kickstart -k  gui/$UID/com.orphograph.canary_scan   # smoke
+
+  Cadence: once every 24 hours. RunAtLoad=true so the first scan also fires
+  the next time you log in, in case the daemon died between sessions.
+
+  Log: ~/Library/Logs/orphograph_canary.jsonl (one record per run)
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.orphograph.canary_scan</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/opt/homebrew/bin/python3</string>
+        <string>/Users/franciscoefrain.rodriguezrivera/orphograph/scripts/canary_scan.py</string>
+    </array>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin</string>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>StartInterval</key>
+    <integer>86400</integer>
+
+    <key>KeepAlive</key>
+    <false/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/franciscoefrain.rodriguezrivera/Library/Logs/orphograph_canary.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/franciscoefrain.rodriguezrivera/Library/Logs/orphograph_canary.log</string>
+
+    <key>ProcessType</key>
+    <string>Background</string>
+</dict>
+</plist>

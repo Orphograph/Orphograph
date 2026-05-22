@@ -3,6 +3,11 @@
 .env.local
 .env.production
 .env.*.local
+*.secrets*
+*orphograph_secrets*
+*.sparseimage
+*.founder_token*
+*.canary
 
 # runtime artifacts
 receipts/
