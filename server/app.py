@@ -1427,8 +1427,10 @@ class Handler(BaseHTTPRequestHandler):
                 record["notify_email"] = candidate
             except (OSError, json.JSONDecodeError):
                 pass
+        site = os.environ.get("SITE_URL", "https://orphograph.com").rstrip("/")
+        rid = record["receipt_id"]
         _json_response(self, 200, {
-            "receipt_id": record["receipt_id"],
+            "receipt_id": rid,
             "created_at": record["created_at"],
             "hash_hex": record["hash_hex"],
             "sha512_hex": record.get("sha512_hex"),
@@ -1441,6 +1443,13 @@ class Handler(BaseHTTPRequestHandler):
             "subscription_active": subscription_active,
             "successes": [{"calendar": s["calendar"], "ots_path": s["ots_path"]} for s in record["successes"]],
             "failures": record["failures"],
+            # Distribution-friendly URLs. Every API caller (a workflow tool,
+            # an SDK user, a curl script) gets the receipt's public URL and
+            # an embeddable badge URL without having to read docs and
+            # hand-construct them. Receipt UI uses these too.
+            "receipt_url": f"{site}/r/{rid}",
+            "badge_url": f"{site}/api/badge/{rid}.svg",
+            "verify_url": f"{site}/api/receipt/{rid}",
         })
 
     def _handle_request_email_link(self) -> None:
@@ -1620,15 +1629,19 @@ class Handler(BaseHTTPRequestHandler):
                 results.append({"index": idx, "ok": False, "error": str(e),
                                 "client_label": client_label})
                 continue
+            site = os.environ.get("SITE_URL", "https://orphograph.com").rstrip("/")
+            rid = record["receipt_id"]
             results.append({
                 "index": idx,
                 "ok": True,
-                "receipt_id": record["receipt_id"],
+                "receipt_id": rid,
                 "created_at": record["created_at"],
                 "client_label": record["client_label"],
                 "calendars_ok": record["calendars_ok"],
                 "calendars_total": record["calendars_total"],
                 "low_redundancy": record["calendars_ok"] < MIN_CALENDARS_OK,
+                "receipt_url": f"{site}/r/{rid}",
+                "badge_url": f"{site}/api/badge/{rid}.svg",
             })
 
         succeeded = sum(1 for r in results if r.get("ok"))
