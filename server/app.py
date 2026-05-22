@@ -704,7 +704,12 @@ class Handler(BaseHTTPRequestHandler):
             _serve_static(self, "/buy.html")
             return
         if path in ("/blog", "/blog/"):
-            _send_html(self, 200, blog.render_index_html())
+            # Serve the curated static index at web/blog/index.html. It
+            # lists both the static HTML posts (under /blog/<slug>.html)
+            # and the markdown-rendered posts (under /blog/<slug>). The
+            # dynamic blog.py renderer is retained for individual posts
+            # only — keeping one editorial index avoids divergence.
+            _serve_static(self, "/blog/index.html")
             return
         if path == "/blog/atom.xml":
             _send_xml(self, 200, blog.atom_feed_xml(),

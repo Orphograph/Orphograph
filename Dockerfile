@@ -7,6 +7,7 @@ WORKDIR /app
 COPY server/ /app/server/
 COPY web/ /app/web/
 COPY scripts/ /app/scripts/
+COPY content/ /app/content/
 
 # Non-root user — defense in depth for any future RCE class bug.
 RUN useradd --create-home --shell /usr/sbin/nologin --uid 10001 orpho \

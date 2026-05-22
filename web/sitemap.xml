@@ -180,4 +180,49 @@
     <lastmod>2026-05-21</lastmod>
     <changefreq>monthly</changefreq>
   </url>
+  <url>
+    <loc>https://orphograph.com/blog/prove-photo-existed-before-ai</loc>
+    <lastmod>2026-05-17</lastmod>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://orphograph.com/blog/how-to-prove-photo-existed-before-ai-model-released</loc>
+    <lastmod>2026-05-17</lastmod>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://orphograph.com/blog/opentimestamps-for-non-developers</loc>
+    <lastmod>2026-05-17</lastmod>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://orphograph.com/blog/bitcoin-block-height-as-source-of-truth</loc>
+    <lastmod>2026-05-17</lastmod>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://orphograph.com/blog/bitcoin-merkle-roots-unforgeable-timestamps</loc>
+    <lastmod>2026-05-17</lastmod>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://orphograph.com/blog/why-5-opentimestamps-calendars-not-1</loc>
+    <lastmod>2026-05-17</lastmod>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://orphograph.com/blog/why-domain-dying-doesnt-kill-your-timestamp</loc>
+    <lastmod>2026-05-17</lastmod>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://orphograph.com/blog/digital-notary-vs-cryptographic-timestamp</loc>
+    <lastmod>2026-05-17</lastmod>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://orphograph.com/blog/reading-ots-file-by-hand</loc>
+    <lastmod>2026-05-17</lastmod>
+    <changefreq>monthly</changefreq>
+  </url>
 </urlset>

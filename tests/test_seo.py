@@ -53,6 +53,15 @@ EXPECTED_URLS = [
     "https://orphograph.com/blog/date-stamp-a-document-permanently.html",
     "https://orphograph.com/blog/prove-i-created-something-before-someone-else.html",
     "https://orphograph.com/blog/prove-you-wrote-it-not-ai.html",
+    "https://orphograph.com/blog/prove-photo-existed-before-ai",
+    "https://orphograph.com/blog/how-to-prove-photo-existed-before-ai-model-released",
+    "https://orphograph.com/blog/opentimestamps-for-non-developers",
+    "https://orphograph.com/blog/bitcoin-block-height-as-source-of-truth",
+    "https://orphograph.com/blog/bitcoin-merkle-roots-unforgeable-timestamps",
+    "https://orphograph.com/blog/why-5-opentimestamps-calendars-not-1",
+    "https://orphograph.com/blog/why-domain-dying-doesnt-kill-your-timestamp",
+    "https://orphograph.com/blog/digital-notary-vs-cryptographic-timestamp",
+    "https://orphograph.com/blog/reading-ots-file-by-hand",
 ]
 
 SITEMAP_NS = "{http://www.sitemaps.org/schemas/sitemap/0.9}"
