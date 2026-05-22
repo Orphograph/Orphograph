@@ -27,6 +27,15 @@
   .arch-callout p { margin: 0; }
   .step-num { font-family: var(--serif); font-size: 13px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); }
   .disclaimer-block { margin-top: 48px; padding: 20px 24px; background: #f1ead7; border-radius: 6px; font-size: 14px; line-height: 1.65; color: var(--muted); }
+  .next-step-card { max-width: 820px; margin: 48px auto 0; padding: 28px 32px; background: var(--paper-card, #fffaef); border: 1px solid #e5dec9; border-radius: 6px; }
+  .next-step-card .ns-label { font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); margin: 0 0 12px; }
+  .next-step-card h2 { font-family: var(--serif); font-size: 22px; font-weight: 500; margin: 0 0 18px; color: var(--ink); }
+  .next-step-card .ns-row { display: flex; flex-wrap: wrap; gap: 12px; }
+  .next-step-card .ns-btn { display: inline-flex; align-items: center; justify-content: center; padding: 11px 20px; border-radius: 999px; font-size: 14px; font-weight: 500; text-decoration: none; border: 1px solid var(--ink); transition: background .15s ease, color .15s ease, transform .15s ease; }
+  .next-step-card .ns-btn.ns-primary { background: var(--ink); color: var(--paper-soft, #f6f1e3); }
+  .next-step-card .ns-btn.ns-primary:hover { background: #000; transform: translateY(-1px); }
+  .next-step-card .ns-btn.ns-secondary { background: transparent; color: var(--ink); }
+  .next-step-card .ns-btn.ns-secondary:hover { background: var(--ink); color: var(--paper-soft, #f6f1e3); }
 </style>
 <meta name="copyright" content="© 2026 Orphograph. Code under MIT (see /LICENSE). Brand, content, and design — all rights reserved.">
 </head>
@@ -150,6 +159,15 @@
     <p><strong>Disclaimer.</strong> The office anchors the existence of a byte sequence at a recorded time. The office does not certify authorship, truth, originality, or compliance with any external standard, and does not give legal advice. A receipt is a description of what was anchored, not a judgment about what the anchored thing means. A customer with an actual dispute should consult counsel admitted in the relevant jurisdiction.</p>
   </div>
 
+  <aside class="next-step-card" aria-label="Next step">
+    <p class="ns-label">Next step</p>
+    <h2>Begin.</h2>
+    <div class="ns-row">
+      <a href="/#drop" class="ns-btn ns-primary">Anchor your first file →</a>
+      <a href="/#tiers" class="ns-btn ns-secondary">Browse Pack tiers →</a>
+    </div>
+  </aside>
+
 </main>
 
 <footer>
@@ -165,5 +183,6 @@
 </footer>
 
 <script src="/statusbar.js" defer></script>
+<script src="/assets/event.js" defer></script>
 </body>
 </html>

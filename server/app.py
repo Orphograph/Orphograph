@@ -146,6 +146,25 @@ _anchor_limiter = TokenBucket(
     snapshot_path=RATE_LIMIT_SNAPSHOT,
 )
 
+# Funnel-event limiter: 60 events / IP / minute. Separate bucket so noisy
+# analytics traffic can't burn the anchor-rate budget (and vice versa).
+# Cookieless: keyed by truncated IP only. In-memory only (no snapshot) —
+# analytics is best-effort and a restart resetting the bucket is fine.
+EVENT_RATE_CAPACITY = 60
+EVENT_RATE_REFILL = 60 / 60.0  # 1 token/sec refill, burst 60
+_event_limiter = TokenBucket(EVENT_RATE_CAPACITY, EVENT_RATE_REFILL)
+
+# Allowlist for the 4 funnel events. Any value outside this set is rejected.
+FUNNEL_EVENTS = frozenset({
+    "drop_zone_visible",
+    "file_anchored",
+    "checkout_clicked",
+    "checkout_returned_success",
+})
+FUNNEL_EVENT_FIELDS = frozenset({"event", "page"})
+FUNNEL_EVENTS_PATH = DATA_DIR / "events.jsonl"
+MAX_EVENT_PAGE_LEN = 256
+
 
 def _subscription_active_for(email: str | None) -> bool:
     """True if `email` has an active subscription directly OR via team membership.
@@ -435,6 +454,11 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):  # noqa: N802
         path = self.path.split("?", 1)[0]
+        # /api/event is POST-only. Reject any other method (incl. GET) with
+        # 405 so we don't leak internal state via inadvertent GET-as-probe.
+        if path == "/api/event":
+            self._event_method_not_allowed()
+            return
         # /LICENSE — the static handler rejects extensionless files (no
         # MIME match). Serve the LICENSE file explicitly as text/plain so
         # the every-page "(c) Orphograph. MIT — see /LICENSE" footer
@@ -1672,12 +1696,77 @@ class Handler(BaseHTTPRequestHandler):
             "results": results,
         })
 
+    def _event_method_not_allowed(self) -> None:
+        """Emit 405 Method Not Allowed for /api/event on non-POST.
+
+        Sets Allow: POST per RFC 7231 §6.5.5. No body — we never want
+        this endpoint to surface internal state on any method but POST.
+        """
+        self.send_response(405)
+        self.send_header("Allow", "POST")
+        self.send_header("Content-Length", "0")
+        self.send_header("Cache-Control", "no-store")
+        _security_headers(self)
+        self.end_headers()
+
+    def do_HEAD(self):  # noqa: N802
+        path = self.path.split("?", 1)[0]
+        if path == "/api/event":
+            self._event_method_not_allowed()
+            return
+        # Fall back to Python default for everything else.
+        self.send_error(501, "Unsupported method ('HEAD')")
+
+    def do_OPTIONS(self):  # noqa: N802
+        path = self.path.split("?", 1)[0]
+        if path == "/api/event":
+            self._event_method_not_allowed()
+            return
+        self.send_error(501, "Unsupported method ('OPTIONS')")
+
+    def do_PUT(self):  # noqa: N802
+        path = self.path.split("?", 1)[0]
+        if path == "/api/event":
+            self._event_method_not_allowed()
+            return
+        self.send_error(501, "Unsupported method ('PUT')")
+
+    def do_DELETE(self):  # noqa: N802
+        path = self.path.split("?", 1)[0]
+        if path == "/api/event":
+            self._event_method_not_allowed()
+            return
+        self.send_error(501, "Unsupported method ('DELETE')")
+
+    def do_PATCH(self):  # noqa: N802
+        path = self.path.split("?", 1)[0]
+        if path == "/api/event":
+            self._event_method_not_allowed()
+            return
+        self.send_error(501, "Unsupported method ('PATCH')")
+
     def _handle_event(self) -> None:
-        # Bounded per-IP to keep noisy clients from filling the ledger.
-        allowed, _ = _anchor_limiter.check(f"event:{self._client_key()}")
+        """Privacy-preserving funnel event collector.
+
+        Accepts: {"event": "<one of FUNNEL_EVENTS>", "page": "<path>"}.
+        Rejects any other top-level keys with 400. No cookies, no full
+        IPs, no user-agent, no referer recorded — only the truncated IP
+        prefix (/24 for v4, /48 for v6) for abuse-detection bucketing.
+
+        Returns 204 No Content on success (success is silent so beacon
+        clients don't waste bandwidth on a body they won't read).
+        """
+        # 60 events / IP / minute. Silent drop on excess — analytics is
+        # best-effort, never authoritative; surfacing 429 just teaches an
+        # abuser the bucket exists.
+        client_key = self._client_key()
+        allowed, _ = _event_limiter.check(f"event:{client_key}")
         if not allowed:
-            # Silent drop — analytics is best-effort, not authoritative.
-            _json_response(self, 204, {})
+            self.send_response(204)
+            self.send_header("Content-Length", "0")
+            self.send_header("Cache-Control", "no-store")
+            _security_headers(self)
+            self.end_headers()
             return
         length = _read_content_length(self)
         if length <= 0 or length > MAX_BODY_BYTES:
@@ -1688,21 +1777,47 @@ class Handler(BaseHTTPRequestHandler):
         except (UnicodeDecodeError, json.JSONDecodeError):
             _json_response(self, 400, {"error": "body must be JSON"})
             return
+        if not isinstance(payload, dict):
+            _json_response(self, 400, {"error": "body must be a JSON object"})
+            return
+        # Strict shape: exactly {event, page}. Extra keys are rejected so
+        # callers can't smuggle PII / fingerprints through the schema.
+        extra = set(payload.keys()) - FUNNEL_EVENT_FIELDS
+        if extra:
+            _json_response(self, 400, {"error": "unexpected fields", "fields": sorted(extra)})
+            return
         event = payload.get("event")
-        page = payload.get("page", "other")
-        if not isinstance(event, str) or not isinstance(page, str):
+        page = payload.get("page")
+        if not isinstance(event, str) or event not in FUNNEL_EVENTS:
             _json_response(self, 400, {"error": "invalid event"})
             return
-        # Capture referer HOST only — never path or query (would leak).
-        ref_host = ""
-        ref = self.headers.get("Referer", "") or ""
-        if "://" in ref:
-            try:
-                ref_host = ref.split("://", 1)[1].split("/", 1)[0].split("?", 1)[0]
-            except (IndexError, ValueError):
-                ref_host = ""
-        analytics.record(event, page, self._client_key(), ref_host)
-        _json_response(self, 200, {"ok": True})
+        if not isinstance(page, str) or not page:
+            _json_response(self, 400, {"error": "invalid page"})
+            return
+        # Bound page length; the client only ever sends location.pathname
+        # which is well under this cap. We do NOT coerce the value — it's
+        # written verbatim so the funnel report can show real paths.
+        page = page[:MAX_EVENT_PAGE_LEN]
+        row = {
+            "ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "event": event,
+            "page": page,
+            "ip_trunc": client_key,
+        }
+        try:
+            FUNNEL_EVENTS_PATH.parent.mkdir(parents=True, exist_ok=True)
+            with FUNNEL_EVENTS_PATH.open("a") as f:
+                f.write(json.dumps(row) + "\n")
+                f.flush()
+        except OSError:
+            # Disk full / read-only volume — drop silently. The page user
+            # gets no benefit from being told their analytics ping failed.
+            pass
+        self.send_response(204)
+        self.send_header("Content-Length", "0")
+        self.send_header("Cache-Control", "no-store")
+        _security_headers(self)
+        self.end_headers()
 
     def _handle_waitlist(self) -> None:
         # Same per-IP rate limit as the auth endpoint to prevent spam.

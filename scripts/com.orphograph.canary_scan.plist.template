@@ -29,7 +29,7 @@
     <key>ProgramArguments</key>
     <array>
         <string>/opt/homebrew/bin/python3</string>
-        <string>/Users/franciscoefrain.rodriguezrivera/orphograph/scripts/canary_scan.py</string>
+        <string>/Users/REPLACE_ME_HOMEDIR/orphograph/scripts/canary_scan.py</string>
     </array>
 
     <key>EnvironmentVariables</key>
@@ -48,10 +48,10 @@
     <false/>
 
     <key>StandardOutPath</key>
-    <string>/Users/franciscoefrain.rodriguezrivera/Library/Logs/orphograph_canary.log</string>
+    <string>/Users/REPLACE_ME_HOMEDIR/Library/Logs/orphograph_canary.log</string>
 
     <key>StandardErrorPath</key>
-    <string>/Users/franciscoefrain.rodriguezrivera/Library/Logs/orphograph_canary.log</string>
+    <string>/Users/REPLACE_ME_HOMEDIR/Library/Logs/orphograph_canary.log</string>
 
     <key>ProcessType</key>
     <string>Background</string>

@@ -46,7 +46,7 @@
     <key>ProgramArguments</key>
     <array>
         <string>/opt/homebrew/bin/python3</string>
-        <string>/Users/franciscoefrain.rodriguezrivera/orphograph/scripts/morning_check.py</string>
+        <string>/Users/REPLACE_ME_HOMEDIR/orphograph/scripts/morning_check.py</string>
     </array>
 
     <key>EnvironmentVariables</key>
@@ -65,10 +65,10 @@
     <false/>
 
     <key>StandardOutPath</key>
-    <string>/Users/franciscoefrain.rodriguezrivera/Library/Logs/orphograph_morning_check.log</string>
+    <string>/Users/REPLACE_ME_HOMEDIR/Library/Logs/orphograph_morning_check.log</string>
 
     <key>StandardErrorPath</key>
-    <string>/Users/franciscoefrain.rodriguezrivera/Library/Logs/orphograph_morning_check.log</string>
+    <string>/Users/REPLACE_ME_HOMEDIR/Library/Logs/orphograph_morning_check.log</string>
 
     <key>ProcessType</key>
     <string>Background</string>

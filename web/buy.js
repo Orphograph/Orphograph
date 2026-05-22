@@ -89,6 +89,9 @@ async function showStripeConfirmation(sessionId) {
   const settledEl = $("#settled");
   if (!settledEl) return;
   settledEl.hidden = false;
+  if (typeof window !== "undefined" && typeof window.orphoEvent === "function") {
+    try { window.orphoEvent("checkout_returned_success"); } catch (e) {}
+  }
 
   let mode = "";
   let customerEmail = "";

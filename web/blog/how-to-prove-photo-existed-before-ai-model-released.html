@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>How to prove a photo existed before an AI model was released — Orphograph</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#f6f1e3">
+<meta name="description" content="Step-by-step walkthrough to prove a photo existed before AI training. Bitcoin-anchored timestamp, free tier, ten-minute setup.">
+<meta property="og:title" content="How to prove a photo existed before an AI model was released">
+<meta property="og:description" content="Step-by-step walkthrough to prove a photo existed before AI training. Bitcoin-anchored timestamp, free tier, ten-minute setup.">
+<meta property="og:url" content="https://orphograph.com/blog/how-to-prove-photo-existed-before-ai-model-released.html">
+<meta property="og:type" content="article">
+<meta property="og:image" content="https://orphograph.com/seal.png?v=6">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="How to prove a photo existed before an AI model was released">
+<meta name="twitter:description" content="Step-by-step walkthrough to prove a photo existed before AI training. Bitcoin-anchored timestamp, free tier, ten-minute setup.">
+<link rel="canonical" href="https://orphograph.com/blog/how-to-prove-photo-existed-before-ai-model-released.html">
+<link rel="icon" type="image/png" href="/favicon.png?v=6">
+<link rel="stylesheet" href="/index.css?v=8">
+<style>
+  .arch-wrap { max-width: 760px; margin: 0 auto; padding: 0 24px 64px; }
+  .arch-wrap h1 { font-family: var(--serif); font-size: 34px; font-weight: 500; margin: 32px 0 6px; line-height: 1.2; }
+  .arch-wrap h2 { font-family: var(--serif); font-size: 22px; font-weight: 500; margin: 36px 0 4px; color: var(--ink); }
+  .arch-wrap h3 { font-family: var(--serif); font-size: 17px; font-weight: 500; margin: 24px 0 2px; color: var(--ink); }
+  .arch-rule { border-top: 1px solid var(--ink); width: 32px; margin: 8px 0 16px; opacity: 0.6; }
+  .arch-wrap p, .arch-wrap li { color: var(--ink-2); line-height: 1.75; font-size: 15.5px; }
+  .arch-wrap code { background: rgba(74,154,115,0.08); padding: 2px 6px; border-radius: 3px; font-size: 0.92em; }
+  .arch-wrap pre { background: #f1ead7; padding: 14px 18px; border-radius: 6px; overflow-x: auto; font-size: 13.5px; line-height: 1.55; }
+  .arch-wrap pre code { background: transparent; padding: 0; }
+  .arch-wrap table { border-collapse: collapse; margin: 20px 0; width: 100%; font-size: 14.5px; }
+  .arch-wrap th, .arch-wrap td { border: 1px solid var(--line-soft); padding: 8px 10px; text-align: left; vertical-align: top; }
+  .arch-wrap th { background: rgba(74,154,115,0.06); font-weight: 500; }
+  .arch-lede { font-size: 17px; line-height: 1.7; color: var(--ink-2); margin: 0 0 24px; }
+  .disclaimer-block { margin-top: 48px; padding: 20px 24px; background: #f1ead7; border-radius: 6px; font-size: 14px; line-height: 1.65; color: var(--muted); }
+  .post-meta { font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); margin: 48px 0 8px; }
+  .post-foot { color: var(--muted); font-size: 13px; margin-top: 48px; border-top: 1px solid var(--line-soft); padding-top: 18px; }
+</style>
+<meta name="copyright" content="© 2026 Orphograph. Code under MIT (see /LICENSE). Brand, content, and design — all rights reserved.">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Article",
+  "headline": 'How to prove a photo existed before an AI model was released',
+  "description": 'Step-by-step walkthrough to prove a photo existed before AI training. Bitcoin-anchored timestamp, free tier, ten-minute setup.',
+  "datePublished": "2026-05-17",
+  "dateModified": "2026-05-17",
+  "author": { "@type": "Organization", "name": "Orphograph" },
+  "publisher": {
+    "@type": "Organization",
+    "name": "Orphograph",
+    "logo": { "@type": "ImageObject", "url": "https://orphograph.com/seal.png" }
+  },
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://orphograph.com/blog/how-to-prove-photo-existed-before-ai-model-released.html"
+  }
+}
+</script>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap row">
+    <a href="/" class="brand">Orphograph</a>
+    <nav>
+      <a href="/learn.html">Method</a>
+      <a href="/faq.html">FAQ</a>
+      <a href="/continuity.html">Continuity</a>
+      <a href="/#tiers">Pricing</a>
+      <a href="/signin.html">Sign in</a>
+      <a href="/#drop" class="cta">Anchor a file</a>
+    </nav>
+  </div>
+</header>
+
+<main class="arch-wrap">
+
+  <p class="post-meta">Blog · Document timestamping</p>
+  <h1>How to prove a photo existed before an AI model was released</h1>
+
+  <p>By the middle of 2026 most working photographers have seen the same thing happen at least once: an image gets posted, weeks later a similar one shows up in an AI-generated set, and the argument over who shot what starts. The dispute is almost always settled by whichever party has the better paper trail — not the better argument.</p>
+  <p>This post is a practical walkthrough for locking that paper trail to a moment in time, before any 2026 AI model finishes training on your work. The technique is called cryptographic timestamping, and it produces a receipt that a third party can check against the public Bitcoin chain without trusting you, without trusting the service that issued the receipt, and without involving a lawyer.</p>
+  <h2>What &quot;prove it existed&quot; actually means</h2>
+  <p>A timestamp does not prove you authored a file. It proves a specific byte sequence existed by a specific moment. That is a narrower claim than &quot;I made this,&quot; but it is the one claim that matters in an AI-training dispute.</p>
+  <p>The dispute usually breaks down to one question: did the disputed file exist before the model&#x27;s training data cutoff? If your receipt points to a Bitcoin block mined before that cutoff, the model could not have been trained on a future version of the file. The argument collapses into a date check.</p>
+  <p>For 2026 disputes the relevant cutoffs are public. Most major foundation models published in 2026 used training data with cutoffs between mid-2024 and early 2026. If your receipt is older than the cutoff, the model could not have produced the original.</p>
+  <h2>What you need before you start</h2>
+  <p>You need three things:</p>
+  <p><strong>1.</strong> The original file. RAW is ideal. JPEG works. The file&#x27;s bytes must not change after the anchor — re-saving in Lightroom produces a new file with a different hash.</p>
+  <p><strong>2.</strong> A way to compute a SHA-256 hash. Every modern browser has this built in via WebCrypto. You do not need to install anything.</p>
+  <p><strong>3.</strong> A place to save the receipt. Anywhere your normal photo backup lives is fine: Dropbox, iCloud, an external drive.</p>
+  <p>You do not need a Bitcoin wallet. You do not need to pay a miner. You are not putting money on chain. You are submitting a 32-byte fingerprint of your file to a calendar server that batches many users&#x27; fingerprints into one Bitcoin transaction.</p>
+  <h2>Step 1: hash the file</h2>
+  <p>Open Orphograph in a browser. Drag the file onto the drop zone. The hash is computed locally — the file&#x27;s bytes never leave your machine. The page shows two hashes: SHA-256 and SHA-512. Both are included in the receipt so that if SHA-256 is ever broken, the SHA-512 sibling still verifies independently.</p>
+  <p>If you want to do this without any service, the command-line path is <code>shasum -a 256 my_photo.jpg</code>. You will see the same 64-character hex string the browser produced. Save that string somewhere. The hash itself reveals nothing about the file — it is a one-way fingerprint.</p>
+  <h2>Step 2: submit to a calendar</h2>
+  <p>The browser sends the hash (not the file) to five OpenTimestamps calendar servers. Each calendar is run by a different operator. They each batch your hash with other users&#x27; hashes into a Merkle tree and write the tree&#x27;s root into a Bitcoin transaction within the next hour.</p>
+  <p>You get back a receipt bundle: a JSON file plus five <code>.ots</code> proof files, one per calendar. The bundle downloads as a single zip.</p>
+  <p>Save the zip to your photo backup right now. If you lose the receipt, the anchor still exists on Bitcoin, but you have no way to prove which block contains your hash. The receipt is the index.</p>
+  <h2>Step 3: wait for the block</h2>
+  <p>Within roughly one hour the calendar&#x27;s Merkle root is included in a Bitcoin block. The receipt&#x27;s status updates from &quot;pending&quot; to &quot;block-pinned at block N.&quot; From this point forward the proof is self-contained: anyone with a Bitcoin node can verify that your hash is committed to block N, mined at a specific timestamp.</p>
+  <p>You can see what a finished receipt looks like at <a href="https://orphograph.com/r/o3WGD22T4UwqfCrb">https://orphograph.com/r/o3WGD22T4UwqfCrb</a> — the genesis receipt, public, pinned to a real Bitcoin block.</p>
+  <h2>Step 4: verify it yourself</h2>
+  <p>This is the step most photographers skip, and it is the most important one. A receipt you have never verified is a receipt you do not actually trust. Run the verification once, on your own machine, so you know what the output looks like:</p>
+  <pre><code>pip install opentimestamps-client
+  ots verify my_photo.jpg.ots</code></pre>
+  <p>The verifier walks the Merkle path inside the <code>.ots</code> file, locates the Bitcoin transaction, fetches the block header, and confirms that the block&#x27;s timestamp is what the receipt claims. If anything fails, you see the failure here, not later in a dispute.</p>
+  <p>The verifier does not depend on Orphograph. It does not depend on the calendar that issued the proof. It depends only on a Bitcoin node and the file. This is why the receipt outlives any single service.</p>
+  <h2>Step 5: anchor at capture time, not at publication time</h2>
+  <p>Here is the part that determines whether your receipts actually help in a dispute. The cryptography proves a file existed by a block&#x27;s timestamp. It does not prove you, specifically, were the first to anchor it.</p>
+  <p>If you post a photo on Instagram on Tuesday and anchor it on Thursday, anyone who downloaded the photo on Wednesday could have anchored it before you. Both timestamps are equally valid. The cryptography cannot distinguish.</p>
+  <p>The defense is to anchor the file before publication, while the file is still only on your camera and your laptop. The gap between &quot;file exists privately&quot; and &quot;file exists publicly&quot; is the only window where your anchor is provably first. Anchor inside that window.</p>
+  <p>For working photographers this means: anchor RAW files before you post JPEGs. Anchor a fashion week shoot&#x27;s selects before they ship to the publication. Anchor portraits before you deliver them.</p>
+  <h2>What this does not do</h2>
+  <p>Be honest with yourself about the limits.</p>
+  <p>A timestamped hash proves:</p>
+  <ul>
+  <li>A specific byte sequence existed at or before a Bitcoin block&#x27;s</li>
+  </ul>
+  <p>timestamp.</p>
+  <p>A timestamped hash does not prove:</p>
+  <ul>
+  <li>That you authored the file.</li>
+  <li>That the file was produced by a camera rather than generated.</li>
+  <li>That you own the rights to the subject.</li>
+  <li>That the file is legally authentic under any qualified</li>
+  </ul>
+  <p>trust-service-provider framework.</p>
+  <p>For full legal authentication you need a qualified TSA (in the EU) or a notary (in jurisdictions that recognize digital notarial acts). Orphograph is not either of those. It is a strong, permissionless, mathematical anchor to a specific date — which is the piece most photographers are missing.</p>
+  <h2>What to do this week</h2>
+  <p>If you do nothing else, do this:</p>
+  <p><strong>1.</strong> Pick the three photos from the last month you would most regret losing the &quot;I shot this&quot; argument over.</p>
+  <p><strong>2.</strong> Anchor each one. The free tier covers three anchors per 24 hours, which is exactly enough.</p>
+  <p><strong>3.</strong> Save the receipt zips to your normal photo backup.</p>
+  <p><strong>4.</strong> Run <code>ots verify</code> on one of them, just so you know the verification works on your machine.</p>
+  <p>The whole thing takes about ten minutes. The receipt is good for the working life of Bitcoin, which is the longest-running proof-of-existence anchor available in 2026.</p>
+  <p>Start with the free tier at <a href="https://orphograph.com">https://orphograph.com</a>.</p>
+  <hr>
+  <p><em>Orphograph is a Bitcoin file-timestamping service. Three free anchors every 24 hours, $29 for a 10-anchor pack, $9/mo for unlimited. Open-source verifier. Receipts verify against any Bitcoin node without our servers.</em></p>
+
+  <p class="post-foot">
+    Published 2026-05-17. <a href="/blog/" style="color:var(--muted);">More from the blog</a>.
+  </p>
+
+  <p class="post-foot" style="margin-top:8px;">
+    Start here: <a href="/what-is-this.html" style="color:var(--confirm);">What this office actually does</a>.
+  </p>
+
+  <div class="disclaimer-block">
+    <p><strong>Disclaimer.</strong> The office is not a law firm, not a qualified electronic-trust-service provider, and not a financial advisor. The summaries above describe a technical method in plain English; they are not legal advice and do not establish an attorney–client relationship. The doctrine in any particular jurisdiction may differ from the broad sketch above, and statutes are amended over time. A customer with an actual dispute should consult counsel admitted in the relevant jurisdiction.</p>
+  </div>
+
+</main>
+
+<footer class="footer">
+  <div class="wrap">
+    <p>© 2026 Orphograph. Code under MIT — see <a href="/LICENSE">/LICENSE</a>. Brand, content, and design — all rights reserved.</p>
+  </div>
+</footer>
+
+<script src="/assets/event.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Why a Bitcoin block height is the strongest proof of existence in 2026 — Orphograph</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#f6f1e3">
+<meta name="description" content="Why a Bitcoin block height is the strongest existence-proof anchor in 2026. Sixteen-year track record, attack costs, what would have to fail.">
+<meta property="og:title" content="Why a Bitcoin block height is the strongest proof of existence in 2026">
+<meta property="og:description" content="Why a Bitcoin block height is the strongest existence-proof anchor in 2026. Sixteen-year track record, attack costs, what would have to fail.">
+<meta property="og:url" content="https://orphograph.com/blog/bitcoin-block-height-as-source-of-truth.html">
+<meta property="og:type" content="article">
+<meta property="og:image" content="https://orphograph.com/seal.png?v=6">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Why a Bitcoin block height is the strongest proof of existence in 2026">
+<meta name="twitter:description" content="Why a Bitcoin block height is the strongest existence-proof anchor in 2026. Sixteen-year track record, attack costs, what would have to fail.">
+<link rel="canonical" href="https://orphograph.com/blog/bitcoin-block-height-as-source-of-truth.html">
+<link rel="icon" type="image/png" href="/favicon.png?v=6">
+<link rel="stylesheet" href="/index.css?v=8">
+<style>
+  .arch-wrap { max-width: 760px; margin: 0 auto; padding: 0 24px 64px; }
+  .arch-wrap h1 { font-family: var(--serif); font-size: 34px; font-weight: 500; margin: 32px 0 6px; line-height: 1.2; }
+  .arch-wrap h2 { font-family: var(--serif); font-size: 22px; font-weight: 500; margin: 36px 0 4px; color: var(--ink); }
+  .arch-wrap h3 { font-family: var(--serif); font-size: 17px; font-weight: 500; margin: 24px 0 2px; color: var(--ink); }
+  .arch-rule { border-top: 1px solid var(--ink); width: 32px; margin: 8px 0 16px; opacity: 0.6; }
+  .arch-wrap p, .arch-wrap li { color: var(--ink-2); line-height: 1.75; font-size: 15.5px; }
+  .arch-wrap code { background: rgba(74,154,115,0.08); padding: 2px 6px; border-radius: 3px; font-size: 0.92em; }
+  .arch-wrap pre { background: #f1ead7; padding: 14px 18px; border-radius: 6px; overflow-x: auto; font-size: 13.5px; line-height: 1.55; }
+  .arch-wrap pre code { background: transparent; padding: 0; }
+  .arch-wrap table { border-collapse: collapse; margin: 20px 0; width: 100%; font-size: 14.5px; }
+  .arch-wrap th, .arch-wrap td { border: 1px solid var(--line-soft); padding: 8px 10px; text-align: left; vertical-align: top; }
+  .arch-wrap th { background: rgba(74,154,115,0.06); font-weight: 500; }
+  .arch-lede { font-size: 17px; line-height: 1.7; color: var(--ink-2); margin: 0 0 24px; }
+  .disclaimer-block { margin-top: 48px; padding: 20px 24px; background: #f1ead7; border-radius: 6px; font-size: 14px; line-height: 1.65; color: var(--muted); }
+  .post-meta { font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); margin: 48px 0 8px; }
+  .post-foot { color: var(--muted); font-size: 13px; margin-top: 48px; border-top: 1px solid var(--line-soft); padding-top: 18px; }
+</style>
+<meta name="copyright" content="© 2026 Orphograph. Code under MIT (see /LICENSE). Brand, content, and design — all rights reserved.">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Article",
+  "headline": 'Why a Bitcoin block height is the strongest proof of existence in 2026',
+  "description": 'Why a Bitcoin block height is the strongest existence-proof anchor in 2026. Sixteen-year track record, attack costs, what would have to fail.',
+  "datePublished": "2026-05-17",
+  "dateModified": "2026-05-17",
+  "author": { "@type": "Organization", "name": "Orphograph" },
+  "publisher": {
+    "@type": "Organization",
+    "name": "Orphograph",
+    "logo": { "@type": "ImageObject", "url": "https://orphograph.com/seal.png" }
+  },
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://orphograph.com/blog/bitcoin-block-height-as-source-of-truth.html"
+  }
+}
+</script>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap row">
+    <a href="/" class="brand">Orphograph</a>
+    <nav>
+      <a href="/learn.html">Method</a>
+      <a href="/faq.html">FAQ</a>
+      <a href="/continuity.html">Continuity</a>
+      <a href="/#tiers">Pricing</a>
+      <a href="/signin.html">Sign in</a>
+      <a href="/#drop" class="cta">Anchor a file</a>
+    </nav>
+  </div>
+</header>
+
+<main class="arch-wrap">
+
+  <p class="post-meta">Blog · Document timestamping</p>
+  <h1>Why a Bitcoin block height is the strongest proof of existence in 2026</h1>
+
+  <p>When you anchor a file&#x27;s hash to a Bitcoin block, the receipt references a specific block height — for example, &quot;this file&#x27;s hash is committed to the Merkle root inside block 892,341, mined at 2026-05-17 14:00 UTC.&quot;</p>
+  <p>That block height is the load-bearing piece of the proof. Everything else in the receipt — the Merkle path, the calendar servers, the issuing service — is auxiliary. The block height is the part that anyone can independently check against a public record sixteen years long.</p>
+  <p>This post explains why a block height is currently the strongest existence-proof anchor available, what its actual track record looks like, and what would have to be true for a Bitcoin-anchored timestamp to fail. The goal is to give you enough information to decide for yourself whether you trust it.</p>
+  <h2>What a block height represents</h2>
+  <p>A Bitcoin block is a batch of transactions, sealed with a header that contains:</p>
+  <ul>
+  <li>The hash of the previous block.</li>
+  <li>A Merkle root summarizing every transaction in the block.</li>
+  <li>A timestamp set by the miner, validated by the network to be</li>
+  </ul>
+  <p>within roughly two hours of consensus time.</p>
+  <ul>
+  <li>A nonce, found by trial and error, that makes the block&#x27;s own</li>
+  </ul>
+  <p>hash satisfy a target difficulty.</p>
+  <p>The block height is just the position of that block in the chain. Block 0 is the genesis block, mined in January 2009. Block 892,341 is the 892,341st block in the chain. Each block can only have one predecessor, and the predecessor&#x27;s hash is baked into the successor&#x27;s header. Changing block N requires changing every block from N onward, because each header is cryptographically bound to the one before it.</p>
+  <p>This is the structural property that makes a block height useful as a timestamp anchor. The block exists at exactly one point in a totally ordered sequence, and that ordering is enforced by hashes, not by any operator&#x27;s policy.</p>
+  <h2>The sixteen-year track record</h2>
+  <p>As of May 2026, Bitcoin has been producing blocks continuously for just over sixteen years. The chain has never been rewritten beyond about six blocks deep — and even those shallow reorganizations have been rare events caused by near-simultaneous block discovery, not by attack.</p>
+  <p>A few specific facts worth sitting with:</p>
+  <ul>
+  <li>The deepest reorganization in Bitcoin&#x27;s history was a 53-block</li>
+  </ul>
+  <p>rollback in March 2013, caused by a bug in the database backend of an earlier client version. That bug was patched within hours. No subsequent reorganization has come close.</p>
+  <ul>
+  <li>Since 2013, no reorganization has exceeded six blocks. The</li>
+  </ul>
+  <p>rolling average is below one block.</p>
+  <ul>
+  <li>The chain has survived multiple hard forks, several exchange</li>
+  </ul>
+  <p>failures, two halvings, and a period in 2024 when the network&#x27;s hash rate briefly dropped due to mining-equipment relocations. In each case the chain kept producing blocks.</p>
+  <ul>
+  <li>The cumulative proof-of-work in the chain — the sum of all the</li>
+  </ul>
+  <p>computational effort the network has expended — increases monotonically. Reversing any historical block requires redoing every block of work since.</p>
+  <p>For a timestamp anchor, this matters because the question is not &quot;can Bitcoin be attacked in theory&quot; but &quot;has it been attacked in practice, over sixteen years, with billions of dollars in incentives, ever.&quot; The answer is no. Not even close.</p>
+  <h2>What a six-block confirmation means in practice</h2>
+  <p>Most timestamping services, including Orphograph, treat a block as &quot;deeply confirmed&quot; once six additional blocks have been mined on top of it. That is roughly one hour of additional work.</p>
+  <p>The convention exists because of probability. The chance of a block being rolled back declines exponentially with each additional block of work on top of it. After six blocks, the probability of a rollback is, in practice, indistinguishable from zero — given sixteen years of empirical data showing no rollback at that depth.</p>
+  <p>This is also why timestamping receipts say &quot;block-pinned after one hour.&quot; That hour is the six-block confirmation window. After it, the block is treated as permanent.</p>
+  <h2>Why a block height beats other anchors</h2>
+  <p>Compare a Bitcoin block height to the alternatives:</p>
+  <p>A timestamp on a private database depends on the operator not editing the row. The operator can edit the row at any time. The row is gone the day the company shuts down.</p>
+  <p>A timestamp from a qualified trust service provider is stronger, because the TSA is regulated and audited. It still depends on the TSA&#x27;s signing key not being compromised and on the TSA continuing to exist. Qualified TSAs have had keys revoked and providers have wound down.</p>
+  <p>A timestamp on a private chain is the database, with extra steps. The validators run the show. If they agree to rewrite history, history is rewritten.</p>
+  <p>A Bitcoin block height depends on no entity having enough sustained hash rate to rewrite the chain back to your block. That trust is calibrated by sixteen years of empirical data and by an attack cost currently in the billions of dollars per day.</p>
+  <p>None of these are absolute. The question is which one has the strongest track record in 2026. The answer, by every available measure, is Bitcoin.</p>
+  <h2>What would have to be true for a Bitcoin timestamp to fail</h2>
+  <p>Be honest about the failure modes. A Bitcoin-anchored timestamp fails only if at least one of the following is true:</p>
+  <p>A sustained 51% attack succeeds against the chain. An attacker must control more than half of Bitcoin&#x27;s global hash rate continuously, from the block of your anchor forward, until the attacker&#x27;s alternative chain is longer than the honest chain. The attacker must also keep winning every new block forever. As of 2026, the cost of doing this for one day is estimated at roughly $20–40M. For one year, it exceeds the GDP of most countries. The attacker also gets no reward — the attempt destroys the value of the asset being attacked.</p>
+  <p>A SHA-256 collision is found. No public SHA-256 collision has ever been found. Best known academic attacks require roughly 2^126 operations. If SHA-256 is ever broken, the impact would be a once-in-a-generation cryptographic event affecting essentially the entire internet. Orphograph receipts include a SHA-512 sibling hash that would still verify in that scenario.</p>
+  <p>The entire Bitcoin network agrees to a coordinated rollback. The closest historical precedent is the March 2013 rollback, caused by a software bug, lasting hours, reverting 24 blocks. Nothing of comparable scope has happened since.</p>
+  <p>Bitcoin ceases to exist. The historical chain is currently stored on tens of thousands of independent nodes worldwide, including in academic archives. Total disappearance is implausible on any timeline shorter than decades.</p>
+  <p>If any one of these happens, your timestamp is at risk. If none of them happens, your timestamp is good for the working life of Bitcoin.</p>
+  <h2>What this means for a receipt</h2>
+  <p>Practically, the block height in your receipt is the part you should focus on when checking the proof. The verification step is straightforward:</p>
+  <p><strong>1.</strong> Look up the block at that height on any public block explorer, or on your own Bitcoin node.</p>
+  <p><strong>2.</strong> Confirm the block&#x27;s timestamp matches what the receipt claims.</p>
+  <p><strong>3.</strong> Confirm the Merkle root in the block&#x27;s header matches the one the receipt&#x27;s path computes to.</p>
+  <p><strong>4.</strong> Confirm the file&#x27;s hash leads, via the Merkle path, to that root.</p>
+  <p>If all four match, the file existed by the block&#x27;s timestamp. The service that issued the receipt is no longer in the trust chain. The calendar that batched the submission is no longer in the trust chain. The only trust required is in the Bitcoin chain itself, and that trust is what the sixteen-year track record is calibrating.</p>
+  <h2>The practical takeaway</h2>
+  <p>A Bitcoin block height is not magic. It is a specific position in a specific chain that has, over sixteen years and through substantial financial incentive to break it, never been successfully rewritten beyond a handful of blocks.</p>
+  <p>That track record is what you are relying on when you anchor a file to Bitcoin. The cryptography matters, but the empirical record is the part that converts a theoretical guarantee into a useful one. In 2026 there is no other anchor with comparable properties.</p>
+  <p>If the receipt format outlives the service that issued it — which Orphograph&#x27;s does, by design — then the only question that matters for the next decade is whether the Bitcoin chain continues. So far it has, every ten minutes, for sixteen years.</p>
+  <hr>
+  <p><em>Orphograph is a Bitcoin file-timestamping service. Three free anchors every 24 hours, $29 for a 10-anchor pack, $9/mo for unlimited. Open-source verifier. Receipts verify against any Bitcoin node without our servers.</em></p>
+
+  <p class="post-foot">
+    Published 2026-05-17. <a href="/blog/" style="color:var(--muted);">More from the blog</a>.
+  </p>
+
+  <p class="post-foot" style="margin-top:8px;">
+    Start here: <a href="/what-is-this.html" style="color:var(--confirm);">What this office actually does</a>.
+  </p>
+
+  <div class="disclaimer-block">
+    <p><strong>Disclaimer.</strong> The office is not a law firm, not a qualified electronic-trust-service provider, and not a financial advisor. The summaries above describe a technical method in plain English; they are not legal advice and do not establish an attorney–client relationship. The doctrine in any particular jurisdiction may differ from the broad sketch above, and statutes are amended over time. A customer with an actual dispute should consult counsel admitted in the relevant jurisdiction.</p>
+  </div>
+
+</main>
+
+<footer class="footer">
+  <div class="wrap">
+    <p>© 2026 Orphograph. Code under MIT — see <a href="/LICENSE">/LICENSE</a>. Brand, content, and design — all rights reserved.</p>
+  </div>
+</footer>
+
+<script src="/assets/event.js" defer></script>
+</body>
+</html>

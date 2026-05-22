@@ -152,6 +152,104 @@
     border-bottom: 1px dotted rgba(107,99,84,0.45);
   }
   .trust-strip a:hover{ color: var(--ink-2); }
+  /* Footer restructure (institutional three-column) */
+  footer.site .made-for{
+    font-family: var(--serif);
+    font-size: 13px;
+    color: var(--muted);
+    padding: 0 0 22px;
+    margin: 0 0 22px;
+    border-bottom: 1px solid rgba(58,47,36,0.08);
+    letter-spacing: 0.02em;
+    line-height: 1.9;
+  }
+  footer.site .made-for .made-for-label{
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    font-size: 11px;
+    color: var(--muted-2);
+    margin-right: 12px;
+  }
+  footer.site .made-for a{
+    color: var(--muted);
+    border-bottom: 1px dotted rgba(107,99,84,0.35);
+    margin-right: 14px;
+  }
+  footer.site .made-for a:hover{ color: var(--ink); }
+  footer.site .cols{
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 28px 36px;
+    padding: 4px 0 8px;
+  }
+  footer.site .col h4{
+    font-family: var(--serif);
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--muted-2);
+    margin: 0 0 12px;
+    font-weight: 500;
+  }
+  footer.site .col a{
+    display: block;
+    font-size: 13.5px;
+    color: var(--muted);
+    padding: 3px 0;
+    border-bottom: 0;
+    font-family: var(--serif);
+  }
+  footer.site .col a:hover{ color: var(--ink); }
+  footer.site .dev-group{
+    margin-top: 24px;
+    padding-top: 18px;
+    border-top: 1px solid rgba(58,47,36,0.08);
+  }
+  footer.site .dev-group > summary{
+    list-style: none;
+    cursor: pointer;
+    font-family: var(--serif);
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--muted-2);
+    padding: 4px 0;
+    outline: none;
+  }
+  footer.site .dev-group > summary::-webkit-details-marker{ display: none; }
+  footer.site .dev-group > summary::before{
+    content: "+ ";
+    color: var(--muted-2);
+  }
+  footer.site .dev-group[open] > summary::before{ content: "− "; }
+  footer.site .dev-links{
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 18px;
+    padding: 12px 0 4px;
+  }
+  footer.site .dev-links a{
+    font-size: 13px;
+    color: var(--muted);
+    border-bottom: 0;
+    font-family: var(--serif);
+  }
+  footer.site .dev-links a:hover{ color: var(--ink); }
+  footer.site .brand-line{
+    margin-top: 24px;
+    padding-top: 18px;
+    border-top: 1px solid rgba(58,47,36,0.08);
+    font-family: var(--serif);
+    font-size: 12px;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    color: var(--muted-2);
+  }
+  @media (max-width: 720px){
+    footer.site .cols{ grid-template-columns: 1fr; gap: 22px; }
+    footer.site .made-for{ line-height: 2.1; }
+    footer.site .made-for a{ display: inline-block; }
+  }
 </style>
 <meta name="copyright" content="© 2026 Orphograph. MIT — see /LICENSE">
 <script type="application/ld+json">
@@ -237,7 +335,7 @@
     <h1>Proof a file existed —<br><em>before anyone could argue otherwise.</em></h1>
     <p class="plain-subtitle">Make a permanent, tamper-evident record of your photos, documents, or work — the file never leaves your device.</p>
     <p class="lede">An empirical notary. Drop a file in your browser; receive a Bitcoin-anchored fingerprint that records it existed by no later than the next block. The file itself never leaves your machine.</p>
-    <p class="reassure" style="font-family:var(--serif);font-size:14px;color:var(--muted);margin:0 0 14px;letter-spacing:0.04em;">No account · No installation · The file never leaves this tab.</p>
+    <p class="reassure" style="font-family:var(--serif);font-size:16px;color:var(--ink);font-weight:500;margin:0 0 14px;letter-spacing:0.04em;">Free · No account · The file stays on your device.</p>
     <div class="chips">
       <span>Client-side hashing</span>
       <span>5 independent calendars</span>
@@ -349,6 +447,65 @@
       <div><div class="n">SHA‑256 / 512</div><div class="l">Hash Functions</div></div>
       <div><div class="n">$0.00</div><div class="l">Marginal On‑Chain</div></div>
     </div>
+  </div>
+</section>
+
+<!-- ────────────────────────────────── SAMPLE RECEIPT ───────────────────── -->
+<section class="sample-receipt-section" aria-labelledby="sample-receipt-title" style="padding:0 0 36px;">
+  <style>
+    .sample-receipt-card{
+      max-width:680px;margin:0 auto;padding:30px 28px;
+      background:var(--paper-card);border-radius:var(--radius);
+      box-shadow:var(--shadow-1);font-family:var(--serif);text-align:center;
+    }
+    .sample-receipt-card .eyebrow{
+      font-size:11.5px;letter-spacing:0.28em;text-transform:uppercase;
+      color:var(--muted-2);margin-bottom:12px;font-weight:500;
+    }
+    .sample-receipt-card h3{
+      font-family:var(--serif);font-size:24px;font-weight:500;
+      color:var(--ink);margin:0 0 12px;line-height:1.25;letter-spacing:-0.005em;
+    }
+    .sample-receipt-card .receipt-id{
+      display:inline-block;margin:0 0 14px;
+    }
+    .sample-receipt-card .desc{
+      font-size:15px;color:var(--muted);margin:0 0 22px;line-height:1.55;
+    }
+    .sample-receipt-card .cta-row{
+      display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin:0 0 16px;
+    }
+    .sample-receipt-card .cta{
+      display:inline-block;padding:11px 22px;font-size:13.5px;
+      font-family:var(--serif);letter-spacing:0.02em;border-radius:8px;
+      border-bottom:0;transition:transform .15s ease, background .15s ease, color .15s ease;
+    }
+    .sample-receipt-card .cta-primary{
+      background:var(--ink);color:var(--paper-soft);
+    }
+    .sample-receipt-card .cta-primary:hover{
+      background:#000;transform:translateY(-1px);color:var(--paper-soft);
+    }
+    .sample-receipt-card .cta-secondary{
+      background:transparent;color:var(--ink);border:1px solid var(--ink);
+    }
+    .sample-receipt-card .cta-secondary:hover{
+      background:var(--ink);color:var(--paper-soft);transform:translateY(-1px);
+    }
+    .sample-receipt-card .fineprint{
+      font-size:12.5px;color:var(--muted-2);margin:0;line-height:1.5;
+    }
+  </style>
+  <div class="sample-receipt-card">
+    <div class="eyebrow">Recent receipt</div>
+    <h3 id="sample-receipt-title">A real receipt, verifiable by anyone.</h3>
+    <div class="receipt-id"><code>7KViBg91CR8D4mTr</code></div>
+    <p class="desc">A timestamped self-anchor issued by the office, committed to five OpenTimestamps calendars and the Bitcoin chain.</p>
+    <div class="cta-row">
+      <a href="/r/7KViBg91CR8D4mTr" class="cta cta-primary">View receipt →</a>
+      <a href="/verify/" class="cta cta-secondary">Verify it yourself →</a>
+    </div>
+    <p class="fineprint">Verification works without our servers. Source code under MIT.</p>
   </div>
 </section>
 
@@ -478,6 +635,7 @@
           <a href="#" class="cta" data-checkout="pack">Pay by card</a>
           <a href="/pay/crypto.html" class="cta cta-alt" id="crypto-pay-link" hidden>Pay with crypto</a>
         </div>
+        <div class="checkout-error" hidden></div>
         <p class="cta-fineprint" id="crypto-pay-fineprint" hidden>BTC, USDC, SOL, XRP, ETH, USDT, LTC, DOGE, MATIC — non-custodial via NOWPayments</p>
         <p class="cta-fineprint" style="margin-top:6px;">
           Need fewer? <a href="/pay/crypto.html" style="color:inherit;text-decoration:underline;">Writer Pack — 10 anchors, $19</a> (crypto only at this time).
@@ -497,6 +655,7 @@
           <a href="#" class="cta" data-checkout="pro">Pay by card</a>
           <a href="/pay/crypto.html" class="cta cta-alt" id="crypto-pay-link-sub" hidden>Pay with crypto</a>
         </div>
+        <div class="checkout-error" hidden></div>
         <p class="cta-fineprint" id="crypto-pay-sub-fineprint" hidden>Crypto path = Pack of Fifty (equivalent value; recurring crypto coming).</p>
       </div>
     </div>
@@ -576,45 +735,63 @@
 </section>
 
 <footer class="site">
-  <div class="wrap row">
-    <div class="brand">Orphograph &nbsp;·&nbsp; Bitcoin-Anchored Notary</div>
-    <nav>
-      <a href="/what-is-this.html">First time?</a>
-      <a href="/learn.html">Method</a>
-      <a href="/about.html">Office</a>
-      <a href="/press.html">Press</a>
-      <a href="/press-kit.html">Press kit</a>
-      <a href="/about-the-office.html">About the office</a>
-      <a href="/faq.html">FAQ</a>
-      <a href="/vs/c2pa.html">vs. C2PA</a>
-      <a href="/ios.html">iOS</a>
-      <a href="/mcp.html">MCP server</a>
-      <a href="/verify-js.html">Independent verifier</a>
-      <a href="/badge.html">Badge</a>
-      <a href="/docs/api.html">API</a>
-      <a href="/docs/webhooks.html">Webhooks</a>
-      <a href="/docs/install.html">Install</a>
-      <a href="/docs/quickstart.html">Quickstart</a>
-      <a href="/docs/verify.html">Verify a receipt</a>
-      <a href="/changelog.html">Changelog</a>
-      <a href="/blog/">Blog</a>
-      <a href="/roadmap.html">Roadmap</a>
-      <a href="/method/architecture.html">Architecture</a>
-      <a href="/method/evidence-law.html">Evidence law</a>
-      <a href="/construction/">For construction</a>
-      <a href="/inspection/">For inspection</a>
-      <a href="/matters/">For legal matters</a>
-      <a href="/listings/">For listings</a>
-      <a href="/practice/">For practice records</a>
-      <a href="/workpapers/">For workpapers</a>
-      <a href="/continuity.html">Continuity</a>
-      <a href="/recover.html">Recover</a>
-      <a href="/legal/">Legal</a>
-      <a href="/terms.html">Terms</a>
-      <a href="/privacy.html">Privacy</a>
-      <a href="/status.html">Status</a>
-      <a href="https://github.com/Orphograph/Orphograph" rel="noopener">Open Source</a>
-    </nav>
+  <div class="wrap">
+    <div class="made-for">
+      <span class="made-for-label">Made for</span>
+      <a href="/construction/">construction</a>
+      <a href="/inspection/">inspection</a>
+      <a href="/matters/">legal matters</a>
+      <a href="/listings/">listings</a>
+      <a href="/practice/">practice records</a>
+      <a href="/workpapers/">workpapers</a>
+    </div>
+    <div class="cols">
+      <div class="col">
+        <h4>Product</h4>
+        <a href="/what-is-this.html">First time?</a>
+        <a href="/#tiers">Pricing</a>
+        <a href="/docs/verify.html">Verify a receipt</a>
+        <a href="/ios.html">iOS</a>
+        <a href="/recover.html">Recover</a>
+        <a href="/status.html">Status</a>
+      </div>
+      <div class="col">
+        <h4>Method</h4>
+        <a href="/learn.html">Method</a>
+        <a href="/method/architecture.html">Architecture</a>
+        <a href="/method/evidence-law.html">Evidence law</a>
+        <a href="/faq.html">FAQ</a>
+        <a href="/blog/">Blog</a>
+        <a href="/changelog.html">Changelog</a>
+      </div>
+      <div class="col">
+        <h4>Office</h4>
+        <a href="/about-the-office.html">About the office</a>
+        <a href="/press.html">Press</a>
+        <a href="/press-kit.html">Press kit</a>
+        <a href="/continuity.html">Continuity</a>
+        <a href="/terms.html">Terms</a>
+        <a href="/privacy.html">Privacy</a>
+      </div>
+    </div>
+    <details class="dev-group">
+      <summary>For developers</summary>
+      <div class="dev-links">
+        <a href="/docs/api.html">API</a>
+        <a href="/docs/webhooks.html">Webhooks</a>
+        <a href="/docs/install.html">Install</a>
+        <a href="/docs/quickstart.html">Quickstart</a>
+        <a href="/mcp.html">MCP server</a>
+        <a href="/verify-js.html">Independent verifier</a>
+        <a href="https://github.com/Orphograph/Orphograph" rel="noopener">Open Source</a>
+        <a href="/vs/c2pa.html">vs. C2PA</a>
+        <a href="/badge.html">Badge</a>
+        <a href="/roadmap.html">Roadmap</a>
+        <a href="/about.html">About</a>
+        <a href="/legal/">Legal</a>
+      </div>
+    </details>
+    <div class="brand-line">Orphograph &nbsp;·&nbsp; Bitcoin-Anchored Notary</div>
   </div>
 </footer>
 
@@ -623,5 +800,7 @@
 <script type="module" src="/folder.js"></script>
 <script src="/statusbar.js" defer></script>
 <script src="/status-badge.js" defer></script>
+<script src="/assets/event.js" defer></script>
+<script src="/assets/drop-observer.js" defer></script>
 </body>
 </html>

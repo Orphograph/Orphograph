@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Reading an .ots file by hand — a forensic walkthrough — Orphograph</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#f6f1e3">
+<meta name="description" content="A byte-by-byte walkthrough of what&#x27;s actually inside an OpenTimestamps proof file. Useful if you&#x27;re an investigator, a journalist verifying a tip, or anyon...">
+<meta property="og:title" content="Reading an .ots file by hand — a forensic walkthrough">
+<meta property="og:description" content="A byte-by-byte walkthrough of what&#x27;s actually inside an OpenTimestamps proof file. Useful if you&#x27;re an investigator, a journalist verifying a tip, or anyon...">
+<meta property="og:url" content="https://orphograph.com/blog/reading-ots-file-by-hand.html">
+<meta property="og:type" content="article">
+<meta property="og:image" content="https://orphograph.com/seal.png?v=6">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Reading an .ots file by hand — a forensic walkthrough">
+<meta name="twitter:description" content="A byte-by-byte walkthrough of what&#x27;s actually inside an OpenTimestamps proof file. Useful if you&#x27;re an investigator, a journalist verifying a tip, or anyon...">
+<link rel="canonical" href="https://orphograph.com/blog/reading-ots-file-by-hand.html">
+<link rel="icon" type="image/png" href="/favicon.png?v=6">
+<link rel="stylesheet" href="/index.css?v=8">
+<style>
+  .arch-wrap { max-width: 760px; margin: 0 auto; padding: 0 24px 64px; }
+  .arch-wrap h1 { font-family: var(--serif); font-size: 34px; font-weight: 500; margin: 32px 0 6px; line-height: 1.2; }
+  .arch-wrap h2 { font-family: var(--serif); font-size: 22px; font-weight: 500; margin: 36px 0 4px; color: var(--ink); }
+  .arch-wrap h3 { font-family: var(--serif); font-size: 17px; font-weight: 500; margin: 24px 0 2px; color: var(--ink); }
+  .arch-rule { border-top: 1px solid var(--ink); width: 32px; margin: 8px 0 16px; opacity: 0.6; }
+  .arch-wrap p, .arch-wrap li { color: var(--ink-2); line-height: 1.75; font-size: 15.5px; }
+  .arch-wrap code { background: rgba(74,154,115,0.08); padding: 2px 6px; border-radius: 3px; font-size: 0.92em; }
+  .arch-wrap pre { background: #f1ead7; padding: 14px 18px; border-radius: 6px; overflow-x: auto; font-size: 13.5px; line-height: 1.55; }
+  .arch-wrap pre code { background: transparent; padding: 0; }
+  .arch-wrap table { border-collapse: collapse; margin: 20px 0; width: 100%; font-size: 14.5px; }
+  .arch-wrap th, .arch-wrap td { border: 1px solid var(--line-soft); padding: 8px 10px; text-align: left; vertical-align: top; }
+  .arch-wrap th { background: rgba(74,154,115,0.06); font-weight: 500; }
+  .arch-lede { font-size: 17px; line-height: 1.7; color: var(--ink-2); margin: 0 0 24px; }
+  .disclaimer-block { margin-top: 48px; padding: 20px 24px; background: #f1ead7; border-radius: 6px; font-size: 14px; line-height: 1.65; color: var(--muted); }
+  .post-meta { font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); margin: 48px 0 8px; }
+  .post-foot { color: var(--muted); font-size: 13px; margin-top: 48px; border-top: 1px solid var(--line-soft); padding-top: 18px; }
+</style>
+<meta name="copyright" content="© 2026 Orphograph. Code under MIT (see /LICENSE). Brand, content, and design — all rights reserved.">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Article",
+  "headline": 'Reading an .ots file by hand — a forensic walkthrough',
+  "description": "A byte-by-byte walkthrough of what's actually inside an OpenTimestamps proof file. Useful if you're an investigator, a journalist verifying a tip, or anyon...",
+  "datePublished": "2026-05-17",
+  "dateModified": "2026-05-17",
+  "author": { "@type": "Organization", "name": "Orphograph" },
+  "publisher": {
+    "@type": "Organization",
+    "name": "Orphograph",
+    "logo": { "@type": "ImageObject", "url": "https://orphograph.com/seal.png" }
+  },
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://orphograph.com/blog/reading-ots-file-by-hand.html"
+  }
+}
+</script>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap row">
+    <a href="/" class="brand">Orphograph</a>
+    <nav>
+      <a href="/learn.html">Method</a>
+      <a href="/faq.html">FAQ</a>
+      <a href="/continuity.html">Continuity</a>
+      <a href="/#tiers">Pricing</a>
+      <a href="/signin.html">Sign in</a>
+      <a href="/#drop" class="cta">Anchor a file</a>
+    </nav>
+  </div>
+</header>
+
+<main class="arch-wrap">
+
+  <p class="post-meta">Blog · Document timestamping</p>
+  <h1>Reading an .ots file by hand — a forensic walkthrough</h1>
+
+  <p>You can verify an OpenTimestamps proof file with the official CLI in one command. But if you&#x27;ve ever wanted to look inside an .ots file and confirm the math is real — not just a logo on a website that claims to verify it — this post walks through the bytes one at a time.</p>
+  <p>Useful if you&#x27;re:</p>
+  <ul>
+  <li>A journalist verifying a tipster&#x27;s anchored evidence</li>
+  <li>A forensic analyst on a disputed-image case</li>
+  <li>A photographer who wants to see exactly what you&#x27;re paying for</li>
+  <li>An auditor confirming Orphograph&#x27;s claims aren&#x27;t marketing</li>
+  <li>Curious about how Bitcoin-anchored timestamping actually works</li>
+  </ul>
+  <p>We&#x27;ll dissect the sample receipt that ships with our open-source verifier. You can follow along by downloading it:</p>
+  <pre><code>curl -O https://orphograph.com/verify/examples/sample/a.ots</code></pre>
+  <p>That&#x27;s a real .ots file from a real anchor we made on 2026-05-12. Let&#x27;s see what&#x27;s in it.</p>
+  <h2>The file format</h2>
+  <p>OpenTimestamps files are binary. They follow a documented format (<a href="https://github.com/opentimestamps/python-opentimestamps">spec on github.com/opentimestamps</a>) that&#x27;s deliberately simple — three sections:</p>
+  <p><strong>1.</strong> <strong>Magic header</strong> (15 bytes) — identifies the file as an OTS proof</p>
+  <p><strong>2.</strong> <strong>The hash being attested</strong> (SHA-256, 32 bytes)</p>
+  <p><strong>3.</strong> <strong>The merkle path</strong> from that hash up to a Bitcoin transaction (variable length; depends on tree depth)</p>
+  <p>The first two are trivial to read. The third is where the cryptographic magic happens.</p>
+  <h2>Section 1 — the magic header</h2>
+  <p>Open the file in <code>xxd</code> or any hex viewer:</p>
+  <pre><code>xxd a.ots | head -1</code></pre>
+  <p>The first 18 bytes are:</p>
+  <pre><code>00 4f 70 65 6e 54 69 6d 65 73 74 61 6d 70 73 00 00 50</code></pre>
+  <p>Decode that as ASCII:</p>
+  <pre><code>.OpenTimestamps..P</code></pre>
+  <p>Specifically:</p>
+  <ul>
+  <li>Byte 0: <code>\x00</code> (null byte — explicit &quot;this is a binary file&quot; marker)</li>
+  <li>Bytes 1–14: <code>OpenTimestamps</code> (literal ASCII)</li>
+  <li>Bytes 15–16: <code>\x00\x00</code> (separator)</li>
+  <li>Byte 17: <code>P</code> (start of &quot;Proof&quot; string)</li>
+  </ul>
+  <p>The full magic constant is:</p>
+  <pre><code>\x00OpenTimestamps\x00\x00Proof\x00\xbf\x89\xe2\xe8\x84\xe8\x92\x94</code></pre>
+  <p>That last 8-byte sequence (<code>\xbf\x89...</code>) is a version + format identifier — it tells parsers exactly which OTS spec version this file conforms to. As of 2026, there&#x27;s only one version in the wild.</p>
+  <p>If a file claims to be an .ots proof but doesn&#x27;t start with this exact sequence, it isn&#x27;t one. Our open-source verifier checks for exactly this magic before doing anything else.</p>
+  <h2>Section 2 — the hash being attested</h2>
+  <p>Byte 25 of the file is the SHA-256 tag (<code>\x08</code>), followed by 32 bytes — the actual SHA-256 hash of the file you anchored.</p>
+  <p>For the sample receipt, that hash is:</p>
+  <pre><code>7accf9e90453280e6fb081fd9d83dfb1eeef3bd64e0d680826989ba79bccac88</code></pre>
+  <p>You can verify by computing the SHA-256 of the sample&#x27;s original file:</p>
+  <pre><code>curl -O https://orphograph.com/verify/examples/sample/sample.txt
+  shasum -a 256 sample.txt
+  # 7accf9e90453280e6fb081fd9d83dfb1eeef3bd64e0d680826989ba79bccac88</code></pre>
+  <p>That&#x27;s a real hash of a real file matching what&#x27;s embedded in the .ots proof. No mystery.</p>
+  <p>This is the <strong>input</strong> to the OTS proof. The .ots file&#x27;s job is to prove that this 32-byte fingerprint existed in Bitcoin&#x27;s blockchain at a specific time.</p>
+  <h2>Section 3 — the merkle path</h2>
+  <p>Everything after byte 57 is the merkle path. This is where the proof structure lives.</p>
+  <p>Each step in the path is one of:</p>
+  <ul>
+  <li><strong>SHA-256 op</strong> (<code>\x08</code>) — &quot;hash whatever&#x27;s accumulated so far with SHA-256&quot;</li>
+  <li><strong>Append</strong> (<code>\xf0 &lt;length&gt; &lt;bytes&gt;</code>) — &quot;concatenate these bytes to what we have&quot;</li>
+  <li><strong>Prepend</strong> (<code>\xf1 &lt;length&gt; &lt;bytes&gt;</code>) — &quot;stick these bytes BEFORE what we have&quot;</li>
+  <li><strong>Calendar attestation</strong> (<code>\x83\xdf\xe3\x0d\x2e\xf9\x0c\x8e &lt;length&gt; &lt;calendar-URL&gt;</code>) — &quot;this hash got submitted to this calendar; ask them for the upgraded proof&quot;</li>
+  <li><strong>Bitcoin block attestation</strong> (<code>\x05\x88\x96\x0d\x73\xd7\x19\x01 &lt;varint-block-height&gt;</code>) — &quot;this hash is incorporated in the Bitcoin block at height N&quot;</li>
+  </ul>
+  <p>Walking the path means: start with your file&#x27;s hash, follow each op, accumulating values, until you arrive at a Bitcoin block header&#x27;s merkle root.</p>
+  <p>For our sample file, the calendar attestation reads:</p>
+  <pre><code>.-https://alice.btc.calendar.opentimestamps.org</code></pre>
+  <p>That&#x27;s saying: &quot;I submitted this hash to alice&#x27;s calendar. If you want the full Bitcoin merkle proof, ask that calendar for the upgraded version.&quot;</p>
+  <p>When the calendar batches your hash with thousands of others into a Bitcoin transaction (which it does roughly once per hour), the upgraded .ots file gets extended with:</p>
+  <p><strong>1.</strong> The merkle path WITHIN the calendar&#x27;s batch (from your hash to their root)</p>
+  <p><strong>2.</strong> The Bitcoin transaction ID containing that root</p>
+  <p><strong>3.</strong> The Bitcoin block height where that transaction landed</p>
+  <p><strong>4.</strong> The merkle path WITHIN that block (from the calendar&#x27;s root transaction up to the block header&#x27;s merkle root field)</p>
+  <p>After that &quot;upgrade&quot; runs, the .ots file is self-sufficient — no calendar is needed to verify, just the public Bitcoin chain.</p>
+  <p>You can trigger the upgrade yourself:</p>
+  <pre><code>pip install opentimestamps-client
+  ots upgrade a.ots</code></pre>
+  <p>Then <code>xxd a.ots | tail</code> will show the new bytes that got appended.</p>
+  <h2>Section 4 — what the math actually proves</h2>
+  <p>Once an .ots file has been upgraded to include the Bitcoin block attestation, here&#x27;s what its math proves:</p>
+  <p>Given:</p>
+  <ul>
+  <li>The file you originally anchored (you have this)</li>
+  <li>The .ots proof file (you have this)</li>
+  <li>The public Bitcoin blockchain (anyone has this)</li>
+  </ul>
+  <p>You can recompute, deterministically:</p>
+  <p><strong>1.</strong> SHA-256(your file) → must equal the hash in the .ots</p>
+  <p><strong>2.</strong> Walking the merkle path in the .ots → must equal the merkle root of the Bitcoin block at the specified height</p>
+  <p><strong>3.</strong> The Bitcoin block at that height → must be in the longest chain (you can check this against any Bitcoin node, including public block explorers like <a href="https://mempool.space">mempool.space</a>)</p>
+  <p>If all three are true, the proof holds. The file existed at the timestamp of that Bitcoin block. To forge the proof, an attacker would need to:</p>
+  <ul>
+  <li>Find a SHA-256 collision (preimage: 2^128 operations under</li>
+  </ul>
+  <p>Grover&#x27;s algorithm; classical: not done in public)</p>
+  <ul>
+  <li>AND rewrite the Bitcoin block that contains the attestation</li>
+  <li>AND rewrite every Bitcoin block after it to maintain the</li>
+  </ul>
+  <p>longest-chain property</p>
+  <p>The economics of that attack are well-documented. As of 2026, attacking even a single Bitcoin block from years ago would require sustained 51% hash-rate dominance for the entire interval since — measured in tens of billions of dollars of mining infrastructure running flat-out for years.</p>
+  <p>That&#x27;s the security backing every .ots proof.</p>
+  <h2>Reading our sample, end-to-end</h2>
+  <p>For the sample file we shipped:</p>
+  <p><strong>1.</strong> <strong>Magic header</strong> ✓ matches the OTS magic constant</p>
+  <p><strong>2.</strong> <strong>Hash</strong> ✓ matches SHA-256 of <code>sample.txt</code></p>
+  <p><strong>3.</strong> <strong>Merkle path</strong> ends with a calendar attestation (the sample was anchored less than an hour before this post was written; the BTC upgrade hadn&#x27;t completed yet at write-time)</p>
+  <p><strong>4.</strong> <strong>After <code>ots upgrade</code></strong> ✓ the file gains the full Bitcoin block attestation</p>
+  <p>Run our verifier:</p>
+  <pre><code>python3 verify.py examples/sample/receipt.json --file examples/sample/sample.txt</code></pre>
+  <p>You should see five <code>[OK]</code> lines for the five calendars, plus a &quot;file hash matches&quot; line. The verifier is 100 lines of Python; if you don&#x27;t trust our claims, <strong>read the verifier source code</strong> (<code>verify.py</code> in the same tarball).</p>
+  <h2>Why this matters</h2>
+  <p>Most digital-evidence systems sell trust. Orphograph sells math-you-can-verify. You don&#x27;t have to take our word for anything — including the claim that we&#x27;re not lying to you. The .ots file is auditable, the verifier is open source, the protocol is public, and the underlying Bitcoin chain is replicated across the internet.</p>
+  <p>If something on the verification path ever stops adding up — your hash, the merkle path, the Bitcoin chain — the cryptographic contract is broken and we want to hear about it. Our security disclosure address is in the README; PGP keys available on request.</p>
+  <p>For 99% of users, &quot;click verify&quot; is enough. For the 1% who need to confirm the math is real, this post is a starting point. Welcome to the rabbit hole.</p>
+  <hr>
+  <p><em>Anchor a file at <a href="/">orphograph.com</a>. Verify any receipt with the open-source verifier at <a href="/verify/">/verify/</a> — no Orphograph account, no Python install required if you use the bundled sample&#x27;s pre-upgraded receipts. $7 for a Pack of 10, free for one per month.</em></p>
+
+  <p class="post-foot">
+    Published 2026-05-17. <a href="/blog/" style="color:var(--muted);">More from the blog</a>.
+  </p>
+
+  <p class="post-foot" style="margin-top:8px;">
+    Start here: <a href="/what-is-this.html" style="color:var(--confirm);">What this office actually does</a>.
+  </p>
+
+  <div class="disclaimer-block">
+    <p><strong>Disclaimer.</strong> The office is not a law firm, not a qualified electronic-trust-service provider, and not a financial advisor. The summaries above describe a technical method in plain English; they are not legal advice and do not establish an attorney–client relationship. The doctrine in any particular jurisdiction may differ from the broad sketch above, and statutes are amended over time. A customer with an actual dispute should consult counsel admitted in the relevant jurisdiction.</p>
+  </div>
+
+</main>
+
+<footer class="footer">
+  <div class="wrap">
+    <p>© 2026 Orphograph. Code under MIT — see <a href="/LICENSE">/LICENSE</a>. Brand, content, and design — all rights reserved.</p>
+  </div>
+</footer>
+
+<script src="/assets/event.js" defer></script>
+</body>
+</html>

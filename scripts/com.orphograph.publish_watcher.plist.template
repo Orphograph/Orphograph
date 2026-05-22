@@ -22,7 +22,7 @@
        ~/Library/LaunchAgents/com.orphograph.publish_watcher.plist
     # Edit ~/Library/LaunchAgents/com.orphograph.publish_watcher.plist:
     #   - replace every REPLACE_ME_HOMEDIR with your macOS short username
-    #     (the path segment after /Users/), e.g. franciscoefrain.rodriguezrivera
+    #     (the path segment after /Users/), e.g. yourshortname
     #   - optionally fill ORPHO_AUTO_ANCHOR_KEY to bypass the free tier
     launchctl bootstrap gui/$UID ~/Library/LaunchAgents/com.orphograph.publish_watcher.plist
     launchctl enable        gui/$UID/com.orphograph.publish_watcher

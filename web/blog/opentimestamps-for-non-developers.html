@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>OpenTimestamps for non-developers — a 10-minute walkthrough — Orphograph</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#f6f1e3">
+<meta name="description" content="A practical explainer of what OpenTimestamps is, why it works, and how to use it without ever opening a terminal. Bitcoin without the gas fees, timestampin...">
+<meta property="og:title" content="OpenTimestamps for non-developers — a 10-minute walkthrough">
+<meta property="og:description" content="A practical explainer of what OpenTimestamps is, why it works, and how to use it without ever opening a terminal. Bitcoin without the gas fees, timestampin...">
+<meta property="og:url" content="https://orphograph.com/blog/opentimestamps-for-non-developers.html">
+<meta property="og:type" content="article">
+<meta property="og:image" content="https://orphograph.com/seal.png?v=6">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="OpenTimestamps for non-developers — a 10-minute walkthrough">
+<meta name="twitter:description" content="A practical explainer of what OpenTimestamps is, why it works, and how to use it without ever opening a terminal. Bitcoin without the gas fees, timestampin...">
+<link rel="canonical" href="https://orphograph.com/blog/opentimestamps-for-non-developers.html">
+<link rel="icon" type="image/png" href="/favicon.png?v=6">
+<link rel="stylesheet" href="/index.css?v=8">
+<style>
+  .arch-wrap { max-width: 760px; margin: 0 auto; padding: 0 24px 64px; }
+  .arch-wrap h1 { font-family: var(--serif); font-size: 34px; font-weight: 500; margin: 32px 0 6px; line-height: 1.2; }
+  .arch-wrap h2 { font-family: var(--serif); font-size: 22px; font-weight: 500; margin: 36px 0 4px; color: var(--ink); }
+  .arch-wrap h3 { font-family: var(--serif); font-size: 17px; font-weight: 500; margin: 24px 0 2px; color: var(--ink); }
+  .arch-rule { border-top: 1px solid var(--ink); width: 32px; margin: 8px 0 16px; opacity: 0.6; }
+  .arch-wrap p, .arch-wrap li { color: var(--ink-2); line-height: 1.75; font-size: 15.5px; }
+  .arch-wrap code { background: rgba(74,154,115,0.08); padding: 2px 6px; border-radius: 3px; font-size: 0.92em; }
+  .arch-wrap pre { background: #f1ead7; padding: 14px 18px; border-radius: 6px; overflow-x: auto; font-size: 13.5px; line-height: 1.55; }
+  .arch-wrap pre code { background: transparent; padding: 0; }
+  .arch-wrap table { border-collapse: collapse; margin: 20px 0; width: 100%; font-size: 14.5px; }
+  .arch-wrap th, .arch-wrap td { border: 1px solid var(--line-soft); padding: 8px 10px; text-align: left; vertical-align: top; }
+  .arch-wrap th { background: rgba(74,154,115,0.06); font-weight: 500; }
+  .arch-lede { font-size: 17px; line-height: 1.7; color: var(--ink-2); margin: 0 0 24px; }
+  .disclaimer-block { margin-top: 48px; padding: 20px 24px; background: #f1ead7; border-radius: 6px; font-size: 14px; line-height: 1.65; color: var(--muted); }
+  .post-meta { font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); margin: 48px 0 8px; }
+  .post-foot { color: var(--muted); font-size: 13px; margin-top: 48px; border-top: 1px solid var(--line-soft); padding-top: 18px; }
+</style>
+<meta name="copyright" content="© 2026 Orphograph. Code under MIT (see /LICENSE). Brand, content, and design — all rights reserved.">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Article",
+  "headline": 'OpenTimestamps for non-developers — a 10-minute walkthrough',
+  "description": 'A practical explainer of what OpenTimestamps is, why it works, and how to use it without ever opening a terminal. Bitcoin without the gas fees, timestampin...',
+  "datePublished": "2026-05-17",
+  "dateModified": "2026-05-17",
+  "author": { "@type": "Organization", "name": "Orphograph" },
+  "publisher": {
+    "@type": "Organization",
+    "name": "Orphograph",
+    "logo": { "@type": "ImageObject", "url": "https://orphograph.com/seal.png" }
+  },
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://orphograph.com/blog/opentimestamps-for-non-developers.html"
+  }
+}
+</script>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap row">
+    <a href="/" class="brand">Orphograph</a>
+    <nav>
+      <a href="/learn.html">Method</a>
+      <a href="/faq.html">FAQ</a>
+      <a href="/continuity.html">Continuity</a>
+      <a href="/#tiers">Pricing</a>
+      <a href="/signin.html">Sign in</a>
+      <a href="/#drop" class="cta">Anchor a file</a>
+    </nav>
+  </div>
+</header>
+
+<main class="arch-wrap">
+
+  <p class="post-meta">Blog · Document timestamping</p>
+  <h1>OpenTimestamps for non-developers — a 10-minute walkthrough</h1>
+
+  <p>OpenTimestamps is the most useful thing in the Bitcoin ecosystem that you&#x27;ve probably never heard of. It&#x27;s a free, open protocol that lets anyone prove &quot;this file existed at this exact time&quot; by anchoring a fingerprint to the Bitcoin blockchain — and the only thing it costs is the 10 seconds it takes to use it.</p>
+  <p>This post explains how it works without making you install Python. If you finish reading this, you&#x27;ll understand:</p>
+  <ul>
+  <li>What &quot;timestamping&quot; actually means in a cryptographic sense</li>
+  <li>Why anchoring to Bitcoin is the gold standard for proof-of-existence</li>
+  <li>Why OpenTimestamps doesn&#x27;t cost gas fees the way you&#x27;d expect</li>
+  <li>The three layers (yours, the calendar&#x27;s, Bitcoin&#x27;s) and what each</li>
+  </ul>
+  <p>one does</p>
+  <ul>
+  <li>How to use it today, without a CLI</li>
+  </ul>
+  <h2>What a timestamp actually is</h2>
+  <p>When most people say &quot;timestamp,&quot; they mean &quot;the metadata field on a file that says when it was created.&quot; That&#x27;s not really a timestamp — it&#x27;s a self-attestation, and self-attestations can be changed by anyone with editor access.</p>
+  <p>A cryptographic timestamp is different: it&#x27;s a signed promise from a party with no incentive to lie that the data they saw existed at or before a specific time. Specifically:</p>
+  <p><strong>1.</strong> You take a file (any file: photo, contract, video).</p>
+  <p><strong>2.</strong> You compute a <strong>hash</strong> of it — a fixed-length fingerprint that uniquely identifies the file&#x27;s contents. Any change to the file produces a totally different hash.</p>
+  <p><strong>3.</strong> You submit the hash (not the file — just the 32-byte fingerprint) to a trusted timestamping authority.</p>
+  <p><strong>4.</strong> The authority writes the hash into a record that is itself reliably dated, then signs the package.</p>
+  <p>Anyone with the original file + the timestamp can later prove the file existed by:</p>
+  <ul>
+  <li>Re-computing the hash of the file</li>
+  <li>Confirming the hash matches what was timestamped</li>
+  <li>Confirming the timestamp authority&#x27;s record is intact</li>
+  </ul>
+  <p>If the file changes by even one bit, the hash changes, and the timestamp no longer matches. <strong>You cannot edit a timestamped file without invalidating the timestamp.</strong> That&#x27;s the magic.</p>
+  <h2>Why Bitcoin makes this stronger</h2>
+  <p>The traditional model of cryptographic timestamping uses <strong>Qualified Trust Service Providers</strong> (QTSPs) — government-accredited entities in Europe (under eIDAS) and similar bodies elsewhere. They sign timestamps with private keys backed by hardware security modules. That&#x27;s strong against most threats, but it has two limits:</p>
+  <p><strong>1.</strong> You&#x27;re trusting one company. If they&#x27;re hacked, bribed, or shut down, your timestamps become questionable.</p>
+  <p><strong>2.</strong> They charge per timestamp (~$0.10–$2.00 each, depending on volume).</p>
+  <p>The Bitcoin model fixes both:</p>
+  <p><strong>1.</strong> <strong>Trustless verification.</strong> A Bitcoin timestamp is &quot;signed&quot; not by any one party but by the entire proof-of-work of Bitcoin&#x27;s chain. Forging a fake timestamp would require an attacker to re-mine years of blocks faster than the entire global mining network produced them — economically impossible for any foreseeable adversary.</p>
+  <p><strong>2.</strong> <strong>No per-record cost.</strong> Here&#x27;s the trick that makes this scale: OpenTimestamps doesn&#x27;t write each user&#x27;s hash directly into Bitcoin. Instead, it batches them.</p>
+  <h2>How batching works (the part that costs nothing)</h2>
+  <p>If you&#x27;ve used Ethereum, you know &quot;anchoring data on-chain&quot; usually costs gas — $1 to $30 per transaction, depending on network congestion. So how does OpenTimestamps anchor your hash without charging you anything?</p>
+  <p>The protocol uses a tree structure called a <strong>Merkle tree</strong>.</p>
+  <p>Imagine you and 999 other people all want to timestamp a file at roughly the same time. A &quot;calendar server&quot; collects all 1,000 of your hashes. It hashes them pairwise, then hashes those pairs, then hashes those pairs again — building up a tree until only one hash remains at the top: the <strong>Merkle root</strong>.</p>
+  <p>The calendar then writes JUST that single 32-byte Merkle root into a single Bitcoin transaction.</p>
+  <p>The single transaction proves the existence of ALL 1,000 hashes, because each individual hash is reachable by walking up the tree.</p>
+  <p>Your &quot;proof&quot; file — the <code>.ots</code> file you save with your original — contains the steps from your specific hash up the tree to the Merkle root, plus the Bitcoin transaction ID. To verify, anyone can:</p>
+  <p><strong>1.</strong> Re-compute your hash from your original file</p>
+  <p><strong>2.</strong> Walk the tree up to the Merkle root using the steps in your <code>.ots</code></p>
+  <p><strong>3.</strong> Check the Bitcoin transaction containing that root</p>
+  <p>The verifier needs no special account, no API key, no permission. Just a copy of the Bitcoin chain (which is fully public) and the <code>.ots</code> file you saved.</p>
+  <p>Marginal cost to OpenTimestamps: one shared Bitcoin transaction amortized across thousands of users, so effectively zero per record. Marginal cost to you: zero.</p>
+  <h2>The three layers</h2>
+  <p>OpenTimestamps has three layers, each doing one specific job:</p>
+  <h3>Layer 1 — Your file</h3>
+  <p>This stays on your machine. You compute its SHA-256 hash and that&#x27;s the only thing that leaves your computer.</p>
+  <h3>Layer 2 — Calendar servers</h3>
+  <p>These are the OpenTimestamps community-run servers (5 of them by default — <code>a.pool</code>, <code>b.pool</code>, <code>alice</code>, <code>finney</code>, <code>btc.catallaxy</code>). Each calendar:</p>
+  <ul>
+  <li>Receives your hash</li>
+  <li>Adds it to a Merkle tree alongside many other users&#x27; hashes</li>
+  <li>Once per hour, writes the tree&#x27;s root into a Bitcoin transaction</li>
+  <li>Returns to you a small proof file (the <code>.ots</code>) that includes the</li>
+  </ul>
+  <p>steps from your hash to the Merkle root, plus the Bitcoin tx ID</p>
+  <p>Calendars are run by independent operators with no financial relationship to OpenTimestamps. The protocol uses 5 of them simultaneously so a single calendar going down doesn&#x27;t lose your proof.</p>
+  <h3>Layer 3 — Bitcoin</h3>
+  <p>Bitcoin&#x27;s job here is the simplest: it remembers things. Each block written contains all the transactions from the past 10 minutes, including any OpenTimestamps Merkle roots. Once a block is mined into the chain and has accumulated enough subsequent blocks (called &quot;confirmations&quot;), the data inside is for all practical purposes immutable.</p>
+  <p>This is the part that gives OpenTimestamps its strength. The calendar operators could go offline, get hacked, or lie — but the hash is already in Bitcoin&#x27;s chain, which is replicated across tens of thousands of independent nodes globally.</p>
+  <h2>What this looks like in practice</h2>
+  <p>If you&#x27;re comfortable in a terminal, here&#x27;s the whole protocol in four commands:</p>
+  <pre><code># Install the official Python client:
+  pip install opentimestamps-client
+  
+  # Anchor a file:
+  ots stamp my_photo.jpg
+  # → produces my_photo.jpg.ots (the proof file)
+  
+  # Wait ~1 hour for the calendar to publish its Bitcoin tx.
+  
+  # Upgrade the .ots to include the full Bitcoin merkle proof:
+  ots upgrade my_photo.jpg.ots
+  
+  # Verify any time, even years later:
+  ots verify my_photo.jpg.ots</code></pre>
+  <p>The <code>.ots</code> file is tiny (~200–500 bytes), and once upgraded, can be verified offline against any Bitcoin node.</p>
+  <h2>What if you don&#x27;t want to install Python?</h2>
+  <p>The protocol is great. The CLI is a wall.</p>
+  <p>A handful of services wrap OpenTimestamps with a browser-based UI:</p>
+  <ul>
+  <li><strong><a href="https://orphograph.com">Orphograph</a></strong> — drop a file in your</li>
+  </ul>
+  <p>browser, get a receipt back. The file never uploads (hashing happens in WebCrypto). $7 for 10 anchors, $5/mo for unlimited. Open-source verifier on GitHub means your receipts work even if the service disappears. (Disclosure: I built this.)</p>
+  <ul>
+  <li><strong>WordProof</strong> — WordPress plugin focused on bloggers. Paid.</li>
+  <li><strong>OriginStamp</strong> — enterprise-only since their 2025 pivot. Not</li>
+  </ul>
+  <p>suitable for individual creators.</p>
+  <p>If you&#x27;re a photographer worried about AI training scraping your work and you want a way to prove &quot;I took this on October 4&quot; without installing anything, the Orphograph free tier or $7 pack is the shortest path. If you want zero dependency on any single company, use OpenTimestamps directly via the CLI.</p>
+  <h2>Common questions</h2>
+  <h3>Does the timestamp prove I authored the file?</h3>
+  <p>No. It proves the file existed by a certain time. If you publicly post a photo and someone immediately anchors it before you do, both of you can prove &quot;this file existed by Day 1.&quot; The trick is to anchor at capture time, before anyone else has access — that&#x27;s the temporal moat.</p>
+  <h3>What if Bitcoin disappears?</h3>
+  <p>Then a lot of things break. But also: your proof relies on the historical chain, not on Bitcoin continuing into the future. Existing blocks are baked-in PoW; even if Bitcoin&#x27;s mining halts forever tomorrow, your already-anchored proofs remain verifiable.</p>
+  <h3>Is this admissible in court?</h3>
+  <p>It&#x27;s strong cryptographic evidence of proof-of-existence. It is NOT a qualified eIDAS timestamp. Whether a specific court accepts it depends on the case, the jurisdiction, and the lawyer. Treat it as &quot;strong evidence the file existed by time T&quot; not as a notary replacement.</p>
+  <h3>How long does the proof last?</h3>
+  <p>Until Bitcoin&#x27;s chain is rewritten or abandoned. Practical answer: indefinitely. Earliest OpenTimestamps anchors are now 8+ years old and still verify.</p>
+  <h3>Can I anchor a 4GB video?</h3>
+  <p>Yes — the protocol hashes the file with SHA-256, and SHA-256 takes the same fixed time regardless of input size. Only the 32-byte hash goes to the calendar.</p>
+  <h2>Why this matters</h2>
+  <p>We&#x27;re entering an era where the question &quot;did a human or an AI make this?&quot; is going to be litigated millions of times — in courtrooms, on Twitter, in copyright registries, in dating apps.</p>
+  <p>The clearest answer any creator can give is <strong>&quot;I made this, and I locked the date to Bitcoin&#x27;s chain before any AI saw it.&quot;</strong> That&#x27;s the entire OpenTimestamps thesis in one sentence.</p>
+  <p>It&#x27;s free. It&#x27;s permissionless. It doesn&#x27;t require trust. And unlike most things in crypto, it&#x27;s been quietly working in production since 2017.</p>
+  <p>Anchor your work.</p>
+  <hr>
+  <p><em>Orphograph is a $7-and-up Bitcoin timestamping service for photographers + creators. Open source verifier, no file uploads, your receipt verifies forever. <a href="https://orphograph.com/#sample">Try the sample receipt without signing up.</a></em></p>
+
+  <p class="post-foot">
+    Published 2026-05-17. <a href="/blog/" style="color:var(--muted);">More from the blog</a>.
+  </p>
+
+  <p class="post-foot" style="margin-top:8px;">
+    Start here: <a href="/what-is-this.html" style="color:var(--confirm);">What this office actually does</a>.
+  </p>
+
+  <div class="disclaimer-block">
+    <p><strong>Disclaimer.</strong> The office is not a law firm, not a qualified electronic-trust-service provider, and not a financial advisor. The summaries above describe a technical method in plain English; they are not legal advice and do not establish an attorney–client relationship. The doctrine in any particular jurisdiction may differ from the broad sketch above, and statutes are amended over time. A customer with an actual dispute should consult counsel admitted in the relevant jurisdiction.</p>
+  </div>
+
+</main>
+
+<footer class="footer">
+  <div class="wrap">
+    <p>© 2026 Orphograph. Code under MIT — see <a href="/LICENSE">/LICENSE</a>. Brand, content, and design — all rights reserved.</p>
+  </div>
+</footer>
+
+<script src="/assets/event.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>How to prove your photo existed before AI scraped it (without a lawyer) — Orphograph</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#f6f1e3">
+<meta name="description" content="A practical guide for photographers who want timestamp-grade proof of when they made an image — using Bitcoin, no court appearance, no $400/hr attorney. Fr...">
+<meta property="og:title" content="How to prove your photo existed before AI scraped it (without a lawyer)">
+<meta property="og:description" content="A practical guide for photographers who want timestamp-grade proof of when they made an image — using Bitcoin, no court appearance, no $400/hr attorney. Fr...">
+<meta property="og:url" content="https://orphograph.com/blog/prove-photo-existed-before-ai.html">
+<meta property="og:type" content="article">
+<meta property="og:image" content="https://orphograph.com/seal.png?v=6">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="How to prove your photo existed before AI scraped it (without a lawyer)">
+<meta name="twitter:description" content="A practical guide for photographers who want timestamp-grade proof of when they made an image — using Bitcoin, no court appearance, no $400/hr attorney. Fr...">
+<link rel="canonical" href="https://orphograph.com/blog/prove-photo-existed-before-ai.html">
+<link rel="icon" type="image/png" href="/favicon.png?v=6">
+<link rel="stylesheet" href="/index.css?v=8">
+<style>
+  .arch-wrap { max-width: 760px; margin: 0 auto; padding: 0 24px 64px; }
+  .arch-wrap h1 { font-family: var(--serif); font-size: 34px; font-weight: 500; margin: 32px 0 6px; line-height: 1.2; }
+  .arch-wrap h2 { font-family: var(--serif); font-size: 22px; font-weight: 500; margin: 36px 0 4px; color: var(--ink); }
+  .arch-wrap h3 { font-family: var(--serif); font-size: 17px; font-weight: 500; margin: 24px 0 2px; color: var(--ink); }
+  .arch-rule { border-top: 1px solid var(--ink); width: 32px; margin: 8px 0 16px; opacity: 0.6; }
+  .arch-wrap p, .arch-wrap li { color: var(--ink-2); line-height: 1.75; font-size: 15.5px; }
+  .arch-wrap code { background: rgba(74,154,115,0.08); padding: 2px 6px; border-radius: 3px; font-size: 0.92em; }
+  .arch-wrap pre { background: #f1ead7; padding: 14px 18px; border-radius: 6px; overflow-x: auto; font-size: 13.5px; line-height: 1.55; }
+  .arch-wrap pre code { background: transparent; padding: 0; }
+  .arch-wrap table { border-collapse: collapse; margin: 20px 0; width: 100%; font-size: 14.5px; }
+  .arch-wrap th, .arch-wrap td { border: 1px solid var(--line-soft); padding: 8px 10px; text-align: left; vertical-align: top; }
+  .arch-wrap th { background: rgba(74,154,115,0.06); font-weight: 500; }
+  .arch-lede { font-size: 17px; line-height: 1.7; color: var(--ink-2); margin: 0 0 24px; }
+  .disclaimer-block { margin-top: 48px; padding: 20px 24px; background: #f1ead7; border-radius: 6px; font-size: 14px; line-height: 1.65; color: var(--muted); }
+  .post-meta { font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); margin: 48px 0 8px; }
+  .post-foot { color: var(--muted); font-size: 13px; margin-top: 48px; border-top: 1px solid var(--line-soft); padding-top: 18px; }
+</style>
+<meta name="copyright" content="© 2026 Orphograph. Code under MIT (see /LICENSE). Brand, content, and design — all rights reserved.">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Article",
+  "headline": 'How to prove your photo existed before AI scraped it (without a lawyer)',
+  "description": 'A practical guide for photographers who want timestamp-grade proof of when they made an image — using Bitcoin, no court appearance, no $400/hr attorney. Fr...',
+  "datePublished": "2026-05-17",
+  "dateModified": "2026-05-17",
+  "author": { "@type": "Organization", "name": "Orphograph" },
+  "publisher": {
+    "@type": "Organization",
+    "name": "Orphograph",
+    "logo": { "@type": "ImageObject", "url": "https://orphograph.com/seal.png" }
+  },
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://orphograph.com/blog/prove-photo-existed-before-ai.html"
+  }
+}
+</script>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap row">
+    <a href="/" class="brand">Orphograph</a>
+    <nav>
+      <a href="/learn.html">Method</a>
+      <a href="/faq.html">FAQ</a>
+      <a href="/continuity.html">Continuity</a>
+      <a href="/#tiers">Pricing</a>
+      <a href="/signin.html">Sign in</a>
+      <a href="/#drop" class="cta">Anchor a file</a>
+    </nav>
+  </div>
+</header>
+
+<main class="arch-wrap">
+
+  <p class="post-meta">Blog · Document timestamping</p>
+  <h1>How to prove your photo existed before AI scraped it (without a lawyer)</h1>
+
+  <p>If you&#x27;ve ever uploaded a photo to Instagram, you&#x27;ve probably wondered: what stops an AI training set from scraping it, then a year from now someone claims your photo is the AI-generated one?</p>
+  <p>This isn&#x27;t paranoid. It&#x27;s the next phase of a problem that already happened to musicians (sample disputes), writers (plagiarism), and illustrators (style mimicking). Photographers are now the cohort getting the most heat — Getty filed against Stability AI for 12 million scraped images, and every working photographer has a &quot;is that mine?&quot; story brewing.</p>
+  <p>The standard answer is <strong>EXIF metadata + your RAW files + cloud backups</strong>. That&#x27;s three plates spinning, all of which can be edited, deleted, or lost. None of them produce evidence a third party would treat as definitive.</p>
+  <p>This post walks through the better answer: <strong>cryptographic timestamping</strong> — a way to lock today&#x27;s date to a file&#x27;s contents such that the only path to forge the claim is to re-mine the entire Bitcoin blockchain. Which nobody will do for your wedding shoot.</p>
+  <h2>The fundamental tool: OpenTimestamps</h2>
+  <p><a href="https://opentimestamps.org/">OpenTimestamps</a> is a free, open protocol that works like this:</p>
+  <p><strong>1.</strong> You compute the SHA-256 hash of your file. (32 bytes; reveals nothing about the photo.)</p>
+  <p><strong>2.</strong> You submit the hash to one of ~5 &quot;calendar servers.&quot;</p>
+  <p><strong>3.</strong> Each calendar batches many users&#x27; hashes into a single Merkle root and writes that root into a Bitcoin transaction (approximately once per hour).</p>
+  <p><strong>4.</strong> You receive a small <code>.ots</code> proof file. The proof says: <em>&quot;this hash is provably included in Bitcoin block N, mined at time T.&quot;</em></p>
+  <p>Verification is the inverse: given your original file + the <code>.ots</code> proof, anyone with a Bitcoin node (or just the public chain) can confirm that the hash existed at time T. No trust in any server is required at verification time.</p>
+  <p>This is the gold standard for proof-of-existence. It&#x27;s free, it&#x27;s permissionless, and it doesn&#x27;t go away if any single company disappears.</p>
+  <h2>The catch with raw OpenTimestamps</h2>
+  <p>OpenTimestamps is a brilliant protocol, but it&#x27;s a CLI:</p>
+  <pre><code>pip install opentimestamps-client
+  ots stamp photo.jpg
+  # ... wait ~1 hour for the BTC calendar to publish the block ...
+  ots upgrade photo.jpg.ots
+  ots verify photo.jpg.ots</code></pre>
+  <p>If you live in <code>pip install</code>, you&#x27;re done — go use it, and skip the rest of this post. (Seriously. Stop reading and go run it.)</p>
+  <p>For everyone else: the CLI is a wall. You need Python, a working build chain for <code>python-bitcoinlib</code>, comfort with the terminal, and the discipline to safely store <code>.ots</code> files alongside your raw photos. Most photographers won&#x27;t do any of that. So most photos go unanchored, and the AI-vs-real disputes happen with no usable evidence on either side.</p>
+  <h2>A simpler path: drop the file in a browser</h2>
+  <p>There&#x27;s a small product called <a href="https://orphograph.com">Orphograph</a> (disclosure: I built it) that wraps OpenTimestamps with a browser-based workflow:</p>
+  <p><strong>1.</strong> Open the site, drag your file onto the drop zone.</p>
+  <p><strong>2.</strong> The hash is computed locally in your browser using WebCrypto. The image bytes never reach our server.</p>
+  <p><strong>3.</strong> You get a receipt — JSON file + 5 OpenTimestamps proofs — downloadable as a single bundle.</p>
+  <p><strong>4.</strong> The block-pinning upgrade happens automatically server-side over the following hour; the receipt updates from &quot;pending&quot; to &quot;block-pinned at block N.&quot;</p>
+  <p>You can verify the receipt later with <a href="https://github.com/orphograph/orphograph-verify">a 100-line Python file on GitHub</a> — no Orphograph dependency. The receipt outlives our company by design.</p>
+  <p>Three pricing tiers: free (1 anchor/month), $7 Pack (10 anchors, never expires, claim code by email), $5/mo Personal (unlimited).</p>
+  <h2>How to actually do this for your portfolio</h2>
+  <p>Pick the approach that matches your comfort level.</p>
+  <h3>Path A — free, technical (use OpenTimestamps directly)</h3>
+  <pre><code>pip install opentimestamps-client
+  # anchor:
+  ots stamp my_photo.jpg
+  # returns my_photo.jpg.ots — save it next to the photo
+  # upgrade after 1 hour to get the BTC merkle proof:
+  ots upgrade my_photo.jpg.ots
+  # verify any time:
+  ots verify my_photo.jpg.ots</code></pre>
+  <p>Cost: $0. Time: 5 minutes per photo plus 1 hour wait. Defensibility: strongest. You&#x27;re using the protocol directly.</p>
+  <h3>Path B — free, browser (drag-and-drop monthly)</h3>
+  <p>Visit <a href="https://orphograph.com">orphograph.com</a>, drop your best photo of the month into the box. Save the receipt JSON. Done.</p>
+  <p>Cost: $0/month forever for the first anchor. Time: 10 seconds. Defensibility: same as Path A, with a slight UX trade — the receipt has to be re-downloaded if your browser clears localStorage. Save the receipt to Dropbox / iCloud / your normal photo backup.</p>
+  <h3>Path C — $7 for a batch (when you have 10 photos at once)</h3>
+  <p>Same as Path B but pay $7 and skip the rate limit. The claim code is delivered by email and lets you anchor 10 files in one sitting. The Stripe receipt is your invoice; the email gets the claim code.</p>
+  <p>Defensibility: identical to A/B (same OTS proofs).</p>
+  <h3>Path D — $5/mo (you anchor 50+ files per month)</h3>
+  <p>If you batch-anchor a wedding shoot or a fashion week catalog, the Personal tier is the only one with unlimited anchors and email delivery. It also gives you an account dashboard showing your history — useful if you ever need to produce a chronologically-ordered list of &quot;what I anchored when.&quot;</p>
+  <h2>What this does NOT do</h2>
+  <p>Be honest about the limits, because the AI disputes are going to get litigated and you want to know what your receipts will and won&#x27;t prove.</p>
+  <p>A timestamped hash proves:</p>
+  <ul>
+  <li><strong>A specific byte sequence existed at time T.</strong> ✅</li>
+  </ul>
+  <p>A timestamped hash does NOT prove:</p>
+  <ul>
+  <li>That <strong>you</strong> authored it. (Anyone with the file can anchor it.</li>
+  </ul>
+  <p>If you publicly publish a photo, the AI could anchor it the same day you did.)</p>
+  <ul>
+  <li>That the file was <strong>made by a camera</strong> versus generated.</li>
+  <li>That the file is <strong>legally authentic</strong> under eIDAS or any</li>
+  </ul>
+  <p>national qualified-trust-service-provider framework. For that, you need a notary, a qualified TSA, or both.</p>
+  <p>The right framing is: <strong>anchor immediately at capture time, when the only person who has the file is you.</strong> That&#x27;s the temporal moat the AI can&#x27;t compete with — they need to scrape the file first, and you&#x27;ve already locked the timestamp before they have access.</p>
+  <p>In practice this means: anchor RAW files before posting JPEGs. Anchor on the camera&#x27;s SD-card directly if you can. Don&#x27;t wait until after a viral upload.</p>
+  <h2>What to do this week</h2>
+  <p>If you&#x27;re a working photographer, here&#x27;s the minimum-effort path:</p>
+  <p><strong>1.</strong> Pick your most distinctive image from the last week — the one you&#x27;d most regret losing the &quot;I shot this&quot; argument over.</p>
+  <p><strong>2.</strong> Anchor it. Free, takes 10 seconds.</p>
+  <p><strong>3.</strong> Save the receipt JSON to wherever you keep your photo backups.</p>
+  <p><strong>4.</strong> If anyone ever disputes the date — show them the receipt and the open-source verifier link. Let the math speak.</p>
+  <h2>Further reading</h2>
+  <ul>
+  <li>OpenTimestamps protocol: <a href="https://opentimestamps.org/">opentimestamps.org</a></li>
+  <li>Orphograph open-source verifier: <a href="https://github.com/orphograph/orphograph-verify">github.com/orphograph/orphograph-verify</a></li>
+  <li>eIDAS-grade timestamps (when you need legally binding): your</li>
+  </ul>
+  <p>national qualified-trust-service-provider list. EU = check the European Trust List. UK = ICO trust list. US = there is no federal QTSP regime; consult a digital evidence attorney.</p>
+  <p>If you&#x27;ve used timestamping in any actual dispute, I&#x27;d love to hear what happened. The clearer the use cases, the better tools get built for the next round.</p>
+  <hr>
+  <p><em>Orphograph is a $7-and-up Bitcoin timestamping service for photographers. Open source verifier, no file uploads, your receipt verifies forever. <a href="https://orphograph.com/#sample">Try the sample receipt without signing up.</a></em></p>
+
+  <p class="post-foot">
+    Published 2026-05-17. <a href="/blog/" style="color:var(--muted);">More from the blog</a>.
+  </p>
+
+  <p class="post-foot" style="margin-top:8px;">
+    Start here: <a href="/what-is-this.html" style="color:var(--confirm);">What this office actually does</a>.
+  </p>
+
+  <div class="disclaimer-block">
+    <p><strong>Disclaimer.</strong> The office is not a law firm, not a qualified electronic-trust-service provider, and not a financial advisor. The summaries above describe a technical method in plain English; they are not legal advice and do not establish an attorney–client relationship. The doctrine in any particular jurisdiction may differ from the broad sketch above, and statutes are amended over time. A customer with an actual dispute should consult counsel admitted in the relevant jurisdiction.</p>
+  </div>
+
+</main>
+
+<footer class="footer">
+  <div class="wrap">
+    <p>© 2026 Orphograph. Code under MIT — see <a href="/LICENSE">/LICENSE</a>. Brand, content, and design — all rights reserved.</p>
+  </div>
+</footer>
+
+<script src="/assets/event.js" defer></script>
+</body>
+</html>

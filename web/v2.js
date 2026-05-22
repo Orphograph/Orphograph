@@ -545,6 +545,9 @@
         "Calendars attesting: " + ok + " / " + total + ".",
         "success"
       );
+      if (typeof window !== "undefined" && typeof window.orphoEvent === "function") {
+        try { window.orphoEvent("file_anchored"); } catch (e) {}
+      }
       status.appendChild(makeField("Receipt · " + j.receipt_id));
       status.appendChild(makeField("SHA-256 · " + sha256));
 
@@ -625,11 +628,79 @@
   // Click handler hits /api/stripe/checkout, gets a hosted Checkout URL,
   // then redirects the browser to it. Stripe handles card entry and on
   // success fires the webhook that mints the Pack code / activates sub.
+  // Resolve the .checkout-error slot for a given button by walking up to
+  // the enclosing .tier card. Returns null if the markup ever changes
+  // and the slot is missing — callers degrade silently in that case.
+  function findCheckoutErrorSlot(button) {
+    if (!button || typeof button.closest !== "function") return null;
+    const card = button.closest(".tier");
+    if (!card) return null;
+    return card.querySelector(".checkout-error");
+  }
+
+  // Render an inline failure inside the tier card. Two affordances:
+  // "Try again" re-fires startCheckout for the same plan/button, and
+  // "Pay with crypto instead" routes to the existing /pay/crypto.html
+  // flow that's already wired on the same card. No alert() — the prior
+  // implementation blocked the page and offered no recovery path.
+  function showCheckoutError(button, plan, message) {
+    const slot = findCheckoutErrorSlot(button);
+    if (!slot) return;
+    // Clear any prior contents before re-rendering — keeps the slot
+    // idempotent across repeated failures.
+    while (slot.firstChild) slot.removeChild(slot.firstChild);
+
+    const p = document.createElement("p");
+    p.textContent = message;
+    slot.appendChild(p);
+
+    const actions = document.createElement("div");
+    actions.className = "checkout-error-actions";
+
+    const retry = document.createElement("button");
+    retry.type = "button";
+    retry.textContent = "Try again";
+    retry.addEventListener("click", function (ev) {
+      ev.preventDefault();
+      // Hide the error row on retry so the next attempt starts clean.
+      slot.hidden = true;
+      while (slot.firstChild) slot.removeChild(slot.firstChild);
+      startCheckout(plan, button);
+    });
+    actions.appendChild(retry);
+
+    const crypto = document.createElement("a");
+    crypto.href = "/pay/crypto.html";
+    crypto.textContent = "Pay with crypto instead →";
+    actions.appendChild(crypto);
+
+    slot.appendChild(actions);
+    slot.hidden = false;
+
+    // Best-effort analytics ping. The orphoEvent hook is owned by a
+    // sibling task; if absent we no-op rather than throw.
+    try {
+      if (typeof window !== "undefined" && typeof window.orphoEvent === "function") {
+        window.orphoEvent("checkout_error", { plan: plan, message: message });
+      }
+    } catch (e) {}
+  }
+
   async function startCheckout(plan, button) {
     const originalLabel = button.textContent;
     button.textContent = "Loading…";
     button.style.pointerEvents = "none";
+    // Clear any prior error before the new attempt so the UI doesn't
+    // show a stale failure under the spinner.
+    const priorSlot = findCheckoutErrorSlot(button);
+    if (priorSlot) {
+      priorSlot.hidden = true;
+      while (priorSlot.firstChild) priorSlot.removeChild(priorSlot.firstChild);
+    }
     try {
+      if (typeof window !== "undefined" && typeof window.orphoEvent === "function") {
+        try { window.orphoEvent("checkout_clicked", { plan: plan }); } catch (e) {}
+      }
       const r = await fetch("/api/stripe/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -642,9 +713,9 @@
           const j = JSON.parse(body);
           if (j && j.error) msg = j.error;
         } catch (e) {}
-        alert(msg);
         button.textContent = originalLabel;
         button.style.pointerEvents = "";
+        showCheckoutError(button, plan, msg);
         return;
       }
       const j = await r.json();
@@ -652,13 +723,17 @@
         window.location.href = j.url;
         return;
       }
-      alert("Checkout response missing url.");
       button.textContent = originalLabel;
       button.style.pointerEvents = "";
+      showCheckoutError(button, plan, "Checkout response missing url.");
     } catch (e) {
-      alert("Network error opening checkout: " + (e && e.message ? e.message : e));
       button.textContent = originalLabel;
       button.style.pointerEvents = "";
+      showCheckoutError(
+        button,
+        plan,
+        "Network error opening checkout: " + (e && e.message ? e.message : e)
+      );
     }
   }
   document.querySelectorAll("[data-checkout]").forEach((btn) => {

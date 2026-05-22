@@ -275,6 +275,28 @@
     font-size:11px;color:var(--muted);letter-spacing:0.02em;
     margin:10px 0 0;line-height:1.4;text-align:center;
   }
+  /* Inline checkout failure — replaces blocking alert() modals. Muted
+     red on the existing paper, with a two-action row: retry the card
+     path or hop to the already-implemented crypto checkout. */
+  .tier .checkout-error{
+    margin:10px 0 0;padding-top:8px;border-top:1px solid var(--line-soft);
+    font-size:12.5px;color:#8a3a2c;line-height:1.5;text-align:center;
+  }
+  .tier .checkout-error p{margin:0 0 8px;color:#8a3a2c;}
+  .tier .checkout-error-actions{
+    display:flex;gap:10px;justify-content:center;flex-wrap:wrap;
+  }
+  .tier .checkout-error-actions a,
+  .tier .checkout-error-actions button{
+    display:inline-block;font-family:inherit;font-size:12px;
+    letter-spacing:0.02em;padding:6px 12px;border-radius:999px;
+    background:transparent;color:var(--ink);border:1px solid var(--muted);
+    cursor:pointer;text-decoration:none;line-height:1.2;
+  }
+  .tier .checkout-error-actions a:hover,
+  .tier .checkout-error-actions button:hover{
+    background:var(--accent);color:var(--paper-soft);border-color:var(--accent);
+  }
   @media (max-width:880px){
     .tiers{grid-template-columns:1fr;}
     .tier.featured{transform:none;}
