@@ -98,9 +98,28 @@
   </section>
 </article>
 
-<aside class="gift-cta no-print" aria-label="Pack referral">
-  <p>Send a colleague a Pack of ten anchors. The recipient activates with one click; ten complimentary anchors are added to the giver's account on the recipient's first issuance.</p>
-  <p><a href="/gift.html" class="gift-cta-link">Issue a gift Pack →</a></p>
+<aside class="share-block no-print" aria-label="Share this proof">
+  <h2 style="font-family:var(--serif,Georgia,serif);font-size:20px;font-weight:500;margin:0 0 12px;">Share this proof</h2>
+  <p class="muted small" style="margin:0 0 16px;">A receipt is more useful when the people who need to see it can see it. The link below resolves the same record from any device; the badge below embeds a live status pill on any web page you control.</p>
+
+  <div class="share-row" style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:18px;">
+    <input type="text" id="share-url" readonly aria-label="Public link to this receipt" style="flex:1;min-width:240px;padding:8px 10px;font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:13px;border:1px solid #d9d2c0;border-radius:4px;background:#faf6e9;">
+    <button type="button" id="copy-link-btn" class="share-btn" style="padding:8px 14px;border:1px solid #4a9a73;background:#4a9a73;color:#fff;border-radius:4px;font-size:13px;cursor:pointer;">Copy link</button>
+    <button type="button" id="native-share-btn" class="share-btn" hidden style="padding:8px 14px;border:1px solid #4a9a73;background:transparent;color:#4a9a73;border-radius:4px;font-size:13px;cursor:pointer;">Share…</button>
+  </div>
+
+  <details style="margin-top:8px;">
+    <summary style="cursor:pointer;font-size:14px;color:#4a9a73;">Embed a verifiable badge on your site</summary>
+    <div style="margin-top:14px;">
+      <p class="muted small" style="margin:0 0 10px;">Preview — updates in real time once the Bitcoin pin lands:</p>
+      <p style="margin:0 0 14px;"><img id="badge-preview" src="" alt="Orphograph anchor badge" style="max-height:32px;"></p>
+      <p class="muted small" style="margin:0 0 6px;">Paste this HTML anywhere — portfolio, blog post, listing page:</p>
+      <textarea id="embed-code" readonly rows="3" style="width:100%;font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:12px;padding:8px;border:1px solid #d9d2c0;border-radius:4px;background:#faf6e9;resize:vertical;"></textarea>
+      <p style="margin:10px 0 0;"><button type="button" id="copy-embed-btn" class="share-btn" style="padding:6px 12px;border:1px solid #4a9a73;background:transparent;color:#4a9a73;border-radius:4px;font-size:12px;cursor:pointer;">Copy embed code</button></p>
+    </div>
+  </details>
+
+  <p class="muted small" style="margin:18px 0 0;border-top:1px solid #ede6cf;padding-top:14px;">Sending a colleague a Pack of ten anchors? <a href="/gift.html" style="color:#4a9a73;">Issue a gift Pack →</a></p>
 </aside>
 
 <p id="err" class="muted no-print" hidden></p>

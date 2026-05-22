@@ -298,6 +298,7 @@ async function main() {
   }
 
   renderExplorerGrid(rec);
+  initShareBlock(rec);
 
   $("#verifier-url").href = VERIFIER_URL;
   $("#print-btn").addEventListener("click", (e) => { e.preventDefault(); window.print(); });
@@ -310,6 +311,80 @@ async function main() {
   const params = new URLSearchParams(window.location.search);
   if (params.get("print") === "1") {
     setTimeout(() => { try { window.print(); } catch (_) { /* noop */ } }, 400);
+  }
+}
+
+// Initialises the "Share this proof" block on the receipt page:
+// copy-link, native share (mobile), embeddable SVG badge with preview.
+// All actions are origin-local — no third-party network calls.
+function initShareBlock(rec) {
+  const rid = rec.receipt_id;
+  if (!rid) return;
+  const origin = window.location.origin;
+  const receiptUrl = origin + "/r/" + encodeURIComponent(rid);
+  const badgeUrl = origin + "/api/badge/" + encodeURIComponent(rid) + ".svg";
+
+  const urlField = document.getElementById("share-url");
+  const copyBtn = document.getElementById("copy-link-btn");
+  const nativeBtn = document.getElementById("native-share-btn");
+  const badgeImg = document.getElementById("badge-preview");
+  const embedTa = document.getElementById("embed-code");
+  const copyEmbedBtn = document.getElementById("copy-embed-btn");
+  if (!urlField || !copyBtn) return;
+
+  urlField.value = receiptUrl;
+  if (badgeImg) badgeImg.src = badgeUrl;
+  if (embedTa) {
+    embedTa.value =
+      '<a href="' + receiptUrl + '" rel="noopener" aria-label="Verifiable proof of existence">\n' +
+      '  <img src="' + badgeUrl + '" alt="Bitcoin-anchored proof of existence" height="32">\n' +
+      '</a>';
+  }
+
+  function flashCopied(btn, original) {
+    const prior = btn.textContent;
+    btn.textContent = "Copied ✓";
+    btn.disabled = true;
+    setTimeout(() => { btn.textContent = original || prior; btn.disabled = false; }, 1600);
+  }
+
+  copyBtn.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(receiptUrl);
+      flashCopied(copyBtn, "Copy link");
+    } catch (_) {
+      urlField.select();
+      urlField.setSelectionRange(0, 99999);
+      try { document.execCommand("copy"); flashCopied(copyBtn, "Copy link"); } catch (__) {
+        urlField.focus();
+      }
+    }
+  });
+
+  if (copyEmbedBtn && embedTa) {
+    copyEmbedBtn.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(embedTa.value);
+        flashCopied(copyEmbedBtn, "Copy embed code");
+      } catch (_) {
+        embedTa.select();
+        try { document.execCommand("copy"); flashCopied(copyEmbedBtn, "Copy embed code"); } catch (__) { /* noop */ }
+      }
+    });
+  }
+
+  // Web Share API — only useful on mobile / supported desktops.
+  if (nativeBtn && "share" in navigator) {
+    nativeBtn.hidden = false;
+    nativeBtn.addEventListener("click", async () => {
+      try {
+        await navigator.share({
+          title: "Orphograph receipt " + rid,
+          text: "A verifiable Bitcoin-anchored proof of existence.",
+          url: receiptUrl,
+        });
+      } catch (_) { /* user dismissed; no-op */ }
+    });
   }
 }
 
