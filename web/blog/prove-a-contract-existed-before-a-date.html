@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>How to prove a contract existed before a date — Orphograph</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#f6f1e3">
+<meta name="description" content="A plain-English method for proving that a signed or unsigned contract existed in its present form before a specific calendar date. Anchor the document's cryptographic fingerprint to the Bitcoin chain and hold a third-party-verifiable date of record.">
+<meta property="og:title" content="How to prove a contract existed before a date">
+<meta property="og:description" content="A method for establishing that a contract existed in its present form before a specific calendar date — verifiable by any third party against the Bitcoin chain.">
+<meta property="og:url" content="https://orphograph.com/blog/prove-a-contract-existed-before-a-date.html">
+<meta property="og:type" content="article">
+<meta property="og:image" content="https://orphograph.com/seal.png?v=6">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="How to prove a contract existed before a date">
+<meta name="twitter:description" content="A method for establishing that a contract existed in its present form before a specific calendar date.">
+<link rel="canonical" href="https://orphograph.com/blog/prove-a-contract-existed-before-a-date.html">
+<link rel="icon" type="image/png" href="/favicon.png?v=6">
+<link rel="stylesheet" href="/index.css?v=8">
+<style>
+  .arch-wrap { max-width: 760px; margin: 0 auto; padding: 0 24px 64px; }
+  .arch-wrap h1 { font-family: var(--serif); font-size: 34px; font-weight: 500; margin: 32px 0 6px; line-height: 1.2; }
+  .arch-wrap h2 { font-family: var(--serif); font-size: 22px; font-weight: 500; margin: 36px 0 4px; color: var(--ink); }
+  .arch-wrap h3 { font-family: var(--serif); font-size: 17px; font-weight: 500; margin: 24px 0 2px; color: var(--ink); }
+  .arch-rule { border-top: 1px solid var(--ink); width: 32px; margin: 8px 0 16px; opacity: 0.6; }
+  .arch-wrap p, .arch-wrap li { color: var(--ink-2); line-height: 1.75; font-size: 15.5px; }
+  .arch-wrap code { background: rgba(74,154,115,0.08); padding: 2px 6px; border-radius: 3px; font-size: 0.92em; }
+  .arch-lede { font-size: 17px; line-height: 1.7; color: var(--ink-2); margin: 0 0 24px; }
+  .arch-callout { background: rgba(74,154,115,0.06); border-left: 3px solid var(--confirm); padding: 16px 20px; margin: 24px 0; border-radius: 0 6px 6px 0; }
+  .arch-callout p { margin: 0; }
+  .means-bullets { list-style: none; padding: 0; margin: 16px 0 32px; }
+  .means-bullets li { padding: 8px 0 8px 24px; position: relative; }
+  .means-bullets li::before { content: "·"; position: absolute; left: 4px; color: var(--confirm); font-size: 22px; line-height: 1; top: 6px; }
+  .disclaimer-block { margin-top: 48px; padding: 20px 24px; background: #f1ead7; border-radius: 6px; font-size: 14px; line-height: 1.65; color: var(--muted); }
+  .post-meta { font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); margin: 48px 0 8px; }
+  .post-foot { color: var(--muted); font-size: 13px; margin-top: 48px; border-top: 1px solid var(--line-soft); padding-top: 18px; }
+</style>
+<meta name="copyright" content="© 2026 Orphograph. Code under MIT (see /LICENSE). Brand, content, and design — all rights reserved.">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Article",
+  "headline": "How to prove a contract existed before a date",
+  "description": "A plain-English method for proving that a contract existed in its present form before a specific calendar date — verifiable by any third party against the Bitcoin chain.",
+  "datePublished": "2026-05-21",
+  "dateModified": "2026-05-21",
+  "author": { "@type": "Organization", "name": "Orphograph" },
+  "publisher": {
+    "@type": "Organization",
+    "name": "Orphograph",
+    "logo": { "@type": "ImageObject", "url": "https://orphograph.com/seal.png" }
+  },
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://orphograph.com/blog/prove-a-contract-existed-before-a-date.html"
+  }
+}
+</script>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap row">
+    <a href="/" class="brand">Orphograph</a>
+    <nav>
+      <a href="/learn.html">Method</a>
+      <a href="/faq.html">FAQ</a>
+      <a href="/continuity.html">Continuity</a>
+      <a href="/#tiers">Pricing</a>
+      <a href="/signin.html">Sign in</a>
+      <a href="/#drop" class="cta">Anchor a file</a>
+    </nav>
+  </div>
+</header>
+
+<main class="arch-wrap">
+
+  <p class="post-meta">Blog · Contracts and dated priority</p>
+  <h1>How to prove a contract existed before a date.</h1>
+  <p class="arch-lede">
+    Contract disputes frequently turn on a single question of time. Did the master service agreement exist before the work was performed. Did the side letter exist before the closing. Did the indemnity clause exist before the loss. The office's method does not adjudicate any of those questions, but it does fix the one fact a disputing party most often cannot establish on its own: the document in its present byte-exact form existed on or before a specific Bitcoin block.
+  </p>
+
+  <section>
+    <h2>The problem</h2>
+    <div class="arch-rule"></div>
+    <p>
+      Filenames lie. Document metadata can be edited. The "last modified" field on a file system reflects the file system, not the contract. A printout's date is whatever the person at the printer types. Email headers can be reconstructed. None of those signals survive a serious challenge from a counterparty who has a financial reason to argue the contract was drafted after the dispute arose.
+    </p>
+    <p>
+      The conventional fix is to send the document to a third party — a lawyer, an escrow agent, a recording office — and let the third party's records do the work. That is useful and remains useful. It also creates a single point of failure: if the third party loses its records, closes its business, or is itself a party to the dispute, the date of record evaporates.
+    </p>
+  </section>
+
+  <section>
+    <h2>What the method establishes</h2>
+    <div class="arch-rule"></div>
+    <p>
+      The office issues a receipt that proves one specific, narrow fact: <em>a file with this exact SHA-256 fingerprint existed on or before Bitcoin block N.</em> The fingerprint is sixty-four characters; the block has a published timestamp; the chain has a sixteen-year track record without a reorganization past about six blocks.
+    </p>
+    <p>
+      For a contract, that fact is usually enough to convert a date dispute into a math dispute, and the math is settled. Either the counterparty's copy of the contract hashes to the recorded fingerprint or it does not. Either the block was mined before the date in question or it was not. There is no room for argument about either of those two facts.
+    </p>
+    <div class="arch-callout">
+      <p>The receipt does not prove the contract was signed, that the parties had capacity, that consideration was exchanged, or that the document is enforceable. Those questions are litigated on their own evidence. The receipt only proves the contract existed in its present byte-exact form by a specific date.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>What you do</h2>
+    <div class="arch-rule"></div>
+    <ul class="means-bullets">
+      <li><strong>Save</strong> the final contract as a single file — typically the executed PDF, but the method does not care about format. Word, plain text, scanned image, even a zip of the contract and its exhibits — anything that reduces to a stable byte sequence works.</li>
+      <li><strong>Drop the file</strong> at <a href="/" style="color:var(--confirm);">orphograph.com</a>. The browser computes the SHA-256 fingerprint locally; the contract's contents never leave the device. Only the sixty-four-character fingerprint is submitted to the calendars.</li>
+      <li><strong>Save the receipt.</strong> The receipt consists of a sixteen-character ID, a public URL of the form <code>orphograph.com/r/&lt;id&gt;</code>, and five small <code>.ots</code> proof files from five independent calendars. Keep them in the matter file alongside the executed contract.</li>
+    </ul>
+    <p>
+      The fingerprint is committed to a Bitcoin block within about an hour. From that block forward, the receipt is evidence that the contract existed by no later than that block's mined timestamp.
+    </p>
+  </section>
+
+  <section>
+    <h2>Where this matters most</h2>
+    <div class="arch-rule"></div>
+
+    <h3>The "did this clause exist before the event" dispute</h3>
+    <p>
+      A counterparty asserts a clause was added after a triggering event — a default, a sale, a regulatory inquiry. The receipt fixes the contract's byte-exact form on a date before the event. The clause either appears in that version or it does not, and the question is settled without a hearing on credibility.
+    </p>
+
+    <h3>The "the contract was never finalized" dispute</h3>
+    <p>
+      A counterparty argues that the version produced in litigation is not the version the parties agreed to. The contemporaneously anchored version — its fingerprint recorded at finalization — fixes a specific byte sequence as the operative one. Any later substitution will hash to a different fingerprint, and the substitution will be visible.
+    </p>
+
+    <h3>The "we signed an earlier version" dispute</h3>
+    <p>
+      Multiple drafts are common; arguments about which draft was the final one are also common. A receipt anchored at signing fixes the version. Anchoring earlier drafts as they are exchanged produces a chain of dated artifacts that traces the actual negotiation from the inside.
+    </p>
+  </section>
+
+  <section>
+    <h2>The verification path</h2>
+    <div class="arch-rule"></div>
+    <p>
+      A counterparty, court, arbitrator, or auditor needs no account, no API key, and no trust in the office to verify the receipt. The verification path is:
+    </p>
+    <ul class="means-bullets">
+      <li>Hash the contract again with any SHA-256 tool. The fingerprint must match the one recorded on the receipt.</li>
+      <li>Check the <code>.ots</code> proof files against any copy of the Bitcoin chain. The proof reveals a specific block height and timestamp.</li>
+      <li>Confirm that block height was mined on or before the date being claimed.</li>
+    </ul>
+    <p>
+      A reference verifier is published under MIT at <a href="/method/the-mit-verifier-annotated.html" style="color:var(--confirm);">/method/the-mit-verifier-annotated.html</a>. Any party in any jurisdiction can run it. The office is not required to be present, reachable, or in business for verification to succeed.
+    </p>
+  </section>
+
+  <section>
+    <h2>What it cannot do</h2>
+    <div class="arch-rule"></div>
+    <ul class="means-bullets">
+      <li>It cannot prove who drafted, signed, or delivered the contract. Those questions are answered by the document itself, by witnesses, and by surrounding correspondence.</li>
+      <li>It cannot make an unenforceable contract enforceable. Statute of frauds, capacity, formality, choice-of-law, and the rest are unaffected.</li>
+      <li>It cannot detect that a counterparty has anchored a fabricated document. Anyone can anchor any file. Authorship is separate from existence. The receipt establishes that <em>a</em> file existed by a date — not that the file is genuine, accurate, or yours.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>What survives the office</h2>
+    <div class="arch-rule"></div>
+    <p>
+      Receipts are verifiable through <a href="https://opentimestamps.org" style="color:var(--confirm);">OpenTimestamps</a>, the open public standard the office uses underneath, against any copy of the Bitcoin chain. The receipt is the artifact. The office is the convenience. The artifact outlives the office by design.
+    </p>
+  </section>
+
+  <section>
+    <h2>Try it</h2>
+    <div class="arch-rule"></div>
+    <p>
+      Open <a href="/" style="color:var(--confirm);">orphograph.com</a>. Drop the executed contract. Save the receipt to the matter file. The date of record is now fixed, and a counterparty's later claim about when the document came into being can be answered with a fingerprint and a block height rather than a credibility argument.
+    </p>
+  </section>
+
+  <div class="disclaimer-block">
+    <p><strong>Disclaimer.</strong> Proof of existence is not a legal opinion. A receipt establishes that a specific byte sequence existed by a specific Bitcoin block — it is one piece of evidence in a contract dispute, not a determination of enforceability, validity, or breach. Consult counsel for legal advice specific to a matter.</p>
+  </div>
+
+  <p class="post-foot">Posted 2026-05-21 · <a href="/blog/" style="color:var(--muted);">More from the blog</a></p>
+
+</main>
+
+<footer class="footer">
+  <div class="wrap">
+    <p>&copy; 2026 Orphograph. Code under MIT &mdash; see <a href="/LICENSE">/LICENSE</a>. Brand, content, and design &mdash; all rights reserved.</p>
+  </div>
+</footer>
+
+</body>
+</html>

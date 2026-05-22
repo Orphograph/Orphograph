@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>What makes a digital timestamp legally defensible — Orphograph</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#f6f1e3">
+<meta name="description" content="An institutional explainer of the properties that make a digital timestamp hold up under examination — independent verification, cryptographic binding, public anchoring, and continuity beyond the issuer. From the Orphograph office.">
+<meta property="og:title" content="What makes a digital timestamp legally defensible">
+<meta property="og:description" content="The properties that make a digital timestamp hold up under examination — independent verification, cryptographic binding, public anchoring, continuity beyond the issuer.">
+<meta property="og:url" content="https://orphograph.com/blog/what-makes-a-digital-timestamp-legally-defensible.html">
+<meta property="og:type" content="article">
+<meta property="og:image" content="https://orphograph.com/seal.png?v=6">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="What makes a digital timestamp legally defensible">
+<meta name="twitter:description" content="The properties that make a digital timestamp hold up under examination.">
+<link rel="canonical" href="https://orphograph.com/blog/what-makes-a-digital-timestamp-legally-defensible.html">
+<link rel="icon" type="image/png" href="/favicon.png?v=6">
+<link rel="stylesheet" href="/index.css?v=8">
+<style>
+  .arch-wrap { max-width: 760px; margin: 0 auto; padding: 0 24px 64px; }
+  .arch-wrap h1 { font-family: var(--serif); font-size: 34px; font-weight: 500; margin: 32px 0 6px; line-height: 1.2; }
+  .arch-wrap h2 { font-family: var(--serif); font-size: 22px; font-weight: 500; margin: 36px 0 4px; color: var(--ink); }
+  .arch-wrap h3 { font-family: var(--serif); font-size: 17px; font-weight: 500; margin: 24px 0 2px; color: var(--ink); }
+  .arch-rule { border-top: 1px solid var(--ink); width: 32px; margin: 8px 0 16px; opacity: 0.6; }
+  .arch-wrap p, .arch-wrap li { color: var(--ink-2); line-height: 1.75; font-size: 15.5px; }
+  .arch-wrap code { background: rgba(74,154,115,0.08); padding: 2px 6px; border-radius: 3px; font-size: 0.92em; }
+  .arch-lede { font-size: 17px; line-height: 1.7; color: var(--ink-2); margin: 0 0 24px; }
+  .arch-callout { background: rgba(74,154,115,0.06); border-left: 3px solid var(--confirm); padding: 16px 20px; margin: 24px 0; border-radius: 0 6px 6px 0; }
+  .arch-callout p { margin: 0; }
+  .means-bullets { list-style: none; padding: 0; margin: 16px 0 32px; }
+  .means-bullets li { padding: 8px 0 8px 24px; position: relative; }
+  .means-bullets li::before { content: "·"; position: absolute; left: 4px; color: var(--confirm); font-size: 22px; line-height: 1; top: 6px; }
+  .disclaimer-block { margin-top: 48px; padding: 20px 24px; background: #f1ead7; border-radius: 6px; font-size: 14px; line-height: 1.65; color: var(--muted); }
+  .post-meta { font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); margin: 48px 0 8px; }
+  .post-foot { color: var(--muted); font-size: 13px; margin-top: 48px; border-top: 1px solid var(--line-soft); padding-top: 18px; }
+</style>
+<meta name="copyright" content="© 2026 Orphograph. Code under MIT (see /LICENSE). Brand, content, and design — all rights reserved.">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Article",
+  "headline": "What makes a digital timestamp legally defensible",
+  "description": "An institutional explainer of the properties that make a digital timestamp hold up under examination — independent verification, cryptographic binding, public anchoring, continuity beyond the issuer.",
+  "datePublished": "2026-05-21",
+  "dateModified": "2026-05-21",
+  "author": { "@type": "Organization", "name": "Orphograph" },
+  "publisher": {
+    "@type": "Organization",
+    "name": "Orphograph",
+    "logo": { "@type": "ImageObject", "url": "https://orphograph.com/seal.png" }
+  },
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://orphograph.com/blog/what-makes-a-digital-timestamp-legally-defensible.html"
+  }
+}
+</script>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap row">
+    <a href="/" class="brand">Orphograph</a>
+    <nav>
+      <a href="/learn.html">Method</a>
+      <a href="/faq.html">FAQ</a>
+      <a href="/continuity.html">Continuity</a>
+      <a href="/#tiers">Pricing</a>
+      <a href="/signin.html">Sign in</a>
+      <a href="/#drop" class="cta">Anchor a file</a>
+    </nav>
+  </div>
+</header>
+
+<main class="arch-wrap">
+
+  <p class="post-meta">Blog · Evidence and defensibility</p>
+  <h1>What makes a digital timestamp legally defensible.</h1>
+  <p class="arch-lede">
+    A digital timestamp is only as good as the question it can answer under cross-examination. Most everyday timestamps — file system dates, document metadata, email headers, screenshots of a clock — fail that test the first time a serious challenger asks how the date could be altered, who controls the record, and what happens if the issuer disappears. The office's method satisfies four properties that the everyday timestamps do not. Those four properties are what defensibility means here.
+  </p>
+
+  <section>
+    <h2>The four properties</h2>
+    <div class="arch-rule"></div>
+    <p>
+      A digital timestamp is defensible to the extent it satisfies all four of the following:
+    </p>
+    <ul class="means-bullets">
+      <li><strong>Cryptographic binding to a specific file.</strong> The timestamp must commit to the byte-exact contents of the file in a way that any later substitution becomes visible.</li>
+      <li><strong>Public, independent anchoring.</strong> The date must be fixed by a record outside the issuer's control, so the issuer cannot quietly backdate or alter what was stamped.</li>
+      <li><strong>Independent verifiability.</strong> A challenger must be able to confirm the timestamp using their own tools, without relying on the issuer's database or word.</li>
+      <li><strong>Continuity beyond the issuer.</strong> The timestamp must remain verifiable if the issuer closes, is sold, is compromised, or becomes a party to the dispute.</li>
+    </ul>
+    <p>
+      Each is necessary. Together they are sufficient for the narrow question a timestamp answers — that a specific file existed by a specific date — to survive cross-examination.
+    </p>
+  </section>
+
+  <section>
+    <h2>Property one — cryptographic binding</h2>
+    <div class="arch-rule"></div>
+    <p>
+      A file system "last modified" date binds to the file system, not to the file. Copying the file resets the date. Editing one byte does not. The conventional timestamp is decoupled from the bytes it appears to describe.
+    </p>
+    <p>
+      A SHA-256 fingerprint binds to the bytes themselves. Change one bit anywhere in the file and the fingerprint changes completely. There is no known way to construct a different file with the same SHA-256 fingerprint in the time the universe has been around. So when a timestamp commits to a fingerprint, it commits to a specific byte sequence — and any later attempt to substitute a different file is immediately visible to anyone with both the original and the recorded fingerprint.
+    </p>
+    <div class="arch-callout">
+      <p>The fingerprint is the file's signature. Anchor the fingerprint and the file is anchored, byte by byte, without sending the file anywhere.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Property two — public, independent anchoring</h2>
+    <div class="arch-rule"></div>
+    <p>
+      If the date of a timestamp is recorded in a database the issuer controls, the issuer can change it. That is true whether the issuer is a notary, a software vendor, a cloud provider, or a government office. Defensibility under cross-examination requires the date to be fixed somewhere the issuer cannot reach.
+    </p>
+    <p>
+      The office uses the Bitcoin chain as the anchor. The chain has a sixteen-year track record without a reorganization past about six blocks. No one party controls it. The mined timestamp of a block is visible to anyone with a copy of the chain — which is to say, anyone with a moderately fast internet connection and a few hours of disk space. To alter the recorded date, an adversary would need to alter the chain itself, which has not been done at scale by any party, public or private, since the chain began.
+    </p>
+    <p>
+      The architectural explainer is at <a href="/method/bitcoin-attestation.html" style="color:var(--confirm);">/method/bitcoin-attestation.html</a>.
+    </p>
+  </section>
+
+  <section>
+    <h2>Property three — independent verifiability</h2>
+    <div class="arch-rule"></div>
+    <p>
+      A defensible timestamp does not require the verifier to trust the issuer. The verifier needs only the file, the receipt, and any standard SHA-256 tool. The receipt's proof files reveal the block height and timestamp; any copy of the Bitcoin chain confirms when that block was mined. Nothing in that loop touches the office's servers.
+    </p>
+    <p>
+      A reference verifier under MIT is published at <a href="/method/the-mit-verifier-annotated.html" style="color:var(--confirm);">/method/the-mit-verifier-annotated.html</a>. The verifier is a few hundred lines of code and runs offline once the chain is local. Any opposing party, court-appointed expert, or auditor can run it without an account, an API key, or a cooperation request to the office. That is what verifiability without trust means in practice.
+    </p>
+  </section>
+
+  <section>
+    <h2>Property four — continuity beyond the issuer</h2>
+    <div class="arch-rule"></div>
+    <p>
+      Every conventional timestamp service inherits a weakness from the structure of the service itself: the date is real until the company stops paying its hosting bill. When the database goes dark, the receipts in customer hands point at a tombstone. The proof is gone.
+    </p>
+    <p>
+      The office's receipts do not have that property. The proof is in the file the customer holds, the fingerprint the file produces, and the block height encoded in the <code>.ots</code> proof file. The office is a convenience for issuing the receipt; the receipt itself is independent of the office. If the office closes tomorrow, every receipt issued today still verifies tomorrow, next year, and as long as the Bitcoin chain is running. A treatment of this property is at <a href="/blog/why-domain-dying-doesnt-kill-your-timestamp" style="color:var(--confirm);">/blog/why-domain-dying-doesnt-kill-your-timestamp</a>.
+    </p>
+  </section>
+
+  <section>
+    <h2>Why everyday timestamps fail at least one property</h2>
+    <div class="arch-rule"></div>
+
+    <h3>Document metadata</h3>
+    <p>
+      Fails binding (metadata is decoupled from content) and anchoring (metadata is editable). Useful as a soft cue, not as evidence.
+    </p>
+
+    <h3>Screenshots of a clock or a calendar</h3>
+    <p>
+      Fails binding (the screenshot is one image, not the document it claims to date) and verifiability (the verifier cannot independently confirm the clock was correct or unaltered).
+    </p>
+
+    <h3>Email headers</h3>
+    <p>
+      Stronger than metadata when the receiving mail server is trustworthy, but fails continuity (the headers depend on the receiving provider's records) and partially fails anchoring (a sophisticated party can fabricate plausible headers).
+    </p>
+
+    <h3>Centralised timestamping services</h3>
+    <p>
+      Often satisfy binding and verifiability, but fail anchoring (the date lives in the vendor's database) and continuity (the vendor can close). The defensibility lasts as long as the vendor does.
+    </p>
+
+    <h3>Bitcoin-anchored timestamps</h3>
+    <p>
+      Satisfy all four properties when implemented through a public standard with multiple independent calendars and a chain-based anchor. That is the configuration the office runs. The redundancy argument for using five calendars rather than one is at <a href="/blog/why-5-opentimestamps-calendars-not-1" style="color:var(--confirm);">/blog/why-5-opentimestamps-calendars-not-1</a>.
+    </p>
+  </section>
+
+  <section>
+    <h2>What defensibility does not mean</h2>
+    <div class="arch-rule"></div>
+    <ul class="means-bullets">
+      <li>It does not mean a court will admit the receipt automatically. Admission depends on jurisdiction, on the relevance of the underlying fact, and on the foundation laid by counsel. The receipt is evidence; admissibility is a separate question.</li>
+      <li>It does not mean the receipt proves authorship, signing, or delivery. It proves a specific byte sequence existed by a specific block. Those other questions are litigated on their own evidence.</li>
+      <li>It does not mean the receipt is irrebuttable. A counterparty can argue the file was anchored after fabrication, that the wrong file was anchored, or that the surrounding context is misleading. The receipt only forecloses the one specific argument that the file did not exist by the recorded date.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Try it</h2>
+    <div class="arch-rule"></div>
+    <p>
+      Open <a href="/" style="color:var(--confirm);">orphograph.com</a>. Drop any file. The browser hashes it on the device; the office anchors the fingerprint through five independent calendars and into the Bitcoin chain. The receipt that comes back satisfies the four properties above and will be verifiable by any third party for as long as the chain is running.
+    </p>
+  </section>
+
+  <div class="disclaimer-block">
+    <p><strong>Disclaimer.</strong> This post is an architectural explainer, not a legal opinion. Defensibility under examination depends on jurisdiction, the relevance of the underlying fact, and the foundation laid by counsel. Consult counsel for advice specific to a matter.</p>
+  </div>
+
+  <p class="post-foot">Posted 2026-05-21 · <a href="/blog/" style="color:var(--muted);">More from the blog</a></p>
+
+</main>
+
+<footer class="footer">
+  <div class="wrap">
+    <p>&copy; 2026 Orphograph. Code under MIT &mdash; see <a href="/LICENSE">/LICENSE</a>. Brand, content, and design &mdash; all rights reserved.</p>
+  </div>
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>How to prove a piece of code existed before a competitor's commit — Orphograph</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#f6f1e3">
+<meta name="description" content="A practical guide for engineers and engineering organisations: anchor a source tree's cryptographic fingerprint to the Bitcoin chain so a defensible date of record fixes the bytes before any competing commit. From the Orphograph office.">
+<meta property="og:title" content="How to prove a piece of code existed before a competitor's commit">
+<meta property="og:description" content="A method for engineers facing a priority-of-creation dispute over source code: anchor the tree's fingerprint to the Bitcoin chain and hold a defensible date of record.">
+<meta property="og:url" content="https://orphograph.com/blog/prove-code-existed-before-a-competitors-commit.html">
+<meta property="og:type" content="article">
+<meta property="og:image" content="https://orphograph.com/seal.png?v=6">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="How to prove a piece of code existed before a competitor's commit">
+<meta name="twitter:description" content="A method for engineers facing a priority-of-creation dispute over source code.">
+<link rel="canonical" href="https://orphograph.com/blog/prove-code-existed-before-a-competitors-commit.html">
+<link rel="icon" type="image/png" href="/favicon.png?v=6">
+<link rel="stylesheet" href="/index.css?v=8">
+<style>
+  .arch-wrap { max-width: 760px; margin: 0 auto; padding: 0 24px 64px; }
+  .arch-wrap h1 { font-family: var(--serif); font-size: 34px; font-weight: 500; margin: 32px 0 6px; line-height: 1.2; }
+  .arch-wrap h2 { font-family: var(--serif); font-size: 22px; font-weight: 500; margin: 36px 0 4px; color: var(--ink); }
+  .arch-wrap h3 { font-family: var(--serif); font-size: 17px; font-weight: 500; margin: 24px 0 2px; color: var(--ink); }
+  .arch-rule { border-top: 1px solid var(--ink); width: 32px; margin: 8px 0 16px; opacity: 0.6; }
+  .arch-wrap p, .arch-wrap li { color: var(--ink-2); line-height: 1.75; font-size: 15.5px; }
+  .arch-wrap code { background: rgba(74,154,115,0.08); padding: 2px 6px; border-radius: 3px; font-size: 0.92em; }
+  .arch-lede { font-size: 17px; line-height: 1.7; color: var(--ink-2); margin: 0 0 24px; }
+  .arch-callout { background: rgba(74,154,115,0.06); border-left: 3px solid var(--confirm); padding: 16px 20px; margin: 24px 0; border-radius: 0 6px 6px 0; }
+  .arch-callout p { margin: 0; }
+  .means-bullets { list-style: none; padding: 0; margin: 16px 0 32px; }
+  .means-bullets li { padding: 8px 0 8px 24px; position: relative; }
+  .means-bullets li::before { content: "·"; position: absolute; left: 4px; color: var(--confirm); font-size: 22px; line-height: 1; top: 6px; }
+  .disclaimer-block { margin-top: 48px; padding: 20px 24px; background: #f1ead7; border-radius: 6px; font-size: 14px; line-height: 1.65; color: var(--muted); }
+  .post-meta { font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); margin: 48px 0 8px; }
+  .post-foot { color: var(--muted); font-size: 13px; margin-top: 48px; border-top: 1px solid var(--line-soft); padding-top: 18px; }
+</style>
+<meta name="copyright" content="© 2026 Orphograph. Code under MIT (see /LICENSE). Brand, content, and design — all rights reserved.">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Article",
+  "headline": "How to prove a piece of code existed before a competitor's commit",
+  "description": "A practical method for engineers facing a priority-of-creation dispute over source code: anchor the tree's fingerprint to the Bitcoin chain so a defensible date of record fixes the bytes before any competing commit.",
+  "datePublished": "2026-05-21",
+  "dateModified": "2026-05-21",
+  "author": { "@type": "Organization", "name": "Orphograph" },
+  "publisher": {
+    "@type": "Organization",
+    "name": "Orphograph",
+    "logo": { "@type": "ImageObject", "url": "https://orphograph.com/seal.png" }
+  },
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://orphograph.com/blog/prove-code-existed-before-a-competitors-commit.html"
+  }
+}
+</script>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap row">
+    <a href="/" class="brand">Orphograph</a>
+    <nav>
+      <a href="/learn.html">Method</a>
+      <a href="/faq.html">FAQ</a>
+      <a href="/continuity.html">Continuity</a>
+      <a href="/#tiers">Pricing</a>
+      <a href="/signin.html">Sign in</a>
+      <a href="/#drop" class="cta">Anchor a file</a>
+    </nav>
+  </div>
+</header>
+
+<main class="arch-wrap">
+
+  <p class="post-meta">Blog · Source-code priority</p>
+  <h1>How to prove a piece of code existed before a competitor's commit.</h1>
+  <p class="arch-lede">
+    Priority disputes over source code arrive in two common forms. A former employer alleges code in a customer's new product was lifted from an old codebase. A competitor publishes a feature that looks suspiciously like one in private development. In both cases the question reduces to a single fact about time: which version of the bytes existed first. A commit timestamp inside a hosting provider does not settle that question against a counterparty who has any reason to argue the timestamp was manufactured. A Bitcoin-anchored receipt does.
+  </p>
+
+  <section>
+    <h2>Why the commit date is not enough</h2>
+    <div class="arch-rule"></div>
+    <p>
+      A commit's author date is a field in the commit object. The field is editable. A repository's history can be rewritten, force-pushed, rebased onto an earlier base, or constructed from scratch with arbitrary dates. A hosting provider's "pushed at" timestamp is more credible because the provider records it, but it depends on the provider being trusted by the disputing party — and the provider's records being available, intact, and admissible when the dispute arises, sometimes years later.
+    </p>
+    <p>
+      A defensible date of record needs three things the commit date does not provide on its own: cryptographic binding to the byte-exact state of the tree, anchoring outside any party's control, and verifiability that does not depend on a hosting provider remaining cooperative. The architectural treatment of those properties is at <a href="/blog/what-makes-a-digital-timestamp-legally-defensible.html" style="color:var(--confirm);">/blog/what-makes-a-digital-timestamp-legally-defensible.html</a>.
+    </p>
+  </section>
+
+  <section>
+    <h2>What you do</h2>
+    <div class="arch-rule"></div>
+    <ul class="means-bullets">
+      <li><strong>Produce a single file from the tree.</strong> The simplest form is a reproducible archive — for example, <code>git archive --format=tar.gz HEAD &gt; snapshot.tar.gz</code>, or a tarball of the working tree with deterministic ordering. Any byte-stable single-file representation works. A commit hash itself is also a valid input: the SHA-1 or SHA-256 of a commit binds to the entire reachable history.</li>
+      <li><strong>Drop the file</strong> at <a href="/" style="color:var(--confirm);">orphograph.com</a>. The browser computes the SHA-256 fingerprint locally. The archive's contents never leave the device. Only the sixty-four-character fingerprint is submitted.</li>
+      <li><strong>Save the receipt.</strong> The receipt is a sixteen-character ID, a public URL of the form <code>orphograph.com/r/&lt;id&gt;</code>, and five small <code>.ots</code> proof files from five independent calendars. Commit the receipt into the repository, or keep it in the engineering matter folder alongside the archive.</li>
+    </ul>
+    <p>
+      Within about an hour the fingerprint is committed to a Bitcoin block. From that block forward, the receipt is evidence that a tree with this exact fingerprint existed by no later than the block's mined timestamp.
+    </p>
+  </section>
+
+  <section>
+    <h2>Three useful cadences</h2>
+    <div class="arch-rule"></div>
+
+    <h3>Per-milestone</h3>
+    <p>
+      Anchor the tree at each tagged release, internal milestone, or major feature branch merge. This is the lightest discipline and the most common configuration. It establishes the byte-exact state of the codebase at a small set of high-signal moments. For most priority disputes that touches the dispute window, a milestone anchor is enough.
+    </p>
+
+    <h3>Per-day</h3>
+    <p>
+      Anchor the head of the default branch once per day, via a CI job that produces the archive, computes the fingerprint, and submits it. The result is a chain of daily artifacts that traces the actual development inside the dispute window. A counterparty who later argues a feature was added after their commit must reconcile the daily anchors that show it present before.
+    </p>
+
+    <h3>Per-commit, for the disputed area</h3>
+    <p>
+      In active dispute or where IP priority is core to the product, anchor on every commit that touches the relevant subtree. The resulting density of evidence makes any "this code did not exist until later" argument expensive to mount and easy to disprove.
+    </p>
+  </section>
+
+  <section>
+    <h2>What the receipt actually establishes</h2>
+    <div class="arch-rule"></div>
+    <p>
+      The receipt proves one specific, narrow fact: <em>a file with this exact SHA-256 fingerprint existed on or before Bitcoin block N.</em>
+    </p>
+    <p>
+      For a source tree, that fact converts the priority question into mechanical verification. Either the archive in the engineer's possession hashes to the recorded fingerprint or it does not. Either the block was mined before the competitor's commit or it was not. Both questions are answered against the public chain without trusting either party.
+    </p>
+    <div class="arch-callout">
+      <p>The receipt is not authorship of the code. Authorship is established through other means — commit history, internal review records, design documents, witnesses. The timestamp is one piece of the priority argument, not the entire argument.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>The verification path</h2>
+    <div class="arch-rule"></div>
+    <ul class="means-bullets">
+      <li>Produce the archive the same way it was produced at anchoring time. Reproducibility matters here — sort file entries, fix the modification times, and pin the compression level so the byte sequence is stable.</li>
+      <li>Hash the archive with any SHA-256 tool. The fingerprint must match the receipt.</li>
+      <li>Check the <code>.ots</code> proof files against any copy of the Bitcoin chain. The proof reveals a specific block height and its mined timestamp.</li>
+      <li>Confirm the block was mined before the competitor's commit date.</li>
+    </ul>
+    <p>
+      A reference verifier under MIT is at <a href="/method/the-mit-verifier-annotated.html" style="color:var(--confirm);">/method/the-mit-verifier-annotated.html</a>. It runs offline once the chain is local. The office is not in the verification loop.
+    </p>
+  </section>
+
+  <section>
+    <h2>Practical notes</h2>
+    <div class="arch-rule"></div>
+
+    <h3>Anchor the archive, not the working directory</h3>
+    <p>
+      A working directory has unstable byte order, untracked files, swap files, and editor temp files. Anchor the output of a deterministic archive command instead. The fingerprint must be reproducible by a verifier given the same source state.
+    </p>
+
+    <h3>Keep the archive, not just the receipt</h3>
+    <p>
+      The receipt fixes the date for whatever file was anchored. If the archive is lost, the receipt is unverifiable — there is no file left to hash. Treat the archive as evidence and back it up alongside the receipt.
+    </p>
+
+    <h3>Anchor the dependency snapshot too</h3>
+    <p>
+      A priority dispute often hinges on which version of a third-party library was in use. Lockfiles record those versions; anchoring the lockfile alongside the source tree pins that fact at the same moment.
+    </p>
+
+    <h3>Folder-mode for engineering organisations</h3>
+    <p>
+      Standing Order accounts can anchor a folder of receipts continuously, producing a daily merkle root that fixes the state of every tracked archive in a single chain entry. The mechanism is described at <a href="/method/folder-merkle.html" style="color:var(--confirm);">/method/folder-merkle.html</a>.
+    </p>
+  </section>
+
+  <section>
+    <h2>What it cannot do</h2>
+    <div class="arch-rule"></div>
+    <ul class="means-bullets">
+      <li>It cannot prove the engineer wrote the code rather than copying it. The receipt fixes the bytes at a date; provenance of those bytes is a separate evidentiary question.</li>
+      <li>It cannot prove the code is original work. A receipt anchored on a fork of someone else's project still records a real fingerprint at a real time — it just records prior art, not creation.</li>
+      <li>It cannot reach back. A receipt anchored today fixes today, not the date the code was first typed. Anchor early and on a cadence; the office cannot supply a date that pre-dates the receipt.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Try it</h2>
+    <div class="arch-rule"></div>
+    <p>
+      Open <a href="/" style="color:var(--confirm);">orphograph.com</a>. Drop a tarball of the current tree. Save the receipt into the repository. The codebase now has a defensible date of record, and any later argument about when a feature came into being can be answered with a fingerprint and a block height rather than a chain-of-trust dispute over a hosting provider's logs.
+    </p>
+  </section>
+
+  <div class="disclaimer-block">
+    <p><strong>Disclaimer.</strong> Proof of existence is not a legal opinion. A receipt establishes that a specific byte sequence existed by a specific Bitcoin block — it is one piece of evidence in a priority dispute, not a determination of authorship, originality, or infringement. Consult counsel for legal advice specific to a matter.</p>
+  </div>
+
+  <p class="post-foot">Posted 2026-05-21 · <a href="/blog/" style="color:var(--muted);">More from the blog</a></p>
+
+</main>
+
+<footer class="footer">
+  <div class="wrap">
+    <p>&copy; 2026 Orphograph. Code under MIT &mdash; see <a href="/LICENSE">/LICENSE</a>. Brand, content, and design &mdash; all rights reserved.</p>
+  </div>
+</footer>
+
+</body>
+</html>
