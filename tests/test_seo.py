@@ -52,6 +52,7 @@ EXPECTED_URLS = [
     "https://orphograph.com/blog/prove-a-photo-was-not-edited.html",
     "https://orphograph.com/blog/date-stamp-a-document-permanently.html",
     "https://orphograph.com/blog/prove-i-created-something-before-someone-else.html",
+    "https://orphograph.com/blog/prove-you-wrote-it-not-ai.html",
 ]
 
 SITEMAP_NS = "{http://www.sitemaps.org/schemas/sitemap/0.9}"

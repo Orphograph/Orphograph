@@ -711,7 +711,21 @@ class Handler(BaseHTTPRequestHandler):
                       content_type="application/atom+xml; charset=utf-8")
             return
         if path.startswith("/blog/"):
-            slug = path[len("/blog/"):].rstrip("/")
+            # Two independent blog content surfaces share /blog/:
+            #   1. Static HTML files at web/blog/<slug>.html — long-form
+            #      posts authored as HTML, served byte-for-byte.
+            #   2. Markdown-rendered posts at content/blog/<slug>.md —
+            #      addressed at /blog/<slug> with no extension.
+            # We dispatch by URL shape: anything ending in .html and matching
+            # a real static file goes to the static path; bare slugs go to
+            # the markdown renderer.
+            rest = path[len("/blog/"):]
+            if rest.endswith(".html") and re.match(r"^[a-z0-9-]{1,80}\.html$", rest):
+                # Try the static file under web/blog/. _serve_static returns
+                # a 404 if the file is missing.
+                _serve_static(self, "/blog/" + rest)
+                return
+            slug = rest.rstrip("/")
             if not re.match(r"^[a-z0-9-]{1,80}$", slug):
                 self.send_error(400, "invalid slug")
                 return
