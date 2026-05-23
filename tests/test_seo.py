@@ -37,6 +37,7 @@ EXPECTED_URLS = [
     "https://orphograph.com/press-kit.html",
     "https://orphograph.com/method/folder-merkle.html",
     "https://orphograph.com/method/evidence-law.html",
+    "https://orphograph.com/method/legal-recognition.html",
     "https://orphograph.com/method/architecture.html",
     "https://orphograph.com/method/bitcoin-attestation.html",
     "https://orphograph.com/method/the-mit-verifier-annotated.html",
