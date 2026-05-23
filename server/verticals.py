@@ -81,7 +81,7 @@ _PAGE_TEMPLATE = """<!DOCTYPE html>
 <meta property="og:title" content="Orphograph — {title_esc}">
 <meta property="og:description" content="{subhead_esc}">
 <meta property="og:type" content="article">
-<meta property="og:image" content="https://orphograph.com/seal.png?v=6">
+<meta property="og:image" content="https://orphograph.com/seal.png?v=7">
 <link rel="icon" type="image/png" href="/favicon.png?v=6">
 <link rel="stylesheet" href="/index.css?v=8">
 <style>

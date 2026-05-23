@@ -96,6 +96,14 @@
     font-size:9px;letter-spacing:0.48em;text-transform:uppercase;
     color:var(--muted-2);margin-top:16px;
   }
+  /* HD raster wordmark — used on index.html in place of .lockup-text.
+     Aspect of lockup.png is ~1.92:1 (1736×906). Width tuned to match
+     the visual area of the prior CSS-text rendering. */
+  .lockup-text-img{
+    width:340px;height:auto;display:block;flex-shrink:0;
+    /* Match the soft engraved feel of the seal */
+    filter:drop-shadow(0 4px 12px rgba(60,40,20,0.06));
+  }
 
   /* ── Hero (text only — masthead lives above it now) ──────────────── */
   .hero{padding:24px 0 72px;background:transparent;}
@@ -123,6 +131,7 @@
     .lockup{flex-direction:column;align-items:center;text-align:center;gap:8px;max-width:none;}
     .lockup-seal{width:120px;}
     .lockup-text{align-items:center;}
+    .lockup-text-img{width:260px;}
     .lockup-wordmark{font-size:26px;letter-spacing:0.26em;}
     .lockup-rule{max-width:220px;}
     .hero{padding:24px 0 36px;}
@@ -418,6 +427,7 @@
   @media (max-width:480px){
     .hero h1{font-size:30px;}
     .lockup-seal{width:110px;}
+    .lockup-text-img{width:220px;}
     .lockup-wordmark{font-size:22px;letter-spacing:0.22em;}
     section.band h2{font-size:24px;}
     .action ol li{font-size:13.5px;}
