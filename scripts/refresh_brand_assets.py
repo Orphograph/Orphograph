@@ -141,7 +141,14 @@ def _bump_cachebusters(dry_run: bool) -> dict[pathlib.Path, int]:
     Conservative: only bumps lines that also mention seal.png/seal.svg/
     favicon/lockup/og-image to avoid touching unrelated version markers.
     """
-    pattern = re.compile(r"(seal\.png|seal\.svg|favicon|lockup\.png|og-image)\?v=6")
+    # Match brand assets followed by ?v=6. Covers seal.png, seal.svg,
+    # lockup.png, og-image.png, favicon.png, favicon-16.png, favicon-32.png,
+    # apple-touch-icon-180.png, favicon.ico, favicon.svg.
+    pattern = re.compile(
+        r"((?:seal|lockup|og-image)\.(?:png|svg)|"
+        r"(?:favicon[a-z0-9-]*|apple-touch-icon-\d+)\.(?:png|svg|ico))"
+        r"\?v=6"
+    )
     touched: dict[pathlib.Path, int] = {}
     for ext in REFERENCE_EXTENSIONS:
         for p in REPO.rglob(f"*{ext}"):
