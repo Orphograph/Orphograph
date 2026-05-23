@@ -1153,6 +1153,10 @@ class Handler(BaseHTTPRequestHandler):
             # Designed for the login-trigger morning-check script.
             self._handle_founder_morning_summary()
             return
+        if path == "/api/founder/funnel":
+            # Founder-only — analytics funnel rollup from data/events.jsonl.
+            self._handle_founder_funnel()
+            return
         if path in ("/affiliate", "/affiliate/"):
             # Public landing for the affiliate program.
             _serve_static(self, "/affiliate.html")
@@ -2328,6 +2332,84 @@ class Handler(BaseHTTPRequestHandler):
             "health": hs,
             "revenue": metrics,
             "feedback": feedback,
+        })
+
+    def _handle_founder_funnel(self) -> None:
+        """JSON funnel rollup from data/events.jsonl.
+
+        Gated by ORPHO_FOUNDER_TOKEN via header X-Orpho-Founder. Returns
+        per-day event counts for the 4 funnel events, conversion rates
+        between adjacent stages, and a 30-day rolling total.
+        """
+        token = os.environ.get("ORPHO_FOUNDER_TOKEN", "").strip()
+        if not token:
+            self.send_error(404, "not found")
+            return
+        supplied = self.headers.get("X-Orpho-Founder", "").strip()
+        import hmac as _hmac
+        if not _hmac.compare_digest(supplied, token):
+            self.send_error(404, "not found")
+            return
+
+        events_path = pathlib.Path(__file__).resolve().parent.parent / "data" / "events.jsonl"
+        funnel_events = ["drop_zone_visible", "file_anchored", "checkout_clicked", "checkout_returned_success"]
+        now_utc = datetime.now(timezone.utc)
+        cutoff = now_utc - timedelta(days=30)
+
+        per_day: dict[str, dict[str, int]] = {}  # date_iso -> event -> count
+        totals: dict[str, int] = {e: 0 for e in funnel_events}
+        total_lines = 0
+        if events_path.exists():
+            try:
+                with events_path.open("rb") as f:
+                    raw = f.read().decode("utf-8", errors="ignore")
+                for line in raw.splitlines():
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        rec = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    total_lines += 1
+                    ev = rec.get("event")
+                    ts = rec.get("ts") or rec.get("timestamp")
+                    if not ev or not ts:
+                        continue
+                    if ev not in funnel_events:
+                        continue
+                    try:
+                        when = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+                    except ValueError:
+                        continue
+                    if when < cutoff:
+                        continue
+                    day = when.date().isoformat()
+                    per_day.setdefault(day, {e: 0 for e in funnel_events})
+                    per_day[day][ev] = per_day[day].get(ev, 0) + 1
+                    totals[ev] += 1
+            except OSError:
+                pass
+
+        def _rate(num: int, den: int) -> float:
+            return round(100.0 * num / den, 1) if den else 0.0
+
+        rates_30d = {
+            "visible_to_anchored": _rate(totals["file_anchored"], totals["drop_zone_visible"]),
+            "anchored_to_checkout": _rate(totals["checkout_clicked"], totals["file_anchored"]),
+            "checkout_to_paid": _rate(totals["checkout_returned_success"], totals["checkout_clicked"]),
+            "visible_to_paid": _rate(totals["checkout_returned_success"], totals["drop_zone_visible"]),
+        }
+
+        days_sorted = sorted(per_day.keys(), reverse=True)
+        series = [{"date": d, **per_day[d]} for d in days_sorted]
+
+        _json_response(self, 200, {
+            "timestamp": now_utc.isoformat() + "Z",
+            "totals_30d": totals,
+            "rates_30d_pct": rates_30d,
+            "events_scanned": total_lines,
+            "series_by_day": series,
         })
 
     def _handle_unsubscribe_post(self) -> None:
