@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Orphograph — Blog</title>
+    <link>https://orphograph.com/blog/</link>
+    <description>Notes from the office. Method, doctrine, and edge cases of Bitcoin-anchored timestamps.</description>
+    <language>en-us</language>
+    <copyright>© 2026 Orphograph</copyright>
+    <managingEditor>hello@orphograph.com (Orphograph)</managingEditor>
+    <lastBuildDate>Thu, 21 May 2026 00:00:00 +0000</lastBuildDate>
+    <atom:link href="https://orphograph.com/blog/rss.xml" rel="self" type="application/rss+xml"/>
+    <item>
+      <title>What makes a digital timestamp legally defensible</title>
+      <link>https://orphograph.com/blog/what-makes-a-digital-timestamp-legally-defensible.html</link>
+      <description>A digital timestamp is only as good as the question it can answer under cross-examination. Most everyday timestamps — file system dates, document metadata, email headers, screenshots of a clock — fail that test the first time a serious challenger asks how the date could be altered, who controls t...</description>
+      <pubDate>Thu, 21 May 2026 00:00:00 +0000</pubDate>
+      <guid isPermaLink="true">https://orphograph.com/blog/what-makes-a-digital-timestamp-legally-defensible.html</guid>
+    </item>
+    <item>
+      <title>How to prove you wrote it — not an AI</title>
+      <link>https://orphograph.com/blog/prove-you-wrote-it-not-ai.html</link>
+      <description>Detection tools are wrong often enough that an AI-use accusation regularly lands on honest writers. The fix is not a better detector. The fix is going to the opposite end of the problem: hold a verifiable date of record showing the draft existed before the accusation could possibly have been made...</description>
+      <pubDate>Thu, 21 May 2026 00:00:00 +0000</pubDate>
+      <guid isPermaLink="true">https://orphograph.com/blog/prove-you-wrote-it-not-ai.html</guid>
+    </item>
+    <item>
+      <title>How to prove you created something before someone else</title>
+      <link>https://orphograph.com/blog/prove-i-created-something-before-someone-else.html</link>
+      <description>The reliable answer to a priority dispute is a dated, third-party-verifiable record of the work as it existed at the moment of creation. Compute a cryptographic fingerprint of the draft — the manuscript, the sketch, the design file, the code archive — on your own device, and anchor that fingerpri...</description>
+      <pubDate>Thu, 21 May 2026 00:00:00 +0000</pubDate>
+      <guid isPermaLink="true">https://orphograph.com/blog/prove-i-created-something-before-someone-else.html</guid>
+    </item>
+    <item>
+      <title>How to prove a piece of code existed before a competitor&apos;s commit</title>
+      <link>https://orphograph.com/blog/prove-code-existed-before-a-competitors-commit.html</link>
+      <description>Priority disputes over source code arrive in two common forms. A former employer alleges code in a customer&apos;s new product was lifted from an old codebase. A competitor publishes a feature that looks suspiciously like one in private development. In both cases the question reduces to a single fact...</description>
+      <pubDate>Thu, 21 May 2026 00:00:00 +0000</pubDate>
+      <guid isPermaLink="true">https://orphograph.com/blog/prove-code-existed-before-a-competitors-commit.html</guid>
+    </item>
+    <item>
+      <title>How to prove a photo was not edited</title>
+      <link>https://orphograph.com/blog/prove-a-photo-was-not-edited.html</link>
+      <description>Compute a cryptographic fingerprint of the photograph at the moment you trust it — for example, the instant it leaves the camera or the moment a roll of inspection images is finished — and record that fingerprint on the Bitcoin chain through an open public protocol. Any later copy of the file can...</description>
+      <pubDate>Thu, 21 May 2026 00:00:00 +0000</pubDate>
+      <guid isPermaLink="true">https://orphograph.com/blog/prove-a-photo-was-not-edited.html</guid>
+    </item>
+    <item>
+      <title>How to prove a contract existed before a date</title>
+      <link>https://orphograph.com/blog/prove-a-contract-existed-before-a-date.html</link>
+      <description>Contract disputes frequently turn on a single question of time. Did the master service agreement exist before the work was performed. Did the side letter exist before the closing. Did the indemnity clause exist before the loss. The office&apos;s method does not adjudicate any of those questions, but i...</description>
+      <pubDate>Thu, 21 May 2026 00:00:00 +0000</pubDate>
+      <guid isPermaLink="true">https://orphograph.com/blog/prove-a-contract-existed-before-a-date.html</guid>
+    </item>
+    <item>
+      <title>How to date-stamp a document permanently</title>
+      <link>https://orphograph.com/blog/date-stamp-a-document-permanently.html</link>
+      <description>Reduce the document to a short cryptographic fingerprint on your own device, then submit only that fingerprint through a public timestamping protocol that writes it into a Bitcoin block. The block becomes part of the public ledger; the fingerprint is then permanently associated with the moment th...</description>
+      <pubDate>Thu, 21 May 2026 00:00:00 +0000</pubDate>
+      <guid isPermaLink="true">https://orphograph.com/blog/date-stamp-a-document-permanently.html</guid>
+    </item>
+    <item>
+      <title>Why your domain dying shouldn&apos;t kill your timestamp receipt</title>
+      <link>https://orphograph.com/blog/why-domain-dying-doesnt-kill-your-timestamp.html</link>
+      <description>Blog · Document timestamping</description>
+      <pubDate>Sun, 17 May 2026 00:00:00 +0000</pubDate>
+      <guid isPermaLink="true">https://orphograph.com/blog/why-domain-dying-doesnt-kill-your-timestamp.html</guid>
+    </item>
+    <item>
+      <title>Why Orphograph uses five OpenTimestamps calendars instead of one</title>
+      <link>https://orphograph.com/blog/why-5-opentimestamps-calendars-not-1.html</link>
+      <description>Blog · Document timestamping</description>
+      <pubDate>Sun, 17 May 2026 00:00:00 +0000</pubDate>
+      <guid isPermaLink="true">https://orphograph.com/blog/why-5-opentimestamps-calendars-not-1.html</guid>
+    </item>
+    <item>
+      <title>Reading an .ots file by hand — a forensic walkthrough</title>
+      <link>https://orphograph.com/blog/reading-ots-file-by-hand.html</link>
+      <description>Blog · Document timestamping</description>
+      <pubDate>Sun, 17 May 2026 00:00:00 +0000</pubDate>
+      <guid isPermaLink="true">https://orphograph.com/blog/reading-ots-file-by-hand.html</guid>
+    </item>
+    <item>
+      <title>How to prove your photo existed before AI scraped it (without a lawyer)</title>
+      <link>https://orphograph.com/blog/prove-photo-existed-before-ai.html</link>
+      <description>Blog · Document timestamping</description>
+      <pubDate>Sun, 17 May 2026 00:00:00 +0000</pubDate>
+      <guid isPermaLink="true">https://orphograph.com/blog/prove-photo-existed-before-ai.html</guid>
+    </item>
+    <item>
+      <title>OpenTimestamps for non-developers — a 10-minute walkthrough</title>
+      <link>https://orphograph.com/blog/opentimestamps-for-non-developers.html</link>
+      <description>Blog · Document timestamping</description>
+      <pubDate>Sun, 17 May 2026 00:00:00 +0000</pubDate>
+      <guid isPermaLink="true">https://orphograph.com/blog/opentimestamps-for-non-developers.html</guid>
+    </item>
+    <item>
+      <title>How to prove a photo existed before an AI model was released</title>
+      <link>https://orphograph.com/blog/how-to-prove-photo-existed-before-ai-model-released.html</link>
+      <description>Blog · Document timestamping</description>
+      <pubDate>Sun, 17 May 2026 00:00:00 +0000</pubDate>
+      <guid isPermaLink="true">https://orphograph.com/blog/how-to-prove-photo-existed-before-ai-model-released.html</guid>
+    </item>
+    <item>
+      <title>Digital notary vs cryptographic timestamp — what each one proves</title>
+      <link>https://orphograph.com/blog/digital-notary-vs-cryptographic-timestamp.html</link>
+      <description>Blog · Document timestamping</description>
+      <pubDate>Sun, 17 May 2026 00:00:00 +0000</pubDate>
+      <guid isPermaLink="true">https://orphograph.com/blog/digital-notary-vs-cryptographic-timestamp.html</guid>
+    </item>
+    <item>
+      <title>How Bitcoin merkle roots make file timestamps un-falsifiable</title>
+      <link>https://orphograph.com/blog/bitcoin-merkle-roots-unforgeable-timestamps.html</link>
+      <description>Blog · Document timestamping</description>
+      <pubDate>Sun, 17 May 2026 00:00:00 +0000</pubDate>
+      <guid isPermaLink="true">https://orphograph.com/blog/bitcoin-merkle-roots-unforgeable-timestamps.html</guid>
+    </item>
+    <item>
+      <title>Why a Bitcoin block height is the strongest proof of existence in 2026</title>
+      <link>https://orphograph.com/blog/bitcoin-block-height-as-source-of-truth.html</link>
+      <description>Blog · Document timestamping</description>
+      <pubDate>Sun, 17 May 2026 00:00:00 +0000</pubDate>
+      <guid isPermaLink="true">https://orphograph.com/blog/bitcoin-block-height-as-source-of-truth.html</guid>
+    </item>
+  </channel>
+</rss>

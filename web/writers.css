@@ -100,8 +100,8 @@
 .verify-card.dragover{border-color:var(--accent-warm);background:#fffaef;}
 
 .honesty{
-  background:rgba(58,47,36,0.04);border-left:3px solid var(--accent);
-  padding:22px 26px;border-radius:8px;max-width:760px;margin:0 auto;
+  background:transparent;border-left:3px solid var(--accent);
+  padding:22px 26px;border-radius:0;max-width:760px;margin:0 auto;
 }
 .honesty p{margin:0 0 12px;color:var(--ink-2);font-size:15.5px;line-height:1.65;}
 .honesty p:last-child{margin-bottom:0;}

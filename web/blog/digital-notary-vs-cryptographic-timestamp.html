@@ -40,14 +40,16 @@
 {
   "@context": "https://schema.org",
   "@type": "Article",
-  "headline": 'Digital notary vs cryptographic timestamp — what each one proves',
-  "description": 'Digital notary vs cryptographic timestamp — what each actually proves, why they are not interchangeable, and which one your use case needs.',
+  "headline": "Digital notary vs cryptographic timestamp — what each one proves",
+  "description": "Digital notary vs cryptographic timestamp — what each actually proves, why they are not interchangeable, and which one a given use case needs.",
+  "url": "https://orphograph.com/blog/digital-notary-vs-cryptographic-timestamp.html",
   "datePublished": "2026-05-17",
   "dateModified": "2026-05-17",
-  "author": { "@type": "Organization", "name": "Orphograph" },
+  "author": { "@type": "Organization", "name": "Orphograph", "url": "https://orphograph.com" },
   "publisher": {
     "@type": "Organization",
     "name": "Orphograph",
+    "url": "https://orphograph.com",
     "logo": { "@type": "ImageObject", "url": "https://orphograph.com/seal.png" }
   },
   "mainEntityOfPage": {
@@ -89,16 +91,14 @@
   <p>A digital or &quot;remote online&quot; notary does the same thing using a video session and a digital seal instead of an ink stamp. The underlying legal authority is identical. The notary is still acting under state commission, still verifying identity, still witnessing the signature.</p>
   <p>What a notarized document proves:</p>
   <ul>
-  <li>A specific person, with verified identity, signed this specific</li>
+  <li>A specific person, with verified identity, signed this specific document on this specific date in the presence of an authorized notary.</li>
   </ul>
-  <p>document on this specific date in the presence of an authorized notary.</p>
   <p>What a notarized document does not prove:</p>
   <ul>
   <li>That the contents of the document are true.</li>
   <li>That the signer had the legal authority to sign.</li>
-  <li>That the document existed before the notarization date in any</li>
+  <li>That the document existed before the notarization date in any form — the notary only attests to the moment of signing.</li>
   </ul>
-  <p>form — the notary only attests to the moment of signing.</p>
   <p>If you need a deed, a power of attorney, an affidavit, or any document where the law requires sworn personal attestation, you need a notary. There is no cryptographic substitute.</p>
   <h2>What a cryptographic timestamp actually does</h2>
   <p>A cryptographic timestamp does not involve a person at all. It does not verify identity. It does not witness a signing. It does one thing: it proves that a specific sequence of bytes existed by a specific moment in time.</p>
@@ -108,17 +108,13 @@
   <p><strong>3.</strong> You receive a proof that links the file&#x27;s hash to the moment the record was committed.</p>
   <p>What a cryptographic timestamp proves:</p>
   <ul>
-  <li>This specific byte sequence existed at or before this specific</li>
+  <li>This specific byte sequence existed at or before this specific moment.</li>
   </ul>
-  <p>moment.</p>
   <p>What a cryptographic timestamp does not prove:</p>
   <ul>
   <li>Who created the file.</li>
   <li>Who possesses the file now.</li>
-  <li>Whether the file&#x27;s contents are accurate, original, or owned by</li>
-  </ul>
-  <p>any particular party.</p>
-  <ul>
+  <li>Whether the file&#x27;s contents are accurate, original, or owned by any particular party.</li>
   <li>That any person ever saw, signed, or agreed to the file.</li>
   </ul>
   <p>The proof is about the bytes, not about the people. A file&#x27;s hash is the same whether you generated it, copied it from someone else, or downloaded it from the open web. The timestamp says only that those exact bytes were locked to that date.</p>
@@ -134,29 +130,21 @@
   <h2>Which one your situation needs</h2>
   <p>Use a notary when:</p>
   <ul>
-  <li>The law requires it. Real estate deeds, certain affidavits,</li>
-  </ul>
-  <p>certain powers of attorney, certain immigration forms — these require notarization by statute.</p>
-  <ul>
-  <li>You need to prove a specific person signed a specific document.</li>
-  <li>You need a witness whose role the court already understands.</li>
+  <li>The law requires it. Real estate deeds, certain affidavits, certain powers of attorney, certain immigration forms — these require notarization by statute.</li>
+  <li>The dispute requires proof that a specific person signed a specific document.</li>
+  <li>The matter benefits from a witness whose role the court already understands.</li>
   </ul>
   <p>Use a cryptographic timestamp when:</p>
   <ul>
-  <li>You need to prove a file existed before a specific date.</li>
-  <li>You need a receipt that anyone can verify without contacting you</li>
+  <li>The dispute turns on whether a file existed before a specific date.</li>
+  <li>The receipt must be verifiable by anyone, without contacting the issuer or any service.</li>
+  <li>The anchor must outlive the service that issued it.</li>
+  <li>The use case is about the file&#x27;s content, not about who signed it.</li>
   </ul>
-  <p>or any service.</p>
-  <ul>
-  <li>You need an anchor that survives the service that issued it.</li>
-  <li>The use case is about the file&#x27;s content, not about who signed</li>
-  </ul>
-  <p>it.</p>
   <p>Use both when:</p>
   <ul>
-  <li>The dispute is likely to turn on both who signed and when the</li>
+  <li>The dispute is likely to turn on both who signed and when the document existed. Notarize the signed document, then anchor the notarized PDF. The timestamp proves the notarized version was the one that existed on that date; the notarial act proves a verified person signed it.</li>
   </ul>
-  <p>document existed. Notarize the signed document, then anchor the notarized PDF. The timestamp proves the notarized version was the one that existed on that date; the notarial act proves a verified person signed it.</p>
   <h2>Legal weight in 2026</h2>
   <p>A notarized document carries a defined legal weight in every U.S. state and in most jurisdictions worldwide. Courts know what to do with it. Statutes spell out its effect.</p>
   <p>A cryptographic timestamp carries less codified legal weight, but it is increasingly accepted as evidence. In the EU, qualified electronic timestamps under eIDAS have an explicit legal presumption of accuracy. In the U.S., a Bitcoin-anchored timestamp is treated as a form of self-authenticating digital evidence under the Federal Rules of Evidence — admissible, but the weight is up to the trier of fact.</p>
@@ -164,9 +152,9 @@
   <h2>What Orphograph is and is not</h2>
   <p>Orphograph is a cryptographic timestamping service. The browser computes a hash, submits it to five OpenTimestamps calendar servers, and returns a receipt that anchors to Bitcoin within an hour. The receipt verifies against any Bitcoin node, with or without Orphograph&#x27;s servers.</p>
   <p>Orphograph is not a notary public, not a qualified trust service provider under eIDAS, and not a court-authorized digital signature authority. It does not verify the identity of users. It does not witness signatures. It does not retain a notarial journal. It is a proof-of-existence service for files, and that is the entire scope.</p>
-  <p>If you need a notarial act, hire a notary. If you need a qualified electronic timestamp under eIDAS, contact a qualified TSA in your jurisdiction. If you need a strong, free or low-cost, permissionless anchor of &quot;this file existed by this date&quot; — that is the thing Orphograph does well.</p>
+  <p>If a matter needs a notarial act, hire a notary. If it needs a qualified electronic timestamp under eIDAS, contact a qualified TSA in the relevant jurisdiction. If it needs a strong, free or low-cost, permissionless anchor of &quot;this file existed by this date&quot; — that is the thing Orphograph does well.</p>
   <hr>
-  <p><em>Orphograph is a Bitcoin file-timestamping service. Three free anchors every 24 hours, $29 for a 10-anchor pack, $9/mo for unlimited. Receipts verify against any Bitcoin node without our servers. We are not a notary public.</em></p>
+  <p><em>Orphograph is a Bitcoin file-timestamping service. Three free anchors every 24 hours, $7 for a Pack of Ten, $29 for a Pack of Fifty. Packs are one-time purchases; credits never expire. Receipts verify against any Bitcoin node, independent of Orphograph. Orphograph is not a notary public.</em> Method overview: <a href="/method/evidence-law.html" style="color:var(--confirm);">how evidence law treats these receipts</a>. Related: <a href="/blog/why-domain-dying-doesnt-kill-your-timestamp.html" style="color:var(--confirm);">why the receipt survives if the issuer disappears</a>.</p>
 
   <p class="post-foot">
     Published 2026-05-17. <a href="/blog/" style="color:var(--muted);">More from the blog</a>.

@@ -67,6 +67,8 @@ EXPECTED_URLS = [
     "https://orphograph.com/blog/why-domain-dying-doesnt-kill-your-timestamp.html",
     "https://orphograph.com/blog/digital-notary-vs-cryptographic-timestamp.html",
     "https://orphograph.com/blog/reading-ots-file-by-hand.html",
+    "https://orphograph.com/blog/rss.xml",
+    "https://orphograph.com/blog/atom.xml",
 ]
 
 SITEMAP_NS = "{http://www.sitemaps.org/schemas/sitemap/0.9}"

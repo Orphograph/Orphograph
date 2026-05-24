@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:news="http://www.google.com/schemas/sitemap-news/0.9">
+  <url>
+    <loc>https://orphograph.com/blog/what-makes-a-digital-timestamp-legally-defensible.html</loc>
+    <news:news>
+      <news:publication>
+        <news:name>Orphograph</news:name>
+        <news:language>en</news:language>
+      </news:publication>
+      <news:publication_date>2026-05-21T00:00:00Z</news:publication_date>
+      <news:title>What makes a digital timestamp legally defensible</news:title>
+    </news:news>
+  </url>
+  <url>
+    <loc>https://orphograph.com/blog/prove-you-wrote-it-not-ai.html</loc>
+    <news:news>
+      <news:publication>
+        <news:name>Orphograph</news:name>
+        <news:language>en</news:language>
+      </news:publication>
+      <news:publication_date>2026-05-21T00:00:00Z</news:publication_date>
+      <news:title>How to prove you wrote it — not an AI</news:title>
+    </news:news>
+  </url>
+  <url>
+    <loc>https://orphograph.com/blog/prove-i-created-something-before-someone-else.html</loc>
+    <news:news>
+      <news:publication>
+        <news:name>Orphograph</news:name>
+        <news:language>en</news:language>
+      </news:publication>
+      <news:publication_date>2026-05-21T00:00:00Z</news:publication_date>
+      <news:title>How to prove you created something before someone else</news:title>
+    </news:news>
+  </url>
+  <url>
+    <loc>https://orphograph.com/blog/prove-code-existed-before-a-competitors-commit.html</loc>
+    <news:news>
+      <news:publication>
+        <news:name>Orphograph</news:name>
+        <news:language>en</news:language>
+      </news:publication>
+      <news:publication_date>2026-05-21T00:00:00Z</news:publication_date>
+      <news:title>How to prove a piece of code existed before a competitor&apos;s commit</news:title>
+    </news:news>
+  </url>
+  <url>
+    <loc>https://orphograph.com/blog/prove-a-photo-was-not-edited.html</loc>
+    <news:news>
+      <news:publication>
+        <news:name>Orphograph</news:name>
+        <news:language>en</news:language>
+      </news:publication>
+      <news:publication_date>2026-05-21T00:00:00Z</news:publication_date>
+      <news:title>How to prove a photo was not edited</news:title>
+    </news:news>
+  </url>
+  <url>
+    <loc>https://orphograph.com/blog/prove-a-contract-existed-before-a-date.html</loc>
+    <news:news>
+      <news:publication>
+        <news:name>Orphograph</news:name>
+        <news:language>en</news:language>
+      </news:publication>
+      <news:publication_date>2026-05-21T00:00:00Z</news:publication_date>
+      <news:title>How to prove a contract existed before a date</news:title>
+    </news:news>
+  </url>
+  <url>
+    <loc>https://orphograph.com/blog/date-stamp-a-document-permanently.html</loc>
+    <news:news>
+      <news:publication>
+        <news:name>Orphograph</news:name>
+        <news:language>en</news:language>
+      </news:publication>
+      <news:publication_date>2026-05-21T00:00:00Z</news:publication_date>
+      <news:title>How to date-stamp a document permanently</news:title>
+    </news:news>
+  </url>
+</urlset>

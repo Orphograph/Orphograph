@@ -2,17 +2,36 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Open alternative to Adobe Content Credentials / C2PA — Orphograph</title>
+<title>Open alternative to vendor-signed Content Credentials / C2PA — Orphograph</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="description" content="A vendor-neutral, open alternative to C2PA Content Credentials for solo creators. Bitcoin-anchored timestamps, no certificate authority, no Adobe sign-in.">
+<meta name="description" content="A vendor-neutral, open alternative to C2PA Content Credentials for solo creators. Bitcoin-anchored timestamps, no certificate authority, no vendor sign-in.">
 <link rel="canonical" href="https://orphograph.com/lp/c2pa-alternative.html">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-<meta property="og:title" content="Open alternative to Adobe Content Credentials / C2PA">
+<link rel="icon" type="image/png" href="/favicon.png?v=8">
+<meta property="og:title" content="Open alternative to vendor-signed Content Credentials / C2PA">
 <meta property="og:description" content="Independent provenance for creators who don't want their proof of authorship tied to a single vendor's certificate authority.">
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://orphograph.com/lp/c2pa-alternative.html">
+<meta property="og:image" content="https://orphograph.com/og-image.png?v=8">
 <link rel="stylesheet" href="/style.css">
 <link rel="stylesheet" href="/blog.css">
+<link rel="stylesheet" href="/index.css?v=9">
+<style>
+  /* Institutional palette override: map style.css/blog.css sage tokens
+     to cream/ink so LP pages read as instrument pages, not UI panels. */
+  :root {
+    --bg: #f7f1e3;
+    --panel: #fbf7ea;
+    --panel-stroke: #e9e1cb;
+    --panel-stroke-soft: #f0e9d4;
+    --text: #14110d;
+    --text-soft: #2c2620;
+    --muted: #6b6354;
+    --accent: #3a2f24;
+    --accent-soft: rgba(58,47,36,0.06);
+    --accent-stroke: rgba(58,47,36,0.18);
+  }
+</style>
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -87,9 +106,9 @@
 <p>
   The Coalition for Content Provenance and Authenticity (C2PA) is a
   good standard with one structural problem from the perspective of a
-  solo creator: it requires a certificate authority. Adobe Content
-  Credentials, Leica's built-in C2PA signing, and the various
-  camera-vendor implementations all chain back to vendor-issued
+  solo creator: it requires a certificate authority. The major
+  commercial Content Credentials implementations and the built-in
+  C2PA signing in higher-end cameras all chain back to vendor-issued
   certificates. That works fine until the vendor changes pricing,
   sunsets a product, revokes a cert, or simply goes out of business.
   Your proof becomes a credential issued by an absent party.
@@ -104,9 +123,10 @@
 <h2>Where C2PA is strong</h2>
 <p>
   C2PA does something Orphograph doesn't: it describes the full
-  capture-and-edit history of a file. If you shot a photo on a Leica
-  M11, edited in Photoshop, exported with Content Credentials enabled,
-  the signed manifest records the camera model, the edit operations,
+  capture-and-edit history of a file. If you shot a photo on a
+  C2PA-enabled camera, edited in a desktop image editor, exported with
+  Content Credentials enabled, the signed manifest records the camera
+  model, the edit operations,
   and the signing identity. That's genuinely useful — and we don't try
   to replace it.
 </p>
@@ -188,7 +208,7 @@
     <a href="/lp/">More guides</a> ·
     <a href="/about.html">About</a> ·
     <a href="/privacy.html">Privacy</a> ·
-    We never see your file
+    The office does not transmit your file
   </small>
 </footer>
 

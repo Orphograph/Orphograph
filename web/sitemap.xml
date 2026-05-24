@@ -171,6 +171,14 @@
     <changefreq>monthly</changefreq>
   </url>
   <url>
+    <loc>https://orphograph.com/blog/rss.xml</loc>
+    <lastmod>2026-05-23</lastmod>
+  </url>
+  <url>
+    <loc>https://orphograph.com/blog/atom.xml</loc>
+    <lastmod>2026-05-23</lastmod>
+  </url>
+  <url>
     <loc>https://orphograph.com/blog/prove-a-photo-was-not-edited.html</loc>
     <lastmod>2026-05-21</lastmod>
     <changefreq>monthly</changefreq>

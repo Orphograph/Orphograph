@@ -40,14 +40,16 @@
 {
   "@context": "https://schema.org",
   "@type": "Article",
-  "headline": 'Why a Bitcoin block height is the strongest proof of existence in 2026',
-  "description": 'Why a Bitcoin block height is the strongest existence-proof anchor in 2026. Sixteen-year track record, attack costs, what would have to fail.',
+  "headline": "Why a Bitcoin block height is the strongest proof of existence in 2026",
+  "description": "Why a Bitcoin block height is the strongest existence-proof anchor in 2026. Sixteen-year track record, attack costs, what would have to fail.",
+  "url": "https://orphograph.com/blog/bitcoin-block-height-as-source-of-truth.html",
   "datePublished": "2026-05-17",
   "dateModified": "2026-05-17",
-  "author": { "@type": "Organization", "name": "Orphograph" },
+  "author": { "@type": "Organization", "name": "Orphograph", "url": "https://orphograph.com" },
   "publisher": {
     "@type": "Organization",
     "name": "Orphograph",
+    "url": "https://orphograph.com",
     "logo": { "@type": "ImageObject", "url": "https://orphograph.com/seal.png" }
   },
   "mainEntityOfPage": {
@@ -86,34 +88,20 @@
   <ul>
   <li>The hash of the previous block.</li>
   <li>A Merkle root summarizing every transaction in the block.</li>
-  <li>A timestamp set by the miner, validated by the network to be</li>
+  <li>A timestamp set by the miner, validated by the network to be within roughly two hours of consensus time.</li>
+  <li>A nonce, found by trial and error, that makes the block&#x27;s own hash satisfy a target difficulty.</li>
   </ul>
-  <p>within roughly two hours of consensus time.</p>
-  <ul>
-  <li>A nonce, found by trial and error, that makes the block&#x27;s own</li>
-  </ul>
-  <p>hash satisfy a target difficulty.</p>
   <p>The block height is just the position of that block in the chain. Block 0 is the genesis block, mined in January 2009. Block 892,341 is the 892,341st block in the chain. Each block can only have one predecessor, and the predecessor&#x27;s hash is baked into the successor&#x27;s header. Changing block N requires changing every block from N onward, because each header is cryptographically bound to the one before it.</p>
   <p>This is the structural property that makes a block height useful as a timestamp anchor. The block exists at exactly one point in a totally ordered sequence, and that ordering is enforced by hashes, not by any operator&#x27;s policy.</p>
   <h2>The sixteen-year track record</h2>
   <p>As of May 2026, Bitcoin has been producing blocks continuously for just over sixteen years. The chain has never been rewritten beyond about six blocks deep — and even those shallow reorganizations have been rare events caused by near-simultaneous block discovery, not by attack.</p>
   <p>A few specific facts worth sitting with:</p>
   <ul>
-  <li>The deepest reorganization in Bitcoin&#x27;s history was a 53-block</li>
+  <li>The deepest reorganization in Bitcoin&#x27;s history was a 53-block rollback in March 2013, caused by a bug in the database backend of an earlier client version. That bug was patched within hours. No subsequent reorganization has come close.</li>
+  <li>Since 2013, no reorganization has exceeded six blocks. The rolling average is below one block.</li>
+  <li>The chain has survived multiple hard forks, several exchange failures, two halvings, and a period in 2024 when the network&#x27;s hash rate briefly dropped due to mining-equipment relocations. In each case the chain kept producing blocks.</li>
+  <li>The cumulative proof-of-work in the chain — the sum of all the computational effort the network has expended — increases monotonically. Reversing any historical block requires redoing every block of work since.</li>
   </ul>
-  <p>rollback in March 2013, caused by a bug in the database backend of an earlier client version. That bug was patched within hours. No subsequent reorganization has come close.</p>
-  <ul>
-  <li>Since 2013, no reorganization has exceeded six blocks. The</li>
-  </ul>
-  <p>rolling average is below one block.</p>
-  <ul>
-  <li>The chain has survived multiple hard forks, several exchange</li>
-  </ul>
-  <p>failures, two halvings, and a period in 2024 when the network&#x27;s hash rate briefly dropped due to mining-equipment relocations. In each case the chain kept producing blocks.</p>
-  <ul>
-  <li>The cumulative proof-of-work in the chain — the sum of all the</li>
-  </ul>
-  <p>computational effort the network has expended — increases monotonically. Reversing any historical block requires redoing every block of work since.</p>
   <p>For a timestamp anchor, this matters because the question is not &quot;can Bitcoin be attacked in theory&quot; but &quot;has it been attacked in practice, over sixteen years, with billions of dollars in incentives, ever.&quot; The answer is no. Not even close.</p>
   <h2>What a six-block confirmation means in practice</h2>
   <p>Most timestamping services, including Orphograph, treat a block as &quot;deeply confirmed&quot; once six additional blocks have been mined on top of it. That is roughly one hour of additional work.</p>
@@ -145,7 +133,7 @@
   <p>That track record is what you are relying on when you anchor a file to Bitcoin. The cryptography matters, but the empirical record is the part that converts a theoretical guarantee into a useful one. In 2026 there is no other anchor with comparable properties.</p>
   <p>If the receipt format outlives the service that issued it — which Orphograph&#x27;s does, by design — then the only question that matters for the next decade is whether the Bitcoin chain continues. So far it has, every ten minutes, for sixteen years.</p>
   <hr>
-  <p><em>Orphograph is a Bitcoin file-timestamping service. Three free anchors every 24 hours, $29 for a 10-anchor pack, $9/mo for unlimited. Open-source verifier. Receipts verify against any Bitcoin node without our servers.</em></p>
+  <p><em>Orphograph is a Bitcoin file-timestamping service. Three free anchors every 24 hours, $7 for a Pack of Ten, $29 for a Pack of Fifty. Packs are one-time purchases; credits never expire. Open-source verifier. Receipts verify against any Bitcoin node, independent of Orphograph.</em> Related reading: <a href="/blog/why-5-opentimestamps-calendars-not-1.html" style="color:var(--confirm);">why five OpenTimestamps calendars, not one</a>. Method overview: <a href="/learn.html" style="color:var(--confirm);">how the protocol works</a>.</p>
 
   <p class="post-foot">
     Published 2026-05-17. <a href="/blog/" style="color:var(--muted);">More from the blog</a>.

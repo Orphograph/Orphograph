@@ -40,14 +40,16 @@
 {
   "@context": "https://schema.org",
   "@type": "Article",
-  "headline": 'How to prove a photo existed before an AI model was released',
-  "description": 'Step-by-step walkthrough to prove a photo existed before AI training. Bitcoin-anchored timestamp, free tier, ten-minute setup.',
+  "headline": "How to prove a photo existed before an AI model was released",
+  "description": "Step-by-step walkthrough to prove a photo existed before AI training. Bitcoin-anchored timestamp, free tier, ten-minute setup.",
+  "url": "https://orphograph.com/blog/how-to-prove-photo-existed-before-ai-model-released.html",
   "datePublished": "2026-05-17",
   "dateModified": "2026-05-17",
-  "author": { "@type": "Organization", "name": "Orphograph" },
+  "author": { "@type": "Organization", "name": "Orphograph", "url": "https://orphograph.com" },
   "publisher": {
     "@type": "Organization",
     "name": "Orphograph",
+    "url": "https://orphograph.com",
     "logo": { "@type": "ImageObject", "url": "https://orphograph.com/seal.png" }
   },
   "mainEntityOfPage": {
@@ -86,9 +88,9 @@
   <p>For 2026 disputes the relevant cutoffs are public. Most major foundation models published in 2026 used training data with cutoffs between mid-2024 and early 2026. If your receipt is older than the cutoff, the model could not have produced the original.</p>
   <h2>What you need before you start</h2>
   <p>You need three things:</p>
-  <p><strong>1.</strong> The original file. RAW is ideal. JPEG works. The file&#x27;s bytes must not change after the anchor — re-saving in Lightroom produces a new file with a different hash.</p>
-  <p><strong>2.</strong> A way to compute a SHA-256 hash. Every modern browser has this built in via WebCrypto. You do not need to install anything.</p>
-  <p><strong>3.</strong> A place to save the receipt. Anywhere your normal photo backup lives is fine — any cloud-sync service or an external drive.</p>
+  <p><strong>1.</strong> The original file. RAW is ideal. JPEG works. The file&#x27;s bytes must not change after the anchor — re-saving the image in any editor produces a new file with a different hash.</p>
+  <p><strong>2.</strong> A way to compute a SHA-256 hash. Every modern browser has this built in via WebCrypto. No installation is required.</p>
+  <p><strong>3.</strong> A place to save the receipt. Anywhere the normal photo backup lives is fine — any cloud-sync service or an external drive.</p>
   <p>You do not need a Bitcoin wallet. You do not need to pay a miner. You are not putting money on chain. You are submitting a 32-byte fingerprint of your file to a calendar server that batches many users&#x27; fingerprints into one Bitcoin transaction.</p>
   <h2>Step 1: hash the file</h2>
   <p>Open Orphograph in a browser. Drag the file onto the drop zone. The hash is computed locally — the file&#x27;s bytes never leave your machine. The page shows two hashes: SHA-256 and SHA-512. Both are included in the receipt so that if SHA-256 is ever broken, the SHA-512 sibling still verifies independently.</p>
@@ -115,17 +117,15 @@
   <p>Be honest with yourself about the limits.</p>
   <p>A timestamped hash proves:</p>
   <ul>
-  <li>A specific byte sequence existed at or before a Bitcoin block&#x27;s</li>
+  <li>A specific byte sequence existed at or before a Bitcoin block&#x27;s timestamp.</li>
   </ul>
-  <p>timestamp.</p>
   <p>A timestamped hash does not prove:</p>
   <ul>
-  <li>That you authored the file.</li>
+  <li>That the holder authored the file.</li>
   <li>That the file was produced by a camera rather than generated.</li>
-  <li>That you own the rights to the subject.</li>
-  <li>That the file is legally authentic under any qualified</li>
+  <li>That the holder owns the rights to the subject.</li>
+  <li>That the file is legally authentic under any qualified trust-service-provider framework.</li>
   </ul>
-  <p>trust-service-provider framework.</p>
   <p>For full legal authentication you need a qualified TSA (in the EU) or a notary (in jurisdictions that recognize digital notarial acts). Orphograph is not either of those. It is a strong, permissionless, mathematical anchor to a specific date — which is the piece most photographers are missing.</p>
   <h2>What to do this week</h2>
   <p>If you do nothing else, do this:</p>
@@ -136,7 +136,7 @@
   <p>The whole thing takes about ten minutes. The receipt is good for the working life of Bitcoin, which is the longest-running proof-of-existence anchor available in 2026.</p>
   <p>Start with the free tier at <a href="https://orphograph.com">https://orphograph.com</a>.</p>
   <hr>
-  <p><em>Orphograph is a Bitcoin file-timestamping service. Three free anchors every 24 hours, $29 for a 10-anchor pack, $9/mo for unlimited. Open-source verifier. Receipts verify against any Bitcoin node without our servers.</em></p>
+  <p><em>Orphograph is a Bitcoin file-timestamping service. Three free anchors every 24 hours, $7 for a Pack of Ten, $29 for a Pack of Fifty. Packs are one-time purchases; credits never expire. Open-source verifier. Receipts verify against any Bitcoin node, independent of Orphograph.</em> Related: <a href="/blog/bitcoin-merkle-roots-unforgeable-timestamps.html" style="color:var(--confirm);">the cryptography that makes the receipt un-falsifiable</a>. Method overview: <a href="/learn.html" style="color:var(--confirm);">how the protocol works</a>.</p>
 
   <p class="post-foot">
     Published 2026-05-17. <a href="/blog/" style="color:var(--muted);">More from the blog</a>.

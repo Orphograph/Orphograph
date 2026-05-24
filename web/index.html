@@ -452,7 +452,7 @@
   <style>
     .sample-receipt-card{
       max-width:680px;margin:0 auto;padding:30px 28px;
-      background:var(--paper-card);border-radius:var(--radius);
+      background:var(--paper-soft);border-radius:var(--radius-sm);
       box-shadow:var(--shadow-1);font-family:var(--serif);text-align:center;
     }
     .sample-receipt-card .eyebrow{
@@ -484,10 +484,11 @@
       background:#000;transform:translateY(-1px);color:var(--paper-soft);
     }
     .sample-receipt-card .cta-secondary{
-      background:transparent;color:var(--ink);border:1px solid var(--ink);
+      background:transparent;color:var(--ink-2);border:0;border-radius:0;
+      padding:11px 6px;border-bottom:1px dotted var(--accent-warm);
     }
     .sample-receipt-card .cta-secondary:hover{
-      background:var(--ink);color:var(--paper-soft);transform:translateY(-1px);
+      background:transparent;color:var(--ink);border-bottom-color:var(--ink);
     }
     .sample-receipt-card .fineprint{
       font-size:12.5px;color:var(--muted-2);margin:0;line-height:1.5;

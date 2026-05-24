@@ -2351,7 +2351,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_error(404, "not found")
             return
 
-        events_path = pathlib.Path(__file__).resolve().parent.parent / "data" / "events.jsonl"
+        events_path = Path(__file__).resolve().parent.parent / "data" / "events.jsonl"
         funnel_events = ["drop_zone_visible", "file_anchored", "checkout_clicked", "checkout_returned_success"]
         now_utc = datetime.now(timezone.utc)
         cutoff = now_utc - timedelta(days=30)

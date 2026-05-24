@@ -90,10 +90,11 @@ h2 { font-size: 22px; font-weight: 400; margin: 0 0 16px; }
 .actions button { margin-right: 8px; }
 button {
   background: transparent; color: var(--text);
-  border: 1px solid var(--panel-stroke); border-radius: 8px;
-  padding: 8px 14px; font: inherit; cursor: pointer;
+  border: 1px solid var(--text-soft); border-radius: 999px;
+  padding: 9px 18px; font: inherit; cursor: pointer;
+  transition: background .15s ease, color .15s ease;
 }
-button:hover { border-color: var(--accent); color: var(--accent); }
+button:hover { background: var(--text); color: #fbf7ea; border-color: var(--text); }
 
 .hint { color: var(--muted); font-size: 13px; margin-top: 12px; }
 .warn { color: var(--warn); font-size: 13px; margin: 12px 0; padding: 10px 14px;

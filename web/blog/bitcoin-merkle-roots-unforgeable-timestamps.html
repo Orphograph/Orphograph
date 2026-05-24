@@ -5,15 +5,15 @@
 <title>How Bitcoin merkle roots make file timestamps un-falsifiable — Orphograph</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#f6f1e3">
-<meta name="description" content="A technical walkthrough of why a timestamp anchored to Bitcoin is fundamentally different from any conventional database record. With the math, but without...">
+<meta name="description" content="A technical walkthrough of why a timestamp anchored to Bitcoin is fundamentally different from a conventional database record. The math, the eight attacks an adversary would have to mount, and why each one fails in practice.">
 <meta property="og:title" content="How Bitcoin merkle roots make file timestamps un-falsifiable">
-<meta property="og:description" content="A technical walkthrough of why a timestamp anchored to Bitcoin is fundamentally different from any conventional database record. With the math, but without...">
+<meta property="og:description" content="A technical walkthrough of why a timestamp anchored to Bitcoin is fundamentally different from a conventional database record. The math, the eight attacks an adversary would have to mount, and why each one fails in practice.">
 <meta property="og:url" content="https://orphograph.com/blog/bitcoin-merkle-roots-unforgeable-timestamps.html">
 <meta property="og:type" content="article">
 <meta property="og:image" content="https://orphograph.com/og-image.png?v=8">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="How Bitcoin merkle roots make file timestamps un-falsifiable">
-<meta name="twitter:description" content="A technical walkthrough of why a timestamp anchored to Bitcoin is fundamentally different from any conventional database record. With the math, but without...">
+<meta name="twitter:description" content="A technical walkthrough of why a timestamp anchored to Bitcoin is fundamentally different from a conventional database record. The math, the eight attacks an adversary would have to mount, and why each one fails in practice.">
 <link rel="canonical" href="https://orphograph.com/blog/bitcoin-merkle-roots-unforgeable-timestamps.html">
 <link rel="icon" type="image/png" href="/favicon.png?v=8">
 <link rel="stylesheet" href="/index.css?v=9">
@@ -40,14 +40,16 @@
 {
   "@context": "https://schema.org",
   "@type": "Article",
-  "headline": 'How Bitcoin merkle roots make file timestamps un-falsifiable',
-  "description": 'A technical walkthrough of why a timestamp anchored to Bitcoin is fundamentally different from any conventional database record. With the math, but without...',
+  "headline": "How Bitcoin merkle roots make file timestamps un-falsifiable",
+  "description": "A technical walkthrough of why a timestamp anchored to Bitcoin is fundamentally different from a conventional database record. The math, the eight attacks an adversary would have to mount, and why each one fails in practice.",
+  "url": "https://orphograph.com/blog/bitcoin-merkle-roots-unforgeable-timestamps.html",
   "datePublished": "2026-05-17",
   "dateModified": "2026-05-17",
-  "author": { "@type": "Organization", "name": "Orphograph" },
+  "author": { "@type": "Organization", "name": "Orphograph", "url": "https://orphograph.com" },
   "publisher": {
     "@type": "Organization",
     "name": "Orphograph",
+    "url": "https://orphograph.com",
     "logo": { "@type": "ImageObject", "url": "https://orphograph.com/seal.png" }
   },
   "mainEntityOfPage": {
@@ -120,22 +122,14 @@
   <p>The calendar takes the root of the tree (one 32-byte value) and writes it into a Bitcoin transaction. Specifically: it embeds the root in an <code>OP_RETURN</code> output, which is a Bitcoin output type explicitly designed for committing arbitrary data without making it spendable.</p>
   <p>The transaction gets included in a Bitcoin block. The block has its own properties:</p>
   <ul>
-  <li><strong>A timestamp</strong> (the block header&#x27;s <code>timestamp</code> field) — set by</li>
+  <li><strong>A timestamp</strong> (the block header&#x27;s <code>timestamp</code> field) — set by the miner, validated by the network to be within roughly two hours of network-consensus time.</li>
+  <li><strong>Proof-of-work.</strong> The block hash must satisfy a target difficulty — the miner must have done roughly 2^N hash computations to produce it, where N is whatever difficulty the network requires.</li>
   </ul>
-  <p>the miner, validated by the network to be within ~2 hours of network-consensus time.</p>
+  <p>Once the transaction is in a block and the block has accumulated 6 subsequent blocks (~1 hour), the block is considered &quot;deeply confirmed.&quot; From this point forward:</p>
   <ul>
-  <li><strong>Proof-of-work.</strong> The block hash must satisfy a target difficulty</li>
+  <li>The block exists in tens of thousands of independent Bitcoin node copies worldwide.</li>
+  <li>Replacing it would require an attacker to (1) rewrite that block — paying the proof-of-work the original miner already did — and (2) rewrite every subsequent block on top of it, paying all the proof-of-work since then, faster than the rest of the mining network can produce new blocks.</li>
   </ul>
-  <p>— the miner must have done roughly 2^N hash computations to produce it, where N is whatever difficulty the network requires.</p>
-  <p>Once your transaction is in a block and the block has accumulated 6 subsequent blocks (~1 hour), the block is considered &quot;deeply confirmed.&quot; From this point forward:</p>
-  <ul>
-  <li>The block exists in tens of thousands of independent Bitcoin</li>
-  </ul>
-  <p>node copies worldwide.</p>
-  <ul>
-  <li>Replacing it would require an attacker to:</li>
-  </ul>
-  <p>1. Rewrite that block (cost: the proof-of-work the original miner already did). 2. Rewrite EVERY subsequent block on top of it (cost: ALL the proof-of-work since then, faster than the rest of the mining network can produce new blocks).</p>
   <p>That second condition is &quot;winning a 51% attack&quot; — controlling a majority of Bitcoin&#x27;s global hash rate sustained for the entire period since your anchor. As of 2026, that costs roughly billions of dollars per day to attempt. And critically, <strong>the attacker has to attempt it FROM the point of your anchor onward, indefinitely, to keep the false history alive.</strong></p>
   <h2>What the .ots proof actually contains</h2>
   <p>Your <code>.ots</code> proof is, in essence, the breadcrumbs from your hash to the Bitcoin block header. It contains:</p>
@@ -153,7 +147,7 @@
   <p><strong>5.</strong> Is that block actually part of the longest Bitcoin chain?</p>
   <p>If all five are yes, the file&#x27;s existence by the block&#x27;s timestamp is proven. No trust in the calendar, in OpenTimestamps, in the service you used — only in the math + the public Bitcoin chain.</p>
   <h2>Attack scenarios — what would an adversary have to do?</h2>
-  <p>Let&#x27;s enumerate every way someone might try to forge a timestamp, and what stops each one.</p>
+  <p>Consider every way someone might try to forge a timestamp, and what stops each one.</p>
   <h3>Attack 1: edit the file after anchoring</h3>
   <p>Adversary modifies the original file to say something different.</p>
   <p><strong>Why it fails.</strong> The hash changes. The new hash doesn&#x27;t match the leaf in the <code>.ots</code> proof. Verification fails at step 1.</p>
@@ -180,30 +174,23 @@
   <p>Adversary anchors a file at the same moment as the legitimate creator and later claims they were first.</p>
   <p><strong>Why it fails — only with discipline.</strong> This isn&#x27;t a cryptographic failure; it&#x27;s a behavioral one. If you publicly publish a photo and someone immediately anchors it before you do, both timestamps are equally valid. The cryptography can&#x27;t distinguish between you and them. The practical defense is: anchor at capture time, when only you have the file. The &quot;I anchored before publication&quot; gap is the moat.</p>
   <h2>What this is NOT</h2>
-  <p>For all the cryptographic beauty, let&#x27;s be clear about the limits.</p>
-  <p>A Bitcoin-anchored timestamp proves:</p>
+  <p>For all the cryptographic beauty, the limits are worth stating plainly.</p>
+  <p>A Bitcoin-anchored timestamp proves one thing: a specific byte sequence existed at or before a specific block&#x27;s timestamp.</p>
+  <p>It does not prove:</p>
   <ul>
-  <li><strong>A specific byte sequence existed at or before a specific block&#x27;s timestamp.</strong> ✓</li>
+  <li>That the reader authored or owns the file.</li>
+  <li>That the file was made by a camera rather than an AI.</li>
+  <li>Any specific legal qualification (eIDAS qualified status and similar) unless an additional qualified trust service provider has also signed.</li>
+  <li>That the original file can be recovered later if it is lost.</li>
   </ul>
-  <p>It does NOT prove:</p>
-  <ul>
-  <li>That you authored or own the file.</li>
-  <li>That the file was made by a camera vs. an AI.</li>
-  <li>Any specific legal qualification (eIDAS qualified status, etc.)</li>
-  </ul>
-  <p>unless an additional qualified trust service provider has also signed.</p>
-  <ul>
-  <li>That you&#x27;ll be able to find the original file later if you lose</li>
-  </ul>
-  <p>it.</p>
   <p>Treat it as &quot;strong evidence the file existed by date T,&quot; and you have the right mental model.</p>
   <h2>Why this matters now</h2>
   <p>For most of the last decade, the answer to &quot;did this photo actually exist before AI training cutoff X?&quot; was &quot;let me check the EXIF data and pray.&quot; That answer is collapsing under the weight of edit-history software, deepfake suspicion, and increasingly sophisticated AI-generated imagery.</p>
   <p>Bitcoin-anchored timestamping gives anyone — creator, journalist, photographer, whistleblower, accuser, defendant — a permissionless way to lock a date to a file&#x27;s contents using mathematics that cost the entire mining network billions of dollars per day to defeat.</p>
   <p>It is not perfect. But it is structurally honest in a way that self-attested timestamps, traditional digital signatures, and proprietary &quot;verified&quot; badges are not. The proof outlives the issuer. The verifier doesn&#x27;t need permission. The math is the trust.</p>
-  <p>If you make things that might one day be disputed, anchor them.</p>
+  <p>Anyone whose work might one day be disputed should anchor it.</p>
   <hr>
-  <p><em>Orphograph is a $7-and-up Bitcoin timestamping service for photographers + creators. Open source verifier, no file uploads, your receipt verifies forever. <a href="https://orphograph.com/#sample">Try the sample receipt without signing up.</a></em></p>
+  <p><em>Orphograph is a Bitcoin file-timestamping service. Three free anchors every 24 hours, $7 for a Pack of Ten, $29 for a Pack of Fifty. Packs are one-time purchases; credits never expire. Open-source verifier. The file&#x27;s bytes never leave the browser; only the hash is submitted. <a href="https://orphograph.com/#sample">Try the sample receipt without signing up.</a></em> Related: <a href="/blog/bitcoin-block-height-as-source-of-truth.html" style="color:var(--confirm);">why a Bitcoin block height is the strongest anchor</a>. Method overview: <a href="/learn.html" style="color:var(--confirm);">how the protocol works end-to-end</a>.</p>
 
   <p class="post-foot">
     Published 2026-05-17. <a href="/blog/" style="color:var(--muted);">More from the blog</a>.

@@ -140,10 +140,10 @@
   /* ── Action band (the counter) ──────────────────────────────────── */
   .action{padding:32px 0 64px;}
   .action-card{
-    background:var(--paper-card);
-    border-radius:var(--radius-lg);
+    background:var(--paper-soft);
+    border-radius:var(--radius-sm);
     padding:36px;
-    box-shadow:var(--shadow-3);
+    box-shadow:var(--shadow-2);
     display:grid;grid-template-columns:1.05fr 1fr;gap:32px;
     align-items:stretch;
   }
@@ -204,7 +204,7 @@
     background:var(--line-soft);border-radius:var(--radius);overflow:hidden;
     box-shadow:var(--shadow-1);
   }
-  .ledger > div{background:var(--paper-card);padding:22px 14px;text-align:center;}
+  .ledger > div{background:var(--paper-soft);padding:22px 14px;text-align:center;}
   .ledger .n{font-family:var(--serif);font-size:30px;font-weight:500;color:var(--ink);line-height:1;font-variant-numeric:tabular-nums;}
   .ledger .l{font-size:10.5px;letter-spacing:0.2em;text-transform:uppercase;color:var(--muted);margin-top:8px;font-weight:500;}
   @media (max-width:680px){.ledger{grid-template-columns:repeat(2,1fr);}}
@@ -219,11 +219,11 @@
   /* ── Feature cards (3-up) ───────────────────────────────────────── */
   .feature-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;}
   .feature{
-    background:var(--paper-card);border-radius:var(--radius);padding:30px 26px;
+    background:var(--paper-soft);border-radius:var(--radius-sm);padding:30px 26px;
     box-shadow:var(--shadow-1);transition:transform .25s cubic-bezier(.2,.8,.2,1), box-shadow .25s ease;
-    border:1px solid transparent;
+    border:1px solid var(--line-soft);
   }
-  .feature:hover{transform:translateY(-3px);box-shadow:var(--shadow-2);border-color:var(--line-soft);}
+  .feature:hover{transform:translateY(-3px);box-shadow:var(--shadow-2);border-color:var(--line);}
   .feature .num{font-family:var(--mono);font-size:12px;color:var(--accent-warm);letter-spacing:0.12em;margin-bottom:14px;}
   .feature h3{font-family:var(--serif);font-size:21px;font-weight:500;margin:0 0 10px;color:var(--ink);line-height:1.3;}
   .feature p{font-size:14.5px;color:var(--muted);margin:0;line-height:1.6;}
@@ -232,13 +232,14 @@
   /* ── Fees / tiers ───────────────────────────────────────────────── */
   .tiers{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;}
   .tier{
-    background:var(--paper-card);border-radius:var(--radius);padding:32px 28px;
+    background:var(--paper-soft);border-radius:var(--radius-sm);padding:32px 28px;
     box-shadow:var(--shadow-1);position:relative;
+    border:1px solid var(--line-soft);
     transition:transform .25s ease, box-shadow .25s ease;
     display:flex;flex-direction:column;
   }
   .tier:hover{transform:translateY(-3px);box-shadow:var(--shadow-2);}
-  .tier.featured{background:linear-gradient(180deg, #fffaef 0%, var(--paper-card) 100%);box-shadow:var(--shadow-2);transform:scale(1.02);border:1px solid var(--accent-warm);}
+  .tier.featured{background:linear-gradient(180deg, #fffaef 0%, var(--paper-soft) 100%);box-shadow:var(--shadow-2);transform:scale(1.02);border:1px solid var(--accent-warm);}
   .tier .ribbon{position:absolute;top:14px;right:14px;font-size:10px;letter-spacing:0.22em;text-transform:uppercase;background:var(--accent);color:var(--paper-soft);padding:4px 10px;border-radius:999px;}
   .tier .t-name{font-size:12px;letter-spacing:0.24em;text-transform:uppercase;color:var(--muted-2);font-weight:500;}
   .tier .t-price{font-family:var(--serif);font-size:46px;font-weight:500;color:var(--ink);margin:10px 0 4px;line-height:1;}
@@ -314,7 +315,7 @@
   /* ── Verification levels ────────────────────────────────────────── */
   .levels{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;}
   .level{
-    background:var(--paper-card);border-radius:var(--radius);padding:28px;
+    background:var(--paper-soft);border-radius:var(--radius-sm);padding:28px;
     box-shadow:var(--shadow-1);transition:transform .25s ease, box-shadow .25s ease;
     border:1px solid var(--line-soft);
   }

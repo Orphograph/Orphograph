@@ -5,15 +5,15 @@
 <title>How to prove your photo existed before AI scraped it (without a lawyer) — Orphograph</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#f6f1e3">
-<meta name="description" content="A practical guide for photographers who want timestamp-grade proof of when they made an image — using Bitcoin, no court appearance, no $400/hr attorney. Fr...">
+<meta name="description" content="A practical guide for photographers who want timestamp-grade proof of when they made an image. Bitcoin-anchored timestamps, free tier, ten-second workflow.">
 <meta property="og:title" content="How to prove your photo existed before AI scraped it (without a lawyer)">
-<meta property="og:description" content="A practical guide for photographers who want timestamp-grade proof of when they made an image — using Bitcoin, no court appearance, no $400/hr attorney. Fr...">
+<meta property="og:description" content="A practical guide for photographers who want timestamp-grade proof of when they made an image. Bitcoin-anchored timestamps, free tier, ten-second workflow.">
 <meta property="og:url" content="https://orphograph.com/blog/prove-photo-existed-before-ai.html">
 <meta property="og:type" content="article">
 <meta property="og:image" content="https://orphograph.com/og-image.png?v=8">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="How to prove your photo existed before AI scraped it (without a lawyer)">
-<meta name="twitter:description" content="A practical guide for photographers who want timestamp-grade proof of when they made an image — using Bitcoin, no court appearance, no $400/hr attorney. Fr...">
+<meta name="twitter:description" content="A practical guide for photographers who want timestamp-grade proof of when they made an image. Bitcoin-anchored timestamps, free tier, ten-second workflow.">
 <link rel="canonical" href="https://orphograph.com/blog/prove-photo-existed-before-ai.html">
 <link rel="icon" type="image/png" href="/favicon.png?v=8">
 <link rel="stylesheet" href="/index.css?v=9">
@@ -40,14 +40,16 @@
 {
   "@context": "https://schema.org",
   "@type": "Article",
-  "headline": 'How to prove your photo existed before AI scraped it (without a lawyer)',
-  "description": 'A practical guide for photographers who want timestamp-grade proof of when they made an image — using Bitcoin, no court appearance, no $400/hr attorney. Fr...',
+  "headline": "How to prove your photo existed before AI scraped it (without a lawyer)",
+  "description": "A practical guide for photographers who want timestamp-grade proof of when they made an image. Bitcoin-anchored timestamps, free tier, ten-second workflow.",
+  "url": "https://orphograph.com/blog/prove-photo-existed-before-ai.html",
   "datePublished": "2026-05-17",
   "dateModified": "2026-05-17",
-  "author": { "@type": "Organization", "name": "Orphograph" },
+  "author": { "@type": "Organization", "name": "Orphograph", "url": "https://orphograph.com" },
   "publisher": {
     "@type": "Organization",
     "name": "Orphograph",
+    "url": "https://orphograph.com",
     "logo": { "@type": "ImageObject", "url": "https://orphograph.com/seal.png" }
   },
   "mainEntityOfPage": {
@@ -78,89 +80,79 @@
   <p class="post-meta">Blog · Document timestamping</p>
   <h1>How to prove your photo existed before AI scraped it (without a lawyer)</h1>
 
-  <p>If you&#x27;ve ever uploaded a photo to a social platform, you&#x27;ve probably wondered: what stops an AI training set from scraping it, then a year from now someone claims your photo is the AI-generated one?</p>
-  <p>This isn&#x27;t paranoid. It&#x27;s the next phase of a problem that already happened to musicians (sample disputes), writers (plagiarism), and illustrators (style mimicking). Photographers are now the cohort getting the most heat — a stock-image-provider lawsuit over twelve million scraped images is in active litigation, and every working photographer has a &quot;is that mine?&quot; story brewing.</p>
-  <p>The standard answer is <strong>EXIF metadata + your RAW files + cloud backups</strong>. That&#x27;s three plates spinning, all of which can be edited, deleted, or lost. None of them produce evidence a third party would treat as definitive.</p>
-  <p>This post walks through the better answer: <strong>cryptographic timestamping</strong> — a way to lock today&#x27;s date to a file&#x27;s contents such that the only path to forge the claim is to re-mine the entire Bitcoin blockchain. Which nobody will do for your wedding shoot.</p>
+  <p>A working photographer ships a portrait on a Tuesday. Six months later a similar image surfaces in an AI-generated set, and the argument over who shot what begins. Whoever can date the file earliest, against a record the other side cannot edit, wins. Whoever is relying on metadata, cloud-sync timestamps, or a saved email loses, because each of those can be edited by the person holding the file.</p>
+  <p>This is the next phase of a dispute pattern that already played out in music (sample arguments), in writing (plagiarism), and in illustration (style mimicking). Photographers are now the cohort with the most exposure — a stock-image-provider lawsuit over twelve million scraped images is in active litigation as of mid-2026 — and every working photographer either has a &quot;is that mine?&quot; story brewing or knows someone who does.</p>
+  <p>The standard answer is EXIF metadata plus RAW files plus cloud backups. That is three plates spinning, all of which can be edited, deleted, or lost, and none of which produce evidence a third party would treat as definitive.</p>
+  <p>This post walks through the better answer: cryptographic timestamping — a way to lock today&#x27;s date to a file&#x27;s contents such that the only path to forge the claim is to re-mine the entire Bitcoin chain. No reasonable adversary will do that for a wedding shoot.</p>
   <h2>The fundamental tool: OpenTimestamps</h2>
   <p><a href="https://opentimestamps.org/">OpenTimestamps</a> is a free, open protocol that works like this:</p>
-  <p><strong>1.</strong> You compute the SHA-256 hash of your file. (32 bytes; reveals nothing about the photo.)</p>
-  <p><strong>2.</strong> You submit the hash to one of ~5 &quot;calendar servers.&quot;</p>
-  <p><strong>3.</strong> Each calendar batches many users&#x27; hashes into a single Merkle root and writes that root into a Bitcoin transaction (approximately once per hour).</p>
-  <p><strong>4.</strong> You receive a small <code>.ots</code> proof file. The proof says: <em>&quot;this hash is provably included in Bitcoin block N, mined at time T.&quot;</em></p>
-  <p>Verification is the inverse: given your original file + the <code>.ots</code> proof, anyone with a Bitcoin node (or just the public chain) can confirm that the hash existed at time T. No trust in any server is required at verification time.</p>
-  <p>This is the gold standard for proof-of-existence. It&#x27;s free, it&#x27;s permissionless, and it doesn&#x27;t go away if any single company disappears.</p>
+  <p><strong>1.</strong> Compute the SHA-256 hash of the file. The hash is 32 bytes and reveals nothing about the photo.</p>
+  <p><strong>2.</strong> Submit the hash to one of roughly five &quot;calendar servers.&quot;</p>
+  <p><strong>3.</strong> Each calendar batches many users&#x27; hashes into a single Merkle root and writes that root into a Bitcoin transaction approximately once per hour.</p>
+  <p><strong>4.</strong> The submitter receives a small <code>.ots</code> proof file. The proof says: this hash is provably included in Bitcoin block N, mined at time T.</p>
+  <p>Verification is the inverse: given the original file plus the <code>.ots</code> proof, anyone with a Bitcoin node — or with the public chain — can confirm that the hash existed at time T. No trust in any server is required at verification time.</p>
+  <p>This is the strongest available proof-of-existence anchor. It is free, it is permissionless, and it does not go away if any single company disappears.</p>
   <h2>The catch with raw OpenTimestamps</h2>
-  <p>OpenTimestamps is a brilliant protocol, but it&#x27;s a CLI:</p>
+  <p>OpenTimestamps is a strong protocol, but the default interface is a CLI:</p>
   <pre><code>pip install opentimestamps-client
   ots stamp photo.jpg
-  # ... wait ~1 hour for the BTC calendar to publish the block ...
+  # ... wait ~1 hour for the calendar to publish the block ...
   ots upgrade photo.jpg.ots
   ots verify photo.jpg.ots</code></pre>
-  <p>If you live in <code>pip install</code>, you&#x27;re done — go use it, and skip the rest of this post. (Seriously. Stop reading and go run it.)</p>
-  <p>For everyone else: the CLI is a wall. You need Python, a working build chain for <code>python-bitcoinlib</code>, comfort with the terminal, and the discipline to safely store <code>.ots</code> files alongside your raw photos. Most photographers won&#x27;t do any of that. So most photos go unanchored, and the AI-vs-real disputes happen with no usable evidence on either side.</p>
+  <p>A reader who is comfortable in a Python shell can stop here and run it directly. For the working photographer who does not live in <code>pip install</code>, the CLI is a wall — a Python environment, a working build chain for native bindings, terminal comfort, and the discipline to file <code>.ots</code> files alongside RAW photos. Most photographers will not do any of that. So most photos go unanchored, and the AI-vs-real disputes happen with no usable evidence on either side.</p>
   <h2>A simpler path: drop the file in a browser</h2>
-  <p>There&#x27;s a small product called <a href="https://orphograph.com">Orphograph</a> (disclosure: I built it) that wraps OpenTimestamps with a browser-based workflow:</p>
-  <p><strong>1.</strong> Open the site, drag your file onto the drop zone.</p>
-  <p><strong>2.</strong> The hash is computed locally in your browser using WebCrypto. The image bytes never reach our server.</p>
-  <p><strong>3.</strong> You get a receipt — JSON file + 5 OpenTimestamps proofs — downloadable as a single bundle.</p>
-  <p><strong>4.</strong> The block-pinning upgrade happens automatically server-side over the following hour; the receipt updates from &quot;pending&quot; to &quot;block-pinned at block N.&quot;</p>
-  <p>You can verify the receipt later with <a href="https://github.com/orphograph/orphograph-verify">a 100-line Python file on GitHub</a> — no Orphograph dependency. The receipt outlives our company by design.</p>
-  <p>Three pricing tiers: free (1 anchor/month), $7 Pack (10 anchors, never expires, claim code by email), $5/mo Personal (unlimited).</p>
-  <h2>How to actually do this for your portfolio</h2>
-  <p>Pick the approach that matches your comfort level.</p>
+  <p>Orphograph wraps OpenTimestamps with a browser-based workflow:</p>
+  <p><strong>1.</strong> Open the site, drag the file onto the drop zone.</p>
+  <p><strong>2.</strong> The hash is computed locally in the browser using WebCrypto. The image bytes never leave the device.</p>
+  <p><strong>3.</strong> The receipt — a JSON file plus five OpenTimestamps proofs — downloads as a single bundle.</p>
+  <p><strong>4.</strong> The block-pinning upgrade happens automatically over the following hour; the receipt updates from &quot;pending&quot; to &quot;block-pinned at block N.&quot;</p>
+  <p>The receipt verifies later against any Bitcoin node using the open-source verifier published at <a href="/verify/">orphograph.com/verify/</a> — no Orphograph dependency. The receipt is designed to outlive the issuing service.</p>
+  <p>Pricing: the free tier covers three anchors per 24 hours. A Pack of Ten is $7, a Pack of Fifty is $29. Packs are one-time purchases, credits never expire.</p>
+  <h2>Three working paths for a portfolio</h2>
+  <p>Pick the path that matches the reader&#x27;s comfort level. The defensibility is identical across all three — the same OpenTimestamps proofs land in the same Bitcoin blocks.</p>
   <h3>Path A — free, technical (use OpenTimestamps directly)</h3>
   <pre><code>pip install opentimestamps-client
   # anchor:
   ots stamp my_photo.jpg
   # returns my_photo.jpg.ots — save it next to the photo
-  # upgrade after 1 hour to get the BTC merkle proof:
+  # upgrade after 1 hour to get the full Bitcoin merkle proof:
   ots upgrade my_photo.jpg.ots
   # verify any time:
   ots verify my_photo.jpg.ots</code></pre>
-  <p>Cost: $0. Time: 5 minutes per photo plus 1 hour wait. Defensibility: strongest. You&#x27;re using the protocol directly.</p>
-  <h3>Path B — free, browser (drag-and-drop monthly)</h3>
-  <p>Visit <a href="https://orphograph.com">orphograph.com</a>, drop your best photo of the month into the box. Save the receipt JSON. Done.</p>
-  <p>Cost: $0/month forever for the first anchor. Time: 10 seconds. Defensibility: same as Path A, with a slight UX trade — the receipt has to be re-downloaded if your browser clears localStorage. Save the receipt to your normal photo backup (any cloud-sync service or external drive).</p>
-  <h3>Path C — $7 for a batch (when you have 10 photos at once)</h3>
-  <p>Same as Path B but pay $7 and skip the rate limit. The claim code is delivered by email and lets you anchor 10 files in one sitting. The card-checkout receipt is your invoice; the email gets the claim code.</p>
-  <p>Defensibility: identical to A/B (same OTS proofs).</p>
-  <h3>Path D — $5/mo (you anchor 50+ files per month)</h3>
-  <p>If you batch-anchor a wedding shoot or a fashion week catalog, the Personal tier is the only one with unlimited anchors and email delivery. It also gives you an account dashboard showing your history — useful if you ever need to produce a chronologically-ordered list of &quot;what I anchored when.&quot;</p>
-  <h2>What this does NOT do</h2>
-  <p>Be honest about the limits, because the AI disputes are going to get litigated and you want to know what your receipts will and won&#x27;t prove.</p>
+  <p>Cost: $0. Time: about five minutes per photo plus a one-hour wait. The protocol is being used directly, with no wrapper.</p>
+  <h3>Path B — free, browser (drag-and-drop, up to three per 24 hours)</h3>
+  <p>Visit <a href="https://orphograph.com">orphograph.com</a>, drop a photo onto the box, save the receipt bundle. The free tier covers three anchors per 24 hours, permanent.</p>
+  <p>Cost: $0. Time: about ten seconds. Save the bundle to whichever cloud-sync service or external drive holds the rest of the photo backup.</p>
+  <h3>Path C — Pack purchase (when batch volume exceeds the free tier)</h3>
+  <p>A Pack of Ten ($7) or Pack of Fifty ($29) clears the rate limit for batch sessions — for a wedding shoot, a fashion-week catalog, or a back-catalog upgrade. Packs are one-time purchases, credits never expire, and the claim code is delivered by email so receipts continue to flow even if the original payment device is replaced. The card-checkout receipt is the invoice; the email carries the claim code.</p>
+  <h2>What this does not do</h2>
+  <p>The limits matter — disputes around AI training are being litigated, and a holder of a receipt should know exactly what it will and will not prove.</p>
   <p>A timestamped hash proves:</p>
   <ul>
-  <li><strong>A specific byte sequence existed at time T.</strong> ✅</li>
+  <li>A specific byte sequence existed at or before time T.</li>
   </ul>
-  <p>A timestamped hash does NOT prove:</p>
+  <p>A timestamped hash does not prove:</p>
   <ul>
-  <li>That <strong>you</strong> authored it. (Anyone with the file can anchor it.</li>
+  <li>That the holder authored the file. Anyone with the file can anchor it. If a photo is published to a public surface on Day 1, an adversary can anchor it the same day as the creator.</li>
+  <li>That the file was produced by a camera rather than generated.</li>
+  <li>That the file is legally authentic under eIDAS or any national qualified-trust-service-provider framework. For that, a notary, a qualified TSA, or both are required.</li>
   </ul>
-  <p>If you publicly publish a photo, the AI could anchor it the same day you did.)</p>
-  <ul>
-  <li>That the file was <strong>made by a camera</strong> versus generated.</li>
-  <li>That the file is <strong>legally authentic</strong> under eIDAS or any</li>
-  </ul>
-  <p>national qualified-trust-service-provider framework. For that, you need a notary, a qualified TSA, or both.</p>
-  <p>The right framing is: <strong>anchor immediately at capture time, when the only person who has the file is you.</strong> That&#x27;s the temporal moat the AI can&#x27;t compete with — they need to scrape the file first, and you&#x27;ve already locked the timestamp before they have access.</p>
-  <p>In practice this means: anchor RAW files before posting JPEGs. Anchor on the camera&#x27;s SD-card directly if you can. Don&#x27;t wait until after a viral upload.</p>
+  <p>The right framing is: anchor immediately at capture time, while the file is still only on the camera and the laptop. That gap — file exists privately, file does not yet exist publicly — is the temporal moat. Anchor RAW files before posting JPEGs. Anchor a wedding selects folder before delivery. Do not wait until after publication.</p>
   <h2>What to do this week</h2>
-  <p>If you&#x27;re a working photographer, here&#x27;s the minimum-effort path:</p>
-  <p><strong>1.</strong> Pick your most distinctive image from the last week — the one you&#x27;d most regret losing the &quot;I shot this&quot; argument over.</p>
-  <p><strong>2.</strong> Anchor it. Free, takes 10 seconds.</p>
-  <p><strong>3.</strong> Save the receipt JSON to wherever you keep your photo backups.</p>
-  <p><strong>4.</strong> If anyone ever disputes the date — show them the receipt and the open-source verifier link. Let the math speak.</p>
+  <p>For a working photographer, the minimum-effort path is:</p>
+  <p><strong>1.</strong> Pick the most distinctive image from the last week — the one a dispute would hurt most.</p>
+  <p><strong>2.</strong> Anchor it. Free, about ten seconds.</p>
+  <p><strong>3.</strong> Save the receipt bundle to wherever the photo backup lives.</p>
+  <p><strong>4.</strong> If the date is ever disputed, hand over the receipt and the open-source verifier link. The math is the trust.</p>
   <h2>Further reading</h2>
   <ul>
-  <li>OpenTimestamps protocol: <a href="https://opentimestamps.org/">opentimestamps.org</a></li>
-  <li>Orphograph open-source verifier: <a href="https://github.com/orphograph/orphograph-verify">github.com/orphograph/orphograph-verify</a></li>
-  <li>eIDAS-grade timestamps (when you need legally binding): your</li>
+  <li>OpenTimestamps protocol: <a href="https://opentimestamps.org/">opentimestamps.org</a>.</li>
+  <li>Orphograph open-source verifier: <a href="/verify/">orphograph.com/verify/</a>.</li>
+  <li>eIDAS-grade timestamps, for legally binding contexts: consult the relevant national qualified-trust-service-provider list. EU — the European Trust List. UK — the ICO trust list. US — there is no federal QTSP regime; consult a digital-evidence attorney.</li>
   </ul>
-  <p>national qualified-trust-service-provider list. EU = check the European Trust List. UK = ICO trust list. US = there is no federal QTSP regime; consult a digital evidence attorney.</p>
-  <p>If you&#x27;ve used timestamping in any actual dispute, I&#x27;d love to hear what happened. The clearer the use cases, the better tools get built for the next round.</p>
+  <p>Real-world use cases settled with a Bitcoin-anchored receipt are the most useful input the office can receive. The office keeps a public record of cases where the customer consents to publication; <a href="mailto:hello@orphograph.com" style="color:var(--confirm);">write to the office</a> to share one.</p>
   <hr>
-  <p><em>Orphograph is a $7-and-up Bitcoin timestamping service for photographers. Open source verifier, no file uploads, your receipt verifies forever. <a href="https://orphograph.com/#sample">Try the sample receipt without signing up.</a></em></p>
+  <p><em>Orphograph is a Bitcoin file-timestamping service. Three free anchors every 24 hours, $7 for a Pack of Ten, $29 for a Pack of Fifty. Packs are one-time purchases; credits never expire. Open-source verifier. The file&#x27;s bytes never leave the browser; only the hash is submitted. <a href="https://orphograph.com/#sample">Try the sample receipt without signing up.</a></em> Related: <a href="/blog/how-to-prove-photo-existed-before-ai-model-released.html" style="color:var(--confirm);">the step-by-step model-cutoff walkthrough</a>. Method overview: <a href="/learn.html" style="color:var(--confirm);">how the protocol works end-to-end</a>.</p>
 
   <p class="post-foot">
     Published 2026-05-17. <a href="/blog/" style="color:var(--muted);">More from the blog</a>.
