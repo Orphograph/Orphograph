@@ -16,7 +16,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 
 # -- Paths ---------------------------------------------------------------------
-REPO = Path("/Users/franciscoefrain.rodriguezrivera/orphograph")
+REPO = Path(__file__).resolve().parent.parent
 SEAL_SRC = REPO / "web" / "seal.png"
 OUT_KIT = REPO / "outbox" / "launch_hn" / "og-share.png"
 OUT_WEB = REPO / "web" / "share" / "og-show-hn.png"
