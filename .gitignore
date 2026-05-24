@@ -127,3 +127,4 @@ verifier-js/node_modules/
 # Founder-private drafts, anchor history, compliance scans, strategic notes.
 # This directory contains personal PII and outreach drafts that should not be public.
 outbox/
+data/.seal_sha256

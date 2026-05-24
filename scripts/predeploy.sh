@@ -31,7 +31,10 @@ echo "  repo: $REPO_ROOT"
 echo
 
 check "1. pytest suite (full)" bash -c '
-  python -m pytest tests/ -q -p no:anchorpy --ignore=tests/test_biweekly_safety_audit.py 2>&1 | tail -1 | grep -E "passed" >/dev/null
+  out=$(python -m pytest tests/ -q -p no:anchorpy --ignore=tests/test_biweekly_safety_audit.py 2>&1 | tail -1)
+  echo "$out" | grep -q "passed" || exit 1
+  echo "$out" | grep -qE "failed|error" && exit 1
+  exit 0
 '
 
 check "2. no founder-PII / brand-lineage in externals" bash -c '
