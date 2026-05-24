@@ -20,6 +20,59 @@
 <link rel="icon" type="image/png" href="/favicon.png?v=8">
 <link rel="stylesheet" href="/style.css">
 <link rel="stylesheet" href="/receipt.css">
+<link rel="stylesheet" href="/index.css?v=9">
+<style>
+  /* Institutional palette overrides — wash out style.css's white-card
+     + sage-accent + hard-1px-border look on the receipt page so it
+     reads as a cream-paper instrument, not a UI rectangle. */
+  :root {
+    --bg: #f7f1e3;
+    --panel: #fbf7ea;
+    --panel-stroke: #e9e1cb;
+    --panel-stroke-soft: #f0e9d4;
+    --text: #14110d;
+    --text-soft: #2c2620;
+    --muted: #6b6354;
+    --accent: #3a2f24;
+    --accent-soft: rgba(58,47,36,0.06);
+    --accent-stroke: rgba(58,47,36,0.18);
+  }
+  body.receipt-page { font-family: var(--sans, -apple-system, "Inter", sans-serif); color: var(--ink, #14110d); background: var(--paper, #f7f1e3); }
+  .receipt-card {
+    background: var(--paper-soft, #fbf7ea);
+    border: 1px solid var(--line-soft, #e9e1cb);
+    border-radius: 8px;
+    box-shadow: 0 2px 6px rgba(60,40,20,0.04), 0 12px 32px rgba(60,40,20,0.04);
+  }
+  .card-header { border-bottom: 1px solid var(--line-soft, #e9e1cb); }
+  .card-header h1 { font-family: var(--serif, "EB Garamond", Georgia, serif); color: var(--ink, #14110d); }
+  /* Visitor CTAs use institutional ink button instead of sage */
+  #visitor-cta, #visitor-cta-pack {
+    background: var(--paper-soft, #fbf7ea) !important;
+    border: 1px solid var(--line-soft, #e9e1cb) !important;
+    border-radius: 8px !important;
+  }
+  #visitor-cta a, #visitor-cta-pack a {
+    background: var(--ink, #14110d) !important;
+    color: var(--paper, #f7f1e3) !important;
+    border-radius: 8px !important;
+    font-family: var(--serif, Georgia, serif);
+  }
+  /* Share buttons soften from sage panel to institutional outline */
+  .share-block { background: transparent !important; border: none !important; }
+  .share-btn {
+    background: var(--paper-soft, #fbf7ea);
+    color: var(--ink, #14110d);
+    border: 1px solid var(--line, #d9cfb6);
+    border-radius: 6px;
+    font-family: var(--serif, Georgia, serif);
+  }
+  .share-btn:hover { background: var(--ink, #14110d); color: var(--paper, #f7f1e3); }
+  /* Explorer card grid: hairline rules instead of hard borders */
+  .explorer-grid > * { border: 1px solid var(--line-soft, #e9e1cb) !important; border-radius: 6px; background: transparent; }
+  /* Checks-li: subtle row separator, no boxed border */
+  .checks li { border: none; border-bottom: 1px solid var(--line-soft, #e9e1cb); background: transparent; }
+</style>
 <meta name="copyright" content="© 2026 Orphograph. MIT — see /LICENSE">
 </head>
 <body class="receipt-page">
