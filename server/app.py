@@ -3686,11 +3686,65 @@ def _start_cadence_scheduler() -> None:
     t.start()
 
 
+def _start_funnel_digest_scheduler() -> None:
+    """Background thread that emails the weekly funnel digest each Monday at 14:00 UTC.
+
+    Wakes once an hour; when the current UTC time matches (hour == 14,
+    weekday == 0 = Monday) it invokes scripts/funnel_digest.py. The
+    underlying script enforces its own same-day idempotency guard via
+    DATA_DIR/.funnel_digest_last_run, so a re-fire within the hour-14
+    window is a no-op.
+
+    Kill switch: set ORPHO_FUNNEL_DIGEST_DISABLED=1 (e.g. via `fly
+    secrets set`) and the loop becomes a no-op at the next wake. The
+    thread keeps running so the switch can be cleared without a restart.
+
+    No yes/no founder click required — this is operational mail.
+    """
+    import threading
+    import subprocess
+    from datetime import datetime, timezone
+
+    runner_path = ROOT / "scripts" / "funnel_digest.py"
+
+    def loop() -> None:
+        while True:
+            try:
+                if os.environ.get("ORPHO_FUNNEL_DIGEST_DISABLED", "") == "1":
+                    sys.stderr.write(
+                        "[funnel-digest] disabled via ORPHO_FUNNEL_DIGEST_DISABLED=1\n"
+                    )
+                else:
+                    now = datetime.now(timezone.utc)
+                    hour = now.hour
+                    weekday = now.weekday()  # Mon=0 .. Sun=6
+                    if hour == 14 and weekday == 0:
+                        proc = subprocess.run(
+                            ["python3", str(runner_path)],
+                            capture_output=True,
+                            text=True,
+                            timeout=300,
+                        )
+                        sys.stderr.write(
+                            f"[funnel-digest] hour={hour} weekday={weekday} "
+                            f"returncode={proc.returncode}\n"
+                        )
+            except Exception as exc:  # noqa: BLE001 — scheduler errors must not kill the thread
+                sys.stderr.write(
+                    f"[funnel-digest] error: {type(exc).__name__}: {exc}\n"
+                )
+            time.sleep(3600)
+
+    t = threading.Thread(target=loop, name="funnel-digest", daemon=True)
+    t.start()
+
+
 def main() -> int:
     WEB_DIR.mkdir(parents=True, exist_ok=True)
     _seed_sample_receipt()
     _start_upgrade_scheduler()
     _start_cadence_scheduler()
+    _start_funnel_digest_scheduler()
     server = ThreadingHTTPServer((HOST, PORT), Handler)
     sys.stderr.write(f"orphograph listening on http://{HOST}:{PORT}\n")
     try:
