@@ -70,6 +70,10 @@ EXPECTED_URLS = [
     "https://orphograph.com/blog/rss.xml",
     "https://orphograph.com/blog/atom.xml",
     "https://orphograph.com/press-kit/orphograph-press-kit.zip",
+    "https://orphograph.com/security.html",
+    "https://orphograph.com/.well-known/security.txt",
+    "https://orphograph.com/humans.txt",
+    "https://orphograph.com/sitemap-image.xml",
 ]
 
 SITEMAP_NS = "{http://www.sitemaps.org/schemas/sitemap/0.9}"

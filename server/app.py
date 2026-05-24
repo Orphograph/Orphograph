@@ -389,7 +389,7 @@ def _serve_static(handler: BaseHTTPRequestHandler, rel_path: str) -> None:
     if if_none and etag in if_none:
         handler.send_response(304)
         handler.send_header("ETag", etag)
-        handler.send_header("Cache-Control", _static_cache_control(target.suffix))
+        handler.send_header("Cache-Control", _static_cache_control(target.suffix, rel_path))
         _security_headers(handler)
         handler.end_headers()
         return
@@ -402,7 +402,7 @@ def _serve_static(handler: BaseHTTPRequestHandler, rel_path: str) -> None:
     handler.send_response(200)
     handler.send_header("Content-Type", ctype)
     handler.send_header("Content-Length", str(len(data)))
-    handler.send_header("Cache-Control", _static_cache_control(target.suffix))
+    handler.send_header("Cache-Control", _static_cache_control(target.suffix, rel_path))
     handler.send_header("ETag", etag)
     if enc:
         handler.send_header("Content-Encoding", enc)
@@ -412,12 +412,29 @@ def _serve_static(handler: BaseHTTPRequestHandler, rel_path: str) -> None:
     handler.wfile.write(data)
 
 
-def _static_cache_control(suffix: str) -> str:
+def _static_cache_control(suffix: str, rel_path: str = "") -> str:
     """Aggressive caching for binary assets, short caching for HTML.
 
     HTML can change with each deploy; let browsers revalidate fast.
     Binaries (svg, ico, ots, tar.gz) effectively immutable per filename.
+
+    Brand assets — seal*.png, lockup.png, favicon*, apple-touch-icon-*.png,
+    og-image.png — are served with a 30-day immutable cache. These filenames
+    are cache-busted via ?v=N query strings, so the response is safe to pin.
+    Blog HTML pages are also pinned for 30 days: post slugs are append-only,
+    so an existing slug never changes its content within a 30-day window.
     """
+    name = rel_path.rsplit("/", 1)[-1].lower()
+    is_brand_asset = (
+        (name.startswith("seal") and name.endswith(".png"))
+        or name == "lockup.png"
+        or name.startswith("favicon")
+        or (name.startswith("apple-touch-icon-") and name.endswith(".png"))
+        or name == "og-image.png"
+    )
+    is_blog_post = rel_path.startswith("/blog/") or rel_path.startswith("blog/")
+    if is_brand_asset or (is_blog_post and suffix == ".html"):
+        return "public, max-age=2592000, immutable"
     short_lived = {".html", ".json", ".webmanifest"}
     if suffix in short_lived:
         return "public, max-age=300, must-revalidate"

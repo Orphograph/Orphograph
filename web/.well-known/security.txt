@@ -1,7 +1,6 @@
 Contact: mailto:security@orphograph.com
-Contact: https://orphograph.com/SECURITY.md
-Expires: 2027-05-21T00:00:00.000Z
-Acknowledgments: https://orphograph.com/SECURITY.md
+Expires: 2027-05-24T00:00:00.000Z
 Preferred-Languages: en
 Canonical: https://orphograph.com/.well-known/security.txt
-Policy: https://orphograph.com/SECURITY.md
+Policy: https://orphograph.com/security.html
+Acknowledgments: https://orphograph.com/security.html#acknowledgments

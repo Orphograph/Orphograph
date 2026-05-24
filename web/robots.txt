@@ -8,3 +8,4 @@ Disallow: /admin/
 
 Sitemap: https://orphograph.com/sitemap.xml
 Sitemap: https://orphograph.com/sitemap-news.xml
+Sitemap: https://orphograph.com/sitemap-image.xml

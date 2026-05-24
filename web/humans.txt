@@ -1,0 +1,21 @@
+/* TEAM */
+    The office at Orphograph — hello@orphograph.com
+    Based in San Juan, Puerto Rico
+
+/* THANKS */
+    Stuart Haber, W. Scott Stornetta — for the 1991 paper that made every modern timestamping system possible
+    Peter Todd — for OpenTimestamps
+    The Bitcoin network — for sixteen years of immutable block history
+    All operators of the five public OpenTimestamps calendars
+
+/* SITE */
+    Last update: 2026-05-24
+    Language: English
+    Doctype: HTML5
+    Standards: HTML5, CSS3, WAI-ARIA, OpenGraph
+    Components: stdlib Python on Fly.io, Cloudflare DNS, Resend transactional email
+
+/* THIS OFFICE */
+    An empirical notary. Bitcoin-anchored proof a file existed by the recorded block.
+    The file stays on the customer's machine. Est. 2026.
+    https://orphograph.com

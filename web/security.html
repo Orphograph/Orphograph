@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Orphograph — Security disclosure policy</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#f6f1e3">
+<meta name="description" content="Responsible-disclosure policy for security researchers. Scope, expected timelines, contact, and acknowledgments. RFC 9116 security.txt at /.well-known/security.txt.">
+<meta property="og:title" content="Orphograph — Security disclosure policy">
+<meta property="og:description" content="Responsible-disclosure policy. 90-day standard timeline.">
+<meta property="og:url" content="https://orphograph.com/security.html">
+<meta property="og:type" content="article">
+<meta property="og:image" content="https://orphograph.com/og-image.png?v=8">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Orphograph — Security disclosure policy">
+<link rel="canonical" href="https://orphograph.com/security.html">
+<link rel="icon" type="image/png" href="/favicon.png?v=8">
+<link rel="stylesheet" href="/index.css?v=9">
+<style>
+  .arch-wrap { max-width: 820px; margin: 0 auto; padding: 0 24px 64px; }
+  .arch-wrap h1 { font-family: var(--serif); font-size: 36px; font-weight: 500; margin: 32px 0 6px; }
+  .arch-wrap h2 { font-family: var(--serif); font-size: 22px; font-weight: 500; margin: 36px 0 4px; color: var(--ink); }
+  .arch-wrap h3 { font-family: var(--serif); font-size: 18px; font-weight: 500; margin: 28px 0 4px; color: var(--ink); }
+  .arch-rule { border-top: 1px solid var(--ink); width: 32px; margin: 8px 0 16px; opacity: 0.6; }
+  .arch-wrap p, .arch-wrap li { color: var(--ink-2); line-height: 1.75; font-size: 15.5px; }
+  .arch-wrap code { background: rgba(58, 47, 36, 0.06); padding: 2px 6px; border-radius: 3px; font-size: 0.92em; }
+  .arch-lede { font-size: 17px; line-height: 1.7; color: var(--ink-2); margin: 0 0 24px; }
+  .arch-callout { background: rgba(58, 47, 36, 0.04); border-left: 3px solid var(--accent); padding: 16px 20px; margin: 24px 0; border-radius: 0; }
+  .arch-callout p { margin: 0; }
+</style>
+<meta name="copyright" content="© 2026 Orphograph. MIT — see /LICENSE">
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap row">
+    <a href="/" class="brand">Orphograph</a>
+    <nav>
+      <a href="/learn.html">Method</a>
+      <a href="/faq.html">FAQ</a>
+      <a href="/continuity.html">Continuity</a>
+      <a href="/#tiers">Pricing</a>
+      <a href="/signin.html">Sign in</a>
+      <a href="/#drop" class="cta">Anchor a file</a>
+    </nav>
+  </div>
+</header>
+
+<main class="arch-wrap">
+
+  <p style="font-size:12px;letter-spacing:0.18em;text-transform:uppercase;color:var(--muted);margin:48px 0 8px;">The office · Security</p>
+  <h1>Responsible disclosure.</h1>
+  <p class="arch-lede">
+    Orphograph welcomes security research conducted in good faith. This page describes how to report a vulnerability, what the office considers in scope, and how researchers are credited.
+  </p>
+
+  <section>
+    <h2>Contact</h2>
+    <div class="arch-rule"></div>
+    <p>Send reports to <a href="mailto:security@orphograph.com"><code>security@orphograph.com</code></a>. PGP is not currently required; if your report is sensitive enough to warrant encryption, indicate that in the first message and an arrangement will be made.</p>
+    <p>The machine-readable advisory for this policy is published at <a href="/.well-known/security.txt"><code>/.well-known/security.txt</code></a> per RFC 9116.</p>
+  </section>
+
+  <section>
+    <h2>Disclosure timeline</h2>
+    <div class="arch-rule"></div>
+    <p>The office observes a 90-day standard window between report receipt and public disclosure. The timeline runs as follows:</p>
+    <ul>
+      <li><strong>Day 0.</strong> Report received. An acknowledgment is sent within three business days.</li>
+      <li><strong>Day 1 to 14.</strong> Triage and reproduction. The office confirms severity and proposes a remediation path.</li>
+      <li><strong>Day 14 to 90.</strong> Remediation, regression testing, and deploy. Researchers are kept informed at material milestones.</li>
+      <li><strong>Day 90.</strong> Standard maximum embargo. Extension beyond 90 days is rare and is negotiated with the reporter in writing.</li>
+    </ul>
+    <p>Disclosure earlier than 90 days is appropriate where a fix has shipped and the reporter consents to publication. Disclosure later than 90 days is appropriate only where a deployed fix is not yet possible and continued embargo is genuinely safer than publication.</p>
+  </section>
+
+  <section>
+    <h2>In scope</h2>
+    <div class="arch-rule"></div>
+    <ul>
+      <li>The <code>orphograph.com</code> web application and any subdomain operated by the office.</li>
+      <li>The anchoring pipeline — receipt issuance, OpenTimestamps aggregation, calendar handling, and the receipt-vault storage layer.</li>
+      <li>Receipt verification — both the server-side verifier and the standalone client-side verifier shipped under MIT.</li>
+      <li>Authentication and session handling, including the magic-link flow.</li>
+      <li>Billing and payment flows administered directly by the office.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Out of scope</h2>
+    <div class="arch-rule"></div>
+    <p>The following are explicitly out of scope. Reports against these surfaces should be sent directly to the operator of the service in question.</p>
+    <ul>
+      <li>Third-party transactional-email infrastructure used to deliver magic-link and receipt emails.</li>
+      <li>Third-party hosting infrastructure on which the office runs.</li>
+      <li>Third-party DNS and edge providers fronting the public domain.</li>
+      <li>Bitcoin nodes, OpenTimestamps calendar servers operated by third parties, and the Bitcoin network itself.</li>
+      <li>Findings that require physical access to a customer device or social engineering of office staff.</li>
+      <li>Volumetric denial-of-service findings without a novel amplification or asymmetry argument.</li>
+      <li>Theoretical cryptographic weaknesses in SHA-256 or SHA-512 absent a working demonstration.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Safe harbor</h2>
+    <div class="arch-rule"></div>
+    <p>Research conducted under this policy — non-destructive testing, no exfiltration of customer data, no service degradation, and timely reporting — is considered authorized. The office will not pursue legal action against researchers who act in good faith and within the scope defined above. Activity that disrupts service, reads or modifies data belonging to other customers, or persists beyond what is required to demonstrate the finding falls outside safe harbor.</p>
+  </section>
+
+  <section>
+    <h2>Bounty</h2>
+    <div class="arch-rule"></div>
+    <p>The office does not operate a paid bounty program at this time. Reporters of valid findings are credited publicly in the Acknowledgments section below, unless the reporter requests otherwise.</p>
+  </section>
+
+  <section>
+    <h3 id="acknowledgments">Acknowledgments</h3>
+    <div class="arch-rule"></div>
+    <p>Researchers who have responsibly disclosed verified findings will be listed here, with their consent.</p>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap" style="text-align:center;color:var(--muted);font-size:13px;padding:32px 0;">
+    <p>Orphograph · An empirical notary.</p>
+    <p style="margin-top:8px;">
+      <a href="/" style="color:var(--muted);">Home</a> ·
+      <a href="/faq.html" style="color:var(--muted);">FAQ</a> ·
+      <a href="/roadmap.html" style="color:var(--muted);">Roadmap</a> ·
+      <a href="/continuity.html" style="color:var(--muted);">Continuity</a>
+    </p>
+  </div>
+</footer>
+
+<script src="/statusbar.js" defer></script>
+<script src="/assets/event.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
+  <url>
+    <loc>https://orphograph.com/</loc>
+    <image:image>
+      <image:loc>https://orphograph.com/seal.png</image:loc>
+      <image:title>Orphograph seal</image:title>
+      <image:caption>Institutional seal — globe wireframe with spiral. Cream paper, ink-brown engraving.</image:caption>
+    </image:image>
+    <image:image>
+      <image:loc>https://orphograph.com/lockup.png</image:loc>
+      <image:title>Orphograph wordmark</image:title>
+      <image:caption>ORPHOGRAPH wordmark with Strategy &#183; Stewardship &#183; Est. 2026 tagline.</image:caption>
+    </image:image>
+    <image:image>
+      <image:loc>https://orphograph.com/og-image.png</image:loc>
+      <image:title>Orphograph — social card</image:title>
+      <image:caption>1200&#215;630 cream canvas with centered Orphograph seal.</image:caption>
+    </image:image>
+  </url>
+</urlset>

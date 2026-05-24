@@ -263,4 +263,24 @@
     <lastmod>2026-05-24</lastmod>
     <changefreq>monthly</changefreq>
   </url>
+  <url>
+    <loc>https://orphograph.com/security.html</loc>
+    <lastmod>2026-05-24</lastmod>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://orphograph.com/.well-known/security.txt</loc>
+    <lastmod>2026-05-24</lastmod>
+    <changefreq>yearly</changefreq>
+  </url>
+  <url>
+    <loc>https://orphograph.com/humans.txt</loc>
+    <lastmod>2026-05-24</lastmod>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://orphograph.com/sitemap-image.xml</loc>
+    <lastmod>2026-05-24</lastmod>
+    <changefreq>monthly</changefreq>
+  </url>
 </urlset>
