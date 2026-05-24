@@ -89,9 +89,9 @@
   <li>An auditor confirming Orphograph&#x27;s claims aren&#x27;t marketing</li>
   <li>Curious about how Bitcoin-anchored timestamping actually works</li>
   </ul>
-  <p>We&#x27;ll dissect the sample receipt that ships with our open-source verifier. You can follow along by downloading it:</p>
+  <p>The walkthrough below dissects the sample receipt that ships with the Orphograph open-source verifier. Follow along by downloading it:</p>
   <pre><code>curl -O https://orphograph.com/verify/examples/sample/a.ots</code></pre>
-  <p>That&#x27;s a real .ots file from a real anchor we made on 2026-05-12. Let&#x27;s see what&#x27;s in it.</p>
+  <p>That is a real .ots file from a real anchor made on 2026-05-12. Read on for what is inside it.</p>
   <h2>The file format</h2>
   <p>OpenTimestamps files are binary. They follow a documented format (<a href="https://github.com/opentimestamps/python-opentimestamps">spec on github.com/opentimestamps</a>) that&#x27;s deliberately simple — three sections:</p>
   <p><strong>1.</strong> <strong>Magic header</strong> (15 bytes) — identifies the file as an OTS proof</p>
@@ -115,7 +115,7 @@
   <p>The full magic constant is:</p>
   <pre><code>\x00OpenTimestamps\x00\x00Proof\x00\xbf\x89\xe2\xe8\x84\xe8\x92\x94</code></pre>
   <p>That last 8-byte sequence (<code>\xbf\x89...</code>) is a version + format identifier — it tells parsers exactly which OTS spec version this file conforms to. As of 2026, there&#x27;s only one version in the wild.</p>
-  <p>If a file claims to be an .ots proof but doesn&#x27;t start with this exact sequence, it isn&#x27;t one. Our open-source verifier checks for exactly this magic before doing anything else.</p>
+  <p>If a file claims to be an .ots proof but does not start with this exact sequence, it is not one. The Orphograph open-source verifier checks for exactly this magic before doing anything else.</p>
   <h2>Section 2 — the hash being attested</h2>
   <p>Byte 25 of the file is the SHA-256 tag (<code>\x08</code>), followed by 32 bytes — the actual SHA-256 hash of the file you anchored.</p>
   <p>For the sample receipt, that hash is:</p>
@@ -131,15 +131,15 @@
   <p>Each step in the path is one of:</p>
   <ul>
   <li><strong>SHA-256 op</strong> (<code>\x08</code>) — &quot;hash whatever&#x27;s accumulated so far with SHA-256&quot;</li>
-  <li><strong>Append</strong> (<code>\xf0 &lt;length&gt; &lt;bytes&gt;</code>) — &quot;concatenate these bytes to what we have&quot;</li>
-  <li><strong>Prepend</strong> (<code>\xf1 &lt;length&gt; &lt;bytes&gt;</code>) — &quot;stick these bytes BEFORE what we have&quot;</li>
+  <li><strong>Append</strong> (<code>\xf0 &lt;length&gt; &lt;bytes&gt;</code>) — concatenate these bytes to the accumulator.</li>
+  <li><strong>Prepend</strong> (<code>\xf1 &lt;length&gt; &lt;bytes&gt;</code>) — insert these bytes before the accumulator.</li>
   <li><strong>Calendar attestation</strong> (<code>\x83\xdf\xe3\x0d\x2e\xf9\x0c\x8e &lt;length&gt; &lt;calendar-URL&gt;</code>) — &quot;this hash got submitted to this calendar; ask them for the upgraded proof&quot;</li>
   <li><strong>Bitcoin block attestation</strong> (<code>\x05\x88\x96\x0d\x73\xd7\x19\x01 &lt;varint-block-height&gt;</code>) — &quot;this hash is incorporated in the Bitcoin block at height N&quot;</li>
   </ul>
   <p>Walking the path means: start with your file&#x27;s hash, follow each op, accumulating values, until you arrive at a Bitcoin block header&#x27;s merkle root.</p>
-  <p>For our sample file, the calendar attestation reads:</p>
+  <p>For the sample file, the calendar attestation reads:</p>
   <pre><code>.-https://alice.btc.calendar.opentimestamps.org</code></pre>
-  <p>That&#x27;s saying: &quot;I submitted this hash to alice&#x27;s calendar. If you want the full Bitcoin merkle proof, ask that calendar for the upgraded version.&quot;</p>
+  <p>That is the protocol saying: this hash was submitted to alice&#x27;s calendar. For the full Bitcoin merkle proof, ask that calendar for the upgraded version.</p>
   <p>When the calendar batches your hash with thousands of others into a Bitcoin transaction (which it does roughly once per hour), the upgraded .ots file gets extended with:</p>
   <p><strong>1.</strong> The merkle path WITHIN the calendar&#x27;s batch (from your hash to their root)</p>
   <p><strong>2.</strong> The Bitcoin transaction ID containing that root</p>
@@ -161,34 +161,30 @@
   <p>You can recompute, deterministically:</p>
   <p><strong>1.</strong> SHA-256(your file) → must equal the hash in the .ots</p>
   <p><strong>2.</strong> Walking the merkle path in the .ots → must equal the merkle root of the Bitcoin block at the specified height</p>
-  <p><strong>3.</strong> The Bitcoin block at that height → must be in the longest chain (you can check this against any Bitcoin node, including public block explorers like <a href="https://mempool.space">mempool.space</a>)</p>
+  <p><strong>3.</strong> The Bitcoin block at that height — must be in the longest chain. Check this against any Bitcoin node or any public block explorer.</p>
   <p>If all three are true, the proof holds. The file existed at the timestamp of that Bitcoin block. To forge the proof, an attacker would need to:</p>
   <ul>
-  <li>Find a SHA-256 collision (preimage: 2^128 operations under</li>
+  <li>Find a SHA-256 collision — 2^128 operations under Grover&#x27;s algorithm; not done in public, classically.</li>
+  <li>And rewrite the Bitcoin block that contains the attestation.</li>
+  <li>And rewrite every Bitcoin block after it to maintain the longest-chain property.</li>
   </ul>
-  <p>Grover&#x27;s algorithm; classical: not done in public)</p>
-  <ul>
-  <li>AND rewrite the Bitcoin block that contains the attestation</li>
-  <li>AND rewrite every Bitcoin block after it to maintain the</li>
-  </ul>
-  <p>longest-chain property</p>
   <p>The economics of that attack are well-documented. As of 2026, attacking even a single Bitcoin block from years ago would require sustained 51% hash-rate dominance for the entire interval since — measured in tens of billions of dollars of mining infrastructure running flat-out for years.</p>
   <p>That&#x27;s the security backing every .ots proof.</p>
-  <h2>Reading our sample, end-to-end</h2>
-  <p>For the sample file we shipped:</p>
-  <p><strong>1.</strong> <strong>Magic header</strong> ✓ matches the OTS magic constant</p>
-  <p><strong>2.</strong> <strong>Hash</strong> ✓ matches SHA-256 of <code>sample.txt</code></p>
-  <p><strong>3.</strong> <strong>Merkle path</strong> ends with a calendar attestation (the sample was anchored less than an hour before this post was written; the BTC upgrade hadn&#x27;t completed yet at write-time)</p>
-  <p><strong>4.</strong> <strong>After <code>ots upgrade</code></strong> ✓ the file gains the full Bitcoin block attestation</p>
-  <p>Run our verifier:</p>
+  <h2>Reading the sample, end-to-end</h2>
+  <p>For the sample file:</p>
+  <p><strong>1.</strong> <strong>Magic header</strong> — matches the OTS magic constant.</p>
+  <p><strong>2.</strong> <strong>Hash</strong> — matches SHA-256 of <code>sample.txt</code>.</p>
+  <p><strong>3.</strong> <strong>Merkle path</strong> — ends with a calendar attestation. The sample was anchored less than an hour before this post was written; the Bitcoin upgrade had not completed at write-time.</p>
+  <p><strong>4.</strong> <strong>After <code>ots upgrade</code></strong> — the file gains the full Bitcoin block attestation.</p>
+  <p>Run the verifier:</p>
   <pre><code>python3 verify.py examples/sample/receipt.json --file examples/sample/sample.txt</code></pre>
-  <p>You should see five <code>[OK]</code> lines for the five calendars, plus a &quot;file hash matches&quot; line. The verifier is 100 lines of Python; if you don&#x27;t trust our claims, <strong>read the verifier source code</strong> (<code>verify.py</code> in the same tarball).</p>
+  <p>The expected output is five <code>[OK]</code> lines for the five calendars, plus a &quot;file hash matches&quot; line. The verifier is roughly 100 lines of Python; readers who do not take the claims on faith can read the source directly in <code>verify.py</code> in the same tarball.</p>
   <h2>Why this matters</h2>
-  <p>Most digital-evidence systems sell trust. Orphograph sells math-you-can-verify. You don&#x27;t have to take our word for anything — including the claim that we&#x27;re not lying to you. The .ots file is auditable, the verifier is open source, the protocol is public, and the underlying Bitcoin chain is replicated across the internet.</p>
-  <p>If something on the verification path ever stops adding up — your hash, the merkle path, the Bitcoin chain — the cryptographic contract is broken and we want to hear about it. Our security disclosure address is in the README; PGP keys available on request.</p>
-  <p>For 99% of users, &quot;click verify&quot; is enough. For the 1% who need to confirm the math is real, this post is a starting point. Welcome to the rabbit hole.</p>
+  <p>Most digital-evidence systems sell trust. Orphograph sells math anyone can verify. No party needs to take the office&#x27;s word for anything. The .ots file is auditable, the verifier is open source, the protocol is public, and the underlying Bitcoin chain is replicated across the internet.</p>
+  <p>If anything on the verification path ever stops adding up — the file&#x27;s hash, the merkle path, the Bitcoin chain — the cryptographic contract is broken and the office wants to know. The security disclosure address is in the README; PGP keys are available on request.</p>
+  <p>For nearly all users, &quot;click verify&quot; is enough. For the minority who need to confirm the math is real, this post is a starting point.</p>
   <hr>
-  <p><em>Anchor a file at <a href="/">orphograph.com</a>. Verify any receipt with the open-source verifier at <a href="/verify/">/verify/</a> — no Orphograph account, no Python install required if you use the bundled sample&#x27;s pre-upgraded receipts. $7 for a Pack of 10, free for one per month.</em></p>
+  <p><em>Orphograph is a Bitcoin file-timestamping service. Three free anchors every 24 hours. Pack of Fifty: $29 one-time, credits never expire. Standing Order: $9/month for unlimited. Open-source verifier at <a href="/verify/">/verify/</a>. Receipts verify against any Bitcoin node, independent of Orphograph.</em> Related: <a href="/blog/why-5-opentimestamps-calendars-not-1.html" style="color:var(--confirm);">why five calendars and not one</a>. Method overview: <a href="/method/the-mit-verifier-annotated.html" style="color:var(--confirm);">the verifier source, annotated</a>.</p>
 
   <p class="post-foot">
     Published 2026-05-17. <a href="/blog/" style="color:var(--muted);">More from the blog</a>.

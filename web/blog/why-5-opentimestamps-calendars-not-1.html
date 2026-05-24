@@ -40,14 +40,16 @@
 {
   "@context": "https://schema.org",
   "@type": "Article",
-  "headline": 'Why Orphograph uses five OpenTimestamps calendars instead of one',
-  "description": 'Why submitting to five OpenTimestamps calendars instead of one matters — independent operators, no single point of failure, receipt survives outages.',
+  "headline": "Why Orphograph uses five OpenTimestamps calendars instead of one",
+  "description": "Why submitting to five OpenTimestamps calendars instead of one matters — independent operators, no single point of failure, receipt survives outages.",
+  "url": "https://orphograph.com/blog/why-5-opentimestamps-calendars-not-1.html",
   "datePublished": "2026-05-17",
   "dateModified": "2026-05-17",
-  "author": { "@type": "Organization", "name": "Orphograph" },
+  "author": { "@type": "Organization", "name": "Orphograph", "url": "https://orphograph.com" },
   "publisher": {
     "@type": "Organization",
     "name": "Orphograph",
+    "url": "https://orphograph.com",
     "logo": { "@type": "ImageObject", "url": "https://orphograph.com/seal.png" }
   },
   "mainEntityOfPage": {
@@ -121,9 +123,9 @@
   <h2>The trade-off</h2>
   <p>The cost of five-calendar fan-out is not zero. The browser does five submissions instead of one, the receipt is roughly five times larger, and there is more code to test. The Orphograph receipt format adds about 4 KB per anchor for the additional <code>.ots</code> files.</p>
   <p>In exchange, the receipt has no single point of failure on the calendar side. The redundancy is the entire reason for the overhead. For a service whose receipts are supposed to verify indefinitely, that trade-off is the right one.</p>
-  <p>There is no version of the product where you only get one calendar&#x27;s proof. The five-calendar receipt is the only receipt Orphograph issues.</p>
+  <p>There is no version of the product where the holder only gets one calendar&#x27;s proof. The five-calendar receipt is the only receipt Orphograph issues.</p>
   <hr>
-  <p><em>Orphograph is a Bitcoin file-timestamping service. Three free anchors every 24 hours, $29 for a 10-anchor pack, $9/mo for unlimited. Five OpenTimestamps calendars, five independent operators, no single point of failure. Receipts verify against any Bitcoin node without our servers.</em></p>
+  <p><em>Orphograph is a Bitcoin file-timestamping service. Three free anchors every 24 hours. Pack of Fifty: $29 one-time, credits never expire. Standing Order: $9/month for unlimited. Five OpenTimestamps calendars, five independent operators, no single point of failure. Receipts verify against any Bitcoin node, independent of Orphograph.</em> Related: <a href="/blog/why-domain-dying-doesnt-kill-your-timestamp.html" style="color:var(--confirm);">why the receipt survives if the issuer disappears</a>. Method overview: <a href="/method/evidence-law.html" style="color:var(--confirm);">how evidence law treats these receipts</a>.</p>
 
   <p class="post-foot">
     Published 2026-05-17. <a href="/blog/" style="color:var(--muted);">More from the blog</a>.

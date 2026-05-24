@@ -5,15 +5,15 @@
 <title>Why your domain dying shouldn&#x27;t kill your timestamp receipt — Orphograph</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#f6f1e3">
-<meta name="description" content="Most SaaS receipts are worthless when the company disappears. A Bitcoin-anchored timestamp is structurally different — your proof outlives the issuer by de...">
+<meta name="description" content="Most SaaS receipts are worthless when the company disappears. A Bitcoin-anchored timestamp is structurally different — the proof outlives the issuer by design.">
 <meta property="og:title" content="Why your domain dying shouldn&#x27;t kill your timestamp receipt">
-<meta property="og:description" content="Most SaaS receipts are worthless when the company disappears. A Bitcoin-anchored timestamp is structurally different — your proof outlives the issuer by de...">
+<meta property="og:description" content="Most SaaS receipts are worthless when the company disappears. A Bitcoin-anchored timestamp is structurally different — the proof outlives the issuer by design.">
 <meta property="og:url" content="https://orphograph.com/blog/why-domain-dying-doesnt-kill-your-timestamp.html">
 <meta property="og:type" content="article">
 <meta property="og:image" content="https://orphograph.com/og-image.png?v=8">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Why your domain dying shouldn&#x27;t kill your timestamp receipt">
-<meta name="twitter:description" content="Most SaaS receipts are worthless when the company disappears. A Bitcoin-anchored timestamp is structurally different — your proof outlives the issuer by de...">
+<meta name="twitter:description" content="Most SaaS receipts are worthless when the company disappears. A Bitcoin-anchored timestamp is structurally different — the proof outlives the issuer by design.">
 <link rel="canonical" href="https://orphograph.com/blog/why-domain-dying-doesnt-kill-your-timestamp.html">
 <link rel="icon" type="image/png" href="/favicon.png?v=8">
 <link rel="stylesheet" href="/index.css?v=9">
@@ -41,13 +41,15 @@
   "@context": "https://schema.org",
   "@type": "Article",
   "headline": "Why your domain dying shouldn't kill your timestamp receipt",
-  "description": 'Most SaaS receipts are worthless when the company disappears. A Bitcoin-anchored timestamp is structurally different — your proof outlives the issuer by de...',
+  "description": "Most SaaS receipts are worthless when the company disappears. A Bitcoin-anchored timestamp is structurally different — the proof outlives the issuer by design.",
+  "url": "https://orphograph.com/blog/why-domain-dying-doesnt-kill-your-timestamp.html",
   "datePublished": "2026-05-17",
   "dateModified": "2026-05-17",
-  "author": { "@type": "Organization", "name": "Orphograph" },
+  "author": { "@type": "Organization", "name": "Orphograph", "url": "https://orphograph.com" },
   "publisher": {
     "@type": "Organization",
     "name": "Orphograph",
+    "url": "https://orphograph.com",
     "logo": { "@type": "ImageObject", "url": "https://orphograph.com/seal.png" }
   },
   "mainEntityOfPage": {
@@ -81,7 +83,7 @@
   <p>The number-one question every working photographer asks before paying anything for a timestamping service: <strong>what happens to my proof if your company disappears?</strong></p>
   <p>This is a reasonable thing to ask. Earlier consumer-facing timestamping services have appeared, attracted some traction, and then either shut down, let their certificates lapse, or pivoted to enterprise-only sales channels. The pattern is consistent enough that any prospective customer is right to wonder what happens to their receipt when the operator of the service is no longer around to vouch for it.</p>
   <p>If you anchored five hundred photos through such a service before it disappeared, what would you have? Probably a forgotten password to a defunct login page and a vague memory that you&#x27;d &quot;done something.&quot;</p>
-  <p>This post explains why Orphograph receipts are structurally different — your proof works without us, by construction — and exactly what files you need to save to make that promise real.</p>
+  <p>This post explains why Orphograph receipts are structurally different — the proof works without Orphograph, by construction — and exactly which files a holder needs to save to make that promise real.</p>
   <h2>The two kinds of timestamping services</h2>
   <p>There are two architectural shapes a timestamping service can take. One survives the company&#x27;s death; the other doesn&#x27;t.</p>
   <h3>Type A — proprietary verifier (don&#x27;t trust these for the long haul)</h3>
@@ -90,18 +92,18 @@
   <h3>Type B — open-standard receipts (these survive)</h3>
   <p>The service is a wrapper around an open standard. Their receipts are not their property — they&#x27;re standardized files anyone can verify against the underlying chain or protocol. If the wrapper dies, the receipts still work.</p>
   <p>Orphograph is type B by design. So is raw OpenTimestamps. Other timestamping services vary in their architecture: some emit receipts that verify only against their proprietary tools, others emit receipts that verify against the underlying chain or open protocol independently. Readers evaluating an alternative should ask whether the receipt verifies without the issuer&#x27;s servers — that is the test.</p>
-  <h2>How an Orphograph receipt survives us</h2>
-  <p>When you anchor a file with Orphograph, you get back:</p>
-  <p><strong>1.</strong> <strong>A receipt JSON file</strong> (~1KB) — contains the SHA-256 hash of your file, the timestamp, and pointers to the OpenTimestamps calendar servers that received it.</p>
-  <p><strong>2.</strong> <strong>Five <code>.ots</code> proof files</strong> (~200–500 bytes each) — one per OpenTimestamps calendar. Each contains the cryptographic path from your hash up to a Bitcoin transaction.</p>
-  <p><strong>3.</strong> <strong>A SHA-512 sibling witness</strong> in the receipt (quantum hedge — we wrote about that in [the quantum-protection blog post]).</p>
-  <p>Total bundle: ~3KB. Save it next to your photo. That&#x27;s it.</p>
-  <p>To verify five years from now, you need three things — none of which depend on Orphograph the company still existing:</p>
-  <p><strong>1.</strong> <strong>The original file</strong> (you have it).</p>
-  <p><strong>2.</strong> <strong>The receipt + .ots files</strong> (you saved them).</p>
-  <p><strong>3.</strong> <strong>A copy of our open-source verifier</strong> — available at <a href="/verify/">orphograph.com/verify/</a> right now (MIT, ~100 lines of Python, save a copy locally if you&#x27;re paranoid).</p>
-  <p>Plus optionally, the public Bitcoin blockchain, which is replicated across tens of thousands of independent nodes worldwide and isn&#x27;t going anywhere.</p>
-  <p>That&#x27;s the contract. The math, not our company, is the trust.</p>
+  <h2>How an Orphograph receipt survives the office</h2>
+  <p>When a file is anchored with Orphograph, the holder receives:</p>
+  <p><strong>1.</strong> <strong>A receipt JSON file</strong> (~1KB) — contains the SHA-256 hash of the file, the timestamp, and pointers to the OpenTimestamps calendar servers that received it.</p>
+  <p><strong>2.</strong> <strong>Five <code>.ots</code> proof files</strong> (~200–500 bytes each) — one per OpenTimestamps calendar. Each contains the cryptographic path from the hash up to a Bitcoin transaction.</p>
+  <p><strong>3.</strong> <strong>A SHA-512 sibling witness</strong> in the receipt — a hedge against any future weakness in SHA-256.</p>
+  <p>Total bundle: about 3KB. Save it next to the photo.</p>
+  <p>To verify five years from now, three things are required — none of which depend on Orphograph still existing:</p>
+  <p><strong>1.</strong> <strong>The original file</strong> (the holder has it).</p>
+  <p><strong>2.</strong> <strong>The receipt and .ots files</strong> (the holder saved them).</p>
+  <p><strong>3.</strong> <strong>A copy of the open-source verifier</strong> — available at <a href="/verify/">orphograph.com/verify/</a> (MIT, roughly 100 lines of Python; a paranoid holder can keep a local copy).</p>
+  <p>Plus, optionally, the public Bitcoin chain, which is replicated across tens of thousands of independent nodes worldwide.</p>
+  <p>That is the contract. The math, not the issuing company, is the trust.</p>
   <h2>What to actually save</h2>
   <p>Here&#x27;s the minimum-paranoid backup posture:</p>
   <h3>Tier 1 — what you save next to every photo (zero effort)</h3>
@@ -109,11 +111,11 @@
   <pre><code>my_photo.jpg
   my_photo.jpg.orpho.json     ← the receipt
   my_photo.jpg.orpho.tar      ← the 5 .ots files</code></pre>
-  <p>Most photographers already do something like this for RAW + JPG pairs. Add <code>.orpho.json</code> to the workflow and you&#x27;re done. Our folder-watcher CLI does this automatically.</p>
+  <p>Most photographers already do something like this for RAW + JPG pairs. Add <code>.orpho.json</code> to the workflow and the job is done. The Orphograph folder-watcher CLI does this automatically.</p>
   <h3>Tier 2 — what you save in case of zombie internet (low effort)</h3>
   <p>Once, save a copy of the verifier somewhere you control:</p>
   <pre><code>curl -O https://orphograph.com/verify/orphograph-verify-0.1.tar.gz</code></pre>
-  <p>Throw it on your existing photo backup drive. The tarball is 5KB. If Orphograph goes away, the verifier is there. If the verifier binary on our site changes versions, your saved copy still verifies your old receipts (the protocol is stable).</p>
+  <p>Throw it on the existing photo backup drive. The tarball is 5KB. If Orphograph goes away, the verifier is still there. If the verifier on the site changes versions later, the saved copy still verifies older receipts — the protocol is stable.</p>
   <h3>Tier 3 — what you save if you&#x27;re really worried (moderate effort)</h3>
   <p>Run <a href="https://opentimestamps.org/">the OpenTimestamps client</a> yourself to &quot;upgrade&quot; your .ots files into full Bitcoin merkle proofs. This bakes the entire Bitcoin transaction proof into the .ots file, so verification becomes:</p>
   <p><strong>1.</strong> Re-hash the original file</p>
@@ -136,20 +138,20 @@
   <table>
   <thead><tr><th>Threat</th><th>What it kills</th><th>What survives</th></tr></thead>
   <tbody>
-  <tr><td>Orphograph (the company) shuts down</td><td>Our website. Our <code>/api/verify/</code> shortcut.</td><td><strong>Your receipt + the OSS verifier still work.</strong></td></tr>
+  <tr><td>Orphograph (the company) shuts down</td><td>The orphograph.com website. The <code>/api/verify/</code> shortcut.</td><td><strong>The receipt and the open-source verifier still work.</strong></td></tr>
   <tr><td>OpenTimestamps calendar servers all shut down</td><td>The &quot;upgrade&quot; path for new anchors made after the shutdown.</td><td><strong>Already-upgraded .ots files survive.</strong> Once a proof is locked to a Bitcoin block, no calendar is needed for verification.</td></tr>
-  <tr><td>Bitcoin is abandoned / 51%-attacked / forked into oblivion</td><td>Trust in the chain itself.</td><td><strong>Already-mined historical blocks remain in the chain&#x27;s PoW history.</strong> Even a future fork would have to rewrite millennia of accumulated work to fake a historical anchor.</td></tr>
-  <tr><td>You lose your receipt files</td><td>Your proof. There&#x27;s no recovery.</td><td>Nothing — this is the one failure mode you control. <strong>Back up your receipts the way you back up your photos.</strong></td></tr>
-  <tr><td>Your hard drive dies</td><td>Same as above.</td><td>Same.</td></tr>
+  <tr><td>Bitcoin is abandoned, 51%-attacked, or forked into oblivion</td><td>Trust in the chain itself.</td><td><strong>Already-mined historical blocks remain in the chain&#x27;s PoW history.</strong> Even a future fork would have to rewrite years of accumulated work to fake a historical anchor.</td></tr>
+  <tr><td>The holder loses the receipt files</td><td>The proof. No recovery.</td><td>Nothing — this is the one failure mode the holder controls. <strong>Back up receipts the way photos are backed up.</strong></td></tr>
+  <tr><td>The holder&#x27;s hard drive dies</td><td>Same as above.</td><td>Same.</td></tr>
   </tbody></table>
-  <p>The one threat we can&#x27;t insulate you from: losing the receipt file. The cryptography is durable; user error is the limit.</p>
-  <h2>Why we wrote this</h2>
-  <p>Most SaaS services tell you &quot;you can trust us&quot; and hope the question of long-term durability never comes up. Photographers <em>especially</em> think in decade-long horizons — your archive is forever, and a proof tied to a specific company&#x27;s continued existence is structurally incompatible with that.</p>
-  <p>We built Orphograph because the protocol (OpenTimestamps + Bitcoin) already solves this. We&#x27;re just a wrapper that makes the protocol accessible without <code>pip install</code>. The receipts you get from us are the same shape OpenTimestamps would issue directly — we don&#x27;t add proprietary fields, we don&#x27;t watermark them, we don&#x27;t reserve the right to invalidate them.</p>
-  <p>If we&#x27;re around in 10 years: great. If we&#x27;re not: your receipts still work.</p>
-  <p>That&#x27;s the whole pitch.</p>
+  <p>The one threat Orphograph cannot insulate a holder from: losing the receipt file. The cryptography is durable; user error is the limit.</p>
+  <h2>Why this is written this way</h2>
+  <p>Most SaaS services ask the customer to trust the company and hope the question of long-term durability never comes up. Photographers especially think in decade-long horizons — an archive is forever, and a proof tied to a specific company&#x27;s continued existence is structurally incompatible with that.</p>
+  <p>Orphograph exists because the protocol — OpenTimestamps plus Bitcoin — already solves this. The Orphograph wrapper makes the protocol accessible without <code>pip install</code>. The receipts are the same shape OpenTimestamps would issue directly. No proprietary fields, no watermarks, no reserved right to invalidate.</p>
+  <p>If Orphograph is around in 10 years: useful. If not: the receipts still work.</p>
+  <p>That is the whole pitch.</p>
   <hr>
-  <p><em>Anchor your first file at <a href="/">orphograph.com</a>. 1 free per month forever. $7 for a 10-pack. Open-source verifier at <a href="/verify/">/verify/</a> so your receipts outlive us, by design.</em></p>
+  <p><em>Orphograph is a Bitcoin file-timestamping service. Three free anchors every 24 hours. Pack of Fifty: $29 one-time, credits never expire. Standing Order: $9/month for unlimited. Open-source verifier at <a href="/verify/">/verify/</a>. Receipts verify against any Bitcoin node, independent of Orphograph.</em> Related: <a href="/blog/why-5-opentimestamps-calendars-not-1.html" style="color:var(--confirm);">why five calendars and not one</a>. Method overview: <a href="/method/the-mit-verifier-annotated.html" style="color:var(--confirm);">the verifier source, annotated</a>.</p>
 
   <p class="post-foot">
     Published 2026-05-17. <a href="/blog/" style="color:var(--muted);">More from the blog</a>.
