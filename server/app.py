@@ -3604,10 +3604,93 @@ def _start_upgrade_scheduler() -> None:
     t.start()
 
 
+def _start_cadence_scheduler() -> None:
+    """Background thread that fires cold-outreach cadence runs on Tue/Wed/Thu at 14:00 UTC.
+
+    Avoids the need for a separate Fly cron machine: the scheduler wakes once an
+    hour, and when the current UTC time matches (hour == 14, weekday in {Tue=1,
+    Wed=2, Thu=3}) it invokes scripts/cadence_runner.py --execute.
+
+    Idempotency: a state file at DATA_DIR/.cadence_last_run records the iso date
+    of the last successful fire. The scheduler refuses to fire twice on the same
+    UTC date even if clock drift / restart causes the hour-14 window to be
+    observed more than once.
+
+    Kill switch: set ORPHO_CADENCE_DISABLED=1 (e.g. via `fly secrets set`) and
+    the loop becomes a no-op at the next wake. No restart required.
+
+    The cadence_runner itself enforces the 20/day hard cap and the Tue-Thu
+    day-of-week gate, so this scheduler is a thin wall-clock trigger.
+    """
+    import threading
+    import subprocess
+    from datetime import datetime, timezone
+
+    state_path = DATA_DIR / ".cadence_last_run"
+    runner_path = ROOT / "scripts" / "cadence_runner.py"
+
+    def _parse_sent_ok(stdout: str) -> str:
+        # cadence_runner prints "done · sent_ok=K failed=F dry=D" on its last line
+        for token in stdout.split():
+            if token.startswith("sent_ok="):
+                return token.split("=", 1)[1]
+        return "?"
+
+    def loop() -> None:
+        while True:
+            try:
+                if os.environ.get("ORPHO_CADENCE_DISABLED", "") == "1":
+                    sys.stderr.write("[cadence] disabled via ORPHO_CADENCE_DISABLED=1\n")
+                else:
+                    now = datetime.now(timezone.utc)
+                    hour = now.hour
+                    weekday = now.weekday()  # Mon=0, Tue=1, Wed=2, Thu=3
+                    today_iso = now.date().isoformat()
+                    if hour == 14 and weekday in (1, 2, 3):
+                        last_run = ""
+                        if state_path.exists():
+                            try:
+                                last_run = state_path.read_text().strip()
+                            except Exception:  # noqa: BLE001
+                                last_run = ""
+                        if last_run == today_iso:
+                            sys.stderr.write(
+                                f"[cadence] already fired today ({today_iso}); skipping\n"
+                            )
+                        else:
+                            proc = subprocess.run(
+                                ["python3", str(runner_path), "--execute"],
+                                capture_output=True,
+                                text=True,
+                                timeout=600,
+                            )
+                            sent_ok = _parse_sent_ok(proc.stdout or "")
+                            sys.stderr.write(
+                                f"[cadence] hour={hour} weekday={weekday} "
+                                f"returncode={proc.returncode} sent_ok={sent_ok}\n"
+                            )
+                            if proc.returncode == 0:
+                                try:
+                                    state_path.parent.mkdir(parents=True, exist_ok=True)
+                                    state_path.write_text(today_iso)
+                                except Exception as exc:  # noqa: BLE001
+                                    sys.stderr.write(
+                                        f"[cadence] state write error: "
+                                        f"{type(exc).__name__}: {exc}\n"
+                                    )
+            except Exception as exc:  # noqa: BLE001 — scheduler errors must not kill the thread
+                sys.stderr.write(f"[cadence] error: {type(exc).__name__}: {exc}\n")
+            time.sleep(3600)
+
+    t = threading.Thread(target=loop, name="cadence-scheduler", daemon=True)
+    t.start()
+
+
 def main() -> int:
     WEB_DIR.mkdir(parents=True, exist_ok=True)
     _seed_sample_receipt()
     _start_upgrade_scheduler()
+    _start_cadence_scheduler()
     server = ThreadingHTTPServer((HOST, PORT), Handler)
     sys.stderr.write(f"orphograph listening on http://{HOST}:{PORT}\n")
     try:

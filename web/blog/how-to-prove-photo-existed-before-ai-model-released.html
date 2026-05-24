@@ -88,7 +88,7 @@
   <p>You need three things:</p>
   <p><strong>1.</strong> The original file. RAW is ideal. JPEG works. The file&#x27;s bytes must not change after the anchor — re-saving in Lightroom produces a new file with a different hash.</p>
   <p><strong>2.</strong> A way to compute a SHA-256 hash. Every modern browser has this built in via WebCrypto. You do not need to install anything.</p>
-  <p><strong>3.</strong> A place to save the receipt. Anywhere your normal photo backup lives is fine: Dropbox, iCloud, an external drive.</p>
+  <p><strong>3.</strong> A place to save the receipt. Anywhere your normal photo backup lives is fine — any cloud-sync service or an external drive.</p>
   <p>You do not need a Bitcoin wallet. You do not need to pay a miner. You are not putting money on chain. You are submitting a 32-byte fingerprint of your file to a calendar server that batches many users&#x27; fingerprints into one Bitcoin transaction.</p>
   <h2>Step 1: hash the file</h2>
   <p>Open Orphograph in a browser. Drag the file onto the drop zone. The hash is computed locally — the file&#x27;s bytes never leave your machine. The page shows two hashes: SHA-256 and SHA-512. Both are included in the receipt so that if SHA-256 is ever broken, the SHA-512 sibling still verifies independently.</p>
@@ -108,7 +108,7 @@
   <p>The verifier does not depend on Orphograph. It does not depend on the calendar that issued the proof. It depends only on a Bitcoin node and the file. This is why the receipt outlives any single service.</p>
   <h2>Step 5: anchor at capture time, not at publication time</h2>
   <p>Here is the part that determines whether your receipts actually help in a dispute. The cryptography proves a file existed by a block&#x27;s timestamp. It does not prove you, specifically, were the first to anchor it.</p>
-  <p>If you post a photo on Instagram on Tuesday and anchor it on Thursday, anyone who downloaded the photo on Wednesday could have anchored it before you. Both timestamps are equally valid. The cryptography cannot distinguish.</p>
+  <p>If you post a photo on a social platform on Tuesday and anchor it on Thursday, anyone who downloaded the photo on Wednesday could have anchored it before you. Both timestamps are equally valid. The cryptography cannot distinguish.</p>
   <p>The defense is to anchor the file before publication, while the file is still only on your camera and your laptop. The gap between &quot;file exists privately&quot; and &quot;file exists publicly&quot; is the only window where your anchor is provably first. Anchor inside that window.</p>
   <p>For working photographers this means: anchor RAW files before you post JPEGs. Anchor a fashion week shoot&#x27;s selects before they ship to the publication. Anchor portraits before you deliver them.</p>
   <h2>What this does not do</h2>

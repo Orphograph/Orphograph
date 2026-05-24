@@ -78,8 +78,8 @@
   <p class="post-meta">Blog · Document timestamping</p>
   <h1>How to prove your photo existed before AI scraped it (without a lawyer)</h1>
 
-  <p>If you&#x27;ve ever uploaded a photo to Instagram, you&#x27;ve probably wondered: what stops an AI training set from scraping it, then a year from now someone claims your photo is the AI-generated one?</p>
-  <p>This isn&#x27;t paranoid. It&#x27;s the next phase of a problem that already happened to musicians (sample disputes), writers (plagiarism), and illustrators (style mimicking). Photographers are now the cohort getting the most heat — Getty filed against Stability AI for 12 million scraped images, and every working photographer has a &quot;is that mine?&quot; story brewing.</p>
+  <p>If you&#x27;ve ever uploaded a photo to a social platform, you&#x27;ve probably wondered: what stops an AI training set from scraping it, then a year from now someone claims your photo is the AI-generated one?</p>
+  <p>This isn&#x27;t paranoid. It&#x27;s the next phase of a problem that already happened to musicians (sample disputes), writers (plagiarism), and illustrators (style mimicking). Photographers are now the cohort getting the most heat — a stock-image-provider lawsuit over twelve million scraped images is in active litigation, and every working photographer has a &quot;is that mine?&quot; story brewing.</p>
   <p>The standard answer is <strong>EXIF metadata + your RAW files + cloud backups</strong>. That&#x27;s three plates spinning, all of which can be edited, deleted, or lost. None of them produce evidence a third party would treat as definitive.</p>
   <p>This post walks through the better answer: <strong>cryptographic timestamping</strong> — a way to lock today&#x27;s date to a file&#x27;s contents such that the only path to forge the claim is to re-mine the entire Bitcoin blockchain. Which nobody will do for your wedding shoot.</p>
   <h2>The fundamental tool: OpenTimestamps</h2>
@@ -121,9 +121,9 @@
   <p>Cost: $0. Time: 5 minutes per photo plus 1 hour wait. Defensibility: strongest. You&#x27;re using the protocol directly.</p>
   <h3>Path B — free, browser (drag-and-drop monthly)</h3>
   <p>Visit <a href="https://orphograph.com">orphograph.com</a>, drop your best photo of the month into the box. Save the receipt JSON. Done.</p>
-  <p>Cost: $0/month forever for the first anchor. Time: 10 seconds. Defensibility: same as Path A, with a slight UX trade — the receipt has to be re-downloaded if your browser clears localStorage. Save the receipt to Dropbox / iCloud / your normal photo backup.</p>
+  <p>Cost: $0/month forever for the first anchor. Time: 10 seconds. Defensibility: same as Path A, with a slight UX trade — the receipt has to be re-downloaded if your browser clears localStorage. Save the receipt to your normal photo backup (any cloud-sync service or external drive).</p>
   <h3>Path C — $7 for a batch (when you have 10 photos at once)</h3>
-  <p>Same as Path B but pay $7 and skip the rate limit. The claim code is delivered by email and lets you anchor 10 files in one sitting. The Stripe receipt is your invoice; the email gets the claim code.</p>
+  <p>Same as Path B but pay $7 and skip the rate limit. The claim code is delivered by email and lets you anchor 10 files in one sitting. The card-checkout receipt is your invoice; the email gets the claim code.</p>
   <p>Defensibility: identical to A/B (same OTS proofs).</p>
   <h3>Path D — $5/mo (you anchor 50+ files per month)</h3>
   <p>If you batch-anchor a wedding shoot or a fashion week catalog, the Personal tier is the only one with unlimited anchors and email delivery. It also gives you an account dashboard showing your history — useful if you ever need to produce a chronologically-ordered list of &quot;what I anchored when.&quot;</p>

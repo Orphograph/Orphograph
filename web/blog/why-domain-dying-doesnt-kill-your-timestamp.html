@@ -89,7 +89,7 @@
   <p>These services usually have nice UX and slick marketing. They sell trust, not durability.</p>
   <h3>Type B — open-standard receipts (these survive)</h3>
   <p>The service is a wrapper around an open standard. Their receipts are not their property — they&#x27;re standardized files anyone can verify against the underlying chain or protocol. If the wrapper dies, the receipts still work.</p>
-  <p>Orphograph is type B by design. So is raw OpenTimestamps. So, historically, was OriginStamp&#x27;s consumer tier (though they&#x27;ve since gone enterprise-only). WordProof is partial — their receipts include their chain&#x27;s data but verification requires their tools.</p>
+  <p>Orphograph is type B by design. So is raw OpenTimestamps. Other timestamping services vary in their architecture: some emit receipts that verify only against their proprietary tools, others emit receipts that verify against the underlying chain or open protocol independently. Readers evaluating an alternative should ask whether the receipt verifies without the issuer&#x27;s servers — that is the test.</p>
   <h2>How an Orphograph receipt survives us</h2>
   <p>When you anchor a file with Orphograph, you get back:</p>
   <p><strong>1.</strong> <strong>A receipt JSON file</strong> (~1KB) — contains the SHA-256 hash of your file, the timestamp, and pointers to the OpenTimestamps calendar servers that received it.</p>
