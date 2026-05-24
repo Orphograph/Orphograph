@@ -739,6 +739,13 @@ class Handler(BaseHTTPRequestHandler):
             _send_xml(self, 200, blog.atom_feed_xml(),
                       content_type="application/atom+xml; charset=utf-8")
             return
+        if path == "/blog/rss.xml":
+            # Serve the statically-generated RSS 2.0 feed (built by the
+            # press-kit / discoverability tooling). Bypasses the
+            # /blog/ slug-routing branch below which would otherwise
+            # 400 on the bare .xml path.
+            _serve_static(self, "/blog/rss.xml")
+            return
         if path.startswith("/blog/"):
             # Two independent blog content surfaces share /blog/:
             #   1. Static HTML files at web/blog/<slug>.html — long-form
