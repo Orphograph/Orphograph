@@ -6,23 +6,29 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/index.css?v=9">
 <style>
-  body { background: #0a0e27; color: #e8e9f3; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  /* Institutional cream/serif palette — founder metrics reads as part of the
+     same office as the public site. */
+  body { background: var(--paper, #f7f1e3); color: var(--ink, #14110d); font-family: var(--sans, -apple-system, BlinkMacSystemFont, "Inter", sans-serif); }
 
-  header { border-bottom: 1px solid #1a1f3a; padding: 1rem 2rem; }
+  header { border-bottom: 1px solid var(--line-soft, #e9e1cb); padding: 1rem 2rem; }
 
   main { padding: 2rem; max-width: 1200px; margin: 0 auto; }
 
+  h1, h2, h3 { font-family: var(--serif, "EB Garamond", Georgia, serif); color: var(--ink, #14110d); font-weight: 500; }
+
   .intro {
-    background: #161d3c;
-    border: 1px solid #2a3254;
+    background: var(--paper-soft, #fbf7ea);
+    border: 1px solid var(--line-soft, #e9e1cb);
     border-radius: 8px;
     padding: 1.5rem;
     margin-bottom: 2rem;
+    box-shadow: 0 1px 0 rgba(58,47,36,0.04);
   }
 
-  .intro h2 { margin: 0 0 0.5rem 0; font-size: 1rem; }
-  .intro p { margin: 0; font-size: 0.9rem; color: #b0b5c8; }
+  .intro h2 { margin: 0 0 0.5rem 0; font-size: 1.1rem; }
+  .intro p { margin: 0; font-size: 0.9rem; color: var(--muted, #6b6354); font-family: var(--sans, -apple-system, sans-serif); }
 
   .token-input {
     display: flex;
@@ -32,26 +38,28 @@
 
   .token-input input {
     flex: 1;
-    padding: 0.5rem;
-    background: #0a0e27;
-    border: 1px solid #2a3254;
+    padding: 0.55rem 0.65rem;
+    background: var(--paper-soft, #fbf7ea);
+    border: 1px solid var(--line, #d9cfb6);
     border-radius: 4px;
-    color: #e8e9f3;
-    font-family: monospace;
+    color: var(--ink, #14110d);
+    font-family: var(--mono, ui-monospace, Menlo, monospace);
     font-size: 0.9rem;
   }
 
   .token-input button {
-    padding: 0.5rem 1rem;
-    background: #10b981;
+    padding: 0.55rem 1.1rem;
+    background: var(--ink, #14110d);
     border: none;
     border-radius: 4px;
-    color: white;
+    color: var(--paper-soft, #fbf7ea);
     cursor: pointer;
     font-weight: 500;
+    font-family: var(--serif, Georgia, serif);
+    letter-spacing: 0.02em;
   }
 
-  .token-input button:hover { background: #059669; }
+  .token-input button:hover { background: var(--ink-2, #2c2620); }
 
   .metrics-grid {
     display: grid;
@@ -61,34 +69,38 @@
   }
 
   .metric-card {
-    background: #161d3c;
-    border: 1px solid #2a3254;
+    background: var(--paper-soft, #fbf7ea);
+    border: 1px solid var(--line-soft, #e9e1cb);
     border-radius: 8px;
     padding: 1.5rem;
     text-align: center;
+    box-shadow: 0 1px 0 rgba(58,47,36,0.04);
   }
 
   .metric-card h3 {
     margin: 0 0 0.5rem 0;
-    font-size: 0.85rem;
-    color: #8b92a9;
+    font-size: 0.78rem;
+    color: var(--muted, #6b6354);
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.1em;
+    font-family: var(--sans, -apple-system, sans-serif);
+    font-weight: 600;
   }
 
   .metric-value {
     font-size: 2rem;
-    font-weight: 600;
-    color: #10b981;
+    font-weight: 500;
+    color: var(--ink, #14110d);
+    font-family: var(--serif, "EB Garamond", Georgia, serif);
   }
 
-  .metric-card.warning .metric-value { color: #f59e0b; }
-  .metric-card.danger .metric-value { color: #ef4444; }
-  .metric-card.info .metric-value { color: #3b82f6; }
+  .metric-card.warning .metric-value { color: #a65a30; }
+  .metric-card.danger .metric-value { color: #b25845; }
+  .metric-card.info .metric-value { color: var(--ink, #14110d); }
 
   .metric-subtitle {
-    font-size: 0.8rem;
-    color: #8b92a9;
+    font-size: 0.82rem;
+    color: var(--muted, #6b6354);
     margin-top: 0.5rem;
   }
 
@@ -97,7 +109,7 @@
     justify-content: space-around;
     margin-top: 1rem;
     padding-top: 1rem;
-    border-top: 1px solid #2a3254;
+    border-top: 1px solid var(--line-soft, #e9e1cb);
     font-size: 0.9rem;
   }
 
@@ -107,16 +119,19 @@
 
   .customers-detail strong {
     display: block;
-    color: #10b981;
+    color: var(--ink, #14110d);
     font-size: 1.25rem;
+    font-family: var(--serif, "EB Garamond", Georgia, serif);
+    font-weight: 500;
   }
 
   .status-box {
-    background: #161d3c;
-    border: 1px solid #2a3254;
+    background: var(--paper-soft, #fbf7ea);
+    border: 1px solid var(--line-soft, #e9e1cb);
     border-radius: 8px;
     padding: 1.5rem;
     margin-bottom: 2rem;
+    box-shadow: 0 1px 0 rgba(58,47,36,0.04);
   }
 
   .status {
@@ -128,33 +143,33 @@
 
   .status-icon {
     display: inline-block;
-    width: 12px;
-    height: 12px;
+    width: 10px;
+    height: 10px;
     border-radius: 50%;
-    background: #10b981;
+    background: #3a6a4c;
   }
 
-  .status.error .status-icon { background: #ef4444; }
-  .status.warning .status-icon { background: #f59e0b; }
-  .status.info .status-icon { background: #3b82f6; }
+  .status.error .status-icon { background: #b25845; }
+  .status.warning .status-icon { background: #a65a30; }
+  .status.info .status-icon { background: var(--muted, #6b6354); }
 
   .status-text {
     font-size: 0.9rem;
-    color: #b0b5c8;
+    color: var(--muted, #6b6354);
   }
 
   .loading {
     text-align: center;
     padding: 2rem;
-    color: #8b92a9;
+    color: var(--muted, #6b6354);
   }
 
   .spinner {
     display: inline-block;
     width: 20px;
     height: 20px;
-    border: 2px solid #2a3254;
-    border-top-color: #10b981;
+    border: 2px solid var(--line-soft, #e9e1cb);
+    border-top-color: var(--ink, #14110d);
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
   }
@@ -164,26 +179,28 @@
   }
 
   .error-message {
-    background: #7f1d1d;
-    border: 1px solid #991b1b;
+    background: rgba(178,88,69,0.08);
+    border: 1px solid #b25845;
     border-radius: 4px;
     padding: 1rem;
-    color: #fecaca;
+    color: #6b2f1f;
     margin-bottom: 2rem;
   }
 
   .refresh-btn {
     padding: 0.5rem 1rem;
-    background: #3b82f6;
+    background: var(--ink, #14110d);
     border: none;
     border-radius: 4px;
-    color: white;
+    color: var(--paper-soft, #fbf7ea);
     cursor: pointer;
-    font-size: 0.9rem;
+    font-size: 0.85rem;
     float: right;
+    font-family: var(--serif, Georgia, serif);
+    letter-spacing: 0.02em;
   }
 
-  .refresh-btn:hover { background: #2563eb; }
+  .refresh-btn:hover { background: var(--ink-2, #2c2620); }
 </style>
 </head>
 <body>

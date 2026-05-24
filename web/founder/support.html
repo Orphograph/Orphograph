@@ -6,23 +6,29 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/index.css?v=9">
 <style>
-  body { background: #0a0e27; color: #e8e9f3; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  /* Institutional cream/serif palette — founder support tools read as part of
+     the same office as the public site. */
+  body { background: var(--paper, #f7f1e3); color: var(--ink, #14110d); font-family: var(--sans, -apple-system, BlinkMacSystemFont, "Inter", sans-serif); }
 
-  header { border-bottom: 1px solid #1a1f3a; padding: 1rem 2rem; }
+  header { border-bottom: 1px solid var(--line-soft, #e9e1cb); padding: 1rem 2rem; }
 
   main { padding: 2rem; max-width: 1200px; margin: 0 auto; }
 
+  h1, h2, h3 { font-family: var(--serif, "EB Garamond", Georgia, serif); color: var(--ink, #14110d); font-weight: 500; }
+
   .intro {
-    background: #161d3c;
-    border: 1px solid #2a3254;
+    background: var(--paper-soft, #fbf7ea);
+    border: 1px solid var(--line-soft, #e9e1cb);
     border-radius: 8px;
     padding: 1.5rem;
     margin-bottom: 2rem;
+    box-shadow: 0 1px 0 rgba(58,47,36,0.04);
   }
 
-  .intro h2 { margin: 0 0 0.5rem 0; font-size: 1rem; }
-  .intro p { margin: 0; font-size: 0.9rem; color: #b0b5c8; }
+  .intro h2 { margin: 0 0 0.5rem 0; font-size: 1.1rem; }
+  .intro p { margin: 0; font-size: 0.9rem; color: var(--muted, #6b6354); font-family: var(--sans, -apple-system, sans-serif); }
 
   .token-input {
     display: flex;
@@ -32,36 +38,39 @@
 
   .token-input input {
     flex: 1;
-    padding: 0.5rem;
-    background: #0a0e27;
-    border: 1px solid #2a3254;
+    padding: 0.55rem 0.65rem;
+    background: var(--paper-soft, #fbf7ea);
+    border: 1px solid var(--line, #d9cfb6);
     border-radius: 4px;
-    color: #e8e9f3;
-    font-family: monospace;
+    color: var(--ink, #14110d);
+    font-family: var(--mono, ui-monospace, Menlo, monospace);
     font-size: 0.9rem;
   }
 
   .token-input button {
-    padding: 0.5rem 1rem;
-    background: #10b981;
+    padding: 0.55rem 1.1rem;
+    background: var(--ink, #14110d);
     border: none;
     border-radius: 4px;
-    color: white;
+    color: var(--paper-soft, #fbf7ea);
     cursor: pointer;
     font-weight: 500;
+    font-family: var(--serif, Georgia, serif);
+    letter-spacing: 0.02em;
   }
 
-  .token-input button:hover { background: #059669; }
+  .token-input button:hover { background: var(--ink-2, #2c2620); }
 
   .search-box {
-    background: #161d3c;
-    border: 1px solid #2a3254;
+    background: var(--paper-soft, #fbf7ea);
+    border: 1px solid var(--line-soft, #e9e1cb);
     border-radius: 8px;
     padding: 1.5rem;
     margin-bottom: 2rem;
+    box-shadow: 0 1px 0 rgba(58,47,36,0.04);
   }
 
-  .search-box h3 { margin: 0 0 1rem 0; font-size: 1rem; }
+  .search-box h3 { margin: 0 0 1rem 0; font-size: 1.05rem; }
 
   .search-input {
     display: flex;
@@ -71,31 +80,35 @@
   .search-input input {
     flex: 1;
     padding: 0.75rem;
-    background: #0a0e27;
-    border: 1px solid #2a3254;
+    background: var(--paper-soft, #fbf7ea);
+    border: 1px solid var(--line, #d9cfb6);
     border-radius: 4px;
-    color: #e8e9f3;
+    color: var(--ink, #14110d);
     font-size: 0.95rem;
+    font-family: var(--sans, -apple-system, sans-serif);
   }
 
   .search-input button {
     padding: 0.75rem 1.5rem;
-    background: #3b82f6;
+    background: var(--ink, #14110d);
     border: none;
     border-radius: 4px;
-    color: white;
+    color: var(--paper-soft, #fbf7ea);
     cursor: pointer;
     font-weight: 500;
+    font-family: var(--serif, Georgia, serif);
+    letter-spacing: 0.02em;
   }
 
-  .search-input button:hover { background: #2563eb; }
+  .search-input button:hover { background: var(--ink-2, #2c2620); }
 
   .customer-profile {
-    background: #161d3c;
-    border: 1px solid #2a3254;
+    background: var(--paper-soft, #fbf7ea);
+    border: 1px solid var(--line-soft, #e9e1cb);
     border-radius: 8px;
     padding: 1.5rem;
     margin-bottom: 2rem;
+    box-shadow: 0 1px 0 rgba(58,47,36,0.04);
   }
 
   .customer-header {
@@ -103,13 +116,15 @@
     justify-content: space-between;
     align-items: center;
     margin-bottom: 1.5rem;
-    border-bottom: 1px solid #2a3254;
+    border-bottom: 1px solid var(--line-soft, #e9e1cb);
     padding-bottom: 1rem;
   }
 
   .customer-email {
-    font-size: 1.1rem;
+    font-size: 1.15rem;
     font-weight: 500;
+    font-family: var(--serif, "EB Garamond", Georgia, serif);
+    color: var(--ink, #14110d);
   }
 
   .customer-stats {
@@ -122,23 +137,27 @@
   .stat {
     text-align: center;
     padding: 1rem;
-    background: #0a0e27;
+    background: var(--paper, #f7f1e3);
     border-radius: 4px;
-    border: 1px solid #2a3254;
+    border: 1px solid var(--line-soft, #e9e1cb);
   }
 
   .stat-value {
     display: block;
     font-size: 1.5rem;
-    font-weight: 600;
-    color: #10b981;
+    font-weight: 500;
+    color: var(--ink, #14110d);
+    font-family: var(--serif, "EB Garamond", Georgia, serif);
   }
 
   .stat-label {
-    font-size: 0.75rem;
-    color: #8b92a9;
+    font-size: 0.72rem;
+    color: var(--muted, #6b6354);
     text-transform: uppercase;
+    letter-spacing: 0.1em;
     margin-top: 0.5rem;
+    font-family: var(--sans, -apple-system, sans-serif);
+    font-weight: 600;
   }
 
   .section {
@@ -146,12 +165,15 @@
   }
 
   .section h3 {
-    font-size: 0.9rem;
-    color: #b0b5c8;
+    font-size: 0.78rem;
+    color: var(--muted, #6b6354);
     text-transform: uppercase;
-    border-bottom: 1px solid #2a3254;
+    letter-spacing: 0.1em;
+    border-bottom: 1px solid var(--line-soft, #e9e1cb);
     padding-bottom: 0.5rem;
     margin: 0 0 1rem 0;
+    font-family: var(--sans, -apple-system, sans-serif);
+    font-weight: 600;
   }
 
   .items-list {
@@ -162,31 +184,37 @@
 
   .items-list li {
     padding: 0.75rem;
-    background: #0a0e27;
-    border: 1px solid #2a3254;
+    background: var(--paper, #f7f1e3);
+    border: 1px solid var(--line-soft, #e9e1cb);
     border-radius: 4px;
     margin-bottom: 0.5rem;
     font-size: 0.9rem;
+    color: var(--ink-2, #2c2620);
   }
 
   .items-list li strong {
-    color: #10b981;
+    color: var(--ink, #14110d);
+    font-weight: 600;
   }
 
   .refund-section {
-    background: #1a1f3a;
-    border: 1px solid #ef4444;
+    background: rgba(178,88,69,0.04);
+    border: 1px solid #b25845;
     border-radius: 8px;
     padding: 1.5rem;
     margin-top: 2rem;
   }
 
   .refund-section h3 {
-    color: #ef4444;
+    color: #b25845;
     margin: 0 0 1rem 0;
     border: none;
     text-transform: none;
-    font-size: 1rem;
+    font-size: 1.05rem;
+    font-family: var(--serif, "EB Garamond", Georgia, serif);
+    font-weight: 500;
+    letter-spacing: 0;
+    padding-bottom: 0;
   }
 
   .refund-form {
@@ -200,18 +228,20 @@
   }
 
   .form-group label {
-    font-size: 0.9rem;
-    color: #b0b5c8;
+    font-size: 0.85rem;
+    color: var(--muted, #6b6354);
     margin-bottom: 0.5rem;
+    font-family: var(--sans, -apple-system, sans-serif);
   }
 
   .form-group input, .form-group select, .form-group textarea {
     padding: 0.75rem;
-    background: #0a0e27;
-    border: 1px solid #2a3254;
+    background: var(--paper-soft, #fbf7ea);
+    border: 1px solid var(--line, #d9cfb6);
     border-radius: 4px;
-    color: #e8e9f3;
+    color: var(--ink, #14110d);
     font-size: 0.9rem;
+    font-family: var(--sans, -apple-system, sans-serif);
   }
 
   .form-group textarea {
@@ -227,41 +257,45 @@
 
   .btn-refund {
     padding: 0.75rem 1.5rem;
-    background: #ef4444;
+    background: #b25845;
     border: none;
     border-radius: 4px;
-    color: white;
+    color: var(--paper-soft, #fbf7ea);
     cursor: pointer;
     font-weight: 500;
     flex: 1;
+    font-family: var(--serif, Georgia, serif);
+    letter-spacing: 0.02em;
   }
 
-  .btn-refund:hover { background: #dc2626; }
+  .btn-refund:hover { background: #8a4234; }
 
   .btn-cancel {
     padding: 0.75rem 1.5rem;
-    background: #2a3254;
-    border: none;
+    background: var(--paper, #f7f1e3);
+    border: 1px solid var(--line, #d9cfb6);
     border-radius: 4px;
-    color: #b0b5c8;
+    color: var(--ink-2, #2c2620);
     cursor: pointer;
     font-weight: 500;
+    font-family: var(--serif, Georgia, serif);
+    letter-spacing: 0.02em;
   }
 
-  .btn-cancel:hover { background: #3a4264; }
+  .btn-cancel:hover { background: var(--paper-soft, #fbf7ea); border-color: var(--ink-2, #2c2620); }
 
   .loading {
     text-align: center;
     padding: 2rem;
-    color: #8b92a9;
+    color: var(--muted, #6b6354);
   }
 
   .spinner {
     display: inline-block;
     width: 20px;
     height: 20px;
-    border: 2px solid #2a3254;
-    border-top-color: #10b981;
+    border: 2px solid var(--line-soft, #e9e1cb);
+    border-top-color: var(--ink, #14110d);
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
   }
@@ -271,20 +305,20 @@
   }
 
   .error-message {
-    background: #7f1d1d;
-    border: 1px solid #991b1b;
+    background: rgba(178,88,69,0.08);
+    border: 1px solid #b25845;
     border-radius: 4px;
     padding: 1rem;
-    color: #fecaca;
+    color: #6b2f1f;
     margin-bottom: 2rem;
   }
 
   .success-message {
-    background: #065f46;
-    border: 1px solid #047857;
+    background: rgba(58,106,76,0.08);
+    border: 1px solid #3a6a4c;
     border-radius: 4px;
     padding: 1rem;
-    color: #a7f3d0;
+    color: #234534;
     margin-bottom: 2rem;
   }
 </style>
@@ -311,7 +345,7 @@
 <div id="success-box"></div>
 
 <div id="auth-required" style="display: block;">
-  <div class="search-box" style="text-align: center; color: #8b92a9;">
+  <div class="search-box" style="text-align: center; color: #6b6354;">
     Please authorize with your founder token above to access support tools.
   </div>
 </div>
@@ -335,7 +369,7 @@
     <div class="customer-profile">
       <div class="customer-header">
         <div>
-          <div style="color: #8b92a9; font-size: 0.85rem;">Customer</div>
+          <div style="color: #6b6354; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.1em;">Customer</div>
           <div class="customer-email" id="customer-email">—</div>
         </div>
         <button class="btn-cancel" onclick="clearCustomer()">Clear</button>
@@ -370,12 +404,12 @@
 
       <div id="subscription-section" class="section" style="display: none;">
         <h3>Subscription</h3>
-        <div id="subscription-info" style="padding: 1rem; background: #0a0e27; border-radius: 4px; border: 1px solid #2a3254;"></div>
+        <div id="subscription-info" style="padding: 1rem; background: #f7f1e3; border-radius: 4px; border: 1px solid #e9e1cb; color: #2c2620;"></div>
       </div>
 
       <div class="refund-section">
         <h3>Process Refund</h3>
-        <p style="margin-top: 0; color: #b0b5c8; font-size: 0.9rem;">
+        <p style="margin-top: 0; color: #6b6354; font-size: 0.9rem;">
           Refund a specific charge and issue manual credits if needed.
         </p>
         <div class="refund-form">
@@ -470,7 +504,7 @@ function displayCustomer(customer) {
   if (customer.anchors.length === 0) {
     const li = document.createElement('li');
     li.textContent = 'No anchors yet';
-    li.style.color = '#8b92a9';
+    li.style.color = '#6b6354';
     anchorsList.appendChild(li);
   } else {
     customer.anchors.slice(0, 5).forEach(anchor => {
@@ -487,7 +521,7 @@ function displayCustomer(customer) {
   if (customer.purchases.length === 0) {
     const li = document.createElement('li');
     li.textContent = 'No purchases';
-    li.style.color = '#8b92a9';
+    li.style.color = '#6b6354';
     purchasesList.appendChild(li);
   } else {
     customer.purchases.forEach(purchase => {

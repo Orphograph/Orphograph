@@ -69,6 +69,7 @@ EXPECTED_URLS = [
     "https://orphograph.com/blog/reading-ots-file-by-hand.html",
     "https://orphograph.com/blog/rss.xml",
     "https://orphograph.com/blog/atom.xml",
+    "https://orphograph.com/press-kit/orphograph-press-kit.zip",
 ]
 
 SITEMAP_NS = "{http://www.sitemaps.org/schemas/sitemap/0.9}"

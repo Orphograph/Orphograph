@@ -77,11 +77,18 @@ check "7. no third-party trackers in web/" bash -c '
 
 check "8. analytics script tag in every web/*.html" python3 -c '
 import sys, pathlib
+# Excluded: press-kit/ assets are offline-downloadable (open in journalist'"'"'s
+# browser without internet) — phoning home from those would be wrong.
+# Excluded: _mockups/ are founder-private staging.
+EXCLUDE_PREFIXES = ("web/press-kit/", "web/_mockups/", "web/index-legacy.html")
 missing = []
 for p in pathlib.Path("web").rglob("*.html"):
+    sp = str(p)
+    if any(sp.startswith(pfx) for pfx in EXCLUDE_PREFIXES):
+        continue
     s = p.read_text()
     if "</body>" in s and "event.js" not in s:
-        missing.append(str(p))
+        missing.append(sp)
 if missing:
     print("pages missing event.js include:", *missing[:8], sep="\n  ")
     sys.exit(1)

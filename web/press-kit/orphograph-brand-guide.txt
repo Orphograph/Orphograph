@@ -1,0 +1,122 @@
+ORPHOGRAPH — BRAND GUIDE
+Established 2026. An empirical notary.
+
+------------------------------------------------------------
+1. THE OFFICE IN ONE LINE
+------------------------------------------------------------
+Orphograph is a Bitcoin-anchored notary that issues receipts
+proving a file existed at a specific moment, without the file
+itself ever leaving the customer's device.
+
+------------------------------------------------------------
+2. NAME
+------------------------------------------------------------
+Orphograph. One word. No hyphen. No camel case. Lowercase in
+prose unless leading a sentence. The possessive is
+"Orphograph's"; the plural is not used.
+
+The shorter institutional form used in the office's own voice
+is "the office".
+
+------------------------------------------------------------
+3. ESTABLISHMENT
+------------------------------------------------------------
+Established 2026. The protocol source code, the verifier kit,
+and the first publicly addressable receipt are matters of
+public record.
+
+------------------------------------------------------------
+4. COLOUR PALETTE
+------------------------------------------------------------
+The palette is institutional and intentionally narrow.
+
+  Cream          #f7f1e3   surface, paper
+  Ink            #14110d   primary type
+  Confirm green  #3a6a4c   attestation, the receipt mark
+
+No additional accent colours are sanctioned. Greys and warm
+off-whites derived from the cream surface are acceptable for
+secondary type.
+
+------------------------------------------------------------
+5. TYPOGRAPHY
+------------------------------------------------------------
+A classical, book-weight serif is used throughout — EB
+Garamond is the reference. Any equivalent serif at regular or
+medium weight is an acceptable substitute. No third-party
+brand-font reference is used. Body copy is set at a
+comfortable reading measure with generous leading.
+
+Display weights and italic small caps are reserved for the
+opening line of a section.
+
+------------------------------------------------------------
+6. THE SEAL
+------------------------------------------------------------
+The institutional seal is the primary mark. It is supplied at
+1254 by 1254 pixels with a transparent background and should
+be reproduced without modification. The seal may be placed on
+a cream or near-white surface; it should not be placed on a
+dark surface, recoloured, or composited with other glyphs.
+
+A display variant at 600 by 600 pixels is supplied for
+in-line editorial use.
+
+------------------------------------------------------------
+7. THE LOCKUP
+------------------------------------------------------------
+The wordmark lockup combines the seal with the word
+"Orphograph" set in the institutional serif. It is supplied
+at 1736 by 906 pixels with a transparent background. Do not
+re-typeset the wordmark; use the supplied artwork.
+
+------------------------------------------------------------
+8. ACCEPTABLE USE
+------------------------------------------------------------
+  - Editorial illustration of articles that discuss
+    Orphograph or its receipts.
+  - Reference in reviews, comparisons, and academic work.
+  - Reproduction at any size, provided clear space equal to
+    one quarter of the mark's height is preserved on all
+    sides.
+
+------------------------------------------------------------
+9. UNACCEPTABLE USE
+------------------------------------------------------------
+  - Recolouring the seal or the wordmark.
+  - Re-typesetting the wordmark in a different face.
+  - Placing the mark on a busy background that reduces
+    legibility.
+  - Implying an endorsement, partnership, or certification
+    that has not been issued in writing by the office.
+  - Use as a product mark on third-party goods or services.
+
+------------------------------------------------------------
+10. VOICE
+------------------------------------------------------------
+The office writes in an institutional register: plain,
+declarative, technical where precision requires it. The first
+person plural is avoided. Exclamation is avoided. The
+instrument is described in narrow terms — a cryptographic
+attestation of file existence by a moment in time — and is
+not claimed to be a legal opinion, a content-authenticity
+verdict, or a judgment about how a file was made.
+
+------------------------------------------------------------
+11. LICENCE
+------------------------------------------------------------
+Protocol source code is published under the MIT licence and
+is available on the public source tree. The brand — name,
+seal, wordmark, lockup, voice, written copy, and the visual
+system described in this guide — is reserved. The brand is
+not part of the MIT-licensed code release.
+
+------------------------------------------------------------
+12. CONTACT
+------------------------------------------------------------
+Press correspondence: hello@orphograph.com
+Security disclosure:  security@orphograph.com
+Press kit web page:   https://orphograph.com/press-kit.html
+
+The office responds to press inquiries within a small number
+of business days.
