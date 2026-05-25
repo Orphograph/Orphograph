@@ -231,6 +231,20 @@
 
   /* ── Fees / tiers ───────────────────────────────────────────────── */
   .tiers{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;}
+  /* 4-tier variant — Free / Writer Pack / Pack of Fifty / Standing Order.
+     Tightens padding so 4 cards fit on a 12-col container without crowding. */
+  .tiers.tiers-4{grid-template-columns:repeat(4,1fr);gap:16px;}
+  .tiers.tiers-4 .tier{padding:26px 22px;}
+  .tiers.tiers-4 .tier .t-price{font-size:40px;}
+  @media (max-width:1100px){.tiers.tiers-4{grid-template-columns:repeat(2,1fr);}}
+  @media (max-width:560px){.tiers.tiers-4{grid-template-columns:1fr;}}
+  /* Secondary "or pay with crypto" inline link inside cta-fineprint. */
+  .tier .cta-alt-link{
+    color:var(--ink-2);border-bottom:1px dotted var(--accent-warm);
+    transition:color .15s ease, border-color .15s ease;
+  }
+  .tier .cta-alt-link:hover{color:var(--ink);border-bottom-color:var(--ink);}
+  .tier .crypto-tokens{display:block;margin-top:4px;color:var(--muted-2);font-size:10.5px;}
   .tier{
     background:var(--paper-soft);border-radius:var(--radius-sm);padding:32px 28px;
     box-shadow:var(--shadow-1);position:relative;
