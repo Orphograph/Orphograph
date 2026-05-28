@@ -128,3 +128,6 @@ verifier-js/node_modules/
 # This directory contains personal PII and outreach drafts that should not be public.
 outbox/
 data/.seal_sha256
+
+# brand-air-gap pre-commit token list (local-only)
+.brand-deny-tokens
