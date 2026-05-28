@@ -31,8 +31,8 @@ Then restart Claude Code. The skills appear under `/orphograph:`.
 | Tier | Price | Anchors |
 |---|---|---|
 | Free | $0 | 1 / month |
-| Pack | $7 one-shot | 10 (no expiry) |
-| Personal | $5/mo | Unlimited |
+| Writer Pack | $19 one-shot | 10 (no expiry) |
+| Standing Order | $9/mo | Unlimited |
 | Creator | $19/mo | Unlimited + capture-time app + API + verifier badge |
 
 Set `$ORPHOGRAPH_API_KEY` in your shell to use a paid tier, or pass `--api-key`.

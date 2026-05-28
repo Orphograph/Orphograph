@@ -4,8 +4,8 @@ Anchor any file to the Bitcoin blockchain in about ten seconds.
 For photographers, journalists, indie creators, and developers who need to
 prove a file existed before a given moment — especially before an AI model
 saw it. Files never leave the browser; only the 32-byte SHA-256 fingerprint
-is submitted. Free tier (1 anchor/month), $7 Pack (10 anchors), $5/mo
-Personal (unlimited), $19/mo Creator (capture-time app + API + verifier badge).
+is submitted. Free tier (1 anchor/month), $19 Writer Pack (10 anchors), $9/mo
+Standing Order (unlimited), $19/mo Creator (capture-time app + API + verifier badge).
 
 ---
 
@@ -205,11 +205,11 @@ email, CSP `default-src 'self'`. Step-by-step in
 | Tier | Price | What's included |
 |---|---|---|
 | Free | $0 | 1 anchor per month per IP-prefix |
-| Pack | $7 one-time | 10 anchors, claim code by email, never expires, skips rate limit |
-| Personal | $5/mo or $60/yr | Unlimited anchors, email delivery, account dashboard, anchor history |
+| Writer Pack | $19 one-time | 10 anchors, claim code by email, never expires, skips rate limit |
+| Standing Order | $9/mo or $60/yr | Unlimited anchors, email delivery, account dashboard, anchor history |
 | Creator | $19/mo | Personal + Orphograph Capture (capture-time desktop app) + API access + verifier badge |
 
-The `$7 / $5` price points sit deliberately below WordProof and OriginStamp.
+The `$19 / $9` price points are set deliberately low.
 The wedge is browser-based UX plus the open-source verifier — not the
 cryptography, which is the public OpenTimestamps protocol.
 

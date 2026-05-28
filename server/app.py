@@ -1574,9 +1574,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         email = email.strip()
 
-        # USD amount: $7 default Pack. (Tier param is reserved for
-        # future Personal subscriptions via BTC — not built yet.)
-        usd_amount = 7.0
+        # USD amount: $19 default Writer Pack. (Tier param is reserved for
+        # future Standing Order subscriptions via BTC — not built yet.)
+        usd_amount = 19.0
 
         # Use a random 4-digit suffix so the exact sat amount is unique
         # to this order. The settle worker matches by exact amount.

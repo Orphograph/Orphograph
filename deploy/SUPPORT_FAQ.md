@@ -169,8 +169,8 @@ Example:
 
 A: 
 - **Free:** 1 anchor per calendar month (rate-limited)
-- **Pack:** $7 one-time for 10 anchor credits (never expire)
-- **Personal:** $5/month for unlimited anchors (planned, not yet live)
+- **Writer Pack:** $19 one-time for 10 anchor credits (never expire)
+- **Standing Order:** $9/month for unlimited anchors (planned, not yet live)
 - **Creator:** $19/month for capture-time provenance app + API (planned, not yet live)
 
 **Q: What's a Pack credit?**
@@ -332,7 +332,7 @@ If they match, the receipt is correct.
 A: Maybe. Email us at hello@orphograph.com with your feature request. We read all feedback.
 
 **Current roadmap (Month 2-3):**
-- Personal tier ($5/mo for unlimited anchors)
+- Standing Order tier ($9/mo for unlimited anchors)
 - Creator Capture app (capture-time provenance)
 - Private receipts (only you can view)
 - Receipt vault (save all receipts)

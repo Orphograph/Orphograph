@@ -118,8 +118,8 @@ def check_cumulative_revenue() -> None:
     rows = _read_jsonl(CREDIT_LEDGER)
     pack_count = sum(1 for r in rows if int(r.get("credits_delta", 0)) >= 10 and
                      str(r.get("source", "")).startswith(("stripe:", "btc:")))
-    # rough revenue: $7 per Pack
-    revenue_usd = pack_count * 7
+    # rough revenue: $19 per Pack
+    revenue_usd = pack_count * 19
     if pack_count >= 5:
         _fire("five_packs",
               f"📈 5+ pack sales recorded. Cumulative ~${revenue_usd}. "

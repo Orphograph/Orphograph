@@ -193,16 +193,16 @@ A handful of services wrap OpenTimestamps with a browser-based UI:
 
 - **[Orphograph](https://orphograph.com)** — drop a file in your
   browser, get a receipt back. The file never uploads (hashing
-  happens in WebCrypto). $7 for 10 anchors, $5/mo for unlimited.
+  happens in WebCrypto). $19 for 10 anchors, $9/mo for unlimited.
   Open-source verifier on GitHub means your receipts work even if
   the service disappears. (Disclosure: I built this.)
-- **WordProof** — WordPress plugin focused on bloggers. Paid.
-- **OriginStamp** — enterprise-only since their 2025 pivot. Not
-  suitable for individual creators.
+- Other browser-based wrappers exist too — ranging from WordPress
+  plugins to enterprise-oriented platforms. Which one fits depends on
+  whether you want a simple individual tool or a team/enterprise setup.
 
 If you're a photographer worried about AI training scraping your
 work and you want a way to prove "I took this on October 4" without
-installing anything, the Orphograph free tier or $7 pack is the
+installing anything, the Orphograph free tier or $19 Writer Pack is the
 shortest path. If you want zero dependency on any single company,
 use OpenTimestamps directly via the CLI.
 
@@ -261,7 +261,7 @@ Anchor your work.
 
 ---
 
-*Orphograph is a $7-and-up Bitcoin timestamping service for
+*Orphograph is a $19-and-up Bitcoin timestamping service for
 photographers + creators. Open source verifier, no file uploads,
 your receipt verifies forever. [Try the sample receipt without
 signing up.](https://orphograph.com/#sample)*

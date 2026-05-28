@@ -329,7 +329,7 @@ If you make things that might one day be disputed, anchor them.
 
 ---
 
-*Orphograph is a $7-and-up Bitcoin timestamping service for
+*Orphograph is a $19-and-up Bitcoin timestamping service for
 photographers + creators. Open source verifier, no file uploads,
 your receipt verifies forever. [Try the sample receipt without
 signing up.](https://orphograph.com/#sample)*

@@ -326,7 +326,7 @@
       <td>One credit consumed per receipt. Pack credits never expire.</td>
     </tr>
     <tr>
-      <td>Personal ($5/mo) / Creator ($19/mo)</td>
+      <td>Standing Order ($9/mo) / Creator ($19/mo)</td>
       <td>No IP limit, priority queue</td>
       <td>Up to 50 hashes per <code>/api/anchor/batch</code> call</td>
       <td>Soft fair-use ceiling: 1,000 anchors / API key / day.</td>
@@ -1074,7 +1074,7 @@ python3 verify_cli.py receipt.json</code></pre>
   </p>
   <pre><code>{
   "stripe": { "pack_url": "...", "personal_monthly_url": "...", "personal_annual_url": "...", "creator_monthly_url": "..." },
-  "pricing": { "pack_usd": 7, "pack_credits": 10, "personal_monthly_usd": 5, "personal_annual_usd": 60, "creator_monthly_usd": 19 },
+  "pricing": { "pack_usd": 19, "pack_credits": 10, "personal_monthly_usd": 9, "personal_annual_usd": 60, "creator_monthly_usd": 19 },
   "toggles": { "checkout_disabled": false, "anchoring_disabled": false, "maintenance_mode": false },
   "features": { "btc_payments": false, "creator_tier_live": false, "private_receipts": true, "receipt_vault": true }
 }</code></pre>

@@ -106,7 +106,7 @@ def main() -> int:
         return 3
     if code == 429:
         print("rate limit reached on the free tier.", file=sys.stderr)
-        print(f"  buy a Pack (10 anchors / $7): {args.endpoint}/buy.html",
+        print(f"  buy a Writer Pack (10 anchors / $19): {args.endpoint}/buy.html",
               file=sys.stderr)
         return 3
     if code >= 400:

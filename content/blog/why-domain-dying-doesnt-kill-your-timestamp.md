@@ -51,11 +51,11 @@ are not their property — they're standardized files anyone can
 verify against the underlying chain or protocol. If the wrapper
 dies, the receipts still work.
 
-Orphograph is type B by design. So is raw OpenTimestamps. So,
-historically, was OriginStamp's consumer tier (though they've
-since gone enterprise-only). WordProof is partial — their
-receipts include their chain's data but verification requires
-their tools.
+Orphograph is type B by design. So is raw OpenTimestamps. Some
+other wrappers are type B as well; others are type A — their
+receipts embed proprietary data and verification requires that
+vendor's own tools, so if the vendor goes away, your ability to
+verify can go with it.
 
 ## How an Orphograph receipt survives us
 
@@ -200,5 +200,5 @@ That's the whole pitch.
 ---
 
 *Anchor your first file at [orphograph.com](/). 1 free per month
-forever. $7 for a 10-pack. Open-source verifier at
+forever. $19 for a 10-pack. Open-source verifier at
 [/verify/](/verify/) so your receipts outlive us, by design.*
