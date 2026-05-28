@@ -203,6 +203,33 @@
   .cta-final:hover{ background:#000; transform:translateY(-2px); box-shadow:0 16px 40px rgba(60,40,20,.22); }
   .fineprint{ margin-top:22px; font-size:13px; color:var(--muted); letter-spacing:.02em; }
 
+  /* ── Mobile / portrait ─────────────────────────────────────── */
+  @media (max-width:600px){
+    /* Fixed brand + back-link were colliding at the top — shrink and
+       tighten both so they sit on one row without overlapping. */
+    .brandmark{ top:16px; left:18px; font-size:11.5px; letter-spacing:.16em; }
+    .toindex{ top:16px; right:18px; font-size:10px; letter-spacing:.08em; }
+    /* Hero copy needs side gutters so the headline/lede don't touch edges. */
+    .hero-copy{ padding-left:22px; padding-right:22px; padding-bottom:11vh; }
+    .hero-copy h1{ font-size:clamp(34px,11vw,52px); }
+    .hero-copy .lede{ font-size:16px; line-height:1.5; }
+    /* On a short portrait viewport the cue collided with the lede — the
+       copy already sits low, so the scroll affordance is redundant. */
+    .scrollcue{ display:none; }
+    /* Pinned manifesto: seal column is hidden <880px already; give the
+       steps real gutters and tighter rhythm. */
+    .pin-right{ padding:12vh 22px; gap:18vh; }
+    /* Section padding so nothing runs edge-to-edge. */
+    .pane{ padding:0 22px; }
+    .gallery-head{ padding:0 22px 6vh; }
+    .rail{ padding:0 22px 24px; }
+    .card{ flex-basis:82vw; padding:28px; min-height:380px; }
+    /* Image-expansion frame starts smaller on a narrow screen. */
+    .expand-frame{ width:76vw; height:38vh; }
+    #commit h2, #close h2{ font-size:clamp(30px,9vw,46px); }
+    #lottie-anchor{ width:min(190px,52vw); height:min(190px,52vw); }
+  }
+
   @media (prefers-reduced-motion:reduce){
     .reveal,.reveal-line>span{ opacity:1 !important; transform:none !important; }
     .scrollcue::after{ animation:none; }

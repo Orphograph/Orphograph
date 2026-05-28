@@ -105,7 +105,11 @@
 
     function resize() {
       var dd = dims(); w = dd[0]; h = dd[1];
-      camera.aspect = w / h; camera.updateProjectionMatrix();
+      var aspect = w / h;
+      camera.aspect = aspect; camera.updateProjectionMatrix();
+      // Portrait/mobile: pull the camera back so the medallion fits the
+      // narrow width instead of bleeding off both edges. Desktop unchanged.
+      camera.position.z = aspect < 1 ? (6 / aspect) * 1.2 : 6;
       renderer.setSize(w, h);
     }
     // Re-assert size after layout settles and whenever the stage resizes.
@@ -133,12 +137,24 @@
       color: 0xe7d9bc, roughness: 0.8, metalness: 0.1,
     });
     var R = 1.9, TH = 0.34;
-    var disc = new THREE.Mesh(
-      new THREE.CylinderGeometry(R, R, TH, 96, 1, false),
-      [edgeMat, faceMat, faceMat]
+    // Medallion body: a short cylinder gives the coin its edge + depth.
+    var body = new THREE.Mesh(
+      new THREE.CylinderGeometry(R, R, TH, 96), edgeMat
     );
-    disc.rotation.x = Math.PI / 2; // face the camera
-    group.add(disc);
+    body.rotation.x = Math.PI / 2; // lay the cylinder axis toward the camera
+    group.add(body);
+    // Seal face: a flat circle in the XY plane faces the camera head-on, so
+    // CircleGeometry's UVs render the seal UPRIGHT with no texture rotation.
+    // (The prior cylinder-cap mapping landed the image on its side.)
+    var faceGeo = new THREE.CircleGeometry(R * 0.992, 96);
+    var faceFront = new THREE.Mesh(faceGeo, faceMat);
+    faceFront.position.z = TH / 2 + 0.002;
+    group.add(faceFront);
+    // Mirror the seal on the back so a drag-spin never reveals a hollow cap.
+    var faceBack = new THREE.Mesh(faceGeo, faceMat);
+    faceBack.position.z = -(TH / 2 + 0.002);
+    faceBack.rotation.y = Math.PI;
+    group.add(faceBack);
 
     // Lights: warm key (the "wax glow"), cool-ish fill, ambient floor.
     var ambient = new THREE.AmbientLight(0xfff3e0, 0.55);
@@ -151,7 +167,7 @@
     scene.add(rim);
 
     // Drag to rotate + gentle auto-rotate.
-    var auto = 0.0035, velX = 0, velY = 0, tgtX = 0, dragging = false, px = 0, py = 0;
+    var velX = 0, velY = 0, dragging = false, px = 0, py = 0, t0 = performance.now();
     function down(x, y) { dragging = true; px = x; py = y; }
     function move(x, y) {
       if (!dragging) return;
@@ -180,8 +196,17 @@
     (function render() {
       requestAnimationFrame(render);
       if (!dragging) {
-        group.rotation.y += auto + velY * 0.0;
         velY *= 0.92; velX *= 0.92;
+        if (Math.abs(velY) > 0.0009) {
+          // Carry fling momentum from a drag — full 360 is allowed.
+          group.rotation.y += velY;
+        } else {
+          // Idle: slow bounded sway (~18°) so the seal always reads upright
+          // and never turns edge-on ("sideways").
+          var tNow = (performance.now() - t0) / 1000;
+          var target = Math.sin(tNow * 0.45) * 0.32;
+          group.rotation.y += (target - group.rotation.y) * 0.02;
+        }
         group.rotation.x += (myn * 0.18 - group.rotation.x) * 0.04;
       }
       // Scroll drives the key light: it sweeps + brightens as you descend
