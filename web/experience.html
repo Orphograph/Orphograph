@@ -9,11 +9,11 @@
 <meta name="robots" content="noindex"><!-- preview route; not for search -->
 <link rel="icon" type="image/png" href="/favicon.png?v=8">
 <!--
-  EXPERIENCE / preview route. Separate from index.html.
-  Libraries are loaded from CDN for this preview. Before promoting to a
-  primary route, vendor them locally (see scripts/vendor_experience_libs.sh)
-  so the page makes zero third-party calls — consistent with the
-  file-never-leaves-the-device doctrine of the anchoring tool itself.
+  EXPERIENCE route. Separate from index.html (unlinked, noindex).
+  Libraries are vendored locally under web/vendor/ — the page makes zero
+  third-party calls, consistent with the file-never-leaves-the-device
+  doctrine of the anchoring tool. Refresh libs via
+  scripts/vendor_experience_libs.sh.
 -->
 <style>
   :root{
@@ -337,12 +337,15 @@
     <p class="fineprint reveal">Free for three a day · No account · The file stays on your device</p>
   </section>
 
-  <!-- Libraries (CDN for preview; vendor before promoting — see header note) -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@studio-freight/lenis@1.0.42/dist/lenis.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js"></script>
-  <script src="/experience.js?v=1"></script>
+  <!-- Libraries vendored locally (web/vendor/) — zero third-party calls,
+       consistent with the file-never-leaves-the-device doctrine.
+       Versions: three r128 · gsap+ScrollTrigger 3.12.5 · lenis 1.0.42 ·
+       lottie-web 5.12.2. Refresh via scripts/vendor_experience_libs.sh. -->
+  <script src="/vendor/three.min.js"></script>
+  <script src="/vendor/gsap.min.js"></script>
+  <script src="/vendor/ScrollTrigger.min.js"></script>
+  <script src="/vendor/lenis.min.js"></script>
+  <script src="/vendor/lottie.min.js"></script>
+  <script src="/experience.js?v=2"></script>
 </body>
 </html>
