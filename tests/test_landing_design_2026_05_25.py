@@ -188,5 +188,46 @@ class TestExamplesRepetitionTrimmed(unittest.TestCase):
         )
 
 
+class TestCheckoutWiringMatchesSKU(unittest.TestCase):
+    """Money-critical: the card `data-checkout="pack"` plan charges the single
+    STRIPE_PRICE_PACK and grants PACK_CREDIT_COUNT (=10) credits. So it may
+    ONLY back a 10-credit tier (Writer Pack). Wiring it to the 50-credit
+    "Pack of Fifty" under-delivers (buyer pays for 50, receives 10) — the bug
+    this guard prevents from ever shipping again. Pack of Fifty needs its own
+    $29 / 50-credit Stripe price (STRIPE_PRICE_PACK50) before it gets a card
+    button; until then it is crypto-only.
+    """
+
+    def _tier_chunk(self, name: str) -> str:
+        # Strip HTML comments (not rendered/active) then split on the tier
+        # delimiter so each chunk is exactly one tier card's markup.
+        html = re.sub(r"<!--.*?-->", "", _html(), flags=re.DOTALL)
+        chunks = re.split(r'<div class="tier', html)
+        marker = f'<div class="t-name">{name}</div>'
+        for c in chunks:
+            if marker in c:
+                return c
+        self.fail(f"tier card {name!r} not found")
+
+    def test_fifty_credit_tier_is_not_wired_to_the_ten_credit_pack(self):
+        fifty = self._tier_chunk("Pack of Fifty")
+        self.assertIn("50 anchor credits", fifty, "sanity: this is the 50-credit tier")
+        self.assertNotIn(
+            'data-checkout="pack"',
+            fifty,
+            'Pack of Fifty must NOT use the card pack plan: that SKU grants '
+            "10 credits (PACK_CREDIT_COUNT) and would under-deliver the 50-pack. "
+            "Give it its own STRIPE_PRICE_PACK50 plan before adding a card button.",
+        )
+
+    def test_writer_pack_is_the_card_pack(self):
+        """The 10-credit Writer Pack is the tier that legitimately maps to the
+        single card `pack` SKU (10 credits, $19)."""
+        writer = self._tier_chunk("Writer Pack")
+        self.assertIn("10 anchor credits", writer)
+        self.assertIn('data-checkout="pack"', writer,
+                      "Writer Pack should carry the card pack CTA (10 credits / $19).")
+
+
 if __name__ == "__main__":
     unittest.main()

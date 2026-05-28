@@ -681,8 +681,11 @@
           <li>Credits never expire</li>
           <li>Gift to a friend</li>
         </ul>
-        <a href="/pay/crypto.html?pack=writer" class="cta" data-checkout="writer-pack">Buy</a>
-        <p class="cta-fineprint">Pay with crypto today <span aria-hidden="true">·</span> <a href="mailto:hello@orphograph.com?subject=Writer%20Pack%20by%20card" class="cta-alt-link">card by request</a></p>
+        <a href="#" class="cta" data-checkout="pack">Buy</a>
+        <p class="cta-fineprint">
+          <a href="/pay/crypto.html?plan=writer_pack" class="cta-alt-link" id="crypto-pay-link">or pay with crypto →</a>
+        </p>
+        <div class="checkout-error" hidden></div>
       </div>
       <div class="tier featured">
         <span class="ribbon">Most Popular</span>
@@ -695,12 +698,16 @@
           <li>Credits never expire</li>
           <li>Gift to a friend</li>
         </ul>
-        <a href="#" class="cta" data-checkout="pack">Buy</a>
+        <!-- Card checkout for the 50-pack needs its own Stripe price
+             (STRIPE_PRICE_PACK50, $29 / 50-credit metadata). Until that
+             exists, this tier is crypto-only: the single card pack SKU
+             grants 10 credits and would under-deliver the 50-pack. Do not
+             wire this tier to the card pack plan. -->
+        <a href="/pay/crypto.html?plan=pack_50" class="cta">Pay with crypto</a>
         <p class="cta-fineprint">
-          <a href="/pay/crypto.html" class="cta-alt-link" id="crypto-pay-link">or pay with crypto →</a>
+          <a href="mailto:hello@orphograph.com?subject=Pack%20of%20Fifty%20by%20card" class="cta-alt-link">card by request</a>
           <span class="crypto-tokens" id="crypto-pay-fineprint" hidden>9 cryptos accepted (BTC, USDC, ETH, SOL, USDT, LTC, XRP, DOGE, MATIC) · non-custodial via NOWPayments</span>
         </p>
-        <div class="checkout-error" hidden></div>
       </div>
       <div class="tier">
         <div class="t-name">Standing Order</div>
