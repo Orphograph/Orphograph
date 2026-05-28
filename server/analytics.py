@@ -163,8 +163,8 @@ def metrics(days_back: int = 90) -> dict:
             if cancel_date and cancel_date > cutoff:
                 churned_count += 1
 
-    # MRR: assume $5/mo per active subscription (placeholder; use actual plan amounts in production)
-    monthly_revenue = active_count * 5.0
+    # MRR: assume $9/mo per active subscription (placeholder; use actual plan amounts in production)
+    monthly_revenue = active_count * 9.0
     arr = monthly_revenue * 12
     churn_rate = churned_count / max(active_count + churned_count, 1)
     ltv = (monthly_revenue / max(churn_rate, 0.01)) if churn_rate > 0 else (monthly_revenue * 12)

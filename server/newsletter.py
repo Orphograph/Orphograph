@@ -264,11 +264,11 @@ def send_confirmation_email(email: str, interest: str, token: str) -> bool:
     """
     confirm_url = f"{SITE_URL}/api/waitlist/confirm?token={urllib.parse.quote(token)}"
     interest_label = {
-        "personal": "Personal ($5/mo)",
+        "personal": "Standing Order ($9/mo)",
         "creator": "Creator ($19/mo)",
         "capture": "Orphograph Capture (capture-time provenance)",
         "b2b": "B2B / Team tier",
-        "pack": "Pack tier ($7 one-shot)",
+        "pack": "Writer Pack tier ($19 one-shot)",
         "other": "Orphograph updates",
     }.get(interest, "Orphograph updates")
     subject = "Confirm your Orphograph waitlist spot"

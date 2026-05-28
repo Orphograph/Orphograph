@@ -90,7 +90,7 @@ The over-arching anti-spam discipline applies to **every** sub:
 > What I learned by building it:
 >
 > - Most photographers I talked to don't want a B2B compliance tool.
->   They want a $5/month thing that runs quietly in the background.
+>   They want a $9/month thing that runs quietly in the background.
 > - The market wants "proof of existence at time T," not "court
 >   evidence." Those are different products and conflating them is
 >   how the older companies in this space died.
@@ -155,7 +155,7 @@ Proof-of-Existence?"**
 > integration and the cost discipline of being a one-person operation.
 > The dead companies in this space mostly failed by promising legal
 > evidence and not delivering, or by trying to be a token / ICO. I'm
-> selling a $5/month receipt service, not a legal product or a
+> selling a $9/month receipt service, not a legal product or a
 > security. If month-6 revenue is under $200, it becomes a side
 > project, not a layoff event.
 
@@ -607,10 +607,10 @@ protocol."**
 
 ### Title options (A/B)
 1. *"Built a Bitcoin-timestamping tool for photo portfolios.
-   $7 for 10 anchors. Looking for honest feedback."*
+   $19 for 10 anchors. Looking for honest feedback."*
 2. *"Anyone here using OpenTimestamps to protect pre-AI portfolio
    work? I made a wrapper, want critique."*
-3. *"$5/month to timestamp your portfolio to Bitcoin. Solo
+3. *"$9/month to timestamp your portfolio to Bitcoin. Solo
    builder here. Tell me where this is wrong."*
 
 ### Post body (~300 words)
@@ -627,8 +627,8 @@ protocol."**
 > Pricing:
 >
 > - Free: 1 anchor a month, forever, no card.
-> - $7 one-time: 10 anchors, no expiry.
-> - $5/month: unlimited.
+> - $19 one-time: 10 anchors, no expiry.
+> - $9/month: unlimited.
 >
 > Built because I kept seeing photographers ask "how do I prove
 > this is my work, pre-AI" and the answer was either "use the
@@ -637,7 +637,7 @@ protocol."**
 > What I want from the sub:
 >
 > 1. Is the pricing in the right ballpark?
-> 2. Would you trust a $5/month one-person operation with a
+> 2. Would you trust a $9/month one-person operation with a
 >    receipt-presentation layer over the free CLI?
 > 3. Is the workflow you'd actually use a drag-drop web page,
 >    a folder watcher, a Lightroom plugin, or something I
@@ -667,9 +667,9 @@ protocol."**
 
 ### Anticipated objections + replies
 
-**Obj 1: "$5/month is too much for a hashing tool."**
+**Obj 1: "$9/month is too much for a hashing tool."**
 > Possibly. The free tier exists for that exact reason — 1
-> anchor a month forever, no card. The $5/mo only makes sense
+> anchor a month forever, no card. The $9/mo only makes sense
 > if you're anchoring 10+ files per month and want unlimited.
 > Most hobbyists will live on the free tier.
 
@@ -708,7 +708,7 @@ I anchor mine?"**
 ### Title options (A/B)
 1. *"Shipped: a Bitcoin-anchored file-timestamping service in
    Python stdlib + vanilla JS. Lessons from a 6-week solo build."*
-2. *"Solo dev shipped a $5/mo SaaS with zero dependencies (Python
+2. *"Solo dev shipped a $9/mo SaaS with zero dependencies (Python
    stdlib backend, vanilla JS frontend). Here's what I learned."*
 3. *"I shipped a SaaS in 6 weeks with no framework, no database,
    and an AI co-pilot writing 90% of the code. Honest retro."*
@@ -719,7 +719,7 @@ I anchor mine?"**
 > **What I built:** Orphograph (orphograph.com). Takes a file's
 > SHA-256 in the browser, anchors the hash to Bitcoin via
 > OpenTimestamps, produces a receipt that anyone can verify
-> without my service. $5/mo unlimited, $7 one-time pack of 10,
+> without my service. $9/mo unlimited, $19 one-time pack of 10,
 > free tier for one anchor a month.
 >
 > **Stack:**
@@ -834,8 +834,8 @@ I anchor mine?"**
 1. *"Launched: Bitcoin-anchored file-timestamping SaaS. $0 MRR
    on day one. Full pricing rationale + stack inside."*
 2. *"Pre-revenue solo SaaS launch retro: 6 weeks, zero
-   dependencies, $5/mo unit price. What I'd do differently."*
-3. *"$7 one-shot vs $5/mo subscription vs free tier — pricing
+   dependencies, $9/mo unit price. What I'd do differently."*
+3. *"$19 one-shot vs $9/mo subscription vs free tier — pricing
    experiment writeup for a hashing/timestamping SaaS."*
 
 ### Post body (~450 words)
@@ -853,8 +853,8 @@ I anchor mine?"**
 > | Tier      | Price       | What you get                           |
 > |-----------|-------------|----------------------------------------|
 > | Free      | $0          | 1 anchor / month, forever, no card     |
-> | Pack      | $7 one-time | 10 anchors, no expiry                  |
-> | Personal  | $5/month    | Unlimited anchors + folder monitoring  |
+> | Writer Pack | $19 one-time | 10 anchors, no expiry                  |
+> | Standing Order | $9/month    | Unlimited anchors + folder monitoring  |
 > | Creator   | $19/month   | Capture-time anchoring (planned, beta) |
 > | Team B2B  | $99-299/mo  | Multi-seat + white-label (later)       |
 >
@@ -863,9 +863,9 @@ I anchor mine?"**
 > - Free tier exists because marginal cost per anchor is
 >   <$0.01 (OTS calendars batch into shared Bitcoin txs).
 >   Loss-leading is cheap.
-> - $7 Pack is impulse-purchase territory and skips the
+> - $19 Writer Pack is impulse-purchase territory and skips the
 >   subscription objection for one-time portfolio anchoring.
-> - $5/mo Personal is intentionally below Backblaze
+> - $9/mo Standing Order is intentionally below Backblaze
 >   ($8/mo). Lowers the "do I really need this?" friction.
 > - $19/mo Creator is the bet — paid only by users who
 >   want capture-time provenance, not after-the-fact upload.
@@ -880,7 +880,7 @@ I anchor mine?"**
 >
 > **What I want from the sub:**
 >
-> 1. Is the $5 / $7 / $19 ladder coherent or is one rung
+> 1. Is the $9 / $19 / $19 ladder coherent or is one rung
 >    redundant?
 > 2. For a sub-$10 SaaS, what's the realistic month-6 MRR
 >    target before "it's a side project" becomes the right
@@ -917,9 +917,9 @@ I anchor mine?"**
 
 **Obj 1: "Free-forever tier will cannibalize paid."**
 > Possible but I think mis-priced. The free tier is 1 anchor a
-> month. The Pack at $7 is the natural step-up the moment a
+> month. The Writer Pack at $19 is the natural step-up the moment a
 > photographer wants to anchor their portfolio in a sitting.
-> The $5/mo is for unlimited. The friction between tiers is
+> The $9/mo is for unlimited. The friction between tiers is
 > the volume, not the feature set.
 
 **Obj 2: "Why not enterprise from day one?"**
@@ -986,7 +986,7 @@ I anchor mine?"**
 > - **Marginal cost per receipt: effectively $0.** Calendars
 >   batch many users' hashes into one Bitcoin tx every ~hour.
 >   The user pays no mempool fee, just my UX wrapper fee
->   ($0 free / $7 for 10 / $5 per month).
+>   ($0 free / $19 for 10 / $9 per month).
 > - **No proprietary anything.** The receipt verifies with a
 >   200-line Python script against any public Bitcoin node.
 >   If my service dies in 5 years, the receipt still works.
@@ -1076,7 +1076,7 @@ purposes. Bad?"**
 - **Monday 13:00–15:00 UTC.** Freelancers planning their week.
 
 ### Title options (A/B)
-1. *"For freelancers: a $5/month way to timestamp your
+1. *"For freelancers: a $9/month way to timestamp your
    deliverables so clients can't dispute delivery date later."*
 2. *"Cheap proof-of-delivery for freelancers — Bitcoin-anchored
    timestamping. Built it because a client tried to renegotiate
@@ -1121,10 +1121,10 @@ purposes. Bad?"**
 > Pricing for the wrapper:
 >
 > - Free: 1 anchor a month, no card.
-> - $7 one-time: 10 anchors, no expiry.
-> - $5/month: unlimited.
+> - $19 one-time: 10 anchors, no expiry.
+> - $9/month: unlimited.
 >
-> Most freelancers I've talked to land on the Pack — 10
+> Most freelancers I've talked to land on the Writer Pack — 10
 > anchors covers most monthly delivery volume, and the
 > one-time price avoids subscription objection from the
 > bookkeeping side.
@@ -1173,9 +1173,9 @@ purposes. Bad?"**
 > insurance for the ones it covers.
 
 **Obj 3: "Sounds like over-engineering for $500 invoices."**
-> The free tier exists for small invoices. The $7 Pack
+> The free tier exists for small invoices. The $19 Writer Pack
 > covers a working-month's worth of deliverables. The
-> economics only make sense at the $5/mo tier if you're
+> economics only make sense at the $9/mo tier if you're
 > delivering 20+ files/month.
 
 ---
@@ -1280,8 +1280,8 @@ After each post, check at the 1h / 6h / 24h marks:
 - **Total comments:** 200–900.
 - **Total click-throughs to orphograph.com:** 800–3,500.
 - **Anchored free files in launch window:** 80–500.
-- **Pack purchases ($7 × ~3% of free anchorers):** 2–15.
-- **Subscription conversions ($5/mo, ~1% of free anchorers,
+- **Pack purchases ($19 × ~3% of free anchorers):** 2–15.
+- **Subscription conversions ($9/mo, ~1% of free anchorers,
   first 90 days):** 1–5.
 - **Launch-window gross revenue (low estimate):** $20.
 - **Launch-window gross revenue (high estimate):** $130.

@@ -36,6 +36,10 @@ try:
     import mempool_watcher  # type: ignore
 except ImportError:  # pragma: no cover
     mempool_watcher = None  # type: ignore
+try:
+    import public_config  # type: ignore
+except ImportError:  # pragma: no cover
+    public_config = None  # type: ignore
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = Path(os.environ.get("ORPHO_DATA_DIR", str(ROOT / "data") if (ROOT / "data").is_dir() else str(ROOT)))
@@ -180,8 +184,26 @@ def _compute_snapshot() -> dict:
         "calendars": _check_calendars_parallel(list(engine.CALENDARS)),
         "btc_oracle": _btc_price_snapshot(),
         "payout": _payout_snapshot(),
+        "checkout": _checkout_snapshot(),
         "checked_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
     }
+
+
+def _checkout_snapshot() -> dict:
+    """Is the revenue path actually live? Surfaces config_warnings (e.g. checkout
+    enabled but no Stripe Pack URL) so a dead buy button is visible in /health."""
+    if public_config is None:
+        return {"ready": None, "warnings": ["public_config unavailable"]}
+    try:
+        cfg = public_config.snapshot()
+        warnings = public_config.config_warnings(cfg)
+        return {
+            "ready": bool(cfg["stripe"]["pack_url"]) and not cfg["toggles"]["checkout_disabled"],
+            "pack_usd": cfg["pricing"]["pack_usd"],
+            "warnings": warnings,
+        }
+    except Exception as e:  # noqa: BLE001  # pragma: no cover
+        return {"ready": None, "warnings": [f"{type(e).__name__}: {e}"]}
 
 
 def snapshot() -> dict:

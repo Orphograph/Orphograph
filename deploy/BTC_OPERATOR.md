@@ -114,7 +114,7 @@ fly logs -a orphograph | grep btc_settle
 
 ### 5. Test with a tiny order
 
-Place a real $7 order through the public site (it's BTC, you'll
+Place a real $19 order through the public site (it's BTC, you'll
 pay yourself):
 
 1. Click "Pay with Bitcoin" on the landing.
@@ -184,8 +184,8 @@ What that does:
 - Generates claim codes that are spendable on anchors.
 - Does NOT move any funds.
 
-Damage cap: each fake settlement = 10 free anchors. At $7 implied
-value, the attacker's marginal "gain" is $7 worth of OpenTimestamps
+Damage cap: each fake settlement = 10 free anchors. At $19 implied
+value, the attacker's marginal "gain" is $19 worth of OpenTimestamps
 anchors. Calendar load is negligible. **Not worth attacking for.**
 
 Defenses:

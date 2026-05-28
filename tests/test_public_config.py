@@ -72,15 +72,15 @@ class TestPublicConfig(unittest.TestCase):
         is fetched on every page load."""
         os.environ["PACK_PRICE_USD"] = "$7"  # typo
         snap = self._snapshot()
-        self.assertEqual(snap["pricing"]["pack_usd"], 7)
+        self.assertEqual(snap["pricing"]["pack_usd"], 19)  # canonical Writer Pack default
 
     def test_bad_integer_env_falls_back_for_all_pricing_fields(self):
         os.environ["PACK_PRICE_USD"] = "not_a_number"
         os.environ["PERSONAL_MONTHLY_USD"] = ""
         os.environ["CREATOR_MONTHLY_USD"] = "nineteen"
         snap = self._snapshot()
-        self.assertEqual(snap["pricing"]["pack_usd"], 7)
-        self.assertEqual(snap["pricing"]["personal_monthly_usd"], 5)
+        self.assertEqual(snap["pricing"]["pack_usd"], 19)
+        self.assertEqual(snap["pricing"]["personal_monthly_usd"], 9)
         self.assertEqual(snap["pricing"]["creator_monthly_usd"], 19)
 
     def test_empty_stripe_urls_default_to_empty_string(self):

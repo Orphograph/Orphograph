@@ -2,8 +2,8 @@
 """affiliate.py — real affiliate program on top of referrals.
 
 Tiers (from deploy/INFLUENCER_TARGETS.md):
-    - Pack signup (one-shot, $7):  referrer earns $5  + referee gets +10 bonus credits
-    - Personal signup ($5/mo):     referrer earns $25
+    - Writer Pack signup (one-shot, $19):  referrer earns $5  + referee gets +10 bonus credits
+    - Standing Order signup ($9/mo):       referrer earns $25
     - Creator signup ($19/mo):     referrer earns $99
 
 Payout:

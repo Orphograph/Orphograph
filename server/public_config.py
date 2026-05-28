@@ -56,9 +56,15 @@ def snapshot() -> dict:
             "creator_monthly_url": os.environ.get("STRIPE_CREATOR_MONTHLY_URL", "").strip(),
         },
         "pricing": {
-            "pack_usd": _int_env("PACK_PRICE_USD", 7),
+            # Canonical entry SKU: Writer Pack — 10 anchors — $19 (founder-confirmed
+            # 2026-05-25). Default was $7 (stale "Pack of Ten" pricing) and silently
+            # contradicted the live homepage CTA. See config_warnings().
+            "pack_usd": _int_env("PACK_PRICE_USD", 19),
             "pack_credits": _int_env("PACK_CREDIT_COUNT", 10),
-            "personal_monthly_usd": _int_env("PERSONAL_MONTHLY_USD", 5),
+            # Standing Order (unlimited monthly) — $9/mo canonical (blogs + mcp
+            # README + records). Default was $5 (stale). Annual left at 60 pending
+            # a founder decision — see config_warnings()/CHECKOUT_GO_LIVE.md.
+            "personal_monthly_usd": _int_env("PERSONAL_MONTHLY_USD", 9),
             "personal_annual_usd": _int_env("PERSONAL_ANNUAL_USD", 60),
             "creator_monthly_usd": _int_env("CREATOR_MONTHLY_USD", 19),
         },
@@ -75,3 +81,31 @@ def snapshot() -> dict:
             "nowpayments_enabled": bool(os.environ.get("NOWPAYMENTS_API_KEY", "").strip()),
         },
     }
+
+
+def config_warnings(cfg: dict | None = None) -> list[str]:
+    """Return human-readable problems with the current public config.
+
+    The motivating failure: checkout was *enabled* in production while every
+    Stripe Payment Link URL was empty — so the buy buttons led nowhere and no
+    one could pay, silently. This makes that (and similar) misconfigs loud.
+    Surface in /api/health and assert in tests so dead checkout can't ship.
+    """
+    cfg = cfg or snapshot()
+    warnings: list[str] = []
+
+    checkout_live = not cfg["toggles"]["checkout_disabled"]
+    if checkout_live and not cfg["stripe"]["pack_url"]:
+        warnings.append(
+            "checkout is ENABLED but STRIPE_PACK_URL is empty — the Pack buy "
+            "button leads nowhere; no one can purchase. Set STRIPE_PACK_URL or "
+            "set ORPHO_DISABLE_CHECKOUT=1 until the link exists."
+        )
+
+    if cfg["features"]["nowpayments_enabled"] and not cfg["features"]["btc_payments"]:
+        warnings.append(
+            "NOWPAYMENTS_API_KEY is set but btc_payments feature is off — crypto "
+            "checkout is half-wired (BTC_PAYMENTS_ENABLED unset)."
+        )
+
+    return warnings

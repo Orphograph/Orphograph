@@ -16,7 +16,7 @@ batch many users' hashes into a single Bitcoin transaction roughly
 once an hour. The resulting receipt can be verified by anyone — even
 years later, even if Orphograph the company is gone — using an
 open-source verifier on GitHub. Pricing: free for one anchor per
-month, $7 for a ten-anchor pack, $5/month for unlimited anchors.
+month, $19 for a ten-anchor Writer Pack, $9/month for unlimited anchors.
 
 ## One-sentence pitch
 
@@ -34,7 +34,7 @@ month, $7 for a ten-anchor pack, $5/month for unlimited anchors.
 > open-source verifier that outlives the company.
 
 **For photography-trade press:**
-> A $7 service that solves the "did I take this before AI got
+> A $19 service that solves the "did I take this before AI got
 > hold of it" problem photographers are quietly losing. Built by
 > an anonymous solo founder after talking to photographers
 > being accused of using AI for shots they actually took.
@@ -129,7 +129,7 @@ startup to publish their own off-ramp.
 
 > "There are 2.5 million working photographers globally. If 1%
 > of them ever needs to prove the date of a photo, and 10% of
-> those find $7 a reasonable price, that's 2,500 paying
+> those find $19 a reasonable price, that's 2,500 paying
 > customers — a small but viable business for one solo founder.
 > The math doesn't require everyone to care."
 

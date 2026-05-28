@@ -31,8 +31,8 @@ description: |
 
   COSTS for the user:
     - Free tier: 1 anchor / month
-    - $7 Pack: 10 anchors (no expiry)
-    - $5/mo Personal: unlimited
+    - $19 Writer Pack: 10 anchors (no expiry)
+    - $9/mo Standing Order: unlimited
     - The user pays at https://orphograph.com — we don't take credentials here.
 metadata:
   category: provenance

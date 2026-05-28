@@ -62,7 +62,7 @@ identify as "pro" are clicking through more.
 <p class="lede">
   SHA-256 is computed in your browser, then submitted to 5 OpenTimestamps
   calendars that batch into a single Bitcoin transaction. Your receipt
-  verifies forever against the public chain. $7 buys you 10 anchors.
+  verifies forever against the public chain. $19 buys you 10 anchors.
 </p>
 ```
 
@@ -136,7 +136,7 @@ variant is clearly worse after 200+ `page_view` events, switch back.
   this would undermine the entire positioning.
 - **"Files never leave your browser" claim.** Always on. Privacy
   is structural, not optional.
-- **"$7 for 10 anchors" framing.** This is the headline price; do
+- **"$19 for 10 anchors" framing.** This is the headline price; do
   not bury it in tier comparisons.
 
 ## What's NOT in this file (and why)
