@@ -14,10 +14,11 @@ Exit codes:
   1  prod unhealthy, recovery attempted
   2  uncovered failure (fly CLI missing, JSON parse error, etc.)
 
-Logs each probe to ~/Hydroboro/logs/orphograph_watchdog.jsonl (no PII;
-HTTP status codes only). After 3 consecutive failures within 10 minutes
-attempts a Telegram notification via ~/.claude/notifier.py if importable,
-otherwise writes ~/Hydroboro/logs/orphograph_watchdog_ALERT.txt.
+Logs each probe to ~/.orphograph/logs/orphograph_watchdog.jsonl (no PII;
+HTTP status codes only; override with ORPHOGRAPH_WATCHDOG_LOG_DIR). After 3
+consecutive failures within 10 minutes attempts a Telegram notification via
+~/.claude/notifier.py if importable, otherwise writes
+~/.orphograph/logs/orphograph_watchdog_ALERT.txt.
 """
 from __future__ import annotations
 
@@ -51,7 +52,7 @@ USER_AGENT = (
     "Chrome/124.0.0.0 Safari/537.36"
 )
 
-LOG_DIR = os.path.expanduser("~/Hydroboro/logs")
+LOG_DIR = os.environ.get("ORPHOGRAPH_WATCHDOG_LOG_DIR") or os.path.expanduser("~/.orphograph/logs")
 LOG_PATH = os.path.join(LOG_DIR, "orphograph_watchdog.jsonl")
 ALERT_PATH = os.path.join(LOG_DIR, "orphograph_watchdog_ALERT.txt")
 

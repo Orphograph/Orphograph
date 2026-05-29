@@ -48,12 +48,12 @@ cutoff, the model could not have produced the original.
 You need three things:
 
 1. The original file. RAW is ideal. JPEG works. The file's bytes
-   must not change after the anchor — re-saving in Lightroom
-   produces a new file with a different hash.
+   must not change after the anchor — re-saving in your photo
+   editor produces a new file with a different hash.
 2. A way to compute a SHA-256 hash. Every modern browser has this
    built in via WebCrypto. You do not need to install anything.
 3. A place to save the receipt. Anywhere your normal photo backup
-   lives is fine: Dropbox, iCloud, an external drive.
+   lives is fine: a cloud drive, an external disk, your usual backup.
 
 You do not need a Bitcoin wallet. You do not need to pay a miner.
 You are not putting money on chain. You are submitting a 32-byte
@@ -130,7 +130,7 @@ help in a dispute. The cryptography proves a file existed by a
 block's timestamp. It does not prove you, specifically, were the
 first to anchor it.
 
-If you post a photo on Instagram on Tuesday and anchor it on
+If you post a photo publicly on Tuesday and anchor it on
 Thursday, anyone who downloaded the photo on Wednesday could have
 anchored it before you. Both timestamps are equally valid. The
 cryptography cannot distinguish.
