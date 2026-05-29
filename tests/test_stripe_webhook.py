@@ -20,6 +20,7 @@ def _sig(payload: bytes, secret: str, ts: int | None = None) -> str:
 @pytest.fixture(autouse=True)
 def _isolate_processed(tmp_path, monkeypatch):
     monkeypatch.setattr(stripe_webhook, "PROCESSED_EVENTS_PATH", tmp_path / "events.jsonl")
+    monkeypatch.setattr(stripe_webhook, "PI_SESSION_MAP_PATH", tmp_path / "pi_session_map.jsonl")
     yield
 
 
@@ -180,3 +181,121 @@ def test_bad_credit_count_metadata_falls_back_to_default(tmp_path, monkeypatch):
     result = stripe_webhook.handle_event(payload)
     assert result["ok"] is True
     assert _ledger_total(ledger) == stripe_webhook.PACK_CREDITS
+
+
+# --------------------------------------- email credit-count (pack50 mislabel)
+
+def test_pack50_claim_email_reports_actual_credit_count(tmp_path, monkeypatch):
+    """The ledger grants 50 for pack50, but the confirmation email previously
+    hardcoded PACK_CREDITS(=10). The email must state the ACTUAL granted amount."""
+    monkeypatch.setattr(credits, "LEDGER_PATH", tmp_path / "credit_ledger.jsonl")
+    import mailer
+    captured = {}
+
+    def fake_claim(to, claim_code, credit_count):
+        captured["credit_count"] = credit_count
+        return True
+
+    monkeypatch.setattr(mailer, "send_pack_claim_email", fake_claim)
+    payload = json.dumps({
+        "type": "checkout.session.completed",
+        "data": {"object": {
+            "id": "cs_pack50_email",
+            "customer_email": "buyer@example.com",
+            "metadata": {"credit_count": "50", "plan": "pack50"},
+        }},
+    }).encode()
+    result = stripe_webhook.handle_event(payload)
+    assert result["ok"] is True
+    assert captured.get("credit_count") == 50, "pack50 email must say 50, not 10"
+
+
+def test_pack50_gift_email_reports_actual_credit_count(tmp_path, monkeypatch):
+    monkeypatch.setattr(credits, "LEDGER_PATH", tmp_path / "credit_ledger.jsonl")
+    import mailer
+    captured = {}
+
+    def fake_gift(to, from_email, claim_code, credit_count, message):
+        captured["credit_count"] = credit_count
+        return True
+
+    monkeypatch.setattr(mailer, "send_pack_gift_email", fake_gift)
+    payload = json.dumps({
+        "type": "checkout.session.completed",
+        "data": {"object": {
+            "id": "cs_pack50_gift",
+            "customer_email": "buyer@example.com",
+            "metadata": {"credit_count": "50", "gift_to_email": "friend@example.com"},
+        }},
+    }).encode()
+    result = stripe_webhook.handle_event(payload)
+    assert result.get("gift") is True
+    assert captured.get("credit_count") == 50
+
+
+# --------------------------------------- refund clawback via payment_intent map
+
+def test_refund_resolves_session_via_payment_intent_map(tmp_path, monkeypatch):
+    """A real charge.refunded carries only the bare payment_intent id (charge
+    metadata is inherited from the PI, not the Checkout Session). The pi->session
+    map persisted at mint time must let the handler find and revoke the credits."""
+    ledger = tmp_path / "credit_ledger.jsonl"
+    monkeypatch.setattr(credits, "LEDGER_PATH", ledger)
+    completed = json.dumps({
+        "id": "evt_completed_refundmap",
+        "type": "checkout.session.completed",
+        "data": {"object": {
+            "id": "cs_refundmap",
+            "customer_email": "refundmap@example.com",
+            "payment_intent": "pi_refundmap_123",   # bare id, as Stripe sends
+        }},
+    }).encode()
+    minted = stripe_webhook.handle_event(completed)
+    assert minted.get("claim_code_minted") is True
+
+    refund = json.dumps({
+        "id": "evt_refund_map",
+        "type": "charge.refunded",
+        "data": {"object": {"payment_intent": "pi_refundmap_123", "metadata": {}}},
+    }).encode()
+    result = stripe_webhook.handle_event(refund)
+    assert result["ok"] is True
+    assert result.get("session_id") == "cs_refundmap"
+    assert result.get("no_session_id") is None
+    assert len(result.get("revoked") or []) >= 1
+    neg = [json.loads(l) for l in ledger.read_text().splitlines()
+           if l.strip() and json.loads(l)["credits_delta"] < 0]
+    assert any(r["source"].startswith("stripe-refund:cs_refundmap") for r in neg)
+
+
+def test_refund_with_unknown_payment_intent_cannot_revoke(tmp_path, monkeypatch):
+    """Boundary: a refund whose payment_intent was never mapped still degrades
+    safely to no_session_id (no crash, no spurious revoke)."""
+    monkeypatch.setattr(credits, "LEDGER_PATH", tmp_path / "credit_ledger.jsonl")
+    refund = json.dumps({
+        "id": "evt_refund_unknown_pi",
+        "type": "charge.refunded",
+        "data": {"object": {"payment_intent": "pi_never_seen", "metadata": {}}},
+    }).encode()
+    result = stripe_webhook.handle_event(refund)
+    assert result["ok"] is True
+    assert result.get("no_session_id") is True
+
+
+# --------------------------------------- no-email checkout stays recoverable
+
+def test_no_email_checkout_is_not_marked_processed(tmp_path, monkeypatch):
+    """A paid session with no email must NOT be deduped — marking it processed
+    would turn every Stripe retry into a permanent paid-but-nothing dead end."""
+    monkeypatch.setattr(credits, "LEDGER_PATH", tmp_path / "credit_ledger.jsonl")
+    payload = json.dumps({
+        "id": "evt_no_email_recover",
+        "type": "checkout.session.completed",
+        "data": {"object": {"id": "cs_no_email_recover"}},
+    }).encode()
+    first = stripe_webhook.handle_event(payload)
+    assert first["ok"] is False
+    assert first.get("recoverable") is True
+    second = stripe_webhook.handle_event(payload)
+    assert second.get("recoverable") is True
+    assert "duplicate" not in second, "no-email event must remain reprocessable"

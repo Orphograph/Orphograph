@@ -124,6 +124,7 @@ def create_invoice(
     currency: str,
     order_id: str,
     customer_email: str | None = None,
+    plan: str | None = None,
 ) -> dict:
     """Create a hosted NOWPayments invoice the buyer will be redirected to.
 
@@ -146,12 +147,21 @@ def create_invoice(
         return {"ok": False, "reason": "bad_order_id"}
 
     origin = _site_origin()
+    # Round-trip the plan to the IPN. NOWPayments echoes order_description
+    # verbatim; the webhook resolves the credit pack from it (and from the
+    # plan token embedded in order_id) so a $29 Pack-of-50 is not mistaken
+    # for a $19 Writer Pack and under-granted.
+    plan_token = (plan or "").strip().lower()
+    description = (
+        f"Orphograph {plan_token} credit pack" if plan_token
+        else "Orphograph credit pack"
+    )
     payload: dict = {
         "price_amount": round(amt, 2),
         "price_currency": "usd",
         "pay_currency": cur,
         "order_id": order_id,
-        "order_description": "Orphograph credit pack",
+        "order_description": description,
         "ipn_callback_url": f"{origin}/api/nowpayments/webhook",
         "success_url": f"{origin}/pay/success?order={order_id}",
         "cancel_url": f"{origin}/",

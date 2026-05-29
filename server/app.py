@@ -3372,14 +3372,19 @@ class Handler(BaseHTTPRequestHandler):
             _json_response(self, 400, {"error": "unsupported currency"})
             return
         plan_meta = nowpayments_api.PLANS[plan]
-        # Order id is opaque + unguessable so retries/lookups are safe to
-        # leak in URLs. We use the same token shape as receipt ids.
-        order_id = "np_" + secrets.token_urlsafe(10)
+        # Order id is opaque + unguessable so retries/lookups are safe to leak
+        # in URLs. We embed the plan token (np_<plan>_<rand>) so the IPN — which
+        # echoes order_id verbatim — can recover which pack was bought even if
+        # order_description is dropped. `plan` is a validated PLANS key above,
+        # so it is a safe, fixed-vocabulary token. Stays well under the 64-char
+        # order_id cap (np_pack_50_ + ~14 = ~25).
+        order_id = f"np_{plan}_" + secrets.token_urlsafe(10)
         result = nowpayments_api.create_invoice(
             amount_usd=float(plan_meta["price_usd"]),
             currency=currency,
             order_id=order_id,
             customer_email=email if "@" in email else None,
+            plan=plan,
         )
         if not result.get("ok"):
             _json_response(self, 502, {
