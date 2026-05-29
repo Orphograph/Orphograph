@@ -62,6 +62,29 @@ class TestCheckoutGuard(unittest.TestCase):
         }
         self.assertEqual(_load().config_warnings(cfg), [])
 
+    def test_no_false_alarm_when_nowpayments_on_native_btc_off(self):
+        """The live prod config (2026-05-28): card live, NOWPayments on,
+        native BTC flow off. NOWPayments alone is a complete crypto path —
+        this must NOT emit a 'half-wired' / crypto warning."""
+        cfg = {
+            "stripe": {"pack_url": "https://buy.stripe.com/live_xyz"},
+            "toggles": {"checkout_disabled": False},
+            "features": {"nowpayments_enabled": True, "btc_payments": False},
+        }
+        warnings = _load().config_warnings(cfg)
+        self.assertEqual(warnings, [], f"false crypto alarm returned: {warnings}")
+        self.assertFalse(any("half-wired" in w for w in warnings))
+
+    def test_card_only_config_is_silent(self):
+        """Card configured, no crypto backend at all — a valid card-only
+        config. Absence of crypto is not a misconfiguration."""
+        cfg = {
+            "stripe": {"pack_url": "https://buy.stripe.com/live_xyz"},
+            "toggles": {"checkout_disabled": False},
+            "features": {"nowpayments_enabled": False, "btc_payments": False},
+        }
+        self.assertEqual(_load().config_warnings(cfg), [])
+
 
 if __name__ == "__main__":
     unittest.main()

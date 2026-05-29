@@ -102,10 +102,12 @@ def config_warnings(cfg: dict | None = None) -> list[str]:
             "set ORPHO_DISABLE_CHECKOUT=1 until the link exists."
         )
 
-    if cfg["features"]["nowpayments_enabled"] and not cfg["features"]["btc_payments"]:
-        warnings.append(
-            "NOWPAYMENTS_API_KEY is set but btc_payments feature is off — crypto "
-            "checkout is half-wired (BTC_PAYMENTS_ENABLED unset)."
-        )
+    # Note on crypto: checkout is served by NOWPayments (multi-coin, incl.
+    # BTC). The native exact-amount BTC flow (BTC_PAYMENTS_ENABLED) is an
+    # OPTIONAL, redundant secondary path. NOWPayments-on + native-BTC-off is
+    # a complete, healthy crypto config — NOT "half-wired" — so it earns no
+    # warning. Card checkout (Stripe) is independent of both. We therefore
+    # do not warn on crypto-flag combinations here; absence of crypto is a
+    # valid card-only configuration.
 
     return warnings
