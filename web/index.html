@@ -698,11 +698,14 @@
           <li>Credits never expire</li>
           <li>Gift to a friend</li>
         </ul>
-        <!-- Card checkout for the 50-pack needs its own Stripe price
-             (STRIPE_PRICE_PACK50, $29 / 50-credit metadata). Until that
-             exists, this tier is crypto-only: the single card pack SKU
-             grants 10 credits and would under-deliver the 50-pack. Do not
-             wire this tier to the card pack plan. -->
+        <!-- Backend NOW supports the pack50 plan: the checkout handler routes
+             it to STRIPE_PRICE_PACK50 and tags the session credit_count=50,
+             which the webhook honors (entry pack still defaults to 10). It
+             returns a graceful 503 until STRIPE_PRICE_PACK50 is set, so this
+             tier stays crypto-only to avoid a dead-button click. TO ENABLE
+             CARD: (1) create a $29 Stripe price, set STRIPE_PRICE_PACK50;
+             (2) give the CTA below the pack50 checkout hook (data-checkout
+             value pack50). Never the plain pack hook here — that SKU grants 10. -->
         <a href="/pay/crypto.html?plan=pack_50" class="cta">Pay with crypto</a>
         <p class="cta-fineprint">
           <a href="mailto:hello@orphograph.com?subject=Pack%20of%20Fifty%20by%20card" class="cta-alt-link">card by request</a>
@@ -817,6 +820,7 @@
       <div class="col">
         <h4>Product</h4>
         <a href="/what-is-this.html">First time?</a>
+        <a href="/experience.html">The Seal</a>
         <a href="/#tiers">Pricing</a>
         <a href="/docs/verify.html">Verify a receipt</a>
         <a href="/ios.html">iOS</a>

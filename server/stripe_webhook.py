@@ -293,11 +293,20 @@ def handle_event(payload: bytes) -> dict:
                 f"({auth.mask_email(gift_to_raw)!r}); delivering pack to buyer instead\n"
             )
 
+        # Credit count: multi-size packs (e.g. pack50) carry `credit_count` in
+        # the checkout-session metadata; the entry Writer Pack sends none and
+        # falls back to PACK_CREDITS (=10) — so existing purchases are unchanged.
+        try:
+            credit_amount = int(meta.get("credit_count") or PACK_CREDITS)
+        except (TypeError, ValueError):
+            credit_amount = PACK_CREDITS
+        if credit_amount <= 0:
+            credit_amount = PACK_CREDITS
         claim_code = credits.new_claim_code()
         credits.add_credits(
             claim_code=claim_code,
             email=recipient_email,
-            amount=PACK_CREDITS,
+            amount=credit_amount,
             source=(
                 f"stripe-gift:{session_id}" if is_gift else f"stripe:{session_id}"
             ),

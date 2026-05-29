@@ -184,6 +184,7 @@ def create_checkout_session(
     cancel_url: str,
     customer_email: str = "",
     client_reference_id: str = "",
+    metadata: dict | None = None,
 ) -> dict:
     """Create a Stripe Checkout Session.
 
@@ -222,6 +223,13 @@ def create_checkout_session(
         form["customer_email"] = customer_email
     if client_reference_id:
         form["client_reference_id"] = client_reference_id
+    # Optional checkout-session metadata (e.g. credit_count for multi-size
+    # packs). Round-trips to the webhook on data.object.metadata. Only str
+    # values; skip empties so we don't send blank keys.
+    if metadata:
+        for k, v in metadata.items():
+            if v is not None and str(v) != "":
+                form[f"metadata[{k}]"] = str(v)
     # For one-time Pack purchases, collect a phone+email and persist as
     # a Customer object so the buyer can come back later. For subs this
     # already happens automatically.

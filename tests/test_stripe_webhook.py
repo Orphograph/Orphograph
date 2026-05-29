@@ -125,3 +125,58 @@ def test_handle_event_dedupes_ignored_types_too(tmp_path):
     second = stripe_webhook.handle_event(payload)
     assert first.get("ignored") == "payment_intent.created"
     assert second == {"ok": True, "duplicate": "evt_ignored"}
+
+
+def _ledger_total(ledger_path):
+    return sum(
+        int(line.split('"credits_delta":')[1].split(",")[0])
+        for line in ledger_path.read_text().splitlines()
+    )
+
+
+def test_entry_pack_without_metadata_grants_default_credits(tmp_path, monkeypatch):
+    """Backward-compat: a checkout with no credit_count metadata mints the
+    default PACK_CREDITS (=10) — the existing Writer Pack path is unchanged."""
+    ledger = tmp_path / "credit_ledger.jsonl"
+    monkeypatch.setattr(credits, "LEDGER_PATH", ledger)
+    payload = json.dumps({
+        "type": "checkout.session.completed",
+        "data": {"object": {"id": "cs_pack_x", "customer_email": "buyer@example.com"}},
+    }).encode()
+    result = stripe_webhook.handle_event(payload)
+    assert result["ok"] is True
+    assert _ledger_total(ledger) == stripe_webhook.PACK_CREDITS
+
+
+def test_pack50_metadata_grants_fifty_credits(tmp_path, monkeypatch):
+    """pack50 carries credit_count=50 in session metadata → mints 50, not 10."""
+    ledger = tmp_path / "credit_ledger.jsonl"
+    monkeypatch.setattr(credits, "LEDGER_PATH", ledger)
+    payload = json.dumps({
+        "type": "checkout.session.completed",
+        "data": {"object": {
+            "id": "cs_pack50_x",
+            "customer_email": "buyer@example.com",
+            "metadata": {"credit_count": "50", "plan": "pack50"},
+        }},
+    }).encode()
+    result = stripe_webhook.handle_event(payload)
+    assert result["ok"] is True
+    assert _ledger_total(ledger) == 50
+
+
+def test_bad_credit_count_metadata_falls_back_to_default(tmp_path, monkeypatch):
+    """Garbage credit_count must not zero out or crash the grant — fall back."""
+    ledger = tmp_path / "credit_ledger.jsonl"
+    monkeypatch.setattr(credits, "LEDGER_PATH", ledger)
+    payload = json.dumps({
+        "type": "checkout.session.completed",
+        "data": {"object": {
+            "id": "cs_pack_bad",
+            "customer_email": "buyer@example.com",
+            "metadata": {"credit_count": "not-a-number"},
+        }},
+    }).encode()
+    result = stripe_webhook.handle_event(payload)
+    assert result["ok"] is True
+    assert _ledger_total(ledger) == stripe_webhook.PACK_CREDITS

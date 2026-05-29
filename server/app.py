@@ -3222,18 +3222,24 @@ class Handler(BaseHTTPRequestHandler):
 
         plan = (payload.get("plan") or "").strip().lower()
         email = (payload.get("email") or "").strip()
+        session_metadata: dict[str, str] = {}
         if plan == "pack":
-            price_id = os.environ.get("STRIPE_PRICE_PACK", "")
-            mode = "payment"
+            price_env, mode = "STRIPE_PRICE_PACK", "payment"
+        elif plan in ("pack50", "pack_50"):
+            price_env, mode = "STRIPE_PRICE_PACK50", "payment"
+            # The 50-pack's credit count travels in session metadata and is
+            # read back by the webhook, so it stays independent of the default
+            # PACK_CREDIT_COUNT (=10) that the entry Writer Pack relies on.
+            session_metadata = {"credit_count": "50", "plan": "pack50"}
         elif plan in ("pro", "sub", "subscription", "standing", "standing_order"):
-            price_id = os.environ.get("STRIPE_PRICE_SUB", "")
-            mode = "subscription"
+            price_env, mode = "STRIPE_PRICE_SUB", "subscription"
         else:
-            _json_response(self, 400, {"error": "plan must be 'pack' or 'pro'"})
+            _json_response(self, 400, {"error": "plan must be 'pack', 'pack50' or 'pro'"})
             return
+        price_id = os.environ.get(price_env, "")
         if not price_id:
             _json_response(self, 503, {
-                "error": f"Stripe price not configured (STRIPE_PRICE_{'PACK' if plan == 'pack' else 'SUB'} unset)",
+                "error": f"Stripe price not configured ({price_env} unset)",
             })
             return
 
@@ -3260,6 +3266,7 @@ class Handler(BaseHTTPRequestHandler):
             success_url=success_url,
             cancel_url=cancel_url,
             customer_email=email if "@" in email else "",
+            metadata=session_metadata,
         )
         if not result.get("ok"):
             _json_response(self, 502, {"error": result.get("error", "stripe error")})
