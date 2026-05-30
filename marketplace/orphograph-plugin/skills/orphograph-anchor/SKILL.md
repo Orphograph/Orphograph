@@ -84,4 +84,4 @@ Tell them:
 - Not encrypting or storing the file. We don't see the file.
 - Not exclusive to Orphograph — the same OpenTimestamps proof can be verified
   by any OTS client without us. The receipt JSON + verify_cli.py from
-  github.com/orphograph/orphograph-verify is the trust artifact.
+  the MIT verifier (server/verify_cli.py in the public repo) is the trust artifact.
