@@ -1,0 +1,17 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "orphograph",
+  "description": "Bitcoin-anchored file timestamping for Claude Code — prove a file existed at a specific moment without uploading it. Only the SHA-256 hash leaves your machine.",
+  "owner": {
+    "name": "Orphograph",
+    "url": "https://orphograph.com"
+  },
+  "plugins": [
+    {
+      "name": "orphograph",
+      "description": "Anchor any file to the Bitcoin blockchain from inside Claude Code — the file never leaves your machine, only its 32-byte SHA-256 fingerprint. /orphograph:anchor to timestamp, /orphograph:verify to check (offline, no key). For developers, researchers, journalists, and photographers who need provenance for their own work, including pre-AI-cutoff proof.",
+      "source": "./marketplace/orphograph-plugin",
+      "homepage": "https://orphograph.com"
+    }
+  ]
+}

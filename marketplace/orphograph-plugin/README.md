@@ -18,13 +18,26 @@ A privacy-preserving timestamping plugin. Only the SHA-256 hash leaves your mach
 
 ## Install
 
-```bash
-# Install in your Claude Code plugin directory
-# (Replace with the actual install path once Anthropic's marketplace publishes the manifest)
-git clone https://github.com/orphograph/orphograph-plugin ~/.claude/plugins/orphograph
+The plugin ships inside the public Orphograph repo, which doubles as a Claude
+Code plugin marketplace. Two commands:
+
+```
+/plugin marketplace add Orphograph/Orphograph
+/plugin install orphograph@orphograph
 ```
 
-Then restart Claude Code. The skills appear under `/orphograph:`.
+The first registers the marketplace from GitHub; the second installs the plugin
+(`orphograph` = the plugin name, `@orphograph` = the marketplace name). Verify
+with `/plugin list`. The skills then appear under `/orphograph:` — no restart
+needed.
+
+Prefer not to use the marketplace? Clone the repo and point Claude Code at the
+plugin subdirectory:
+
+```bash
+git clone https://github.com/Orphograph/Orphograph ~/src/orphograph
+# then: /plugin marketplace add ~/src/orphograph
+```
 
 ## Pricing (paid via orphograph.com)
 
@@ -41,7 +54,7 @@ Set `$ORPHOGRAPH_API_KEY` in your shell to use a paid tier, or pass `--api-key`.
 
 - We don't see your file.
 - Receipts verify against the public Bitcoin chain via the OpenTimestamps protocol — the same one Bitcoin Core developers use.
-- Standalone verifier at https://github.com/orphograph/orphograph-verify — your receipts still verify if orphograph.com disappears.
+- Standalone MIT verifier ships in the repo (`server/verify_cli.py`) — your receipts still verify if orphograph.com disappears.
 
 ## Legal disclaimer
 
@@ -49,7 +62,7 @@ Proof-of-existence only. **Not** legal evidence on its own, **not** a qualified 
 
 ## Source
 
-- Plugin: https://github.com/orphograph/orphograph-plugin
+- Plugin + marketplace: https://github.com/Orphograph/Orphograph (this repo, under `marketplace/orphograph-plugin/`)
 - Service: https://orphograph.com
-- Verifier: https://github.com/orphograph/orphograph-verify
+- Verifier: the MIT verifier ships in the repo at `server/verify_cli.py`
 - License: MIT
