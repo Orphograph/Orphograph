@@ -1,6 +1,22 @@
 # Publishing the Orphograph Claude Code plugin
 
-**Outcome:** the plugin at `marketplace/orphograph-plugin/` lives on GitHub at `github.com/orphograph/orphograph-plugin`, and any Claude Code user can install it in two commands.
+> **⚠️ SUPERSEDED (2026-05-30).** This runbook described publishing the plugin
+> to a *separate* `orphograph/orphograph-plugin` repo. That approach is retired.
+> The plugin now ships **inside the main repo** (`Orphograph/Orphograph`), which
+> doubles as a Claude Code marketplace via the root `.claude-plugin/marketplace.json`.
+> No separate repo, no `gh repo create`. Current end-user install:
+>
+> ```
+> /plugin marketplace add Orphograph/Orphograph
+> /plugin install orphograph@orphograph
+> ```
+>
+> See `marketplace/orphograph-plugin/README.md` for the canonical install
+> instructions. The historical steps below are kept for reference only — the
+> `git init` / separate-repo / `git clone <plugin-repo>` parts no longer apply.
+
+**Outcome (historical):** the plugin at `marketplace/orphograph-plugin/` is
+installable by any Claude Code user in two commands.
 
 This doc is **founder-action**. I can't run `gh` against your account.
 

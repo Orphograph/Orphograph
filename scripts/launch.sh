@@ -80,26 +80,12 @@ else
   warn "orphograph.com registration not confirmed in FOUNDER_TODO.md"
 fi
 
-VERIFIER_GIT_INIT=0
-VERIFIER_DIR="$ROOT/dist/orphograph-verify"
-if [ -d "$VERIFIER_DIR/.git" ]; then
-  VERIFIER_GIT_INIT=1
-  cur_email=$(git -C "$VERIFIER_DIR" config user.email 2>/dev/null)
-  cur_name=$(git -C "$VERIFIER_DIR" config user.name 2>/dev/null)
-  ok "verifier repo initialized ($cur_name <$cur_email>)"
-else
-  warn "verifier repo not initialized — run safety check first"
-fi
-
-VERIFIER_REMOTE=""
-if [ "$VERIFIER_GIT_INIT" -eq 1 ]; then
-  VERIFIER_REMOTE=$(git -C "$VERIFIER_DIR" remote get-url origin 2>/dev/null || echo "")
-  if [ -n "$VERIFIER_REMOTE" ]; then
-    ok "remote configured: $VERIFIER_REMOTE"
-  else
-    warn "no remote 'origin' configured yet"
-  fi
-fi
+# The standalone verifier is no longer published to a separate GitHub repo.
+# It ships inside THIS repository (server/verify_cli.py + web/verify/) and is
+# served live at https://orphograph.com/verify/, so there is no
+# dist/orphograph-verify repo to detect, init, or push. Step 1 below is a
+# retired no-op kept only so --step github and full runs stay valid.
+ok "verifier ships in-repo (server/verify_cli.py + web/verify/) — no separate repo"
 
 FLY_AUTHED=0
 if have fly && fly auth whoami >/dev/null 2>&1; then
@@ -122,88 +108,18 @@ fi
 # ─── STEP 1: GITHUB ─────────────────────────────────────────────────────
 
 if [ -z "$STEP_FILTER" ] || [ "$STEP_FILTER" = "github" ]; then
-step "Step 1 — GitHub account, org, repo, push"
+step "Step 1 — GitHub (retired: verifier ships in-repo)"
 
-if [ "$VERIFIER_GIT_INIT" -eq 0 ]; then
-  fail "verifier repo not initialized. Run safety check first:"
-  note "  bash scripts/publish_safety_check.sh"
-  exit 1
-fi
-
-# 1a. Safety check before any push.
-note "running publish safety check..."
-if ! bash "$ROOT/scripts/publish_safety_check.sh" >/dev/null 2>&1; then
-  fail "publish safety check failed. Run it manually and fix issues:"
-  note "  bash scripts/publish_safety_check.sh"
-  exit 1
-fi
-ok "publish safety check: 9/9 green"
-
-# 1b. Browser-gated account creation.
-if [ "$GH_AUTHED" -eq 0 ]; then
-  warn "you don't appear to be authenticated to GitHub via 'gh'."
-  note "If you haven't created the dedicated orphograph account yet:"
-  note "  1. Open an incognito window."
-  note "  2. Go to https://github.com/signup"
-  note "  3. Use a fresh email (Cloudflare alias on orphograph.com is cleanest)."
-  note "  4. Username: orphograph"
-  note "  5. Enable TOTP 2FA (NOT SMS)."
-  note "  6. Create the 'orphograph' organization."
-  note "  7. Generate a fine-grained PAT scoped to the org's repos."
-  note "Full guide: deploy/PUBLISH_SAFETY.md §3 + deploy/LAUNCH_WALKTHROUGH.md §1"
-  pause "press enter once you have a PAT ready to paste"
-
-  PAT=$(ask "paste the github_pat_ token (input will echo)")
-  if [ -z "$PAT" ]; then fail "no PAT provided. aborting."; exit 1; fi
-
-  echo "$PAT" | gh auth login --hostname github.com --git-protocol https --with-token
-  if ! gh auth status >/dev/null 2>&1; then
-    fail "gh auth failed. Check token validity + scopes."
-    exit 1
-  fi
-  ok "gh authenticated successfully"
-fi
-
-# 1c. Create the repo if it doesn't exist.
-if ! gh repo view orphograph/orphograph-verify >/dev/null 2>&1; then
-  note "creating empty repo at github.com/orphograph/orphograph-verify..."
-  gh repo create orphograph/orphograph-verify \
-    --public \
-    --description "Standalone verifier for Orphograph receipts. MIT." \
-    --homepage "https://orphograph.com" || {
-      fail "gh repo create failed. Maybe the 'orphograph' org doesn't exist yet?"
-      note "Create it manually at https://github.com/organizations/new"
-      exit 1
-    }
-  ok "repo created"
-else
-  ok "repo orphograph/orphograph-verify already exists"
-fi
-
-# 1d. Wire the remote.
-if [ -z "$VERIFIER_REMOTE" ]; then
-  git -C "$VERIFIER_DIR" remote add origin https://github.com/orphograph/orphograph-verify.git
-  ok "remote 'origin' added"
-fi
-
-# 1e. Final pre-push safety check + push.
-if ! bash "$ROOT/scripts/publish_safety_check.sh" >/dev/null 2>&1; then
-  fail "publish safety check failed at the final gate. Aborting push."
-  exit 1
-fi
-
-prompt "ready to push to github.com/orphograph/orphograph-verify? type 'push' to confirm: "
-read -r confirm
-if [ "$confirm" != "push" ]; then
-  warn "skipped push (did not type 'push')"
-else
-  git -C "$VERIFIER_DIR" push -u origin main || {
-    fail "git push failed. Check auth and remote."
-    exit 1
-  }
-  ok "pushed to github.com/orphograph/orphograph-verify"
-  note "verify in incognito: https://github.com/orphograph/orphograph-verify"
-fi
+# RETIRED. This step used to create + push a separate
+# github.com/orphograph/orphograph-verify repo. The verifier is now part of the
+# main repository (server/verify_cli.py + web/verify/) and is served live at
+# https://orphograph.com/verify/, so there is nothing separate to publish.
+# The main repo (Orphograph/Orphograph) is published through normal git
+# workflow + CI, not this script. Kept as a no-op so the step list is intact.
+note "verifier is consolidated into the main repo — no separate publish step."
+note "  • CLI verifier:  server/verify_cli.py"
+note "  • web verifier:  web/verify/  (served at https://orphograph.com/verify/)"
+ok "Step 1 retired (no action needed)"
 fi  # STEP_FILTER github
 
 # ─── STEP 2: RESEND ─────────────────────────────────────────────────────
