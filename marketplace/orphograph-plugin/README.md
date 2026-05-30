@@ -22,7 +22,7 @@ The plugin ships inside the public Orphograph repo, which doubles as a Claude
 Code plugin marketplace. Two commands:
 
 ```
-/plugin marketplace add Orphograph/Orphograph
+/plugin marketplace add https://github.com/Orphograph/Orphograph
 /plugin install orphograph@orphograph
 ```
 
@@ -30,6 +30,11 @@ The first registers the marketplace from GitHub; the second installs the plugin
 (`orphograph` = the plugin name, `@orphograph` = the marketplace name). Verify
 with `/plugin list`. The skills then appear under `/orphograph:` — no restart
 needed.
+
+> The `https://` URL works everywhere. The shorthand
+> `/plugin marketplace add Orphograph/Orphograph` also works but resolves to an
+> SSH clone (`git@github.com:…`), so it needs GitHub SSH keys configured — use
+> the `https://` form above if you're not sure.
 
 Prefer not to use the marketplace? Clone the repo and point Claude Code at the
 plugin subdirectory:
