@@ -85,6 +85,59 @@ class TestCheckoutGuard(unittest.TestCase):
         }
         self.assertEqual(_load().config_warnings(cfg), [])
 
+    def test_warns_when_pack_url_is_placeholder(self):
+        """The 2026-05-30 live failure: STRIPE_PACK_URL was the literal
+        placeholder 'https://buy.stripe.com/...'. Non-empty, so the old
+        emptiness check passed it and the dead button shipped silently."""
+        cfg = {
+            "stripe": {"pack_url": "https://buy.stripe.com/..."},
+            "toggles": {"checkout_disabled": False},
+            "features": {"nowpayments_enabled": False, "btc_payments": False},
+        }
+        warnings = _load().config_warnings(cfg)
+        self.assertTrue(any("not a valid Stripe payment link" in w for w in warnings),
+                        f"placeholder pack_url not flagged: {warnings}")
+
+    def test_warns_when_monthly_url_is_placeholder(self):
+        """Standing Order link placeholder is the same dead-button trap; an
+        empty monthly URL is fine (not offered) but a placeholder is not."""
+        cfg = {
+            "stripe": {
+                "pack_url": "https://buy.stripe.com/live_xyz",
+                "personal_monthly_url": "https://buy.stripe.com/...",
+            },
+            "toggles": {"checkout_disabled": False},
+            "features": {"nowpayments_enabled": False, "btc_payments": False},
+        }
+        warnings = _load().config_warnings(cfg)
+        self.assertTrue(any("STRIPE_PERSONAL_MONTHLY_URL" in w for w in warnings),
+                        f"placeholder monthly_url not flagged: {warnings}")
+
+
+class TestStripeUrlValidation(unittest.TestCase):
+    def test_is_live_stripe_url(self):
+        mod = _load()
+        live = [
+            "https://buy.stripe.com/test_abc",
+            "https://buy.stripe.com/live_xyz",
+            "https://buy.stripe.com/eVa00j2Qq7byfYQbII",
+            "https://buy.stripe.com/8x2cN5abc123?prefilled_email=a@b.co",
+            "https://checkout.stripe.com/c/pay/cs_live_abc12345",
+        ]
+        for url in live:
+            self.assertTrue(mod.is_live_stripe_url(url), f"should be live: {url}")
+        dead = [
+            "",
+            "   ",
+            "https://buy.stripe.com/...",
+            "https://buy.stripe.com/",
+            "https://buy.stripe.com/abc",          # too short
+            "https://example.com/buy",             # wrong host
+            "buy.stripe.com/eVa00j2Qq7byfYQbII",   # no scheme
+        ]
+        for url in dead:
+            self.assertFalse(mod.is_live_stripe_url(url), f"should be dead: {url!r}")
+
 
 if __name__ == "__main__":
     unittest.main()
