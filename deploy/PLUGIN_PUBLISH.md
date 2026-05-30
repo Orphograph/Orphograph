@@ -7,7 +7,7 @@
 > No separate repo, no `gh repo create`. Current end-user install:
 >
 > ```
-> /plugin marketplace add Orphograph/Orphograph
+> /plugin marketplace add https://github.com/Orphograph/Orphograph
 > /plugin install orphograph@orphograph
 > ```
 >
