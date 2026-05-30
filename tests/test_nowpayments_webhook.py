@@ -224,3 +224,148 @@ def test_finished_status_without_email_does_not_credit():
     assert "no customer email" in result.get("error", "")
     if credits.LEDGER_PATH.exists():
         assert credits.LEDGER_PATH.read_text().strip() == ""
+
+
+# ------------------------------------------- per-order mint dedup (double-grant)
+
+def _ledger_rows():
+    if not credits.LEDGER_PATH.exists():
+        return []
+    return [json.loads(l) for l in credits.LEDGER_PATH.read_text().splitlines() if l.strip()]
+
+
+def test_confirmed_then_finished_same_order_credits_only_once():
+    """NOWPayments fires an IPN per lifecycle transition, so one paid order
+    delivers BOTH a `confirmed` and a `finished` IPN with DIFFERENT per-status
+    event_ids. The mint must be deduped per ORDER, not per status, or every
+    crypto buyer is credited (and emailed a claim code) twice."""
+    order_id = "np_lifecycle_001"
+    base = {
+        "order_id": order_id,
+        "invoice_id": "inv_lifecycle_001",
+        "customer_email": "lifecycle@example.com",
+        "plan": "writer_pack",
+    }
+    confirmed_payload, _ = _sign({**base, "payment_status": "confirmed"})
+    finished_payload, _ = _sign({**base, "payment_status": "finished"})
+
+    first = nowpayments_webhook.handle_event(confirmed_payload)
+    assert first.get("claim_code_minted") is True
+    rows_after_first = _ledger_rows()
+    assert len(rows_after_first) == 1
+    assert rows_after_first[0]["credits_delta"] == 10
+
+    second = nowpayments_webhook.handle_event(finished_payload)
+    assert second.get("duplicate_mint") == order_id
+    assert second.get("claim_code_minted") is None
+    # Ledger unchanged: exactly one positive grant for the order.
+    assert _ledger_rows() == rows_after_first, "confirmed+finished must mint once"
+
+
+# ------------------------------------------- plan round-trip (pack50 undergrant)
+
+def test_plan_resolved_from_order_id_token_when_no_plan_key():
+    """Real IPNs do not echo a `plan` key. The pack must be recovered from the
+    plan token we embed in order_id (np_<plan>_<rand>), else a $29 Pack-of-50
+    silently grants 10 credits."""
+    body = {
+        "order_id": "np_pack_50_Ab12Cd34",   # plan token embedded by the caller
+        "payment_status": "finished",
+        "invoice_id": "inv_rt_id",
+        "customer_email": "rt-id@example.com",
+        # NO plan key, NO order_description
+    }
+    payload, _sig = _sign(body)
+    result = nowpayments_webhook.handle_event(payload)
+    assert result.get("claim_code_minted") is True
+    assert result["plan"] == "pack_50"
+    assert result["credits"] == 50
+    assert result.get("plan_resolved") is True
+
+
+def test_plan_resolved_from_order_description_when_no_plan_key():
+    body = {
+        "order_id": "np_opaque_xyz",          # no plan token here
+        "payment_status": "finished",
+        "invoice_id": "inv_rt_desc",
+        "customer_email": "rt-desc@example.com",
+        "order_description": "Orphograph pack_50 credit pack",
+    }
+    payload, _sig = _sign(body)
+    result = nowpayments_webhook.handle_event(payload)
+    assert result["plan"] == "pack_50"
+    assert result["credits"] == 50
+
+
+def test_unresolved_plan_defaults_to_smaller_pack_and_flags():
+    """When the pack cannot be determined from any echoed field, default to the
+    SMALLER pack (never over-grant) and surface plan_resolved=False so the
+    founder can reconcile rather than silently over/under-shipping."""
+    body = {
+        "order_id": "np_opaque_only",         # no plan token
+        "payment_status": "finished",
+        "invoice_id": "inv_unresolved",
+        "customer_email": "unresolved@example.com",
+        # no plan key, no order_description
+    }
+    payload, _sig = _sign(body)
+    result = nowpayments_webhook.handle_event(payload)
+    assert result.get("claim_code_minted") is True
+    assert result["plan"] == "writer_pack"
+    assert result["credits"] == 10
+    assert result.get("plan_resolved") is False
+
+
+# ------------------------------------------- underpayment guard
+
+def test_underpayment_warns_but_still_credits_by_default():
+    """Default posture is WARN-ONLY: we never reject a payment NOWPayments has
+    already accepted as finished (paid-but-no-credit is the worse error)."""
+    body = {
+        "order_id": "np_underpay_warn",
+        "payment_status": "finished",
+        "invoice_id": "inv_underpay_warn",
+        "customer_email": "underpay-warn@example.com",
+        "plan": "writer_pack",
+        "pay_amount": "0.0010",
+        "actually_paid": "0.0005",            # 50% short
+    }
+    payload, _sig = _sign(body)
+    result = nowpayments_webhook.handle_event(payload)
+    assert result.get("claim_code_minted") is True
+    assert result["credits"] == 10
+
+
+def test_underpayment_blocks_when_enforcement_enabled(monkeypatch):
+    monkeypatch.setenv("ORPHO_NOWPAY_ENFORCE_AMOUNT", "1")
+    body = {
+        "order_id": "np_underpay_block",
+        "payment_status": "finished",
+        "invoice_id": "inv_underpay_block",
+        "customer_email": "underpay-block@example.com",
+        "plan": "writer_pack",
+        "pay_amount": "0.0010",
+        "actually_paid": "0.0005",
+    }
+    payload, _sig = _sign(body)
+    result = nowpayments_webhook.handle_event(payload)
+    assert result.get("ignored") is True
+    assert result.get("reason") == "underpaid"
+    assert _ledger_rows() == [], "enforced underpayment must not mint"
+
+
+def test_exact_payment_credits_under_enforcement(monkeypatch):
+    monkeypatch.setenv("ORPHO_NOWPAY_ENFORCE_AMOUNT", "1")
+    body = {
+        "order_id": "np_exact_pay",
+        "payment_status": "finished",
+        "invoice_id": "inv_exact_pay",
+        "customer_email": "exact@example.com",
+        "plan": "writer_pack",
+        "pay_amount": "0.0010",
+        "actually_paid": "0.0010",            # paid in full
+    }
+    payload, _sig = _sign(body)
+    result = nowpayments_webhook.handle_event(payload)
+    assert result.get("claim_code_minted") is True
+    assert result["credits"] == 10

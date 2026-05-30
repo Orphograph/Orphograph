@@ -57,6 +57,14 @@ PROCESSED_EVENTS_PATH = Path(os.environ.get(
 _dedupe_lock = threading.Lock()
 
 
+def _to_float(v) -> float | None:
+    """Best-effort float parse; None on missing/garbage (used for amount guards)."""
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return None
+
+
 def verify_signature(payload: bytes, sig_header_hex: str, secret: str) -> bool:
     """HMAC-SHA512 of JSON body (sorted keys) compared in constant time.
 
@@ -122,17 +130,37 @@ def handle_event(payload: bytes) -> dict:
     order_id = (event.get("order_id") or "").strip()
     invoice_id = str(event.get("invoice_id") or event.get("payment_id") or "").strip()
     customer_email = (event.get("customer_email") or "").strip()
-    # `order_description` lets us round-trip the plan since order_id is
-    # our internal token. We accept either a `plan` key (preferred) or a
-    # description containing "pack_50" / "writer_pack".
+    # Resolve the credit pack. NOWPayments echoes `order_id` and
+    # `order_description` verbatim, so we round-trip the plan through BOTH
+    # (set in nowpayments_api.create_invoice + _handle_nowpayments_create):
+    #   order_id          = "np_<plan>_<rand>"
+    #   order_description = "Orphograph <plan> credit pack"
+    # Accept an explicit `plan` key first, then an exact plan token in either
+    # echoed field, then the legacy human-readable description variants.
     plan = (event.get("plan") or "").strip().lower()
-    if not plan:
+    if plan not in PLAN_CREDITS:
+        haystack = f"{event.get('order_description') or ''} {order_id}".lower()
+        for known in PLAN_CREDITS:          # exact tokens: writer_pack, pack_50
+            if known in haystack:
+                plan = known
+                break
+    if plan not in PLAN_CREDITS:
         desc = (event.get("order_description") or "").lower()
-        if "pack_50" in desc or "pack-of-50" in desc or "pack of 50" in desc:
+        if "pack-of-50" in desc or "pack of 50" in desc:
             plan = "pack_50"
         elif "writer" in desc:
             plan = "writer_pack"
-    if plan not in PLAN_CREDITS:
+    plan_resolved = plan in PLAN_CREDITS
+    if not plan_resolved:
+        # Could not determine the pack from any echoed field. Default to the
+        # SMALLER pack so we never OVER-grant, and alert loudly so the founder
+        # can reconcile (top up to the larger pack) rather than silently
+        # shipping 10 credits for a possible $29 purchase.
+        sys.stderr.write(
+            f"[nowpayments_webhook] order {order_id}: UNRESOLVED plan "
+            f"(desc={event.get('order_description')!r}) — defaulting to "
+            f"{DEFAULT_PLAN}; RECONCILE MANUALLY\n"
+        )
         plan = DEFAULT_PLAN
     pack_credits = PLAN_CREDITS[plan]
 
@@ -147,16 +175,58 @@ def handle_event(payload: bytes) -> dict:
         if _has_been_processed(event_id):
             return {"ok": True, "duplicate": event_id}
 
-        # Crediting branch.
+        # Crediting branch. NOWPayments' lifecycle (waiting -> confirming ->
+        # confirmed -> sending -> finished) fires an IPN per transition, so a
+        # single paid order delivers BOTH a `confirmed` and a `finished` IPN.
+        # Those carry different per-status event_ids, so we dedup the MINT on a
+        # per-ORDER marker: whichever status arrives first credits; the sibling
+        # no-ops. (Refund/partial/failed keep their own per-status keys below.)
         if payment_status in ("finished", "confirmed"):
+            mint_marker = f"mint:{order_id}"
+            if _has_been_processed(mint_marker):
+                result = {"ok": True, "duplicate_mint": order_id,
+                          "status": payment_status}
+                _mark_processed(event_id, result)
+                return result
+
             if not customer_email or "@" not in customer_email:
                 sys.stderr.write(
                     f"[nowpayments_webhook] order {order_id} {payment_status} "
                     f"has no customer email — cannot deliver claim code\n"
                 )
                 result = {"ok": False, "error": "no customer email"}
+                # NOTE: do not set mint_marker — nothing was minted, so a later
+                # IPN that DOES carry an email can still deliver the pack.
                 _mark_processed(event_id, result)
                 return result
+
+            # Underpayment guard. NOWPayments only marks `finished` once its own
+            # merchant-configured tolerance is met, but FX/fee slippage across
+            # the supported networks can let a finished/confirmed IPN settle
+            # below the quoted crypto amount. Measure actually_paid vs pay_amount
+            # (both in the pay currency). Default is WARN-ONLY so we never reject
+            # a payment NOWPayments already accepted (paid-but-no-credit is the
+            # worse error); set ORPHO_NOWPAY_ENFORCE_AMOUNT=1 to refuse on gross
+            # underpayment. Fails OPEN when the amount fields are absent.
+            actually_paid = _to_float(event.get("actually_paid"))
+            pay_amount = _to_float(event.get("pay_amount"))
+            if actually_paid is not None and pay_amount and pay_amount > 0:
+                tol = _to_float(os.environ.get("ORPHO_NOWPAY_UNDERPAY_TOLERANCE"))
+                if tol is None:
+                    tol = 0.02
+                if actually_paid < pay_amount * (1.0 - tol):
+                    enforce = os.environ.get("ORPHO_NOWPAY_ENFORCE_AMOUNT", "0") == "1"
+                    sys.stderr.write(
+                        f"[nowpayments_webhook] order {order_id} UNDERPAID: "
+                        f"actually_paid={actually_paid} < pay_amount={pay_amount} "
+                        f"(tol={tol}) enforce={enforce}\n"
+                    )
+                    if enforce:
+                        result = {"ok": True, "ignored": True, "reason": "underpaid",
+                                  "order_id": order_id, "actually_paid": actually_paid,
+                                  "pay_amount": pay_amount}
+                        _mark_processed(event_id, result)
+                        return result
 
             claim_code = credits.new_claim_code()
             # Include BOTH invoice_id and order_id in the source so that
@@ -178,9 +248,13 @@ def handle_event(payload: bytes) -> dict:
                 "ok": True,
                 "claim_code_minted": True,
                 "plan": plan,
+                "plan_resolved": plan_resolved,
                 "credits": pack_credits,
                 "order_id": order_id,
             }
+            # Per-ORDER mint guard FIRST, so a racing sibling IPN (confirmed vs
+            # finished) sees it and no-ops; then the per-status event marker.
+            _mark_processed(mint_marker, result)
             _mark_processed(event_id, result)
             return result
 

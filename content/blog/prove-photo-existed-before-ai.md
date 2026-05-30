@@ -9,16 +9,16 @@ tags: [photographers, ai-disputes, opentimestamps, provenance]
 
 # How to prove your photo existed before AI scraped it (without a lawyer)
 
-If you've ever uploaded a photo to Instagram, you've probably wondered:
+If you've ever posted a photo online, you've probably wondered:
 what stops an AI training set from scraping it, then a year from now
 someone claims your photo is the AI-generated one?
 
 This isn't paranoid. It's the next phase of a problem that already
 happened to musicians (sample disputes), writers (plagiarism), and
 illustrators (style mimicking). Photographers are now the cohort
-getting the most heat — Getty filed against Stability AI for 12
-million scraped images, and every working photographer has a "is
-that mine?" story brewing.
+getting the most heat — major AI image generators have been sued
+over millions of scraped images, and every working photographer
+has a "is that mine?" story brewing.
 
 The standard answer is **EXIF metadata + your RAW files + cloud
 backups**. That's three plates spinning, all of which can be edited,
@@ -96,7 +96,7 @@ You can verify the receipt later with [a 100-line Python file
 on GitHub](https://github.com/orphograph/orphograph-verify) — no
 Orphograph dependency. The receipt outlives our company by design.
 
-Three pricing tiers: free (1 anchor/month), $19 Writer Pack (10 anchors,
+Three pricing tiers: free (3 anchors/24h), $19 Writer Pack (10 anchors,
 never expires, claim code by email), $9/mo Standing Order (unlimited).
 
 ## How to actually do this for your portfolio
@@ -127,7 +127,7 @@ photo of the month into the box. Save the receipt JSON. Done.
 Cost: $0/month forever for the first anchor. Time: 10 seconds.
 Defensibility: same as Path A, with a slight UX trade — the
 receipt has to be re-downloaded if your browser clears
-localStorage. Save the receipt to Dropbox / iCloud / your normal
+localStorage. Save the receipt to your normal cloud storage or
 photo backup.
 
 ### Path C — $19 for a batch (when you have 10 photos at once)

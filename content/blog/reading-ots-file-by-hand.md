@@ -250,5 +250,5 @@ Welcome to the rabbit hole.
 *Anchor a file at [orphograph.com](/). Verify any receipt with
 the open-source verifier at [/verify/](/verify/) — no Orphograph
 account, no Python install required if you use the bundled
-sample's pre-upgraded receipts. $19 for a Writer Pack of 10, free for one
-per month.*
+sample's pre-upgraded receipts. $19 for a Writer Pack of 10, free for three
+per 24 hours.*

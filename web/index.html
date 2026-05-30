@@ -66,9 +66,29 @@
     font-size: 22px;
     line-height: 1;
   }
+  .hero .see-seal{
+    margin: 22px 0 0;
+    font-family: var(--serif);
+    font-style: italic;
+    font-size: 14px;
+    color: var(--muted);
+    letter-spacing: 0.03em;
+  }
+  .hero .see-seal a{
+    color: var(--muted-2);
+    text-decoration: none;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 1px;
+    transition: color .15s ease, border-color .15s ease;
+  }
+  .hero .see-seal a:hover{
+    color: var(--ink);
+    border-bottom-color: var(--ink);
+  }
   @media (max-width: 640px){
     .hero .plain-subtitle{font-size: 17px;}
     .hero .means-list li{font-size: 15px;}
+    .hero .see-seal{font-size: 13px;}
   }
   /* Live status badge (header) */
   .live-status-badge{
@@ -387,6 +407,7 @@
         <li>Anyone can verify it later — no account, no login.</li>
       </ul>
     </section>
+    <p class="see-seal"><a href="/experience.html">View the seal &rarr;</a></p>
     <details class="examples">
       <summary>Examples of what people anchor</summary>
       <div class="examples-body"></div>

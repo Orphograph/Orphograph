@@ -14,7 +14,10 @@ primary_region = 'iad'
   ORPHO_DATA_DIR = '/app/data'
   ORPHO_TRUST_PROXY_HEADERS = '1'
   PORT = '8080'
-  RATE_LIMIT_PER_HOUR = '10'
+  # Canonical free tier is 3 anchors / 24h. The legacy RATE_LIMIT_PER_HOUR='10'
+  # resolved to 10*24 = 240/day (app.py multiplies the hourly legacy value by
+  # 24), far above policy. Set the daily cap directly.
+  RATE_LIMIT_PER_DAY = '3'
   RESEND_FROM = 'Orphograph <hello@orphograph.com>'
   SITE_URL = 'https://orphograph.com'
 

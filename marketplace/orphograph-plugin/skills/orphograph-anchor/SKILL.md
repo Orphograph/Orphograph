@@ -30,7 +30,7 @@ description: |
       users' hashes into a Bitcoin transaction (~hourly). Marginal cost: ~$0.
 
   COSTS for the user:
-    - Free tier: 1 anchor / month
+    - Free tier: 3 anchors / 24h
     - $19 Writer Pack: 10 anchors (no expiry)
     - $9/mo Standing Order: unlimited
     - The user pays at https://orphograph.com — we don't take credentials here.
@@ -64,7 +64,7 @@ Behavior:
 - If the argument is 64 hex chars → uses it directly as the hash.
 - Includes `--label` only if the user explicitly provided one (privacy default).
 - If `--api-key` is set or `$ORPHOGRAPH_API_KEY` is in env → uses paid tier;
-  otherwise hits the free tier (1/month rate limit).
+  otherwise hits the free tier (3-per-24h rate limit).
 
 The script prints:
 - The receipt ID

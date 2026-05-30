@@ -15,8 +15,8 @@ server), then submitted to OpenTimestamps calendar servers that
 batch many users' hashes into a single Bitcoin transaction roughly
 once an hour. The resulting receipt can be verified by anyone — even
 years later, even if Orphograph the company is gone — using an
-open-source verifier on GitHub. Pricing: free for one anchor per
-month, $19 for a ten-anchor Writer Pack, $9/month for unlimited anchors.
+open-source verifier on GitHub. Pricing: free for three anchors per 24
+hours, $19 for a ten-anchor Writer Pack, $9/month for unlimited anchors.
 
 ## One-sentence pitch
 

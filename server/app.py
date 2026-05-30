@@ -99,6 +99,33 @@ TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]{16,64}$")
 EMAIL_RE = re.compile(r"^[^@\s,]{1,64}@[^@\s,]{1,255}$")
 COOKIE_SECURE = os.environ.get("ORPHO_COOKIE_SECURE", "1") != "0"
 TRUST_PROXY_HEADERS = os.environ.get("ORPHO_TRUST_PROXY_HEADERS", "0") == "1"
+# Platform-set real-client-IP header. Fly.io sets `Fly-Client-IP` to the true
+# connecting IP at its edge; unlike X-Forwarded-For, the client cannot forge it.
+# Used in preference to XFF for rate-limit bucketing so the limiter can't be
+# bypassed by rotating a client-supplied XFF value.
+REAL_IP_HEADER = os.environ.get("ORPHO_REAL_IP_HEADER", "Fly-Client-IP")
+
+
+def _resolve_peer_ip(real_ip_value: str, xff_value: str, peer_addr: str,
+                     trust_proxy: bool) -> str:
+    """Pick the client IP for rate-limit bucketing. Pure (no I/O) for testing.
+
+    When behind a trusted proxy, prefer the platform real-IP header
+    (Fly-Client-IP) which the client cannot forge. Otherwise fall back to the
+    RIGHTMOST X-Forwarded-For entry: proxies APPEND the true connecting IP to
+    the right of any client-supplied value, so the leftmost token is
+    attacker-controlled and using it would let a client rotate XFF to mint
+    unlimited fresh rate-limit buckets. With no trusted proxy, only the real
+    socket peer counts (client-supplied headers must never bypass limits).
+    """
+    peer = peer_addr or ""
+    if not trust_proxy:
+        return peer
+    real = (real_ip_value or "").strip()
+    if real:
+        return real
+    parts = [p.strip() for p in (xff_value or "").split(",") if p.strip()]
+    return parts[-1] if parts else peer
 ALLOW_UNSIGNED_WEBHOOK_PROBE = os.environ.get("ORPHO_ALLOW_UNSIGNED_WEBHOOK_PROBE", "0") == "1"
 ALLOWED_STATIC_SUFFIXES = {
     ".html", ".css", ".js", ".svg", ".png", ".ico", ".webmanifest",
@@ -450,14 +477,14 @@ class Handler(BaseHTTPRequestHandler):
         sys.stderr.write(f"[{self.log_date_time_string()}] {truncated} - {fmt % args}\n")
 
     def _client_key(self) -> str:
-        # Trust X-Forwarded-For only when the deployment has explicitly said
-        # every request arrives through a trusted proxy. Local/tunnel/direct
-        # traffic can carry attacker-supplied XFF and must not bypass limits.
-        xff = ""
-        if TRUST_PROXY_HEADERS:
-            xff = self.headers.get("X-Forwarded-For", "").split(",")[0].strip()
-        peer = xff or (self.client_address[0] if self.client_address else "")
-        return truncate_ip(peer)
+        peer = self.client_address[0] if self.client_address else ""
+        chosen = _resolve_peer_ip(
+            self.headers.get(REAL_IP_HEADER, ""),
+            self.headers.get("X-Forwarded-For", ""),
+            peer,
+            TRUST_PROXY_HEADERS,
+        )
+        return truncate_ip(chosen)
 
     def _session_email(self) -> str | None:
         cookies = SimpleCookie()
@@ -1397,13 +1424,20 @@ class Handler(BaseHTTPRequestHandler):
                 return
         length = _read_content_length(self)
         if length <= 0 or length > MAX_BODY_BYTES:
-            _json_response(self, 400, {"error": "invalid body size"})
+            # Credit was consumed above; a malformed request must not burn it.
+            if pack_consumed:
+                credits.refund_credit(pack_token)
+            _json_response(self, 400, {"error": "invalid body size",
+                                       "credit_refunded": pack_consumed})
             return
         raw = self.rfile.read(length)
         try:
             payload = json.loads(raw.decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError):
-            _json_response(self, 400, {"error": "body must be JSON"})
+            if pack_consumed:
+                credits.refund_credit(pack_token)
+            _json_response(self, 400, {"error": "body must be JSON",
+                                       "credit_refunded": pack_consumed})
             return
         hash_hex = payload.get("hash_hex", "")
         sha512_hex = payload.get("sha512_hex")
@@ -1453,9 +1487,24 @@ class Handler(BaseHTTPRequestHandler):
                 c2pa_manifest_hash=c2pa_manifest_hash,
             )
         except ValueError as e:
-            _json_response(self, 400, {"error": str(e)})
+            # Anchor definitively failed (bad hash, etc.); no receipt produced.
+            # Refund the consumed pack credit so the buyer isn't charged for a
+            # request that yielded nothing.
+            if pack_consumed:
+                credits.refund_credit(pack_token)
+            _json_response(self, 400, {"error": str(e),
+                                       "credit_refunded": pack_consumed})
             return
         low_redundancy = record["calendars_ok"] < MIN_CALENDARS_OK
+        # Total calendar outage: 0 calendars accepted the hash, so the receipt
+        # has no Bitcoin commitment and can never upgrade — it is worthless.
+        # Refund the consumed credit (the buyer can re-anchor when calendars
+        # recover) while still returning the receipt for transparency.
+        credit_refunded = False
+        if pack_consumed and record["calendars_ok"] == 0:
+            credits.refund_credit(pack_token, reason="anchor-refund:no-calendars")
+            credit_refunded = True
+            pack_remaining += 1
         # Receipt email: fires for any paid path (Pack consumed, active
         # subscription, or active API key). Previously this was Pack-only,
         # which silently dropped receipts for subscribers — exact 2026-05-18
@@ -1511,6 +1560,7 @@ class Handler(BaseHTTPRequestHandler):
             "low_redundancy": low_redundancy,
             "pack_consumed": pack_consumed,
             "pack_remaining": pack_remaining,
+            "credit_refunded": credit_refunded,
             "subscription_active": subscription_active,
             "successes": [{"calendar": s["calendar"], "ots_path": s["ots_path"]} for s in record["successes"]],
             "failures": record["failures"],
@@ -1894,13 +1944,34 @@ class Handler(BaseHTTPRequestHandler):
             btc_amount = payload.get("btc_amount"),
             btc_address= payload.get("btc_address", "") if isinstance(payload.get("btc_address"), str) else "",
             note       = payload.get("note", "") if isinstance(payload.get("note"), str) else "",
-            source_ip  = _truncate_ip(self._client_ip()),
+            source_ip  = self._client_key(),   # already truncated; _client_ip/_truncate_ip never existed
         )
         if not ok:
             _json_response(self, 400, {"error": result})
             return
         _json_response(self, 200, {"ok": True, "claim_id": result,
                                    "message": "Got it. We verify on-chain and email your claim code within ~1 hour."})
+
+    def _handle_affiliate_payout(self) -> None:
+        """POST /api/me/affiliate/payout.
+
+        do_POST dispatches here, but the handler was never defined — every
+        request 500'd with an AttributeError. The backing logic exists
+        (affiliate.request_payout), but self-serve payouts are intentionally
+        NOT enabled yet: the BTC/credit payout rail is a deferred feature and
+        the "credits" method would auto-grant boosted value. Fail CLOSED with a
+        clear, honest message instead of crashing, and never settle value
+        autonomously. To enable self-serve payouts later, wire this handler to
+        affiliate.request_payout(email, method, destination) behind a session
+        check (see _handle_refund_request for the session-gating pattern).
+        """
+        _json_response(self, 503, {
+            "ok": False,
+            "reason": "payouts_not_self_serve",
+            "error": "Referral payouts are settled manually for now — reply to "
+                     "your referral email with your payout details and we'll "
+                     "process it.",
+        })
 
     def _parse_unsub_email(self) -> str:
         """Extract ?e=<email> from the request path. Returns '' if absent/invalid."""
@@ -3372,14 +3443,19 @@ class Handler(BaseHTTPRequestHandler):
             _json_response(self, 400, {"error": "unsupported currency"})
             return
         plan_meta = nowpayments_api.PLANS[plan]
-        # Order id is opaque + unguessable so retries/lookups are safe to
-        # leak in URLs. We use the same token shape as receipt ids.
-        order_id = "np_" + secrets.token_urlsafe(10)
+        # Order id is opaque + unguessable so retries/lookups are safe to leak
+        # in URLs. We embed the plan token (np_<plan>_<rand>) so the IPN — which
+        # echoes order_id verbatim — can recover which pack was bought even if
+        # order_description is dropped. `plan` is a validated PLANS key above,
+        # so it is a safe, fixed-vocabulary token. Stays well under the 64-char
+        # order_id cap (np_pack_50_ + ~14 = ~25).
+        order_id = f"np_{plan}_" + secrets.token_urlsafe(10)
         result = nowpayments_api.create_invoice(
             amount_usd=float(plan_meta["price_usd"]),
             currency=currency,
             order_id=order_id,
             customer_email=email if "@" in email else None,
+            plan=plan,
         )
         if not result.get("ok"):
             _json_response(self, 502, {

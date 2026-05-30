@@ -289,7 +289,7 @@
       <td><strong>None (free tier)</strong></td>
       <td>—</td>
       <td>Anonymous browser drops; quick experimentation from the terminal.</td>
-      <td>10 anchors per hour per /24-truncated IP. Returns <code>429</code> with a <code>Retry-After</code> header on exhaustion.</td>
+      <td>3 anchors per 24 hours per /24-truncated IP. Returns <code>429</code> with a <code>Retry-After</code> header on exhaustion.</td>
     </tr>
   </tbody>
 </table>
@@ -315,9 +315,9 @@
   <tbody>
     <tr>
       <td>Free</td>
-      <td>10 / hour / truncated IP</td>
+      <td>3 / 24h / truncated IP</td>
       <td>—</td>
-      <td>Token bucket; refills continuously at ~10/3600 tokens/sec. Hit it and you get <code>429</code>.</td>
+      <td>Token bucket; refills continuously at ~3/86400 tokens/sec. Hit it and you get <code>429</code>.</td>
     </tr>
     <tr>
       <td>Pack of Fifty ($29 one-shot)</td>
@@ -400,7 +400,7 @@
   </p>
 
   <h3>Auth</h3>
-  <p>Optional <code>X-Orpho-Api-Key</code> or <code>X-Pack-Token</code>. Anonymous calls fall back to the 10/hour free-tier limit.</p>
+  <p>Optional <code>X-Orpho-Api-Key</code> or <code>X-Pack-Token</code>. Anonymous calls fall back to the free-tier limit of 3 anchors per 24 hours.</p>
 
   <h3>Request</h3>
 <pre>POST /api/anchor HTTP/1.1

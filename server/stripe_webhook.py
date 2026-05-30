@@ -51,6 +51,47 @@ PROCESSED_EVENTS_PATH = Path(os.environ.get(
 ))
 _dedupe_lock = threading.Lock()
 
+# payment_intent -> checkout session_id map. Real Stripe charge.refunded /
+# charge.dispute.created webhooks carry only the bare `payment_intent` id (and
+# the charge's metadata is inherited from the PaymentIntent, NOT the Checkout
+# Session — which we never write to). Without this map the refund handler can
+# never recover the session_id and credits are never revoked = money leak.
+PI_SESSION_MAP_PATH = Path(os.environ.get(
+    "ORPHO_STRIPE_PI_SESSION_MAP", str(DATA_DIR / "stripe_pi_session_map.jsonl")
+))
+
+
+def _record_pi_session(payment_intent_id: str, session_id: str) -> None:
+    """Persist payment_intent_id -> checkout session_id (append-only)."""
+    if not payment_intent_id or not session_id:
+        return
+    with locked(PI_SESSION_MAP_PATH, mode="a", exclusive=True) as f:
+        f.write(json.dumps({
+            "ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "payment_intent": payment_intent_id,
+            "session_id": session_id,
+        }, separators=(",", ":")) + "\n")
+
+
+def _lookup_session_by_pi(payment_intent_id: str) -> str:
+    """Resolve a checkout session_id from a bare payment_intent id. Last
+    write wins (re-minted sessions are rare; latest mapping is correct)."""
+    if not payment_intent_id or not PI_SESSION_MAP_PATH.exists():
+        return ""
+    found = ""
+    with PI_SESSION_MAP_PATH.open() as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if row.get("payment_intent") == payment_intent_id:
+                found = row.get("session_id") or found
+    return found
+
 
 def verify_signature(payload: bytes, sig_header: str, secret: str, tolerance_sec: int = 300) -> bool:
     if not secret or not sig_header:
@@ -173,7 +214,10 @@ def handle_event(payload: bytes) -> dict:
                 or ""
             )
             if not session_id:
-                # payment_intent may be expanded into an object or a bare id.
+                # payment_intent may be expanded into an object or — in real
+                # webhooks — a bare id string. Try expanded metadata first, then
+                # resolve the bare id via the pi->session map we persisted at
+                # checkout.session.completed time.
                 pi = obj.get("payment_intent")
                 if isinstance(pi, dict):
                     pi_meta = pi.get("metadata", {}) or {}
@@ -182,6 +226,10 @@ def handle_event(payload: bytes) -> dict:
                         or pi_meta.get("session_id")
                         or ""
                     )
+                    if not session_id:
+                        pi = pi.get("id") or ""
+                if not session_id and isinstance(pi, str) and pi:
+                    session_id = _lookup_session_by_pi(pi)
             if not session_id:
                 sys.stderr.write(
                     f"[stripe_webhook] {event_type} event {event_id} had no "
@@ -233,10 +281,17 @@ def handle_event(payload: bytes) -> dict:
         session_id = session.get("id", "")
 
         if not customer_email:
-            sys.stderr.write(f"[stripe_webhook] session {session_id} had no customer email; skipping\n")
-            result = {"ok": False, "error": "no customer email"}
-            _mark_processed(event_id, result)
-            return result
+            # A paid session with no resolvable email. Do NOT mark the event
+            # processed: marking it would dedupe every Stripe retry into a
+            # permanent "paid-but-nothing" dead end. Leaving it unmarked lets a
+            # corrected redelivery (or manual replay) still deliver the pack.
+            # Alert loudly so the founder can reconcile from the Stripe session.
+            sys.stderr.write(
+                f"[stripe_webhook] WARNING session {session_id} completed with NO "
+                f"customer email — credits NOT minted; event left unprocessed for "
+                f"retry/manual recovery. RECONCILE from Stripe dashboard\n"
+            )
+            return {"ok": False, "error": "no customer email", "recoverable": True}
         masked = auth.mask_email(customer_email)
 
         # Capture customer_id → email mapping for later subscription events,
@@ -311,6 +366,12 @@ def handle_event(payload: bytes) -> dict:
                 f"stripe-gift:{session_id}" if is_gift else f"stripe:{session_id}"
             ),
         )
+        # Map payment_intent -> session_id so a later refund/dispute (whose
+        # charge carries only the bare payment_intent id) can find and revoke
+        # exactly these credits. mode==payment sessions carry a string PI id.
+        payment_intent_id = session.get("payment_intent")
+        if isinstance(payment_intent_id, str) and payment_intent_id:
+            _record_pi_session(payment_intent_id, session_id)
 
         # Referral: Stripe Payment Links accept arbitrary key=value pairs
         # in metadata (set client-side by adding ?prefilled_metadata or via
@@ -328,13 +389,13 @@ def handle_event(payload: bytes) -> dict:
                 to=recipient_email,
                 from_email=customer_email,
                 claim_code=claim_code,
-                credit_count=PACK_CREDITS,
+                credit_count=credit_amount,
                 message=gift_message,
             )
             sys.stderr.write(
                 f"[stripe_webhook] gifted Pack for session {session_id}: "
                 f"buyer={masked} → recipient={auth.mask_email(recipient_email)}, "
-                f"{PACK_CREDITS} credits (email_sent={sent})\n"
+                f"{credit_amount} credits (email_sent={sent})\n"
             )
             if not sent:
                 # Credits are minted; recipient won't get the code by email.
@@ -345,10 +406,10 @@ def handle_event(payload: bytes) -> dict:
                     f"claim code minted but recipient not notified\n"
                 )
         else:
-            sent = mailer.send_pack_claim_email(customer_email, claim_code, PACK_CREDITS)
+            sent = mailer.send_pack_claim_email(customer_email, claim_code, credit_amount)
             sys.stderr.write(
                 f"[stripe_webhook] minted claim_code for session {session_id} ({masked}): "
-                f"{PACK_CREDITS} credits (email_sent={sent})\n"
+                f"{credit_amount} credits (email_sent={sent})\n"
             )
         result = {"ok": True, "claim_code_minted": True, "gift": is_gift}
         if ref_credit_result is not None:

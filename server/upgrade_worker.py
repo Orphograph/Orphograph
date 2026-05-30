@@ -40,6 +40,18 @@ DATA_DIR = Path(os.environ.get("ORPHO_DATA_DIR", str(ROOT / "data") if (ROOT / "
 RECEIPTS_DIR = Path(os.environ.get("ORPHO_RECEIPTS_DIR", str(DATA_DIR / "receipts")))
 UPGRADE_LOG = Path(os.environ.get("ORPHO_UPGRADE_LOG", str(DATA_DIR / "upgrade_log.jsonl")))
 
+# After this many consecutive eligible runs that make NO forward progress (no
+# calendar newly pinned), stop re-fetching a stuck receipt. A pool calendar
+# whose commitment digest permanently 404s would otherwise be re-queried on
+# every cron run forever — burning thousands of calls and growing the log
+# unbounded. verify_cli.py stays the authoritative Bitcoin-inclusion check;
+# freezing only halts the wasteful polling. Set 0 to disable; clear
+# `upgrade_frozen` on a record to resume it.
+MAX_UPGRADE_STALLS = int(os.environ.get("ORPHO_MAX_UPGRADE_STALLS", "24"))
+# Bound the append-only upgrade log: rotate to a single .1 backup past this
+# size so a long-stuck backlog can't grow it without limit.
+UPGRADE_LOG_MAX_BYTES = int(os.environ.get("ORPHO_UPGRADE_LOG_MAX_BYTES", str(5 * 1024 * 1024)))
+
 # Matches engine.py header so an upgraded .ots stays well-formed.
 OTS_HEADER_MAGIC = b"\x00OpenTimestamps\x00\x00Proof\x00\xbf\x89\xe2\xe8\x84\xe8\x92\x94"
 OTS_VERSION = b"\x01"
@@ -111,8 +123,22 @@ def _commitment_for_pending(ots_blob: bytes) -> tuple[str | None, int]:
     return cur.hex(), marker_idx
 
 
+def _rotate_log_if_needed() -> None:
+    """Rotate the upgrade log to a single .1 backup once it exceeds the size
+    cap. Best-effort: any OSError leaves the current log in place — logging
+    must never crash the worker."""
+    if UPGRADE_LOG_MAX_BYTES <= 0:
+        return
+    try:
+        if UPGRADE_LOG.exists() and UPGRADE_LOG.stat().st_size >= UPGRADE_LOG_MAX_BYTES:
+            os.replace(UPGRADE_LOG, UPGRADE_LOG.with_suffix(UPGRADE_LOG.suffix + ".1"))
+    except OSError:
+        pass
+
+
 def _log(event: dict) -> None:
     # flock so concurrent upgrade-cron runs across machines don't interleave lines.
+    _rotate_log_if_needed()
     with locked(UPGRADE_LOG, mode="a", exclusive=True) as f:
         f.write(json.dumps(event, separators=(",", ":")) + "\n")
 
@@ -222,6 +248,27 @@ def _upgrade_one(receipt_dir: Path, record: dict) -> dict:
     # fields reflect Bitcoin PIN confirmation, which can be a strict subset.
     record["pinned_count"] = pinned_count
     record["pinned_total"] = len(record.get("successes", []))
+    # Stall/freeze accounting. A receipt stuck at pending/partial because a
+    # pool calendar's commitment permanently 404s would otherwise be re-fetched
+    # on every run forever. Count consecutive eligible runs that make no forward
+    # progress (no calendar's blob changed this run); once the ceiling is hit,
+    # freeze it so upgrade_all() skips it like a pinned receipt. This touches
+    # only polling cadence — never the proof bytes or the commitment walk.
+    progressed = any(u.get("changed") for u in upgrades)
+    record["upgrade_attempts"] = int(record.get("upgrade_attempts", 0) or 0) + 1
+    if status == "pinned" or progressed:
+        record["upgrade_stalls"] = 0
+    else:
+        record["upgrade_stalls"] = int(record.get("upgrade_stalls", 0) or 0) + 1
+    if (MAX_UPGRADE_STALLS > 0 and status != "pinned"
+            and record["upgrade_stalls"] >= MAX_UPGRADE_STALLS
+            and not record.get("upgrade_frozen")):
+        record["upgrade_frozen"] = True
+        record["upgrade_frozen_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        record["upgrade_frozen_reason"] = (
+            f"no Bitcoin-pin progress after {record['upgrade_stalls']} attempts; "
+            "polling halted (verify_cli remains authoritative)"
+        )
     # Email the customer exactly on the pending→pinned/partial transition.
     # was_pinned_before guards against re-sending if btc_pinned_at was
     # already populated on a prior run. _send_pin_email_if_needed also
@@ -233,6 +280,8 @@ def _upgrade_one(receipt_dir: Path, record: dict) -> dict:
         "receipt_id": record["receipt_id"],
         "status": status,
         "pinned_count": pinned_count,
+        "stalls": record.get("upgrade_stalls", 0),
+        "frozen": bool(record.get("upgrade_frozen")),
         "upgrades": upgrades,
     }
 
@@ -260,7 +309,9 @@ def upgrade_all(min_age_sec: int = 3600) -> dict:
             record = json.loads(receipt_file.read_text())
         except json.JSONDecodeError:
             continue
-        if record.get("status") == "pinned":
+        if record.get("status") == "pinned" or record.get("upgrade_frozen"):
+            # Pinned = done. Frozen = a permanently-stuck partial we've stopped
+            # polling (see MAX_UPGRADE_STALLS) so it can't burn calls forever.
             skipped += 1
             continue
         age = now - receipt_file.stat().st_mtime
