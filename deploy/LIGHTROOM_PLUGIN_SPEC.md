@@ -105,7 +105,7 @@ Privacy:
   • The image bytes never leave your computer
   • Filename inclusion is opt-in only
   • All your data is yours; receipts work even if Orphograph disappears
-  • Open-source verifier at github.com/orphograph/orphograph-verify
+  • Open-source verifier at orphograph.com/verify/
 ```
 
 ---
