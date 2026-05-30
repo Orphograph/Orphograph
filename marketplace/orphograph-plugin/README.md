@@ -30,7 +30,7 @@ Then restart Claude Code. The skills appear under `/orphograph:`.
 
 | Tier | Price | Anchors |
 |---|---|---|
-| Free | $0 | 1 / month |
+| Free | $0 | 3 / 24h |
 | Writer Pack | $19 one-shot | 10 (no expiry) |
 | Standing Order | $9/mo | Unlimited |
 | Creator | $19/mo | Unlimited + capture-time app + API + verifier badge |

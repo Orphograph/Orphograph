@@ -9,7 +9,7 @@
 - **Client-side hashing**: Your files stay on your machine. Only the 32-byte SHA-256 digest reaches our servers.
 - **Bitcoin anchoring**: 5 independent OpenTimestamps calendars (a.pool, b.pool, alice, finney, btc.catallaxy) batch your hash into the Bitcoin blockchain within ~1 hour.
 - **Verifiable receipts**: Each anchor produces a JSON receipt + 5 OTS proof files. Verify against Bitcoin's public chain using our open-source verifier or command-line tool — no login required.
-- **Free tier**: 1 anchor per month, rate-limited. Free-tier receipts may be pruned after 30 days, but your local copy remains independently verifiable forever.
+- **Free tier**: 3 anchors per 24 hours, rate-limited. Free-tier receipts may be pruned after 30 days, but your local copy remains independently verifiable forever.
 - **Writer Pack tier** ($19 one-shot): 10 anchor credits. Credits never expire.
 - **Standing Order tier** ($9/mo): Unlimited anchors, folder monitoring, API access.
 - **Creator tier** ($19/mo): Orphograph Capture app (capture-time provenance), 100 anchors/mo, verifier badge, custom branding. [*Coming 2026-06*]
@@ -106,7 +106,7 @@ python3 server/verify_cli.py receipt.json *.ots
 1. **Drop a file** on the landing page
 2. **Get a receipt** (JSON + 5 OTS files) — save it locally
 3. **Verify anytime** with the browser tool or CLI
-4. **Buy Writer Pack credits** ($19 for 10 anchors) if you need more after 1 free anchor/month
+4. **Buy Writer Pack credits** ($19 for 10 anchors) if you need more after 3 free anchors/24h
 5. **Subscribe to Standing Order** ($9/mo) for unlimited anchors + folder monitoring
 
 ## Architecture

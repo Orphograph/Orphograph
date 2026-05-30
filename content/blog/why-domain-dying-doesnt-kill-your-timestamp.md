@@ -199,6 +199,6 @@ That's the whole pitch.
 
 ---
 
-*Anchor your first file at [orphograph.com](/). 1 free per month
+*Anchor your first file at [orphograph.com](/). 3 free per 24 hours,
 forever. $19 for a 10-pack. Open-source verifier at
 [/verify/](/verify/) so your receipts outlive us, by design.*

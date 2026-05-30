@@ -96,7 +96,7 @@ You can verify the receipt later with [a 100-line Python file
 on GitHub](https://github.com/orphograph/orphograph-verify) — no
 Orphograph dependency. The receipt outlives our company by design.
 
-Three pricing tiers: free (1 anchor/month), $19 Writer Pack (10 anchors,
+Three pricing tiers: free (3 anchors/24h), $19 Writer Pack (10 anchors,
 never expires, claim code by email), $9/mo Standing Order (unlimited).
 
 ## How to actually do this for your portfolio

@@ -37,7 +37,7 @@ work without us. The cryptography is a public standard (OpenTimestamps,
 2016) and the chain is the most decentralized one humans have built.
 Nobody is gated out of the truth.
 
-> **Code invariant.** Free tier (3 anchors/month, no card) shipped in
+> **Code invariant.** Free tier (3 anchors/24h, no card) shipped in
 > `server/app.py`. Verifier at `github.com/Orphograph/orphograph-verify`
 > is MIT-licensed and has zero Orphograph code dependency.
 
