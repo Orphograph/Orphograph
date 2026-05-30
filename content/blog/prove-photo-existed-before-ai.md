@@ -92,9 +92,9 @@ browser-based workflow:
    over the following hour; the receipt updates from "pending" to
    "block-pinned at block N."
 
-You can verify the receipt later with [a 100-line Python file
-on GitHub](https://github.com/orphograph/orphograph-verify) — no
-Orphograph dependency. The receipt outlives our company by design.
+You can verify the receipt later with [a ~100-line Python
+verifier](https://orphograph.com/verify/) — no Orphograph
+dependency. The receipt outlives our company by design.
 
 Three pricing tiers: free (3 anchors/24h), $19 Writer Pack (10 anchors,
 never expires, claim code by email), $9/mo Standing Order (unlimited).
@@ -189,7 +189,7 @@ If you're a working photographer, here's the minimum-effort path:
 ## Further reading
 
 - OpenTimestamps protocol: [opentimestamps.org](https://opentimestamps.org/)
-- Orphograph open-source verifier: [github.com/orphograph/orphograph-verify](https://github.com/orphograph/orphograph-verify)
+- Orphograph open-source verifier: [orphograph.com/verify/](https://orphograph.com/verify/)
 - eIDAS-grade timestamps (when you need legally binding): your
   national qualified-trust-service-provider list. EU = check the
   European Trust List. UK = ICO trust list. US = there is no

@@ -28,10 +28,15 @@ That's the deal.
 
 ## Install
 
+Download the verifier bundle directly — no account, no clone:
+
 ```bash
-git clone https://github.com/orphograph/orphograph-verify
-cd orphograph-verify
+curl -O https://orphograph.com/verify/orphograph-verify-0.1.tar.gz
+tar xzf orphograph-verify-0.1.tar.gz
 ```
+
+Or grab the single file from the public repo
+(`github.com/Orphograph/Orphograph`, under `web/verify/verify.py`).
 
 That's it. The verifier is a single Python 3.9+ file. No `pip install` needed.
 
