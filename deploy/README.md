@@ -23,7 +23,7 @@ This folder is the operational reference. The doc you open most often is `LAUNCH
 - `EMAIL_AND_LEGAL_COMPLIANCE.md` — CAN-SPAM, GDPR, RFC 8058, multi-jurisdiction matrix + implementation.
 - `LLC_FORMATION.md` — sole-prop vs WY vs DE vs PR Act 60 decision doc; WY at $200 MRR; not DE.
 - `SECURITY.md` — runtime security posture (transport, CSP, HSTS, headers) — single auditor reference.
-- `PUBLISH_SAFETY.md` — leak audit of verifier publish dir; Hydroboro / identity strings clean; git config landmine.
+- `PUBLISH_SAFETY.md` — leak audit of verifier publish dir; sibling-brand / identity strings clean; git config landmine.
 - `compliance/` — folder: `DPA_TEMPLATE.md`, `SECURITY_QUESTIONNAIRE.md`, `SUBPROCESSORS.md` for B2B asks.
 
 ## Plugins + distribution

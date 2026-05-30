@@ -14,7 +14,7 @@
 ### 3. No secrets in git
 - [x] **PASS** — Only matches are in `scripts/launch.sh`, `scripts/stripe_bootstrap.sh`, `scripts/stripe_listen.sh` and they are **placeholder strings / shell prompts / docstring patterns** (`sk_live_xxx`, the literal string `whsec_...`, regex prefixes `sk_live_*)`). No actual key material. Treated as PASS.
 
-### 4. No Hydroboro lineage in product code
+### 4. No sibling-brand lineage in product code
 - [x] **PASS** — All grep hits are in `deploy/*.md` (planning/runbook docs) and `scripts/publish_safety_check.sh` (the *deny-phrase scanner itself*, which legitimately contains the regex). **Zero** matches in `server/`, `web/` (excluding blog/lp), or `dist/`.
 
 ### 5. Stripe webhook fails closed
@@ -60,7 +60,7 @@ The 13-commit run from `21812b4..HEAD` does not violate any of the six non-negot
 3. Receipts verify without us — no changes to `verify_cli.py` semantics.
 4. Y3-band override is in force — feature breadth expansion (export, gifting, teams, extension, Lightroom plugin) is on-policy.
 5. Honest copy — every "court-admissible" / "legally binding" hit is a disclaimer or competitor-comparison.
-6. Zero Hydroboro lineage in product code — confirmed; planning docs in `deploy/` reference Hydroboro in roadmap/lineage-firewall context only, which is the intended use.
+6. Zero sibling-brand lineage in product code — confirmed; a few internal planning docs in `deploy/` reference the operating entity in roadmap/firewall context only, which is the intended use.
 
 **Remaining external (non-code) gates per memory index** (`project_orphograph_launch_state.md`): GitHub push, Stripe live keys, Resend live keys, Fly deploy, founder interviews, Show HN.
 
