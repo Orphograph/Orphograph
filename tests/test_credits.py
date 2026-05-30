@@ -40,6 +40,43 @@ def test_consume_until_empty():
     assert credits.consume_credit(code) == (False, 0)
 
 
+def test_refund_credit_returns_one():
+    """A failed anchor refunds exactly the consumed credit."""
+    code = credits.new_claim_code()
+    credits.add_credits(code, "a@b.com", 1, "stripe:cs_x")
+    assert credits.consume_credit(code) == (True, 0)
+    credits.refund_credit(code)
+    assert credits.balance(code) == 1
+    # The refunded credit is spendable again.
+    assert credits.consume_credit(code) == (True, 0)
+
+
+def test_refund_credit_tagged_source():
+    import json as _json
+    code = credits.new_claim_code()
+    credits.add_credits(code, "a@b.com", 1, "stripe:cs_y")
+    credits.consume_credit(code)
+    credits.refund_credit(code, reason="anchor-refund:no-calendars")
+    rows = [_json.loads(l) for l in credits.LEDGER_PATH.read_text().splitlines() if l.strip()]
+    assert any(r["source"] == "anchor-refund:no-calendars" and r["credits_delta"] == 1
+               for r in rows)
+
+
+def test_torn_previous_write_does_not_lose_next_record():
+    """If a prior append was interrupted (no trailing newline), the next append
+    must start a fresh line so the new VALID record still parses and counts —
+    rather than being glued onto the broken tail and dropped by _scan()."""
+    code = credits.new_claim_code()
+    credits.LEDGER_PATH.parent.mkdir(parents=True, exist_ok=True)
+    # Simulate a torn write: partial JSON, NO trailing newline.
+    credits.LEDGER_PATH.write_text('{"claim_code":"' + code + '","credits_delta":5')
+    credits.add_credits(code, "a@b.com", 10, "stripe:cs_torn")
+    assert credits.balance(code) == 10  # only the valid +10 row counts
+    text = credits.LEDGER_PATH.read_text()
+    assert '"source":"stripe:cs_torn"' in text
+    assert text.endswith("\n")
+
+
 def test_codes_isolated():
     a = credits.new_claim_code()
     b = credits.new_claim_code()

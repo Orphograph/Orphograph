@@ -42,9 +42,26 @@ def new_claim_code() -> str:
 
 
 def _append(row: dict) -> None:
+    data = (json.dumps(row, separators=(",", ":")) + "\n").encode("utf-8")
     with _lock:
-        with locked(LEDGER_PATH, mode="a", exclusive=True) as f:
-            f.write(json.dumps(row, separators=(",", ":")) + "\n")
+        # Binary read+append so we can inspect the tail. O_APPEND makes every
+        # write land at EOF regardless of the read seek.
+        with locked(LEDGER_PATH, mode="ab+", exclusive=True) as f:
+            # Torn-write guard: if a prior write was interrupted (process
+            # killed mid-line) the file won't end in a newline. Start a fresh
+            # line first so this VALID record can't be concatenated onto — and
+            # lost together with — the broken tail when _scan() json-parses it.
+            f.seek(0, os.SEEK_END)
+            if f.tell() > 0:
+                f.seek(-1, os.SEEK_END)
+                if f.read(1) != b"\n":
+                    f.write(b"\n")
+            f.write(data)
+            # fsync so an acknowledged grant/consume survives a crash: the
+            # credit ledger is money, and a buffered-but-lost append would
+            # either drop a purchase or resurrect a spent credit.
+            f.flush()
+            os.fsync(f.fileno())
 
 
 def add_credits(claim_code: str, email: str, amount: int, source: str) -> None:
@@ -56,6 +73,22 @@ def add_credits(claim_code: str, email: str, amount: int, source: str) -> None:
         "email": email,
         "credits_delta": int(amount),
         "source": source,
+    })
+
+
+def refund_credit(claim_code: str, reason: str = "anchor-refund") -> None:
+    """Return ONE previously-consumed credit (e.g. anchoring failed after the
+    credit was already consumed). Append-only +1 row; no balance check because
+    a refund only ever adds back. Idempotency is the caller's responsibility —
+    call exactly once per failed consume."""
+    if not claim_code:
+        return
+    _append({
+        "ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "claim_code": claim_code,
+        "email": "",
+        "credits_delta": 1,
+        "source": reason,
     })
 
 

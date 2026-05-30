@@ -1424,13 +1424,20 @@ class Handler(BaseHTTPRequestHandler):
                 return
         length = _read_content_length(self)
         if length <= 0 or length > MAX_BODY_BYTES:
-            _json_response(self, 400, {"error": "invalid body size"})
+            # Credit was consumed above; a malformed request must not burn it.
+            if pack_consumed:
+                credits.refund_credit(pack_token)
+            _json_response(self, 400, {"error": "invalid body size",
+                                       "credit_refunded": pack_consumed})
             return
         raw = self.rfile.read(length)
         try:
             payload = json.loads(raw.decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError):
-            _json_response(self, 400, {"error": "body must be JSON"})
+            if pack_consumed:
+                credits.refund_credit(pack_token)
+            _json_response(self, 400, {"error": "body must be JSON",
+                                       "credit_refunded": pack_consumed})
             return
         hash_hex = payload.get("hash_hex", "")
         sha512_hex = payload.get("sha512_hex")
@@ -1480,9 +1487,24 @@ class Handler(BaseHTTPRequestHandler):
                 c2pa_manifest_hash=c2pa_manifest_hash,
             )
         except ValueError as e:
-            _json_response(self, 400, {"error": str(e)})
+            # Anchor definitively failed (bad hash, etc.); no receipt produced.
+            # Refund the consumed pack credit so the buyer isn't charged for a
+            # request that yielded nothing.
+            if pack_consumed:
+                credits.refund_credit(pack_token)
+            _json_response(self, 400, {"error": str(e),
+                                       "credit_refunded": pack_consumed})
             return
         low_redundancy = record["calendars_ok"] < MIN_CALENDARS_OK
+        # Total calendar outage: 0 calendars accepted the hash, so the receipt
+        # has no Bitcoin commitment and can never upgrade — it is worthless.
+        # Refund the consumed credit (the buyer can re-anchor when calendars
+        # recover) while still returning the receipt for transparency.
+        credit_refunded = False
+        if pack_consumed and record["calendars_ok"] == 0:
+            credits.refund_credit(pack_token, reason="anchor-refund:no-calendars")
+            credit_refunded = True
+            pack_remaining += 1
         # Receipt email: fires for any paid path (Pack consumed, active
         # subscription, or active API key). Previously this was Pack-only,
         # which silently dropped receipts for subscribers — exact 2026-05-18
@@ -1538,6 +1560,7 @@ class Handler(BaseHTTPRequestHandler):
             "low_redundancy": low_redundancy,
             "pack_consumed": pack_consumed,
             "pack_remaining": pack_remaining,
+            "credit_refunded": credit_refunded,
             "subscription_active": subscription_active,
             "successes": [{"calendar": s["calendar"], "ots_path": s["ots_path"]} for s in record["successes"]],
             "failures": record["failures"],
