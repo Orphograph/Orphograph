@@ -31,11 +31,13 @@ jobs:
   deploy:
     needs: test
     runs-on: ubuntu-latest
-    # Skip the deploy step cleanly when the FLY_API_TOKEN secret is absent.
-    # The founder currently deploys via local `fly deploy` against a CLI
-    # token kept in the local keychain. CI runs the test suite as the safety
-    # net; the deploy is intentionally not automated until the founder
-    # rotates a long-lived CI-scoped deploy token into the GitHub secret.
+    # AUTOMATED DEPLOY IS LIVE. Repo variable CI_DEPLOY_ENABLED=true and secret
+    # FLY_API_TOKEN are both set, so every push to master whose `test` job
+    # passes auto-deploys to production (orphograph.com) via the step below.
+    # In practice: merging a PR to master IS a production deploy.
+    # To return to manual-only deploys, set CI_DEPLOY_ENABLED=false — the
+    # founder can still deploy with local `fly deploy`, or run this workflow
+    # on demand via the workflow_dispatch trigger above.
     if: ${{ vars.CI_DEPLOY_ENABLED == 'true' }}
     steps:
       - uses: actions/checkout@v4
