@@ -198,7 +198,10 @@ def _checkout_snapshot() -> dict:
         cfg = public_config.snapshot()
         warnings = public_config.config_warnings(cfg)
         return {
-            "ready": bool(cfg["stripe"]["pack_url"]) and not cfg["toggles"]["checkout_disabled"],
+            # A non-empty placeholder URL ('https://buy.stripe.com/...') is NOT
+            # ready — validate the link shape, don't just check for non-empty.
+            "ready": public_config.is_live_stripe_url(cfg["stripe"]["pack_url"])
+            and not cfg["toggles"]["checkout_disabled"],
             "pack_usd": cfg["pricing"]["pack_usd"],
             "warnings": warnings,
         }
