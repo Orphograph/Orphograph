@@ -369,3 +369,65 @@ def test_exact_payment_credits_under_enforcement(monkeypatch):
     result = nowpayments_webhook.handle_event(payload)
     assert result.get("claim_code_minted") is True
     assert result["credits"] == 10
+
+
+# ------------------------------------------- golden full-payload end-to-end
+
+# A realistic NOWPayments IPN body with the full field set NOWPayments actually
+# sends (existing tests use minimal stubs — this guards against format drift if
+# NOWPayments adds/reorders fields, since the signature is over canonical JSON).
+GOLDEN_IPN_FIELDS = {
+    "payment_id": 5077125051,
+    "invoice_id": 4944856743,
+    "payment_status": "finished",
+    "pay_address": "bc1qexampleexampleexampleexampleexampleex",
+    "price_amount": 19,
+    "price_currency": "usd",
+    "pay_amount": 0.000196,
+    "actually_paid": 0.000196,
+    "pay_currency": "btc",
+    "order_id": "np_writer_pack_GoLdEn01",
+    "order_description": "Orphograph Writer Pack — 10 anchors",
+    "purchase_id": "6097863291",
+    "outcome_amount": 0.000194,
+    "outcome_currency": "btc",
+    "customer_email": "golden@example.com",
+}
+
+
+def test_golden_full_ipn_signature_and_exactly_once_mint():
+    """End-to-end with a realistic full IPN payload: the signature verifies over
+    the canonical body, the `confirmed` IPN mints exactly one Writer Pack (10),
+    and the `finished` IPN for the same order does NOT double-mint."""
+    confirmed = {**GOLDEN_IPN_FIELDS, "payment_status": "confirmed"}
+    finished = {**GOLDEN_IPN_FIELDS, "payment_status": "finished"}
+
+    c_payload, c_sig = _sign(confirmed)
+    f_payload, f_sig = _sign(finished)
+    # signature must verify over the exact canonical bytes, and reject a mismatch
+    assert nowpayments_webhook.verify_signature(c_payload, c_sig, SECRET) is True
+    assert nowpayments_webhook.verify_signature(f_payload, f_sig, SECRET) is True
+    assert nowpayments_webhook.verify_signature(c_payload, f_sig, SECRET) is False
+
+    first = nowpayments_webhook.handle_event(c_payload)
+    assert first.get("claim_code_minted") is True
+    assert first["credits"] == 10
+    rows = _ledger_rows()
+    assert len(rows) == 1
+    assert rows[0]["credits_delta"] == 10
+    # order_id (not just invoice_id) is recorded in the source for refund linkage
+    assert GOLDEN_IPN_FIELDS["order_id"] in rows[0]["source"]
+
+    second = nowpayments_webhook.handle_event(f_payload)
+    assert second.get("duplicate_mint") == GOLDEN_IPN_FIELDS["order_id"]
+    assert _ledger_rows() == rows, "full-payload confirmed+finished must mint once"
+
+
+def test_golden_ipn_rejects_tampered_signature():
+    """A body altered after signing must fail signature verification — a
+    paid-amount tamper without the secret can't slip through."""
+    payload, sig = _sign(GOLDEN_IPN_FIELDS)
+    tampered = {**GOLDEN_IPN_FIELDS, "actually_paid": 9.999}
+    t_payload, _ = _sign(tampered, secret="attacker_does_not_know_the_secret")
+    # the original signature does not validate the tampered body
+    assert nowpayments_webhook.verify_signature(t_payload, sig, SECRET) is False
