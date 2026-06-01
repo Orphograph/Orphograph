@@ -352,7 +352,6 @@ def _build_sitemap() -> str:
         ("/privacy.html", "0.3"),
         ("/badge-demo.html", "0.4"),
         ("/docs/api.html", "0.6"),
-        ("/compare.html", "0.7"),
         ("/about.html", "0.7"),
         ("/learn.html", "0.8"),
         ("/press.html", "0.4"),
@@ -362,7 +361,6 @@ def _build_sitemap() -> str:
         ("/lp/bitcoin-timestamp-file.html", "0.7"),
         ("/lp/c2pa-alternative.html", "0.7"),
         ("/lp/opentimestamps-explained.html", "0.7"),
-        ("/lp/proof-of-existence-document.html", "0.7"),
         ("/lp/wedding-photographer-proof.html", "0.7"),
         ("/lp/manuscript-priority-date.html", "0.7"),
         ("/lp/screenshot-evidence-timestamp.html", "0.7"),
@@ -1211,6 +1209,10 @@ class Handler(BaseHTTPRequestHandler):
         if path in ("/affiliate", "/affiliate/"):
             # Public landing for the affiliate program.
             _serve_static(self, "/affiliate.html")
+            return
+        if path in ("/pay/success", "/pay/success.html"):
+            # Post-payment landing for the NOWPayments success_url redirect.
+            _serve_static(self, "/pay/success.html")
             return
         # Vertical landing pages — rendered from config/verticals/<slug>.yml.
         # Reachable by direct URL only; not linked from the homepage. This

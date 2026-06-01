@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Payment received — Orphograph</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#f6f1e3">
+<meta name="robots" content="noindex">
+<meta name="description" content="Your Orphograph payment is confirmed. Your claim code is on its way by email.">
+<link rel="icon" type="image/png" href="/favicon.png?v=8">
+<link rel="stylesheet" href="/index.css?v=9">
+<style>
+  .ok-wrap { max-width: 600px; margin: 48px auto; padding: 0 24px 64px; }
+  .ok-card {
+    background: var(--panel, #fbf7ec);
+    border: 1px solid var(--panel-stroke, #e4dcc6);
+    border-radius: 14px;
+    padding: 32px;
+  }
+  .ok-wrap h1 { font-family: var(--serif); font-size: 30px; font-weight: 500; margin: 0 0 10px; }
+  .ok-wrap p { color: var(--ink-2, #4a4234); line-height: 1.7; font-size: 15.5px; }
+  .ok-seal {
+    width: 46px; height: 46px; border-radius: 50%;
+    border: 2px solid var(--accent, #3a2f24); color: var(--accent, #3a2f24);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 24px; margin-bottom: 16px;
+  }
+  .ok-order {
+    margin: 18px 0; padding: 12px 14px; background: rgba(58,47,36,0.05);
+    border-radius: 8px; font-size: 13px; color: var(--ink-2, #4a4234);
+  }
+  .ok-order code { font-size: 14px; word-break: break-all; }
+  .ok-steps { margin: 18px 0 0; padding-left: 20px; }
+  .ok-steps li { color: var(--ink-2, #4a4234); line-height: 1.7; font-size: 14.5px; margin: 6px 0; }
+  .ok-cta { display: inline-block; margin-top: 22px; padding: 11px 20px; background: var(--ink, #14110d); color: #fff; text-decoration: none; border-radius: 8px; font-size: 15px; }
+</style>
+</head>
+<body>
+
+<header class="topnav">
+  <a href="/" class="brand"><strong>Orphograph</strong></a>
+  <nav>
+    <a href="/verify/">Verify</a>
+    <a href="/docs/api.html">Docs</a>
+    <a href="/about.html">About</a>
+  </nav>
+</header>
+
+<main>
+  <div class="ok-wrap">
+    <div class="ok-card">
+      <div class="ok-seal" aria-hidden="true">✓</div>
+      <h1>Payment received</h1>
+      <p>
+        Thank you — your crypto payment is confirmed on-chain. We've emailed your
+        <strong>claim code</strong> to the address you entered at checkout; it
+        usually arrives within a few minutes (check spam if you don't see it).
+      </p>
+
+      <div class="ok-order" id="ok-order" hidden>
+        Keep this for your records — your order reference:
+        <br><code id="ok-order-id"></code>
+      </div>
+
+      <ol class="ok-steps">
+        <li>Open the email and copy your claim code.</li>
+        <li>On the <a href="/">homepage</a>, paste it into <strong>"Got a Pack code?"</strong> — your credits attach to that browser.</li>
+        <li>Anchor your files. Each one produces a Bitcoin-verified receipt that's yours forever.</li>
+      </ol>
+
+      <p style="margin-top:18px;font-size:14px;">
+        Didn't get the email? Write to
+        <a href="mailto:hello@orphograph.com">hello@orphograph.com</a>
+        with your order reference above and we'll re-send your code.
+      </p>
+
+      <a class="ok-cta" href="/">Go to the homepage →</a>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <small>
+    <a href="/">Home</a> · <a href="/privacy.html">Privacy</a> · <a href="/terms.html">Terms</a>
+  </small>
+</footer>
+
+<script>
+  // Show the order reference from the NOWPayments success_url (?order=...).
+  // Safe DOM: textContent only, sanitized to the order-id charset.
+  (function () {
+    try {
+      var raw = new URLSearchParams(location.search).get("order") || "";
+      var clean = raw.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 64);
+      if (clean) {
+        document.getElementById("ok-order-id").textContent = clean;
+        document.getElementById("ok-order").hidden = false;
+      }
+    } catch (e) { /* no-op */ }
+  })();
+</script>
+<script src="/assets/event.js" defer></script>
+</body>
+</html>

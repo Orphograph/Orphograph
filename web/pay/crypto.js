@@ -58,8 +58,12 @@
       setMsg("Pick a coin to continue.", true);
       return;
     }
-    if (email && email.indexOf("@") === -1) {
-      setMsg("That email looks off. Leave it blank if you don't have one handy.", true);
+    if (!email) {
+      setMsg("Email is required — that's where we send your claim code.", true);
+      return;
+    }
+    if (email.indexOf("@") === -1) {
+      setMsg("That email looks off — please enter a valid address for your claim code.", true);
       return;
     }
 
@@ -91,7 +95,7 @@
       if (res.status === 503) {
         setMsg(
           data.error ||
-          "Crypto checkout isn't enabled right now. Try the card option, or pay in BTC.",
+          "Crypto checkout isn't enabled right now. Pay in BTC at /pay/btc.html, or email hello@orphograph.com.",
           true
         );
       } else if (res.status === 400) {
