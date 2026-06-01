@@ -98,6 +98,8 @@
           "Crypto checkout isn't enabled right now. Pay in BTC at /pay/btc.html, or email hello@orphograph.com.",
           true
         );
+      } else if (res.status === 429) {
+        setMsg(data.error || "Too many attempts just now — please wait a minute and try again.", true);
       } else if (res.status === 400) {
         setMsg(data.error || "Couldn't create the invoice — please check the coin and plan.", true);
       } else {
