@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <title>Gift an Orphograph Pack</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="description" content="Buy an Orphograph Pack and gift it to a friend, photographer, or journalist. The recipient gets a claim code by email — no account required.">
+<meta name="description" content="Buy an Orphograph Writer Pack with crypto and gift the claim code to a friend, photographer, or journalist — transferable, no account required.">
 <link rel="icon" type="image/png" href="/favicon.png?v=8">
 <link rel="stylesheet" href="/style.css?v=2">
 <style>
@@ -62,48 +62,38 @@
 <main>
   <h1>Gift an Orphograph Pack</h1>
   <p class="muted">
-    Pay <strong>$19</strong> and we'll email a <strong>10-anchor Writer Pack</strong>
-    claim code to the recipient. No account required on either side. The
-    Pack never expires.
+    A <strong>Writer Pack</strong> is <strong>$19</strong> for <strong>10 anchor
+    credits</strong> that never expire — and the claim code works for anyone, with
+    no account required. Buy a Pack with crypto, then forward the code to whomever
+    you like. It's transferable, like a gift-card number.
   </p>
 
-  <form id="gift-form" class="gift-form">
+  <div class="gift-form">
     <div class="gift-summary">
       <strong>10 anchors · $19 one-time</strong>
       <span class="muted small">never expires · privacy-first · receipts verifiable forever</span>
     </div>
 
-    <label for="gift-to">Recipient's email</label>
-    <input id="gift-to" type="email" placeholder="friend@example.com" required autocomplete="off">
-    <p class="hint">We send the claim code here. The recipient activates with one click.</p>
-
-    <label for="gift-from">Your email (for the receipt)</label>
-    <input id="gift-from" type="email" placeholder="you@example.com" required autocomplete="email">
-
-    <label for="gift-message">Optional message to the recipient</label>
-    <textarea id="gift-message" maxlength="500" placeholder="Saw this and thought of you — proof-of-existence for your photo work."></textarea>
-    <p class="hint">Up to 500 characters. Plain text only.</p>
-
-    <button id="gift-buy" type="submit" class="btn">Continue to Stripe checkout — $19</button>
-    <p id="gift-error" class="hint" style="color:#b03a3a;display:none;"></p>
+    <a href="/pay/crypto.html?plan=writer_pack" class="btn" style="display:block;text-align:center;text-decoration:none">Pay with crypto — $19 Writer Pack</a>
     <p class="hint" style="margin-top:14px">
-      You'll be redirected to Stripe. The recipient gets the Pack as soon as
-      Stripe confirms payment (usually under a minute).
+      Pay in BTC, ETH, USDC, SOL and more — non-custodial, via NOWPayments. Your
+      claim code arrives by email; forward it to the recipient and they activate
+      with one click.
     </p>
-  </form>
+  </div>
 
   <section class="muted small" style="max-width:540px;margin:0 auto 60px;padding:0 8px">
     <h2 style="font-size:14px">How gifting works</h2>
     <ol>
-      <li>You pay $19 on Stripe.</li>
-      <li>We email the recipient a Pack claim code (with your message attached).</li>
-      <li>The recipient clicks the activation link — the Pack is loaded into their browser.</li>
-      <li>They can anchor 10 files. No account needed. Each anchor produces a Bitcoin-verified receipt.</li>
+      <li>Buy a Writer Pack with crypto.</li>
+      <li>You receive a 10-anchor claim code by email.</li>
+      <li>Forward the claim code (with a note of your own) to whomever you're gifting.</li>
+      <li>They click to activate — the Pack loads into their browser. No account needed; each of the 10 anchors produces a Bitcoin-verified receipt.</li>
     </ol>
     <p>
-      Files never leave the recipient's machine. The recipient gets the same
-      privacy guarantees as a self-buy. If they lose the claim code, send
-      this email to support@orphograph.com and we'll re-issue.
+      Files never leave the recipient's machine — they get the same privacy
+      guarantees as a self-buy. If the claim code is lost, email
+      support@orphograph.com and we'll re-issue.
     </p>
   </section>
 </main>
@@ -114,7 +104,6 @@
   </small>
 </footer>
 
-<script src="/gift.js"></script>
 <script src="/assets/event.js" defer></script>
 </body>
 </html>
