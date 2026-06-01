@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Orphograph — anchor a file to Bitcoin. A date you don't have to be trusted on.</title>
+<meta name="description" content="Prove a file existed at a moment in time, anchored to Bitcoin. The file never leaves your browser — only its fingerprint. Pay in crypto; verify against the chain without us.">
+<meta name="copyright" content="© 2026 Orphograph. MIT — see /LICENSE">
+<meta property="og:title" content="Orphograph — a date you don't have to be trusted on">
+<meta property="og:description" content="Anchor any file to Bitcoin. Hash-only, never uploaded. Pay in crypto. Verify without us.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://orphograph.com/lp/start.html">
+<link rel="icon" type="image/png" href="/favicon.png?v=8">
+<style>
+  :root{
+    --paper:#f5efdf; --paper-2:#efe7d2; --card:#fbf7ec;
+    --ink:#16120b; --ink-2:#3a3024; --muted:#7c6f59;
+    --line:#d8cbac; --line-2:#c8b894;
+    --brass:#9c6b2f; --brass-2:#b8853f; --seal:#8c3a2b; --confirm:#3f6b46;
+    --serif:"EB Garamond","Cormorant Garamond","Iowan Old Style",Garamond,"Hoefler Text",Georgia,serif;
+    --sans:ui-sans-serif,-apple-system,"Helvetica Neue",Arial,sans-serif;
+    --mono:"SF Mono",ui-monospace,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0; background:var(--paper); color:var(--ink);
+    font-family:var(--serif); font-size:19px; line-height:1.62;
+    -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+    /* paper grain + a soft vignette of aged light */
+    background-image:
+      radial-gradient(120% 80% at 50% -10%, rgba(184,133,63,0.10), transparent 60%),
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
+  }
+  ::selection{background:rgba(156,107,47,0.22);}
+  a{color:var(--ink); text-underline-offset:3px; text-decoration-thickness:1px;}
+  .wrap{max-width:880px; margin:0 auto; padding:0 28px;}
+  .ink-press{text-shadow:0 1px 0 rgba(255,250,238,0.6);}
+
+  /* ── masthead ── */
+  header.mast{border-bottom:1px solid var(--line); background:linear-gradient(var(--paper),var(--paper-2));}
+  .mast .wrap{display:flex; align-items:baseline; justify-content:space-between; padding-top:22px; padding-bottom:18px;}
+  .word{font-size:21px; letter-spacing:0.30em; text-transform:uppercase; font-weight:500; color:var(--ink);}
+  .word a{text-decoration:none; color:inherit;}
+  .kicker{font-family:var(--sans); font-size:10px; letter-spacing:0.26em; text-transform:uppercase; color:var(--muted);}
+
+  /* ── hero ── */
+  .hero{padding:74px 0 40px; position:relative;}
+  .label{font-family:var(--sans); font-size:11px; letter-spacing:0.32em; text-transform:uppercase; color:var(--brass); margin:0 0 18px;}
+  h1{font-size:clamp(40px,7vw,72px); line-height:1.02; font-weight:500; letter-spacing:-0.015em; margin:0 0 22px; max-width:14ch;}
+  h1 em{font-style:italic; color:var(--brass);}
+  .lede{font-size:21px; color:var(--ink-2); max-width:54ch; margin:0 0 14px;}
+  .fineprint{font-family:var(--sans); font-size:12.5px; color:var(--muted); letter-spacing:0.01em;}
+
+  /* wax seal */
+  .seal{position:absolute; top:60px; right:8px; width:118px; height:118px; opacity:0.92; transform:rotate(-7deg);}
+  @media(max-width:760px){ .seal{display:none;} }
+
+  /* ── the offer (paid, crypto-only) ── */
+  section{padding:30px 0;}
+  .rule{height:1px; background:var(--line); margin:8px 0 0;}
+  .rule.thick{height:0; border-top:3px double var(--line-2);}
+  .offer{
+    background:var(--card); border:1px solid var(--line-2);
+    box-shadow:0 1px 0 #fff inset, 0 16px 40px -28px rgba(60,40,18,0.5);
+    padding:34px 34px 30px; margin-top:10px; position:relative;
+  }
+  .offer:before{content:"FOR PURCHASE"; position:absolute; top:-10px; left:26px; background:var(--card);
+    font-family:var(--sans); font-size:10px; letter-spacing:0.3em; color:var(--muted); padding:0 8px;}
+  .tiers{display:grid; grid-template-columns:1fr 1fr; gap:0;}
+  @media(max-width:620px){ .tiers{grid-template-columns:1fr;} .tier+.tier{border-top:1px solid var(--line);} }
+  .tier{padding:6px 26px 6px 0;}
+  .tier+.tier{padding-left:26px; border-left:1px solid var(--line);}
+  @media(max-width:620px){ .tier+.tier{border-left:0; padding-left:0; padding-top:22px;} }
+  .tier .name{font-family:var(--sans); font-size:11px; letter-spacing:0.22em; text-transform:uppercase; color:var(--muted);}
+  .tier .price{font-size:46px; line-height:1; margin:6px 0 2px; letter-spacing:-0.02em;}
+  .tier .price small{font-size:16px; color:var(--muted); letter-spacing:0;}
+  .tier .desc{font-size:16px; color:var(--ink-2); margin:6px 0 16px; min-height:2.4em;}
+  .feat{font-size:14px;}
+  .btn{
+    display:inline-flex; align-items:center; gap:10px; cursor:pointer;
+    font-family:var(--sans); font-size:14px; letter-spacing:0.04em; font-weight:600;
+    background:var(--ink); color:var(--paper); border:1px solid var(--ink);
+    padding:13px 22px; border-radius:2px; text-decoration:none;
+    transition:transform .12s ease, background .2s ease, box-shadow .2s ease;
+    box-shadow:0 6px 18px -10px rgba(0,0,0,0.6);
+  }
+  .btn:hover{background:#000; transform:translateY(-1px); box-shadow:0 10px 24px -10px rgba(0,0,0,0.6);}
+  .btn .arr{transition:transform .2s ease;}
+  .btn:hover .arr{transform:translateX(4px);}
+  .btn.ghost{background:transparent; color:var(--ink); border-color:var(--line-2); box-shadow:none;}
+  .btn.ghost:hover{background:rgba(156,107,47,0.07); border-color:var(--brass);}
+  .coins{font-family:var(--sans); font-size:11.5px; color:var(--muted); margin-top:14px; letter-spacing:0.02em;}
+  .coins b{color:var(--ink-2); font-weight:600;}
+
+  /* ── try-free strip ── */
+  .try{margin-top:34px; border:1.5px dashed var(--line-2); background:rgba(251,247,236,0.6); border-radius:3px; padding:24px 26px; text-align:center;}
+  .try.drag{border-color:var(--brass); background:rgba(156,107,47,0.06);}
+  .try h3{font-size:22px; margin:0 0 4px; font-weight:500;}
+  .try p{font-size:14.5px; color:var(--muted); margin:0 0 16px; font-family:var(--sans);}
+  .try .hint{font-size:12px; color:var(--muted);}
+  #file{display:none;}
+  /* receipt (rendered after a free anchor) */
+  .receipt{display:none; text-align:left; margin-top:18px; background:#fffdf6; border:1px solid var(--line-2); border-radius:2px; padding:18px 20px; font-family:var(--mono); font-size:12.5px; line-height:1.7; color:var(--ink-2);}
+  .receipt.show{display:block; animation:fade .5s ease both;}
+  .receipt .ok{color:var(--confirm); font-weight:600;}
+  .receipt b{color:var(--ink);}
+  .receipt a{color:var(--brass);}
+
+  /* ── scope / honesty ── */
+  .scope{display:grid; grid-template-columns:1fr 1fr; gap:0 40px;}
+  @media(max-width:620px){ .scope{grid-template-columns:1fr; gap:0;} }
+  .scope div{padding:6px 0;}
+  .scope h4{font-family:var(--sans); font-size:11px; letter-spacing:0.24em; text-transform:uppercase; margin:0 0 6px;}
+  .scope .yes h4{color:var(--confirm);} .scope .no h4{color:var(--seal);}
+  .scope p{font-size:16px; color:var(--ink-2); margin:0;}
+
+  footer{border-top:1px solid var(--line); margin-top:30px; padding:30px 0 56px;}
+  footer .wrap{display:flex; flex-wrap:wrap; gap:8px 22px; align-items:center; font-family:var(--sans); font-size:12.5px; color:var(--muted);}
+  footer a{color:var(--ink-2);}
+
+  @keyframes fade{from{opacity:0; transform:translateY(8px);} to{opacity:1; transform:none;}}
+  .reveal{opacity:0; transform:translateY(14px); animation:fade .7s cubic-bezier(.2,.7,.2,1) forwards;}
+  .d1{animation-delay:.05s;} .d2{animation-delay:.16s;} .d3{animation-delay:.28s;} .d4{animation-delay:.4s;} .d5{animation-delay:.52s;}
+  @media(prefers-reduced-motion:reduce){ .reveal{animation:none; opacity:1; transform:none;} }
+</style>
+</head>
+<body>
+
+<header class="mast">
+  <div class="wrap">
+    <div class="word"><a href="/">Orphograph</a></div>
+    <div class="kicker">Empirical Notary</div>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <section class="hero">
+    <svg class="seal reveal d3" viewBox="0 0 120 120" aria-hidden="true">
+      <circle cx="60" cy="60" r="54" fill="none" stroke="var(--seal)" stroke-width="1.4" opacity="0.7"/>
+      <circle cx="60" cy="60" r="46" fill="none" stroke="var(--seal)" stroke-width="0.8" opacity="0.5"/>
+      <path id="arc" d="M60 18 a42 42 0 1 1 -0.1 0" fill="none"/>
+      <text fill="var(--seal)" font-family="var(--sans)" font-size="8.5" letter-spacing="3" opacity="0.85">
+        <textPath href="#arc" startOffset="2%">ANCHORED · TO · BITCOIN · ANCHORED · TO · BITCOIN ·</textPath>
+      </text>
+      <text x="60" y="66" text-anchor="middle" fill="var(--seal)" font-family="var(--serif)" font-size="30" font-style="italic">₿</text>
+    </svg>
+    <p class="label reveal d1">Proof of existence · since the next block</p>
+    <h1 class="ink-press reveal d2">A date you don't have to be <em>trusted</em> on.</h1>
+    <p class="lede reveal d3">Anchor any file to Bitcoin's chain so you can prove it existed at a moment in time. The file is hashed in your browser — <b>only the 32-byte fingerprint ever leaves your machine.</b></p>
+    <p class="fineprint reveal d4">Open-source verifier · your proof works even if we disappear · pay in crypto.</p>
+  </section>
+
+  <section class="reveal d4">
+    <div class="offer">
+      <div class="tiers">
+        <div class="tier">
+          <div class="name">Writer Pack</div>
+          <div class="price">$19<small> · 10 anchors</small></div>
+          <p class="desc">The entry pack. For writers, photographers, journalists — anyone proving a draft or a frame predated a claim.</p>
+          <a class="btn" href="/pay/crypto.html?plan=writer_pack">Buy with crypto <span class="arr">→</span></a>
+        </div>
+        <div class="tier">
+          <div class="name">Pack of Fifty · best value</div>
+          <div class="price">$29<small> · 50 anchors</small></div>
+          <p class="desc">For working creators with a backlog. Credits never expire; gift them to a collaborator.</p>
+          <a class="btn ghost" href="/pay/crypto.html?plan=pack_50">Buy with crypto <span class="arr">→</span></a>
+        </div>
+      </div>
+      <p class="coins"><b>9 cryptos accepted</b> — BTC · ETH · USDC · SOL · USDT · LTC · XRP · DOGE · MATIC. Non-custodial. The claim code is emailed the moment your payment confirms (~1 hour on-chain).</p>
+    </div>
+
+    <div class="try" id="drop">
+      <h3>Not sure? Anchor one free.</h3>
+      <p>Drop a file (or click) — it's hashed here in your browser and anchored to Bitcoin. Nothing uploads.</p>
+      <button class="btn ghost" id="pick" type="button">Choose a file to anchor →</button>
+      <input type="file" id="file">
+      <p class="hint" id="hint">Free tier: a few anchors a day. Like it? Grab a pack above.</p>
+      <div class="receipt" id="receipt"></div>
+    </div>
+  </section>
+
+  <div class="rule thick"></div>
+
+  <section class="reveal">
+    <p class="label">What the receipt is — and isn't</p>
+    <div class="scope">
+      <div class="yes">
+        <h4>It proves</h4>
+        <p>A file with this exact fingerprint existed by a specific Bitcoin block. Verifiable by anyone, against the public chain, without trusting us.</p>
+      </div>
+      <div class="no">
+        <h4>It does not claim</h4>
+        <p>Authorship, ownership, originality, or that any court accepts it. Honest proof-of-existence in time — nothing more. That line is the whole point.</p>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>© 2026 Orphograph · MIT</span>
+    <a href="/verify/">Verify a receipt without us →</a>
+    <a href="/learn.html">How it works</a>
+    <a href="/faq.html">FAQ</a>
+    <span style="margin-left:auto;">Hashed locally. Anchored to Bitcoin.</span>
+  </div>
+</footer>
+
+<script>
+(function(){
+  "use strict";
+  var drop = document.getElementById("drop");
+  var input = document.getElementById("file");
+  var pick = document.getElementById("pick");
+  var hint = document.getElementById("hint");
+  var receipt = document.getElementById("receipt");
+
+  pick.addEventListener("click", function(){ input.click(); });
+  ["dragenter","dragover"].forEach(function(e){ drop.addEventListener(e, function(ev){ ev.preventDefault(); drop.classList.add("drag"); }); });
+  ["dragleave","drop"].forEach(function(e){ drop.addEventListener(e, function(ev){ ev.preventDefault(); drop.classList.remove("drag"); }); });
+  drop.addEventListener("drop", function(ev){ if (ev.dataTransfer.files && ev.dataTransfer.files[0]) anchorFile(ev.dataTransfer.files[0]); });
+  input.addEventListener("change", function(){ if (input.files && input.files[0]) anchorFile(input.files[0]); });
+
+  function hex(buf){ return [].map.call(new Uint8Array(buf), function(b){ return b.toString(16).padStart(2,"0"); }).join(""); }
+
+  async function anchorFile(file){
+    pick.disabled = true;
+    hint.textContent = "Hashing “" + file.name + "” locally… (not uploading)";
+    try{
+      var buf = await file.arrayBuffer();
+      var s256 = hex(await crypto.subtle.digest("SHA-256", buf));
+      var s512 = hex(await crypto.subtle.digest("SHA-512", buf));
+      hint.textContent = "Anchoring the fingerprint to Bitcoin…";
+      var r = await fetch("/api/anchor", {
+        method:"POST", credentials:"same-origin",
+        headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({ hash_hex:s256, sha512_hex:s512 })
+      });
+      var d = await r.json().catch(function(){ return {}; });
+      if (!r.ok || !d.receipt_id){
+        var msg = (d && d.error) ? d.error : ("HTTP " + r.status);
+        if (r.status === 429) msg = "Free-tier limit reached for today — grab a pack above to keep anchoring.";
+        hint.textContent = msg;
+        pick.disabled = false;
+        return;
+      }
+      // Build the receipt with safe DOM nodes (textContent) + a self-constructed,
+      // sanitized href — no innerHTML, so server values can't inject markup.
+      var id = String(d.receipt_id || "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 64);
+      var url = "/r/" + id;
+      var cok = Number(d.calendars_ok); if (!isFinite(cok)) cok = "?";
+      var ctot = Number(d.calendars_total) || 5;
+      receipt.textContent = "";
+      function line(label, value){
+        var div = document.createElement("div");
+        if (label){ var b = document.createElement("b"); b.textContent = label; div.appendChild(b); }
+        if (value instanceof Node) div.appendChild(value);
+        else if (value != null) div.appendChild(document.createTextNode(String(value)));
+        return div;
+      }
+      var head = document.createElement("div");
+      var ok = document.createElement("span"); ok.className = "ok"; ok.textContent = "✓ Anchored.";
+      head.appendChild(ok);
+      head.appendChild(document.createTextNode(" A receipt now ties this file to Bitcoin."));
+      receipt.appendChild(head);
+      receipt.appendChild(line("file: ", file.name));
+      receipt.appendChild(line("sha-256: ", s256.slice(0, 40) + "…"));
+      receipt.appendChild(line("calendars: ", cok + "/" + ctot + " confirmed"));
+      var link = document.createElement("a"); link.href = url; link.textContent = "orphograph.com" + url;
+      receipt.appendChild(line("receipt: ", link));
+      var foot = document.createElement("div"); foot.style.marginTop = "10px";
+      foot.appendChild(document.createTextNode("Keep this. It verifies against Bitcoin forever — "));
+      var vl = document.createElement("a"); vl.href = "/verify/"; vl.textContent = "even without us";
+      foot.appendChild(vl); foot.appendChild(document.createTextNode("."));
+      receipt.appendChild(foot);
+      receipt.classList.add("show");
+      hint.textContent = "That one's on the house. Anchor a whole backlog with a pack above — paid in crypto.";
+      pick.textContent = "Anchor another →";
+      pick.disabled = false;
+    }catch(err){
+      hint.textContent = "Something went wrong hashing the file. Try a different one.";
+      pick.disabled = false;
+    }
+  }
+})();
+</script>
+</body>
+</html>
