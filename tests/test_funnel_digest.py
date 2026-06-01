@@ -174,7 +174,12 @@ class TestIdempotencyGuard(unittest.TestCase):
         live deployment's idempotency record.
         """
         mod = _load_module()
-        today = _dt.date.today()
+        # Match the script's clock: main() computes `today` from
+        # datetime.now(timezone.utc).date(), so the state file must be stamped
+        # with that SAME UTC date. A local date() flakes in UTC-behind zones
+        # (e.g. an AST evening is already the next UTC day); CI (UTC) agreed,
+        # which is why this only ever broke on a local run.
+        today = _dt.datetime.now(_dt.timezone.utc).date()
         state_path = mod.STATE_PATH
 
         backup: bytes | None = None

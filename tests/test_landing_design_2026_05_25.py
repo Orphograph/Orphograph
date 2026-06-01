@@ -8,8 +8,10 @@ Locks in the visible changes so a future template edit can't silently undo:
   3. All four canonical SKUs (Free, Writer Pack, Pack of Fifty, Standing Order)
      are present and priced per the founder-confirmed canon.
   4. The hero price-anchor strip surfaces every SKU before the long scroll.
-  5. Tier CTAs use one primary verb per tier (Begin / Buy / Buy / Subscribe)
-     and crypto is a secondary inline link, not a co-equal button.
+  5. Tier CTAs are crypto-only while the card rails are unconfigured: the free
+     tier reads "Begin"; every paid tier is a single "Pay with crypto" button
+     routing to /pay/crypto.html. No live card hooks (data-checkout) remain.
+     (Updated 2026-05-31: founder decision — crypto-only until Stripe is set.)
   6. The "office anchors only the fingerprint" boilerplate in the examples
      block appears at most twice — the prior 5-restatement repetition is gone.
   7. The pricing tier name "First Party" (jargon) is gone in favor of "Free".
@@ -153,19 +155,50 @@ class TestSinglePrimaryCTA(unittest.TestCase):
 
 
 class TestCTAVerbs(unittest.TestCase):
-    """Verbs ladder: Begin / Buy / Buy / Subscribe.
-    Reads as a progression, not a wall of repeated 'Pay'."""
+    """Crypto-only CTA ladder (founder decision 2026-05-31, card rails
+    unconfigured): the free tier reads "Begin"; every PAID tier is a single
+    "Pay with crypto" button. The old card verbs (Buy / Subscribe) and the
+    data-checkout card hooks are gone — these tests lock that in so a dead
+    card button can't silently reappear before Stripe is configured."""
 
-    def test_each_canonical_verb_appears(self):
+    def test_free_begins_and_paid_tiers_are_crypto(self):
         html = _html()
         m = re.search(r'id="tiers".*?</section>', html, re.DOTALL)
         self.assertIsNotNone(m)
         tiers_block = m.group(0)
-        for verb in ("Begin", "Buy", "Subscribe"):
-            self.assertRegex(
-                tiers_block,
-                rf'>\s*{verb}\s*<',
-                f"Tier CTA verb {verb!r} missing from tiers block.",
+        # Free tier invites without a charge.
+        self.assertRegex(
+            tiers_block, r'>\s*Begin\s*<',
+            "Free-tier CTA verb 'Begin' missing from tiers block.",
+        )
+        # Each of the three paid tiers routes to the crypto checkout.
+        pay_crypto = re.findall(r'>\s*Pay with crypto\s*<', tiers_block)
+        self.assertEqual(
+            len(pay_crypto), 3,
+            "Expected exactly 3 'Pay with crypto' CTAs (one per paid tier), "
+            f"found {len(pay_crypto)}.",
+        )
+
+    def test_no_dead_card_buttons(self):
+        """No live card-checkout hook may sit on the homepage while the card
+        rails are unconfigured — neither a data-checkout button nor the old
+        Buy/Subscribe card verbs as CTAs (a dead button 'looks bad' and 503s)."""
+        html = _html()
+        m = re.search(r'id="tiers".*?</section>', html, re.DOTALL)
+        self.assertIsNotNone(m)
+        # Strip HTML comments first: the Pack-of-Fifty card-enable note mentions
+        # data-checkout in prose — documentation, not an active button.
+        tiers_block = re.sub(r"<!--.*?-->", "", m.group(0), flags=re.DOTALL)
+        self.assertNotIn(
+            "data-checkout", tiers_block,
+            "A live card-checkout hook (data-checkout) reappeared on the "
+            "homepage; tiers are crypto-only until Stripe is configured.",
+        )
+        for card_verb in (r'>\s*Buy\s*<', r'>\s*Subscribe\s*<'):
+            self.assertNotRegex(
+                tiers_block, card_verb,
+                "An old card CTA verb (Buy/Subscribe) reappeared; "
+                "tiers are crypto-only.",
             )
 
 
@@ -189,13 +222,15 @@ class TestExamplesRepetitionTrimmed(unittest.TestCase):
 
 
 class TestCheckoutWiringMatchesSKU(unittest.TestCase):
-    """Money-critical: the card `data-checkout="pack"` plan charges the single
-    STRIPE_PRICE_PACK and grants PACK_CREDIT_COUNT (=10) credits. So it may
-    ONLY back a 10-credit tier (Writer Pack). Wiring it to the 50-credit
-    "Pack of Fifty" under-delivers (buyer pays for 50, receives 10) — the bug
-    this guard prevents from ever shipping again. Pack of Fifty needs its own
-    $29 / 50-credit Stripe price (STRIPE_PRICE_PACK50) before it gets a card
-    button; until then it is crypto-only.
+    """Money-critical SKU-wiring guard. The homepage is crypto-only as of
+    2026-05-31 (card rails unconfigured), so no tier carries a card button
+    today. This guard preserves the rule for whenever a card button returns:
+    the card `data-checkout="pack"` plan charges the single STRIPE_PRICE_PACK
+    and grants PACK_CREDIT_COUNT (=10) credits, so it may ONLY ever back a
+    10-credit tier (Writer Pack). Wiring it to the 50-credit "Pack of Fifty"
+    under-delivers (buyer pays for 50, receives 10) — the bug this prevents
+    from ever shipping. Pack of Fifty needs its own $29 / 50-credit Stripe
+    price (STRIPE_PRICE_PACK50) before it gets a card button.
     """
 
     def _tier_chunk(self, name: str) -> str:
@@ -220,13 +255,22 @@ class TestCheckoutWiringMatchesSKU(unittest.TestCase):
             "Give it its own STRIPE_PRICE_PACK50 plan before adding a card button.",
         )
 
-    def test_writer_pack_is_the_card_pack(self):
-        """The 10-credit Writer Pack is the tier that legitimately maps to the
-        single card `pack` SKU (10 credits, $19)."""
+    def test_writer_pack_routes_to_crypto(self):
+        """The 10-credit Writer Pack is crypto-only while the card rails are
+        unconfigured: it routes to the crypto checkout with plan=writer_pack
+        and carries NO card hook. (If a card button is ever re-added it must
+        map to the single `pack` SKU — 10 credits / $19 — never the 50-pack.)"""
         writer = self._tier_chunk("Writer Pack")
         self.assertIn("10 anchor credits", writer)
-        self.assertIn('data-checkout="pack"', writer,
-                      "Writer Pack should carry the card pack CTA (10 credits / $19).")
+        self.assertNotIn(
+            'data-checkout="pack"', writer,
+            "Writer Pack is crypto-only until Stripe is configured.",
+        )
+        self.assertRegex(
+            writer, r'href="/pay/crypto\.html\?plan=writer_pack"',
+            "Writer Pack CTA should route to the crypto checkout "
+            "(plan=writer_pack).",
+        )
 
 
 if __name__ == "__main__":
