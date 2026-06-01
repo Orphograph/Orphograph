@@ -664,6 +664,18 @@ function applyReferralToStripeUrl(url, ref) {
   return `${url}${sep}prefilled_metadata[ref_code]=${encodeURIComponent(ref)}`;
 }
 
+// A non-empty STRIPE_PACK_URL can still be a placeholder ("https://buy.stripe.com/...").
+// Mirrors the server's is_live_stripe_url: only treat it as a real buy link if it's a
+// known Stripe host with a plausible >=8-char link code (no "..."). Otherwise the card
+// CTA falls back to the graceful waitlist path instead of linking to a dead Stripe page.
+function isLivePackUrl(u) {
+  u = (u || "").trim();
+  if (!u || !/^https:\/\/(buy|checkout|pay)\.stripe\.com\//.test(u)) return false;
+  const path = u.split("//")[1].split("/").slice(1).join("/").split(/[?#]/)[0];
+  return path.split("/").some(
+    (seg) => seg && !seg.includes("...") && seg.length >= 8 && /^[A-Za-z0-9_-]+$/.test(seg));
+}
+
 function wireBuyPack() {
   const btn = $("#buy-pack");
   if (!btn) return;
@@ -677,13 +689,15 @@ function wireBuyPack() {
     if (ref) parts.push("+10 referral bonus");
     pill.textContent = parts.join(" · ");
   }
-  if (STRIPE_PACK_URL) {
+  if (isLivePackUrl(STRIPE_PACK_URL)) {
     let url = applyCouponToStripeUrl(STRIPE_PACK_URL, coupon);
     url = applyReferralToStripeUrl(url, ref);
     btn.href = url;
     btn.target = "_blank";
     btn.rel = "noopener";
   } else {
+    // No live card link yet (unset or placeholder) — never link to a dead Stripe
+    // page. Offer the waitlist instead; free anchoring + crypto remain available.
     btn.addEventListener("click", (e) => {
       e.preventDefault();
       revealPackWaitlist(btn);
