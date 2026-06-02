@@ -102,10 +102,33 @@ def lookup_customer(email: str) -> dict | None:
 
     total_spent = sum(p.get("amount", 0) for p in purchases)
 
+    # Pack claim codes minted to this email — from the append-only credit
+    # ledger, which covers BOTH Stripe and crypto (NOWPayments) purchases.
+    # Without this a crypto buyer's claim code is invisible to support and a
+    # "paid but never got my code" ticket cannot be resolved from the dashboard.
+    pack_claims = []
+    ledger_path = DATA_DIR / "credit_ledger.jsonl"
+    if ledger_path.exists():
+        for row in _read_jsonl(ledger_path):
+            if not isinstance(row, dict) or row.get("email") != email:
+                continue
+            try:
+                delta = int(row.get("credits_delta", 0))
+            except (TypeError, ValueError):
+                continue  # tolerate a hand-corrupted ledger row
+            if delta > 0:
+                pack_claims.append({
+                    "claim_code": row.get("claim_code", ""),
+                    "credits": delta,
+                    "source": row.get("source", ""),
+                    "ts": row.get("ts", ""),
+                })
+
     return {
         "email": email,
         "anchors": anchors,
         "purchases": purchases,
+        "pack_claims": pack_claims,
         "subscription": subscription,
         "total_spent": round(total_spent, 2),
         "anchor_count": len(anchors),

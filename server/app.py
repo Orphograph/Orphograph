@@ -352,7 +352,6 @@ def _build_sitemap() -> str:
         ("/privacy.html", "0.3"),
         ("/badge-demo.html", "0.4"),
         ("/docs/api.html", "0.6"),
-        ("/compare.html", "0.7"),
         ("/about.html", "0.7"),
         ("/learn.html", "0.8"),
         ("/press.html", "0.4"),
@@ -362,7 +361,6 @@ def _build_sitemap() -> str:
         ("/lp/bitcoin-timestamp-file.html", "0.7"),
         ("/lp/c2pa-alternative.html", "0.7"),
         ("/lp/opentimestamps-explained.html", "0.7"),
-        ("/lp/proof-of-existence-document.html", "0.7"),
         ("/lp/wedding-photographer-proof.html", "0.7"),
         ("/lp/manuscript-priority-date.html", "0.7"),
         ("/lp/screenshot-evidence-timestamp.html", "0.7"),
@@ -550,7 +548,7 @@ class Handler(BaseHTTPRequestHandler):
             self._handle_stripe_session_status()
             return
         # Maintenance mode: allow only health/stats and static pages (founder dashboards stay live)
-        if ORPHO_MAINTENANCE_MODE and not path.startswith(("/web/founder/", "/status.html")):
+        if ORPHO_MAINTENANCE_MODE and not path.startswith(("/founder/", "/api/founder/", "/status.html")):
             _json_response(self, 503, {
                 "error": "service unavailable",
                 "detail": "Server undergoing maintenance. We'll be back shortly.",
@@ -1211,6 +1209,10 @@ class Handler(BaseHTTPRequestHandler):
         if path in ("/affiliate", "/affiliate/"):
             # Public landing for the affiliate program.
             _serve_static(self, "/affiliate.html")
+            return
+        if path in ("/pay/success", "/pay/success.html"):
+            # Post-payment landing for the NOWPayments success_url redirect.
+            _serve_static(self, "/pay/success.html")
             return
         # Vertical landing pages — rendered from config/verticals/<slug>.yml.
         # Reachable by direct URL only; not linked from the homepage. This
@@ -3420,6 +3422,24 @@ class Handler(BaseHTTPRequestHandler):
                 "error": "Crypto checkout is not currently enabled.",
             })
             return
+        # Rate-limit like every other public money POST (mirror the Stripe
+        # checkout limiter): an unauthenticated create hits the NOWPayments
+        # /invoice API, so an unthrottled caller could mint unlimited real
+        # hosted invoices and exhaust the merchant quota. Per-IP-prefix key.
+        allowed, retry_after = _anchor_limiter.check(f"nowpay:{self._client_key()}")
+        if not allowed:
+            self.send_response(429)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Retry-After", str(int(retry_after) + 1))
+            body = json.dumps({
+                "error": "rate limit exceeded",
+                "retry_after_seconds": int(retry_after) + 1,
+            }).encode("utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            _security_headers(self)
+            self.end_headers()
+            self.wfile.write(body)
+            return
         length = _read_content_length(self)
         if length < 0 or length > MAX_BODY_BYTES:
             _json_response(self, 400, {"error": "invalid body size"})
@@ -3442,6 +3462,16 @@ class Handler(BaseHTTPRequestHandler):
         if currency not in nowpayments_api.SUPPORTED_CURRENCIES:
             _json_response(self, 400, {"error": "unsupported currency"})
             return
+        # Email is REQUIRED: the claim code is delivered by email and the
+        # webhook refuses to mint a Pack for an order carrying no customer
+        # email. A blank email here would mean a paid (irreversible) crypto
+        # order that can never receive its code, so fail closed before the
+        # invoice is created.
+        if not email or "@" not in email or len(email) > 254:
+            _json_response(self, 400, {
+                "error": "A valid email is required — it is where we send your claim code.",
+            })
+            return
         plan_meta = nowpayments_api.PLANS[plan]
         # Order id is opaque + unguessable so retries/lookups are safe to leak
         # in URLs. We embed the plan token (np_<plan>_<rand>) so the IPN — which
@@ -3454,7 +3484,7 @@ class Handler(BaseHTTPRequestHandler):
             amount_usd=float(plan_meta["price_usd"]),
             currency=currency,
             order_id=order_id,
-            customer_email=email if "@" in email else None,
+            customer_email=email,
             plan=plan,
         )
         if not result.get("ok"):
