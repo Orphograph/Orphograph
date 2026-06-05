@@ -1207,8 +1207,16 @@ class Handler(BaseHTTPRequestHandler):
             self._handle_founder_funnel()
             return
         if path in ("/affiliate", "/affiliate/"):
-            # Public landing for the affiliate program.
-            _serve_static(self, "/affiliate.html")
+            # No standalone public landing page exists for the affiliate
+            # program; referral/affiliate details live on the signed-in
+            # account page. Redirect there rather than 404 on a missing
+            # static file. 302 (temporary) so a future landing page can
+            # reclaim this URL without a cached 301 getting in the way.
+            self.send_response(302)
+            self.send_header("Location", "/account.html")
+            self.send_header("Content-Length", "0")
+            _security_headers(self)
+            self.end_headers()
             return
         if path in ("/pay/success", "/pay/success.html"):
             # Post-payment landing for the NOWPayments success_url redirect.
