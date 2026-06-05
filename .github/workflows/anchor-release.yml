@@ -1,0 +1,39 @@
+name: Anchor release
+
+# Dogfood + template: on a published release (or manual run), anchor the release
+# commit SHA to Bitcoin via the local composite action, so every release has an
+# independent, third-party-verifiable proof of when it existed. Does NOT run on
+# push, so merging this workflow anchors nothing on its own.
+#
+# Copy this into any repo to get Bitcoin-anchored release attestation:
+#   - uses: Orphograph/Orphograph/.github/actions/anchor@master   (or vendor it)
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  anchor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - id: anchor
+        uses: ./.github/actions/anchor
+        with:
+          # github.sha is a trusted 40-hex commit id; passed as a value the
+          # action hashes locally (only the fingerprint is transmitted).
+          text: ${{ github.sha }}
+          label: ${{ format('release {0}', github.ref_name) }}
+          api-key: ${{ secrets.ORPHOGRAPH_API_KEY }}
+      - shell: bash
+        env:
+          RECEIPT_URL: ${{ steps.anchor.outputs.receipt-url }}
+          REL: ${{ github.ref_name }}
+        run: |
+          echo "Anchored release $REL ($GITHUB_SHA)"
+          echo "Receipt: $RECEIPT_URL"
+          echo "RECEIPT_URL=$RECEIPT_URL" >> "$GITHUB_STEP_SUMMARY"

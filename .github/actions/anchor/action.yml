@@ -1,0 +1,50 @@
+name: "Orphograph anchor"
+description: "Anchor a file or string to the Bitcoin chain via Orphograph. Hash-only — the bytes never leave the runner."
+branding:
+  icon: "anchor"
+  color: "gray-dark"
+
+inputs:
+  file:
+    description: "Path to a file to anchor (mutually exclusive with `text`)."
+    required: false
+    default: ""
+  text:
+    description: "A string to anchor (e.g. a release SHA, an SBOM digest, release notes)."
+    required: false
+    default: ""
+  label:
+    description: "Optional human-readable label stored on the receipt (no secrets)."
+    required: false
+    default: ""
+  api-key:
+    description: "Orphograph API key (raises rate limits). Free tier if omitted."
+    required: false
+    default: ""
+  endpoint:
+    description: "Service endpoint."
+    required: false
+    default: "https://orphograph.com"
+
+outputs:
+  receipt-id:
+    description: "The Orphograph receipt id."
+    value: ${{ steps.anchor.outputs.receipt-id }}
+  receipt-url:
+    description: "Human-readable receipt URL."
+    value: ${{ steps.anchor.outputs.receipt-url }}
+
+runs:
+  using: "composite"
+  steps:
+    - id: anchor
+      shell: bash
+      # Inputs are passed via env (NOT interpolated into the run script) so a
+      # malicious tag/label/path can never inject shell. anchor_ci.py reads them.
+      env:
+        ORPHO_FILE: ${{ inputs.file }}
+        ORPHO_TEXT: ${{ inputs.text }}
+        ORPHO_LABEL: ${{ inputs.label }}
+        ORPHOGRAPH_API_KEY: ${{ inputs.api-key }}
+        ORPHO_ENDPOINT: ${{ inputs.endpoint }}
+      run: python3 "$GITHUB_ACTION_PATH/anchor_ci.py"
