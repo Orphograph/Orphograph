@@ -159,6 +159,21 @@ def _send(to: str, subject: str, text: str, html: str,
     Transactional mail is exempt from unsubscribe but still benefits from
     DKIM-aligned signing and a clean reply-to.
     """
+    # Suppression gate: never email an address that hard-bounced or filed a
+    # spam complaint (recorded by the Resend webhook). Repeatedly mailing a
+    # suppressed address tanks sender reputation and can get the domain blocked.
+    # Best-effort + lazy import so a webhook-module issue can never break sending.
+    try:
+        import resend_webhook as _rw  # type: ignore
+        if _rw.is_suppressed(to):
+            sys.stderr.write(
+                f"[email:suppressed] skipping to={_auth.mask_email(to)} "
+                f"subject={subject!r} (address on bounce/complaint suppression list)\n"
+            )
+            return False
+    except Exception:  # noqa: BLE001 — suppression check must never block sending
+        pass
+
     text_out = text + _footer_text(to, transactional)
     html_out = _wrap_html_body(html + _footer_html(to, transactional))
 
