@@ -53,13 +53,13 @@
   <p style="font-size:12px;letter-spacing:0.18em;text-transform:uppercase;color:var(--muted);margin:48px 0 8px;">Recovery</p>
   <h1>Recover an issued instrument.</h1>
   <p class="rec-lede">
-    If payment has been received but the corresponding claim instrument or sign-in instrument has not arrived in your inbox, this form re-issues it to the address on file. No duplicate instrument is minted; the original claim code is preserved. The session identifier appears in the payment-confirmation email Stripe sent you, or in the URL after checkout (the segment beginning <code>cs_…</code>).
+    If payment has been received but the corresponding claim instrument or sign-in instrument has not arrived in your inbox, this form re-issues it to the address on file. No duplicate instrument is minted; the original claim code is preserved. For a card payment, the identifier is the session segment beginning <code>cs_…</code> (in your checkout-success URL or your payment-confirmation email). For a crypto payment, it is the order identifier beginning <code>np_…</code> shown on the payment page and in your confirmation.
   </p>
 
   <form class="rec-form" id="rec-form" novalidate>
-    <label for="rec-session">Stripe session identifier</label>
-    <input type="text" id="rec-session" name="stripe_session_id" placeholder="cs_live_…" autocomplete="off" spellcheck="false" required>
-    <p class="hint">Found in the Stripe checkout-success URL or your Stripe email receipt. Begins with <code>cs_live_</code>.</p>
+    <label for="rec-session">Payment identifier</label>
+    <input type="text" id="rec-session" name="stripe_session_id" placeholder="cs_live_… or np_…" autocomplete="off" spellcheck="false" required>
+    <p class="hint">For a card payment, the checkout session beginning <code>cs_live_</code> (or <code>cs_test_</code>). For a crypto payment, the order identifier beginning <code>np_</code>.</p>
 
     <label for="rec-email">Email on file</label>
     <input type="email" id="rec-email" name="email" placeholder="you@example.com" autocomplete="email" required>
@@ -79,8 +79,8 @@
     <h3>What if the email does not arrive?</h3>
     <p>Email may be delayed by the receiving provider for up to fifteen minutes. Check the spam folder. If after thirty minutes no instrument has arrived, write to <a href="mailto:hello@orphograph.com">hello@orphograph.com</a> with the session identifier — that mailbox is read directly by the office.</p>
 
-    <h3>Why is the session identifier required?</h3>
-    <p>It binds the recovery to a specific payment and prevents the form from being used to enumerate other customers. Without it the recovery cannot proceed. The identifier was issued to you by Stripe and is private.</p>
+    <h3>Why is the payment identifier required?</h3>
+    <p>It binds the recovery to a specific payment and prevents the form from being used to enumerate other customers. Without it the recovery cannot proceed. The identifier was issued to you by the payment processor — Stripe for a card payment, or the crypto processor for a crypto payment — and is private. The email must also match the address on file for that payment.</p>
   </section>
 </main>
 
@@ -120,12 +120,14 @@
       showResult("err", "Both fields are required.");
       return;
     }
-    if (!/^cs_(test|live)_[A-Za-z0-9_]+$/.test(sid)) {
-      showResult("err", "Session identifier is not in the expected format. It begins with cs_live_ or cs_test_.");
+    var isStripe = /^cs_(test|live)_[A-Za-z0-9_]+$/.test(sid);
+    var isCrypto = /^np_[A-Za-z0-9_-]{1,61}$/.test(sid);
+    if (!isStripe && !isCrypto) {
+      showResult("err", "Payment identifier is not in the expected format. A card session begins with cs_live_ or cs_test_; a crypto order begins with np_.");
       return;
     }
     submitBtn.disabled = true;
-    showResult("wait", "Verifying with the payment processor…");
+    showResult("wait", isCrypto ? "Looking up the payment on file…" : "Verifying with the payment processor…");
     fetch("/api/recover", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
