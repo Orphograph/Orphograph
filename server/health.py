@@ -40,6 +40,10 @@ try:
     import public_config  # type: ignore
 except ImportError:  # pragma: no cover
     public_config = None  # type: ignore
+try:
+    import mailer  # type: ignore
+except ImportError:  # pragma: no cover
+    mailer = None  # type: ignore
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = Path(os.environ.get("ORPHO_DATA_DIR", str(ROOT / "data") if (ROOT / "data").is_dir() else str(ROOT)))
@@ -151,6 +155,17 @@ def _payout_snapshot() -> dict:
         return {"configured": False, "error": f"{type(e).__name__}"}
 
 
+def _email_snapshot() -> dict:
+    """Whether transactional email (claim codes, receipts, sign-in links) can be
+    delivered. The mailer is INERT without RESEND_API_KEY, so resend_configured
+    == False means a paid buyer's claim code would be minted + queued for manual
+    recovery rather than emailed. Exposes ONLY a boolean — never the API key
+    value — so it is safe on the public, ungated /api/health endpoint."""
+    if mailer is None:
+        return {"resend_configured": False}
+    return {"resend_configured": bool(getattr(mailer, "RESEND_API_KEY", "") or "")}
+
+
 def _compute_snapshot() -> dict:
     ledger = engine.LEDGER
     upgrade_log = DATA_DIR / "upgrade_log.jsonl"
@@ -185,6 +200,7 @@ def _compute_snapshot() -> dict:
         "btc_oracle": _btc_price_snapshot(),
         "payout": _payout_snapshot(),
         "checkout": _checkout_snapshot(),
+        "email": _email_snapshot(),
         "reconciliation": _reconciliation_snapshot(),
         "checked_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
     }
