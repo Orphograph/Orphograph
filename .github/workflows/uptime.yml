@@ -1,0 +1,69 @@
+name: Uptime monitor
+
+# External, off-host uptime monitoring — runs on GitHub's infrastructure, not the
+# operator's machine and not Fly. Closes the #1 TRL bottleneck in
+# deploy/TRL_ASSESSMENT_2026_05_18.md (monitoring was TRL 4: only a localhost
+# probe existed). Each run is an auditable uptime data point; the Actions run
+# history is the uptime record. A failed run notifies repo admins by email
+# (GitHub default) and, if the optional UPTIME_WEBHOOK secret is set, pings it.
+#
+# Note: GitHub's scheduled-cron minimum granularity is 5 minutes, and schedules
+# only run from the default branch. This is deliberately lightweight (a couple of
+# curls) so it stays well within free public-repo minutes.
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch: {}
+
+concurrency:
+  group: uptime
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe public health endpoint
+        run: |
+          set -euo pipefail
+          code=$(curl -s -o /tmp/health.json -w '%{http_code}' --max-time 25 https://orphograph.com/api/health)
+          echo "GET /api/health -> HTTP $code"
+          if [ "$code" != "200" ]; then
+            echo "::error::/api/health returned HTTP $code"
+            cat /tmp/health.json || true
+            exit 1
+          fi
+          python3 - <<'PY'
+          import json
+          d = json.load(open("/tmp/health.json"))
+          assert d.get("ok") is True, f"health.ok is not true: {d.get('ok')!r}"
+          assert d.get("version"), "health.version missing"
+          # data dir + receipt store must be readable (operational, not just up)
+          assert "counts" in d and "receipts_on_disk" in d["counts"], "receipt store not reported"
+          print("HEALTHY ok=%s version=%s uptime_sec=%s receipts=%s" % (
+              d["ok"], d["version"], d.get("uptime_sec"),
+              d["counts"]["receipts_on_disk"]))
+          PY
+
+      - name: Probe trust-chain asset (standalone verifier survives the company)
+        run: |
+          set -euo pipefail
+          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 25 https://orphograph.com/verify/orphograph-verify-0.1.tar.gz)
+          echo "GET /verify/orphograph-verify-0.1.tar.gz -> HTTP $code"
+          if [ "$code" != "200" ]; then
+            echo "::error::verifier tarball returned HTTP $code (independent-verification path down)"
+            exit 1
+          fi
+
+      - name: Notify webhook on failure (optional)
+        if: failure() && env.UPTIME_WEBHOOK != ''
+        env:
+          UPTIME_WEBHOOK: ${{ secrets.UPTIME_WEBHOOK }}
+        run: |
+          curl -s -m 15 -X POST "$UPTIME_WEBHOOK" \
+            -H 'Content-Type: application/json' \
+            -d "{\"text\":\"⚠️ orphograph.com uptime probe FAILED (run ${GITHUB_RUN_ID})\"}" || true
