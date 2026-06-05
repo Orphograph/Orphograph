@@ -951,6 +951,38 @@ class Handler(BaseHTTPRequestHandler):
                 "team_role": team_role,
             })
             return
+        if path.startswith("/api/nowpayments/order/"):
+            # Status-only poll for web/pay/success.html so it can tell the
+            # buyer whether their crypto payment has been credited yet.
+            #
+            # PRIVACY CONTRACT — this response is STATUS ONLY. It MUST NEVER
+            # echo the claim code (a "pk_..." bearer token), the customer
+            # email, or any secret. We look the ledger row up server-side but
+            # project out ONLY a boolean and the integer credit count. The
+            # order_id is a public reference printed on the success page.
+            order_id = path[len("/api/nowpayments/order/"):].rstrip("/")
+            if not RECEIPT_ID_RE.match(order_id):
+                _json_response(self, 400, {"error": "invalid order id"})
+                return
+            allowed, retry = _anchor_limiter.check(f"orderstat:{self._client_key()}")
+            if not allowed:
+                _json_response(self, 429, {
+                    "error": "too many requests",
+                    "retry_after_seconds": int(retry) + 1,
+                })
+                return
+            ledger_row = credits.find_claim_code_by_source(order_id)
+            credited = ledger_row is not None
+            # NOTE: ledger_row contains claim_code + email + source — do NOT
+            # spread it into the response. Only the int delta is safe to echo.
+            credit_count = int(ledger_row.get("credits_delta", 0)) if ledger_row else None
+            _json_response(self, 200, {
+                "ok": True,
+                "order_id": order_id,
+                "credited": credited,
+                "credits": credit_count,
+            })
+            return
         if path == "/api/me/webhooks":
             email = self._session_email()
             if not email:
