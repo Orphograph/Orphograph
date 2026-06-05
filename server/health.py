@@ -185,7 +185,66 @@ def _compute_snapshot() -> dict:
         "btc_oracle": _btc_price_snapshot(),
         "payout": _payout_snapshot(),
         "checkout": _checkout_snapshot(),
+        "reconciliation": _reconciliation_snapshot(),
         "checked_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+    }
+
+
+def _count_jsonl(path: Path) -> int | None:
+    """Count non-blank JSONL rows; None on read error (crash-safe)."""
+    try:
+        if not path.exists():
+            return 0
+        n = 0
+        with path.open() as f:
+            for line in f:
+                if line.strip():
+                    n += 1
+        return n
+    except OSError:
+        return None
+
+
+def _count_jsonl_event_prefix(path: Path, prefix: str) -> int | None:
+    """Count rows whose `event_id` starts with `prefix`; None on read error."""
+    try:
+        if not path.exists():
+            return 0
+        n = 0
+        with path.open() as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    row = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if str(row.get("event_id", "")).startswith(prefix):
+                    n += 1
+        return n
+    except OSError:
+        return None
+
+
+def _reconciliation_snapshot() -> dict:
+    """Read-only money-integrity counts so a silently-failed webhook path is
+    detectable from /health. Counts only — no emails, codes, or amounts. A
+    successful grant leaves exactly one credit-ledger row; a paid NOWPayments
+    order leaves exactly one mint marker. Divergence between processed-events
+    and grants over time is the cue to run scripts/reconcile_stripe_ledger.py."""
+    credit_ledger = Path(os.environ.get(
+        "ORPHO_CREDIT_LEDGER", str(DATA_DIR / "credit_ledger.jsonl")))
+    stripe_events = Path(os.environ.get(
+        "ORPHO_PROCESSED_EVENTS", str(DATA_DIR / "stripe_processed_events.jsonl")))
+    nowpay_events = Path(os.environ.get(
+        "ORPHO_NOWPAYMENTS_PROCESSED_EVENTS", str(DATA_DIR / "nowpayments_processed_events.jsonl")))
+    return {
+        "credit_ledger_rows": _count_jsonl(credit_ledger),
+        "stripe_processed_events": _count_jsonl(stripe_events),
+        "nowpayments_processed_events": _count_jsonl(nowpay_events),
+        "nowpayments_mint_markers": _count_jsonl_event_prefix(nowpay_events, "mint:"),
+        "note": "counts only; run scripts/reconcile_stripe_ledger.py for full drift detection",
     }
 
 
