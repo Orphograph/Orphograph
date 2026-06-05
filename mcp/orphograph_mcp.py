@@ -197,6 +197,59 @@ def tool_anchor_file(args: dict) -> dict:
     }
 
 
+def hash_text(text: str) -> tuple[str, str, int]:
+    """SHA-256 + SHA-512 of a UTF-8 string. Returns (sha256_hex, sha512_hex, byte_len)."""
+    raw = text.encode("utf-8")
+    return hashlib.sha256(raw).hexdigest(), hashlib.sha512(raw).hexdigest(), len(raw)
+
+
+def tool_anchor_output(args: dict) -> dict:
+    """Anchor a string of generated output (e.g. an AI agent's result, a model
+    response, a transcript) directly — without writing it to a file first. The
+    text is hashed in-process; ONLY the SHA-256/512 fingerprints are transmitted,
+    so the output itself never leaves the device. Proves "this exact output
+    existed at time T" — re-verify later by hashing the identical text."""
+    text = args.get("text")
+    if not isinstance(text, str) or not text:
+        return {"error": "missing required argument: text"}
+    sha256_hex, sha512_hex, size = hash_text(text)
+    payload: dict = {"hash_hex": sha256_hex, "sha512_hex": sha512_hex}
+    label = args.get("label")
+    if isinstance(label, str) and label.strip():
+        payload["client_label"] = label.strip()[:200]
+    c2pa_hash = args.get("c2pa_manifest_hash")
+    if isinstance(c2pa_hash, str) and c2pa_hash.strip():
+        payload["c2pa_manifest_hash"] = c2pa_hash.strip().lower()
+    log(f"anchor_output: hashing {size} bytes of output, submitting hash …")
+    result = _http("POST", "/api/anchor", payload)
+    if result.get("error"):
+        return {
+            "ok": False,
+            "error": result.get("error"),
+            "detail": result.get("body") or result.get("reason"),
+        }
+    rid = result.get("receipt_id", "")
+    return {
+        "ok": True,
+        "receipt_id": rid,
+        "receipt_url": f"{BASE_URL}/r/{rid}" if rid else None,
+        "sha256_hex": sha256_hex,
+        "sha512_hex": sha512_hex,
+        "calendars_ok": result.get("calendars_ok"),
+        "calendars_total": result.get("calendars_total"),
+        "low_redundancy": result.get("low_redundancy", False),
+        "pack_consumed": result.get("pack_consumed", False),
+        "pack_remaining": result.get("pack_remaining", 0),
+        "subscription_active": result.get("subscription_active", False),
+        "size_bytes": size,
+        "note": (
+            "The output text did not leave this device — only the SHA-256 and "
+            "SHA-512 fingerprints were transmitted. To re-verify, hash the exact "
+            "same text and compare to the receipt's anchored hash."
+        ),
+    }
+
+
 def tool_verify_receipt(args: dict) -> dict:
     rid = args.get("receipt_id")
     if not isinstance(rid, str) or not rid:
@@ -304,6 +357,35 @@ TOOL_DEFINITIONS = [
         },
     },
     {
+        "name": "orphograph_anchor_output",
+        "description": (
+            "Anchor a string of generated OUTPUT (an AI agent's result, a model "
+            "response, a transcript, any text) to the Bitcoin chain — without "
+            "writing a file first. Hashes the UTF-8 text in-process and transmits "
+            "ONLY the SHA-256/512 fingerprints; the text never leaves the device. "
+            "Use this to prove an exact output existed at a specific time. Returns "
+            "a receipt id, a receipt URL, and calendar attestation counts."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "text": {
+                    "type": "string",
+                    "description": "The output text to anchor. Hashed locally; not transmitted.",
+                },
+                "label": {
+                    "type": "string",
+                    "description": "Optional human-readable label (max 200 chars). Stored on the receipt; do not include sensitive content.",
+                },
+                "c2pa_manifest_hash": {
+                    "type": "string",
+                    "description": "Optional SHA-256 hex of a C2PA manifest the receipt should reference (coexistence mode).",
+                },
+            },
+            "required": ["text"],
+        },
+    },
+    {
         "name": "orphograph_verify_receipt",
         "description": (
             "Verify an existing Orphograph receipt against the calendars "
@@ -393,6 +475,8 @@ def handle(msg: dict) -> dict | None:
         args = params.get("arguments") or {}
         if name == "orphograph_anchor_file":
             return _reply(req_id, _wrap_tool_result(tool_anchor_file(args)))
+        if name == "orphograph_anchor_output":
+            return _reply(req_id, _wrap_tool_result(tool_anchor_output(args)))
         if name == "orphograph_verify_receipt":
             return _reply(req_id, _wrap_tool_result(tool_verify_receipt(args)))
         if name == "orphograph_list_vault":
