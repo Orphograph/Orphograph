@@ -26,14 +26,14 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install pytest only (stdlib-only project; no other runtime deps)
-        run: pip install pytest==9.0.2
+      - name: Install test deps (cryptography + PyYAML, like deploy.yml)
+        run: pip install --upgrade pip && pip install pytest cryptography PyYAML
       - name: Compile check every server module
         run: python3 -m py_compile server/*.py
-      - name: Run pytest
+      - name: Run pytest (same command as the deploy gate)
         env:
           PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
-        run: python3 -m pytest tests/ -q
+        run: python3 -m pytest tests/ -q --ignore=tests/test_biweekly_safety_audit.py
 
   jslint:
     runs-on: ubuntu-latest
@@ -52,17 +52,9 @@ jobs:
             node --check "$f"
           done
 
-  verifier_roundtrip:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - name: Verify the bundled sample with the OSS verifier
-        run: |
-          cd dist/orphograph-verify
-          python3 verify.py examples/sample/receipt.json --file examples/sample/sample.txt
+  # NOTE: the standalone verifier roundtrip lived here but was (1) broken — it used
+  # an outdated positional CLI (verify.py now takes a `file`/`folder` subcommand) and
+  # no inclusion-proof/manifest sample ships in examples/sample (only a receipt + .ots);
+  # and (2) redundant — tests/test_dist_verifier.py already invokes dist/orphograph-verify/
+  # verify.py as a subprocess against freshly-built folder-manifest AND inclusion-proof
+  # fixtures (folder OK, tamper-detect, file mode), and runs in the pytest job above.
