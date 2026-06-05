@@ -2907,15 +2907,31 @@ class Handler(BaseHTTPRequestHandler):
         except (UnicodeDecodeError, json.JSONDecodeError):
             _json_response(self, 400, {"error": "invalid request"})
             return
+        # The same field carries either a Stripe checkout session id
+        # (cs_test_/cs_live_) or a crypto (NOWPayments) order id (np_...).
         sid = (payload.get("stripe_session_id") or "").strip()
         provided_email = (payload.get("email") or "").strip().lower()
+        # Email shape is required for BOTH paths; check it once up front so the
+        # generic 400 below is identical regardless of which path is taken.
+        if not provided_email or "@" not in provided_email or len(provided_email) > 254:
+            _json_response(self, 400, {"error": "invalid request"})
+            return
+
+        # ---- Crypto (NOWPayments) recovery branch -------------------------
+        # A crypto buyer's order id begins with "np_". Dispatch BEFORE the
+        # Stripe shape check (which would otherwise reject any non-cs_ id).
+        # This branch NEVER mints: it looks up the already-issued claim code
+        # and re-sends it only when the requester's email matches the ledger
+        # row exactly. The per-IP rate limit above already applies; the
+        # Stripe path below is left completely untouched.
+        if sid.startswith("np_"):
+            self._recover_crypto_claim(sid, provided_email)
+            return
+
         # Strict shape check on the session id. Stripe ids are cs_test_ or
         # cs_live_ followed by alphanumerics + underscores.
         if not sid.startswith(("cs_test_", "cs_live_")) or len(sid) > 256 \
            or not all(c.isalnum() or c == "_" for c in sid):
-            _json_response(self, 400, {"error": "invalid request"})
-            return
-        if not provided_email or "@" not in provided_email or len(provided_email) > 254:
             _json_response(self, 400, {"error": "invalid request"})
             return
         if not stripe_api.is_configured():
@@ -3004,6 +3020,64 @@ class Handler(BaseHTTPRequestHandler):
         sent = mailer.send_pack_claim_email(provided_email, claim_code, credit_count)
         sys.stderr.write(
             f"[recover] resent claim_code for session={sid} "
+            f"email={auth.mask_email(provided_email)} email_sent={sent}\n"
+        )
+        _json_response(self, 200, {
+            "ok": True,
+            "mode": "payment",
+            "message": (
+                "The claim instrument has been re-sent to the address on file. "
+                "It is the same instrument originally issued — no duplicate has been minted."
+            ),
+        })
+
+    def _recover_crypto_claim(self, order_id: str, provided_email: str) -> None:
+        """Crypto (NOWPayments) self-serve claim-code recovery.
+
+        A crypto buyer whose claim-code email never arrived can re-trigger it
+        here. We look up the EXISTING claim code minted for `order_id` and
+        re-send it — we NEVER mint. The most important line is the
+        cross-customer-leak guard: the requester's email MUST equal the email
+        on the ledger row (case-insensitive, stripped). On any failure —
+        bad shape, order not found, OR email mismatch — we return the EXACT
+        SAME generic error the Stripe path returns, so the endpoint cannot be
+        used to enumerate orders or confirm whether an address is on file.
+
+        Pre-state: caller has already (a) applied the per-IP rate limit and
+        (b) validated `provided_email` shape. `provided_email` is already
+        stripped + lower-cased by the caller.
+        """
+        # 1. Validate order_id shape: [A-Za-z0-9_-], length 1..64.
+        if not (1 <= len(order_id) <= 64) or not all(
+            c.isalnum() or c in "_-" for c in order_id
+        ):
+            _json_response(self, 400, {"error": "invalid request"})
+            return
+
+        # 2. Look up the EXISTING claim code by source. Never mint.
+        ledger_row = credits.find_claim_code_by_source(order_id)
+
+        # 3. CROSS-CUSTOMER-LEAK GUARD (load-bearing): the request email must
+        #    equal the ledger-row email exactly (case-insensitive, stripped).
+        #    Not-found and mismatch collapse to the SAME generic 400 — no
+        #    enumeration, no confirmation of which side differed.
+        row_email = ((ledger_row or {}).get("email") or "").strip().lower()
+        if not ledger_row or not row_email or row_email != provided_email:
+            sys.stderr.write(
+                f"[recover] crypto recovery DENIED order={order_id} "
+                f"email={auth.mask_email(provided_email)} "
+                f"(no match or email mismatch)\n"
+            )
+            _json_response(self, 400, {"error": "invalid request"})
+            return
+
+        # 4. Match. Re-send the EXISTING code via the same mailer the Stripe
+        #    path and the webhook use. Mirror the one-time-Pack success body.
+        claim_code = ledger_row["claim_code"]
+        credit_count = int(ledger_row.get("credits_delta", 0))
+        sent = mailer.send_pack_claim_email(provided_email, claim_code, credit_count)
+        sys.stderr.write(
+            f"[recover] resent crypto claim_code for order={order_id} "
             f"email={auth.mask_email(provided_email)} email_sent={sent}\n"
         )
         _json_response(self, 200, {
@@ -3742,11 +3816,13 @@ def _start_upgrade_scheduler() -> None:
 
 
 def _start_cadence_scheduler() -> None:
-    """Background thread that fires cold-outreach cadence runs on Tue/Wed/Thu at 14:00 UTC.
+    """Background thread that fires approved cold-outreach cadence runs.
 
-    Avoids the need for a separate Fly cron machine: the scheduler wakes once an
-    hour, and when the current UTC time matches (hour == 14, weekday in {Tue=1,
-    Wed=2, Thu=3}) it invokes scripts/cadence_runner.py --execute.
+    Default-off by design. Set ORPHO_CADENCE_AUTOMATION_ENABLED=1 after
+    founder approval; otherwise the thread logs a disabled line and never
+    invokes the runner. When enabled, it wakes once an hour, and when the
+    current UTC time matches (hour == 14, weekday in {Tue=1, Wed=2, Thu=3})
+    it invokes scripts/cadence_runner.py --execute.
 
     Idempotency: a state file at DATA_DIR/.cadence_last_run records the iso date
     of the last successful fire. The scheduler refuses to fire twice on the same
@@ -3754,7 +3830,8 @@ def _start_cadence_scheduler() -> None:
     observed more than once.
 
     Kill switch: set ORPHO_CADENCE_DISABLED=1 (e.g. via `fly secrets set`) and
-    the loop becomes a no-op at the next wake. No restart required.
+    the loop becomes a no-op at the next wake. No restart required. The runner
+    enforces the same switch and the same opt-in env before sending.
 
     The cadence_runner itself enforces the 20/day hard cap and the Tue-Thu
     day-of-week gate, so this scheduler is a thin wall-clock trigger.
@@ -3778,6 +3855,11 @@ def _start_cadence_scheduler() -> None:
             try:
                 if os.environ.get("ORPHO_CADENCE_DISABLED", "") == "1":
                     sys.stderr.write("[cadence] disabled via ORPHO_CADENCE_DISABLED=1\n")
+                elif os.environ.get("ORPHO_CADENCE_AUTOMATION_ENABLED", "") != "1":
+                    sys.stderr.write(
+                        "[cadence] automation not enabled "
+                        "(set ORPHO_CADENCE_AUTOMATION_ENABLED=1 to allow approved runs)\n"
+                    )
                 else:
                     now = datetime.now(timezone.utc)
                     hour = now.hour
