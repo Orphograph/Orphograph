@@ -431,3 +431,94 @@ def test_golden_ipn_rejects_tampered_signature():
     t_payload, _ = _sign(tampered, secret="attacker_does_not_know_the_secret")
     # the original signature does not validate the tampered body
     assert nowpayments_webhook.verify_signature(t_payload, sig, SECRET) is False
+
+
+# ------------------------------------------- exactly-once mint (TOCTOU lock)
+
+def test_confirmed_then_finished_mints_once():
+    """NOWPayments fires BOTH `confirmed` and `finished` for one paid order
+    (different event_ids). The per-order mint marker must mint exactly once."""
+    base = {
+        "order_id": "np_seq_001",
+        "invoice_id": "inv_seq_001",
+        "customer_email": "seq@example.com",
+        "plan": "writer_pack",
+    }
+    p1, _ = _sign({**base, "payment_status": "confirmed"})
+    p2, _ = _sign({**base, "payment_status": "finished"})
+
+    r1 = nowpayments_webhook.handle_event(p1)
+    assert r1.get("claim_code_minted") is True
+    r2 = nowpayments_webhook.handle_event(p2)
+    assert r2.get("claim_code_minted") is not True
+    assert r2.get("duplicate_mint") == "np_seq_001", r2
+
+    mints = [
+        json.loads(l) for l in credits.LEDGER_PATH.read_text().splitlines() if l.strip()
+    ]
+    mints = [r for r in mints if r.get("credits_delta", 0) > 0 and "np_seq_001" in r.get("source", "")]
+    assert len(mints) == 1, f"exactly one mint expected, got {len(mints)}"
+
+
+def test_crash_lost_marker_does_not_double_mint():
+    """If the processed-events marker is lost (process crashed after the credit
+    row fsync'd but before the marker was written), a redelivered IPN must still
+    NOT double-mint — the credit-ledger cross-check (find_claim_code_by_source)
+    catches it. This is the crash-safety the file lock alone cannot provide."""
+    body = {
+        "order_id": "np_crash_001",
+        "payment_status": "finished",
+        "invoice_id": "inv_crash_001",
+        "customer_email": "crash@example.com",
+        "plan": "writer_pack",
+    }
+    payload, _sig = _sign(body)
+
+    first = nowpayments_webhook.handle_event(payload)
+    assert first.get("claim_code_minted") is True
+    rows_before = credits.LEDGER_PATH.read_text().splitlines()
+
+    # Simulate a crash that wiped the processed-events log (markers gone) while
+    # the fsync'd credit ledger survived.
+    nowpayments_webhook.PROCESSED_EVENTS_PATH.unlink()
+
+    second = nowpayments_webhook.handle_event(payload)
+    assert second.get("duplicate_mint") == "np_crash_001", second
+    assert second.get("claim_code_minted") is not True
+    rows_after = credits.LEDGER_PATH.read_text().splitlines()
+    assert rows_before == rows_after, "crash-lost marker must NOT cause a re-mint"
+
+
+def test_dedupe_lock_path_tracks_events_path():
+    """The cross-process sentinel lock must sit beside the (possibly overridden)
+    processed-events ledger, resolved at call time — not a stale import-time path."""
+    lp = nowpayments_webhook._dedupe_lock_path()
+    expected = nowpayments_webhook.PROCESSED_EVENTS_PATH.with_suffix(
+        nowpayments_webhook.PROCESSED_EVENTS_PATH.suffix + ".lock")
+    assert lp == expected
+    assert str(lp).endswith(".jsonl.lock")
+
+
+def test_claim_email_sent_once_outside_lock(monkeypatch):
+    """The claim-code email (now sent AFTER the lock releases) fires exactly once
+    on a fresh mint and never on a duplicate IPN — the refactor must not drop or
+    duplicate delivery."""
+    calls = []
+    monkeypatch.setattr(
+        nowpayments_webhook.mailer, "send_pack_claim_email",
+        lambda to, code, n: (calls.append((to, code, n)), True)[1],
+    )
+    body = {
+        "order_id": "np_email_001",
+        "payment_status": "finished",
+        "invoice_id": "inv_email_001",
+        "customer_email": "mail@example.com",
+        "plan": "writer_pack",
+    }
+    payload, _sig = _sign(body)
+    r1 = nowpayments_webhook.handle_event(payload)
+    assert r1.get("claim_code_minted") is True
+    assert len(calls) == 1, f"exactly one email on fresh mint, got {len(calls)}"
+    assert calls[0][0] == "mail@example.com" and calls[0][2] == 10
+    nowpayments_webhook.handle_event(payload)  # duplicate
+    assert len(calls) == 1, "duplicate IPN must not re-send the claim-code email"

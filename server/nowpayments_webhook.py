@@ -53,8 +53,21 @@ PROCESSED_EVENTS_PATH = Path(os.environ.get(
     "ORPHO_NOWPAYMENTS_PROCESSED_EVENTS",
     str(DATA_DIR / "nowpayments_processed_events.jsonl"),
 ))
-
+# Intra-process guard (threads within one machine). The cross-process file lock
+# (see _dedupe_lock_path) adds multi-machine atomicity; we hold BOTH around the
+# check-then-mint-then-mark section.
 _dedupe_lock = threading.Lock()
+
+
+def _dedupe_lock_path() -> Path:
+    """Sibling .lock of the processed-events ledger — the cross-process sentinel
+    held around the whole mint critical section so two machines sharing the data
+    volume cannot both pass the dedup check and double-mint one order. Mirrors
+    credits.consume_credit's lockfile pattern. Resolved at CALL time so a runtime
+    (or test) override of PROCESSED_EVENTS_PATH is honored. It is a DISTINCT file
+    from the ledger it guards, so it never self-deadlocks with _mark_processed's
+    append lock on PROCESSED_EVENTS_PATH itself."""
+    return PROCESSED_EVENTS_PATH.with_suffix(PROCESSED_EVENTS_PATH.suffix + ".lock")
 
 
 def _to_float(v) -> float | None:
@@ -171,9 +184,45 @@ def handle_event(payload: bytes) -> dict:
 
     event_id = f"{order_id}:{payment_status}"
 
-    with _dedupe_lock:
+    # Decide + mint under the lock; the (slow, network) claim-code email is sent
+    # AFTER the lock releases, so a multi-second Resend retry can't hold the
+    # cross-process sentinel and head-of-line-block every other machine's IPN.
+    result, pending_email = _decide_and_mint_locked(
+        event_id, order_id, payment_status, customer_email,
+        pack_credits, plan, plan_resolved, invoice_id, event,
+    )
+    if pending_email is not None:
+        to_email, claim_code, credit_count = pending_email
+        sent = mailer.send_pack_claim_email(to_email, claim_code, credit_count)
+        sys.stderr.write(
+            f"[nowpayments_webhook] minted claim_code order={order_id} "
+            f"plan={plan} credits={pack_credits} email_sent={sent}\n"
+        )
+    return result
+
+
+def _decide_and_mint_locked(
+    event_id: str,
+    order_id: str,
+    payment_status: str,
+    customer_email: str,
+    pack_credits: int,
+    plan: str,
+    plan_resolved: bool,
+    invoice_id: str,
+    event: dict,
+) -> "tuple[dict, tuple | None]":
+    """Dedup + mint critical section. Returns (result, pending_email): pending_email
+    is (to, claim_code, credit_count) IFF a fresh mint happened this call, else None.
+    The caller sends that email AFTER this returns — i.e. after the cross-process
+    lock is released — so a slow Resend call never head-of-line-blocks the fleet.
+    All money mutations (credit add + dedup marks) happen INSIDE the lock."""
+    # Hold BOTH the intra-process threading lock and the cross-process file lock
+    # for the entire check-then-mint-then-mark section, so neither two threads
+    # nor two machines can interleave and double-mint a single order.
+    with _dedupe_lock, locked(_dedupe_lock_path(), exclusive=True):
         if _has_been_processed(event_id):
-            return {"ok": True, "duplicate": event_id}
+            return {"ok": True, "duplicate": event_id}, None
 
         # Crediting branch. NOWPayments' lifecycle (waiting -> confirming ->
         # confirmed -> sending -> finished) fires an IPN per transition, so a
@@ -183,11 +232,20 @@ def handle_event(payload: bytes) -> dict:
         # no-ops. (Refund/partial/failed keep their own per-status keys below.)
         if payment_status in ("finished", "confirmed"):
             mint_marker = f"mint:{order_id}"
-            if _has_been_processed(mint_marker):
+            # Exactly-once mint. The per-order marker dedups the normal case; we
+            # ALSO cross-check the credit ledger (the money source of truth) by
+            # order_id, so even if the marker write was lost to a crash AFTER a
+            # prior successful mint, a retried/duplicate IPN will not double-mint.
+            # find_claim_code_by_source returns the positive mint row; refund
+            # rows are negative and ignored.
+            already_minted = credits.find_claim_code_by_source(order_id) is not None
+            if _has_been_processed(mint_marker) or already_minted:
                 result = {"ok": True, "duplicate_mint": order_id,
                           "status": payment_status}
+                # Re-assert the marker so a crash-lost marker self-heals.
+                _mark_processed(mint_marker, result)
                 _mark_processed(event_id, result)
-                return result
+                return result, None
 
             if not customer_email or "@" not in customer_email:
                 sys.stderr.write(
@@ -198,7 +256,7 @@ def handle_event(payload: bytes) -> dict:
                 # NOTE: do not set mint_marker — nothing was minted, so a later
                 # IPN that DOES carry an email can still deliver the pack.
                 _mark_processed(event_id, result)
-                return result
+                return result, None
 
             # Underpayment guard. NOWPayments only marks `finished` once its own
             # merchant-configured tolerance is met, but FX/fee slippage across
@@ -226,7 +284,7 @@ def handle_event(payload: bytes) -> dict:
                                   "order_id": order_id, "actually_paid": actually_paid,
                                   "pay_amount": pay_amount}
                         _mark_processed(event_id, result)
-                        return result
+                        return result, None
 
             claim_code = credits.new_claim_code()
             # Include BOTH invoice_id and order_id in the source so that
@@ -238,11 +296,6 @@ def handle_event(payload: bytes) -> dict:
                 email=customer_email,
                 amount=pack_credits,
                 source=source,
-            )
-            sent = mailer.send_pack_claim_email(customer_email, claim_code, pack_credits)
-            sys.stderr.write(
-                f"[nowpayments_webhook] minted claim_code order={order_id} "
-                f"plan={plan} credits={pack_credits} email_sent={sent}\n"
             )
             result = {
                 "ok": True,
@@ -256,7 +309,8 @@ def handle_event(payload: bytes) -> dict:
             # finished) sees it and no-ops; then the per-status event marker.
             _mark_processed(mint_marker, result)
             _mark_processed(event_id, result)
-            return result
+            # Claim-code email is sent by the caller AFTER the lock releases.
+            return result, (customer_email, claim_code, pack_credits)
 
         # Partial: do not credit, but acknowledge so NOWPayments stops retrying.
         if payment_status == "partially_paid":
@@ -266,14 +320,14 @@ def handle_event(payload: bytes) -> dict:
             result = {"ok": True, "ignored": True, "reason": "partially_paid",
                       "order_id": order_id}
             _mark_processed(event_id, result)
-            return result
+            return result, None
 
         # Failed / expired: no credit, just ack.
         if payment_status in ("failed", "expired"):
             result = {"ok": True, "ignored": True, "reason": payment_status,
                       "order_id": order_id}
             _mark_processed(event_id, result)
-            return result
+            return result, None
 
         # Refund (after we already minted). Revoke any unused credits whose
         # source mentions this order_id. Already-spent anchors stay valid.
@@ -289,10 +343,10 @@ def handle_event(payload: bytes) -> dict:
             result = {"ok": True, "refunded": True, "order_id": order_id,
                       "revoked": revoked}
             _mark_processed(event_id, result)
-            return result
+            return result, None
 
         # Anything else (sending, waiting, confirming): ack without crediting.
         result = {"ok": True, "ignored": True, "reason": payment_status,
                   "order_id": order_id}
         _mark_processed(event_id, result)
-        return result
+        return result, None
