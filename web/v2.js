@@ -526,6 +526,25 @@
         }),
       });
       if (!r.ok) {
+        if (r.status === 429) {
+          // Free daily limit hit — this user just showed intent. Offer the paid
+          // path instead of a dead error. (Crypto checkout works today.)
+          setStatusSimple(
+            "You've used today's free anchors.",
+            "A Writer Pack is 10 anchors for $19 — credits never expire, and you can pay with crypto in under a minute.",
+            "info"
+          );
+          const cta = document.createElement("a");
+          cta.href = "/pay/crypto.html?plan=writer_pack";
+          cta.className = "cta";
+          cta.textContent = "Get a Writer Pack →";
+          cta.style.display = "inline-block";
+          cta.style.marginTop = "10px";
+          status.appendChild(cta);
+          showStatusBanner("Free limit reached — a Writer Pack removes it.", "info");
+          clearAnchorState();
+          return;
+        }
         const txt = await r.text();
         setStatusSimple(
           "The office could not record this submission.",
