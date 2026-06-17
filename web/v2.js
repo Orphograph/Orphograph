@@ -471,6 +471,99 @@
     status.appendChild(top);
   }
 
+  // Render the frictionless Writer-Pack purchase affordance into the status
+  // area after a free-tier 429. Primary path is the one-call BTC order:
+  // POST /api/buy-btc {email} → redirect to /buy/<id>, a wallet-ready page
+  // showing the exact sat amount + address. If the BTC rail isn't configured
+  // server-side (503), we degrade to the manual /pay/crypto.html flow so the
+  // offer is never a dead end. The manual link also rides along as a safety
+  // net the user can click if the order call errors.
+  const WRITER_PACK_MANUAL_URL = "/pay/crypto.html?plan=writer_pack";
+
+  function offerWriterPack() {
+    if (!status) return;
+
+    const form = document.createElement("form");
+    form.style.marginTop = "10px";
+    form.setAttribute("novalidate", "");
+
+    const input = document.createElement("input");
+    input.type = "email";
+    input.required = true;
+    input.placeholder = "you@example.com";
+    input.autocomplete = "email";
+    input.setAttribute("aria-label", "Email for your Writer Pack receipt");
+    input.style.marginRight = "8px";
+
+    const submit = document.createElement("button");
+    submit.type = "submit";
+    submit.className = "cta";
+    submit.textContent = "Get a Writer Pack →";
+
+    const msg = document.createElement("div");
+    msg.style.marginTop = "8px";
+
+    // Always-present manual fallback link (works even if JS fetch fails).
+    const manual = document.createElement("a");
+    manual.href = WRITER_PACK_MANUAL_URL;
+    manual.textContent = "Or pay step-by-step on the crypto page →";
+    manual.style.display = "inline-block";
+    manual.style.marginTop = "8px";
+
+    form.appendChild(input);
+    form.appendChild(submit);
+    status.appendChild(form);
+    status.appendChild(msg);
+    status.appendChild(manual);
+
+    form.addEventListener("submit", async function (ev) {
+      ev.preventDefault();
+      const email = (input.value || "").trim();
+      if (!email) {
+        msg.textContent = "Enter your email so we can send the receipt.";
+        return;
+      }
+      const label = submit.textContent;
+      submit.disabled = true;
+      submit.textContent = "Creating order…";
+      msg.textContent = "";
+      try {
+        const r = await fetch("/api/buy-btc", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: email }),
+        });
+        if (r.ok) {
+          const j = await r.json();
+          const dest =
+            j && j.buy_page
+              ? j.buy_page
+              : "/buy/" + (j && j.order_id ? encodeURIComponent(j.order_id) : "");
+          window.location.href = dest;
+          return;
+        }
+        if (r.status === 503) {
+          // BTC rail not configured — hand off to the manual crypto flow.
+          msg.textContent = "Taking you to the crypto checkout…";
+          window.location.href = WRITER_PACK_MANUAL_URL;
+          return;
+        }
+        let err = "Could not start the order. Use the crypto page below.";
+        try {
+          const j = await r.json();
+          if (j && j.error) err = j.error;
+        } catch (e) {}
+        msg.textContent = err;
+        submit.disabled = false;
+        submit.textContent = label;
+      } catch (e) {
+        msg.textContent = "Network error — use the crypto page below.";
+        submit.disabled = false;
+        submit.textContent = label;
+      }
+    });
+  }
+
   async function hashFile(file, alg) {
     const buf = await file.arrayBuffer();
     const digest = await crypto.subtle.digest(alg, buf);
@@ -531,16 +624,10 @@
           // path instead of a dead error. (Crypto checkout works today.)
           setStatusSimple(
             "You've used today's free anchors.",
-            "A Writer Pack is 10 anchors for $19 — credits never expire, and you can pay with crypto in under a minute.",
+            "A Writer Pack is 10 anchors for $19 — credits never expire. Enter your email and pay with Bitcoin in under a minute.",
             "info"
           );
-          const cta = document.createElement("a");
-          cta.href = "/pay/crypto.html?plan=writer_pack";
-          cta.className = "cta";
-          cta.textContent = "Get a Writer Pack →";
-          cta.style.display = "inline-block";
-          cta.style.marginTop = "10px";
-          status.appendChild(cta);
+          offerWriterPack();
           showStatusBanner("Free limit reached — a Writer Pack removes it.", "info");
           clearAnchorState();
           return;
