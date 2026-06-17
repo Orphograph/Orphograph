@@ -118,3 +118,95 @@ def test_buy_btc_degrades_with_503_when_unconfigured(live_server_no_btc):
     assert status == 503, f"expected 503 when BTC rail unconfigured, got {status}: {raw[:200]!r}"
     payload = json.loads(raw)
     assert "error" in payload
+
+
+# ── Layer 3: full 200 path — the page the homepage redirects buyers to ─────
+# The single-address fallback rail (BTC_RECEIVE_ADDRESS) needs no network, but
+# the order's sat amount comes from the live BTC price oracle. So this is a
+# network-gated end-to-end check: if the oracle is unreachable the endpoint
+# returns 503 and we skip rather than fail (the 503-degrade is covered above).
+
+TEST_BTC_ADDR = "bc1qtest000000000000000000000000000000000"
+
+
+@pytest.fixture(scope="module")
+def live_server_btc(tmp_path_factory):
+    """Server with the single-address BTC fallback rail configured."""
+    port = _free_port()
+    data_dir = tmp_path_factory.mktemp("data_btc")
+    env = {
+        **os.environ,
+        "PORT": str(port),
+        "HOST": "127.0.0.1",
+        "ORPHO_DATA_DIR": str(data_dir),
+        "RATE_LIMIT_PER_DAY": "100000",
+        "BTC_RECEIVE_ADDRESS": TEST_BTC_ADDR,
+    }
+    env.pop("ORPHO_BTC_XPUB", None)  # force the single-address fallback path
+    proc = subprocess.Popen(
+        [sys.executable, str(REPO_ROOT / "server" / "app.py")],
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    base = f"http://127.0.0.1:{port}"
+    deadline = time.time() + 10
+    while time.time() < deadline:
+        try:
+            with urllib.request.urlopen(base + "/api/health", timeout=1) as r:
+                if r.status == 200:
+                    break
+        except Exception:
+            time.sleep(0.2)
+    else:
+        proc.kill()
+        pytest.fail("server did not start in 10s")
+    yield base
+    proc.terminate()
+    try:
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+
+
+def _get(url: str):
+    try:
+        with urllib.request.urlopen(url, timeout=5) as r:
+            return r.status, r.read()
+    except urllib.error.HTTPError as e:
+        return e.code, e.read()
+
+
+def test_buy_btc_full_order_path(live_server_btc):
+    status, raw = _post_json(
+        live_server_btc + "/api/buy-btc", {"email": "writer@example.com"}
+    )
+    if status == 503:
+        pytest.skip(f"BTC price oracle unreachable in this env: {raw[:120]!r}")
+    assert status == 200, f"expected 200, got {status}: {raw[:200]!r}"
+    order = json.loads(raw)
+
+    # The exact contract the homepage JS depends on for its redirect.
+    assert order["order_id"].startswith("btc_"), order["order_id"]
+    assert order["buy_page"] == "/buy/" + order["order_id"]
+    assert order["address"] == TEST_BTC_ADDR
+    assert int(order["amount_sats"]) >= 1000
+
+    # buy.js parses btc_<token> out of the path with this regex; the server's
+    # order_id MUST match or the landing page can't load the order.
+    import re
+    assert re.match(r"^btc_[A-Za-z0-9_-]{1,32}$", order["order_id"]), order["order_id"]
+
+    # 1. The redirect target serves the buy page (not a 404).
+    page_status, page = _get(live_server_btc + order["buy_page"])
+    assert page_status == 200, f"/buy/<id> returned {page_status}"
+    assert b"buy.js" in page, "buy page must load buy.js"
+
+    # 2. The status endpoint buy.js polls returns this order with its address.
+    s2, raw2 = _get(
+        live_server_btc + "/api/btc-order/" + order["order_id"]
+    )
+    assert s2 == 200, f"/api/btc-order/<id> returned {s2}: {raw2[:200]!r}"
+    lookup = json.loads(raw2)
+    assert lookup.get("address") == TEST_BTC_ADDR
+    assert int(lookup.get("amount_sats", 0)) == int(order["amount_sats"])
