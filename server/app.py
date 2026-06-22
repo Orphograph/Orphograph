@@ -3321,6 +3321,13 @@ class Handler(BaseHTTPRequestHandler):
         if not email:
             _json_response(self, 401, {"error": "not authenticated"})
             return
+        # Rate-limit per account, matching every other authenticated /api/me POST
+        # (security review 2026-06-22) — bounds ledger-append churn from a
+        # logout-all loop and restores parity with the sibling handlers.
+        allowed, _ = _anchor_limiter.check(f"logout-all:{auth.email_id(email)}")
+        if not allowed:
+            _json_response(self, 429, {"error": "too many requests"})
+            return
         n = auth.revoke_all_sessions(email)
         body = json.dumps({"ok": True, "sessions_revoked": n}).encode("utf-8")
         self.send_response(200)

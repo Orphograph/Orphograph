@@ -276,30 +276,37 @@ def revoke_all_sessions(email: str) -> int:
     """
     if not email:
         return 0
-    rows = _read_all(SESSION_LEDGER)
-    # Latest event per session_hash wins (same pattern as token supersede).
-    state: dict[str, dict] = {}
-    for row in rows:
-        h = row.get("session_hash")
-        if not h:
-            continue
-        state[h] = row
-    now = _now()
-    revoked = 0
-    for h, row in state.items():
-        if row.get("event") != "created":
-            continue
-        if row.get("email") != email:
-            continue
-        if now > float(row.get("expires_unix", 0)):
-            continue  # already expired — no need to revoke
-        _append(SESSION_LEDGER, {
-            "ts": _iso(now),
-            "event": "revoked",
-            "session_hash": h,
-        })
-        revoked += 1
-    return revoked
+    # Hold one ledger lock across the scan-and-append so two concurrent
+    # logout-all calls under ThreadingHTTPServer can't double-write revoked
+    # rows (mirrors redeem_link_token; security review 2026-06-22). The lock is
+    # a separate sentinel file, so the per-row _append (which locks the ledger
+    # itself) does not deadlock.
+    lockfile = SESSION_LEDGER.with_suffix(SESSION_LEDGER.suffix + ".lock")
+    with locked(lockfile, mode="a", exclusive=True):
+        rows = _read_all(SESSION_LEDGER)
+        # Latest event per session_hash wins (same pattern as token supersede).
+        state: dict[str, dict] = {}
+        for row in rows:
+            h = row.get("session_hash")
+            if not h:
+                continue
+            state[h] = row
+        now = _now()
+        revoked = 0
+        for h, row in state.items():
+            if row.get("event") != "created":
+                continue
+            if row.get("email") != email:
+                continue
+            if now > float(row.get("expires_unix", 0)):
+                continue  # already expired — no need to revoke
+            _append(SESSION_LEDGER, {
+                "ts": _iso(now),
+                "event": "revoked",
+                "session_hash": h,
+            })
+            revoked += 1
+        return revoked
 
 
 def cookie_name(secure: bool) -> str:
