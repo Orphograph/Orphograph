@@ -72,6 +72,41 @@ def test_planted_dollar_figure_recorded():
         assert report["dollar_hits"], "expected at least one dollar hit"
         matches = [h["match"] for h in report["dollar_hits"]]
         assert any("$1.5M" in m or m.startswith("$") for m in matches)
+        assert report["valuation_hits"], "a $1.5M valuation must be a valuation_hit"
+
+
+def test_product_price_tags_do_not_trip_exit():
+    # The 2026-06-22 fix: bare price tags are recorded but do NOT fail the build.
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        _write(root / "web" / "pricing.html",
+               "Writer Pack $19. Standing Order $9/mo. Pack of Fifty $29. Annual $60/yr.\n")
+        out = root / "outbox" / "report.json"
+        rc, report = _run(root, out)
+        assert rc == 0, "product price tags must not fail the build"
+        assert report["dollar_hits"], "price tags should still be recorded for the report"
+        assert report["valuation_hits"] == [], "no price tag is a valuation hit"
+
+
+def test_valuation_scale_amount_trips_exit():
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        _write(root / "docs" / "deck.md", "FMV today is $350K; 5y EV ~$3M.\n")
+        out = root / "outbox" / "report.json"
+        rc, report = _run(root, out)
+        assert rc == 1
+        assert report["valuation_hits"], "magnitude-suffixed amounts are valuation hits"
+
+
+def test_vendored_min_js_is_excluded():
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        _write(root / "web" / "vendor" / "lottie.min.js", "var a=$1000000,b=$25;\n")
+        _write(root / "README.md", "plain\n")
+        out = root / "outbox" / "report.json"
+        rc, report = _run(root, out)
+        assert rc == 0, "vendored minified libs must not trip the build"
+        assert all("lottie.min.js" not in h["path"] for h in report["dollar_hits"])
 
 
 def test_stripe_webhook_reference_is_low_severity_only():
