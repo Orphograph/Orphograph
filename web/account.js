@@ -45,6 +45,20 @@ async function main() {
     location.href = "/";
   });
 
+  const logoutAllLink = $("#logout-all-link");
+  if (logoutAllLink) {
+    logoutAllLink.addEventListener("click", async (e) => {
+      e.preventDefault();
+      if (!confirm("Log out of all devices? You'll be signed out everywhere, including here, and will need a new sign-in link.")) return;
+      try {
+        await fetch("/api/me/logout-all", { method: "POST", credentials: "same-origin" });
+      } catch (_) {
+        // Network error: still redirect — sessions are revoked server-side once the request lands.
+      }
+      location.href = "/";
+    });
+  }
+
   renderTeam(me);
 
   // Subscription cancel / reactivate buttons.

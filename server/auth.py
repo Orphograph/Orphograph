@@ -266,6 +266,42 @@ def revoke_session(session_id: str) -> None:
     })
 
 
+def revoke_all_sessions(email: str) -> int:
+    """Revoke every live session for an email — "log out of all devices".
+
+    Appends a `revoked` event for each currently-live (created, unexpired,
+    not-already-revoked) session belonging to this email. Returns the count
+    revoked. Other users' sessions are untouched. Idempotent: re-running once
+    no live sessions remain returns 0.
+    """
+    if not email:
+        return 0
+    rows = _read_all(SESSION_LEDGER)
+    # Latest event per session_hash wins (same pattern as token supersede).
+    state: dict[str, dict] = {}
+    for row in rows:
+        h = row.get("session_hash")
+        if not h:
+            continue
+        state[h] = row
+    now = _now()
+    revoked = 0
+    for h, row in state.items():
+        if row.get("event") != "created":
+            continue
+        if row.get("email") != email:
+            continue
+        if now > float(row.get("expires_unix", 0)):
+            continue  # already expired — no need to revoke
+        _append(SESSION_LEDGER, {
+            "ts": _iso(now),
+            "event": "revoked",
+            "session_hash": h,
+        })
+        revoked += 1
+    return revoked
+
+
 def cookie_name(secure: bool) -> str:
     """`__Host-` prefix enforces same-host + Secure + Path=/ by the browser.
     Skipped in dev where Secure is off (browsers reject __Host- without Secure)."""

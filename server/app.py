@@ -1355,6 +1355,9 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/api/auth/signout":
             self._handle_signout()
             return
+        if self.path == "/api/me/logout-all":
+            self._handle_logout_all()
+            return
         if self.path == "/api/me/delete":
             self._handle_account_delete()
             return
@@ -3306,6 +3309,24 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Set-Cookie", auth.clear_session_cookie(secure=COOKIE_SECURE))
         body = json.dumps({"ok": True}).encode("utf-8")
         self.send_header("Content-Length", str(len(body)))
+        _security_headers(self)
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _handle_logout_all(self) -> None:
+        """Revoke every session for the signed-in email (log out of all
+        devices) and clear the current browser's cookie. Session-gated POST;
+        SameSite=Lax on the session cookie blocks cross-site invocation."""
+        email = self._session_email()
+        if not email:
+            _json_response(self, 401, {"error": "not authenticated"})
+            return
+        n = auth.revoke_all_sessions(email)
+        body = json.dumps({"ok": True, "sessions_revoked": n}).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Set-Cookie", auth.clear_session_cookie(secure=COOKIE_SECURE))
         _security_headers(self)
         self.end_headers()
         self.wfile.write(body)
