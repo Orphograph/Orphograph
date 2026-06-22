@@ -59,3 +59,18 @@ disclaimer: |
   implication is made that the receipt substitutes for chain-of-custody
   affidavits or for the licensed judgement of counsel; independent attorney
   review is required before any productized claim of evidentiary utility.
+
+# Functional adapter spec (P1 of the acceptance-layer thesis): promotes this
+# vertical from a landing page into a config-defined adapter onto attest_core's
+# canonical record. Adding a vertical = this block, not a new engine.
+attestation_profile:
+  claim: existence
+  subject_kind: folder
+  canonicalization: folder-merkle
+  disclosure: selective
+  accepted_signers:
+    - did:key
+    - capture-credential
+  compliance_mapping:
+    framework: none            # real legal mapping is COUNSEL-GATED (scaffold only)
+    status: scaffold
