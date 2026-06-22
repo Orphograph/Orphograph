@@ -29,6 +29,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import engine  # noqa: E402
+import acceptance_hook  # noqa: E402
 import affiliate  # noqa: E402
 import analytics  # noqa: E402
 import api_keys  # noqa: E402
@@ -605,6 +606,10 @@ class Handler(BaseHTTPRequestHandler):
             # the receipt is private).
             if not record.get("private"):
                 record.pop("owner_id", None)
+            # OPTIONAL acceptance block — null unless a value-layer resolver is
+            # configured via ORPHO_ACCEPTANCE_RESOLVER. Additive + standalone-safe:
+            # acceptance_hook.resolve never raises and never imports a closed layer.
+            record["acceptance"] = acceptance_hook.resolve(rid, record)
             if response_shape == "zip":
                 import receipt_export
                 zipped, err = receipt_export.export_zip(rid)
@@ -634,6 +639,7 @@ class Handler(BaseHTTPRequestHandler):
                 # Re-apply the owner_id redaction on the summary path too
                 if not summary.get("private"):
                     summary.pop("owner_id", None)
+                summary["acceptance"] = acceptance_hook.resolve(rid, summary)
                 _json_response(self, 200, summary)
                 return
             if response_shape == "nft":
