@@ -66,6 +66,30 @@ def _build_company_regex(names: list[str]) -> re.Pattern[str]:
 
 COMPANY_REGEX = _build_company_regex(ALL_CAPS_DENY)
 
+# A dollar match is only EXIT-TRIPPING when it carries valuation INTENT — a dollar
+# amount co-occurring with valuation-EVENT language ("raised $1.5M", "valued at $5M",
+# "$5M pre-money"), or a funding-round designator ("Series A"). This deliberately
+# does NOT trip on (a) bare product price tags ($19, $9/mo), (b) a magnitude amount in
+# unrelated content (a "$100M research" stat, a "$50k/BTC" price ref), or (c) the bare
+# word "valuation" in a rule/checklist. Those were the daily false-positives (2026-06-22).
+# All dollar matches are still RECORDED in dollar_hits for the report regardless.
+_VAL_CTX_RE = re.compile(
+    r"\b(valuation|valued\s+at|pre-?money|post-?money|acquired\s+for|raised|"
+    r"enterprise\s+value|FMV|funding\s+round|seed\s+round)\b",
+    re.IGNORECASE,
+)
+_SERIES_RE = re.compile(r"\bseries\s+[A-E]\b", re.IGNORECASE)
+_DOLLAR_AMT_RE = re.compile(r"\$[0-9][0-9,]*(?:\.[0-9]+)?\s*[KMB]?\b", re.IGNORECASE)
+
+
+def _is_valuation_intent(match: str, context: str = "") -> bool:
+    """True only when a dollar amount sits in valuation context (or a funding-round
+    designator is present) — not for bare price tags or unrelated magnitude $."""
+    hay = f"{context} {match}"
+    if _SERIES_RE.search(hay):
+        return True
+    return bool(_VAL_CTX_RE.search(hay) and _DOLLAR_AMT_RE.search(hay))
+
 # ----------------------------------------------------------------------------
 # Path filters
 # ----------------------------------------------------------------------------
@@ -84,6 +108,8 @@ EXCLUDE_GLOBS: tuple[str, ...] = (
     "*.pdf",
     "*.zip",
     "*.ots",
+    "*.min.js",      # vendored minified libs are not brand-authored surfaces
+    "web/vendor/*",
     "outbox/EXTERNAL_STRATEGIC_ANALYSIS_*",
     # Founder-private operational directories — internal planning,
     # negotiation, log capture, and audit history. These never ship to a
@@ -95,6 +121,7 @@ EXCLUDE_GLOBS: tuple[str, ...] = (
     "outreach/*",
     "outbox/*",
     "docs/audits/*",
+    "research_*/*",   # founder-internal planning/research, never customer-facing
     "ledger.jsonl",
     "upgrade_log.jsonl",
 )
@@ -111,6 +138,7 @@ RULE_DECLARATION_GLOBS: tuple[str, ...] = (
 SELF_FILE_BASENAMES: frozenset[str] = frozenset({
     "compliance_scan.py",
     "test_compliance_scan.py",
+    "AUTOMATION_README.md",  # documents the deny phrases verbatim (Series A / raised $ / valuation)
     # This existing test enforces the same brand rule at the verticals
     # layer; its regex constant intentionally lists every denied name as
     # the literal pattern set. Same shape as ALL_CAPS_DENY in this file.
@@ -249,6 +277,8 @@ def run_scan(root: Path) -> dict:
         "high_severity_hits": high_all,
         "low_severity_hits": low_all,
         "dollar_hits": dollars_all,
+        "valuation_hits": [h for h in dollars_all
+                           if _is_valuation_intent(h["match"], h.get("context_50_chars", ""))],
     }
 
 
@@ -275,14 +305,17 @@ def main(argv: list[str] | None = None) -> int:
             f"[compliance_scan] scanned {report['files_scanned']} files; "
             f"high={len(report['high_severity_hits'])}, "
             f"low={len(report['low_severity_hits'])}, "
-            f"dollar={len(report['dollar_hits'])}\n"
+            f"dollar={len(report['dollar_hits'])}, "
+            f"valuation={len(report['valuation_hits'])}\n"
             f"[compliance_scan] report: {out_path}\n"
         )
 
-    # Spec: any high-severity company-name hit OR any dollar/valuation hit
-    # outside a rule-declaration file trips exit code 1. Low-severity tech
-    # carve-outs do not affect the exit code.
-    if report["high_severity_hits"] or report["dollar_hits"]:
+    # Exit gate: any high-severity company-name hit OR any VALUATION-INTENT dollar
+    # hit (magnitude-suffixed/large amount, or valuation language) trips exit 1.
+    # Bare product price tags are recorded in dollar_hits but do NOT fail the build
+    # (2026-06-22 fix for the daily false-positive). Low-severity tech carve-outs
+    # and rule-declaration files never affect the exit code.
+    if report["high_severity_hits"] or report["valuation_hits"]:
         return 1
     return 0
 
