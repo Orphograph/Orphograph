@@ -141,3 +141,16 @@ def test_suppressed_contact_is_not_planned(tmp_path, monkeypatch):
     assert rows[-1]["event"] == "run_complete"
     assert rows[-1]["suppressed"] == 1
     assert rows[-1]["planned"] == 0
+
+
+def test_sent_today_count_uses_utc_day_to_match_sent_at_stamp():
+    """sent_at is stamped in UTC (_now_iso). The daily-cap counter must key on
+    the UTC day too, or it undercounts near midnight in a non-UTC zone and lets
+    the 20/day cap be exceeded."""
+    mod = _load_runner()
+    utc_today = mod.datetime.datetime.now(mod.datetime.timezone.utc).date().isoformat()
+    # A send stamped earlier today in UTC must be counted.
+    state = [{"sent_at": f"{utc_today}T00:00:01+00:00", "ok": True}]
+    assert mod._sent_today_count(state) == 1
+    # The counter's notion of "today" is the UTC day, matching _now_iso().
+    assert mod._now_iso().startswith(utc_today)

@@ -196,7 +196,10 @@ def _append_state(entry: dict) -> None:
 
 
 def _sent_today_count(state: list[dict]) -> int:
-    today = datetime.date.today().isoformat()
+    # sent_at is stamped in UTC (see _now_iso), so the daily-cap day must be UTC
+    # too. Using local date() would undercount near midnight in a non-UTC zone
+    # (e.g. UTC-4) and let the 20/day cap be exceeded.
+    today = datetime.datetime.now(datetime.timezone.utc).date().isoformat()
     return sum(1 for e in state if e.get("sent_at", "").startswith(today))
 
 
