@@ -25,6 +25,7 @@ import unittest
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
 INDEX_HTML = REPO / "web" / "index.html"
+CRYPTO_JS = REPO / "web" / "pay" / "crypto.js"
 
 
 def _html() -> str:
@@ -230,7 +231,8 @@ class TestCheckoutWiringMatchesSKU(unittest.TestCase):
     10-credit tier (Writer Pack). Wiring it to the 50-credit "Pack of Fifty"
     under-delivers (buyer pays for 50, receives 10) — the bug this prevents
     from ever shipping. Pack of Fifty needs its own $29 / 50-credit Stripe
-    price (STRIPE_PRICE_PACK50) before it gets a card button.
+    price (STRIPE_PRICE_PACK50) before it gets a card button. crypto.js
+    separately honors the ?plan=pack_50 query param; see TestCryptoPlanDeepLink.
     """
 
     def _tier_chunk(self, name: str) -> str:
@@ -248,11 +250,16 @@ class TestCheckoutWiringMatchesSKU(unittest.TestCase):
         fifty = self._tier_chunk("Pack of Fifty")
         self.assertIn("50 anchor credits", fifty, "sanity: this is the 50-credit tier")
         self.assertNotIn(
-            'data-checkout="pack"',
+            "plan=writer_pack",
             fifty,
-            'Pack of Fifty must NOT use the card pack plan: that SKU grants '
-            "10 credits (PACK_CREDIT_COUNT) and would under-deliver the 50-pack. "
-            "Give it its own STRIPE_PRICE_PACK50 plan before adding a card button.",
+            "Pack of Fifty must NOT deep-link to the writer_pack plan: that SKU "
+            "grants 10 credits and would under-deliver the 50-pack.",
+        )
+        self.assertIn(
+            "/pay/crypto.html?plan=pack_50",
+            fifty,
+            "Pack of Fifty should deep-link to the dedicated pack_50 plan, "
+            "which grants 50 credits.",
         )
 
     def test_writer_pack_routes_to_crypto(self):
@@ -271,6 +278,16 @@ class TestCheckoutWiringMatchesSKU(unittest.TestCase):
             "Writer Pack CTA should route to the crypto checkout "
             "(plan=writer_pack).",
         )
+
+
+class TestCryptoPlanDeepLink(unittest.TestCase):
+    def test_crypto_page_honors_pack50_query_param(self):
+        """The landing links to /pay/crypto.html?plan=pack_50 for the 50-pack.
+        The crypto page must not silently default that buyer back to the
+        10-credit Writer Pack."""
+        js = CRYPTO_JS.read_text(encoding="utf-8")
+        self.assertIn('params.get("plan")', js)
+        self.assertIn('plan === "pack_50" ? "pack_50" : "writer_pack"', js)
 
 
 if __name__ == "__main__":
