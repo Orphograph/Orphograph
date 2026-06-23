@@ -81,10 +81,17 @@ def main() -> int:
     p.add_argument("target", help="path to a file, OR a 64-char hex SHA-256")
     p.add_argument("--label", default="",
                    help="optional filename/label stored alongside the hash (default: off — privacy)")
-    p.add_argument("--api-key", default=os.environ.get("ORPHOGRAPH_API_KEY", ""),
-                   help="orphograph API key (or set $ORPHOGRAPH_API_KEY); without it, uses free tier")
-    p.add_argument("--pack-token", default=os.environ.get("ORPHOGRAPH_PACK_TOKEN", ""),
-                   help="Writer Pack token to spend a prepaid anchor (or set $ORPHOGRAPH_PACK_TOKEN)")
+    # Canonical env vars are ORPHO_* (matches the scripts, launchd plists, and
+    # server). ORPHOGRAPH_* is accepted as a back-compat alias so neither old
+    # nor new docs break.
+    p.add_argument("--api-key",
+                   default=os.environ.get("ORPHO_API_KEY") or os.environ.get("ORPHOGRAPH_API_KEY", ""),
+                   help="orphograph API key (or set $ORPHO_API_KEY; $ORPHOGRAPH_API_KEY also accepted); "
+                        "without it, uses free tier")
+    p.add_argument("--pack-token",
+                   default=os.environ.get("ORPHO_PACK_TOKEN") or os.environ.get("ORPHOGRAPH_PACK_TOKEN", ""),
+                   help="Writer Pack token to spend a prepaid anchor "
+                        "(or set $ORPHO_PACK_TOKEN; $ORPHOGRAPH_PACK_TOKEN also accepted)")
     p.add_argument("--endpoint", default=ENDPOINT,
                    help=f"orphograph endpoint (default: {ENDPOINT})")
     p.add_argument("--json", action="store_true", help="output JSON only (for scripting)")
@@ -117,7 +124,7 @@ def main() -> int:
                   file=sys.stderr)
         print(f"  buy a Writer Pack (10 anchors / $19): {args.endpoint.rstrip('/')}/buy.html",
               file=sys.stderr)
-        print("  then spend it:  export ORPHOGRAPH_PACK_TOKEN=<token>   (or pass --pack-token)",
+        print("  then spend it:  export ORPHO_PACK_TOKEN=<token>   (or pass --pack-token)",
               file=sys.stderr)
         return 3
     if code >= 400:

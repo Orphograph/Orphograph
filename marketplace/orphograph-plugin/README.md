@@ -53,7 +53,7 @@ git clone https://github.com/Orphograph/Orphograph ~/src/orphograph
 | Standing Order | $9/mo | Unlimited |
 | Creator | $19/mo | Unlimited + capture-time app + API + verifier badge |
 
-Set `$ORPHOGRAPH_API_KEY` in your shell to use a paid tier, or pass `--api-key`.
+Set `$ORPHO_API_KEY` in your shell to use a paid tier (legacy `$ORPHOGRAPH_API_KEY` is still accepted), or pass `--api-key`.
 
 ## Trust model
 

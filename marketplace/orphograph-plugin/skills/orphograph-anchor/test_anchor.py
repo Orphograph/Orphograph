@@ -76,20 +76,22 @@ def run():
     if "x-pack-token" in cap["headers"] or "x-orpho-api-key" in cap["headers"]:
         fails.append("auth header sent when none supplied")
 
-    # 5. --pack-token CLI arg / env wiring reaches post_anchor
+    # 5. --pack-token env wiring reaches post_anchor — canonical ORPHO_PACK_TOKEN
+    #    and back-compat ORPHOGRAPH_PACK_TOKEN both work.
     import os
-    os.environ["ORPHOGRAPH_PACK_TOKEN"] = "pk_env"
-    cap, restore = _capture()
-    argv = sys.argv
-    sys.argv = ["anchor.py", "b" * 64, "--json"]
-    try:
-        anchor.main()
-    finally:
-        sys.argv = argv
-        restore()
-        del os.environ["ORPHOGRAPH_PACK_TOKEN"]
-    if cap["headers"].get("x-pack-token") != "pk_env":
-        fails.append("$ORPHOGRAPH_PACK_TOKEN not wired through main()")
+    for env_name in ("ORPHO_PACK_TOKEN", "ORPHOGRAPH_PACK_TOKEN"):
+        os.environ[env_name] = "pk_env"
+        cap, restore = _capture()
+        argv = sys.argv
+        sys.argv = ["anchor.py", "b" * 64, "--json"]
+        try:
+            anchor.main()
+        finally:
+            sys.argv = argv
+            restore()
+            del os.environ[env_name]
+        if cap["headers"].get("x-pack-token") != "pk_env":
+            fails.append(f"${env_name} not wired through main()")
 
     if fails:
         print("FAIL:")

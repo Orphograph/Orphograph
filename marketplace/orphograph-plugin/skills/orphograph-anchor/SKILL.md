@@ -63,7 +63,7 @@ Behavior:
 - If the argument is a file path → reads it and computes SHA-256 locally.
 - If the argument is 64 hex chars → uses it directly as the hash.
 - Includes `--label` only if the user explicitly provided one (privacy default).
-- If `--api-key` is set or `$ORPHOGRAPH_API_KEY` is in env → uses paid tier;
+- If `--api-key` is set or `$ORPHO_API_KEY` is in env (`$ORPHOGRAPH_API_KEY` also accepted) → uses paid tier;
   otherwise hits the free tier (3-per-24h rate limit).
 
 The script prints:
