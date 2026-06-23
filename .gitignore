@@ -133,3 +133,12 @@ data/.seal_sha256
 
 # brand-air-gap pre-commit token list (local-only)
 .brand-deny-tokens
+
+# Generated SLO/uptime evidence (slo_monitor.py --write-report output)
+deploy/SLO_REPORTS/
+# Live-fire / capture evidence artifacts (regenerated, not source)
+evidence/
+# Founder-internal research & outreach planning (references the founder; not customer-facing)
+research_*/
+# Editor/ops backup snapshots
+*.bak-*
