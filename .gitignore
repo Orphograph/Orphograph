@@ -142,3 +142,7 @@ evidence/
 research_*/
 # Editor/ops backup snapshots
 *.bak-*
+
+# Founder-internal runbooks — keep local, never publish (public repo)
+/DEPLOY_RUNBOOK_STANDALONE.md
+/MERGE_RUNBOOK_PACED_2026_06_08.md
