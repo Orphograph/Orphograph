@@ -474,6 +474,19 @@ class Handler(BaseHTTPRequestHandler):
         truncated = truncate_ip(self.client_address[0] if self.client_address else "")
         sys.stderr.write(f"[{self.log_date_time_string()}] {truncated} - {fmt % args}\n")
 
+    def handle_one_request(self):  # noqa: N802 (stdlib name)
+        # Clients (browsers, health probes, proxies) routinely disconnect before a
+        # response finishes sending. The stdlib then propagates the write failure as
+        # an unhandled BrokenPipeError/ConnectionResetError and dumps a full traceback
+        # to stderr per occurrence — benign (the peer is gone, nothing more can be
+        # sent) but it flooded the error log (~9k tracebacks / 19MB). Swallow only
+        # those two connection-teardown errors, end the keep-alive loop, move on.
+        # Any other exception still propagates so real bugs stay visible.
+        try:
+            super().handle_one_request()
+        except (BrokenPipeError, ConnectionResetError):
+            self.close_connection = True
+
     def _client_key(self) -> str:
         peer = self.client_address[0] if self.client_address else ""
         chosen = _resolve_peer_ip(

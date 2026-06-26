@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""cadence_runner.py — autonomous 4-touch cold-outreach sequence.
+"""cadence_runner.py — controlled 4-touch cold-outreach sequence.
 
 Reads `data/prospects.csv` (columns: email,first_name,vertical,public_detail,added_iso),
 for each prospect dispatches day-0 / day-4 / day-10 / day-21 touches using the
@@ -7,10 +7,13 @@ embedded templates, and records state in `data/cadence_state.jsonl` so re-runs
 are idempotent.
 
 Enforced safety rails:
-  - 20 sends per day (hard cap, counts cadence_state entries with today's sent_at)
+  - Opt-in execution: ORPHO_CADENCE_AUTOMATION_ENABLED=1 required for --execute
+  - Kill switch: ORPHO_CADENCE_DISABLED=1 blocks all sends
+  - 20 sends per day max (configurable lower via ORPHO_CADENCE_DAILY_CAP)
   - Tuesday-Thursday only (US-day-of-week filter — founder schedules cron run-time)
   - Skip any address in `data/suppressions.jsonl` (STOP replies, bounces)
   - Each touch idempotent — re-running this script never double-sends
+  - Audit log: every run appends to `data/cadence_audit.jsonl`
 
 Usage:
   python3 scripts/cadence_runner.py                # dry-run, prints planned sends
@@ -27,19 +30,24 @@ import argparse
 import csv
 import datetime
 import json
+import os
 import pathlib
 import sys
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
 sys.path.insert(0, str(REPO / "server"))
+sys.path.insert(0, str(REPO / "scripts"))
 
 DATA_DIR = REPO / "data"
 PROSPECTS_CSV = DATA_DIR / "prospects.csv"
 STATE_LOG = DATA_DIR / "cadence_state.jsonl"
 SUPPRESSIONS = DATA_DIR / "suppressions.jsonl"
+AUDIT_LOG = DATA_DIR / "cadence_audit.jsonl"
 DAILY_CAP = 20
 SEND_WEEKDAYS = {1, 2, 3}  # Tue=1, Wed=2, Thu=3 in datetime.weekday()
+AUTOMATION_ENV = "ORPHO_CADENCE_AUTOMATION_ENABLED"
+DISABLE_ENV = "ORPHO_CADENCE_DISABLED"
 
 # Day-0 templates live inside send_outreach.py; we import them here so the
 # wording stays single-sourced. Day-4 / day-10 / day-21 are short follow-ups
@@ -112,6 +120,37 @@ FOLLOWUP_TEMPLATES: dict[str, dict[int, tuple[str, str]]] = {
 TOUCH_OFFSETS_DAYS = [0, 4, 10, 21]
 
 
+def _now_iso() -> str:
+    return datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
+
+
+def _daily_cap() -> int:
+    """Return the active daily cap, never above the hard-coded maximum."""
+    raw = os.environ.get("ORPHO_CADENCE_DAILY_CAP", "").strip()
+    if not raw:
+        return DAILY_CAP
+    try:
+        val = int(raw)
+    except ValueError:
+        return DAILY_CAP
+    return max(0, min(DAILY_CAP, val))
+
+
+def _append_audit(event: str, **fields) -> None:
+    row = {"ts": _now_iso(), "event": event, **fields}
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    with AUDIT_LOG.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(row, separators=(",", ":")) + "\n")
+
+
+def _automation_enabled() -> bool:
+    return os.environ.get(AUTOMATION_ENV, "") == "1"
+
+
+def _disabled() -> bool:
+    return os.environ.get(DISABLE_ENV, "") == "1"
+
+
 def _read_prospects() -> list[dict[str, str]]:
     if not PROSPECTS_CSV.exists():
         return []
@@ -157,7 +196,10 @@ def _append_state(entry: dict) -> None:
 
 
 def _sent_today_count(state: list[dict]) -> int:
-    today = datetime.date.today().isoformat()
+    # sent_at is stamped in UTC (see _now_iso), so the daily-cap day must be UTC
+    # too. Using local date() would undercount near midnight in a non-UTC zone
+    # (e.g. UTC-4) and let the 20/day cap be exceeded.
+    today = datetime.datetime.now(datetime.timezone.utc).date().isoformat()
     return sum(1 for e in state if e.get("sent_at", "").startswith(today))
 
 
@@ -235,8 +277,22 @@ def main() -> int:
     args = ap.parse_args()
 
     today = datetime.date.today()
+    if _disabled():
+        print(f"{DISABLE_ENV}=1 — cadence disabled; no sends")
+        _append_audit("disabled", execute=bool(args.execute), date=today.isoformat())
+        return 0
+
+    if args.execute and not _automation_enabled():
+        print(
+            f"{AUTOMATION_ENV}=1 is required for --execute; refusing to send.",
+            file=sys.stderr,
+        )
+        _append_audit("execute_blocked", reason=f"{AUTOMATION_ENV}_missing", date=today.isoformat())
+        return 2
+
     if today.weekday() not in SEND_WEEKDAYS and not args.force_day_of_week:
         print(f"today is {today.strftime('%A')} — skip (Tue-Thu only). Use --force-day-of-week to override.")
+        _append_audit("weekday_skipped", execute=bool(args.execute), date=today.isoformat(), weekday=today.weekday())
         return 0
 
     prospects = _read_prospects()
@@ -245,15 +301,27 @@ def main() -> int:
 
     plan = _plan_today(prospects, state, suppressed, today)
     sent_today = _sent_today_count(state)
-    remaining = DAILY_CAP - sent_today
+    daily_cap = _daily_cap()
+    remaining = daily_cap - sent_today
 
     print(f"date={today.isoformat()} weekday={today.strftime('%A')}")
     print(f"prospects={len(prospects)} suppressed={len(suppressed)} state_entries={len(state)}")
-    print(f"sent_today={sent_today} cap={DAILY_CAP} remaining={remaining}")
+    print(f"sent_today={sent_today} cap={daily_cap} remaining={remaining}")
     print(f"plan_today={len(plan)}")
 
     if remaining <= 0:
         print("daily cap reached — no sends")
+        _append_audit(
+            "cap_reached",
+            execute=bool(args.execute),
+            date=today.isoformat(),
+            prospects=len(prospects),
+            suppressed=len(suppressed),
+            state_entries=len(state),
+            sent_today=sent_today,
+            cap=daily_cap,
+            plan_today=len(plan),
+        )
         return 0
 
     plan = plan[:remaining]
@@ -269,13 +337,13 @@ def main() -> int:
             continue
         ok, subj = _send_touch(p, touch_n)
         entry = {
-            "ts": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
+            "ts": _now_iso(),
             "email": p["email"],
             "vertical": p["vertical"],
             "touch_n": touch_n,
             "offset_day": offset_day,
             "subject": subj,
-            "sent_at": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds") if ok else "",
+            "sent_at": _now_iso() if ok else "",
             "ok": bool(ok),
         }
         _append_state(entry)
@@ -286,7 +354,23 @@ def main() -> int:
             sends_fail += 1
             print(f"  FAIL {line}")
 
-    print(f"\ndone · sent_ok={sends_ok} failed={sends_fail} dry={len(plan) - sends_ok - sends_fail if not args.execute else 0}")
+    dry = len(plan) - sends_ok - sends_fail if not args.execute else 0
+    _append_audit(
+        "run_complete",
+        execute=bool(args.execute),
+        date=today.isoformat(),
+        prospects=len(prospects),
+        suppressed=len(suppressed),
+        state_entries=len(state),
+        sent_today_before=sent_today,
+        cap=daily_cap,
+        planned=len(plan),
+        sent_ok=sends_ok,
+        failed=sends_fail,
+        dry=dry,
+    )
+
+    print(f"\ndone · sent_ok={sends_ok} failed={sends_fail} dry={dry}")
     return 0 if sends_fail == 0 else 1
 
 
