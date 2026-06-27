@@ -15,20 +15,20 @@
 <meta name="twitter:card" content="summary_large_image">
 <link rel="stylesheet" href="/index.css?v=9">
 <link rel="preload" as="image" href="/seal-display.png?v=8" fetchpriority="high">
-<link rel="preload" as="image" href="/lockup.png?v=8" fetchpriority="high">
 <style>
   .hero .plain-subtitle{
     font-family: var(--serif);
     font-size: 20px;
     line-height: 1.55;
     color: var(--ink);
-    margin: 0 0 22px;
+    margin: 0 auto 22px;
     max-width: 620px;
     font-weight: 500;
   }
   .hero .means{
-    margin: 28px 0 0;
-    max-width: 600px;
+    margin: 36px auto 0;
+    max-width: 540px;
+    text-align: left;
   }
   .hero .means-title{
     font-family: var(--serif);
@@ -381,7 +381,12 @@
   <div class="wrap">
     <div class="lockup">
       <img class="lockup-seal" src="/seal-display.png?v=8" alt="Orphograph seal">
-      <img class="lockup-text-img" src="/lockup.png?v=8" alt="Orphograph — Strategy · Stewardship · Est. 2026">
+      <div class="lockup-text">
+        <div class="lockup-wordmark">Orphograph</div>
+        <div class="lockup-rule"></div>
+        <div class="lockup-tag">Proof &middot; Permanence</div>
+        <div class="lockup-est">Est. 2026</div>
+      </div>
     </div>
   </div>
 </section>
@@ -390,23 +395,22 @@
 <section class="hero">
   <div class="wrap">
     <h1>Proof a file existed —<br><em>before anyone could argue otherwise.</em></h1>
-    <p class="plain-subtitle">Make a permanent, tamper-evident record of your photos, documents, or work — the file never leaves your device.</p>
-    <p class="lede">An empirical notary. Drop a file in your browser; receive a Bitcoin-anchored fingerprint that records it existed by no later than the next block. The file itself never leaves your machine.</p>
-    <p class="reassure" style="font-family:var(--serif);font-size:16px;color:var(--ink);font-weight:500;margin:0 0 14px;letter-spacing:0.04em;">Free · No account · The file stays on your device.</p>
-    <div class="chips">
-      <span>Client-side hashing</span>
-      <span>5 independent calendars</span>
-      <span>Verifies without us</span>
+    <p class="plain-subtitle">An empirical notary. Drop a file in your browser and walk away with a permanent, Bitcoin-anchored record that it existed &mdash; by no later than the next block, verifiable by anyone.</p>
+    <p class="reassure" style="font-family:var(--serif);font-size:16px;color:var(--ink);font-weight:500;margin:0 0 6px;letter-spacing:0.04em;">Free &middot; No account required.</p>
+    <div class="assurances" aria-label="What this guarantees">
+      <div class="assure">
+        <h3>Stays on your device</h3>
+        <p>Only the file&rsquo;s fingerprint is hashed, in your browser. The file never leaves.</p>
+      </div>
+      <div class="assure">
+        <h3>Anchored to Bitcoin</h3>
+        <p>Committed across five independent calendars, so the date can&rsquo;t be forged or revoked.</p>
+      </div>
+      <div class="assure">
+        <h3>Verifiable without us</h3>
+        <p>Anyone can check the receipt later &mdash; no account, no login, even if we vanish.</p>
+      </div>
     </div>
-    <section class="means" aria-label="What this means for you">
-      <p class="means-title">What this means for you</p>
-      <div class="means-rule"></div>
-      <ul class="means-list">
-        <li>Your file never leaves your device.</li>
-        <li>The receipt lasts on the Bitcoin chain.</li>
-        <li>Anyone can verify it later — no account, no login.</li>
-      </ul>
-    </section>
     <p class="see-seal"><a href="/experience.html">View the seal &rarr;</a></p>
     <details class="examples">
       <summary>Examples of what people anchor</summary>
