@@ -18,6 +18,7 @@ import csv
 import io
 import json
 import mimetypes
+mimetypes.add_type("font/woff2", ".woff2")  # serve self-hosted fonts with correct type (X-Content-Type-Options: nosniff is set)
 import os
 import re
 import secrets
@@ -133,6 +134,7 @@ ALLOWED_STATIC_SUFFIXES = {
     ".py", ".md", ".tar", ".gz",  # self-hosted OSS verifier under web/verify/
     ".zip",  # offline verifier kit under web/dist/orphograph-verify.zip
     ".xml",  # sitemap.xml for SEO discoverability
+    ".woff2",  # self-hosted OFL fonts under web/fonts/ (Fraunces / Spectral / IBM Plex Mono)
 }
 
 # 10 anchors/hour/IP by default; refills at 10/3600 = ~0.00278 tokens/sec
