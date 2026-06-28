@@ -404,16 +404,20 @@
   fetch("/api/stats")
     .then((r) => r.json())
     .then((j) => {
-      if (j.total_anchors != null && $("c-anchors")) {
-        $("c-anchors").textContent = fmtNum(j.total_anchors);
+      // /api/stats nests counts under `anchors` (anchors.total,
+      // anchors.last_anchor_at). The old flat keys never matched, so the
+      // "most recent receipt" clock silently froze at the hardcoded data-utc.
+      const a = j.anchors || {};
+      if (a.total != null && $("c-anchors")) {
+        $("c-anchors").textContent = fmtNum(a.total);
       }
       if (j.bitcoin_blocks_anchored != null && $("c-blocks")) {
         $("c-blocks").textContent = fmtNum(j.bitcoin_blocks_anchored);
       }
-      if (j.most_recent_anchor_at) {
+      if (a.last_anchor_at) {
         const tz = $("latest-tz-block");
         if (tz) {
-          tz.dataset.utc = j.most_recent_anchor_at;
+          tz.dataset.utc = a.last_anchor_at;
           while (tz.firstChild) tz.removeChild(tz.firstChild);
           if (window.Orphograph && window.Orphograph.renderTimezones) {
             window.Orphograph.renderTimezones();
