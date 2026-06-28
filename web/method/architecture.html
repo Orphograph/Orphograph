@@ -13,7 +13,7 @@
 <meta property="og:image" content="https://orphograph.com/og-image.png?v=8">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Orphograph — Architecture of the protocol">
-<link rel="canonical" href="https://orphograph.com/method/architecture.html">
+<link rel="canonical" href="https://orphograph.com/method/architecture">
 <link rel="icon" type="image/png" href="/favicon.png?v=8">
 <link rel="stylesheet" href="/index.css?v=9">
 <style>
@@ -62,12 +62,12 @@
   <div class="wrap row">
     <a href="/" class="brand">Orphograph</a>
     <nav>
-      <a href="/learn.html">Method</a>
-      <a href="/faq.html">FAQ</a>
-      <a href="/vs/c2pa.html">vs. C2PA</a>
-      <a href="/continuity.html">Continuity</a>
+      <a href="/learn">Method</a>
+      <a href="/faq">FAQ</a>
+      <a href="/vs/c2pa">vs. C2PA</a>
+      <a href="/continuity">Continuity</a>
       <a href="/#tiers">Pricing</a>
-      <a href="/signin.html">Sign in</a>
+      <a href="/signin">Sign in</a>
       <a href="/#drop" class="cta">Anchor a file</a>
     </nav>
   </div>
@@ -169,9 +169,9 @@ const sha512_hex = hex(s512);
     <ul>
       <li>a copy of the original file (held by the customer),</li>
       <li>the receipt JSON and the <code>.ots</code> proof files (held by the customer, or available at <code>orphograph.com/r/&lt;id&gt;</code>),</li>
-      <li>any OpenTimestamps client OR the 100-line MIT-licensed verifier at <a href="https://github.com/Orphograph/Orphograph">github.com/Orphograph/Orphograph</a> OR the single-file browser verifier at <a href="/verify-js.html">/verify-js.html</a>.</li>
+      <li>any OpenTimestamps client OR the 100-line MIT-licensed verifier at <a href="https://github.com/Orphograph/Orphograph">github.com/Orphograph/Orphograph</a> OR the single-file browser verifier at <a href="/verify-js">/verify-js.html</a>.</li>
     </ul>
-    <p>Notably absent from this list is any call to Orphograph's servers. The office issues the instrument; the chain is the trust anchor. The continuity statement at <a href="/continuity.html">/continuity.html</a> expands on the operational implications.</p>
+    <p>Notably absent from this list is any call to Orphograph's servers. The office issues the instrument; the chain is the trust anchor. The continuity statement at <a href="/continuity">/continuity.html</a> expands on the operational implications.</p>
   </section>
 
   <section>
@@ -186,7 +186,7 @@ const sha512_hex = hex(s512);
     <p>The protocol's robustness is enumerated against the following failure scenarios:</p>
     <ul>
       <li><strong>Calendar unavailability.</strong> Five-calendar redundancy ensures any single failure is invisible to the customer.</li>
-      <li><strong>This office becoming unreachable.</strong> Every receipt verifies against the Bitcoin chain independently. See <a href="/continuity.html">/continuity.html</a>.</li>
+      <li><strong>This office becoming unreachable.</strong> Every receipt verifies against the Bitcoin chain independently. See <a href="/continuity">/continuity.html</a>.</li>
       <li><strong>Bitcoin fee-market degradation.</strong> Aggregation amortises per-block transaction fees across all customers anchored in that block, keeping per-anchor cost negligible even under sustained fee pressure.</li>
       <li><strong>Receipt vault data loss.</strong> The vault is convenience storage; the customer-held original file plus the <code>.ots</code> proof are sufficient to reconstruct the verification path.</li>
     </ul>
@@ -210,12 +210,12 @@ const sha512_hex = hex(s512);
     <h2>Citations and verification</h2>
     <div class="arch-rule"></div>
     <ul>
-      <li><a href="/verify-js.html">Standalone independent verifier (single HTML file)</a></li>
-      <li><a href="/vs/c2pa.html">Comparison with C2PA</a></li>
-      <li><a href="/faq.html">Frequently asked</a></li>
-      <li><a href="/continuity.html">Continuity statement</a></li>
-      <li><a href="/mcp.html">Model Context Protocol server</a></li>
-      <li><a href="/docs/webhooks.html">Webhook integration</a></li>
+      <li><a href="/verify-js">Standalone independent verifier (single HTML file)</a></li>
+      <li><a href="/vs/c2pa">Comparison with C2PA</a></li>
+      <li><a href="/faq">Frequently asked</a></li>
+      <li><a href="/continuity">Continuity statement</a></li>
+      <li><a href="/mcp">Model Context Protocol server</a></li>
+      <li><a href="/docs/webhooks">Webhook integration</a></li>
       <li><a href="https://github.com/Orphograph/Orphograph">github.com/Orphograph/Orphograph</a></li>
       <li><a href="https://opentimestamps.org/">opentimestamps.org</a></li>
     </ul>
@@ -231,10 +231,10 @@ const sha512_hex = hex(s512);
     <p>Orphograph · An empirical notary.</p>
     <p style="margin-top:8px;">
       <a href="/" style="color:var(--muted);">Home</a> ·
-      <a href="/faq.html" style="color:var(--muted);">FAQ</a> ·
-      <a href="/vs/c2pa.html" style="color:var(--muted);">Compare</a> ·
-      <a href="/roadmap.html" style="color:var(--muted);">Roadmap</a> ·
-      <a href="/continuity.html" style="color:var(--muted);">Continuity</a>
+      <a href="/faq" style="color:var(--muted);">FAQ</a> ·
+      <a href="/vs/c2pa" style="color:var(--muted);">Compare</a> ·
+      <a href="/roadmap" style="color:var(--muted);">Roadmap</a> ·
+      <a href="/continuity" style="color:var(--muted);">Continuity</a>
     </p>
   </div>
 </footer>
