@@ -13,7 +13,7 @@
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://orphograph.com/">
 <meta name="twitter:card" content="summary_large_image">
-<link rel="stylesheet" href="/index.css?v=11">
+<link rel="stylesheet" href="/index.css?v=12">
 <link rel="preload" as="image" href="/seal-display.png?v=8" fetchpriority="high">
 <meta name="copyright" content="© 2026 Orphograph. MIT — see /LICENSE">
 <script type="application/ld+json">
@@ -68,9 +68,15 @@
     <a href="/" class="brand">Orphograph</a>
     <nav>
       <a href="/learn.html">Method</a>
-      <a href="/writers.html">Writers</a>
+      <a href="/verify/">Verify</a>
       <a href="#tiers">Pricing</a>
-      <a href="/about.html">Office</a>
+      <details class="nav-dd">
+        <summary>More</summary>
+        <div class="nav-dd-panel">
+          <a href="/writers.html">For writers</a>
+          <a href="/about.html">About the office</a>
+        </div>
+      </details>
       <a href="/signin.html">Sign in</a>
       <a href="/status.html" id="live-status-badge" class="live-status-badge" data-state="checking" aria-label="Live service status"><span class="dot" aria-hidden="true"></span><span class="label">status</span></a>
       <a href="#drop" class="cta">Anchor a file</a>
@@ -269,6 +275,39 @@
   </div>
 </section>
 
+<!-- ────────────────────────────────── VERIFICATION ─────────────────────── -->
+<section class="band">
+  <div class="wrap">
+    <div class="head">
+      <div class="eyebrow">Verification</div>
+      <h2>Don't trust us. Check the chain.</h2>
+      <p class="head-sub">Three levels of trust, from one-click to fully trustless. The math is the same. The level of paranoia is up to you.</p>
+    </div>
+    <div class="levels">
+      <div class="level">
+        <div class="step">I</div>
+        <div class="who">One click</div>
+        <h3>Open your receipt page</h3>
+        <p>Each receipt has a public URL at <code>/r/&lt;id&gt;</code>. Drop the original file; the page re-hashes locally and reports match.</p>
+      </div>
+      <div class="level">
+        <div class="step">II</div>
+        <div class="who">No account</div>
+        <h3>Run the open-source verifier</h3>
+        <p>A small standalone tool, on your computer. Talks to the OpenTimestamps calendars. Tells you pass or fail. We don't see it run.</p>
+        <a href="/learn.html#three-ways">How →</a>
+      </div>
+      <div class="level">
+        <div class="step">III</div>
+        <div class="who">Trustless</div>
+        <h3>Verify against Bitcoin</h3>
+        <p>Use the OpenTimestamps client against your own Bitcoin node. Orphograph is not in the loop. Math and proof-of-work are the trust surface.</p>
+        <a href="/learn.html#chain">How →</a>
+      </div>
+    </div>
+  </div>
+</section>
+
 <!-- ────────────────────────────────── WHO ──────────────────────────────── -->
 <section class="band">
   <div class="wrap">
@@ -410,39 +449,6 @@
 
 <section class="after-tiers">
   <p>Already used a Bitcoin-anchored receipt to settle a dispute? <a href="mailto:hello@orphograph.com">Write to the office</a>. The office keeps a public record of real-world uses where the customer consents to publication; the receipt itself is yours.</p>
-</section>
-
-<!-- ────────────────────────────────── VERIFICATION ─────────────────────── -->
-<section class="band">
-  <div class="wrap">
-    <div class="head">
-      <div class="eyebrow">Verification</div>
-      <h2>Don't trust us. Check the chain.</h2>
-      <p class="head-sub">Three levels of trust, from one-click to fully trustless. The math is the same. The level of paranoia is up to you.</p>
-    </div>
-    <div class="levels">
-      <div class="level">
-        <div class="step">I</div>
-        <div class="who">One click</div>
-        <h3>Open your receipt page</h3>
-        <p>Each receipt has a public URL at <code>/r/&lt;id&gt;</code>. Drop the original file; the page re-hashes locally and reports match.</p>
-      </div>
-      <div class="level">
-        <div class="step">II</div>
-        <div class="who">No account</div>
-        <h3>Run the open-source verifier</h3>
-        <p>A small standalone tool, on your computer. Talks to the OpenTimestamps calendars. Tells you pass or fail. We don't see it run.</p>
-        <a href="/learn.html#three-ways">How →</a>
-      </div>
-      <div class="level">
-        <div class="step">III</div>
-        <div class="who">Trustless</div>
-        <h3>Verify against Bitcoin</h3>
-        <p>Use the OpenTimestamps client against your own Bitcoin node. Orphograph is not in the loop. Math and proof-of-work are the trust surface.</p>
-        <a href="/learn.html#chain">How →</a>
-      </div>
-    </div>
-  </div>
 </section>
 
 <!-- ────────────────────────────────── TIMEZONE ─────────────────────────── -->
