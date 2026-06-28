@@ -16,24 +16,7 @@
 <link rel="canonical" href="https://orphograph.com/about-the-office.html">
 <link rel="icon" type="image/png" href="/favicon.png?v=8">
 <link rel="stylesheet" href="/index.css?v=14">
-<style>
-  .arch-wrap { max-width: 820px; margin: 0 auto; padding: 0 24px 64px; }
-  .arch-wrap h1 { font-family: var(--serif); font-size: 36px; font-weight: 500; margin: 32px 0 6px; }
-  .arch-wrap h2 { font-family: var(--serif); font-size: 22px; font-weight: 500; margin: 36px 0 4px; color: var(--ink); }
-  .arch-rule { border-top: 1px solid var(--ink); width: 32px; margin: 8px 0 16px; opacity: 0.6; }
-  .arch-wrap p, .arch-wrap li { color: var(--ink-2); line-height: 1.75; font-size: 15.5px; }
-  .arch-wrap code { background: rgba(74,154,115,0.08); padding: 2px 6px; border-radius: 3px; font-size: 0.92em; }
-  .arch-wrap pre { background: #f1ead7; border: 1px solid #d9d2c0; border-radius: 6px; padding: 14px 16px; overflow-x: auto; font-size: 13px; line-height: 1.55; }
-  .arch-lede { font-size: 17px; line-height: 1.7; color: var(--ink-2); margin: 0 0 24px; }
-  .arch-wrap details { margin: 18px 0; padding: 14px 18px; background: #f1ead7; border: 1px solid #d9d2c0; border-radius: 6px; }
-  .arch-wrap details summary { cursor: pointer; font-family: var(--serif); font-size: 17px; color: var(--ink); }
-  .arch-wrap details[open] summary { margin-bottom: 10px; }
-  .arch-wrap details p, .arch-wrap details li { font-size: 15px; }
-  .arch-wrap ul.plain { list-style: none; padding-left: 0; }
-  .arch-wrap ul.plain li { padding-left: 18px; position: relative; }
-  .arch-wrap ul.plain li::before { content: "—"; position: absolute; left: 0; color: var(--muted); }
-  .disclaimer-block { margin-top: 48px; padding: 20px 24px; background: #f1ead7; border-radius: 6px; font-size: 14px; line-height: 1.65; color: var(--muted); }
-</style>
+<link rel="stylesheet" href="/about-the-office.css?v=1">
 <meta name="copyright" content="© 2026 Orphograph. Code under MIT (see /LICENSE). Brand, content, and design — all rights reserved.">
 </head>
 <body>
@@ -55,7 +38,7 @@
 
 <main class="arch-wrap">
 
-  <p style="font-size:12px;letter-spacing:0.18em;text-transform:uppercase;color:var(--muted);margin:48px 0 8px;">About the office</p>
+  <p class="about-the-office-eyebrow">About the office</p>
   <h1>Orphograph is an empirical notary.</h1>
   <p class="arch-lede">
     It produces a Bitcoin-anchored receipt that a file existed at a given moment, without the file itself ever leaving your device.
@@ -123,14 +106,14 @@
 </main>
 
 <footer>
-  <div class="wrap" style="text-align:center;color:var(--muted);font-size:13px;padding:32px 0;">
+  <div class="wrap about-the-office-footer">
     <p>Orphograph · An empirical notary.</p>
-    <p style="margin-top:8px;">
-      <a href="/" style="color:var(--muted);">Home</a> ·
-      <a href="/method" style="color:var(--muted);">Method</a> ·
-      <a href="/faq.html" style="color:var(--muted);">FAQ</a> ·
-      <a href="/vs/c2pa.html" style="color:var(--muted);">Compare</a> ·
-      <a href="/continuity.html" style="color:var(--muted);">Continuity</a>
+    <p class="mt-8">
+      <a href="/" class="link-muted">Home</a> ·
+      <a href="/method" class="link-muted">Method</a> ·
+      <a href="/faq.html" class="link-muted">FAQ</a> ·
+      <a href="/vs/c2pa.html" class="link-muted">Compare</a> ·
+      <a href="/continuity.html" class="link-muted">Continuity</a>
     </p>
   </div>
 </footer>

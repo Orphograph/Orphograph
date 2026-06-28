@@ -1,0 +1,24 @@
+/* externalized from ios.html (CSP: no inline) */
+.ios-wrap { max-width: 720px; margin: 0 auto; padding: 0 24px 64px; }
+h1.ios-h1 { font-family: var(--serif); font-size: 38px; font-weight: 500; margin: 32px 0 6px; color: var(--ink); }
+p.ios-lede { font-size: 17px; color: var(--ink-2); line-height: 1.65; margin: 0 0 24px; }
+ol.ios-steps { padding-left: 22px; margin: 28px 0; color: var(--ink-2); line-height: 1.85; }
+ol.ios-steps li { padding: 6px 0; }
+ol.ios-steps code { background: rgba(74,154,115,0.08); padding: 2px 6px; border-radius: 3px; font-size: 0.9em; }
+.ios-note { background: rgba(74,154,115,0.06); border-left: 3px solid var(--confirm); padding: 16px 20px; margin: 24px 0; border-radius: 0 6px 6px 0; color: var(--ink-2); }
+.ios-note p { margin: 0; }
+.ios-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 28px 0; }
+.ios-grid .card { padding: 18px 20px; border: 1px solid var(--line-soft); border-radius: 8px; }
+.ios-grid .card h3 { font-family: var(--serif); font-size: 18px; font-weight: 500; margin: 0 0 6px; color: var(--ink); }
+.ios-grid .card p { font-size: 13.5px; color: var(--ink-2); line-height: 1.6; margin: 0; }
+@media (max-width:560px) { .ios-grid { grid-template-columns: 1fr; } h1.ios-h1 { font-size: 30px; } }
+
+/* externalized inline style= attributes from ios.html (CSP: no inline) */
+.ios-eyebrow { font-size:12px; letter-spacing:0.18em; text-transform:uppercase; color:var(--muted); margin:48px 0 8px; }
+.ios-h2 { font-family:var(--serif); font-size:24px; font-weight:500; margin-top:36px; color:var(--ink); }
+.ios-body { color:var(--ink-2); line-height:1.7; }
+.link-confirm { color:var(--confirm); }
+.ios-footer-note { color:var(--muted); font-size:13px; margin-top:48px; }
+.footer-inner { text-align:center; color:var(--muted); font-size:13px; padding:32px 0; }
+.mt-8 { margin-top:8px; }
+.link-muted { color:var(--muted); }

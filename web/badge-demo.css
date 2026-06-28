@@ -1,0 +1,25 @@
+/* externalized from badge-demo.html (CSP: no inline) */
+.demo-wrap { max-width: 880px; margin: 0 auto; padding: 0 24px 64px; }
+h1.demo-h1 { font-family: var(--serif); font-size: 38px; font-weight: 500; margin: 32px 0 6px; color: var(--ink); }
+p.demo-lede { font-size: 17px; color: var(--ink-2); line-height: 1.65; margin: 0 0 8px; }
+.demo-section { margin-top: 40px; }
+.demo-section h2 { font-family: var(--serif); font-size: 22px; font-weight: 500; color: var(--ink); margin: 0 0 4px; letter-spacing: 0.01em; }
+.demo-section .section-rule { border-top: 1px solid var(--ink); width: 32px; margin: 10px 0 18px; opacity: 0.6; }
+.demo-section p { color: var(--ink-2); line-height: 1.7; font-size: 15px; }
+.pre-label { font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); margin: 48px 0 8px; }
+.split { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: stretch; margin-top: 10px; }
+@media (max-width: 720px) { .split { grid-template-columns: 1fr; } }
+.panel { border: 1px solid var(--line-soft); border-radius: var(--radius); background: var(--paper-soft); padding: 18px; display: flex; flex-direction: column; gap: 10px; }
+.panel.dark { background: #14110d; border-color: #2c2620; }
+.panel.dark .panel-label { color: #948a76; }
+.panel-label { font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); }
+.panel pre { margin: 0; background: transparent; border: 0; padding: 0; font: 12px/1.55 var(--mono); color: var(--ink-2); white-space: pre-wrap; word-break: break-word; }
+.panel.dark pre { color: #d9cfb6; }
+.render { display: flex; align-items: center; justify-content: center; min-height: 96px; padding: 12px; border: 1px dashed var(--line); border-radius: var(--radius-sm); background: var(--paper-card); }
+.panel.dark .render { background: #1f1d1a; border-color: #3a322a; }
+code.inline { font: 12px/1.4 var(--mono); background: var(--paper-soft); border: 1px solid var(--line-soft); padding: 1px 6px; border-radius: 4px; color: var(--ink-2); }
+.footnote-muted { color: var(--muted); font-size: 13px; margin-top: 48px; }
+.link-confirm { color: var(--confirm); }
+.footer-inner { text-align: center; color: var(--muted); font-size: 13px; padding: 32px 0; }
+.mt-8 { margin-top: 8px; }
+.link-muted { color: var(--muted); }

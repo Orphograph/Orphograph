@@ -16,35 +16,7 @@
 <link rel="canonical" href="https://orphograph.com/press-kit.html">
 <link rel="icon" type="image/png" href="/favicon.png?v=8">
 <link rel="stylesheet" href="/index.css?v=14">
-<style>
-  .arch-wrap { max-width: 820px; margin: 0 auto; padding: 0 24px 64px; }
-  .arch-wrap h1 { font-family: var(--serif); font-size: 36px; font-weight: 500; margin: 32px 0 6px; }
-  .arch-wrap h2 { font-family: var(--serif); font-size: 22px; font-weight: 500; margin: 36px 0 4px; color: var(--ink); }
-  .arch-wrap h3 { font-family: var(--serif); font-size: 17px; font-weight: 500; margin: 22px 0 6px; color: var(--ink); }
-  .arch-rule { border-top: 1px solid var(--ink); width: 32px; margin: 8px 0 16px; opacity: 0.6; }
-  .arch-wrap p, .arch-wrap li { color: var(--ink-2); line-height: 1.75; font-size: 15.5px; }
-  .arch-wrap code { background: rgba(74,154,115,0.08); padding: 2px 6px; border-radius: 3px; font-size: 0.92em; }
-  .arch-wrap pre { background: #f1ead7; border: 1px solid #d9d2c0; border-radius: 6px; padding: 14px 16px; overflow-x: auto; font-size: 13px; line-height: 1.55; }
-  .arch-lede { font-size: 17px; line-height: 1.7; color: var(--ink-2); margin: 0 0 24px; }
-  .arch-callout { background: rgba(74,154,115,0.06); border-left: 3px solid var(--confirm); padding: 16px 20px; margin: 18px 0; border-radius: 0 6px 6px 0; }
-  .arch-callout p { margin: 0; }
-  .arch-callout .attrib { display: block; margin-top: 8px; font-size: 13px; color: var(--muted); font-style: italic; }
-  .boilerplate { background: #f1ead7; border: 1px solid #d9d2c0; border-radius: 6px; padding: 16px 20px; margin: 12px 0 24px; }
-  .boilerplate p { margin: 0; font-size: 15px; line-height: 1.7; color: var(--ink); }
-  .boilerplate .meta { display: block; margin-bottom: 8px; font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
-  .means-bullets { list-style: none; padding: 0; margin: 16px 0 32px; }
-  .means-bullets li { padding: 8px 0 8px 24px; position: relative; }
-  .means-bullets li::before { content: "·"; position: absolute; left: 4px; color: var(--confirm); font-size: 22px; line-height: 1; top: 6px; }
-  .fact-table { width: 100%; border-collapse: collapse; margin: 14px 0 24px; font-size: 14.5px; }
-  .fact-table th, .fact-table td { text-align: left; padding: 10px 12px; border-bottom: 1px solid #d9d2c0; vertical-align: top; color: var(--ink-2); }
-  .fact-table th { font-weight: 500; color: var(--ink); font-family: var(--serif); font-size: 15px; width: 32%; }
-  .fact-table td a { color: var(--confirm); }
-  .asset-row { display: flex; gap: 16px; align-items: flex-start; padding: 12px 0; border-bottom: 1px solid #d9d2c0; }
-  .asset-row:last-child { border-bottom: 0; }
-  .asset-row img.thumb { width: 56px; height: 56px; border: 1px solid #d9d2c0; border-radius: 4px; background: #fff; object-fit: contain; padding: 4px; }
-  .asset-row .meta { font-size: 14px; color: var(--ink-2); line-height: 1.6; }
-  .disclaimer-block { margin-top: 48px; padding: 20px 24px; background: #f1ead7; border-radius: 6px; font-size: 14px; line-height: 1.65; color: var(--muted); }
-</style>
+<link rel="stylesheet" href="/press-kit.css?v=1">
 <meta name="copyright" content="© 2026 Orphograph. Code under MIT (see /LICENSE). Brand, content, and design — all rights reserved.">
 </head>
 <body>
@@ -65,7 +37,7 @@
 
 <main class="arch-wrap">
 
-  <p style="font-size:12px;letter-spacing:0.18em;text-transform:uppercase;color:var(--muted);margin:48px 0 8px;">Press kit</p>
+  <p class="press-eyebrow">Press kit</p>
   <h1>Orphograph — press kit.</h1>
   <p class="arch-lede">
     The deeper resource that <a href="/press.html">/press.html</a> points to. Three boilerplate descriptions in different lengths, a one-line summary, third-party references that can be independently verified, a downloadable asset set, a live sample receipt, and three attributable office statements suited to different story angles. Everything below is intended for direct quotation or paraphrase without prior correspondence.
@@ -95,8 +67,8 @@
     <div class="boilerplate">
       <span class="meta">250 words</span>
       <p>Orphograph is a Bitcoin-anchored notary. It issues receipts proving that a specific file existed at a specific moment in time, without the file itself ever leaving the customer's device. The instrument is narrowly technical: a cryptographic attestation of file existence by a moment in time. It is not a legal opinion, not a content-authenticity claim, and not a verdict on how a file was made.</p>
-      <p style="margin-top:10px;">The mechanism is straightforward. The SHA-256 fingerprint of a file is computed locally in the customer's browser. Only the 32-byte fingerprint is transmitted to the office. The office forwards the fingerprint to five independent OpenTimestamps calendars, which aggregate millions of fingerprints into a single Merkle root and commit that root to the Bitcoin blockchain. Within roughly one hour, the receipt is upgraded with a Bitcoin block-height attestation. From that point forward, the receipt is verifiable, forever, by anyone, against the public Bitcoin chain — using an MIT-licensed offline verifier that does not need to contact the office.</p>
-      <p style="margin-top:10px;">A folder anchoring construction shipped 2026-05-20 extends the same primitive to working sets: a single receipt covers an arbitrary directory by a sorted-leaves Merkle root, with selective disclosure of any one file through a logarithmic inclusion proof. The protocol is open-source under MIT. The customer's file is never seen, stored, or transmitted across the network. The office is replaceable; the Bitcoin chain is the source of truth.</p>
+      <p class="mt-10">The mechanism is straightforward. The SHA-256 fingerprint of a file is computed locally in the customer's browser. Only the 32-byte fingerprint is transmitted to the office. The office forwards the fingerprint to five independent OpenTimestamps calendars, which aggregate millions of fingerprints into a single Merkle root and commit that root to the Bitcoin blockchain. Within roughly one hour, the receipt is upgraded with a Bitcoin block-height attestation. From that point forward, the receipt is verifiable, forever, by anyone, against the public Bitcoin chain — using an MIT-licensed offline verifier that does not need to contact the office.</p>
+      <p class="mt-10">A folder anchoring construction shipped 2026-05-20 extends the same primitive to working sets: a single receipt covers an arbitrary directory by a sorted-leaves Merkle root, with selective disclosure of any one file through a logarithmic inclusion proof. The protocol is open-source under MIT. The customer's file is never seen, stored, or transmitted across the network. The office is replaceable; the Bitcoin chain is the source of truth.</p>
     </div>
   </section>
 
@@ -128,7 +100,7 @@
     <div class="asset-row">
       <img class="thumb" src="/seal.png" alt="Orphograph institutional seal">
       <div class="meta">
-        <strong style="color:var(--ink);">Institutional seal</strong><br>
+        <strong class="ink">Institutional seal</strong><br>
         PNG, suitable for editorial use at article-illustration sizes.<br>
         Download: <a href="/seal.png">/seal.png</a>
       </div>
@@ -137,28 +109,28 @@
     <div class="asset-row">
       <img class="thumb" src="/favicon.png" alt="Orphograph favicon">
       <div class="meta">
-        <strong style="color:var(--ink);">Favicon</strong><br>
+        <strong class="ink">Favicon</strong><br>
         Small-format mark used in the browser tab.<br>
         Download: <a href="/favicon.png">/favicon.png</a>
       </div>
     </div>
 
     <div class="asset-row">
-      <div class="thumb" style="display:flex;align-items:center;justify-content:center;font-family:var(--serif);color:var(--muted);font-size:11px;">on&nbsp;request</div>
+      <div class="thumb thumb-on-request">on&nbsp;request</div>
       <div class="meta">
-        <strong style="color:var(--ink);">Standalone wordmark / logo lockup</strong><br>
+        <strong class="ink">Standalone wordmark / logo lockup</strong><br>
         No additional artwork is published at this time. For a specific format, transparent background, or vector file, request via <a href="mailto:hello@orphograph.com">hello@orphograph.com</a>.
       </div>
     </div>
 
-    <h3 style="margin-top:32px;">Brand colours</h3>
+    <h3 class="mt-32">Brand colours</h3>
     <p>Cream <code>#f7f1e3</code> · ink <code>#14110d</code> · confirm-green <code>#3a6a4c</code>. Typography is a classical book-weight serif for headings; any equivalent serif at regular or medium weight is an acceptable substitute. No third-party brand-font reference is used.</p>
 
-    <h3 style="margin-top:32px;">Download the press kit</h3>
-    <p style="margin-bottom:12px;">
-      <a href="/press-kit/orphograph-press-kit.zip" style="font-family:var(--serif);font-size:17px;color:var(--confirm);border-bottom:1px solid var(--confirm);padding-bottom:1px;">Download press kit (.zip)</a>
+    <h3 class="mt-32">Download the press kit</h3>
+    <p class="mb-12">
+      <a href="/press-kit/orphograph-press-kit.zip" class="press-kit-download-link">Download press kit (.zip)</a>
     </p>
-    <p style="margin-top:0;">A single archive containing the institutional seal, the seal display variant, the wordmark lockup, the favicon set, the Open Graph social card, and a printable brand guide. Approximately three megabytes.</p>
+    <p class="mt-0">A single archive containing the institutional seal, the seal display variant, the wordmark lockup, the favicon set, the Open Graph social card, and a printable brand guide. Approximately three megabytes.</p>
   </section>
 
   <section>
@@ -211,16 +183,16 @@
 </main>
 
 <footer>
-  <div class="wrap" style="text-align:center;color:var(--muted);font-size:13px;padding:32px 0;">
+  <div class="wrap footer-center">
     <p>Orphograph · An empirical notary.</p>
-    <p style="margin-top:8px;">
-      <a href="/" style="color:var(--muted);">Home</a> ·
-      <a href="/press.html" style="color:var(--muted);">Press</a> ·
-      <a href="/method" style="color:var(--muted);">Method</a> ·
-      <a href="/faq.html" style="color:var(--muted);">FAQ</a> ·
-      <a href="/about-the-office.html" style="color:var(--muted);">About the office</a> ·
-      <a href="/status.html" style="color:var(--muted);">Status</a> ·
-      <a href="/continuity.html" style="color:var(--muted);">Continuity</a>
+    <p class="mt-8">
+      <a href="/" class="muted-link">Home</a> ·
+      <a href="/press.html" class="muted-link">Press</a> ·
+      <a href="/method" class="muted-link">Method</a> ·
+      <a href="/faq.html" class="muted-link">FAQ</a> ·
+      <a href="/about-the-office.html" class="muted-link">About the office</a> ·
+      <a href="/status.html" class="muted-link">Status</a> ·
+      <a href="/continuity.html" class="muted-link">Continuity</a>
     </p>
   </div>
 </footer>

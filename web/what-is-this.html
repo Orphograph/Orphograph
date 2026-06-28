@@ -16,27 +16,7 @@
 <link rel="canonical" href="https://orphograph.com/what-is-this.html">
 <link rel="icon" type="image/png" href="/favicon.png?v=8">
 <link rel="stylesheet" href="/index.css?v=14">
-<style>
-  .arch-wrap { max-width: 820px; margin: 0 auto; padding: 0 24px 64px; }
-  .arch-wrap h1 { font-family: var(--serif); font-size: 36px; font-weight: 500; margin: 32px 0 6px; line-height: 1.2; }
-  .arch-wrap h2 { font-family: var(--serif); font-size: 22px; font-weight: 500; margin: 36px 0 4px; color: var(--ink); }
-  .arch-rule { border-top: 1px solid var(--ink); width: 32px; margin: 8px 0 16px; opacity: 0.6; }
-  .arch-wrap p, .arch-wrap li { color: var(--ink-2); line-height: 1.75; font-size: 15.5px; }
-  .arch-wrap code { background: rgba(58, 47, 36, 0.06); padding: 2px 6px; border-radius: 3px; font-size: 0.92em; }
-  .arch-lede { font-size: 17px; line-height: 1.7; color: var(--ink-2); margin: 0 0 24px; }
-  .arch-callout { background: rgba(58, 47, 36, 0.04); border-left: 3px solid var(--accent); padding: 16px 20px; margin: 24px 0; border-radius: 0; }
-  .arch-callout p { margin: 0; }
-  .disclaimer-block { margin-top: 48px; padding: 20px 24px; background: transparent; border-top: 1px solid var(--line-soft); border-bottom: 1px solid var(--line-soft); border-radius: 0; font-size: 14px; line-height: 1.65; color: var(--muted); }
-  .next-step-card { max-width: 820px; margin: 48px auto 0; padding: 28px 32px; background: var(--paper-soft); border: 1px solid var(--line-soft); border-radius: 8px; box-shadow: var(--shadow-1); }
-  .next-step-card .ns-label { font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); margin: 0 0 12px; }
-  .next-step-card h2 { font-family: var(--serif); font-size: 22px; font-weight: 500; margin: 0 0 18px; color: var(--ink); }
-  .next-step-card .ns-row { display: flex; flex-wrap: wrap; gap: 12px; }
-  .next-step-card .ns-btn { display: inline-flex; align-items: center; justify-content: center; padding: 11px 20px; border-radius: 999px; font-size: 14px; font-weight: 500; text-decoration: none; border: 1px solid var(--ink); transition: background .15s ease, color .15s ease, transform .15s ease; }
-  .next-step-card .ns-btn.ns-primary { background: var(--ink); color: var(--paper-soft, #f6f1e3); }
-  .next-step-card .ns-btn.ns-primary:hover { background: #000; transform: translateY(-1px); }
-  .next-step-card .ns-btn.ns-secondary { background: transparent; color: var(--ink); }
-  .next-step-card .ns-btn.ns-secondary:hover { background: var(--ink); color: var(--paper-soft, #f6f1e3); }
-</style>
+<link rel="stylesheet" href="/what-is-this.css?v=1">
 <meta name="copyright" content="© 2026 Orphograph. Code under MIT (see /LICENSE). Brand, content, and design — all rights reserved.">
 </head>
 <body>
@@ -57,7 +37,7 @@
 
 <main class="arch-wrap">
 
-  <p style="font-size:12px;letter-spacing:0.18em;text-transform:uppercase;color:var(--muted);margin:48px 0 8px;">For first-time recipients</p>
+  <p class="recipient-label">For first-time recipients</p>
   <h1>You received a Bitcoin-anchored receipt. Here is what that means.</h1>
   <p class="arch-lede">
     The link in your hand opens a page that shows a 64-character fingerprint of a file (or a folder of files), the date that fingerprint was committed to the Bitcoin chain, and a way to confirm that date is genuine. The file itself is not contained in the link; only the proof that the file existed by a certain moment and has not changed since.
@@ -122,14 +102,14 @@
 </main>
 
 <footer>
-  <div class="wrap" style="text-align:center;color:var(--muted);font-size:13px;padding:32px 0;">
+  <div class="wrap footer-inner">
     <p>Orphograph · An empirical notary.</p>
-    <p style="margin-top:8px;">
-      <a href="/" style="color:var(--muted);">Home</a> ·
-      <a href="/method/evidence-law.html" style="color:var(--muted);">Evidence law</a> ·
-      <a href="/faq.html" style="color:var(--muted);">FAQ</a> ·
-      <a href="/status.html" style="color:var(--muted);">Status</a> ·
-      <a href="/continuity.html" style="color:var(--muted);">Continuity</a>
+    <p class="mt-8">
+      <a href="/" class="link-muted">Home</a> ·
+      <a href="/method/evidence-law.html" class="link-muted">Evidence law</a> ·
+      <a href="/faq.html" class="link-muted">FAQ</a> ·
+      <a href="/status.html" class="link-muted">Status</a> ·
+      <a href="/continuity.html" class="link-muted">Continuity</a>
     </p>
   </div>
 </footer>

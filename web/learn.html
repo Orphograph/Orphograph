@@ -14,90 +14,13 @@
 <link rel="stylesheet" href="/style.css?v=3">
 <link rel="stylesheet" href="/blog.css">
 <link rel="stylesheet" href="/index.css?v=14">
-<style>
-  /* Institutional palette overrides — wash out style.css's white-card +
-     sage-accent + dark-terminal look so learn.html blends with the rest
-     of the cream-paper brand. Uses var() with hex fallbacks so this
-     works regardless of index.css load order. */
-  :root {
-    --bg: #f7f1e3;
-    --panel: transparent;
-    --panel-stroke: #e9e1cb;
-    --panel-stroke-soft: #f0e9d4;
-    --text: #14110d;
-    --text-soft: #2c2620;
-    --muted: #6b6354;
-    --accent: #3a2f24;
-    --accent-soft: rgba(58,47,36,0.06);
-    --accent-stroke: rgba(58,47,36,0.18);
-  }
-  body { font-family: var(--sans, -apple-system, "Inter", sans-serif); color: var(--ink, #14110d); background: var(--paper, #f7f1e3); }
-  .lvl-card {
-    border: none;
-    border-left: 3px solid var(--line, #d9cfb6);
-    background: var(--paper-soft, #fbf7ea);
-    border-radius: 8px;
-    padding: 24px 26px;
-    margin: 22px 0;
-    box-shadow: 0 1px 2px rgba(60,40,20,0.04), 0 2px 6px rgba(60,40,20,0.04);
-  }
-  .lvl-tag, .lvl-1, .lvl-2, .lvl-3 {
-    display: inline-block;
-    font-family: var(--serif, "EB Garamond", "Cormorant Garamond", Georgia, serif);
-    font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase;
-    padding: 4px 12px; border-radius: 999px; margin-bottom: 12px;
-    background: rgba(58,47,36,0.06);
-    color: var(--ink, #14110d);
-    border: 1px solid rgba(58,47,36,0.14);
-    font-weight: 500;
-  }
-  .lvl-card h3 { margin-top: 6px; font-family: var(--serif, Georgia, serif); font-weight: 500; color: var(--ink, #14110d); }
-  .step-row { display: flex; gap: 16px; align-items: flex-start; margin: 14px 0; }
-  .step-num {
-    flex: 0 0 32px; height: 32px; border-radius: 50%;
-    background: var(--ink, #14110d); color: var(--paper, #f7f1e3);
-    display: flex; align-items: center; justify-content: center;
-    font-family: var(--serif, Georgia, serif); font-weight: 500; font-size: 15px;
-  }
-  .step-row p { margin: 6px 0; color: var(--ink-2, #2c2620); }
-  pre.cmd {
-    background: var(--paper-soft, #fbf7ea);
-    border: 1px solid var(--line-soft, #e9e1cb);
-    border-radius: 8px;
-    padding: 14px 18px;
-    overflow-x: auto;
-    font-family: var(--mono, "JetBrains Mono", "SF Mono", Menlo, monospace);
-    font-size: 13px; line-height: 1.6;
-    color: var(--ink-2, #2c2620);
-  }
-  .callout {
-    border-left: 3px solid var(--confirm, #3a6a4c);
-    padding: 14px 18px;
-    background: rgba(58,106,76,0.05);
-    border-radius: 0 6px 6px 0;
-    margin: 22px 0;
-    font-family: var(--serif, Georgia, serif);
-    font-size: 15px; color: var(--ink-2, #2c2620);
-  }
-  .glossary dt { font-weight: 500; margin-top: 14px; color: var(--ink, #14110d); font-family: var(--serif, Georgia, serif); }
-  .glossary dd { margin: 4px 0 0 0; color: var(--muted, #6b6354); }
-  .anchor-skip { font-size: 13px; color: var(--muted, #6b6354); }
-  .anchor-skip a { margin-right: 14px; color: var(--muted, #6b6354); }
-  .anchor-skip a:hover { color: var(--ink, #14110d); }
-  .btn.primary {
-    background: var(--ink, #14110d); color: var(--paper, #f7f1e3);
-    border: none; padding: 10px 22px; border-radius: 8px;
-    font-family: var(--serif, Georgia, serif); font-size: 14px; letter-spacing: 0.04em;
-    text-decoration: none; display: inline-block;
-  }
-  .btn.primary:hover { background: #000; color: var(--paper-soft, #fbf7ea); }
-</style>
+<link rel="stylesheet" href="/learn.css?v=1">
 <meta name="copyright" content="© 2026 Orphograph. MIT — see /LICENSE">
 </head>
 <body>
 
 <header>
-  <div class="brand"><a href="/" style="color:inherit;text-decoration:none;">orphograph</a></div>
+  <div class="brand"><a href="/" class="brand-link">orphograph</a></div>
   <nav>
     <a href="/learn.html">how it works</a>
     <a href="/verify/">verify</a>
@@ -371,8 +294,8 @@ Success! Bitcoin block 824193 attests existence as of 2026-05-16 17:42:11 UTC</p
 </div>
 </article>
 
-<section style="margin-top:48px; padding:32px; border:1px solid var(--panel-stroke); background:var(--panel); border-radius:14px; text-align:center;">
-  <h2 style="margin-top:0;">Have a receipt? Verify it now.</h2>
+<section class="verify-cta">
+  <h2 class="mt-0">Have a receipt? Verify it now.</h2>
   <p>Drop your file and paste the receipt ID — the page re-hashes locally in your browser and tells you if it matches.</p>
   <p><a href="/verify/" class="btn primary">Open the verifier</a></p>
 </section>

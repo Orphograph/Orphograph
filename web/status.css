@@ -23,3 +23,26 @@
 .status-table th { color: var(--muted); font-weight: 400; }
 .cal-ok { color: var(--accent); }
 .cal-bad { color: var(--bad); }
+
+/* externalized from status.html (CSP: no inline) */
+.arch-wrap { max-width: 820px; margin: 0 auto; padding: 0 24px 64px; }
+.arch-wrap h1 { font-family: var(--serif); font-size: 36px; font-weight: 500; margin: 32px 0 6px; }
+.arch-wrap h2 { font-family: var(--serif); font-size: 22px; font-weight: 500; margin: 36px 0 4px; color: var(--ink); }
+.arch-rule { border-top: 1px solid var(--ink); width: 32px; margin: 8px 0 16px; opacity: 0.6; }
+.arch-wrap p, .arch-wrap li { color: var(--ink-2); line-height: 1.75; font-size: 15.5px; }
+.arch-lede { font-size: 17px; line-height: 1.7; color: var(--ink-2); margin: 0 0 24px; }
+.status-grid { display: grid; grid-template-columns: 1fr auto; gap: 14px 24px; margin: 24px 0; padding: 18px 22px; background: #faf6e9; border-radius: 8px; border: 1px solid #e5dec9; font-size: 15px; }
+.status-grid .label { font-family: var(--serif); }
+.status-grid .value { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 13px; color: var(--ink); word-break: break-all; }
+.status-pill { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 500; letter-spacing: 0.04em; vertical-align: middle; }
+.status-pill.pending { background: rgba(74,154,115,0.10); color: var(--confirm); border: 1px solid var(--confirm); }
+.status-pill.fail { background: rgba(190,80,80,0.12); color: #be5050; border: 1px solid #be5050; }
+.status-pill.ok { background: rgba(74,154,115,0.18); color: var(--confirm); border: 1px solid var(--confirm); }
+.ledger-table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+.ledger-table th { text-align: left; font-family: var(--serif); font-weight: 500; padding: 8px 12px; border-bottom: 1px solid #d9d2c0; font-size: 14px; color: var(--ink); }
+.ledger-table td { padding: 8px 12px; border-bottom: 1px solid #ede6cf; font-size: 14px; color: var(--ink-2); }
+.ledger-table code { font-size: 12px; word-break: break-all; }
+.self-check-block { background: rgba(74,154,115,0.06); border-left: 3px solid var(--confirm); padding: 16px 20px; margin: 24px 0; border-radius: 0 6px 6px 0; }
+.self-check-block p { margin: 0; }
+.status-kicker { font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); margin: 48px 0 8px; }
+.link-confirm { color: var(--confirm); }

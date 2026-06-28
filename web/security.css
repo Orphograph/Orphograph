@@ -1,0 +1,17 @@
+/* externalized from security.html (CSP: no inline) */
+.arch-wrap { max-width: 820px; margin: 0 auto; padding: 0 24px 64px; }
+.arch-wrap h1 { font-family: var(--serif); font-size: 36px; font-weight: 500; margin: 32px 0 6px; }
+.arch-wrap h2 { font-family: var(--serif); font-size: 22px; font-weight: 500; margin: 36px 0 4px; color: var(--ink); }
+.arch-wrap h3 { font-family: var(--serif); font-size: 18px; font-weight: 500; margin: 28px 0 4px; color: var(--ink); }
+.arch-rule { border-top: 1px solid var(--ink); width: 32px; margin: 8px 0 16px; opacity: 0.6; }
+.arch-wrap p, .arch-wrap li { color: var(--ink-2); line-height: 1.75; font-size: 15.5px; }
+.arch-wrap code { background: rgba(58, 47, 36, 0.06); padding: 2px 6px; border-radius: 3px; font-size: 0.92em; }
+.arch-lede { font-size: 17px; line-height: 1.7; color: var(--ink-2); margin: 0 0 24px; }
+.arch-callout { background: rgba(58, 47, 36, 0.04); border-left: 3px solid var(--accent); padding: 16px 20px; margin: 24px 0; border-radius: 0; }
+.arch-callout p { margin: 0; }
+
+/* inline style= attributes externalized */
+.security-eyebrow { font-size:12px; letter-spacing:0.18em; text-transform:uppercase; color:var(--muted); margin:48px 0 8px; }
+.footer-inner { text-align:center; color:var(--muted); font-size:13px; padding:32px 0; }
+.mt-8 { margin-top:8px; }
+.link-muted { color:var(--muted); }
