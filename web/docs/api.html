@@ -207,9 +207,9 @@
   <div class="brand"><a href="/">orphograph</a></div>
   <nav>
     <a href="/">home</a>
-    <a href="/about.html">about</a>
-    <a href="/status.html">status</a>
-    <a href="/account.html">account</a>
+    <a href="/about">about</a>
+    <a href="/status">status</a>
+    <a href="/account">account</a>
   </nav>
 </header>
 
@@ -295,7 +295,7 @@
 </table>
 
 <p>
-  Generate or rotate an API key from <a href="/account.html">your account dashboard</a>.
+  Generate or rotate an API key from <a href="/account">your account dashboard</a>.
   Keys look like <code>orpho_</code> + 32 URL-safe characters. We store only the SHA-256
   hash of the key — once shown, it cannot be retrieved. Lost a key? Revoke and re-issue.
 </p>
@@ -374,7 +374,7 @@
     <tr>
       <td><code>500</code></td>
       <td>Server error</td>
-      <td>Genuine internal failure. Retry with exponential backoff; if it persists, check <a href="/status.html">/status.html</a>.</td>
+      <td>Genuine internal failure. Retry with exponential backoff; if it persists, check <a href="/status">/status.html</a>.</td>
     </tr>
     <tr>
       <td><code>503</code></td>
@@ -877,7 +877,7 @@ Accept: image/svg+xml</pre>
         data-receipt="XwTULwlh76PcCst9"
         async&gt;&lt;/script&gt;</pre>
   <p>
-    See the <a href="/badge-demo.html">badge demo</a> for the live rendered
+    See the <a href="/badge-demo">badge demo</a> for the live rendered
     output and tampering notes.
   </p>
 </section>
@@ -960,7 +960,7 @@ Accept: image/svg+xml</pre>
 <h2 id="sla">SLA &amp; status</h2>
 <p>
   No formal SLA on the v0.1 free tier. Best-effort uptime; honest
-  reporting at <a href="/status.html">/status.html</a> and structured
+  reporting at <a href="/status">/status.html</a> and structured
   liveness at <a href="#get-api-health"><code>/api/health</code></a>.
   Calendar reachability is reported per-calendar — your client should
   treat 3-of-5 calendars succeeding as a healthy anchor (the
@@ -1131,11 +1131,11 @@ curl -s -b cookies.txt -O https://orphograph.com/api/me/anchors.zip</code></pre>
 <footer>
   <small>
     <a href="/">home</a> ·
-    <a href="/about.html">about</a> ·
-    <a href="/docs/api.html">API</a> ·
-    <a href="/status.html">status</a> ·
-    <a href="/terms.html">terms</a> ·
-    <a href="/privacy.html">privacy</a> ·
+    <a href="/about">about</a> ·
+    <a href="/docs/api">API</a> ·
+    <a href="/status">status</a> ·
+    <a href="/terms">terms</a> ·
+    <a href="/privacy">privacy</a> ·
     We never see your file
   </small>
 </footer>

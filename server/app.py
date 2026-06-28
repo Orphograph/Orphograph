@@ -396,6 +396,14 @@ def _serve_static(handler: BaseHTTPRequestHandler, rel_path: str) -> None:
     # Directory-style paths (e.g. /verify/) → resolve to <dir>/index.html.
     if target.is_dir():
         target = target / "index.html"
+    # Clean URLs: an extensionless path (/faq, /method/architecture) serves the
+    # matching <path>.html. The .html form keeps working too (backward-compatible
+    # bookmarks/links); this only triggers when the bare path is not itself a
+    # file or dir and a .html sibling exists.
+    if target.suffix == "" and not target.exists():
+        html_sibling = target.with_suffix(".html")
+        if html_sibling.is_file():
+            target = html_sibling
     if not target.exists() or not target.is_file():
         handler.send_error(404, "not found")
         return

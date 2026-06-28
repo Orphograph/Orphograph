@@ -255,9 +255,9 @@ class TestCheckoutWiringMatchesSKU(unittest.TestCase):
             "Pack of Fifty must NOT deep-link to the writer_pack plan: that SKU "
             "grants 10 credits and would under-deliver the 50-pack.",
         )
-        self.assertIn(
-            "/pay/crypto.html?plan=pack_50",
+        self.assertRegex(
             fifty,
+            r'/pay/crypto(?:\.html)?\?plan=pack_50',
             "Pack of Fifty should deep-link to the dedicated pack_50 plan, "
             "which grants 50 credits.",
         )
@@ -274,7 +274,7 @@ class TestCheckoutWiringMatchesSKU(unittest.TestCase):
             "Writer Pack is crypto-only until Stripe is configured.",
         )
         self.assertRegex(
-            writer, r'href="/pay/crypto\.html\?plan=writer_pack"',
+            writer, r'href="/pay/crypto(?:\.html)?\?plan=writer_pack"',
             "Writer Pack CTA should route to the crypto checkout "
             "(plan=writer_pack).",
         )
