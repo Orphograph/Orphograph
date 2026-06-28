@@ -163,3 +163,215 @@ dl.kv dd { margin: 0; font-size: 14px; word-break: break-all; line-height: 1.5; 
   border-radius: 0 4px 4px 0;
   color: var(--text-soft);
 }
+
+/* externalized from receipt.html (CSP: no inline) */
+  /* Institutional palette overrides — wash out style.css's white-card
+     + sage-accent + hard-1px-border look on the receipt page so it
+     reads as a cream-paper instrument, not a UI rectangle. */
+  :root {
+    --bg: #f7f1e3;
+    --panel: #fbf7ea;
+    --panel-stroke: #e9e1cb;
+    --panel-stroke-soft: #f0e9d4;
+    --text: #14110d;
+    --text-soft: #2c2620;
+    --muted: #6b6354;
+    --accent: #3a2f24;
+    --accent-soft: rgba(58,47,36,0.06);
+    --accent-stroke: rgba(58,47,36,0.18);
+  }
+  body.receipt-page { font-family: var(--sans, -apple-system, "Inter", sans-serif); color: var(--ink, #14110d); background: var(--paper, #f7f1e3); }
+  .receipt-card {
+    background: var(--paper-soft, #fbf7ea);
+    border: 1px solid var(--line-soft, #e9e1cb);
+    border-radius: 8px;
+    box-shadow: 0 2px 6px rgba(60,40,20,0.04), 0 12px 32px rgba(60,40,20,0.04);
+  }
+  .card-header { border-bottom: 1px solid var(--line-soft, #e9e1cb); }
+  .card-header h1 { font-family: var(--serif, "EB Garamond", Georgia, serif); color: var(--ink, #14110d); }
+  /* Visitor CTAs use institutional ink button instead of sage */
+  #visitor-cta, #visitor-cta-pack {
+    background: var(--paper-soft, #fbf7ea) !important;
+    border: 1px solid var(--line-soft, #e9e1cb) !important;
+    border-radius: 8px !important;
+  }
+  #visitor-cta a, #visitor-cta-pack a {
+    background: var(--ink, #14110d) !important;
+    color: var(--paper, #f7f1e3) !important;
+    border-radius: 8px !important;
+    font-family: var(--serif, Georgia, serif);
+  }
+  /* Share buttons soften from sage panel to institutional outline */
+  .share-block { background: transparent !important; border: none !important; }
+  .share-btn {
+    background: var(--paper-soft, #fbf7ea);
+    color: var(--ink, #14110d);
+    border: 1px solid var(--line, #d9cfb6);
+    border-radius: 6px;
+    font-family: var(--serif, Georgia, serif);
+  }
+  .share-btn:hover { background: var(--ink, #14110d); color: var(--paper, #f7f1e3); }
+  /* Explorer card grid: hairline rules instead of hard borders */
+  .explorer-grid > * { border: 1px solid var(--line-soft, #e9e1cb) !important; border-radius: 6px; background: transparent; }
+  /* Checks-li: subtle row separator, no boxed border */
+  .checks li { border: none; border-bottom: 1px solid var(--line-soft, #e9e1cb); background: transparent; }
+
+/* externalized style="" attributes from receipt.html (CSP: no inline) */
+.cta-row {
+  max-width: 780px;
+  margin: 8px auto 0;
+  padding: 12px 18px;
+  background: #faf6e9;
+  border: 1px solid #e5dec9;
+  border-radius: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+.cta-row-outline {
+  max-width: 780px;
+  margin: 8px auto 0;
+  padding: 12px 18px;
+  background: transparent;
+  border: 1px solid #14110d;
+  border-radius: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+.cta-text {
+  margin: 0;
+  font-size: 14px;
+  color: #444;
+}
+.cta-grow {
+  flex: 1;
+  min-width: 240px;
+}
+.cta-subtext {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #888;
+}
+.cta-btn {
+  display: inline-block;
+  padding: 8px 16px;
+  background: #14110d;
+  color: #fff;
+  text-decoration: none;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 500;
+}
+.cta-btn-outline {
+  display: inline-block;
+  padding: 8px 16px;
+  background: transparent;
+  color: #14110d;
+  text-decoration: none;
+  border: 1px solid #14110d;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 500;
+}
+.share-heading {
+  font-family: var(--serif, Georgia, serif);
+  font-size: 20px;
+  font-weight: 500;
+  margin: 0 0 12px;
+}
+.share-intro {
+  margin: 0 0 16px;
+}
+.share-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 18px;
+}
+.share-url-input {
+  flex: 1;
+  min-width: 240px;
+  padding: 8px 10px;
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 13px;
+  border: 1px solid #d9d2c0;
+  border-radius: 4px;
+  background: #faf6e9;
+}
+.share-btn-ink {
+  padding: 8px 14px;
+  border: 1px solid #14110d;
+  background: #14110d;
+  color: #fff;
+  border-radius: 4px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.share-btn-outline {
+  padding: 8px 14px;
+  border: 1px solid #14110d;
+  background: transparent;
+  color: #14110d;
+  border-radius: 4px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.embed-details {
+  margin-top: 8px;
+}
+.embed-summary {
+  cursor: pointer;
+  font-size: 14px;
+  color: #14110d;
+}
+.embed-body {
+  margin-top: 14px;
+}
+.embed-preview-label {
+  margin: 0 0 10px;
+}
+.embed-preview-img-wrap {
+  margin: 0 0 14px;
+}
+.embed-preview-img {
+  max-height: 32px;
+}
+.embed-paste-label {
+  margin: 0 0 6px;
+}
+.embed-code-area {
+  width: 100%;
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 12px;
+  padding: 8px;
+  border: 1px solid #d9d2c0;
+  border-radius: 4px;
+  background: #faf6e9;
+  resize: vertical;
+}
+.embed-copy-wrap {
+  margin: 10px 0 0;
+}
+.share-btn-outline-sm {
+  padding: 6px 12px;
+  border: 1px solid #14110d;
+  background: transparent;
+  color: #14110d;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.share-gift {
+  margin: 18px 0 0;
+  border-top: 1px solid #ede6cf;
+  padding-top: 14px;
+}
+.share-gift-link {
+  color: #14110d;
+}

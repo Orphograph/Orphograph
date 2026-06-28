@@ -131,3 +131,6 @@
 }
 .status-line.ok{color:#3a7a3a;}
 .status-line.err{color:#b03a3a;}
+
+/* externalized from writers.html (CSP: no inline) */
+.maxw-760{max-width:760px;}

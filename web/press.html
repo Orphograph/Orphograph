@@ -16,25 +16,7 @@
 <link rel="canonical" href="https://orphograph.com/press.html">
 <link rel="icon" type="image/png" href="/favicon.png?v=8">
 <link rel="stylesheet" href="/index.css?v=14">
-<style>
-  .arch-wrap { max-width: 820px; margin: 0 auto; padding: 0 24px 64px; }
-  .arch-wrap h1 { font-family: var(--serif); font-size: 36px; font-weight: 500; margin: 32px 0 6px; }
-  .arch-wrap h2 { font-family: var(--serif); font-size: 22px; font-weight: 500; margin: 36px 0 4px; color: var(--ink); }
-  .arch-rule { border-top: 1px solid var(--ink); width: 32px; margin: 8px 0 16px; opacity: 0.6; }
-  .arch-wrap p, .arch-wrap li { color: var(--ink-2); line-height: 1.75; font-size: 15.5px; }
-  .arch-wrap code { background: rgba(74,154,115,0.08); padding: 2px 6px; border-radius: 3px; font-size: 0.92em; }
-  .arch-wrap pre { background: #f1ead7; border: 1px solid #d9d2c0; border-radius: 6px; padding: 14px 16px; overflow-x: auto; font-size: 13px; line-height: 1.55; }
-  .arch-lede { font-size: 17px; line-height: 1.7; color: var(--ink-2); margin: 0 0 24px; }
-  .arch-callout { background: rgba(74,154,115,0.06); border-left: 3px solid var(--confirm); padding: 16px 20px; margin: 24px 0; border-radius: 0 6px 6px 0; }
-  .arch-callout p { margin: 0; }
-  .means-bullets { list-style: none; padding: 0; margin: 16px 0 32px; }
-  .means-bullets li { padding: 8px 0 8px 24px; position: relative; }
-  .means-bullets li::before { content: "·"; position: absolute; left: 4px; color: var(--confirm); font-size: 22px; line-height: 1; top: 6px; }
-  .swatch-row { display: flex; gap: 14px; flex-wrap: wrap; margin: 14px 0 8px; }
-  .swatch { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: var(--ink-2); }
-  .swatch span.chip { width: 22px; height: 22px; border-radius: 4px; border: 1px solid #d9d2c0; display: inline-block; }
-  .disclaimer-block { margin-top: 48px; padding: 20px 24px; background: #f1ead7; border-radius: 6px; font-size: 14px; line-height: 1.65; color: var(--muted); }
-</style>
+<link rel="stylesheet" href="/press.css?v=1">
 <meta name="copyright" content="© 2026 Orphograph. Code under MIT (see /LICENSE). Brand, content, and design — all rights reserved.">
 </head>
 <body>
@@ -55,7 +37,7 @@
 
 <main class="arch-wrap">
 
-  <p style="font-size:12px;letter-spacing:0.18em;text-transform:uppercase;color:var(--muted);margin:48px 0 8px;">Press</p>
+  <p class="press-eyebrow">Press</p>
   <h1>Orphograph — press resources.</h1>
   <p class="arch-lede">
     A reference page for journalists, trade-publication writers, and analysts. The sections below give a one-paragraph description of the instrument, quotable facts, press contacts, brand assets, and sample assertion language suitable for direct citation. The page is written in the same institutional voice as the rest of the office's published material. A deeper resource — boilerplate text in three lengths, a live sample receipt, downloadable assets, and longer attributable statements — is at <a href="/press-kit.html">Press kit &rarr;</a>.
@@ -95,9 +77,9 @@
     <p>The institutional seal: <a href="/seal.png">/seal.png</a>. The favicon: <a href="/favicon.png">/favicon.png</a>.</p>
     <p>Brand colors, taken from the live stylesheet:</p>
     <div class="swatch-row">
-      <span class="swatch"><span class="chip" style="background:#f7f1e3;"></span> cream <code>#f7f1e3</code> background</span>
-      <span class="swatch"><span class="chip" style="background:#14110d;"></span> ink <code>#14110d</code> body</span>
-      <span class="swatch"><span class="chip" style="background:#3a6a4c;"></span> confirm-green <code>#3a6a4c</code> accent</span>
+      <span class="swatch"><span class="chip chip-cream"></span> cream <code>#f7f1e3</code> background</span>
+      <span class="swatch"><span class="chip chip-ink"></span> ink <code>#14110d</code> body</span>
+      <span class="swatch"><span class="chip chip-confirm"></span> confirm-green <code>#3a6a4c</code> accent</span>
     </div>
     <p>Wordmark guidance: the wordmark "Orphograph" is set in the same serif used for page headings throughout the site. Where a substitute is required, any classical book-weight serif at a regular or medium weight is appropriate. No third-party brand-font reference is used.</p>
   </section>
@@ -133,15 +115,15 @@
 </main>
 
 <footer>
-  <div class="wrap" style="text-align:center;color:var(--muted);font-size:13px;padding:32px 0;">
+  <div class="wrap footer-inner">
     <p>Orphograph · An empirical notary.</p>
-    <p style="margin-top:8px;">
-      <a href="/" style="color:var(--muted);">Home</a> ·
-      <a href="/method" style="color:var(--muted);">Method</a> ·
-      <a href="/faq.html" style="color:var(--muted);">FAQ</a> ·
-      <a href="/about-the-office.html" style="color:var(--muted);">About the office</a> ·
-      <a href="/status.html" style="color:var(--muted);">Status</a> ·
-      <a href="/continuity.html" style="color:var(--muted);">Continuity</a>
+    <p class="mt-8">
+      <a href="/" class="link-muted">Home</a> ·
+      <a href="/method" class="link-muted">Method</a> ·
+      <a href="/faq.html" class="link-muted">FAQ</a> ·
+      <a href="/about-the-office.html" class="link-muted">About the office</a> ·
+      <a href="/status.html" class="link-muted">Status</a> ·
+      <a href="/continuity.html" class="link-muted">Continuity</a>
     </p>
   </div>
 </footer>

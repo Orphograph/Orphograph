@@ -14,21 +14,7 @@
 <meta property="og:image" content="https://orphograph.com/og-image.png?v=8">
 <link rel="canonical" href="https://orphograph.com/ios.html">
 <link rel="stylesheet" href="/index.css?v=14">
-<style>
-  .ios-wrap { max-width: 720px; margin: 0 auto; padding: 0 24px 64px; }
-  h1.ios-h1 { font-family: var(--serif); font-size: 38px; font-weight: 500; margin: 32px 0 6px; color: var(--ink); }
-  p.ios-lede { font-size: 17px; color: var(--ink-2); line-height: 1.65; margin: 0 0 24px; }
-  ol.ios-steps { padding-left: 22px; margin: 28px 0; color: var(--ink-2); line-height: 1.85; }
-  ol.ios-steps li { padding: 6px 0; }
-  ol.ios-steps code { background: rgba(74,154,115,0.08); padding: 2px 6px; border-radius: 3px; font-size: 0.9em; }
-  .ios-note { background: rgba(74,154,115,0.06); border-left: 3px solid var(--confirm); padding: 16px 20px; margin: 24px 0; border-radius: 0 6px 6px 0; color: var(--ink-2); }
-  .ios-note p { margin: 0; }
-  .ios-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 28px 0; }
-  .ios-grid .card { padding: 18px 20px; border: 1px solid var(--line-soft); border-radius: 8px; }
-  .ios-grid .card h3 { font-family: var(--serif); font-size: 18px; font-weight: 500; margin: 0 0 6px; color: var(--ink); }
-  .ios-grid .card p { font-size: 13.5px; color: var(--ink-2); line-height: 1.6; margin: 0; }
-  @media (max-width:560px) { .ios-grid { grid-template-columns: 1fr; } h1.ios-h1 { font-size: 30px; } }
-</style>
+<link rel="stylesheet" href="/ios.css?v=1">
 <meta name="copyright" content="© 2026 Orphograph. MIT — see /LICENSE">
 </head>
 <body>
@@ -49,7 +35,7 @@
 
 <main class="ios-wrap">
 
-  <p style="font-size:12px;letter-spacing:0.18em;text-transform:uppercase;color:var(--muted);margin:48px 0 8px;">iOS</p>
+  <p class="ios-eyebrow">iOS</p>
   <h1 class="ios-h1">Anchor from the share sheet.</h1>
   <p class="ios-lede">
     A small Shortcut installed on your iPhone or iPad places Orphograph next to AirDrop, Mail, and Messages in every share menu. From Photos, Files, Voice Memos, the camera roll — anywhere a share button appears — a single tap registers the file. The bytes themselves never leave the device.
@@ -66,7 +52,7 @@
     </div>
   </div>
 
-  <h2 style="font-family:var(--serif);font-size:24px;font-weight:500;margin-top:36px;color:var(--ink);">Installation</h2>
+  <h2 class="ios-h2">Installation</h2>
   <ol class="ios-steps">
     <li>On the iPhone, open <strong>Shortcuts</strong> and tap the plus icon to create a new Shortcut.</li>
     <li>Add the action <strong>Get File from Share Sheet</strong>. Set <em>Input Types</em> to <em>Files</em>.</li>
@@ -80,7 +66,7 @@
     <p>The Shortcut reads the file with native Apple cryptography on the device. The fingerprint is the only datum that crosses to Orphograph. The Shortcut can be inspected, edited, or removed at any moment; what it does is exactly what is written above.</p>
   </div>
 
-  <h2 style="font-family:var(--serif);font-size:24px;font-weight:500;margin-top:36px;color:var(--ink);">Using it</h2>
+  <h2 class="ios-h2">Using it</h2>
   <ol class="ios-steps">
     <li>Open Photos, Files, or any app with a share button.</li>
     <li>Select a file. Tap the share icon.</li>
@@ -88,25 +74,25 @@
     <li>To view the full receipt, visit <code>orphograph.com/r/&lt;identifier&gt;</code> at any time. The Shortcut can be extended to open this URL automatically.</li>
   </ol>
 
-  <h2 style="font-family:var(--serif);font-size:24px;font-weight:500;margin-top:36px;color:var(--ink);">A note on rate-limiting</h2>
-  <p style="color:var(--ink-2);line-height:1.7;">
-    The Shortcut respects the same tiering as the website. Free-tier devices may anchor three files per twenty-four hours; account-holders with a Pack or Standing Order anchor without restriction once an account API key is added to the Shortcut as an <code>X-Orpho-Api-Key</code> header. The key is created from the account page; see <a href="/account.html" style="color:var(--confirm);">Account</a>.
+  <h2 class="ios-h2">A note on rate-limiting</h2>
+  <p class="ios-body">
+    The Shortcut respects the same tiering as the website. Free-tier devices may anchor three files per twenty-four hours; account-holders with a Pack or Standing Order anchor without restriction once an account API key is added to the Shortcut as an <code>X-Orpho-Api-Key</code> header. The key is created from the account page; see <a href="/account.html" class="link-confirm">Account</a>.
   </p>
 
-  <p style="color:var(--muted);font-size:13px;margin-top:48px;">
+  <p class="ios-footer-note">
     An Android equivalent is being prepared as a Quick Tile and share-target progressive web app. Notice will be given on this page upon issuance.
   </p>
 </main>
 
 <footer>
-  <div class="wrap" style="text-align:center;color:var(--muted);font-size:13px;padding:32px 0;">
+  <div class="wrap footer-inner">
     <p>Orphograph · An empirical notary.</p>
-    <p style="margin-top:8px;">
-      <a href="/" style="color:var(--muted);">Home</a> ·
-      <a href="/method" style="color:var(--muted);">Method</a> ·
-      <a href="/faq.html" style="color:var(--muted);">FAQ</a> ·
-      <a href="/vs/c2pa.html" style="color:var(--muted);">Compare</a> ·
-      <a href="/terms.html" style="color:var(--muted);">Terms</a>
+    <p class="mt-8">
+      <a href="/" class="link-muted">Home</a> ·
+      <a href="/method" class="link-muted">Method</a> ·
+      <a href="/faq.html" class="link-muted">FAQ</a> ·
+      <a href="/vs/c2pa.html" class="link-muted">Compare</a> ·
+      <a href="/terms.html" class="link-muted">Terms</a>
     </p>
   </div>
 </footer>
