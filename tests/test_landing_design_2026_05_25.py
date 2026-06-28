@@ -290,5 +290,45 @@ class TestCryptoPlanDeepLink(unittest.TestCase):
         self.assertIn('plan === "pack_50" ? "pack_50" : "writer_pack"', js)
 
 
+class TestCspInlineConsolidation(unittest.TestCase):
+    """The live site serves `style-src 'self'` with NO 'unsafe-inline', so every
+    inline <style> block and inline `style=` attribute is blocked by the browser
+    and silently dropped. All landing-page CSS must live in the external
+    /index.css (which IS 'self'-allowed). This guards both the post-redesign
+    markup invariants and the CSP hygiene (no inline CSS may creep back in)."""
+
+    def test_lockup_wordmark_present(self):
+        self.assertIn('class="lockup-wordmark">Orphograph', _html())
+
+    def test_lockup_tagline_present(self):
+        self.assertIn("Proof &middot; Permanence", _html())
+
+    def test_old_lockup_taglines_gone(self):
+        html = _html()
+        self.assertNotIn("Strategy", html)
+        self.assertNotIn("Stewardship", html)
+
+    def test_raster_lockup_references_gone(self):
+        html = _html()
+        self.assertNotIn("lockup.png", html)
+        self.assertNotIn("lockup-text-img", html)
+
+    def test_assurances_row_replaces_chips_and_lede(self):
+        html = _html()
+        self.assertIn('class="assurances"', html)
+        self.assertEqual(html.count('class="assure"'), 3)
+        self.assertNotIn('class="lede"', html)
+        self.assertNotIn('class="chips"', html)
+
+    def test_no_inline_style_block(self):
+        """CSP hygiene: no <style> block may remain — style-src 'self' drops it."""
+        self.assertNotIn("<style>", _html())
+
+    def test_no_inline_style_attribute(self):
+        """CSP hygiene: no inline `style=` attribute may remain — it is blocked
+        by style-src 'self' (no 'unsafe-inline')."""
+        self.assertNotIn(" style=", _html())
+
+
 if __name__ == "__main__":
     unittest.main()
