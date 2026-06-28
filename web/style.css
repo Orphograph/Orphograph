@@ -1,3 +1,17 @@
+/* Self-hosted premium type — same faces as index.css so every page that
+   loads style.css (privacy, terms, account, about, buy, gift, signin, stats…)
+   renders in Fraunces (display) + Spectral (text) + IBM Plex Mono, matching
+   the homepage instead of falling back to a generic system sans. CSP-safe
+   (same-origin /fonts/, no third-party calls). */
+@font-face{font-family:"Fraunces";src:url("/fonts/Fraunces-300_900-i.woff2") format("woff2");font-weight:300 900;font-style:italic;font-display:swap;}
+@font-face{font-family:"Fraunces";src:url("/fonts/Fraunces-300_900.woff2") format("woff2");font-weight:300 900;font-style:normal;font-display:swap;}
+@font-face{font-family:"Spectral";src:url("/fonts/Spectral-400-i.woff2") format("woff2");font-weight:400;font-style:italic;font-display:swap;}
+@font-face{font-family:"Spectral";src:url("/fonts/Spectral-400.woff2") format("woff2");font-weight:400;font-style:normal;font-display:swap;}
+@font-face{font-family:"Spectral";src:url("/fonts/Spectral-500.woff2") format("woff2");font-weight:500;font-style:normal;font-display:swap;}
+@font-face{font-family:"Spectral";src:url("/fonts/Spectral-600.woff2") format("woff2");font-weight:600;font-style:normal;font-display:swap;}
+@font-face{font-family:"IBM Plex Mono";src:url("/fonts/IBMPlexMono-400.woff2") format("woff2");font-weight:400;font-style:normal;font-display:swap;}
+@font-face{font-family:"IBM Plex Mono";src:url("/fonts/IBMPlexMono-500.woff2") format("woff2");font-weight:500;font-style:normal;font-display:swap;}
+
 /* Cream-warm palette. Color psychology applied:
  *   - cream bg (#fdfaf3): trust, low arousal, "open invitation" — Mehta/Zhu 2009 on warm
  *     hues encouraging exploratory cognition vs cold colors triggering vigilance
@@ -20,7 +34,7 @@
   --accent-stroke: rgba(74,154,115,0.30);
   --warn: #c08a3e;
   --bad: #b25050;
-  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --mono: "IBM Plex Mono", "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 }
 
 * { box-sizing: border-box; }
@@ -29,12 +43,13 @@ html, body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Helvetica Neue", Arial, sans-serif;
+  font-family: "Spectral", "Iowan Old Style", "EB Garamond", Georgia, serif;
   font-weight: 400;
   letter-spacing: 0.005em;
   line-height: 1.65;
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
+  font-feature-settings: "liga" 1, "kern" 1, "onum" 1;
 }
 
 header {
@@ -48,7 +63,7 @@ header {
  * style.css does not define) so this matches the homepage on every page that
  * loads style.css without touching any other var(--serif)/var(--ink) usage. */
 .brand {
-  font-family: "EB Garamond", "Cormorant Garamond", "Iowan Old Style", Garamond, Georgia, serif;
+  font-family: "Fraunces", "EB Garamond", "Cormorant Garamond", Garamond, Georgia, serif;
   font-size: 18px;
   font-weight: 500;
   letter-spacing: 0.24em;
@@ -488,3 +503,11 @@ footer { text-align: center; color: var(--muted); padding: 24px; border-top: 1px
 }
 .ready-yes { color: var(--accent); font-weight: 500; }
 .ready-no { color: var(--muted); }
+
+/* Headings render in the Fraunces display face (matching the homepage),
+   not the Spectral body text. Appended last so it wins over the generic
+   h1/h2 rules above; font-weight is left to each heading's own rule. */
+h1, h2, h3, h4, h5, h6 {
+  font-family: "Fraunces", "EB Garamond", "Cormorant Garamond", Garamond, Georgia, serif;
+  letter-spacing: -0.01em;
+}
