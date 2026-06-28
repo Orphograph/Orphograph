@@ -43,9 +43,11 @@
     padding:9px 18px;border-radius:2px;border:1px solid var(--brass-bright);transition:.18s}
   .nav-cta:hover{background:transparent;color:var(--brass-bright)}
   @media(max-width:760px){
-    .nav-in{flex-wrap:wrap;height:auto;padding:11px 0}
+    .nav-in{flex-wrap:wrap;height:auto;padding-top:11px;padding-bottom:11px}
+    .brand{font-size:15px;letter-spacing:.08em;gap:8px}
+    .brand .mark{width:32px;height:32px}
     .nav-links{flex-basis:100%;order:3;gap:16px;flex-wrap:wrap;font-size:13px;margin-top:10px;padding-top:10px;border-top:1px solid var(--line-d)}
-    .nav-cta{order:2}
+    .nav-cta{order:2;padding:8px 14px;font-size:12.5px}
   }
 
   /* ---------- hero ---------- */
