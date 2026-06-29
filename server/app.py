@@ -375,9 +375,12 @@ def _build_sitemap() -> str:
         '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
     ]
     for path, prio in urls:
+        # Emit clean URLs (the canonical form) — strip the .html the source
+        # list still carries, so the sitemap matches the <link rel=canonical>.
+        loc = path[:-5] if path.endswith(".html") else path
         lines += [
             "  <url>",
-            f"    <loc>{site}{path}</loc>",
+            f"    <loc>{site}{loc}</loc>",
             f"    <priority>{prio}</priority>",
             "  </url>",
         ]
