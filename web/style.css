@@ -275,7 +275,13 @@ button:hover { background: var(--text); color: #fbf7ea; border-color: var(--text
 
 dl.kv { display: grid; grid-template-columns: 200px 1fr; gap: 10px 24px; margin: 16px 0; }
 dl.kv dt { color: var(--muted); font-size: 13px; padding-top: 2px; }
-dl.kv dd { margin: 0; font-size: 14px; word-break: break-all; }
+dl.kv dd { margin: 0; font-size: 14px; word-break: break-all; overflow-wrap: anywhere; }
+/* Mobile: stack to one full-width column so long mono values (hashes, ids,
+   addresses) wrap horizontally instead of one char per line in a crushed column. */
+@media (max-width: 600px) {
+  dl.kv { grid-template-columns: 1fr; gap: 0; }
+  dl.kv dt { padding-top: 14px; }
+}
 
 table.anchors { width: 100%; border-collapse: collapse; font-size: 14px; }
 table.anchors th, table.anchors td {
