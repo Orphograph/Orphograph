@@ -64,7 +64,6 @@
     <nav>
       <a href="/learn">Method</a>
       <a href="/faq">FAQ</a>
-      <a href="/vs/c2pa">vs. C2PA</a>
       <a href="/continuity">Continuity</a>
       <a href="/#tiers">Pricing</a>
       <a href="/signin">Sign in</a>
@@ -146,7 +145,6 @@ const sha512_hex = hex(s512);
   "calendars_total": M,
   "successes":       [ { "calendar": URL, "ots_path": "...", "ots_bytes": N }, ... ],
   "failures":        [ ... ],
-  "c2pa_manifest_hash": "&lt;optional 64-char SHA-256 hex&gt;",
   "private":         true | false,
   "owner_id":        "&lt;HMAC-keyed identifier, 16 hex chars, or null&gt;",
   "btc_pinned_at":   "&lt;UTC ISO-8601 once committed, else null&gt;",
@@ -172,12 +170,6 @@ const sha512_hex = hex(s512);
       <li>any OpenTimestamps client OR the 100-line MIT-licensed verifier at <a href="https://github.com/Orphograph/Orphograph">github.com/Orphograph/Orphograph</a> OR the single-file browser verifier at <a href="/verify-js">/verify-js.html</a>.</li>
     </ul>
     <p>Notably absent from this list is any call to Orphograph's servers. The office issues the instrument; the chain is the trust anchor. The continuity statement at <a href="/continuity">/continuity.html</a> expands on the operational implications.</p>
-  </section>
-
-  <section>
-    <h2>10 · C2PA coexistence mode</h2>
-    <div class="arch-rule"></div>
-    <p>When a customer holds a Coalition for Content Provenance and Authenticity (C2PA) manifest for the same file, the SHA-256 of that manifest may be recorded on the Orphograph receipt as <code>c2pa_manifest_hash</code>. The receipt then references both attestations without disclosing the content of either. The two systems are complementary: C2PA documents how an asset was captured and edited; Orphograph attests when its fingerprint existed. A reader presented with both has the complete provenance picture; a reader presented with only Orphograph has the date-of-existence; a reader presented with only C2PA has the chain of capture.</p>
   </section>
 
   <section>
@@ -211,7 +203,6 @@ const sha512_hex = hex(s512);
     <div class="arch-rule"></div>
     <ul>
       <li><a href="/verify-js">Standalone independent verifier (single HTML file)</a></li>
-      <li><a href="/vs/c2pa">Comparison with C2PA</a></li>
       <li><a href="/faq">Frequently asked</a></li>
       <li><a href="/continuity">Continuity statement</a></li>
       <li><a href="/mcp">Model Context Protocol server</a></li>
@@ -232,7 +223,6 @@ const sha512_hex = hex(s512);
     <p style="margin-top:8px;">
       <a href="/" style="color:var(--muted);">Home</a> ·
       <a href="/faq" style="color:var(--muted);">FAQ</a> ·
-      <a href="/vs/c2pa" style="color:var(--muted);">Compare</a> ·
       <a href="/roadmap" style="color:var(--muted);">Roadmap</a> ·
       <a href="/continuity" style="color:var(--muted);">Continuity</a>
     </p>
