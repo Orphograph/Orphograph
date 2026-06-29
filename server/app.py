@@ -394,8 +394,15 @@ def _serve_static(handler: BaseHTTPRequestHandler, rel_path: str) -> None:
         handler.send_error(403, "forbidden")
         return
     # Directory-style paths (e.g. /verify/) → resolve to <dir>/index.html.
+    # But a directory with NO index.html that has a sibling <dir>.html
+    # (e.g. web/mcp/ alongside web/mcp.html, web/press-kit/ alongside
+    # web/press-kit.html) would otherwise 404 the clean URL /mcp. Prefer the
+    # .html page in that case; the directory's own files stay reachable at
+    # /<dir>/<file>.
     if target.is_dir():
-        target = target / "index.html"
+        idx = target / "index.html"
+        sibling = target.with_suffix(".html")
+        target = idx if idx.is_file() else (sibling if sibling.is_file() else idx)
     # Clean URLs: an extensionless path (/faq, /method/architecture) serves the
     # matching <path>.html. The .html form keeps working too (backward-compatible
     # bookmarks/links); this only triggers when the bare path is not itself a
@@ -829,6 +836,12 @@ class Handler(BaseHTTPRequestHandler):
             slug = rest.rstrip("/")
             if not re.match(r"^[a-z0-9-]{1,80}$", slug):
                 self.send_error(400, "invalid slug")
+                return
+            # Clean URL for a static HTML post: /blog/<slug> serves
+            # web/blog/<slug>.html when it exists (this is what the on-site
+            # links now use). Fall back to the markdown renderer otherwise.
+            if (WEB_DIR / "blog" / (slug + ".html")).is_file():
+                _serve_static(self, "/blog/" + slug + ".html")
                 return
             html_page = blog.render_post_html(slug)
             if not html_page:

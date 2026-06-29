@@ -638,7 +638,7 @@ print(receipt["status"], receipt.get("btc_pinned_at"))</pre>
     <strong>Trust-minimized verification belongs offline.</strong>
     For evidence-grade verification, ship the receipt JSON + the five
     <code>.ots</code> files through the open-source
-    <a href="https://github.com/orphograph/orphograph">verify_cli.py</a>
+    <a href="https://github.com/Orphograph/Orphograph">verify_cli.py</a>
     against your local copy of the file. This endpoint is a convenience
     for live integrations — it asks <em>us</em>; the CLI asks <em>Bitcoin</em>.
   </div>
@@ -988,14 +988,14 @@ Accept: image/svg+xml</pre>
   </li>
   <li>
     <strong>Lightroom plugin</strong> —
-    <a href="https://github.com/orphograph/orphograph/tree/main/lightroom-plugin">github.com/orphograph/orphograph (<code>lightroom-plugin/</code>)</a>.
+    <a href="https://github.com/Orphograph/Orphograph/tree/master/lightroom-plugin">github.com/Orphograph/Orphograph (<code>lightroom-plugin/</code>)</a>.
     Anchors RAW and exported JPGs at export time from inside Adobe
     Lightroom Classic. SHA-256 is computed on the export filename's
     bytes locally; only the hash reaches the API.
   </li>
   <li>
     <strong>Capture daemon</strong> —
-    <a href="https://github.com/orphograph/orphograph/tree/main/capture">github.com/orphograph/orphograph (<code>capture/</code>)</a>.
+    <a href="https://github.com/Orphograph/Orphograph/tree/master/capture">github.com/Orphograph/Orphograph (<code>capture/</code>)</a>.
     Headless watcher that anchors files as they appear in a folder —
     DSLR tethering target, screenshot folder, recording dump. Targets
     the Creator tier's capture-time provenance use case.
@@ -1004,7 +1004,7 @@ Accept: image/svg+xml</pre>
 <p>
   The standalone open-source verifier — useful when you need to verify
   a receipt without calling us, or after we are gone — lives at
-  <a href="https://github.com/orphograph/orphograph">github.com/orphograph/orphograph</a>
+  <a href="https://github.com/Orphograph/Orphograph">github.com/Orphograph/Orphograph</a>
   under <code>server/verify_cli.py</code>. Zero dependencies, stdlib only.
 </p>
 

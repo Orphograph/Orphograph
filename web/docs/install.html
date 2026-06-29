@@ -94,7 +94,7 @@ root_hex   = result["root_hex"]
 ok = verify_folder("/path/to/folder", receipt_id)
 assert ok is True
 </code></pre>
-    <p>File bytes are not transmitted. The library streams each file through SHA-256 in one-megabyte chunks and submits only the manifest (paths, per-file digests, leaf hashes, and the thirty-two-byte root). Full reference is in the <a href="https://github.com/Orphograph/Orphograph/tree/main/sdk-python">Python SDK README</a>.</p>
+    <p>File bytes are not transmitted. The library streams each file through SHA-256 in one-megabyte chunks and submits only the manifest (paths, per-file digests, leaf hashes, and the thirty-two-byte root). Full reference is in the <a href="https://github.com/Orphograph/Orphograph/tree/master/sdk-python">Python SDK README</a>.</p>
 
     <details class="legal">
       <summary>Developer detail · arguments, environment, inclusion proofs</summary>
@@ -140,7 +140,7 @@ const ok = await verifyFolder("/path/to/folder", receipt_id, {
   serverUrl: "https://orphograph.com",
 });
 </code></pre>
-    <p>The TypeScript implementation is bit-for-bit compatible with the Python module and the browser implementation. Full reference is in the <a href="https://github.com/Orphograph/Orphograph/tree/main/sdk-node">Node SDK README</a>.</p>
+    <p>The TypeScript implementation is bit-for-bit compatible with the Python module and the browser implementation. Full reference is in the <a href="https://github.com/Orphograph/Orphograph/tree/master/sdk-node">Node SDK README</a>.</p>
 
     <details class="legal">
       <summary>Developer detail · CLI binary, inclusion proofs</summary>
