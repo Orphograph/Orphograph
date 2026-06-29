@@ -279,8 +279,13 @@ dl.kv dd { margin: 0; font-size: 14px; word-break: break-all; overflow-wrap: any
 /* Mobile: stack to one full-width column so long mono values (hashes, ids,
    addresses) wrap horizontally instead of one char per line in a crushed column. */
 @media (max-width: 600px) {
-  dl.kv { grid-template-columns: 1fr; gap: 0; }
-  dl.kv dt { padding-top: 14px; }
+  dl.kv, .receipt dl { grid-template-columns: 1fr; gap: 0; }
+  dl.kv dt, .receipt dl dt { padding-top: 14px; }
+  /* Header: tighten padding and keep nav labels intact (no mid-label wrap like
+     "print / save as" + "PDF"); let the header wrap as whole items if needed. */
+  header { padding: 16px 18px; flex-wrap: wrap; gap: 4px 14px; }
+  header nav { font-size: 13.5px; display: flex; gap: 14px; flex-wrap: wrap; }
+  header nav a { white-space: nowrap; }
 }
 
 table.anchors { width: 100%; border-collapse: collapse; font-size: 14px; }
