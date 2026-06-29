@@ -43,7 +43,16 @@
 
 dl.kv { display: grid; grid-template-columns: 220px 1fr; gap: 12px 24px; margin: 0 0 32px; }
 dl.kv dt { color: var(--muted); font-size: 13px; padding-top: 2px; }
-dl.kv dd { margin: 0; font-size: 14px; word-break: break-all; line-height: 1.5; }
+dl.kv dd { margin: 0; font-size: 14px; word-break: break-all; overflow-wrap: anywhere; line-height: 1.5; }
+/* Mobile: the fixed 220px label column crushes the value to ~1 char wide,
+   wrapping the receipt ID / hash one character per line. Stack to a single
+   full-width column so the label sits above the value and the value wraps
+   horizontally across the full width. */
+@media (max-width: 600px) {
+  dl.kv { grid-template-columns: 1fr; gap: 0; }
+  dl.kv dt { padding-top: 14px; }
+  dl.kv dd { padding-bottom: 0; }
+}
 
 .checks { margin-bottom: 32px; }
 .checks h2 { font-size: 16px; font-weight: 500; margin: 0 0 12px; }
