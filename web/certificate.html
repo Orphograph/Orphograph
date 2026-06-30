@@ -181,6 +181,17 @@
     <button type="button" id="copy-link-btn" class="share-btn share-btn-ink">Copy link</button>
     <button type="button" id="native-share-btn" class="share-btn share-btn-outline" hidden>Share…</button>
   </div>
+
+  <details class="embed-details">
+    <summary class="embed-summary">Embed a verifiable dataset badge</summary>
+    <div class="embed-body">
+      <p class="muted small embed-preview-label">A live "dataset anchored" badge for your repo README, dataset card, or model page — updates as the Bitcoin pin lands:</p>
+      <p class="embed-preview-img-wrap"><img id="badge-preview" src="" alt="Orphograph dataset anchor badge" class="embed-preview-img"></p>
+      <p class="muted small embed-paste-label">Paste this HTML anywhere:</p>
+      <textarea id="embed-code" readonly rows="3" class="embed-code-area"></textarea>
+      <p class="embed-copy-wrap"><button type="button" id="copy-embed-btn" class="share-btn share-btn-outline-sm">Copy embed code</button></p>
+    </div>
+  </details>
 </aside>
 
 <p id="err" class="muted no-print" hidden></p>
@@ -193,7 +204,7 @@
   </small>
 </footer>
 
-<script src="/certificate.js?v=2"></script>
+<script src="/certificate.js?v=3"></script>
 <script src="/assets/event.js" defer></script>
 </body>
 </html>

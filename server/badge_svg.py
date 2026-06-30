@@ -99,15 +99,22 @@ def render(receipt: dict, *, base_url: str = "") -> str:
     rid = receipt.get("receipt_id", "") if isinstance(receipt, dict) else ""
     rid = rid if isinstance(rid, str) else ""
     created_at = receipt.get("created_at", "") if isinstance(receipt, dict) else ""
+    # Folder (dataset) receipts get a dataset-aware subtitle and link straight
+    # to the certificate view. kind + leaf_count are non-PII (no filenames,
+    # hash, or email), so surfacing them respects the privacy contract above.
+    is_folder = isinstance(receipt, dict) and receipt.get("kind") == "folder"
+    leaf_count = receipt.get("leaf_count") if isinstance(receipt, dict) else None
 
     short_id = _short_id(rid)
     date = _short_date(created_at)
 
-    # Build the link target. If base_url is provided we honor it; otherwise
+    # Build the link target. Folder receipts point at /certificate/<id>;
+    # single-file receipts at /r/<id>. Honor base_url when provided, else
     # render a relative URL so the badge works regardless of host.
-    link_target = (base_url.rstrip("/") + "/r/" + rid) if rid else (base_url.rstrip("/") + "/")
+    page = ("/certificate/" if is_folder else "/r/") + rid
+    link_target = (base_url.rstrip("/") + page) if rid else (base_url.rstrip("/") + "/")
     if not base_url:
-        link_target = ("/r/" + rid) if rid else "/"
+        link_target = page if rid else "/"
 
     # All user-derived strings are escaped before substitution. The
     # palette constants and the layout numerics are static and safe.
@@ -115,9 +122,12 @@ def render(receipt: dict, *, base_url: str = "") -> str:
     safe_id = _xml_escape(short_id)
     safe_date = _xml_escape(date)
 
-    subtitle = "anchored to Bitcoin"
-    if safe_date:
+    if is_folder and isinstance(leaf_count, int) and leaf_count > 0:
+        subtitle = f"dataset &middot; {leaf_count} files &middot; anchored to Bitcoin"
+    elif safe_date:
         subtitle = f"anchored to Bitcoin &middot; {safe_date}"
+    else:
+        subtitle = "anchored to Bitcoin"
 
     parts: list[str] = []
     parts.append('<?xml version="1.0" encoding="UTF-8"?>')

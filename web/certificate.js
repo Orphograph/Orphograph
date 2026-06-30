@@ -386,6 +386,23 @@ function initShareBlock(rid) {
       try { document.execCommand("copy"); flash(copyBtn, "Copy link"); } catch (__) { urlField.focus(); }
     }
   });
+
+  // Embeddable dataset badge — the server renders a folder-aware
+  // "dataset · N files · anchored to Bitcoin" SVG that links here.
+  const badgeUrl = window.location.origin + "/api/badge/" + encodeURIComponent(rid) + ".svg";
+  const badgeImg = $("#badge-preview"), embedTa = $("#embed-code"), copyEmbedBtn = $("#copy-embed-btn");
+  if (badgeImg) badgeImg.src = badgeUrl;
+  if (embedTa) embedTa.value =
+    '<a href="' + receiptUrl + '" rel="noopener" aria-label="Verifiable dataset provenance">\n' +
+    '  <img src="' + badgeUrl + '" alt="Dataset anchored to Bitcoin — Orphograph" height="40">\n' +
+    '</a>';
+  if (copyEmbedBtn && embedTa) {
+    copyEmbedBtn.addEventListener("click", async () => {
+      try { await navigator.clipboard.writeText(embedTa.value); flash(copyEmbedBtn, "Copy embed code"); }
+      catch (_) { embedTa.select(); try { document.execCommand("copy"); flash(copyEmbedBtn, "Copy embed code"); } catch (__) {} }
+    });
+  }
+
   if (nativeBtn && "share" in navigator) {
     nativeBtn.hidden = false;
     nativeBtn.addEventListener("click", async () => {
