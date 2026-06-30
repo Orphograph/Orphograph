@@ -101,7 +101,8 @@ def _total_bytes(leaves: list[dict]) -> int:
 
 # --------------------------------------------------------------------------- anchor
 
-def _post_manifest(api: str, manifest: dict, label: str | None) -> dict:
+def _post_manifest(api: str, manifest: dict, label: str | None,
+                   public_paths: bool = False) -> dict:
     """POST the manifest (NOT the data) to /api/anchor_folder; return the receipt.
 
     Raises on any network/HTTP error so the caller can fall back to offline.
@@ -109,6 +110,8 @@ def _post_manifest(api: str, manifest: dict, label: str | None) -> dict:
     body = {"manifest": manifest}
     if label:
         body["client_label"] = label
+    if public_paths:
+        body["paths_public"] = True
     data = json.dumps(body).encode("utf-8")
     # Cloudflare (Error 1010) blocks the default Python-urllib User-Agent. Present
     # the same client signature the browser frontend uses to reach this endpoint.
@@ -155,7 +158,8 @@ def cmd_anchor(args: argparse.Namespace) -> int:
         anchor_error = "skipped (--offline); root not yet anchored"
     else:
         try:
-            receipt = _post_manifest(args.api, manifest, args.label or args.name)
+            receipt = _post_manifest(args.api, manifest, args.label or args.name,
+                                     public_paths=getattr(args, "public_paths", False))
         except urllib.error.HTTPError as e:
             anchor_error = f"HTTP {e.code}: {e.read().decode('utf-8', 'replace')[:200]}"
         except (urllib.error.URLError, TimeoutError, OSError) as e:
@@ -538,6 +542,8 @@ def main(argv: list[str] | None = None) -> int:
     a.add_argument("--label", help="optional client_label stored on the receipt")
     a.add_argument("--offline", action="store_true", help="do not anchor; nothing leaves the machine")
     a.add_argument("--pdf", action="store_true", help="also write certificate.pdf (portable, stdlib-only)")
+    a.add_argument("--public-paths", dest="public_paths", action="store_true",
+                   help="publish file paths so a shared certificate shows them (default: owner-only)")
     a.set_defaults(func=cmd_anchor)
 
     v = sub.add_parser("verify", help="re-verify a bundle against its certificate or a live receipt")

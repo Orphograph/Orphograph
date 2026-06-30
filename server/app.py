@@ -2804,6 +2804,10 @@ class Handler(BaseHTTPRequestHandler):
         else:
             source = "free"
         want_private = bool(payload.get("private", False)) and subscription_active
+        # Opt-in: publish the manifest's file paths so a shared certificate
+        # renders them to anyone (default keeps paths owner-only). Independent
+        # of `private`, which gates the whole receipt to its owner.
+        want_public_paths = bool(payload.get("paths_public", False))
         try:
             record = engine.anchor_hash(
                 root_hex,
@@ -2841,6 +2845,8 @@ class Handler(BaseHTTPRequestHandler):
             on_disk["kind"] = "folder"
             on_disk["leaf_count"] = len(leaves)
             on_disk["merkle_algorithm"] = merkle.ALGORITHM
+            if want_public_paths:
+                on_disk["paths_public"] = True
             if sig_verified is not None:
                 on_disk["signature_verified"] = sig_verified
                 on_disk["signer_kid"] = signer_kid
@@ -2860,6 +2866,8 @@ class Handler(BaseHTTPRequestHandler):
         if sig_verified is not None:
             response_body["signature_verified"] = sig_verified
             response_body["signer_kid"] = signer_kid
+        if want_public_paths:
+            response_body["paths_public"] = True
         _json_response(self, 200, response_body)
 
     def _handle_verify_folder(self, rid: str) -> None:

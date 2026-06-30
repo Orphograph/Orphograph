@@ -224,6 +224,42 @@ class TestFolderAnchorFlow(unittest.TestCase):
         self.assertEqual(d["manifest"]["root_hex"], d["receipt"]["hash_hex"])
         self.assertTrue(all(c["ok"] for c in d["receipt"]["checks"]))
 
+    def test_paths_public_opt_in_at_anchor_time(self):
+        # Default anchor: a non-owner sees redacted leaf paths.
+        folder_a = Path(tempfile.mkdtemp())
+        (folder_a / "private-a.txt").write_bytes(b"default redacted content")
+        (folder_a / "private-b.txt").write_bytes(b"more default content")
+        tree_a = self.merkle.MerkleTree.from_folder(folder_a)
+        req = urllib.request.Request(
+            f"{self._base}/api/anchor_folder",
+            data=json.dumps(tree_a.manifest()).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+        )
+        rid_a = json.loads(urllib.request.urlopen(req, timeout=10).read())["receipt_id"]
+        vf_a = json.loads(urllib.request.urlopen(
+            f"{self._base}/api/verify_folder/{rid_a}", timeout=5).read())
+        self.assertTrue(vf_a["manifest"].get("paths_redacted"))
+
+        # paths_public anchor (wrapped body): NOT redacted, flag echoed + stored.
+        folder_b = Path(tempfile.mkdtemp())
+        (folder_b / "public-x.txt").write_bytes(b"published path content")
+        (folder_b / "public-y.txt").write_bytes(b"second published file")
+        tree_b = self.merkle.MerkleTree.from_folder(folder_b)
+        body = {"manifest": tree_b.manifest(), "paths_public": True}
+        req = urllib.request.Request(
+            f"{self._base}/api/anchor_folder",
+            data=json.dumps(body).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+        )
+        resp_b = json.loads(urllib.request.urlopen(req, timeout=10).read())
+        self.assertTrue(resp_b.get("paths_public"))
+        rid_b = resp_b["receipt_id"]
+        vf_b = json.loads(urllib.request.urlopen(
+            f"{self._base}/api/verify_folder/{rid_b}", timeout=5).read())
+        self.assertNotIn("paths_redacted", vf_b["manifest"])
+        self.assertTrue(vf_b["receipt"].get("paths_public"))
+        self.assertIsNotNone(vf_b["manifest"]["leaves"][0].get("path"))
+
     def test_bad_manifest_rejected(self):
         bad = {"algorithm": "wrong-algo", "version": 1, "root_hex": "00" * 32, "leaves": []}
         req = urllib.request.Request(
