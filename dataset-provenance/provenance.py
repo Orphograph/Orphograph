@@ -61,6 +61,11 @@ sys.path.insert(0, str(_REPO / "server"))
 import merkle  # noqa: E402  (path set above)
 
 DEFAULT_API = "https://orphograph.com"
+# Cloudflare (Error 1010) blocks the bare Python-urllib User-Agent; present the
+# same client signature the browser uses.
+_BROWSER_UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+               "AppleWebKit/537.36 (KHTML, like Gecko) "
+               "Chrome/124.0.0.0 Safari/537.36")
 
 
 # --------------------------------------------------------------------------- categorise
@@ -320,19 +325,61 @@ def _render_certificate_text(cert: dict) -> str:
 
 # --------------------------------------------------------------------------- verify
 
-def cmd_verify(args: argparse.Namespace) -> int:
-    cert_path = Path(args.cert).resolve()
-    bundle = Path(args.bundle).resolve()
+def _fetch_receipt_root(api: str, rid: str) -> "tuple[str | None, str | None]":
+    """Fetch a live receipt and return (root_hex, error).
+
+    Only the receipt id crosses the network — never the bundle. Confirms the
+    receipt exists and is a folder (dataset) anchor, and returns its Merkle
+    root (the receipt's hash_hex).
+    """
+    url = f"{api.rstrip('/')}/api/receipt/{rid}"
+    req = urllib.request.Request(
+        url, headers={"User-Agent": _BROWSER_UA, "Accept": "application/json"})
     try:
-        cert = json.loads(cert_path.read_text())
-    except (OSError, json.JSONDecodeError) as e:
-        print(f"error: could not read certificate: {e}", file=sys.stderr)
-        return 2
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            rec = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return None, f"receipt not found: {rid}"
+        return None, f"HTTP {e.code} fetching receipt {rid}"
+    except (urllib.error.URLError, TimeoutError, OSError, json.JSONDecodeError) as e:
+        return None, f"could not fetch receipt {rid}: {e}"
+    if rec.get("found") is False:
+        return None, f"receipt not found: {rid}"
+    kind = rec.get("kind")
+    if kind and kind != "folder":
+        return None, f"receipt {rid} is a {kind} receipt, not a dataset (folder) anchor"
+    root = rec.get("hash_hex")
+    if not root:
+        return None, f"receipt {rid} has no root hash"
+    return root, None
+
+
+def cmd_verify(args: argparse.Namespace) -> int:
+    bundle = Path(args.bundle).resolve()
     if not bundle.is_dir():
         print(f"error: --bundle is not a directory: {bundle}", file=sys.stderr)
         return 2
 
-    expected_root = cert.get("merkle_root")
+    # The expected root comes from a local certificate OR a live anchored
+    # receipt (only the receipt id crosses the network; the bundle never does).
+    cert_path = None
+    if args.receipt:
+        expected_root, err = _fetch_receipt_root(args.api, args.receipt)
+        if err:
+            print(f"error: {err}", file=sys.stderr)
+            return 2
+        source = f"live receipt {args.receipt}"
+    else:
+        cert_path = Path(args.cert).resolve()
+        try:
+            cert = json.loads(cert_path.read_text())
+        except (OSError, json.JSONDecodeError) as e:
+            print(f"error: could not read certificate: {e}", file=sys.stderr)
+            return 2
+        expected_root = cert.get("merkle_root")
+        source = "certificate"
+
     ok = True
 
     # 1. Rebuild the Merkle root from the bundle on disk.
@@ -343,17 +390,17 @@ def cmd_verify(args: argparse.Namespace) -> int:
         return 1
     recomputed = tree.root_hex()
     if recomputed == expected_root:
-        print(f"PASS  bundle integrity — Merkle root matches certificate")
+        print(f"PASS  bundle integrity — Merkle root matches {source}")
         print(f"      {recomputed}")
     else:
         ok = False
         print(f"FAIL  bundle integrity — root MISMATCH (a file changed/added/removed)")
-        print(f"      certificate: {expected_root}")
+        print(f"      {source}: {expected_root}")
         print(f"      recomputed:  {recomputed}")
 
-    # 2. Confirm the sibling manifest is internally consistent, if present.
-    mpath = cert_path.parent / "manifest.json"
-    if mpath.exists():
+    # 2. Confirm the sibling manifest is internally consistent (cert mode only).
+    mpath = cert_path.parent / "manifest.json" if cert_path is not None else None
+    if mpath is not None and mpath.exists():
         try:
             mtree = merkle.MerkleTree.from_manifest(json.loads(mpath.read_text()))
             tag = "matches" if mtree.root_hex() == expected_root else "DIFFERS from cert"
@@ -418,10 +465,13 @@ def main(argv: list[str] | None = None) -> int:
     a.add_argument("--offline", action="store_true", help="do not anchor; nothing leaves the machine")
     a.set_defaults(func=cmd_anchor)
 
-    v = sub.add_parser("verify", help="re-verify a bundle against its certificate")
-    v.add_argument("--cert", required=True, help="path to certificate.json")
+    v = sub.add_parser("verify", help="re-verify a bundle against its certificate or a live receipt")
+    src = v.add_mutually_exclusive_group(required=True)
+    src.add_argument("--cert", help="path to a local certificate.json")
+    src.add_argument("--receipt", help="verify against a live anchored receipt id (no local cert needed)")
     v.add_argument("--bundle", required=True, help="bundle dir to re-hash")
     v.add_argument("--file", help="optional: prove one file (relpath) belongs to the set")
+    v.add_argument("--api", default=DEFAULT_API, help=f"Orphograph base URL for --receipt (default {DEFAULT_API})")
     v.set_defaults(func=cmd_verify)
 
     args = p.parse_args(argv)
