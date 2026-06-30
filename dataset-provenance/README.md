@@ -93,7 +93,9 @@ a root mismatch, which is exactly the audit failure this is meant to catch.
 
 Every folder receipt now has a **hosted, shareable certificate page** at
 `orphograph.com/certificate/<receipt-id>`. `anchor` prints the URL, and the
-certificate's `anchor.certificate_url` field records it. The page renders the
+certificate's `anchor.certificate_url` field records it. A permanent live
+example (this repo's `sample-dataset`, Bitcoin-anchored) renders at
+[`/certificate/DatasetProvenanceSample`](https://orphograph.com/certificate/DatasetProvenanceSample). The page renders the
 same content as `certificate.txt` — summary, the certifies/does-not-certify
 scope, license/consent documents, the acquisition log, and the full file
 manifest — plus:

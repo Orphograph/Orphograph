@@ -329,6 +329,11 @@ def verify_receipt(receipt_id: str) -> dict:
         out["leaf_count"] = record["leaf_count"]
     if record.get("merkle_algorithm"):
         out["merkle_algorithm"] = record["merkle_algorithm"]
+    # Opt-in: a folder receipt whose owner has chosen to publish file paths
+    # (e.g. a shareable provenance certificate) skips the default path
+    # redaction in /api/verify_folder. Absent/false → paths stay owner-only.
+    if record.get("paths_public"):
+        out["paths_public"] = True
     # Optional Ed25519 authorship signature. Only surface when a signature
     # was actually presented at anchor time — single-file receipts and folder
     # anchors with no signature remain shape-stable.

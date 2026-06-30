@@ -195,6 +195,30 @@ class TestFolderAnchorFlow(unittest.TestCase):
         except urllib.error.HTTPError as e:
             self.assertEqual(e.code, 400)
 
+    def test_sample_folder_receipt_seeds_and_renders_full(self):
+        # The permanent dataset-provenance sample seeds from web/sample-folder/
+        # and renders a full (non-redacted) certificate publicly via paths_public.
+        import app as _app
+        _app._seed_sample_folder_receipt()
+        rid = "DatasetProvenanceSample"
+
+        resp = urllib.request.urlopen(f"{self._base}/certificate/{rid}", timeout=5)
+        self.assertEqual(resp.status, 200)
+        self.assertIn(rid, resp.read().decode("utf-8"))
+
+        resp = urllib.request.urlopen(f"{self._base}/api/verify_folder/{rid}", timeout=5)
+        d = json.loads(resp.read())
+        self.assertEqual(d["receipt"]["kind"], "folder")
+        self.assertTrue(d["receipt"].get("paths_public"))
+        self.assertEqual(d["receipt"]["leaf_count"], 8)
+        # paths_public => the manifest is NOT redacted; real paths are visible.
+        self.assertNotIn("paths_redacted", d["manifest"])
+        self.assertEqual(len(d["manifest"]["leaves"]), 8)
+        self.assertIsNotNone(d["manifest"]["leaves"][0].get("path"))
+        # The committed .ots proofs validate against the anchored root.
+        self.assertEqual(d["manifest"]["root_hex"], d["receipt"]["hash_hex"])
+        self.assertTrue(all(c["ok"] for c in d["receipt"]["checks"]))
+
     def test_bad_manifest_rejected(self):
         bad = {"algorithm": "wrong-algo", "version": 1, "root_hex": "00" * 32, "leaves": []}
         req = urllib.request.Request(

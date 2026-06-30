@@ -75,7 +75,7 @@
     <div class="arch-rule"></div>
     <p><strong>1 — Assemble a bundle.</strong> A folder with your dataset under <code>data/</code>, your license and consent documents under <code>licenses/</code>, and an <code>acquisition_log</code> describing where each source came from, when, and under what terms.</p>
     <p><strong>2 — Hash it locally.</strong> Every file is SHA-256'd on your machine and combined into an RFC&nbsp;6962 Merkle tree. Only the manifest — relative paths and digests and the root — is sent to be anchored. <strong>The dataset itself never leaves your environment</strong>; an air-gapped mode anchors nothing at all.</p>
-    <p><strong>3 — Receive one receipt and one certificate.</strong> The Merkle root is anchored to Bitcoin via OpenTimestamps. You get a hosted, shareable provenance certificate — summary, the honest scope above, your license and acquisition-log documents, the full file manifest, and a verifier where an auditor can drop any file and confirm in their own browser that it belongs to the set.</p>
+    <p><strong>3 — Receive one receipt and one certificate.</strong> The Merkle root is anchored to Bitcoin via OpenTimestamps. You get a hosted, shareable provenance certificate — summary, the honest scope above, your license and acquisition-log documents, the full file manifest, and a verifier where an auditor can drop any file and confirm in their own browser that it belongs to the set. <a href="/certificate/DatasetProvenanceSample">See a live sample certificate →</a></p>
   </section>
 
   <section>
@@ -106,8 +106,8 @@ python3 provenance.py verify --cert out/certificate.json --bundle ./my-dataset \
     <h2>Anchor a dataset, or verify one.</h2>
     <div class="ns-row">
       <a href="/#drop" class="ns-btn ns-primary">Anchor a folder →</a>
+      <a href="/certificate/DatasetProvenanceSample" class="ns-btn ns-secondary">See a live certificate →</a>
       <a href="/verify/" class="ns-btn ns-secondary">Run the open-source verifier →</a>
-      <a href="/learn" class="ns-btn ns-secondary">How the method works →</a>
     </div>
   </aside>
 

@@ -1,0 +1,56 @@
+{
+  "algorithm": "orphograph-merkle-v1-rfc6962",
+  "version": 1,
+  "root_hex": "a51e140920f3a874ef2348c1bd7e0c9db1c28aa52284799e1863e1e2119eb891",
+  "leaves": [
+    {
+      "path": "acquisition_log.json",
+      "file_sha256_hex": "e9ed4c80b0563fc635d2c15dac7366034a6726c30f1e05971075744757e58a37",
+      "leaf_hex": "6047a01ad6f7836b4954aa33e94b51d43464e3e7e08b8afcab7e8840a6483970",
+      "size_bytes": 488
+    },
+    {
+      "path": "data/README.md",
+      "file_sha256_hex": "7976ed1d4673b2761e5f0a7c7d675e7cac1d59bd21c6b4f3ea22df96152f22a2",
+      "leaf_hex": "a96d791ed72e9bba60bd45d63817b1b7c5446bfe9213cced2f28966f8a717dda",
+      "size_bytes": 92
+    },
+    {
+      "path": "data/images/cat_001.jpg",
+      "file_sha256_hex": "f328d7035b35a760e84c2eff723bf1bde9c4c261c386897715b4df9457651ca3",
+      "leaf_hex": "0db96f4bb69ba58674fc2522e6361f4485534b8d27dfac367b8dcfef9b5783f9",
+      "size_bytes": 53
+    },
+    {
+      "path": "data/images/cat_002.jpg",
+      "file_sha256_hex": "58a8df9efed4357497c0b3d34fad16e83085e412bbaeb99edf2ce81ee26d53c0",
+      "leaf_hex": "47d367aeeae1e61155b37696e0c90c4c4dd8980afa5b07f5489c14220bdb541a",
+      "size_bytes": 53
+    },
+    {
+      "path": "data/images/dog_001.jpg",
+      "file_sha256_hex": "9ff48aab1f71d7e7afd74ba60c4b2b2f04ac93249ff9b82f45cae4737f9086cf",
+      "leaf_hex": "4288bee95d6153fe72333e8dacce57d6b0ce5feb94d1c1c648b8e7b277089a6b",
+      "size_bytes": 53
+    },
+    {
+      "path": "data/labels/labels.csv",
+      "file_sha256_hex": "abe930d9b3280b0d83be91b85ca7e44c2b130aa533914986e924c8479874f9a4",
+      "leaf_hex": "70a16c8ee70b8cc62ebf7b2e76ccbd3ea38b0707456265b87faf0b0631321cbc",
+      "size_bytes": 106
+    },
+    {
+      "path": "licenses/cc-by-4.0.txt",
+      "file_sha256_hex": "15d02e8e56f0101a2f76dc6197b81d9479053398a28ac8647d01d8a7678aeb15",
+      "leaf_hex": "4b022f8e042561b4cb554765734ade8b78c3c0136e80994d9460fc0a3dc75abf",
+      "size_bytes": 138
+    },
+    {
+      "path": "licenses/terms_of_use.txt",
+      "file_sha256_hex": "688e5742c1bb38237045a8e35ebcd1b7287d6dce7fd2cdabb42b785b07e8bb0a",
+      "leaf_hex": "9a87baa5364117be0df72e9a37877efa7e981a7846d4258bcde0057412c16e50",
+      "size_bytes": 116
+    }
+  ],
+  "receipt_id": "DatasetProvenanceSample"
+}

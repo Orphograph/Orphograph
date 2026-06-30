@@ -1,0 +1,7 @@
+{
+  "receipt_id": "DatasetProvenanceSample",
+  "hash_hex": "a51e140920f3a874ef2348c1bd7e0c9db1c28aa52284799e1863e1e2119eb891",
+  "kind": "folder",
+  "leaf_count": 8,
+  "description": "Permanent dataset-provenance sample: an 8-file bundle (data + licenses + acquisition log) anchored to Bitcoin as one Merkle receipt. paths_public so the full certificate renders."
+}

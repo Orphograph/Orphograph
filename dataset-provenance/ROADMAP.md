@@ -10,9 +10,9 @@ verify (full suite green + a smoke) → commit to `feat/dataset-provenance-certi
 - [x] **#0 Seed** — hosted `/certificate/<id>` view + reference CLI (`provenance.py`). _(commit 01a90b6, PR #61)_
 - [x] **#1 Drag-and-drop file checker** — drop a file on the certificate; it's hashed locally and matched against the manifest (full Merkle proof when the path is visible). _(commit b2173bf)_
 - [x] **#2 `/dataset-provenance` explainer** — public indexable landing page + sitemap + schema.org. _(commit f2d51fa)_
+- [x] **#3 Permanent sample folder receipt + live demo link** — `web/sample-folder/` (real Bitcoin-pinned `.ots` for the deterministic `sample-dataset` root) seeded on boot via `_seed_sample_folder_receipt()`; live at `/certificate/DatasetProvenanceSample`, linked from the landing page + README. Surfaced & shipped the **`paths_public`** opt-in (a public folder receipt renders the full manifest instead of redacting paths).
 
 ## Next (top = highest leverage)
-- [ ] **#3 Permanent sample folder receipt + live demo link** — commit a non-pruning folder-receipt fixture (like `web/sample/` for single files) so the landing page + README can link a live `/certificate/<id>` example without the free-tier prune trap. Wire the link in once it exists.
 - [ ] **#4 `provenance.py verify --receipt <id>`** — verify a local bundle against the *live* anchored manifest (`/api/verify_folder/<id>`), no local certificate file needed. Closes the verify loop for a bundle that's already anchored.
 - [ ] **#5 Dataset badge + per-certificate OG image** — reuse `badge_svg`/`og_svg` to emit an embeddable "dataset anchored · N files" badge and a richer share-card for `/certificate/<id>`.
 - [ ] **#6 Homepage discoverability** — surface `/dataset-provenance` from the homepage (footer + a folder-anchor section link).
@@ -20,6 +20,8 @@ verify (full suite green + a smoke) → commit to `feat/dataset-provenance-certi
 - [ ] **#8 Accessibility + print QA pass** — cert + landing pages: aria/focus/contrast, and verify the certificate prints to a clean one-document PDF.
 - [ ] **#9 Blog post** — "Prove what was in your training set, and when" via the existing blog system (SEO content + inbound links).
 - [ ] **#10 MCP tool** — expose dataset anchoring/verification through the existing MCP server so agents can anchor a dataset in-pipeline.
+- [ ] **#11 `paths_public` end-to-end** — let owners opt into a public manifest at anchor time: a `--public-paths` flag on `provenance.py` + the folder-anchor UI, plumbed into the stored receipt. (The flag + server honoring it shipped with #3; this wires the producer side + a "paths published by owner" note on the certificate page.)
+- [ ] **#12 Certificate page polish for the sample** — when `paths_public`, show a small "the owner has published file paths" affordance; ensure the redacted vs public states both read clearly.
 
 ## Rules the loop follows
 - One focused improvement per iteration; full test suite must stay green.

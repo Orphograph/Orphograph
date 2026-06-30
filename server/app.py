@@ -2901,7 +2901,7 @@ class Handler(BaseHTTPRequestHandler):
         # owner. The full manifest is required to construct inclusion proofs,
         # but inclusion-proof requests already require the caller to KNOW the
         # path — so withholding the index is the right default.
-        if not is_owner:
+        if not is_owner and not record.get("paths_public"):
             redacted_leaves = []
             for i, leaf in enumerate(manifest.get("leaves", [])):
                 redacted_leaves.append({
@@ -3872,6 +3872,38 @@ def _seed_sample_receipt() -> None:
     sys.stderr.write(f"seeded sample receipt {rid} from {sample_dir} → {target}\n")
 
 
+def _seed_sample_folder_receipt() -> None:
+    """Copy web/sample-folder/ → <RECEIPTS_DIR>/<id>/ on first boot if missing.
+
+    The folder analogue of _seed_sample_receipt: a permanent, git-tracked
+    dataset-provenance certificate sample (receipt.json + manifest.json + the
+    .ots proofs) so /certificate/<id> has a live demo that never prunes. The
+    seeded receipt sets paths_public so the manifest renders in full publicly.
+    """
+    sample_meta = WEB_DIR / "sample-folder" / "index.json"
+    if not sample_meta.exists():
+        return
+    import shutil
+    try:
+        meta = json.loads(sample_meta.read_text())
+    except (OSError, json.JSONDecodeError):
+        return
+    rid = meta.get("receipt_id")
+    if not rid:
+        return
+    target = engine.RECEIPTS_DIR / rid
+    if target.exists():
+        return
+    target.parent.mkdir(parents=True, exist_ok=True)
+    sample_dir = WEB_DIR / "sample-folder"
+    target.mkdir()
+    for item in sample_dir.iterdir():
+        if item.name in ("index.json",):
+            continue
+        shutil.copy2(item, target / item.name, follow_symlinks=False)
+    sys.stderr.write(f"seeded sample folder receipt {rid} from {sample_dir} → {target}\n")
+
+
 def _start_upgrade_scheduler() -> None:
     """Background thread that runs upgrade_worker on a cadence.
 
@@ -4065,6 +4097,7 @@ def _start_funnel_digest_scheduler() -> None:
 def main() -> int:
     WEB_DIR.mkdir(parents=True, exist_ok=True)
     _seed_sample_receipt()
+    _seed_sample_folder_receipt()
     _start_upgrade_scheduler()
     _start_cadence_scheduler()
     _start_funnel_digest_scheduler()
