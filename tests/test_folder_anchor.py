@@ -260,6 +260,43 @@ class TestFolderAnchorFlow(unittest.TestCase):
         self.assertTrue(vf_b["receipt"].get("paths_public"))
         self.assertIsNotNone(vf_b["manifest"]["leaves"][0].get("path"))
 
+    def test_folder_js_emits_server_format_manifest(self):
+        # Regression guard (#24): web/folder.js must build a server-format
+        # {leaves:[{path,file_sha256_hex,leaf_hex,size_bytes}], version}
+        # manifest — not the {files:[...]} summary the server rejects.
+        src = (ROOT / "web" / "folder.js").read_text()
+        self.assertIn("leaves:", src)
+        self.assertIn("file_sha256_hex:", src)
+        self.assertIn("leaf_hex:", src)
+        self.assertIn("size_bytes:", src)
+        self.assertIn("version: 1", src)
+        self.assertNotIn("files: hashed.map", src)  # the old broken shape
+
+    def test_server_rejects_files_shape_accepts_leaves_shape(self):
+        # The /api/anchor_folder contract the folder.js fix depends on.
+        folder, tree = self._build_folder()
+        man = tree.manifest()
+        files_shape = {
+            "algorithm": man["algorithm"], "root_hex": man["root_hex"],
+            "file_count": len(man["leaves"]),
+            "files": [{"path": l["path"], "file_sha256": l["file_sha256_hex"]}
+                      for l in man["leaves"]],
+        }
+        req = urllib.request.Request(
+            f"{self._base}/api/anchor_folder",
+            data=json.dumps(files_shape).encode("utf-8"),
+            headers={"Content-Type": "application/json"})
+        try:
+            urllib.request.urlopen(req, timeout=10)
+            self.fail("expected 400 for the {files} shape")
+        except urllib.error.HTTPError as e:
+            self.assertEqual(e.code, 400)
+        req = urllib.request.Request(
+            f"{self._base}/api/anchor_folder",
+            data=json.dumps(man).encode("utf-8"),
+            headers={"Content-Type": "application/json"})
+        self.assertEqual(urllib.request.urlopen(req, timeout=10).status, 200)
+
     def test_bad_manifest_rejected(self):
         bad = {"algorithm": "wrong-algo", "version": 1, "root_hex": "00" * 32, "leaves": []}
         req = urllib.request.Request(

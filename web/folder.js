@@ -389,7 +389,12 @@ export async function anchorFolder({ onProgress } = {}) {
       continue;
     }
     const digest = await _hashFile(file);
-    hashed.push({ path, file_sha256: _hex(digest), digest });
+    hashed.push({
+      path,
+      file_sha256: _hex(digest),
+      digest,
+      size: typeof file.size === "number" ? file.size : 0,
+    });
   }
   progress({ phase: "hashing", current: entries.length, total: entries.length });
 
@@ -415,12 +420,20 @@ export async function anchorFolder({ onProgress } = {}) {
 
   // ── Phase 3: submit the manifest ────────────────────────────────────
   progress({ phase: "submitting", current: 0, total: 1 });
+  // Server-format manifest (orphograph-merkle-v1-rfc6962): /api/anchor_folder
+  // reconstructs the tree from `leaves` and verifies the root, so we must emit
+  // the full leaf records — NOT a {files} summary, which the server rejects
+  // with "manifest leaves must be a non-empty list".
   const manifest = {
     algorithm: ALGORITHM_TAG,
+    version: 1,
     root_hex,
-    file_count: hashed.length,
-    oversize_skipped: oversizeSkipped,
-    files: hashed.map((h) => ({ path: h.path, file_sha256: h.file_sha256 })),
+    leaves: hashed.map((h, i) => ({
+      path: h.path,
+      file_sha256_hex: h.file_sha256,
+      leaf_hex: _hex(leaves[i]),
+      size_bytes: h.size,
+    })),
   };
   let record;
   try {
@@ -433,7 +446,7 @@ export async function anchorFolder({ onProgress } = {}) {
 
   return {
     record,
-    files: manifest.files,
+    files: manifest.leaves.map((l) => ({ path: l.path, file_sha256: l.file_sha256_hex })),
     root_hex,
     oversize_skipped: oversizeSkipped,
   };
