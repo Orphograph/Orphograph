@@ -794,6 +794,30 @@ class Handler(BaseHTTPRequestHandler):
             except OSError:
                 _serve_static(self, "/receipt.html")
             return
+        if path.startswith("/certificate/"):
+            # Hosted dataset-provenance certificate view for folder anchors.
+            # Mirrors /r/<id>: the JS reads the id from the URL and fetches
+            # /api/verify_folder/<id>; we template the id into the page and
+            # the OG meta so a shared certificate link unfurls with its id.
+            rid = path[len("/certificate/"):].rstrip("/")
+            if not RECEIPT_ID_RE.match(rid):
+                self.send_error(400, "invalid receipt id")
+                return
+            try:
+                html_path = WEB_DIR / "certificate.html"
+                body = html_path.read_text()
+                body = body.replace("{{RECEIPT_ID}}", rid)
+                payload = body.encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(payload)))
+                self.send_header("Cache-Control", "public, max-age=300")
+                _security_headers(self)
+                self.end_headers()
+                self.wfile.write(payload)
+            except OSError:
+                _serve_static(self, "/certificate.html")
+            return
         if path.startswith("/buy/"):
             # BTC payment page — page is static; JS reads order_id from URL.
             oid = path[len("/buy/"):].rstrip("/")

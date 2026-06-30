@@ -274,6 +274,17 @@ function _renderReceipt(host, record, files, oversizeSkipped) {
   eta.textContent = "Bitcoin commitment expected within ≈1 hour.";
   card.appendChild(eta);
 
+  // Link to the hosted provenance certificate — a shareable, print-to-PDF
+  // page that resolves this receipt + its manifest from any device.
+  const viewRow = document.createElement("p");
+  viewRow.className = "folder-receipt-view";
+  const viewLink = document.createElement("a");
+  viewLink.href = "/certificate/" + encodeURIComponent(id);
+  viewLink.className = "folder-receipt-view-link cta-btn-outline";
+  viewLink.textContent = "View the full provenance certificate →";
+  viewRow.appendChild(viewLink);
+  card.appendChild(viewRow);
+
   // ── Per-file table ──────────────────────────────────────────────────
   const table = document.createElement("table");
   table.className = "folder-receipt-table";

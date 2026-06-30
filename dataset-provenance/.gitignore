@@ -1,0 +1,4 @@
+# Generated provenance output (certificates / manifests). Reproduce locally
+# with: python3 provenance.py anchor --bundle sample-dataset --name "…"
+*-provenance/
+__pycache__/

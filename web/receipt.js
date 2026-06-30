@@ -188,6 +188,13 @@ async function main() {
     return showError(`Server returned ${r.status}.`);
   }
   const rec = await r.json();
+  // Folder (dataset) anchors render as a provenance certificate, not a
+  // single-file receipt. Redirect so shared /r/<id> links to folder
+  // anchors land on the right view.
+  if (rec.kind === "folder") {
+    location.replace("/certificate/" + escapePath(rid));
+    return;
+  }
   $("#rid").textContent = rec.receipt_id;
   $("#sha256").textContent = rec.hash_hex;
   $("#sha512").textContent = rec.sha512_hex || "(none — receipt predates SHA-512 sibling)";
