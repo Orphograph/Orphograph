@@ -157,6 +157,14 @@
   border-radius: 6px;
   margin: 0 0 0.7rem;
 }
+.cert-published-note {
+  padding: 0.6rem 0.8rem;
+  background: var(--accent-soft);
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+  margin: 0 0 0.7rem;
+  color: var(--text);
+}
 
 /* ── Mobile ───────────────────────────────────────────────────────────── */
 @media (max-width: 600px) {

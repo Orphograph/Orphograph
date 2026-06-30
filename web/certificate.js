@@ -478,6 +478,12 @@ async function main() {
       $("#log-block").hidden = false;
       renderDocList($("#log-list"), buckets.log);
     }
+    // Positive affordance: the owner opted to publish paths (vs the owner
+    // simply viewing their own private receipt, where paths_public is unset).
+    if (rec.paths_public) {
+      const pn = $("#paths-public-note");
+      if (pn) pn.hidden = false;
+    }
   } else {
     const note = $("#redaction-note");
     note.hidden = false;
