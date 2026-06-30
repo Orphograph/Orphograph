@@ -244,60 +244,128 @@ function renderManifest(leaves, redacted) {
 // ─── in-browser inclusion verifier ───────────────────────────────────────
 let CERT_RID = "";
 let CERT_ROOT = "";
+let CERT_LEAVES = [];   // manifest leaves: {path?, file_sha256_hex, leaf_hex, size_bytes, index?}
+
+// Fetch a path’s inclusion proof and recompute the root in-browser. Returns a
+// plain result object; rendering is the caller’s job (shared by the path tool
+// and the drag-drop checker).
+async function fetchAndVerifyInclusion(path) {
+  let resp;
+  try {
+    resp = await fetch(`/api/inclusion_proof?receipt_id=${escapePath(CERT_RID)}&path=${encodeURIComponent(path)}`);
+  } catch (e) { return { ok: false, path, error: `Network error: ${e}` }; }
+  if (!resp.ok) {
+    return { ok: false, path, status: resp.status,
+             error: resp.status === 404 ? `No such path in this set: ${path}` : `Server returned ${resp.status}.` };
+  }
+  const ip = await resp.json();
+  const proof = (ip.proof || []).map((s) => [s[0], s[1]]);
+  let recomputed;
+  try { recomputed = await recomputeRoot(ip.path, ip.file_sha256_hex, proof); }
+  catch (e) { return { ok: false, path: ip.path, error: `Could not recompute root: ${e.message}` }; }
+  const matches = recomputed === CERT_ROOT && recomputed === (ip.root_hex || CERT_ROOT);
+  return { ok: matches, path: ip.path, file_sha256_hex: ip.file_sha256_hex,
+           recomputed, proofLen: proof.length };
+}
+
+function _detailDl(rows) {
+  const dl = el("dl", { className: "inclusion-detail mono small" });
+  for (const [k, v] of rows) { dl.appendChild(el("dt", {}, k)); dl.appendChild(el("dd", { textContent: v })); }
+  return dl;
+}
+
+function renderInclusion(node, res) {
+  node.hidden = false;
+  if (res.error) {
+    node.className = "inclusion-result bad";
+    node.replaceChildren(el("p", { textContent: res.error }));
+    return;
+  }
+  node.className = `inclusion-result ${res.ok ? "ok" : "bad"}`;
+  node.replaceChildren();
+  node.appendChild(el("p", { className: "inclusion-verdict" },
+    res.ok ? `✓ ‘${res.path}’ is committed to the certified root.`
+           : `✗ ‘${res.path}’ did NOT verify against the certified root.`));
+  node.appendChild(_detailDl([
+    ["File SHA-256", res.file_sha256_hex],
+    ["Recomputed root", res.recomputed],
+    ["Certified root", CERT_ROOT],
+    ["Proof length", `${res.proofLen} sibling hash(es)`],
+  ]));
+  if (res.ok) node.appendChild(el("p", { className: "muted small" },
+    "For a full check, re-hash your local copy of this file and confirm its SHA-256 equals the value above."));
+}
 
 async function runInclusion(path) {
   const out = $("#inclusion-result");
   const input = $("#inclusion-path");
   if (input && path) input.value = path;
   const target = (path || (input && input.value) || "").trim();
+  if (!target) { out.hidden = false; out.className = "inclusion-result bad"; out.replaceChildren(el("p", { textContent: "Enter a file path first." })); return; }
+  out.hidden = false; out.className = "inclusion-result pending";
+  out.replaceChildren(el("p", { className: "muted small", textContent: `Fetching inclusion proof for ${target}…` }));
+  renderInclusion(out, await fetchAndVerifyInclusion(target));
+}
+
+// ─── drag-and-drop "is this file in the set?" checker ────────────────────
+// Hashes the dropped file locally and matches its SHA-256 against the manifest
+// leaves. The file never leaves the browser.
+async function hashFileHex(file) {
+  const buf = await file.arrayBuffer();
+  return _hex(await _sha256(new Uint8Array(buf)));
+}
+
+async function checkDroppedFile(file) {
+  const out = $("#dropcheck-result");
   out.hidden = false;
   out.className = "inclusion-result pending";
-  out.replaceChildren(el("p", { className: "muted small", textContent: `Fetching inclusion proof for ${target}…` }));
-  if (!target) { out.className = "inclusion-result bad"; out.replaceChildren(el("p", { textContent: "Enter a file path first." })); return; }
-  let resp;
-  try {
-    resp = await fetch(`/api/inclusion_proof?receipt_id=${escapePath(CERT_RID)}&path=${encodeURIComponent(target)}`);
-  } catch (e) {
+  out.replaceChildren(el("p", { className: "muted small", textContent: `Hashing “${file.name}” locally — nothing is uploaded…` }));
+  let hex;
+  try { hex = (await hashFileHex(file)).toLowerCase(); }
+  catch (e) { out.className = "inclusion-result bad"; out.replaceChildren(el("p", { textContent: `Could not read file: ${e}` })); return; }
+  const idx = CERT_LEAVES.findIndex((l) => (l.file_sha256_hex || "").toLowerCase() === hex);
+  if (idx === -1) {
     out.className = "inclusion-result bad";
-    out.replaceChildren(el("p", { textContent: `Network error: ${e}` }));
+    out.replaceChildren(
+      el("p", { className: "inclusion-verdict", textContent: `✗ “${file.name}” is NOT in this certified set.` }),
+      el("p", { className: "muted small", textContent: "Its exact bytes match no file in the manifest. (A renamed copy with identical contents still matches; an edited file will not.)" }),
+      _detailDl([["Your file SHA-256", hex]]));
     return;
   }
-  if (!resp.ok) {
-    out.className = "inclusion-result bad";
-    const msg = resp.status === 404 ? `No such path in this set: ${target}` : `Server returned ${resp.status}.`;
-    out.replaceChildren(el("p", { textContent: msg }));
-    return;
+  const leaf = CERT_LEAVES[idx];
+  if (leaf.path != null) {
+    // Path known (owner view): verify the full Merkle proof to the root.
+    out.className = "inclusion-result pending";
+    out.replaceChildren(el("p", { className: "muted small", textContent: `“${file.name}” matches ‘${leaf.path}’ — verifying Merkle proof…` }));
+    const res = await fetchAndVerifyInclusion(leaf.path);
+    renderInclusion(out, res);
+    if (res.ok) out.insertBefore(
+      el("p", { className: "muted small", textContent: `Matched by content: “${file.name}” → ‘${leaf.path}’.` }),
+      out.firstChild.nextSibling);
+  } else {
+    // Paths redacted: the fingerprint match alone is a strong result.
+    out.className = "inclusion-result ok";
+    out.replaceChildren(
+      el("p", { className: "inclusion-verdict", textContent: `✓ “${file.name}” matches a certified file in this set.` }),
+      el("p", { className: "muted small", textContent: `Its fingerprint equals leaf #${leaf.index != null ? leaf.index : idx} in the manifest. The owner withheld paths, so the full Merkle proof isn’t shown — but the fingerprint match alone proves your exact file is one of the certified items.` }),
+      _detailDl([["Matched SHA-256", hex]]));
   }
-  const ip = await resp.json();
-  const proof = (ip.proof || []).map((s) => [s[0], s[1]]);
-  let recomputed;
-  try {
-    recomputed = await recomputeRoot(ip.path, ip.file_sha256_hex, proof);
-  } catch (e) {
-    out.className = "inclusion-result bad";
-    out.replaceChildren(el("p", { textContent: `Could not recompute root: ${e.message}` }));
-    return;
-  }
-  const matches = recomputed === CERT_ROOT && recomputed === (ip.root_hex || CERT_ROOT);
-  out.className = `inclusion-result ${matches ? "ok" : "bad"}`;
-  out.replaceChildren();
-  out.appendChild(el("p", { className: "inclusion-verdict" },
-    matches ? `✓ ‘${ip.path}’ is committed to the certified root.`
-            : `✗ ‘${ip.path}’ did NOT verify against the certified root.`));
-  const dl = el("dl", { className: "inclusion-detail mono small" });
-  dl.appendChild(el("dt", {}, "File SHA-256"));
-  dl.appendChild(el("dd", { textContent: ip.file_sha256_hex }));
-  dl.appendChild(el("dt", {}, "Recomputed root"));
-  dl.appendChild(el("dd", { textContent: recomputed }));
-  dl.appendChild(el("dt", {}, "Certified root"));
-  dl.appendChild(el("dd", { textContent: CERT_ROOT }));
-  dl.appendChild(el("dt", {}, "Proof length"));
-  dl.appendChild(el("dd", { textContent: `${proof.length} sibling hash(es)` }));
-  out.appendChild(dl);
-  if (matches) {
-    out.appendChild(el("p", { className: "muted small" },
-      "For a full check, re-hash your local copy of this file and confirm its SHA-256 equals the value above."));
-  }
+}
+
+function initDropCheck() {
+  const zone = $("#dropcheck"), input = $("#dropcheck-input");
+  if (!zone || !input) return;
+  const pick = () => input.click();
+  zone.addEventListener("click", pick);
+  zone.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(); } });
+  input.addEventListener("change", () => { if (input.files && input.files[0]) checkDroppedFile(input.files[0]); });
+  ["dragenter", "dragover"].forEach((ev) => zone.addEventListener(ev, (e) => { e.preventDefault(); zone.classList.add("dropcheck-over"); }));
+  ["dragleave", "dragend"].forEach((ev) => zone.addEventListener(ev, () => zone.classList.remove("dropcheck-over")));
+  zone.addEventListener("drop", (e) => {
+    e.preventDefault(); zone.classList.remove("dropcheck-over");
+    const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (f) checkDroppedFile(f);
+  });
 }
 
 // ─── share block ─────────────────────────────────────────────────────────
@@ -356,6 +424,7 @@ async function main() {
   const redacted = !!manifest.paths_redacted;
   CERT_RID = rec.receipt_id || rid;
   CERT_ROOT = (manifest.root_hex || rec.hash_hex || "").toLowerCase();
+  CERT_LEAVES = leaves;
 
   // Header
   $("#dataset-name").textContent = rec.client_label || "(unnamed dataset)";
@@ -403,7 +472,8 @@ async function main() {
   $("#manifest-count").textContent = `(${leaves.length} file${leaves.length === 1 ? "" : "s"})`;
   renderManifest(leaves, redacted);
 
-  // Inclusion verifier
+  // Inclusion verifier (drag-drop checker + by-path proof)
+  initDropCheck();
   $("#inclusion-btn").addEventListener("click", () => runInclusion());
   $("#inclusion-path").addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); runInclusion(); } });
 

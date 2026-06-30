@@ -21,7 +21,7 @@
 <link rel="stylesheet" href="/style.css?v=5">
 <link rel="stylesheet" href="/index.css?v=15">
 <link rel="stylesheet" href="/receipt.css?v=2">
-<link rel="stylesheet" href="/certificate.css?v=1">
+<link rel="stylesheet" href="/certificate.css?v=2">
 <meta name="copyright" content="© 2026 Orphograph. MIT — see /LICENSE">
 </head>
 <body class="receipt-page certificate-page">
@@ -109,19 +109,31 @@
   </section>
 
   <section class="cert-inclusion no-print" id="inclusion-tool">
-    <h2>Verify a single file is in this set</h2>
+    <h2>Verify a file is in this set</h2>
     <p class="hint small">
-      Enter a file's path (or click a row above). We fetch its Merkle
-      inclusion proof from the calendar-anchored manifest and recompute the
-      root <em>in your browser</em> — if it equals the certified root, that
-      file is provably part of this dataset. For a full check, re-hash your
-      local copy of the file and confirm the SHA-256 matches.
+      Both checks run entirely in your browser — <strong>the file never leaves
+      your device.</strong> Drop a file to check it by its contents, or verify a
+      known path against its Merkle inclusion proof.
     </p>
-    <div class="inclusion-row">
-      <input type="text" id="inclusion-path" placeholder="data/images/cat_001.jpg" class="inclusion-input" aria-label="File path to verify">
-      <button type="button" id="inclusion-btn" class="share-btn share-btn-ink">Verify inclusion</button>
+    <div class="dropcheck" id="dropcheck" tabindex="0" role="button" aria-label="Drop a file here to check whether it belongs to this dataset">
+      <input type="file" id="dropcheck-input" class="dropcheck-input" hidden>
+      <p class="dropcheck-prompt"><strong>Drop a file here</strong>, or click to choose.</p>
+      <p class="muted small dropcheck-sub">We SHA-256 it locally and check the fingerprint against this dataset's manifest.</p>
     </div>
-    <div id="inclusion-result" class="inclusion-result" hidden></div>
+    <div id="dropcheck-result" class="inclusion-result" hidden></div>
+    <details class="bypath-details">
+      <summary>…or verify by path (with full Merkle proof)</summary>
+      <p class="hint small">
+        Enter a path (or click a row above). We fetch its inclusion proof and
+        recompute the root <em>in your browser</em>; if it equals the certified
+        root, that file is provably part of this dataset.
+      </p>
+      <div class="inclusion-row">
+        <input type="text" id="inclusion-path" placeholder="data/images/cat_001.jpg" class="inclusion-input" aria-label="File path to verify">
+        <button type="button" id="inclusion-btn" class="share-btn share-btn-ink">Verify inclusion</button>
+      </div>
+      <div id="inclusion-result" class="inclusion-result" hidden></div>
+    </details>
   </section>
 
   <section class="checks">
@@ -181,7 +193,7 @@
   </small>
 </footer>
 
-<script src="/certificate.js"></script>
+<script src="/certificate.js?v=2"></script>
 <script src="/assets/event.js" defer></script>
 </body>
 </html>
