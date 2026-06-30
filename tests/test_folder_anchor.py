@@ -182,6 +182,11 @@ class TestFolderAnchorFlow(unittest.TestCase):
         self.assertNotIn("style=", html)
         self.assertNotIn("<style", html)
         self.assertEqual(_re.findall(r"<script(?![^>]*\bsrc=)[^>]*>", html), [])
+        # Accessibility contract: manifest headers are scoped and the dynamic
+        # result/error regions announce to screen readers.
+        self.assertIn('scope="col"', html)
+        self.assertIn('aria-live="polite"', html)
+        self.assertIn('role="alert"', html)
 
         # The single-file verify API must expose kind=folder so /r/<id>
         # can client-side redirect folder anchors to the certificate view.

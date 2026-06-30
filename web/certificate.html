@@ -21,7 +21,7 @@
 <link rel="stylesheet" href="/style.css?v=5">
 <link rel="stylesheet" href="/index.css?v=15">
 <link rel="stylesheet" href="/receipt.css?v=2">
-<link rel="stylesheet" href="/certificate.css?v=2">
+<link rel="stylesheet" href="/certificate.css?v=3">
 <meta name="copyright" content="© 2026 Orphograph. MIT — see /LICENSE">
 </head>
 <body class="receipt-page certificate-page">
@@ -102,7 +102,7 @@
     <p class="muted small" id="redaction-note" hidden></p>
     <div class="manifest-scroll">
       <table class="manifest-table" id="manifest-table">
-        <thead><tr><th>#</th><th>File</th><th>SHA-256</th><th class="num">Size</th></tr></thead>
+        <thead><tr><th scope="col">#</th><th scope="col">File</th><th scope="col">SHA-256</th><th scope="col" class="num">Size</th></tr></thead>
         <tbody id="manifest-body"></tbody>
       </table>
     </div>
@@ -120,7 +120,7 @@
       <p class="dropcheck-prompt"><strong>Drop a file here</strong>, or click to choose.</p>
       <p class="muted small dropcheck-sub">We SHA-256 it locally and check the fingerprint against this dataset's manifest.</p>
     </div>
-    <div id="dropcheck-result" class="inclusion-result" hidden></div>
+    <div id="dropcheck-result" class="inclusion-result" role="status" aria-live="polite" hidden></div>
     <details class="bypath-details">
       <summary>…or verify by path (with full Merkle proof)</summary>
       <p class="hint small">
@@ -132,7 +132,7 @@
         <input type="text" id="inclusion-path" placeholder="data/images/cat_001.jpg" class="inclusion-input" aria-label="File path to verify">
         <button type="button" id="inclusion-btn" class="share-btn share-btn-ink">Verify inclusion</button>
       </div>
-      <div id="inclusion-result" class="inclusion-result" hidden></div>
+      <div id="inclusion-result" class="inclusion-result" role="status" aria-live="polite" hidden></div>
     </details>
   </section>
 
@@ -194,7 +194,7 @@
   </details>
 </aside>
 
-<p id="err" class="muted no-print" hidden></p>
+<p id="err" class="muted no-print" role="alert" hidden></p>
 </main>
 
 <footer class="no-print">

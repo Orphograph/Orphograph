@@ -1,6 +1,12 @@
 /* certificate.css — dataset provenance certificate view (/certificate/<id>).
    Layers on top of style.css + index.css + receipt.css. CSP-safe (external). */
 
+/* Accessibility: lift muted-text contrast on the certificate to WCAG AA.
+   The global --muted (~#837e75) is ~3.9:1 on the cream background, which
+   fails AA for small text; this scoped value (#6b665d) is ~5.5:1. Print
+   already overrides muted to #555 (receipt.css), so this is screen-only. */
+.certificate-page .muted { color: #6b665d; }
+
 .certificate-card .dataset-name {
   font-size: 1.05rem;
   color: var(--text);
