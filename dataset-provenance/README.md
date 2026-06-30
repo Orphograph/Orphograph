@@ -56,6 +56,9 @@ python3 provenance.py anchor --bundle my-dataset --name "My Dataset v1"
 # Air-gapped: build the receipt + certificate, anchor nothing
 python3 provenance.py anchor --bundle my-dataset --name "My Dataset v1" --offline
 
+# Also emit a one-file PDF certificate (portable, stdlib-only — no extra deps)
+python3 provenance.py anchor --bundle my-dataset --name "My Dataset v1" --pdf
+
 # Re-verify any time: rebuild the root from disk, compare to the certificate
 python3 provenance.py verify --cert out/certificate.json --bundle my-dataset
 

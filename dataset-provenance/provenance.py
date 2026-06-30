@@ -177,7 +177,12 @@ def cmd_anchor(args: argparse.Namespace) -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "certificate.json").write_text(json.dumps(cert, indent=2) + "\n")
     (out_dir / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
-    (out_dir / "certificate.txt").write_text(_render_certificate_text(cert))
+    cert_text = _render_certificate_text(cert)
+    (out_dir / "certificate.txt").write_text(cert_text)
+    pdf_written = False
+    if getattr(args, "pdf", False):
+        (out_dir / "certificate.pdf").write_bytes(_text_to_pdf(cert_text))
+        pdf_written = True
 
     print(f"Dataset:    {args.name}")
     print(f"Files:      {len(leaves)} ({_total_bytes(leaves):,} bytes) — "
@@ -190,7 +195,10 @@ def cmd_anchor(args: argparse.Namespace) -> int:
         print(f"Hosted:     {args.api.rstrip('/')}/certificate/{rid}")
     else:
         print(f"Anchor:     NOT anchored — {anchor_error}")
-    print(f"Written:    {out_dir}/certificate.txt  certificate.json  manifest.json")
+    written = "certificate.txt  certificate.json  manifest.json"
+    if pdf_written:
+        written += "  certificate.pdf"
+    print(f"Written:    {out_dir}/  ({written})")
     return 0
 
 
@@ -266,6 +274,72 @@ def _build_certificate(*, name, created_at, root_hex, manifest, buckets, receipt
                         "offline.",
         },
     }
+
+
+def _text_to_pdf(text: str) -> bytes:
+    """Render monospaced text into a minimal multi-page PDF (stdlib only).
+
+    Uses the standard PDF Courier font (base-14, no embedding) so the output
+    is portable and dependency-free — no cupsfilter / wkhtmltopdf needed.
+    US Letter, 0.75" margins, 9pt text on 11pt leading; long lines hard-wrap.
+    """
+    page_w, page_h, margin = 612, 792, 54
+    font_size, leading = 9, 11
+    char_w = font_size * 0.6                      # Courier is 600/1000 em wide
+    max_chars = max(1, int((page_w - 2 * margin) / char_w))
+    lines_per_page = max(1, int((page_h - 2 * margin) / leading))
+
+    wrapped: list[str] = []
+    for ln in text.replace("\t", "    ").split("\n"):
+        if len(ln) <= max_chars:
+            wrapped.append(ln)
+        else:
+            while ln:
+                wrapped.append(ln[:max_chars]); ln = ln[max_chars:]
+    pages = [wrapped[i:i + lines_per_page]
+             for i in range(0, len(wrapped), lines_per_page)] or [[""]]
+
+    def esc(s: str) -> str:
+        return s.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+
+    streams: list[bytes] = []
+    for page in pages:
+        top = page_h - margin - font_size
+        body = [f"BT /F1 {font_size} Tf {leading} TL {margin} {top:.0f} Td"]
+        for i, ln in enumerate(page):
+            body.append(f"({esc(ln)}) Tj" if i == 0 else f"T* ({esc(ln)}) Tj")
+        body.append("ET")
+        streams.append("\n".join(body).encode("latin-1", "replace"))
+
+    # Object layout: 1 Catalog, 2 Pages, 3 Font, then per page Page+Contents.
+    n_pages = len(pages)
+    page_ids = [4 + 2 * i for i in range(n_pages)]
+    content_ids = [5 + 2 * i for i in range(n_pages)]
+    objs: list[bytes] = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        f"<< /Type /Pages /Kids [{' '.join(f'{p} 0 R' for p in page_ids)}] "
+        f"/Count {n_pages} >>".encode(),
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>",
+    ]
+    for i in range(n_pages):
+        objs.append(
+            f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {page_w} {page_h}] "
+            f"/Resources << /Font << /F1 3 0 R >> >> "
+            f"/Contents {content_ids[i]} 0 R >>".encode())
+        objs.append(b"<< /Length %d >>\nstream\n%s\nendstream" % (len(streams[i]), streams[i]))
+
+    out = bytearray(b"%PDF-1.4\n")
+    offsets: list[int] = []
+    for idx, obj in enumerate(objs, start=1):
+        offsets.append(len(out))
+        out += f"{idx} 0 obj\n".encode() + obj + b"\nendobj\n"
+    xref_pos = len(out)
+    n_obj = len(objs) + 1
+    out += f"xref\n0 {n_obj}\n".encode() + b"0000000000 65535 f \n"
+    for off in offsets:
+        out += f"{off:010d} 00000 n \n".encode()
+    out += f"trailer\n<< /Size {n_obj} /Root 1 0 R >>\nstartxref\n{xref_pos}\n%%EOF\n".encode()
+    return bytes(out)
 
 
 def _render_certificate_text(cert: dict) -> str:
@@ -463,6 +537,7 @@ def main(argv: list[str] | None = None) -> int:
     a.add_argument("--api", default=DEFAULT_API, help=f"Orphograph base URL (default {DEFAULT_API})")
     a.add_argument("--label", help="optional client_label stored on the receipt")
     a.add_argument("--offline", action="store_true", help="do not anchor; nothing leaves the machine")
+    a.add_argument("--pdf", action="store_true", help="also write certificate.pdf (portable, stdlib-only)")
     a.set_defaults(func=cmd_anchor)
 
     v = sub.add_parser("verify", help="re-verify a bundle against its certificate or a live receipt")
