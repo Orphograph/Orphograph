@@ -31,6 +31,11 @@
     <changefreq>weekly</changefreq>
   </url>
   <url>
+    <loc>https://orphograph.com/dataset-provenance.html</loc>
+    <lastmod>2026-06-30</lastmod>
+    <changefreq>weekly</changefreq>
+  </url>
+  <url>
     <loc>https://orphograph.com/legal/</loc>
     <lastmod>2026-05-21</lastmod>
     <changefreq>monthly</changefreq>

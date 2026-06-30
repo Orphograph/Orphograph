@@ -356,6 +356,7 @@ def _build_sitemap() -> str:
         ("/docs/api.html", "0.6"),
         ("/about.html", "0.7"),
         ("/learn.html", "0.8"),
+        ("/dataset-provenance.html", "0.8"),
         ("/press.html", "0.4"),
         ("/gift.html", "0.6"),
         ("/lp/", "0.8"),

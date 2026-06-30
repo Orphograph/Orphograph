@@ -23,6 +23,7 @@ EXPECTED_URLS = [
     "https://orphograph.com/account.html",
     "https://orphograph.com/faq.html",
     "https://orphograph.com/learn.html",
+    "https://orphograph.com/dataset-provenance.html",
     "https://orphograph.com/legal/",
     "https://orphograph.com/changelog.html",
     "https://orphograph.com/continuity.html",
