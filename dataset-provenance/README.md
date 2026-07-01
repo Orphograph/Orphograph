@@ -71,6 +71,11 @@ python3 provenance.py verify --cert out/certificate.json --bundle my-dataset \
         --file data/images/cat_001.jpg
 ```
 
+On a root mismatch, `verify` prints an actionable per-file diff — exactly
+which files were **changed**, **added**, or **removed** versus the certified
+set (from the local `manifest.json`, or the live receipt's manifest when its
+paths are public).
+
 Exit code is `0` on VERIFIED, non-zero on failure — drop `verify` into CI as
 a gate, or `anchor` as a post-build step in a training pipeline.
 

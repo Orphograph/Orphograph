@@ -433,6 +433,53 @@ def _fetch_receipt_root(api: str, rid: str) -> "tuple[str | None, str | None]":
     return root, None
 
 
+def _fetch_receipt_leaves(api: str, rid: str) -> "list | None":
+    """Fetch a folder receipt's manifest leaves for a diff. Returns None if the
+    receipt is unavailable or its paths are redacted (owner-only)."""
+    url = f"{api.rstrip('/')}/api/verify_folder/{rid}"
+    req = urllib.request.Request(
+        url, headers={"User-Agent": _BROWSER_UA, "Accept": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError,
+            OSError, json.JSONDecodeError):
+        return None
+    man = data.get("manifest", {})
+    if man.get("paths_redacted"):
+        return None
+    leaves = man.get("leaves")
+    return leaves if isinstance(leaves, list) else None
+
+
+def _load_expected_leaves(cert_path, args) -> "list | None":
+    """The per-file manifest to diff against: the sibling manifest.json in cert
+    mode, or the live receipt's manifest in --receipt mode (None if redacted)."""
+    if cert_path is not None:
+        mpath = cert_path.parent / "manifest.json"
+        if mpath.exists():
+            try:
+                return json.loads(mpath.read_text()).get("leaves")
+            except (OSError, json.JSONDecodeError):
+                return None
+        return None
+    if getattr(args, "receipt", None):
+        return _fetch_receipt_leaves(args.api, args.receipt)
+    return None
+
+
+def _diff_leaves(local_leaves, expected_leaves):
+    """Return (added, removed, changed) path lists comparing local vs expected
+    by (path, file digest). added: local-only; removed: expected-only;
+    changed: same path, different digest."""
+    loc = {l["path"]: l.get("file_sha256_hex") for l in local_leaves if l.get("path")}
+    exp = {l["path"]: l.get("file_sha256_hex") for l in expected_leaves if l.get("path")}
+    added = sorted(p for p in loc if p not in exp)
+    removed = sorted(p for p in exp if p not in loc)
+    changed = sorted(p for p in loc if p in exp and loc[p] != exp[p])
+    return added, removed, changed
+
+
 def cmd_verify(args: argparse.Namespace) -> int:
     bundle = Path(args.bundle).resolve()
     if not bundle.is_dir():
@@ -475,6 +522,27 @@ def cmd_verify(args: argparse.Namespace) -> int:
         print(f"FAIL  bundle integrity — root MISMATCH (a file changed/added/removed)")
         print(f"      {source}: {expected_root}")
         print(f"      recomputed:  {recomputed}")
+        # Actionable diff: show exactly which files differ from the certified set.
+        expected_leaves = _load_expected_leaves(cert_path, args)
+        if expected_leaves:
+            added, removed, changed = _diff_leaves(
+                tree.manifest()["leaves"], expected_leaves)
+            total = len(added) + len(removed) + len(changed)
+            if total == 0:
+                print("      (files match by path+digest, but the tree order/"
+                      "algorithm differs — the manifest may be from another tool)")
+            for label, mark, items in (("changed", "~", changed),
+                                       ("added", "+", added),
+                                       ("removed", "-", removed)):
+                if items:
+                    print(f"      {label} ({len(items)}):")
+                    for p in items[:50]:
+                        print(f"        {mark} {p}")
+                    if len(items) > 50:
+                        print(f"        … and {len(items) - 50} more")
+        else:
+            print("      (per-file diff unavailable — no manifest with visible "
+                  "paths for this source)")
 
     # 2. Confirm the sibling manifest is internally consistent (cert mode only).
     mpath = cert_path.parent / "manifest.json" if cert_path is not None else None
