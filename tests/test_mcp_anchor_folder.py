@@ -60,6 +60,29 @@ def test_manifest_byte_identical_to_server_from_folder():
            [l["leaf_hex"] for l in server_manifest["leaves"]]
 
 
+def test_manifest_matches_server_with_nested_excluded_dirs():
+    """Regression for the exclusion divergence: slash patterns (node_modules/*,
+    .git/*) exclude only at the TOP level, so nested copies must be KEPT and
+    must appear in the tree — MCP and server must still agree on the root."""
+    d = Path(tempfile.mkdtemp())
+    (d / "data").mkdir()
+    (d / "data" / "a.txt").write_text("alpha")
+    (d / "data" / "node_modules").mkdir()
+    (d / "data" / "node_modules" / "dep.js").write_text("vendored")  # nested -> kept
+    (d / "sub").mkdir()
+    (d / "sub" / ".git").mkdir()
+    (d / "sub" / ".git" / "config").write_text("cfg")                # nested -> kept
+    (d / ".git").mkdir()
+    (d / ".git" / "HEAD").write_text("ref")                          # top-level -> dropped
+    (d / ".DS_Store").write_text("junk")                             # basename -> dropped
+    mcp_manifest, _ = mcp._build_folder_manifest(str(d))
+    server_manifest = merkle.MerkleTree.from_folder(d).manifest()
+    assert mcp_manifest["root_hex"] == server_manifest["root_hex"]
+    assert sorted(l["path"] for l in mcp_manifest["leaves"]) == [
+        "data/a.txt", "data/node_modules/dep.js", "sub/.git/config",
+    ]
+
+
 def test_empty_folder_rejected():
     empty = Path(tempfile.mkdtemp())
     with pytest.raises(ValueError):

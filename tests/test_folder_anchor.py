@@ -271,6 +271,20 @@ class TestFolderAnchorFlow(unittest.TestCase):
         self.assertIn("size_bytes:", src)
         self.assertIn("version: 1", src)
         self.assertNotIn("files: hashed.map", src)  # the old broken shape
+        # Guard the VALUE wiring too (not just the keys), so a mis-wire like
+        # leaf_hex:_hex(leaves[0]) or size_bytes:0 can't pass the grep green.
+        self.assertIn("leaf_hex: _hex(leaves[i])", src)
+        self.assertIn("size_bytes: h.size", src)
+        self.assertIn("file_sha256: l.file_sha256_hex", src)
+
+    def test_receipt_js_redirects_folder_anchors_to_certificate(self):
+        # Source guard (#5): a shared /r/<id> link to a folder anchor must
+        # client-side redirect to /certificate/<id>; deleting the branch
+        # would otherwise pass all tests while sending users to a broken page.
+        src = (ROOT / "web" / "receipt.js").read_text()
+        self.assertIn('rec.kind === "folder"', src)
+        self.assertIn("location.replace", src)
+        self.assertIn("/certificate/", src)
 
     def test_server_rejects_files_shape_accepts_leaves_shape(self):
         # The /api/anchor_folder contract the folder.js fix depends on.

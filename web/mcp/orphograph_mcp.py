@@ -216,14 +216,21 @@ _FOLDER_EXCLUDE = (
 
 
 def _folder_excluded(rel_posix: str) -> bool:
+    # Faithful port of server/merkle._matches_any: a slash pattern matches the
+    # FULL posix path (top-level prefix only — e.g. ".git/*" catches ".git/x"
+    # but NOT "a/.git/x"); a no-slash pattern matches the basename at any depth.
     import fnmatch
-    base = rel_posix.rsplit("/", 1)[-1]
-    segments = rel_posix.split("/")
+    name = rel_posix.rsplit("/", 1)[-1]
     for pat in _FOLDER_EXCLUDE:
-        if fnmatch.fnmatch(rel_posix, pat) or fnmatch.fnmatch(base, pat):
-            return True
-        if pat.endswith("/*") and pat[:-2] in segments:
-            return True
+        if "/" in pat:
+            if fnmatch.fnmatch(rel_posix, pat):
+                return True
+            prefix = pat.rstrip("*").rstrip("/")
+            if prefix and (rel_posix == prefix or rel_posix.startswith(prefix + "/")):
+                return True
+        else:
+            if fnmatch.fnmatch(name, pat):
+                return True
     return False
 
 

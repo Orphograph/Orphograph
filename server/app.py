@@ -2924,9 +2924,12 @@ class Handler(BaseHTTPRequestHandler):
                 "leaves": redacted_leaves,
                 "paths_redacted": True,
                 "paths_redaction_reason": (
-                    "Leaf paths are visible only to the receipt owner. "
-                    "Inclusion proofs remain available to anyone who already "
-                    "knows the path of the file they wish to prove."
+                    "Leaf paths are visible only to the receipt owner. Each "
+                    "file's SHA-256 digest and size remain public, so anyone "
+                    "holding a candidate file can confirm its membership; only "
+                    "the human-readable paths are withheld. Inclusion proofs "
+                    "remain available to anyone who already knows the path of "
+                    "the file they wish to prove."
                 ),
             }
         _json_response(self, 200, {"receipt": record, "manifest": manifest})
