@@ -1,0 +1,22 @@
+/* evidence-law.css — externalized from evidence-law.html (strict CSP: no inline styles). */
+
+.arch-wrap { max-width: 820px; margin: 0 auto; padding: 0 24px 64px; }
+  .arch-wrap h1 { font-family: var(--serif); font-size: 36px; font-weight: 500; margin: 32px 0 6px; }
+  .arch-wrap h2 { font-family: var(--serif); font-size: 22px; font-weight: 500; margin: 36px 0 4px; color: var(--ink); }
+  .arch-rule { border-top: 1px solid var(--ink); width: 32px; margin: 8px 0 16px; opacity: 0.6; }
+  .arch-wrap p, .arch-wrap li { color: var(--ink-2); line-height: 1.75; font-size: 15.5px; }
+  .arch-wrap code { background: rgba(58, 47, 36, 0.06); padding: 2px 6px; border-radius: 3px; font-size: 0.92em; }
+  .arch-lede { font-size: 17px; line-height: 1.7; color: var(--ink-2); margin: 0 0 24px; }
+  .arch-callout { background: rgba(58, 47, 36, 0.04); border-left: 3px solid var(--accent); padding: 16px 20px; margin: 24px 0; border-radius: 0; }
+  .arch-callout p { margin: 0; }
+  .means-bullets { list-style: none; padding: 0; margin: 16px 0 32px; }
+  .means-bullets li { padding: 8px 0 8px 24px; position: relative; }
+  .means-bullets li::before { content: "·"; position: absolute; left: 4px; color: var(--confirm); font-size: 22px; line-height: 1; top: 6px; }
+  details.legal { margin: 18px 0; border: 1px solid #d9d2c0; border-radius: 6px; background: #faf6e9; }
+  details.legal[open] { padding-bottom: 14px; }
+  details.legal summary { padding: 14px 18px; font-family: var(--serif); cursor: pointer; font-size: 15px; color: var(--ink); }
+  details.legal[open] summary { border-bottom: 1px solid #e5dec9; margin-bottom: 14px; }
+  details.legal .body { padding: 0 18px; }
+  details.legal .body p { font-size: 14.5px; }
+  details.legal .body code { font-size: 0.88em; }
+  .disclaimer-block { margin-top: 48px; padding: 20px 24px; background: #f1ead7; border-radius: 6px; font-size: 14px; line-height: 1.65; color: var(--muted); }
