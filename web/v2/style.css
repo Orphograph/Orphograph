@@ -123,6 +123,7 @@
   .hashing{font-family:var(--mono);font-size:11px;color:var(--brass-bright);margin-top:12px;min-height:14px}
   .receipt .rlink{margin-top:12px;font-size:12px;color:var(--brass-bright);border-bottom:1px solid var(--brass)}
   .receipt .rlink[hidden]{display:none}
+  .receipt .afterglow{margin-top:10px;font-size:10.5px;line-height:1.45;color:var(--mute-light);max-width:26ch}
 
   /* ---------- sections ---------- */
   section{padding:88px 0}

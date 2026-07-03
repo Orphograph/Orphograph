@@ -198,10 +198,13 @@ function renderVerdict(rec) {
   if (rec.btc_pinned_at) {
     setVerdict(
       `This file existed on or before ${when}.`,
-      "Anchored in the Bitcoin blockchain — verifiable by anyone, no account, no trust in Orphograph required.",
+      "Anchored in the Bitcoin blockchain — verifiable by anyone, no account, no trust in Orphograph required. This fingerprint now lives in the most heavily verified public record in human history; it will outlive every company involved, including ours.",
       checkedLine
     );
     document.getElementById("verdict").classList.add("verdict-anchored");
+    const ctaText = document.querySelector("#visitor-cta .cta-text");
+    if (ctaText) ctaText.textContent =
+      "You just verified this proof yourself — that feeling is the product. Anchoring your own file is free.";
   } else if ((rec.calendars_ok || 0) > 0) {
     setVerdict(
       `Sealed ${when} — awaiting Bitcoin confirmation.`,
