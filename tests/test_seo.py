@@ -19,6 +19,7 @@ WEB = ROOT / "web"
 EXPECTED_URLS = [
     "https://orphograph.com/",
     "https://orphograph.com/about",
+    "https://orphograph.com/v2",
     "https://orphograph.com/buy",
     "https://orphograph.com/account",
     "https://orphograph.com/faq",
