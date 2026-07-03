@@ -1,7 +1,7 @@
 // receipt.js — renders /r/<id> by fetching /api/verify/<id> and populating the card.
 // CSP-safe: no inline scripts; runs only against same-origin endpoints.
 
-const VERIFIER_URL = "/verify/";
+const VERIFIER_URL = "/verify-js";
 
 // Calendar short-name → public hostname. Mirrors server/engine.py CALENDARS list.
 // Used to build per-calendar /timestamp/<hash> URLs so anyone can pull the
@@ -161,6 +161,85 @@ function showError(msg) {
   el.textContent = msg;
   el.hidden = false;
   $("#card").hidden = true;
+  hideRecordSections();
+}
+
+// Hide everything that only makes sense when a record exists (facts strip,
+// honesty box, check-yourself, technical details, share block).
+function hideRecordSections() {
+  for (const node of document.querySelectorAll(".needs-record")) node.hidden = true;
+}
+
+function setVerdict(headline, sub, checked) {
+  const h = $("#verdict-headline");
+  const s = $("#verdict-sub");
+  const c = $("#verdict-checked");
+  if (h) h.textContent = headline;
+  if (s) s.textContent = sub || "";
+  if (c) c.textContent = checked || "";
+}
+
+// Verdict banner — the one thing a skeptic must read. Plain language only.
+function renderVerdict(rec) {
+  const d = rec.created_at ? new Date(rec.created_at) : null;
+  const when = d && !isNaN(d.getTime())
+    ? new Intl.DateTimeFormat(undefined, { year: "numeric", month: "long", day: "numeric" }).format(d)
+    : rec.created_at || "the recorded date";
+
+  if (rec.private) {
+    const p = $("#verdict-private");
+    if (p) p.hidden = false;
+  }
+
+  // The /api/verify endpoint re-checks the stored proofs on every request,
+  // so "checked just now" is literally true.
+  const checkedLine = "Record re-checked just now, at " + _fmtLocal(new Date()) + ".";
+
+  if (rec.btc_pinned_at) {
+    setVerdict(
+      `This file existed on or before ${when}.`,
+      "Anchored in the Bitcoin blockchain — verifiable by anyone, no account, no trust in Orphograph required.",
+      checkedLine
+    );
+    document.getElementById("verdict").classList.add("verdict-anchored");
+  } else if ((rec.calendars_ok || 0) > 0) {
+    setVerdict(
+      `Sealed ${when} — awaiting Bitcoin confirmation.`,
+      "The seal is in place; the Bitcoin anchor usually lands within hours. Refresh this page later to see it confirmed.",
+      checkedLine
+    );
+    document.getElementById("verdict").classList.add("verdict-pending");
+  } else {
+    setVerdict(
+      `Sealed ${when} — confirmation in progress.`,
+      "The record exists but its proofs have not yet been confirmed. Check back shortly.",
+      checkedLine
+    );
+    document.getElementById("verdict").classList.add("verdict-pending");
+  }
+}
+
+// Facts strip — dates in explicit UTC so two skeptics in two time zones
+// read the same numbers.
+function renderFacts(rec) {
+  const sealed = $("#fact-sealed");
+  if (sealed) {
+    const d = new Date(rec.created_at);
+    sealed.textContent = isNaN(d.getTime()) ? (rec.created_at || "—") : _fmtUtc(d);
+  }
+  const btc = $("#fact-btc");
+  if (btc) {
+    if (rec.btc_pinned_at) {
+      const d = new Date(rec.btc_pinned_at);
+      btc.textContent = "Pinned " + (isNaN(d.getTime()) ? rec.btc_pinned_at : _fmtUtc(d));
+    } else {
+      btc.textContent = "Pending — usually within hours";
+    }
+  }
+  const cals = $("#fact-cals");
+  if (cals) cals.textContent = `${rec.calendars_ok || 0} of ${rec.calendars_total || 5} confirmed`;
+  const rid = $("#fact-rid");
+  if (rid) rid.textContent = rec.receipt_id || "—";
 }
 
 function escapePath(id) {
@@ -183,11 +262,35 @@ async function main() {
     return showError(`network error: ${e}`);
   }
   if (!r.ok) {
-    if (r.status === 404) return showError(`Receipt not found: ${rid}`);
+    if (r.status === 404) {
+      // Honest verdict, in the verdict slot: nothing here, say so plainly.
+      hideRecordSections();
+      setVerdict(
+        "No record with this id.",
+        `Nothing has been anchored under “${rid}”. Check the link you were sent for typos, or ask the sender for the correct one.`,
+        ""
+      );
+      document.getElementById("verdict").classList.add("verdict-missing");
+      return;
+    }
     if (r.status === 400) return showError(`Invalid receipt id: ${rid}`);
     return showError(`Server returned ${r.status}.`);
   }
   const rec = await r.json();
+<<<<<<< Updated upstream
+=======
+  // Folder (dataset) anchors render as a provenance certificate, not a
+  // single-file receipt. Redirect so shared /r/<id> links to folder
+  // anchors land on the right view.
+  if (rec.kind === "folder") {
+    location.replace("/certificate/" + escapePath(rid));
+    return;
+  }
+  renderVerdict(rec);
+  renderFacts(rec);
+  const dl = document.getElementById("download-zip");
+  if (dl) dl.href = "/api/receipt/" + escapePath(rec.receipt_id || rid) + ".zip";
+>>>>>>> Stashed changes
   $("#rid").textContent = rec.receipt_id;
   $("#sha256").textContent = rec.hash_hex;
   $("#sha512").textContent = rec.sha512_hex || "(none — receipt predates SHA-512 sibling)";
