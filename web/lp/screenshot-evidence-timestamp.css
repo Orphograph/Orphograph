@@ -1,0 +1,16 @@
+/* screenshot-evidence-timestamp.css — externalized from screenshot-evidence-timestamp.html (strict CSP: no inline styles). */
+
+/* Institutional palette override: map style.css/blog.css sage tokens
+     to cream/ink so LP pages read as instrument pages, not UI panels. */
+  :root {
+    --bg: #f7f1e3;
+    --panel: #fbf7ea;
+    --panel-stroke: #e9e1cb;
+    --panel-stroke-soft: #f0e9d4;
+    --text: #14110d;
+    --text-soft: #2c2620;
+    --muted: #6b6354;
+    --accent: #3a2f24;
+    --accent-soft: rgba(58,47,36,0.06);
+    --accent-stroke: rgba(58,47,36,0.18);
+  }
