@@ -587,6 +587,14 @@
       ));
       status.appendChild(p);
 
+      // afterglow: the habit forms right after the first success, not next week
+      const ag = document.createElement("p");
+      ag.style.margin = "6px 0 0";
+      ag.style.fontSize = "13px";
+      ag.style.opacity = "0.75";
+      ag.textContent = "The free tier covers three anchors a day — seal the next thing while you're here.";
+      status.appendChild(ag);
+
       // Optional: render created_at in local time if the server provided it.
       if (j.created_at) {
         const tnode = document.createElement("div");

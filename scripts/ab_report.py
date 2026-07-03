@@ -50,6 +50,43 @@ def load(path: pathlib.Path) -> dict[str, dict[str, int]]:
     return arms
 
 
+def breakthrough_latency(path: pathlib.Path) -> dict[str, float | None]:
+    """Median minutes from an anchor to the nearest PRECEDING same-arm home view.
+
+    The ledger deliberately carries no user identifiers, so this is a
+    cross-user proxy for time-to-breakthrough; at low traffic (few concurrent
+    visitors) it approximates the real per-visitor latency. Label it a proxy.
+    """
+    import datetime
+    views: dict[str, list[datetime.datetime]] = {"cream": [], "dark": []}
+    deltas: dict[str, list[float]] = {"cream": [], "dark": []}
+    if not path.exists():
+        return {"cream": None, "dark": None}
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        try:
+            rec = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+        arm = rec.get("variant")
+        if arm not in views:
+            continue
+        try:
+            ts = datetime.datetime.fromisoformat(rec["ts"])
+        except (KeyError, ValueError):
+            continue
+        if rec.get("event") == "home_view":
+            views[arm].append(ts)
+        elif rec.get("event") == "anchor" and views[arm]:
+            prior = [v for v in views[arm] if v <= ts]
+            if prior:
+                deltas[arm].append((ts - max(prior)).total_seconds() / 60)
+    out: dict[str, float | None] = {}
+    for arm, d in deltas.items():
+        d.sort()
+        out[arm] = d[len(d) // 2] if d else None
+    return out
+
+
 def two_proportion_z(x1: int, n1: int, x2: int, n2: int) -> tuple[float, float]:
     """z statistic and two-sided p-value for rate(x1/n1) vs rate(x2/n2)."""
     if min(n1, n2) == 0:
@@ -91,6 +128,10 @@ def main() -> None:
         z, p = two_proportion_z(d.get(key, 0), d.get("views", 0), c.get(key, 0), c.get("views", 0))
         sig = "SIGNIFICANT at 95%" if p < 0.05 else "not significant yet"
         print(f"\n{label}: dark vs cream  z={z:+.2f}  p={p:.3f}  → {sig}")
+    lat = breakthrough_latency(path)
+    fmt = lambda v: f"{v:.0f} min" if v is not None else "n/a"
+    print(f"\nbreakthrough latency (proxy: anchor → nearest preceding same-arm view): "
+          f"cream {fmt(lat['cream'])} · dark {fmt(lat['dark'])}")
     total_views = c.get("views", 0) + d.get("views", 0)
     if total_views < 800:
         print(f"\nNote: {total_views} total views — at low traffic expect weeks before "
