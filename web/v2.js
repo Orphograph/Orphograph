@@ -539,7 +539,7 @@
             "info"
           );
           const cta = document.createElement("a");
-          cta.href = "/pay/crypto.html?plan=writer_pack";
+          cta.href = "/pay/crypto?plan=writer_pack";
           cta.className = "cta";
           cta.textContent = "Get a Writer Pack →";
           cta.style.display = "inline-block";
@@ -663,7 +663,7 @@
 
   // Render an inline failure inside the tier card. Two affordances:
   // "Try again" re-fires startCheckout for the same plan/button, and
-  // "Pay with crypto instead" routes to the existing /pay/crypto.html
+  // "Pay with crypto instead" routes to the existing /pay/crypto
   // flow that's already wired on the same card. No alert() — the prior
   // implementation blocked the page and offered no recovery path.
   function showCheckoutError(button, plan, message) {
@@ -693,7 +693,7 @@
     actions.appendChild(retry);
 
     const crypto = document.createElement("a");
-    crypto.href = "/pay/crypto.html";
+    crypto.href = "/pay/crypto";
     crypto.textContent = "Pay with crypto instead →";
     actions.appendChild(crypto);
 
