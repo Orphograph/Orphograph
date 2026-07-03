@@ -194,6 +194,22 @@ FUNNEL_EVENT_FIELDS = frozenset({"event", "page"})
 FUNNEL_EVENTS_PATH = DATA_DIR / "events.jsonl"
 MAX_EVENT_PAGE_LEN = 256
 
+# ── homepage A/B experiment (cream "/" vs dark "/v2" document) ──────────────
+# ORPHO_AB_HOME = fraction of first-time human visitors who get the dark
+# document served AT "/" (0 = experiment off). Read per-request so ops can
+# flip it via env without code changes and tests can toggle it. Assignment is
+# sticky via a 1-bit HttpOnly cookie; bots always get cream (SEO stability).
+# Measurement is entirely server-side into data/ab_home.jsonl — the funnel
+# collector's privacy contract (no cookies recorded) stays untouched.
+AB_HOME_COOKIE = "orpho_ab_home"
+AB_LOG_PATH = DATA_DIR / "ab_home.jsonl"
+_AB_BOT_RE = re.compile(
+    r"bot|crawl|spider|slurp|bingpreview|facebookexternalhit|twitterbot|"
+    r"linkedinbot|whatsapp|telegram|lighthouse|headless|python-urllib|"
+    r"python-requests|curl|wget",
+    re.I,
+)
+
 
 def _subscription_active_for(email: str | None) -> bool:
     """True if `email` has an active subscription directly OR via team membership.
@@ -451,6 +467,72 @@ def _build_sitemap() -> str:
     return "\n".join(lines)
 
 
+def _ab_log(event: str, variant: str, extra: dict | None = None) -> None:
+    """Append one experiment record. Best-effort: analytics must never break serving."""
+    try:
+        from datetime import datetime, timezone
+        rec = {"ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+               "event": event, "variant": variant}
+        if extra:
+            rec.update(extra)
+        with open(AB_LOG_PATH, "a", encoding="utf-8") as f:
+            f.write(json.dumps(rec, separators=(",", ":")) + "\n")
+    except Exception:
+        pass
+
+
+def _ab_cookie_variant(handler: BaseHTTPRequestHandler) -> str | None:
+    """The visitor's experiment arm, or None when unassigned/invalid."""
+    try:
+        jar = SimpleCookie()
+        jar.load(handler.headers.get("Cookie", ""))
+        morsel = jar.get(AB_HOME_COOKIE)
+        value = morsel.value if morsel else ""
+        return value if value in ("cream", "dark") else None
+    except Exception:
+        return None
+
+
+def _serve_ab_home(handler: BaseHTTPRequestHandler) -> bool:
+    """Cream-vs-dark homepage split at "/". Returns True when this function
+    wrote the response; False → caller falls through to the normal cream
+    homepage (experiment off, bot traffic, or unreadable variant document).
+    Both arms are served with no-store so shared caches can't bleed arms.
+    """
+    try:
+        fraction = float(os.environ.get("ORPHO_AB_HOME", "0") or 0)
+    except ValueError:
+        fraction = 0.0
+    if fraction <= 0:
+        return False
+    if _AB_BOT_RE.search(handler.headers.get("User-Agent", "")):
+        return False
+    variant = _ab_cookie_variant(handler)
+    newly_assigned = variant is None
+    if newly_assigned:
+        variant = "dark" if secrets.randbelow(10_000) < int(fraction * 10_000) else "cream"
+    doc = WEB_DIR / ("v2/index.html" if variant == "dark" else "index.html")
+    try:
+        body = doc.read_bytes()
+    except OSError:
+        return False
+    handler.send_response(200)
+    handler.send_header("Content-Type", "text/html; charset=utf-8")
+    handler.send_header("Content-Length", str(len(body)))
+    handler.send_header("Cache-Control", "no-store")
+    handler.send_header("Vary", "Cookie")
+    if newly_assigned:
+        cookie = f"{AB_HOME_COOKIE}={variant}; Max-Age=2592000; Path=/; SameSite=Lax; HttpOnly"
+        if COOKIE_SECURE:
+            cookie += "; Secure"
+        handler.send_header("Set-Cookie", cookie)
+    _security_headers(handler)
+    handler.end_headers()
+    handler.wfile.write(body)
+    _ab_log("home_view", variant, {"new": newly_assigned})
+    return True
+
+
 def _serve_static(handler: BaseHTTPRequestHandler, rel_path: str) -> None:
     if rel_path in ("", "/"):
         rel_path = "index.html"
@@ -616,6 +698,14 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):  # noqa: N802
         path = self.path.split("?", 1)[0]
+        # homepage A/B: split "/" between the cream and dark documents
+        if path == "/" and _serve_ab_home(self):
+            return
+        # homepage A/B: attribute checkout-page reach to the visitor's arm
+        if path.startswith("/pay/crypto"):
+            _ab_arm = _ab_cookie_variant(self)
+            if _ab_arm:
+                _ab_log("checkout_view", _ab_arm)
         # /api/event is POST-only. Reject any other method (incl. GET) with
         # 405 so we don't leak internal state via inadvertent GET-as-probe.
         if path == "/api/event":
@@ -1663,6 +1753,10 @@ class Handler(BaseHTTPRequestHandler):
             _json_response(self, 400, {"error": str(e),
                                        "credit_refunded": pack_consumed})
             return
+        # homepage A/B: attribute the successful anchor to the visitor's arm
+        _ab_arm = _ab_cookie_variant(self)
+        if _ab_arm:
+            _ab_log("anchor", _ab_arm)
         low_redundancy = record["calendars_ok"] < MIN_CALENDARS_OK
         # Total calendar outage: 0 calendars accepted the hash, so the receipt
         # has no Bitcoin commitment and can never upgrade — it is worthless.
