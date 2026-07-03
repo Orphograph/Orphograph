@@ -1,0 +1,53 @@
+{
+  "receipt_id": "DatasetProvenanceSample",
+  "created_at": "2026-06-30T04:16:08+00:00",
+  "hash_hex": "a51e140920f3a874ef2348c1bd7e0c9db1c28aa52284799e1863e1e2119eb891",
+  "sha512_hex": null,
+  "client_label": "dataset-provenance PoC",
+  "source": "free",
+  "private": false,
+  "owner_id": null,
+  "attestation": null,
+  "c2pa_manifest_hash": null,
+  "metadata": null,
+  "calendars_ok": 5,
+  "calendars_total": 5,
+  "successes": [
+    {
+      "calendar": "https://a.pool.opentimestamps.org",
+      "ots_path": "receipts/DatasetProvenanceSample/a.ots",
+      "ots_bytes": 342
+    },
+    {
+      "calendar": "https://b.pool.opentimestamps.org",
+      "ots_path": "receipts/DatasetProvenanceSample/b.ots",
+      "ots_bytes": 235
+    },
+    {
+      "calendar": "https://alice.btc.calendar.opentimestamps.org",
+      "ots_path": "receipts/DatasetProvenanceSample/alice.ots",
+      "ots_bytes": 342
+    },
+    {
+      "calendar": "https://finney.calendar.eternitywall.com",
+      "ots_path": "receipts/DatasetProvenanceSample/finney.ots",
+      "ots_bytes": 186
+    },
+    {
+      "calendar": "https://btc.calendar.catallaxy.com",
+      "ots_path": "receipts/DatasetProvenanceSample/btc.ots",
+      "ots_bytes": 215
+    }
+  ],
+  "failures": [],
+  "kind": "folder",
+  "leaf_count": 8,
+  "merkle_algorithm": "orphograph-merkle-v1-rfc6962",
+  "status": "partial",
+  "btc_pinned_at": "2026-06-30T05:22:16+00:00",
+  "pinned_count": 1,
+  "pinned_total": 5,
+  "upgrade_attempts": 1,
+  "upgrade_stalls": 0,
+  "paths_public": true
+}

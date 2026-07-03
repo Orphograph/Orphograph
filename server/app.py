@@ -384,6 +384,7 @@ def _build_sitemap() -> str:
         ("/blog/", "0.8"),
         ("/v2", "0.8"),
         ("/learn", "0.8"),
+        ("/dataset-provenance", "0.8"),
         ("/buy", "0.8"),
         ("/lp/", "0.8"),
         ("/about", "0.7"),
@@ -970,6 +971,30 @@ class Handler(BaseHTTPRequestHandler):
                 self.wfile.write(payload)
             except OSError:
                 _serve_static(self, "/receipt.html")
+            return
+        if path.startswith("/certificate/"):
+            # Hosted dataset-provenance certificate view for folder anchors.
+            # Mirrors /r/<id>: the JS reads the id from the URL and fetches
+            # /api/verify_folder/<id>; we template the id into the page and
+            # the OG meta so a shared certificate link unfurls with its id.
+            rid = path[len("/certificate/"):].rstrip("/")
+            if not RECEIPT_ID_RE.match(rid):
+                self.send_error(400, "invalid receipt id")
+                return
+            try:
+                html_path = WEB_DIR / "certificate.html"
+                body = html_path.read_text()
+                body = body.replace("{{RECEIPT_ID}}", rid)
+                payload = body.encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(payload)))
+                self.send_header("Cache-Control", "public, max-age=300")
+                _security_headers(self)
+                self.end_headers()
+                self.wfile.write(payload)
+            except OSError:
+                _serve_static(self, "/certificate.html")
             return
         if path.startswith("/buy/"):
             # BTC payment page — page is static; JS reads order_id from URL.
@@ -2960,6 +2985,10 @@ class Handler(BaseHTTPRequestHandler):
         else:
             source = "free"
         want_private = bool(payload.get("private", False)) and subscription_active
+        # Opt-in: publish the manifest's file paths so a shared certificate
+        # renders them to anyone (default keeps paths owner-only). Independent
+        # of `private`, which gates the whole receipt to its owner.
+        want_public_paths = bool(payload.get("paths_public", False))
         try:
             record = engine.anchor_hash(
                 root_hex,
@@ -2997,6 +3026,8 @@ class Handler(BaseHTTPRequestHandler):
             on_disk["kind"] = "folder"
             on_disk["leaf_count"] = len(leaves)
             on_disk["merkle_algorithm"] = merkle.ALGORITHM
+            if want_public_paths:
+                on_disk["paths_public"] = True
             if sig_verified is not None:
                 on_disk["signature_verified"] = sig_verified
                 on_disk["signer_kid"] = signer_kid
@@ -3016,6 +3047,8 @@ class Handler(BaseHTTPRequestHandler):
         if sig_verified is not None:
             response_body["signature_verified"] = sig_verified
             response_body["signer_kid"] = signer_kid
+        if want_public_paths:
+            response_body["paths_public"] = True
         _json_response(self, 200, response_body)
 
     def _handle_verify_folder(self, rid: str) -> None:
@@ -3057,7 +3090,7 @@ class Handler(BaseHTTPRequestHandler):
         # owner. The full manifest is required to construct inclusion proofs,
         # but inclusion-proof requests already require the caller to KNOW the
         # path — so withholding the index is the right default.
-        if not is_owner:
+        if not is_owner and not record.get("paths_public"):
             redacted_leaves = []
             for i, leaf in enumerate(manifest.get("leaves", [])):
                 redacted_leaves.append({
@@ -3072,9 +3105,12 @@ class Handler(BaseHTTPRequestHandler):
                 "leaves": redacted_leaves,
                 "paths_redacted": True,
                 "paths_redaction_reason": (
-                    "Leaf paths are visible only to the receipt owner. "
-                    "Inclusion proofs remain available to anyone who already "
-                    "knows the path of the file they wish to prove."
+                    "Leaf paths are visible only to the receipt owner. Each "
+                    "file's SHA-256 digest and size remain public, so anyone "
+                    "holding a candidate file can confirm its membership; only "
+                    "the human-readable paths are withheld. Inclusion proofs "
+                    "remain available to anyone who already knows the path of "
+                    "the file they wish to prove."
                 ),
             }
         _json_response(self, 200, {"receipt": record, "manifest": manifest})
@@ -4028,6 +4064,38 @@ def _seed_sample_receipt() -> None:
     sys.stderr.write(f"seeded sample receipt {rid} from {sample_dir} → {target}\n")
 
 
+def _seed_sample_folder_receipt() -> None:
+    """Copy web/sample-folder/ → <RECEIPTS_DIR>/<id>/ on first boot if missing.
+
+    The folder analogue of _seed_sample_receipt: a permanent, git-tracked
+    dataset-provenance certificate sample (receipt.json + manifest.json + the
+    .ots proofs) so /certificate/<id> has a live demo that never prunes. The
+    seeded receipt sets paths_public so the manifest renders in full publicly.
+    """
+    sample_meta = WEB_DIR / "sample-folder" / "index.json"
+    if not sample_meta.exists():
+        return
+    import shutil
+    try:
+        meta = json.loads(sample_meta.read_text())
+    except (OSError, json.JSONDecodeError):
+        return
+    rid = meta.get("receipt_id")
+    if not rid:
+        return
+    target = engine.RECEIPTS_DIR / rid
+    if target.exists():
+        return
+    target.parent.mkdir(parents=True, exist_ok=True)
+    sample_dir = WEB_DIR / "sample-folder"
+    target.mkdir()
+    for item in sample_dir.iterdir():
+        if item.name in ("index.json",):
+            continue
+        shutil.copy2(item, target / item.name, follow_symlinks=False)
+    sys.stderr.write(f"seeded sample folder receipt {rid} from {sample_dir} → {target}\n")
+
+
 def _start_upgrade_scheduler() -> None:
     """Background thread that runs upgrade_worker on a cadence.
 
@@ -4221,6 +4289,7 @@ def _start_funnel_digest_scheduler() -> None:
 def main() -> int:
     WEB_DIR.mkdir(parents=True, exist_ok=True)
     _seed_sample_receipt()
+    _seed_sample_folder_receipt()
     _start_upgrade_scheduler()
     _start_cadence_scheduler()
     _start_funnel_digest_scheduler()

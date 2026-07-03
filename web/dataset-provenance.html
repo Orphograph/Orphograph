@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Orphograph — Dataset provenance, anchored to Bitcoin</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#f6f1e3">
+<meta name="description" content="Prove what was in a training set, and when. Orphograph binds a dataset, its license/consent documents, and its acquisition log into one Bitcoin-anchored Merkle receipt — every file independently verifiable, the data never leaving your environment.">
+<meta property="og:title" content="Orphograph — Dataset provenance, anchored to Bitcoin">
+<meta property="og:description" content="Prove a dataset existed in one exact form by a date — every file independently verifiable, the data never leaving your environment.">
+<meta property="og:url" content="https://orphograph.com/dataset-provenance">
+<meta property="og:type" content="article">
+<meta property="og:image" content="https://orphograph.com/og-image.png?v=8">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Orphograph — Dataset provenance, anchored to Bitcoin">
+<link rel="canonical" href="https://orphograph.com/dataset-provenance">
+<link rel="icon" type="image/png" href="/favicon.png?v=8">
+<link rel="stylesheet" href="/index.css?v=15">
+<link rel="stylesheet" href="/dataset-provenance.css?v=1">
+<meta name="copyright" content="© 2026 Orphograph. Code under MIT (see /LICENSE). Brand, content, and design — all rights reserved.">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "headline": "Dataset provenance, anchored to Bitcoin",
+  "description": "Bind a dataset, its license/consent documents, and its acquisition log into one Bitcoin-anchored Merkle receipt. Each file is independently verifiable; the data never leaves your environment.",
+  "about": ["dataset provenance", "data governance", "machine learning", "Merkle tree", "OpenTimestamps", "Bitcoin timestamping"],
+  "publisher": { "@type": "Organization", "name": "Orphograph", "url": "https://orphograph.com" },
+  "url": "https://orphograph.com/dataset-provenance"
+}
+</script>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap row">
+    <a href="/" class="brand">Orphograph</a>
+    <nav>
+      <a href="/learn">Method</a>
+      <a href="/faq">FAQ</a>
+      <a href="/method/evidence-law">Evidence law</a>
+      <a href="/continuity">Continuity</a>
+      <a href="/status">Status</a>
+      <a href="/signin">Vault</a>
+    </nav>
+  </div>
+</header>
+
+<main class="arch-wrap">
+
+  <p class="recipient-label">For ML &amp; data teams</p>
+  <h1>Prove what was in a training set — and when.</h1>
+  <p class="arch-lede">
+    Audits, customer due-diligence, the EU AI Act's data-governance expectations, and copyright or consent disputes all ask the same question of a dataset: <em>what exactly was in it, and by when?</em> A spreadsheet someone can edit afterward is not an answer. Orphograph binds a dataset, its license and consent documents, and its acquisition log into a single Bitcoin-anchored Merkle receipt — so the answer is cryptographic, dated, and independently checkable. The data never leaves your environment; only fingerprints are anchored.
+  </p>
+
+  <section>
+    <h2>What a dataset receipt proves</h2>
+    <div class="arch-rule"></div>
+    <p><strong>The set existed in this exact form by the anchored date.</strong> Every file — the data, the license and consent documents, the acquisition log — is hashed and folded into one Merkle root. That root is committed to a Bitcoin block whose date the chain fixes. The whole bundle therefore existed, in its present form, by the time that block was mined.</p>
+    <p><strong>Nothing has changed since.</strong> Altering any byte of any file — relabelling an image, swapping a license, editing the log — changes the Merkle root. If the root still matches the receipt, the bundle is bit-for-bit what was anchored.</p>
+    <p><strong>Each file is independently verifiable.</strong> A Merkle inclusion proof lets anyone confirm that one specific file belonged to the certified set without seeing — or trusting you about — any other file in it.</p>
+  </section>
+
+  <section>
+    <h2>What it does NOT prove</h2>
+    <div class="arch-rule"></div>
+    <p><strong>It does not prove the data was lawfully sourced, licensed, or owned.</strong> A receipt records that bytes existed at a moment; it does not establish the legal right to those bytes. That is a separate question for your counsel and the relevant forum.</p>
+    <p><strong>It does not prove the acquisition log is truthful.</strong> The log is anchored as written. The receipt fixes <em>when</em> the log existed and that it has not changed since — not that its contents are accurate or complete.</p>
+    <p><strong>It does not prove authorship.</strong> A fingerprint binds a file to a date, not to an author. Provenance tooling that claims otherwise is a liability; this does not.</p>
+  </section>
+
+  <section>
+    <h2>How it works</h2>
+    <div class="arch-rule"></div>
+    <p><strong>1 — Assemble a bundle.</strong> A folder with your dataset under <code>data/</code>, your license and consent documents under <code>licenses/</code>, and an <code>acquisition_log</code> describing where each source came from, when, and under what terms.</p>
+    <p><strong>2 — Hash it locally.</strong> Every file is SHA-256'd on your machine and combined into an RFC&nbsp;6962 Merkle tree. Only the manifest — relative paths and digests and the root — is sent to be anchored. <strong>The dataset itself never leaves your environment</strong>; an air-gapped mode anchors nothing at all.</p>
+    <p><strong>3 — Receive one receipt and one certificate.</strong> The Merkle root is anchored to Bitcoin via OpenTimestamps. You get a hosted, shareable provenance certificate — summary, the honest scope above, your license and acquisition-log documents, the full file manifest, and a verifier where an auditor can drop any file and confirm in their own browser that it belongs to the set. <a href="/certificate/DatasetProvenanceSample">See a live sample certificate →</a></p>
+  </section>
+
+  <section>
+    <h2>Run it in your pipeline</h2>
+    <div class="arch-rule"></div>
+    <p>The reference CLI anchors a bundle as a build step and emits a human-readable certificate plus a machine-verifiable manifest. Exit codes make it a CI gate.</p>
+    <pre class="dp-code"><code># Anchor a dataset bundle (only fingerprints leave the machine)
+python3 provenance.py anchor --bundle ./my-dataset --name "My Dataset v1"
+
+# Air-gapped: build the receipt + certificate, anchor nothing
+python3 provenance.py anchor --bundle ./my-dataset --name "My Dataset v1" --offline
+
+# Re-verify any time — rebuild the root from disk, compare to the certificate
+python3 provenance.py verify --cert out/certificate.json --bundle ./my-dataset
+
+# Prove one file belongs to the certified set
+python3 provenance.py verify --cert out/certificate.json --bundle ./my-dataset \
+        --file data/images/cat_001.jpg</code></pre>
+    <p class="muted">It reuses the same open Merkle format the public verifier checks — no proprietary format, no lock-in. If Orphograph disappeared tomorrow, the Bitcoin anchor and the manifest are all anyone needs.</p>
+  </section>
+
+  <div class="disclaimer-block">
+    <p><strong>Disclaimer.</strong> Orphograph provides proof-of-existence only. It is not a law firm, not a qualified electronic trust service, and not a determination of ownership, licensing, or lawful acquisition. A dataset receipt is technical evidence of integrity and time; whether it is admissible or sufficient in any particular audit or proceeding is a question for that forum's rules and your counsel. Nothing on this page is legal advice.</p>
+  </div>
+
+  <aside class="next-step-card" aria-label="Next step">
+    <p class="ns-label">Next step</p>
+    <h2>Anchor a dataset, or verify one.</h2>
+    <div class="ns-row">
+      <a href="/#drop" class="ns-btn ns-primary">Anchor a folder →</a>
+      <a href="/certificate/DatasetProvenanceSample" class="ns-btn ns-secondary">See a live certificate →</a>
+      <a href="/verify/" class="ns-btn ns-secondary">Run the open-source verifier →</a>
+    </div>
+  </aside>
+
+</main>
+
+<footer>
+  <div class="wrap footer-inner">
+    <p>Orphograph · An empirical notary.</p>
+    <p class="mt-8">
+      <a href="/" class="link-muted">Home</a> ·
+      <a href="/method/evidence-law" class="link-muted">Evidence law</a> ·
+      <a href="/faq" class="link-muted">FAQ</a> ·
+      <a href="/status" class="link-muted">Status</a> ·
+      <a href="/continuity" class="link-muted">Continuity</a>
+    </p>
+  </div>
+</footer>
+
+<script src="/assets/event.js" defer></script>
+</body>
+</html>

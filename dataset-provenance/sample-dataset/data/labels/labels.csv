@@ -1,0 +1,4 @@
+filename,label,split
+images/cat_001.jpg,cat,train
+images/cat_002.jpg,cat,train
+images/dog_001.jpg,dog,val

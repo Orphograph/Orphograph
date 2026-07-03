@@ -98,6 +98,39 @@ def test_render_honors_base_url():
     assert "https://orphograph.com/r/abc123_xyz" in svg
 
 
+def test_render_folder_receipt_is_dataset_aware():
+    """A folder (dataset) receipt shows the file count and links to the cert."""
+    svg = badge_svg.render(
+        {
+            "receipt_id": "DatasetSample",
+            "created_at": "2026-06-30T04:16:08+00:00",
+            "kind": "folder",
+            "leaf_count": 8,
+        },
+        base_url="https://orphograph.com",
+    )
+    assert "dataset" in svg
+    assert "8 files" in svg
+    # Folder badges link to the certificate view, not the single-file /r/ view.
+    assert "https://orphograph.com/certificate/DatasetSample" in svg
+    assert "/r/DatasetSample" not in svg
+
+
+def test_render_folder_without_leaf_count_still_links_to_certificate():
+    """The certificate link is independent of the subtitle: a folder receipt
+    with no leaf_count links to /certificate/ and omits the 'dataset · N files'
+    subtitle rather than emitting a bogus '0 files'."""
+    svg = badge_svg.render(
+        {"receipt_id": "FolderNoLeaf", "kind": "folder",
+         "created_at": "2026-06-30T04:16:08+00:00"},
+        base_url="https://orphograph.com",
+    )
+    assert "https://orphograph.com/certificate/FolderNoLeaf" in svg
+    assert "/r/FolderNoLeaf" not in svg
+    assert "dataset" not in svg      # no dataset subtitle without a positive count
+    assert "files" not in svg
+
+
 def test_render_omits_client_label_and_email_and_hash():
     """Privacy invariant: receipt extras must never bleed into the badge."""
     rid = "abc123_xyz"

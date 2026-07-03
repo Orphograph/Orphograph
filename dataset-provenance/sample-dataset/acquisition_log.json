@@ -1,0 +1,9 @@
+{
+  "dataset": "sample-vision-v1",
+  "compiled_by": "data-team",
+  "sources": [
+    {"file": "data/images/cat_001.jpg", "origin": "openimages", "license": "CC BY 4.0", "acquired": "2026-06-01", "url_sha256_only": true},
+    {"file": "data/images/cat_002.jpg", "origin": "openimages", "license": "CC BY 4.0", "acquired": "2026-06-01"},
+    {"file": "data/images/dog_001.jpg", "origin": "internal-capture", "license": "owned", "acquired": "2026-06-02", "consent": "terms_of_use.txt"}
+  ]
+}

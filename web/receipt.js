@@ -277,6 +277,13 @@ async function main() {
     return showError(`Server returned ${r.status}.`);
   }
   const rec = await r.json();
+  // Folder (dataset) anchors render as a provenance certificate, not a
+  // single-file receipt. Redirect so shared /r/<id> links to folder
+  // anchors land on the right view.
+  if (rec.kind === "folder") {
+    location.replace("/certificate/" + escapePath(rid));
+    return;
+  }
   renderVerdict(rec);
   renderFacts(rec);
   const dl = document.getElementById("download-zip");

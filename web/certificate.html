@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Provenance Certificate {{RECEIPT_ID}}</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<meta name="description" content="Dataset provenance certificate. The dataset, its licenses, and its acquisition log, bound into one Bitcoin-anchored Merkle receipt. Verifies independently of Orphograph.">
+<meta property="og:title" content="Dataset Provenance Certificate {{RECEIPT_ID}}">
+<meta property="og:description" content="A dataset existed in this exact form by the anchored date — every file independently verifiable against the Bitcoin chain.">
+<meta property="og:url" content="https://orphograph.com/certificate/{{RECEIPT_ID}}">
+<meta property="og:type" content="article">
+<meta property="og:image" content="https://orphograph.com/og-image.png?v=8">
+<meta property="og:image:width" content="512">
+<meta property="og:image:height" content="512">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Dataset Provenance Certificate {{RECEIPT_ID}}">
+<meta name="twitter:description" content="A dataset existed in this exact form by the anchored date — every file independently verifiable against the Bitcoin chain.">
+<meta name="twitter:image" content="https://orphograph.com/og-image.png?v=8">
+<link rel="icon" type="image/png" href="/favicon.png?v=8">
+<link rel="stylesheet" href="/style.css?v=5">
+<link rel="stylesheet" href="/index.css?v=15">
+<link rel="stylesheet" href="/receipt.css?v=2">
+<link rel="stylesheet" href="/certificate.css?v=4">
+<meta name="copyright" content="© 2026 Orphograph. MIT — see /LICENSE">
+</head>
+<body class="receipt-page certificate-page">
+
+<header class="no-print">
+  <div class="brand"><a href="/">Orphograph</a></div>
+  <nav><a href="/">Home</a> <a href="#" id="print-btn">Save as PDF</a></nav>
+</header>
+
+<main>
+<div class="no-print cta-row-outline" id="visitor-cta-what">
+  <p class="cta-text">Need provenance for your own dataset? The data never leaves your machine — only fingerprints are anchored.</p>
+  <a href="/dataset-provenance" class="cta-btn-outline">How dataset provenance works →</a>
+</div>
+
+<article id="card" class="receipt-card certificate-card">
+  <div class="card-header">
+    <div>
+      <h1>Dataset Provenance Certificate</h1>
+      <p class="dataset-name mono" id="dataset-name"></p>
+      <p class="muted" id="anchored"></p>
+    </div>
+    <div class="brand-stamp">
+      <img src="/seal-display.png?v=8" alt="Orphograph seal" class="receipt-seal">
+      <p class="muted small">anchored to Bitcoin via<br>OpenTimestamps</p>
+    </div>
+  </div>
+
+  <section class="cert-summary" id="summary">
+    <div class="summary-stat"><span class="summary-num" id="total-files">—</span><span class="summary-label">files</span></div>
+    <div class="summary-stat"><span class="summary-num" id="total-bytes">—</span><span class="summary-label">total size</span></div>
+    <div class="summary-stat" id="stat-licenses" hidden><span class="summary-num" id="cat-licenses">—</span><span class="summary-label">license/consent docs</span></div>
+    <div class="summary-stat" id="stat-log" hidden><span class="summary-num" id="cat-log">—</span><span class="summary-label">acquisition-log files</span></div>
+  </section>
+
+  <dl class="kv">
+    <dt>Receipt ID</dt><dd id="rid" class="mono"></dd>
+    <dt>Merkle root (SHA-256)</dt><dd id="root" class="mono"></dd>
+    <dt>Algorithm</dt><dd id="algo" class="mono"></dd>
+    <dt>Status</dt><dd id="status"></dd>
+    <dt>Calendars</dt><dd id="cals"></dd>
+    <dt>BTC pinned at</dt><dd id="btc"></dd>
+  </dl>
+
+  <section class="cert-scope">
+    <div class="scope-col scope-proves">
+      <h2>What this certifies</h2>
+      <ul>
+        <li>This dataset, its license/consent documents, and its acquisition log all existed in this exact form by the anchored date.</li>
+        <li>No file has been added, removed, or modified since — any change alters the Merkle root.</li>
+        <li>Each file is independently verifiable below, without re-disclosing the rest of the set.</li>
+      </ul>
+    </div>
+    <div class="scope-col scope-limits">
+      <h2>What it does <em>not</em> certify</h2>
+      <ul>
+        <li>That the data was lawfully sourced, licensed, or owned.</li>
+        <li>That the acquisition log is truthful or complete.</li>
+        <li>Authorship of any file.</li>
+      </ul>
+      <p class="muted small">Corroborating evidence of integrity and time — not a license, not ownership.</p>
+    </div>
+  </section>
+
+  <section class="cert-docs" id="docs-section" hidden>
+    <div id="licenses-block" hidden>
+      <h2>License &amp; consent documents</h2>
+      <ul class="doc-list" id="licenses-list"></ul>
+    </div>
+    <div id="log-block" hidden>
+      <h2>Acquisition log</h2>
+      <ul class="doc-list" id="log-list"></ul>
+    </div>
+  </section>
+
+  <section class="cert-manifest">
+    <h2>File manifest <span class="muted small" id="manifest-count"></span></h2>
+    <p class="muted small" id="redaction-note" hidden></p>
+    <p class="cert-published-note small" id="paths-public-note" hidden>The owner has published this dataset's file paths — the full manifest below is shown to everyone.</p>
+    <div class="manifest-scroll">
+      <table class="manifest-table" id="manifest-table">
+        <thead><tr><th scope="col">#</th><th scope="col">File</th><th scope="col">SHA-256</th><th scope="col" class="num">Size</th></tr></thead>
+        <tbody id="manifest-body"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="cert-inclusion no-print" id="inclusion-tool">
+    <h2>Verify a file is in this set</h2>
+    <p class="hint small">
+      Both checks run entirely in your browser — <strong>the file never leaves
+      your device.</strong> Drop a file to check it by its contents, or verify a
+      known path against its Merkle inclusion proof.
+    </p>
+    <div class="dropcheck" id="dropcheck" tabindex="0" role="button" aria-label="Drop a file here to check whether it belongs to this dataset">
+      <input type="file" id="dropcheck-input" class="dropcheck-input" hidden>
+      <p class="dropcheck-prompt"><strong>Drop a file here</strong>, or click to choose.</p>
+      <p class="muted small dropcheck-sub">We SHA-256 it locally and check the fingerprint against this dataset's manifest.</p>
+    </div>
+    <div id="dropcheck-result" class="inclusion-result" role="status" aria-live="polite" hidden></div>
+    <details class="bypath-details">
+      <summary>…or verify by path (with full Merkle proof)</summary>
+      <p class="hint small">
+        Enter a path (or click a row above). We fetch its inclusion proof and
+        recompute the root <em>in your browser</em>; if it equals the certified
+        root, that file is provably part of this dataset.
+      </p>
+      <div class="inclusion-row">
+        <input type="text" id="inclusion-path" placeholder="data/images/cat_001.jpg" class="inclusion-input" aria-label="File path to verify">
+        <button type="button" id="inclusion-btn" class="share-btn share-btn-ink">Verify inclusion</button>
+      </div>
+      <div id="inclusion-result" class="inclusion-result" role="status" aria-live="polite" hidden></div>
+    </details>
+  </section>
+
+  <section class="checks">
+    <h2>OpenTimestamps proofs — the root, anchored to Bitcoin</h2>
+    <ul id="ots-list"></ul>
+  </section>
+
+  <section class="explorers">
+    <h2>Independent verification — don't trust us, check the chain</h2>
+    <p class="hint small">
+      The Merkle root above is what lands on Bitcoin. The links below go to
+      <em>public, third-party</em> services we don't run. If any one shows the
+      root anchored, the proof holds — even if orphograph.com disappears.
+    </p>
+    <div id="explorer-grid" class="explorer-grid"></div>
+  </section>
+
+  <section class="footnote">
+    <p>
+      This certificate proves the Merkle root above was submitted to the
+      listed OpenTimestamps calendars at the time shown, and that every listed
+      file hashes into that root. The calendars aggregate the root into a
+      Bitcoin transaction; each <code>.ots</code> file is independently
+      verifiable against the public chain.
+    </p>
+    <p>
+      To verify without trusting us: download the receipt JSON + the
+      <code>.ots</code> files from <code>/api/receipt/&lt;id&gt;</code> and the
+      manifest from <code>/api/verify_folder/&lt;id&gt;</code>, then run the
+      open-source verifier at
+      <a id="verifier-url" href="/verify/">orphograph.com/verify/</a>.
+    </p>
+    <p class="muted small">
+      Proof-of-existence only. Not a qualified eIDAS timestamp. Not a license
+      or a determination of ownership. See <a href="/terms">Terms</a>.
+    </p>
+  </section>
+</article>
+
+<aside class="share-block no-print" aria-label="Share this certificate">
+  <h2 class="share-heading">Share this certificate</h2>
+  <p class="muted small share-intro">The link below resolves the same certificate from any device — hand it to an auditor, a customer, or a court.</p>
+  <div class="share-row">
+    <input type="text" id="share-url" readonly aria-label="Public link to this certificate" class="share-url-input">
+    <button type="button" id="copy-link-btn" class="share-btn share-btn-ink">Copy link</button>
+    <button type="button" id="native-share-btn" class="share-btn share-btn-outline" hidden>Share…</button>
+  </div>
+
+  <details class="embed-details">
+    <summary class="embed-summary">Embed a verifiable dataset badge</summary>
+    <div class="embed-body">
+      <p class="muted small embed-preview-label">A live "dataset anchored" badge for your repo README, dataset card, or model page — updates as the Bitcoin pin lands:</p>
+      <p class="embed-preview-img-wrap"><img id="badge-preview" src="" alt="Orphograph dataset anchor badge" class="embed-preview-img"></p>
+      <p class="muted small embed-paste-label">Paste this HTML anywhere:</p>
+      <textarea id="embed-code" readonly rows="3" class="embed-code-area"></textarea>
+      <p class="embed-copy-wrap"><button type="button" id="copy-embed-btn" class="share-btn share-btn-outline-sm">Copy embed code</button></p>
+    </div>
+  </details>
+</aside>
+
+<p id="err" class="muted no-print" role="alert" hidden></p>
+</main>
+
+<footer class="no-print">
+  <small>
+    <a href="/">home</a> · <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a> ·
+    Powered by OpenTimestamps
+  </small>
+</footer>
+
+<script src="/certificate.js?v=4"></script>
+<script src="/assets/event.js" defer></script>
+</body>
+</html>
