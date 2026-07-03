@@ -20,7 +20,7 @@
 <link rel="icon" type="image/png" href="/favicon.png?v=8">
 <link rel="stylesheet" href="/style.css?v=5">
 <link rel="stylesheet" href="/index.css?v=15">
-<link rel="stylesheet" href="/receipt.css?v=2">
+<link rel="stylesheet" href="/receipt.css?v=3">
 <meta name="copyright" content="© 2026 Orphograph. MIT — see /LICENSE">
 </head>
 <body class="receipt-page">
@@ -31,21 +31,6 @@
 </header>
 
 <main>
-<div class="no-print cta-row" id="visitor-cta">
-  <p class="cta-text">First time here? You can anchor your own file in five seconds — no signup required.</p>
-  <a href="/#drop" class="cta-btn">Anchor a file →</a>
-</div>
-<div class="no-print cta-row" id="visitor-cta-pack">
-  <div class="cta-grow">
-    <p class="cta-text">Need your own? Pack of Fifty · $29 · 50 receipts that never expire.</p>
-    <p class="cta-subtext">Pay with crypto or bitcoin. No subscription.</p>
-  </div>
-  <a href="/#tiers" class="cta-btn">View Pack tiers →</a>
-</div>
-<div class="no-print cta-row-outline" id="visitor-cta-what">
-  <p class="cta-text">First time here? Read what this office does, then decide.</p>
-  <a href="/what-is-this" class="cta-btn-outline">See what this office does →</a>
-</div>
 <article id="card" class="receipt-card">
   <div class="card-header">
     <div>
@@ -58,62 +43,112 @@
     </div>
   </div>
 
-  <dl class="kv">
-    <dt>Receipt ID</dt><dd id="rid" class="mono"></dd>
-    <dt>SHA-256</dt><dd id="sha256" class="mono"></dd>
-    <dt>SHA-512 (quantum-hedge sibling)</dt><dd id="sha512" class="mono"></dd>
-    <dt>Client label</dt><dd id="label"></dd>
-    <dt>Status</dt><dd id="status"></dd>
-    <dt>Calendars</dt><dd id="cals"></dd>
-    <dt>BTC pinned at</dt><dd id="btc"></dd>
-    <dt id="attestation-label" hidden>Authorship claim</dt><dd id="attestation" hidden></dd>
-    <dt id="metadata-label" hidden>Camera metadata</dt><dd id="metadata" hidden></dd>
-  </dl>
-
-  <section class="checks">
-    <h2>OpenTimestamps proofs</h2>
-    <ul id="ots-list"></ul>
+  <!-- 1 · VERDICT — plain-language answer, first thing a skeptic reads.
+       Fixed min-height in CSS so async data does not shift the layout. -->
+  <section id="verdict" class="verdict" aria-live="polite">
+    <p id="verdict-private" class="verdict-private" hidden>This receipt is private. You are seeing it because you are signed in as its owner.</p>
+    <h2 id="verdict-headline" class="verdict-headline">Checking this record&hellip;</h2>
+    <p id="verdict-sub" class="verdict-sub"></p>
+    <p id="verdict-checked" class="verdict-checked muted small"></p>
   </section>
 
-  <section class="explorers">
-    <h2>Independent verification — don't trust us, check the chain</h2>
-    <p class="hint small">
-      The links below go to <em>public, third-party</em> services we don't run.
-      Each one independently confirms the same fact. If any one of them shows
-      your hash anchored, the proof holds — even if orphograph.com disappears.
-    </p>
-    <div id="explorer-grid" class="explorer-grid"></div>
-    <p class="hint small footnote-explorer">
-      <strong>Note:</strong> a SHA-256 hash is not a Bitcoin transaction. The
-      calendars batch many hashes into one Merkle root and that root lands in
-      a real Bitcoin transaction (usually within ~1 hour). The
-      <code>.ots</code> proof file contains the Merkle path from your hash to
-      the block. Once block-pinned, the BTC block links below resolve.
-    </p>
+  <!-- 2 · FACTS STRIP -->
+  <ul id="facts" class="facts needs-record" aria-label="Key facts">
+    <li><span class="fact-label">Sealed</span><span id="fact-sealed" class="fact-value">—</span></li>
+    <li><span class="fact-label">Bitcoin</span><span id="fact-btc" class="fact-value">—</span></li>
+    <li><span class="fact-label">Calendars</span><span id="fact-cals" class="fact-value">—</span></li>
+    <li><span class="fact-label">Receipt id</span><span id="fact-rid" class="fact-value mono">—</span></li>
+  </ul>
+
+  <!-- 3 · HONESTY BOX -->
+  <section class="honesty needs-record" aria-label="What this proves and what it does not">
+    <div class="honesty-col">
+      <h2>What this proves</h2>
+      <p>That this exact file — byte for byte — existed in this exact form on or before the sealed date above. Change one character and the proof no longer matches.</p>
+    </div>
+    <div class="honesty-col">
+      <h2>What it does not prove</h2>
+      <p>Who created the file, who owns it, or whether its contents are true. This is a record of existence in time, not a claim of authorship and not a legal determination.</p>
+    </div>
   </section>
 
-  <section class="footnote">
+  <!-- 4 · CHECK IT YOURSELF -->
+  <section class="check-yourself needs-record" aria-label="Verify this receipt independently">
+    <h2>Do not take our word for it</h2>
     <p>
-      This receipt proves the SHA-256 above was submitted to the listed
-      OpenTimestamps calendar servers at the time shown. The calendars
-      aggregate hashes into Bitcoin transactions; each <code>.ots</code>
-      file is independently verifiable against the public Bitcoin chain.
+      The proof behind this page is a standard OpenTimestamps record written into the
+      public Bitcoin blockchain. Anyone can re-check it with free, open-source tools —
+      no account with us, and no cooperation from us. If Orphograph disappeared tomorrow,
+      the proof files below would still verify against the Bitcoin chain exactly as they do today.
     </p>
-    <p>
-      To verify without trusting us, download the receipt JSON + the five
-      <code>.ots</code> files from <code>/api/receipt/&lt;id&gt;</code>, then
-      run the open-source verifier at
-      <a id="verifier-url" href="/verify/">orphograph.com/verify/</a>
-      against your original file.
-    </p>
-    <p class="muted small">
-      Proof-of-existence only. Not a qualified eIDAS timestamp.
-      Not legal evidence on its own. See <a href="/terms">Terms</a>.
-    </p>
+    <div class="check-actions">
+      <a id="download-zip" class="check-btn check-btn-ink" href="#" download>Download the proof files (.ots)</a>
+      <a class="check-btn" href="/verify-js">Verify in your browser</a>
+      <a class="check-btn" href="/learn">Verify with open-source tools</a>
+    </div>
   </section>
+
+  <!-- 5 · TECHNICAL DETAILS — collapsed by default; for experts. -->
+  <details id="tech" class="tech-details needs-record">
+    <summary>Technical details</summary>
+
+    <dl class="kv">
+      <dt>Receipt ID</dt><dd id="rid" class="mono"></dd>
+      <dt>SHA-256</dt><dd id="sha256" class="mono"></dd>
+      <dt>SHA-512 (quantum-hedge sibling)</dt><dd id="sha512" class="mono"></dd>
+      <dt>Client label</dt><dd id="label"></dd>
+      <dt>Status</dt><dd id="status"></dd>
+      <dt>Calendars</dt><dd id="cals"></dd>
+      <dt>BTC pinned at</dt><dd id="btc"></dd>
+      <dt id="attestation-label" hidden>Authorship claim</dt><dd id="attestation" hidden></dd>
+      <dt id="metadata-label" hidden>Camera metadata</dt><dd id="metadata" hidden></dd>
+    </dl>
+
+    <section class="checks">
+      <h2>OpenTimestamps proofs</h2>
+      <ul id="ots-list"></ul>
+    </section>
+
+    <section class="explorers">
+      <h2>Independent sources</h2>
+      <p class="hint small">
+        The links below go to <em>public, third-party</em> services we don't run.
+        Each one independently confirms the same fact. If any one of them shows
+        your hash anchored, the proof holds — even if orphograph.com disappears.
+      </p>
+      <div id="explorer-grid" class="explorer-grid"></div>
+      <p class="hint small footnote-explorer">
+        <strong>Note:</strong> a SHA-256 hash is not a Bitcoin transaction. The
+        calendars batch many hashes into one Merkle root and that root lands in
+        a real Bitcoin transaction (usually within ~1 hour). The
+        <code>.ots</code> proof file contains the Merkle path from your hash to
+        the block. Once block-pinned, the BTC block links below resolve.
+      </p>
+    </section>
+
+    <section class="footnote">
+      <p>
+        This receipt proves the SHA-256 above was submitted to the listed
+        OpenTimestamps calendar servers at the time shown. The calendars
+        aggregate hashes into Bitcoin transactions; each <code>.ots</code>
+        file is independently verifiable against the public Bitcoin chain.
+      </p>
+      <p>
+        To verify without trusting us, download the receipt JSON + the five
+        <code>.ots</code> files above, then run the
+        <a id="verifier-url" href="/verify-js">in-browser verifier</a>
+        against your original file, or follow the
+        <a href="/learn">open-source command-line steps</a>.
+      </p>
+      <p class="muted small">
+        Proof-of-existence only. Not a qualified eIDAS timestamp.
+        Not legal evidence on its own. See <a href="/terms">Terms</a>.
+      </p>
+    </section>
+  </details>
 </article>
 
-<aside class="share-block no-print" aria-label="Share this proof">
+<aside class="share-block no-print needs-record" aria-label="Share this proof">
   <h2 class="share-heading">Share this proof</h2>
   <p class="muted small share-intro">A receipt is more useful when the people who need to see it can see it. The link below resolves the same record from any device; the badge below embeds a live status pill on any web page you control.</p>
 
@@ -137,6 +172,22 @@
   <p class="muted small share-gift">Sending a colleague a Writer Pack of ten anchors? <a href="/gift" class="share-gift-link">Issue a gift Writer Pack →</a></p>
 </aside>
 
+<div class="no-print cta-row" id="visitor-cta">
+  <p class="cta-text">First time here? You can anchor your own file in five seconds — no signup required.</p>
+  <a href="/#drop" class="cta-btn">Anchor a file →</a>
+</div>
+<div class="no-print cta-row" id="visitor-cta-pack">
+  <div class="cta-grow">
+    <p class="cta-text">Need your own? Pack of Fifty · $29 · 50 receipts that never expire.</p>
+    <p class="cta-subtext">Pay with crypto or bitcoin. No subscription.</p>
+  </div>
+  <a href="/#tiers" class="cta-btn">View Pack tiers →</a>
+</div>
+<div class="no-print cta-row-outline" id="visitor-cta-what">
+  <p class="cta-text">First time here? Read what this office does, then decide.</p>
+  <a href="/what-is-this" class="cta-btn-outline">See what this office does →</a>
+</div>
+
 <p id="err" class="muted no-print" hidden></p>
 </main>
 
@@ -147,7 +198,7 @@
   </small>
 </footer>
 
-<script src="/receipt.js?v=2"></script>
+<script src="/receipt.js?v=3"></script>
 <script src="/assets/event.js" defer></script>
 </body>
 </html>

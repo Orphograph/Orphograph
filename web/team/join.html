@@ -91,7 +91,7 @@
     result.hidden = false;
     if (data.ok) {
       result.textContent = "Joined! Redirecting to your account…";
-      setTimeout(() => { location.href = "/account.html"; }, 800);
+      setTimeout(() => { location.href = "/account"; }, 800);
     } else {
       result.textContent = data.error || "Could not redeem invite.";
     }

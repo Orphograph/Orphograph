@@ -2,7 +2,7 @@
 
 There is no standalone web/affiliate.html landing page; the affiliate /
 referral details live on the signed-in account page. The /affiliate route
-must therefore 302-redirect to /account.html instead of serving a missing
+must therefore 302-redirect to /account instead of serving a missing
 static file (which previously produced a 404).
 
 Mirrors the ThreadingHTTPServer harness + no-follow redirect handler used by
@@ -70,13 +70,13 @@ class AffiliateRedirectCase(unittest.TestCase):
         # Must be a 3xx redirect — never 404 (missing page) or 502 (crash).
         self.assertIn(resp.status, (301, 302, 303, 307, 308))
         self.assertNotIn(resp.status, (404, 502))
-        self.assertEqual(resp.headers.get("Location", ""), "/account.html")
+        self.assertEqual(resp.headers.get("Location", ""), "/account")
 
     def test_affiliate_trailing_slash_redirects_to_account(self) -> None:
         resp = self._open_no_redirect("/affiliate/")
         self.assertIn(resp.status, (301, 302, 303, 307, 308))
         self.assertNotIn(resp.status, (404, 502))
-        self.assertEqual(resp.headers.get("Location", ""), "/account.html")
+        self.assertEqual(resp.headers.get("Location", ""), "/account")
 
 
 if __name__ == "__main__":

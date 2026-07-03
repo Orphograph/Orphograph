@@ -194,6 +194,22 @@ FUNNEL_EVENT_FIELDS = frozenset({"event", "page"})
 FUNNEL_EVENTS_PATH = DATA_DIR / "events.jsonl"
 MAX_EVENT_PAGE_LEN = 256
 
+# ── homepage A/B experiment (cream "/" vs dark "/v2" document) ──────────────
+# ORPHO_AB_HOME = fraction of first-time human visitors who get the dark
+# document served AT "/" (0 = experiment off). Read per-request so ops can
+# flip it via env without code changes and tests can toggle it. Assignment is
+# sticky via a 1-bit HttpOnly cookie; bots always get cream (SEO stability).
+# Measurement is entirely server-side into data/ab_home.jsonl — the funnel
+# collector's privacy contract (no cookies recorded) stays untouched.
+AB_HOME_COOKIE = "orpho_ab_home"
+AB_LOG_PATH = DATA_DIR / "ab_home.jsonl"
+_AB_BOT_RE = re.compile(
+    r"bot|crawl|spider|slurp|bingpreview|facebookexternalhit|twitterbot|"
+    r"linkedinbot|whatsapp|telegram|lighthouse|headless|python-urllib|"
+    r"python-requests|curl|wget",
+    re.I,
+)
+
 
 def _subscription_active_for(email: str | None) -> bool:
     """True if `email` has an active subscription directly OR via team membership.
@@ -342,51 +358,180 @@ def _send_xml(handler: BaseHTTPRequestHandler, status: int, xml_body: str, *, co
     handler.wfile.write(body)
 
 
+def _sitemap_lastmod(loc: str) -> str:
+    """Honest <lastmod>: the served file's mtime, YYYY-MM-DD (UTC).
+
+    Pages resolve to their .html sibling, directory paths to index.html;
+    anything unresolvable falls back to the homepage's mtime.
+    """
+    from datetime import datetime, timezone
+    rel = loc.lstrip("/")
+    cand = WEB_DIR / (rel + "index.html") if loc.endswith("/") else WEB_DIR / rel
+    if not cand.is_file():
+        html = WEB_DIR / (rel + ".html")
+        cand = html if html.is_file() else WEB_DIR / "index.html"
+    ts = cand.stat().st_mtime
+    return datetime.fromtimestamp(ts, timezone.utc).strftime("%Y-%m-%d")
+
+
 def _build_sitemap() -> str:
     site = os.environ.get("SITE_URL", "https://orphograph.com").rstrip("/")
+    # Canonical public-URL set — reconciled 2026-07-03 with the (previously
+    # drifted) static web/sitemap.xml; a test pins the two in lockstep.
     urls: list[tuple[str, str]] = [
         ("/", "1.0"),
         ("/verify/", "0.9"),
         ("/blog/", "0.8"),
-        ("/status.html", "0.5"),
-        ("/stats.html", "0.6"),
-        ("/terms.html", "0.3"),
-        ("/privacy.html", "0.3"),
-        ("/badge-demo.html", "0.4"),
-        ("/docs/api.html", "0.6"),
-        ("/about.html", "0.7"),
-        ("/learn.html", "0.8"),
-        ("/dataset-provenance.html", "0.8"),
-        ("/press.html", "0.4"),
-        ("/gift.html", "0.6"),
+        ("/v2", "0.8"),
+        ("/learn", "0.8"),
+        ("/dataset-provenance", "0.8"),
+        ("/buy", "0.8"),
         ("/lp/", "0.8"),
-        ("/lp/prove-photo-pre-ai.html", "0.7"),
-        ("/lp/bitcoin-timestamp-file.html", "0.7"),
-        ("/lp/c2pa-alternative.html", "0.7"),
-        ("/lp/opentimestamps-explained.html", "0.7"),
-        ("/lp/wedding-photographer-proof.html", "0.7"),
-        ("/lp/manuscript-priority-date.html", "0.7"),
-        ("/lp/screenshot-evidence-timestamp.html", "0.7"),
-        ("/lp/ai-image-detector-vs-provenance.html", "0.7"),
+        ("/about", "0.7"),
+        ("/faq", "0.7"),
+        ("/verify-js", "0.7"),
+        ("/lp/prove-photo-pre-ai", "0.7"),
+        ("/lp/bitcoin-timestamp-file", "0.7"),
+        ("/lp/c2pa-alternative", "0.7"),
+        ("/lp/opentimestamps-explained", "0.7"),
+        ("/lp/wedding-photographer-proof", "0.7"),
+        ("/lp/manuscript-priority-date", "0.7"),
+        ("/lp/screenshot-evidence-timestamp", "0.7"),
+        ("/lp/ai-image-detector-vs-provenance", "0.7"),
+        ("/method/architecture", "0.6"),
+        ("/method/bitcoin-attestation", "0.6"),
+        ("/method/evidence-law", "0.6"),
+        ("/method/folder-merkle", "0.6"),
+        ("/method/legal-recognition", "0.6"),
+        ("/method/the-mit-verifier-annotated", "0.6"),
+        ("/method/why-filenames-are-not-stored", "0.6"),
+        ("/docs/api", "0.6"),
+        ("/docs/webhooks", "0.6"),
+        ("/stats", "0.6"),
+        ("/gift", "0.6"),
+        ("/status", "0.5"),
+        ("/security", "0.5"),
+        ("/continuity", "0.5"),
+        ("/ios", "0.5"),
+        ("/mcp", "0.5"),
+        ("/badge", "0.5"),
+        ("/badge-demo", "0.4"),
+        ("/press", "0.4"),
+        ("/press-kit", "0.4"),
+        ("/roadmap", "0.4"),
+        ("/changelog", "0.4"),
+        ("/account", "0.4"),
+        ("/construction/", "0.4"),
+        ("/inspection/", "0.4"),
+        ("/listings/", "0.4"),
+        ("/matters/", "0.4"),
+        ("/practice/", "0.4"),
+        ("/workpapers/", "0.4"),
+        ("/blog/atom.xml", "0.4"),
+        ("/blog/rss.xml", "0.4"),
+        ("/signin", "0.3"),
+        ("/recover", "0.3"),
+        ("/terms", "0.3"),
+        ("/privacy", "0.3"),
+        ("/legal/", "0.3"),
+        ("/.well-known/security.txt", "0.3"),
+        ("/humans.txt", "0.3"),
+        ("/sitemap-image.xml", "0.3"),
+        ("/press-kit/orphograph-press-kit.zip", "0.3"),
     ]
-    for post in blog.list_posts():
-        urls.append((f"/blog/{post['slug']}", "0.7"))
+    # Blog posts publish through two paths — the md router (blog.list_posts)
+    # and static long-form HTML files under web/blog/ — and either alone
+    # under-lists the sitemap (7 static-only posts were missing before the
+    # reconciliation). Union both, deduped, deterministic order.
+    blog_slugs = {post["slug"] for post in blog.list_posts()}
+    blog_dir = WEB_DIR / "blog"
+    if blog_dir.is_dir():
+        blog_slugs.update(f.stem for f in blog_dir.glob("*.html") if f.stem != "index")
+    for slug in sorted(blog_slugs):
+        urls.append((f"/blog/{slug}", "0.7"))
     lines = [
         '<?xml version="1.0" encoding="UTF-8"?>',
         '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
     ]
     for path, prio in urls:
-        # Emit clean URLs (the canonical form) — strip the .html the source
-        # list still carries, so the sitemap matches the <link rel=canonical>.
+        # Emit clean URLs (the canonical form) — strip .html defensively so a
+        # future list entry can never reintroduce a .html loc.
         loc = path[:-5] if path.endswith(".html") else path
         lines += [
             "  <url>",
             f"    <loc>{site}{loc}</loc>",
+            f"    <lastmod>{_sitemap_lastmod(loc)}</lastmod>",
             f"    <priority>{prio}</priority>",
             "  </url>",
         ]
     lines.append("</urlset>")
     return "\n".join(lines)
+
+
+def _ab_log(event: str, variant: str, extra: dict | None = None) -> None:
+    """Append one experiment record. Best-effort: analytics must never break serving."""
+    try:
+        from datetime import datetime, timezone
+        rec = {"ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+               "event": event, "variant": variant}
+        if extra:
+            rec.update(extra)
+        with open(AB_LOG_PATH, "a", encoding="utf-8") as f:
+            f.write(json.dumps(rec, separators=(",", ":")) + "\n")
+    except Exception:
+        pass
+
+
+def _ab_cookie_variant(handler: BaseHTTPRequestHandler) -> str | None:
+    """The visitor's experiment arm, or None when unassigned/invalid."""
+    try:
+        jar = SimpleCookie()
+        jar.load(handler.headers.get("Cookie", ""))
+        morsel = jar.get(AB_HOME_COOKIE)
+        value = morsel.value if morsel else ""
+        return value if value in ("cream", "dark") else None
+    except Exception:
+        return None
+
+
+def _serve_ab_home(handler: BaseHTTPRequestHandler) -> bool:
+    """Cream-vs-dark homepage split at "/". Returns True when this function
+    wrote the response; False → caller falls through to the normal cream
+    homepage (experiment off, bot traffic, or unreadable variant document).
+    Both arms are served with no-store so shared caches can't bleed arms.
+    """
+    try:
+        fraction = float(os.environ.get("ORPHO_AB_HOME", "0") or 0)
+    except ValueError:
+        fraction = 0.0
+    if fraction <= 0:
+        return False
+    if _AB_BOT_RE.search(handler.headers.get("User-Agent", "")):
+        return False
+    variant = _ab_cookie_variant(handler)
+    newly_assigned = variant is None
+    if newly_assigned:
+        variant = "dark" if secrets.randbelow(10_000) < int(fraction * 10_000) else "cream"
+    doc = WEB_DIR / ("v2/index.html" if variant == "dark" else "index.html")
+    try:
+        body = doc.read_bytes()
+    except OSError:
+        return False
+    handler.send_response(200)
+    handler.send_header("Content-Type", "text/html; charset=utf-8")
+    handler.send_header("Content-Length", str(len(body)))
+    handler.send_header("Cache-Control", "no-store")
+    handler.send_header("Vary", "Cookie")
+    if newly_assigned:
+        cookie = f"{AB_HOME_COOKIE}={variant}; Max-Age=2592000; Path=/; SameSite=Lax; HttpOnly"
+        if COOKIE_SECURE:
+            cookie += "; Secure"
+        handler.send_header("Set-Cookie", cookie)
+    _security_headers(handler)
+    handler.end_headers()
+    handler.wfile.write(body)
+    _ab_log("home_view", variant, {"new": newly_assigned})
+    return True
 
 
 def _serve_static(handler: BaseHTTPRequestHandler, rel_path: str) -> None:
@@ -396,6 +541,30 @@ def _serve_static(handler: BaseHTTPRequestHandler, rel_path: str) -> None:
     target = (WEB_DIR / rel_path).resolve()
     if WEB_DIR not in target.parents and target != WEB_DIR:
         handler.send_error(403, "forbidden")
+        return
+    # Pages live at clean URLs: a direct GET of /<page>.html permanently
+    # redirects to the extensionless form (query string preserved, so old
+    # Stripe success URLs like /buy.html?stripe_session=… keep working).
+    # Assets never end in .html. /index.html is left alone because the
+    # root path is rewritten to it above and cannot be distinguished here.
+    # The clean form re-resolves to the same file via the sibling logic
+    # below (verified: no <name>.html coexists with <name>/index.html).
+    # Gate on the RAW REQUEST path, not rel_path: internal callers (the
+    # blog router, dir-index resolution) pass .html rel_paths for clean
+    # request URLs — redirecting those loops the clean URL onto itself.
+    from urllib.parse import urlparse as _urlparse
+    _req_path = _urlparse(getattr(handler, "path", "")).path
+    if _req_path.endswith(".html") and rel_path.endswith(".html") and rel_path != "index.html" and target.is_file():
+        clean_rel = rel_path[: -len(".html")]
+        if clean_rel.endswith("/index"):
+            clean_rel = clean_rel[: -len("index")]
+        from urllib.parse import urlparse
+        query = urlparse(getattr(handler, "path", "")).query
+        handler.send_response(301)
+        handler.send_header("Location", "/" + clean_rel + (("?" + query) if query else ""))
+        handler.send_header("Content-Length", "0")
+        _security_headers(handler)
+        handler.end_headers()
         return
     # Directory-style paths (e.g. /verify/) → resolve to <dir>/index.html.
     # But a directory with NO index.html that has a sibling <dir>.html
@@ -530,6 +699,14 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):  # noqa: N802
         path = self.path.split("?", 1)[0]
+        # homepage A/B: split "/" between the cream and dark documents
+        if path == "/" and _serve_ab_home(self):
+            return
+        # homepage A/B: attribute checkout-page reach to the visitor's arm
+        if path.startswith("/pay/crypto"):
+            _ab_arm = _ab_cookie_variant(self)
+            if _ab_arm:
+                _ab_log("checkout_view", _ab_arm)
         # /api/event is POST-only. Reject any other method (incl. GET) with
         # 405 so we don't leak internal state via inadvertent GET-as-probe.
         if path == "/api/event":
@@ -967,7 +1144,7 @@ class Handler(BaseHTTPRequestHandler):
             from urllib.parse import parse_qs, urlparse
             qs = parse_qs(urlparse(self.path).query)
             next_raw = (qs.get("next", [""])[0] or "").strip()
-            location = "/account.html"
+            location = "/account"
             if next_raw.startswith("/") and not next_raw.startswith("//") and "\n" not in next_raw and "\r" not in next_raw and len(next_raw) < 200:
                 location = next_raw
             self.send_response(303)
@@ -1309,7 +1486,7 @@ class Handler(BaseHTTPRequestHandler):
             # static file. 302 (temporary) so a future landing page can
             # reclaim this URL without a cached 301 getting in the way.
             self.send_response(302)
-            self.send_header("Location", "/account.html")
+            self.send_header("Location", "/account")
             self.send_header("Content-Length", "0")
             _security_headers(self)
             self.end_headers()
@@ -1601,6 +1778,10 @@ class Handler(BaseHTTPRequestHandler):
             _json_response(self, 400, {"error": str(e),
                                        "credit_refunded": pack_consumed})
             return
+        # homepage A/B: attribute the successful anchor to the visitor's arm
+        _ab_arm = _ab_cookie_variant(self)
+        if _ab_arm:
+            _ab_log("anchor", _ab_arm)
         low_redundancy = record["calendars_ok"] < MIN_CALENDARS_OK
         # Total calendar outage: 0 calendars accepted the hash, so the receipt
         # has no Bitcoin commitment and can never upgrade — it is worthless.
@@ -3519,7 +3700,7 @@ class Handler(BaseHTTPRequestHandler):
                 return
             scheme = "http" if is_loopback else "https"
             site = f"{scheme}://{host or 'orphograph.com'}"
-        success_url = f"{site}/buy.html?stripe_session={{CHECKOUT_SESSION_ID}}&status=success"
+        success_url = f"{site}/buy?stripe_session={{CHECKOUT_SESSION_ID}}&status=success"
         cancel_url = f"{site}/?stripe=canceled"
 
         result = stripe_api.create_checkout_session(
