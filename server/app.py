@@ -342,46 +342,108 @@ def _send_xml(handler: BaseHTTPRequestHandler, status: int, xml_body: str, *, co
     handler.wfile.write(body)
 
 
+def _sitemap_lastmod(loc: str) -> str:
+    """Honest <lastmod>: the served file's mtime, YYYY-MM-DD (UTC).
+
+    Pages resolve to their .html sibling, directory paths to index.html;
+    anything unresolvable falls back to the homepage's mtime.
+    """
+    from datetime import datetime, timezone
+    rel = loc.lstrip("/")
+    cand = WEB_DIR / (rel + "index.html") if loc.endswith("/") else WEB_DIR / rel
+    if not cand.is_file():
+        html = WEB_DIR / (rel + ".html")
+        cand = html if html.is_file() else WEB_DIR / "index.html"
+    ts = cand.stat().st_mtime
+    return datetime.fromtimestamp(ts, timezone.utc).strftime("%Y-%m-%d")
+
+
 def _build_sitemap() -> str:
     site = os.environ.get("SITE_URL", "https://orphograph.com").rstrip("/")
+    # Canonical public-URL set — reconciled 2026-07-03 with the (previously
+    # drifted) static web/sitemap.xml; a test pins the two in lockstep.
     urls: list[tuple[str, str]] = [
         ("/", "1.0"),
         ("/verify/", "0.9"),
         ("/blog/", "0.8"),
         ("/v2", "0.8"),
-        ("/status.html", "0.5"),
-        ("/stats.html", "0.6"),
-        ("/terms.html", "0.3"),
-        ("/privacy.html", "0.3"),
-        ("/badge-demo.html", "0.4"),
-        ("/docs/api.html", "0.6"),
-        ("/about.html", "0.7"),
-        ("/learn.html", "0.8"),
-        ("/press.html", "0.4"),
-        ("/gift.html", "0.6"),
+        ("/learn", "0.8"),
+        ("/buy", "0.8"),
         ("/lp/", "0.8"),
-        ("/lp/prove-photo-pre-ai.html", "0.7"),
-        ("/lp/bitcoin-timestamp-file.html", "0.7"),
-        ("/lp/c2pa-alternative.html", "0.7"),
-        ("/lp/opentimestamps-explained.html", "0.7"),
-        ("/lp/wedding-photographer-proof.html", "0.7"),
-        ("/lp/manuscript-priority-date.html", "0.7"),
-        ("/lp/screenshot-evidence-timestamp.html", "0.7"),
-        ("/lp/ai-image-detector-vs-provenance.html", "0.7"),
+        ("/about", "0.7"),
+        ("/faq", "0.7"),
+        ("/verify-js", "0.7"),
+        ("/lp/prove-photo-pre-ai", "0.7"),
+        ("/lp/bitcoin-timestamp-file", "0.7"),
+        ("/lp/c2pa-alternative", "0.7"),
+        ("/lp/opentimestamps-explained", "0.7"),
+        ("/lp/wedding-photographer-proof", "0.7"),
+        ("/lp/manuscript-priority-date", "0.7"),
+        ("/lp/screenshot-evidence-timestamp", "0.7"),
+        ("/lp/ai-image-detector-vs-provenance", "0.7"),
+        ("/method/architecture", "0.6"),
+        ("/method/bitcoin-attestation", "0.6"),
+        ("/method/evidence-law", "0.6"),
+        ("/method/folder-merkle", "0.6"),
+        ("/method/legal-recognition", "0.6"),
+        ("/method/the-mit-verifier-annotated", "0.6"),
+        ("/method/why-filenames-are-not-stored", "0.6"),
+        ("/docs/api", "0.6"),
+        ("/docs/webhooks", "0.6"),
+        ("/stats", "0.6"),
+        ("/gift", "0.6"),
+        ("/status", "0.5"),
+        ("/security", "0.5"),
+        ("/continuity", "0.5"),
+        ("/ios", "0.5"),
+        ("/mcp", "0.5"),
+        ("/badge", "0.5"),
+        ("/badge-demo", "0.4"),
+        ("/press", "0.4"),
+        ("/press-kit", "0.4"),
+        ("/roadmap", "0.4"),
+        ("/changelog", "0.4"),
+        ("/account", "0.4"),
+        ("/construction/", "0.4"),
+        ("/inspection/", "0.4"),
+        ("/listings/", "0.4"),
+        ("/matters/", "0.4"),
+        ("/practice/", "0.4"),
+        ("/workpapers/", "0.4"),
+        ("/blog/atom.xml", "0.4"),
+        ("/blog/rss.xml", "0.4"),
+        ("/signin", "0.3"),
+        ("/recover", "0.3"),
+        ("/terms", "0.3"),
+        ("/privacy", "0.3"),
+        ("/legal/", "0.3"),
+        ("/.well-known/security.txt", "0.3"),
+        ("/humans.txt", "0.3"),
+        ("/sitemap-image.xml", "0.3"),
+        ("/press-kit/orphograph-press-kit.zip", "0.3"),
     ]
-    for post in blog.list_posts():
-        urls.append((f"/blog/{post['slug']}", "0.7"))
+    # Blog posts publish through two paths — the md router (blog.list_posts)
+    # and static long-form HTML files under web/blog/ — and either alone
+    # under-lists the sitemap (7 static-only posts were missing before the
+    # reconciliation). Union both, deduped, deterministic order.
+    blog_slugs = {post["slug"] for post in blog.list_posts()}
+    blog_dir = WEB_DIR / "blog"
+    if blog_dir.is_dir():
+        blog_slugs.update(f.stem for f in blog_dir.glob("*.html") if f.stem != "index")
+    for slug in sorted(blog_slugs):
+        urls.append((f"/blog/{slug}", "0.7"))
     lines = [
         '<?xml version="1.0" encoding="UTF-8"?>',
         '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
     ]
     for path, prio in urls:
-        # Emit clean URLs (the canonical form) — strip the .html the source
-        # list still carries, so the sitemap matches the <link rel=canonical>.
+        # Emit clean URLs (the canonical form) — strip .html defensively so a
+        # future list entry can never reintroduce a .html loc.
         loc = path[:-5] if path.endswith(".html") else path
         lines += [
             "  <url>",
             f"    <loc>{site}{loc}</loc>",
+            f"    <lastmod>{_sitemap_lastmod(loc)}</lastmod>",
             f"    <priority>{prio}</priority>",
             "  </url>",
         ]
