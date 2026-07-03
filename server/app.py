@@ -396,6 +396,30 @@ def _serve_static(handler: BaseHTTPRequestHandler, rel_path: str) -> None:
     if WEB_DIR not in target.parents and target != WEB_DIR:
         handler.send_error(403, "forbidden")
         return
+    # Pages live at clean URLs: a direct GET of /<page>.html permanently
+    # redirects to the extensionless form (query string preserved, so old
+    # Stripe success URLs like /buy.html?stripe_session=… keep working).
+    # Assets never end in .html. /index.html is left alone because the
+    # root path is rewritten to it above and cannot be distinguished here.
+    # The clean form re-resolves to the same file via the sibling logic
+    # below (verified: no <name>.html coexists with <name>/index.html).
+    # Gate on the RAW REQUEST path, not rel_path: internal callers (the
+    # blog router, dir-index resolution) pass .html rel_paths for clean
+    # request URLs — redirecting those loops the clean URL onto itself.
+    from urllib.parse import urlparse as _urlparse
+    _req_path = _urlparse(getattr(handler, "path", "")).path
+    if _req_path.endswith(".html") and rel_path.endswith(".html") and rel_path != "index.html" and target.is_file():
+        clean_rel = rel_path[: -len(".html")]
+        if clean_rel.endswith("/index"):
+            clean_rel = clean_rel[: -len("index")]
+        from urllib.parse import urlparse
+        query = urlparse(getattr(handler, "path", "")).query
+        handler.send_response(301)
+        handler.send_header("Location", "/" + clean_rel + (("?" + query) if query else ""))
+        handler.send_header("Content-Length", "0")
+        _security_headers(handler)
+        handler.end_headers()
+        return
     # Directory-style paths (e.g. /verify/) → resolve to <dir>/index.html.
     # But a directory with NO index.html that has a sibling <dir>.html
     # (e.g. web/mcp/ alongside web/mcp.html, web/press-kit/ alongside
@@ -942,7 +966,7 @@ class Handler(BaseHTTPRequestHandler):
             from urllib.parse import parse_qs, urlparse
             qs = parse_qs(urlparse(self.path).query)
             next_raw = (qs.get("next", [""])[0] or "").strip()
-            location = "/account.html"
+            location = "/account"
             if next_raw.startswith("/") and not next_raw.startswith("//") and "\n" not in next_raw and "\r" not in next_raw and len(next_raw) < 200:
                 location = next_raw
             self.send_response(303)
@@ -1284,7 +1308,7 @@ class Handler(BaseHTTPRequestHandler):
             # static file. 302 (temporary) so a future landing page can
             # reclaim this URL without a cached 301 getting in the way.
             self.send_response(302)
-            self.send_header("Location", "/account.html")
+            self.send_header("Location", "/account")
             self.send_header("Content-Length", "0")
             _security_headers(self)
             self.end_headers()
@@ -3483,7 +3507,7 @@ class Handler(BaseHTTPRequestHandler):
                 return
             scheme = "http" if is_loopback else "https"
             site = f"{scheme}://{host or 'orphograph.com'}"
-        success_url = f"{site}/buy.html?stripe_session={{CHECKOUT_SESSION_ID}}&status=success"
+        success_url = f"{site}/buy?stripe_session={{CHECKOUT_SESSION_ID}}&status=success"
         cancel_url = f"{site}/?stripe=canceled"
 
         result = stripe_api.create_checkout_session(
