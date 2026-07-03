@@ -26,6 +26,11 @@
     <priority>0.8</priority>
   </url>
   <url>
+    <loc>https://orphograph.com/dataset-provenance</loc>
+    <lastmod>2026-07-03</lastmod>
+    <priority>0.8</priority>
+  </url>
+  <url>
     <loc>https://orphograph.com/buy</loc>
     <lastmod>2026-06-29</lastmod>
     <priority>0.8</priority>
@@ -342,6 +347,11 @@
   </url>
   <url>
     <loc>https://orphograph.com/blog/prove-photo-existed-before-ai</loc>
+    <lastmod>2026-07-03</lastmod>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://orphograph.com/blog/prove-what-was-in-your-training-set</loc>
     <lastmod>2026-07-03</lastmod>
     <priority>0.7</priority>
   </url>
