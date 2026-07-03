@@ -385,6 +385,7 @@ def _build_sitemap() -> str:
         ("/v2", "0.8"),
         ("/learn", "0.8"),
         ("/dataset-provenance", "0.8"),
+        ("/integrations", "0.7"),
         ("/buy", "0.8"),
         ("/lp/", "0.8"),
         ("/about", "0.7"),
