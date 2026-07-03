@@ -348,6 +348,7 @@ def _build_sitemap() -> str:
         ("/", "1.0"),
         ("/verify/", "0.9"),
         ("/blog/", "0.8"),
+        ("/v2", "0.8"),
         ("/status.html", "0.5"),
         ("/stats.html", "0.6"),
         ("/terms.html", "0.3"),
