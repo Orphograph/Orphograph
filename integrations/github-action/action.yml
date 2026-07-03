@@ -1,0 +1,49 @@
+name: "Orphograph Anchor Artifacts"
+description: >-
+  Anchor release artifacts on Bitcoin via Orphograph (OpenTimestamps).
+  Computes SHA-256/SHA-512 of each file and requests a timestamp receipt
+  proving the artifact existed at this point in time. Files never leave
+  the runner; only hashes are sent.
+branding:
+  icon: "anchor"
+  color: "gray-dark"
+
+inputs:
+  paths:
+    description: "Glob pattern(s) for artifacts to anchor (space-separated)."
+    required: false
+    default: "dist/*"
+  api_key:
+    description: "Orphograph API key (subscription). Pass a secret; lifts the free-tier limit."
+    required: false
+    default: ""
+  pack_token:
+    description: "Orphograph pack token (prepaid credits). Pass a secret; lifts the free-tier limit."
+    required: false
+    default: ""
+  base_url:
+    description: "Orphograph API base URL."
+    required: false
+    default: "https://orphograph.com"
+  fail_on_error:
+    description: "Fail the job if anchoring fails (rate limit, network, etc.). Default: warn and continue."
+    required: false
+    default: "false"
+
+outputs:
+  receipts:
+    description: "JSON array of {file, sha256, receipt_id, receipt_url} for anchored artifacts."
+    value: ${{ steps.anchor.outputs.receipts }}
+
+runs:
+  using: "composite"
+  steps:
+    - id: anchor
+      shell: bash
+      env:
+        ORPHO_API_KEY: ${{ inputs.api_key }}
+        ORPHO_PACK_TOKEN: ${{ inputs.pack_token }}
+        ORPHO_BASE_URL: ${{ inputs.base_url }}
+        ORPHO_PATHS: ${{ inputs.paths }}
+        ORPHO_FAIL_ON_ERROR: ${{ inputs.fail_on_error }}
+      run: python3 "${{ github.action_path }}/anchor_artifacts.py"

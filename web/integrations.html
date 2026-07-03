@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Orphograph — Integrations: seal where the work happens</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#f6f1e3">
+<meta name="description" content="Anchor files automatically where they are created: a watch-folder sealer, a GitHub Action for releases, an MCP server for AI agents, and a dataset-provenance CLI. Files never leave your machine — only fingerprints travel.">
+<meta property="og:title" content="Orphograph — Integrations">
+<meta property="og:description" content="Seal your work where it happens: watch folders, releases, agents, and datasets anchor themselves.">
+<meta property="og:url" content="https://orphograph.com/integrations">
+<meta property="og:type" content="article">
+<meta property="og:image" content="https://orphograph.com/og-image.png?v=8">
+<link rel="canonical" href="https://orphograph.com/integrations">
+<link rel="icon" type="image/png" href="/favicon.png?v=8">
+<link rel="stylesheet" href="/index.css?v=15">
+<link rel="stylesheet" href="/integrations.css?v=1">
+<meta name="copyright" content="© 2026 Orphograph. Code under MIT (see /LICENSE). Brand, content, and design — all rights reserved.">
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap row">
+    <a href="/" class="brand">Orphograph</a>
+    <nav>
+      <a href="/learn">Method</a>
+      <a href="/verify/">Verify</a>
+      <a href="/#tiers">Pricing</a>
+      <a href="/#drop" class="cta">Anchor a file</a>
+    </nav>
+  </div>
+</header>
+
+<main class="arch-wrap">
+  <h1>Seal where the work happens</h1>
+  <div class="arch-rule"></div>
+  <p class="arch-lede">
+    Anchoring one file by hand settles one argument. The stronger habit is a
+    workspace that seals itself: every delivered folder, every release, every
+    dataset carries a checkable timestamp the day it is made — without anyone
+    remembering to do it. Each integration below hashes locally and submits
+    only the fingerprint. Your files never leave your machine.
+  </p>
+
+  <div class="int-grid">
+    <section class="int-card">
+      <p class="int-kicker">Folders</p>
+      <h2>Watch-folder sealer</h2>
+      <p>A single-file, dependency-free Python daemon. Point it at a delivery
+      folder; anything new or changed is fingerprinted and anchored once it
+      stops changing. Receipts accumulate in a ledger inside the folder.</p>
+      <pre>curl -O https://orphograph.com/dist/orphograph-watch.py
+python3 orphograph-watch.py ~/Deliveries</pre>
+      <a class="int-link" href="/dist/orphograph-watch.py" download>Download orphograph-watch.py &rarr;</a>
+    </section>
+
+    <section class="int-card">
+      <p class="int-kicker">Releases</p>
+      <h2>GitHub Action</h2>
+      <p>Anchor your build artifacts on every release. The receipt table lands
+      in the job summary; a receipts file ships with the workspace.</p>
+      <pre>- uses: Orphograph/Orphograph/integrations/github-action@master
+  with:
+    paths: "dist/*"</pre>
+      <a class="int-link" href="https://github.com/Orphograph/Orphograph/tree/master/integrations/github-action">Action documentation &rarr;</a>
+    </section>
+
+    <section class="int-card">
+      <p class="int-kicker">AI agents</p>
+      <h2>MCP server</h2>
+      <p>Give any MCP-capable agent the ability to anchor files and folders it
+      produces — proof of existence becomes part of the agent's output, not an
+      afterthought.</p>
+      <a class="int-link" href="/mcp">Set up the MCP server &rarr;</a>
+    </section>
+
+    <section class="int-card">
+      <p class="int-kicker">Datasets</p>
+      <h2>Dataset provenance</h2>
+      <p>Anchor a training set, its licenses, and its acquisition log as one
+      Merkle-committed bundle, and hand auditors a certificate that verifies
+      in the browser.</p>
+      <a class="int-link" href="/dataset-provenance">Dataset provenance &rarr;</a>
+    </section>
+  </div>
+
+  <h2>Build your own</h2>
+  <div class="arch-rule"></div>
+  <p>Everything above sits on one small API: hash locally, <code>POST /api/anchor</code>,
+  keep the receipt. Free tier is three anchors per day; an
+  <a href="/docs/api">API key</a> or a <a href="/#tiers">pack</a> lifts the limit.
+  Webhooks can tell your systems when a proof pins to Bitcoin —
+  see <a href="/docs/webhooks">webhook docs</a>.</p>
+
+  <div class="disclaimer-block">
+    A receipt proves that a file existed in exactly this form by a recorded
+    date, and that it has not changed since. It does not prove who created the
+    file, who owns it, or that its contents are true — and it is not, on its
+    own, a legal determination. See <a href="/terms">Terms</a>.
+  </div>
+</main>
+
+<footer class="site">
+  <div class="wrap">
+    <small>&copy; 2026 Orphograph &middot; <a href="/terms">Terms</a> &middot; <a href="/privacy">Privacy</a> &middot; <a href="/status">Status</a></small>
+  </div>
+</footer>
+
+</body>
+</html>
