@@ -288,6 +288,16 @@ async function main() {
     return;
   }
   renderVerdict(rec);
+  // Owner view: a signed-in visitor gets integration hints, not sales CTAs.
+  fetch("/api/me").then((res) => {
+    if (!res.ok) return;
+    for (const id of ["visitor-cta", "visitor-cta-pack", "visitor-cta-what"]) {
+      const el = document.getElementById(id);
+      if (el) el.hidden = true;
+    }
+    const hints = document.getElementById("owner-hints");
+    if (hints) hints.hidden = false;
+  }).catch(() => {});
   renderFacts(rec);
   const dl = document.getElementById("download-zip");
   if (dl) dl.href = "/api/receipt/" + escapePath(rec.receipt_id || rid) + ".zip";
