@@ -7,15 +7,15 @@
 <meta name="robots" content="noindex">
 <meta name="description" content="Bitcoin-anchored receipt. Verifies against the chain independently of Orphograph.">
 <meta property="og:title" content="Orphograph receipt {{RECEIPT_ID}}">
-<meta property="og:description" content="A file existed at the recorded moment. Verified against the Bitcoin chain.">
+<meta property="og:description" content="{{OG_SEALED}}">
 <meta property="og:url" content="https://orphograph.com/r/{{RECEIPT_ID}}">
 <meta property="og:type" content="article">
-<meta property="og:image" content="https://orphograph.com/og-image.png?v=8">
-<meta property="og:image:width" content="512">
-<meta property="og:image:height" content="512">
+<meta property="og:image" content="https://orphograph.com/og-receipt-card.png?v=1">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="Orphograph receipt {{RECEIPT_ID}}">
-<meta name="twitter:description" content="A file existed at the recorded moment. Verified against the Bitcoin chain.">
+<meta name="twitter:description" content="{{OG_SEALED}}">
 <meta name="twitter:image" content="https://orphograph.com/og-image.png?v=8">
 <link rel="icon" type="image/png" href="/favicon.png?v=8">
 <link rel="stylesheet" href="/style.css?v=5">
@@ -95,7 +95,7 @@
     <dl class="kv">
       <dt>Receipt ID</dt><dd id="rid" class="mono"></dd>
       <dt>SHA-256</dt><dd id="sha256" class="mono"></dd>
-      <dt>SHA-512 (quantum-hedge sibling)</dt><dd id="sha512" class="mono"></dd>
+      <dt>SHA-512 (sibling fingerprint — decades-scale cryptanalytic diversity)</dt><dd id="sha512" class="mono"></dd>
       <dt>Client label</dt><dd id="label"></dd>
       <dt>Status</dt><dd id="status"></dd>
       <dt>Calendars</dt><dd id="cals"></dd>

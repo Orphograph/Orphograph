@@ -114,7 +114,7 @@ async function showStripeConfirmation(sessionId) {
     if (h) h.textContent = "Payment pending.";
     if (p) p.textContent =
       "Stripe reports this session is " + paymentStatus + ". " +
-      "If you completed payment, your access will arrive shortly — the webhook is the source of truth. Check back in a few minutes.";
+      "If you completed payment, your access will arrive shortly — confirmation is recorded automatically once Stripe reports the charge. Check back in a few minutes.";
     if (a) { a.textContent = ""; a.removeAttribute("href"); }
     return;
   }
