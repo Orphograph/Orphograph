@@ -552,7 +552,7 @@
         const txt = await r.text();
         setStatusSimple(
           "The office could not record this submission.",
-          "Server returned " + r.status + ". " + txt.slice(0, 200),
+          "Server returned " + r.status + ". Nothing was recorded — try again in a moment.",
           "error"
         );
         showStatusBanner("Anchor failed: server returned " + r.status + ".", "error");

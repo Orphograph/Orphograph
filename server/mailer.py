@@ -8,6 +8,13 @@ wiring a real email account.
 Public API:
     send_pack_claim_email(to, claim_code, credit_count) -> bool
     send_receipt_email(to, receipt_record) -> bool
+    send_integration_email(to, receipt_record) -> bool
+
+Note on send_integration_email: this module only builds and sends the
+message via the existing transport. Dispatch (the decision to call it,
+one day after issuance) is wired at the call site behind the env flag
+ORPHO_INTEGRATION_EMAIL — the function itself performs no scheduling
+and no gating beyond the transport's own suppression checks.
 """
 from __future__ import annotations
 
@@ -609,3 +616,65 @@ def send_receipt_email(to: str, receipt: dict) -> bool:
             sys.stderr.write(f"[email] pdf-attach skipped for {rid}: {type(e).__name__}\n")
     return _send(to, subject, text, html, transactional=True, category="receipt_issued",
                  attachments=attachments)
+
+
+def send_integration_email(to: str, receipt: dict) -> bool:
+    """Day-after notice: three ways to put an issued receipt to work.
+
+    Builds and sends only — the call site decides when to dispatch, gated
+    behind the ORPHO_INTEGRATION_EMAIL env flag (see module docstring).
+    Transactional follow-up to a receipt the recipient requested; no
+    marketing content, no unsubscribe requirement.
+    """
+    rid = receipt.get("receipt_id", "")
+    receipt_url = f"{SITE_URL}/r/{rid}"
+    badge_url = f"{SITE_URL}/api/badge/{rid}.svg"
+    subject = "Your receipt is ready to work — Orphograph"
+    text = (
+        f"Receipt {rid} is on file and verifiable. Three standing uses "
+        f"are available to you now.\n\n"
+        f"1. Hand the link to whoever needs convincing.\n"
+        f"   {receipt_url}\n"
+        f"   The receipt verifies for them directly; no account is "
+        f"required on their part.\n\n"
+        f"2. Place the live status badge where the work lives.\n"
+        f"   <img src=\"{badge_url}\">\n"
+        f"   The badge reflects the receipt's current verification "
+        f"status wherever it is embedded.\n\n"
+        f"3. Download the .ots proof bundle from the receipt page and "
+        f"keep it with the file.\n"
+        f"   {receipt_url}\n"
+        f"   The bundle verifies against the Bitcoin chain independently, "
+        f"without reference to this office.\n\n"
+        f"No action is required; the receipt remains on file either way.\n"
+    )
+    html = (
+        f"<h2 style=\"font-family:Georgia,'Times New Roman',serif;margin:0 0 14px;"
+        f"color:#1a1a1a;font-weight:500;font-size:20px;letter-spacing:0.01em;\">"
+        f"Your receipt is ready to work.</h2>"
+        f"<p style=\"color:#444;\">Receipt "
+        f"<code style=\"font-family:Menlo,Consolas,monospace;\">{rid}</code> "
+        f"is on file and verifiable. Three standing uses are available "
+        f"to you now.</p>"
+        f"<ol style=\"color:#2a2a2a;padding-left:20px;\">"
+        f"<li style=\"margin:0 0 14px;\">Hand the link to whoever needs "
+        f"convincing — <a href=\"{receipt_url}\" style=\"color:#1a1a1a;\">"
+        f"{receipt_url}</a> verifies for them directly; no account is "
+        f"required on their part.</li>"
+        f"<li style=\"margin:0 0 14px;\">Place the live status badge where "
+        f"the work lives:<br>"
+        f"<code style=\"font-family:Menlo,Consolas,monospace;font-size:12px;"
+        f"word-break:break-all;\">&lt;img src=\"{badge_url}\"&gt;</code><br>"
+        f"The badge reflects the receipt's current verification status "
+        f"wherever it is embedded.</li>"
+        f"<li style=\"margin:0 0 14px;\">Download the .ots proof bundle "
+        f"from the <a href=\"{receipt_url}\" style=\"color:#1a1a1a;\">"
+        f"receipt page</a> and keep it with the file. The bundle verifies "
+        f"against the Bitcoin chain independently, without reference to "
+        f"this office.</li>"
+        f"</ol>"
+        f"<p style=\"color:#444;font-size:14px;\">No action is required; "
+        f"the receipt remains on file either way.</p>"
+    )
+    return _send(to, subject, text, html, transactional=True,
+                 category="integration_notice")

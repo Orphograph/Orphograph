@@ -289,6 +289,8 @@ Success! Bitcoin block 824193 attests existence as of 2026-05-16 17:42:11 UTC</p
 
 <p><strong>Is this the same as an NFT?</strong> No. An NFT records ownership of a token. Orphograph records the existence of a file's exact bytes at a point in time.</p>
 
+<p><strong>Will quantum computers break this proof?</strong> No, on current cryptographic understanding. Shor's algorithm attacks signatures, and an <code>.ots</code> proof is a chain of hash commitments with no signature in the proof path. Grover's algorithm still leaves SHA-256 at ~2<sup>128</sup> quantum operations to reverse — NIST treats SHA-2 as secure for hashing post-quantum. A quantum computer could disrupt Bitcoin's <em>future</em> operation; it cannot silently falsify <em>past</em> commitments — rewriting history means publicly out-working the accumulated chain. Every receipt also carries a SHA-512 sibling fingerprint for extra cryptanalytic diversity.</p>
+
 <p><strong>What if a court asks?</strong> The OpenTimestamps protocol has been cited in academic and legal contexts since 2017. The Level 3 verification path produces an audit trail that any cryptography expert can independently confirm.</p>
 
 </div>

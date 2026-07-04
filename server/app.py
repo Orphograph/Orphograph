@@ -963,6 +963,25 @@ class Handler(BaseHTTPRequestHandler):
                 # is required, but we still avoid injecting raw user
                 # input by limiting substitution to the validated id.
                 body = body.replace("{{RECEIPT_ID}}", rid)
+                # Per-receipt unfurl text: the sealed date travels in the
+                # og/twitter description (stdlib templating — the branded
+                # card image is static). Private receipts leak nothing.
+                _tail = " Verified against the Bitcoin chain — check it yourself, no account required."
+                sealed = "A file existed at the recorded moment." + _tail
+                try:
+                    _rec = engine.verify_receipt(rid)
+                    if not _rec.get("found"):
+                        # honest unfurl for dead links: claim nothing
+                        sealed = "No record with this id."
+                    elif not _rec.get("private"):
+                        _d = str(_rec.get("created_at", ""))[:10]
+                        if _d:
+                            sealed = f"Sealed {_d}." + _tail
+                            if _rec.get("btc_pinned_at"):
+                                sealed = f"Sealed {_d} — anchored in Bitcoin." + _tail
+                except Exception:
+                    pass
+                body = body.replace("{{OG_SEALED}}", sealed)
                 payload = body.encode("utf-8")
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -983,10 +1002,38 @@ class Handler(BaseHTTPRequestHandler):
             if not RECEIPT_ID_RE.match(rid):
                 self.send_error(400, "invalid receipt id")
                 return
+            _cert_missing = False
+            try:
+                _cert_missing = not engine.verify_receipt(rid).get("found")
+            except Exception:
+                pass
             try:
                 html_path = WEB_DIR / "certificate.html"
                 body = html_path.read_text()
                 body = body.replace("{{RECEIPT_ID}}", rid)
+                if _cert_missing:
+                    body = body.replace(
+                        "A dataset existed in this exact form by the anchored date — every file independently verifiable against the Bitcoin chain.",
+                        "No certificate with this id.")
+                # Per-receipt unfurl text: the sealed date travels in the
+                # og/twitter description (stdlib templating — the branded
+                # card image is static). Private receipts leak nothing.
+                _tail = " Verified against the Bitcoin chain — check it yourself, no account required."
+                sealed = "A file existed at the recorded moment." + _tail
+                try:
+                    _rec = engine.verify_receipt(rid)
+                    if not _rec.get("found"):
+                        # honest unfurl for dead links: claim nothing
+                        sealed = "No record with this id."
+                    elif not _rec.get("private"):
+                        _d = str(_rec.get("created_at", ""))[:10]
+                        if _d:
+                            sealed = f"Sealed {_d}." + _tail
+                            if _rec.get("btc_pinned_at"):
+                                sealed = f"Sealed {_d} — anchored in Bitcoin." + _tail
+                except Exception:
+                    pass
+                body = body.replace("{{OG_SEALED}}", sealed)
                 payload = body.encode("utf-8")
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
