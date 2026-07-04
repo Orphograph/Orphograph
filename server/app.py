@@ -387,6 +387,7 @@ def _build_sitemap() -> str:
         ("/dataset-provenance", "0.8"),
         ("/integrations", "0.7"),
         ("/accept", "0.7"),
+        ("/standing-record", "0.5"),
         ("/buy", "0.8"),
         ("/lp/", "0.8"),
         ("/about", "0.7"),
@@ -1597,6 +1598,9 @@ class Handler(BaseHTTPRequestHandler):
         # explicitly with the correct Content-Type and a 1h cache. The
         # files live in web/; we bypass the generic static handler so
         # the response shape (and Content-Type) is unambiguous.
+        if path == "/api/standing-record":
+            _json_response(self, 200, {"anchors": _list_weekly_anchors()})
+            return
         if path in ("/sitemap.xml", "/robots.txt"):
             try:
                 rel = path.lstrip("/")
@@ -3964,6 +3968,46 @@ def _count_anchors_for_email(email: str) -> int:
         if rec.get("source") == expected_source:
             count += 1
     return count
+
+
+_WEEKLY_CACHE: dict = {"ts": 0.0, "rows": []}
+
+
+def _list_weekly_anchors(limit: int = 16) -> list[dict]:
+    """Latest public weekly self-anchors (client_label weekly-*), 300s cache.
+
+    The office re-anchors its own foundations on a schedule
+    (scripts/weekly_anchor.py); this powers the public /standing-record page.
+    """
+    import time as _time
+    now = _time.time()
+    if now - _WEEKLY_CACHE["ts"] < 300:
+        return _WEEKLY_CACHE["rows"]
+    rows: list[dict] = []
+    receipts_dir = engine.RECEIPTS_DIR
+    if receipts_dir.exists():
+        for child in receipts_dir.iterdir():
+            if not child.is_dir():
+                continue
+            rfile = child / "receipt.json"
+            if not rfile.exists():
+                continue
+            try:
+                rec = json.loads(rfile.read_text())
+            except (OSError, json.JSONDecodeError):
+                continue
+            label = str(rec.get("client_label") or "")
+            if not label.startswith("weekly-") or rec.get("private"):
+                continue
+            rows.append({
+                "receipt_id": rec.get("receipt_id"),
+                "client_label": label,
+                "created_at": rec.get("created_at"),
+                "btc_pinned_at": rec.get("btc_pinned_at"),
+            })
+    rows.sort(key=lambda x: x.get("created_at") or "", reverse=True)
+    _WEEKLY_CACHE.update(ts=now, rows=rows[:limit])
+    return _WEEKLY_CACHE["rows"]
 
 
 def _list_anchors_for_email(
