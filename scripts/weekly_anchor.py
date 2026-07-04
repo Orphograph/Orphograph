@@ -81,8 +81,15 @@ def anchor(sha256: str, sha512: str, label: str) -> dict:
         "sha512_hex": sha512,
         "client_label": label,
     }).encode("utf-8")
+    headers = dict(HEADERS)
+    # With a pack token the office's self-anchors are paid-tier: no 3/day
+    # cap, and the receipts are not subject to free-tier pruning. Set
+    # ORPHO_WEEKLY_PACK_TOKEN in the launchd plist to enable.
+    pack_token = os.environ.get("ORPHO_WEEKLY_PACK_TOKEN", "").strip()
+    if pack_token:
+        headers["X-Pack-Token"] = pack_token
     req = urllib.request.Request(
-        f"{BASE_URL}/api/anchor", data=body, method="POST", headers=HEADERS,
+        f"{BASE_URL}/api/anchor", data=body, method="POST", headers=headers,
     )
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
@@ -113,8 +120,22 @@ def main() -> int:
     head = git_head()
     sys.stderr.write(f"[weekly_anchor] {run_ts} starting (git HEAD: {head[:12] or '(n/a)'})\n")
 
+    # Rotation: the free tier allows 3 anchors/day/IP, so an unpaid run can
+    # never cover the whole list. Persist a cursor and take the next slice
+    # each week — every artifact gets re-anchored on a cycle instead of the
+    # first three hogging every run while the rest 429 silently.
+    state_path = LOG_PATH.parent / "weekly_anchor_state.json"
+    cursor = 0
+    try:
+        cursor = int(json.loads(state_path.read_text()).get("cursor", 0))
+    except (OSError, ValueError, json.JSONDecodeError):
+        pass
+    batch_size = len(ARTIFACTS) if os.environ.get("ORPHO_WEEKLY_PACK_TOKEN", "").strip() else 3
+    ordered = [ARTIFACTS[(cursor + i) % len(ARTIFACTS)] for i in range(len(ARTIFACTS))]
+    todo = ordered[:batch_size]
+
     receipts: list[dict] = []
-    for rel in ARTIFACTS:
+    for rel in todo:
         p = ROOT / rel
         if not p.is_file():
             sys.stderr.write(f"[weekly_anchor]   skip (missing): {rel}\n")
@@ -158,6 +179,15 @@ def main() -> int:
     row = {"ts": run_ts, "receipts": receipts}
     with LOG_PATH.open("a") as f:
         f.write(json.dumps(row, separators=(",", ":")) + "\n")
+    anchored_n = sum(1 for r in receipts if r.get("receipt_id"))
+    try:
+        state_path.write_text(json.dumps({"cursor": (cursor + anchored_n) % len(ARTIFACTS),
+                                          "updated": run_ts}))
+    except OSError:
+        pass
+    if anchored_n == 0:
+        sys.stderr.write("[weekly_anchor] FAILED: zero anchors succeeded this run\n")
+        return 1
     sys.stderr.write(f"[weekly_anchor] done; {len(receipts)} anchors logged to {LOG_PATH}\n")
     return 0
 
