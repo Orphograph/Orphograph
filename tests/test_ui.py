@@ -87,15 +87,13 @@ class _IdCollector(HTMLParser):
 
 
 REQUIRED_IDS = {
-    # Institutional homepage (v0.1+) IDs that v2.js depends on.
-    # If you rename or remove any of these in web/index.html, the
-    # drop zone, status panel, or live ledger strip will silently
-    # stop working — keep this set in sync with v2.js's getElementById
-    # calls.
-    "drop", "drop-input", "drop-btn",
-    "status",
-    "c-anchors", "c-blocks",
-    "latest-tz-block",
+    # Dark homepage (promoted from /v2, 2026-07-05) IDs that /v2/app.js depends
+    # on. If you rename or remove any of these in web/index.html, the seal demo
+    # (drop/hash/receipt) silently breaks — keep this set in sync with
+    # web/v2/app.js's getElementById calls.
+    "picker", "ringCenter", "receipt", "hashing",
+    "rFname", "rHash", "rTs", "rLink",
+    "btnChoose", "btnAgain", "ctaAnchor", "announce",
 }
 
 
