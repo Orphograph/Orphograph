@@ -24,7 +24,7 @@ import re
 import unittest
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
-INDEX_HTML = REPO / "web" / "index.html"
+INDEX_HTML = REPO / "web" / "index-cream.html"
 CRYPTO_JS = REPO / "web" / "pay" / "crypto.js"
 
 

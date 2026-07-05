@@ -15,7 +15,7 @@ primary_region = 'iad'
   # homepage: fraction of new human visitors served the dark /v2 document at
   # '/' (sticky cookie, bots excluded for SEO stability). '1.0' = dark is the
   # canonical homepage for humans; '0' reverts everyone to cream; '0.5' = A/B.
-  ORPHO_AB_HOME = '1.0'
+  ORPHO_AB_HOME = '0'
   ORPHO_TRUST_PROXY_HEADERS = '1'
   PORT = '8080'
   # Canonical free tier is 3 anchors / 24h. The legacy RATE_LIMIT_PER_HOUR='10'
