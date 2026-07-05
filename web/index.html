@@ -405,7 +405,10 @@
           <li>Credits never expire</li>
           <li>Gift to a friend</li>
         </ul>
-        <a href="/pay/crypto?plan=writer_pack" class="cta">Pay with crypto</a>
+        <div class="cta-row">
+          <a id="buy-pack" class="cta" hidden>Pay with card</a>
+          <a href="/pay/crypto?plan=writer_pack" class="cta cta-alt">Pay with crypto</a>
+        </div>
       </div>
       <div class="tier featured">
         <span class="ribbon">Most Popular</span>
@@ -441,9 +444,12 @@
           <li>Receipt vault</li>
           <li>API access</li>
         </ul>
-        <a href="/pay/crypto?plan=pack_50" class="cta">Pay with crypto</a>
+        <div class="cta-row">
+          <a id="buy-personal" class="cta" hidden>Pay with card</a>
+          <a href="/pay/crypto?plan=pack_50" class="cta cta-alt">Pay with crypto</a>
+        </div>
         <p class="cta-fineprint">
-          <span class="crypto-tokens" id="crypto-pay-sub-fineprint">Crypto bills as a Pack of Fifty for equivalent value. Recurring crypto coming.</span>
+          <span class="crypto-tokens" id="crypto-pay-sub-fineprint">Card bills $9/month, cancel anytime. Crypto bills as a Pack of Fifty for equivalent value.</span>
         </p>
       </div>
     </div>
@@ -561,5 +567,6 @@
 <script src="/status-badge.js" defer></script>
 <script src="/assets/event.js" defer></script>
 <script src="/assets/drop-observer.js" defer></script>
+<script src="/checkout-cta.js?v=1" defer></script>
 </body>
 </html>
