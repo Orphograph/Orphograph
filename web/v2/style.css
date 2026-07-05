@@ -181,6 +181,9 @@
   .plan .buy{display:block;text-align:center;font-weight:600;font-size:14.5px;padding:12px;border-radius:2px;cursor:pointer;transition:.18s;
     border:1px solid var(--ink);background:transparent;color:var(--ink)}
   .plan .buy:hover{background:var(--ink);color:var(--paper)}
+  .plan .buy.card{background:var(--brass-bright);border-color:var(--brass-bright);color:var(--ink)}
+  .plan .buy.card:hover{filter:brightness(1.08);background:var(--brass-bright);color:var(--ink)}
+  .plan .buy + .buy{margin-top:8px}
   .plan.feature .buy{background:var(--brass-bright);border-color:var(--brass-bright);color:var(--ink)}
   .plan.feature .buy:hover{filter:brightness(1.08)}
   .price-note{text-align:center;font-size:13px;color:var(--mute);margin-top:26px}
