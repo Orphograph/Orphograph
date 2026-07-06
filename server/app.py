@@ -592,7 +592,10 @@ def _serve_static(handler: BaseHTTPRequestHandler, rel_path: str) -> None:
     if not target.exists() or not target.is_file():
         handler.send_error(404, "not found")
         return
-    if target.suffix not in ALLOWED_STATIC_SUFFIXES:
+    # The MIT LICENSE file ships extensionless (web/LICENSE, web/verify/LICENSE)
+    # and is linked from footers sitewide + the verifier page; allow it through
+    # the suffix allowlist and serve it as plain text below.
+    if target.suffix not in ALLOWED_STATIC_SUFFIXES and target.name != "LICENSE":
         handler.send_error(403, "type not allowed")
         return
 
@@ -615,6 +618,8 @@ def _serve_static(handler: BaseHTTPRequestHandler, rel_path: str) -> None:
         return
 
     ctype, _ = mimetypes.guess_type(target.name)
+    if not ctype and target.name == "LICENSE":
+        ctype = "text/plain; charset=utf-8"
     ctype = ctype or "application/octet-stream"
     data = target.read_bytes()
     data, enc = _maybe_compress(handler, data, ctype)

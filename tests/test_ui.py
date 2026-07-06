@@ -150,6 +150,18 @@ def test_terms_and_privacy_pages_render(live_server):
         assert "orphograph" in html.lower()
 
 
+def test_license_files_serve_as_text(live_server):
+    # The MIT LICENSE ships extensionless and is linked from footers sitewide
+    # (/LICENSE) and the verifier page (/verify/LICENSE). Both must serve 200 as
+    # text/plain — the static suffix-allowlist previously 403'd them.
+    for path in ("/LICENSE", "/verify/LICENSE"):
+        with urllib.request.urlopen(live_server + path) as r:
+            assert r.status == 200, f"{path} did not serve"
+            assert r.headers.get_content_type() == "text/plain", f"{path} wrong content-type"
+            body = r.read().decode()
+        assert "MIT" in body or "Permission is hereby granted" in body, f"{path} not the license text"
+
+
 def test_health_endpoint_returns_extended_snapshot(live_server):
     import json
     with urllib.request.urlopen(live_server + "/api/health") as r:
