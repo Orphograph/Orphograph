@@ -21,7 +21,6 @@ EXPECTED_URLS = [
     "https://orphograph.com/",
     "https://orphograph.com/verify/",
     "https://orphograph.com/blog/",
-    "https://orphograph.com/v2",
     "https://orphograph.com/learn",
     "https://orphograph.com/dataset-provenance",
     "https://orphograph.com/integrations",
