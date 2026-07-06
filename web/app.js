@@ -235,7 +235,7 @@ function wireCryptoPayLink() {
     if (!el) continue;
     el.hidden = !NOWPAYMENTS_ENABLED;
     if (NOWPAYMENTS_ENABLED && el.tagName === "A") {
-      el.href = "/pay/crypto.html";
+      el.href = "/pay/crypto";
     }
   }
 }

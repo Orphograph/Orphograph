@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  com.orphograph.slo_monitor.plist.template
+
+  Daily launchd schedule for scripts/slo_monitor.py. This job produces local
+  operational evidence in outbox/SLO_MONITOR.jsonl and deploy/SLO_REPORTS/.
+  It does not use GitHub, Fly, Stripe, Resend, or deploy credentials.
+
+  This file is a TEMPLATE. It is intentionally not installed by any agent.
+
+  Install:
+    cp scripts/com.orphograph.slo_monitor.plist.template \
+       ~/Library/LaunchAgents/com.orphograph.slo_monitor.plist
+    # Replace REPLACE_ME_HOMEDIR with your absolute home path.
+    launchctl bootstrap gui/$UID ~/Library/LaunchAgents/com.orphograph.slo_monitor.plist
+    launchctl enable        gui/$UID/com.orphograph.slo_monitor
+    launchctl kickstart -k  gui/$UID/com.orphograph.slo_monitor
+
+  If public production cannot be reached during an access suspension, add
+  --no-network to ProgramArguments below and the monitor will still scan local
+  receipts and write TRL evidence.
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.orphograph.slo_monitor</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/opt/homebrew/bin/python3</string>
+        <string>/Users/REPLACE_ME_HOMEDIR/orphograph/scripts/slo_monitor.py</string>
+        <string>--write-report</string>
+    </array>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin</string>
+    </dict>
+
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>9</integer>
+        <key>Minute</key>
+        <integer>15</integer>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <false/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/REPLACE_ME_HOMEDIR/Library/Logs/orphograph_slo_monitor.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/REPLACE_ME_HOMEDIR/Library/Logs/orphograph_slo_monitor.log</string>
+
+    <key>ProcessType</key>
+    <string>Background</string>
+</dict>
+</plist>

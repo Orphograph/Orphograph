@@ -8,33 +8,16 @@
 <meta name="description" content="A technical walkthrough of why a timestamp anchored to Bitcoin is fundamentally different from a conventional database record. The math, the eight attacks an adversary would have to mount, and why each one fails in practice.">
 <meta property="og:title" content="How Bitcoin merkle roots make file timestamps un-falsifiable">
 <meta property="og:description" content="A technical walkthrough of why a timestamp anchored to Bitcoin is fundamentally different from a conventional database record. The math, the eight attacks an adversary would have to mount, and why each one fails in practice.">
-<meta property="og:url" content="https://orphograph.com/blog/bitcoin-merkle-roots-unforgeable-timestamps.html">
+<meta property="og:url" content="https://orphograph.com/blog/bitcoin-merkle-roots-unforgeable-timestamps">
 <meta property="og:type" content="article">
 <meta property="og:image" content="https://orphograph.com/og-image.png?v=8">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="How Bitcoin merkle roots make file timestamps un-falsifiable">
 <meta name="twitter:description" content="A technical walkthrough of why a timestamp anchored to Bitcoin is fundamentally different from a conventional database record. The math, the eight attacks an adversary would have to mount, and why each one fails in practice.">
-<link rel="canonical" href="https://orphograph.com/blog/bitcoin-merkle-roots-unforgeable-timestamps.html">
+<link rel="canonical" href="https://orphograph.com/blog/bitcoin-merkle-roots-unforgeable-timestamps">
 <link rel="icon" type="image/png" href="/favicon.png?v=8">
 <link rel="stylesheet" href="/index.css?v=9">
-<style>
-  .arch-wrap { max-width: 760px; margin: 0 auto; padding: 0 24px 64px; }
-  .arch-wrap h1 { font-family: var(--serif); font-size: 34px; font-weight: 500; margin: 32px 0 6px; line-height: 1.2; }
-  .arch-wrap h2 { font-family: var(--serif); font-size: 22px; font-weight: 500; margin: 36px 0 4px; color: var(--ink); }
-  .arch-wrap h3 { font-family: var(--serif); font-size: 17px; font-weight: 500; margin: 24px 0 2px; color: var(--ink); }
-  .arch-rule { border-top: 1px solid var(--ink); width: 32px; margin: 8px 0 16px; opacity: 0.6; }
-  .arch-wrap p, .arch-wrap li { color: var(--ink-2); line-height: 1.75; font-size: 15.5px; }
-  .arch-wrap code { background: rgba(74,154,115,0.08); padding: 2px 6px; border-radius: 3px; font-size: 0.92em; }
-  .arch-wrap pre { background: #f1ead7; padding: 14px 18px; border-radius: 6px; overflow-x: auto; font-size: 13.5px; line-height: 1.55; }
-  .arch-wrap pre code { background: transparent; padding: 0; }
-  .arch-wrap table { border-collapse: collapse; margin: 20px 0; width: 100%; font-size: 14.5px; }
-  .arch-wrap th, .arch-wrap td { border: 1px solid var(--line-soft); padding: 8px 10px; text-align: left; vertical-align: top; }
-  .arch-wrap th { background: rgba(74,154,115,0.06); font-weight: 500; }
-  .arch-lede { font-size: 17px; line-height: 1.7; color: var(--ink-2); margin: 0 0 24px; }
-  .disclaimer-block { margin-top: 48px; padding: 20px 24px; background: #f1ead7; border-radius: 6px; font-size: 14px; line-height: 1.65; color: var(--muted); }
-  .post-meta { font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); margin: 48px 0 8px; }
-  .post-foot { color: var(--muted); font-size: 13px; margin-top: 48px; border-top: 1px solid var(--line-soft); padding-top: 18px; }
-</style>
+<link rel="stylesheet" href="/blog/bitcoin-merkle-roots-unforgeable-timestamps.css?v=1">
 <meta name="copyright" content="© 2026 Orphograph. Code under MIT (see /LICENSE). Brand, content, and design — all rights reserved.">
 <script type="application/ld+json">
 {
@@ -42,7 +25,7 @@
   "@type": "Article",
   "headline": "How Bitcoin merkle roots make file timestamps un-falsifiable",
   "description": "A technical walkthrough of why a timestamp anchored to Bitcoin is fundamentally different from a conventional database record. The math, the eight attacks an adversary would have to mount, and why each one fails in practice.",
-  "url": "https://orphograph.com/blog/bitcoin-merkle-roots-unforgeable-timestamps.html",
+  "url": "https://orphograph.com/blog/bitcoin-merkle-roots-unforgeable-timestamps",
   "datePublished": "2026-05-17",
   "dateModified": "2026-05-17",
   "author": { "@type": "Organization", "name": "Orphograph", "url": "https://orphograph.com" },
@@ -54,7 +37,7 @@
   },
   "mainEntityOfPage": {
     "@type": "WebPage",
-    "@id": "https://orphograph.com/blog/bitcoin-merkle-roots-unforgeable-timestamps.html"
+    "@id": "https://orphograph.com/blog/bitcoin-merkle-roots-unforgeable-timestamps"
   }
 }
 </script>
@@ -79,7 +62,7 @@
       "@type": "ListItem",
       "position": 3,
       "name": "How Bitcoin merkle roots make file timestamps un-falsifiable",
-      "item": "https://orphograph.com/blog/bitcoin-merkle-roots-unforgeable-timestamps.html"
+      "item": "https://orphograph.com/blog/bitcoin-merkle-roots-unforgeable-timestamps"
     }
   ]
 }
@@ -91,11 +74,11 @@
   <div class="wrap row">
     <a href="/" class="brand">Orphograph</a>
     <nav>
-      <a href="/learn.html">Method</a>
-      <a href="/faq.html">FAQ</a>
-      <a href="/continuity.html">Continuity</a>
+      <a href="/learn">Method</a>
+      <a href="/faq">FAQ</a>
+      <a href="/continuity">Continuity</a>
       <a href="/#tiers">Pricing</a>
-      <a href="/signin.html">Sign in</a>
+      <a href="/signin">Sign in</a>
       <a href="/#drop" class="cta">Anchor a file</a>
     </nav>
   </div>
@@ -216,14 +199,14 @@
   <p>It is not perfect. But it is structurally honest in a way that self-attested timestamps, traditional digital signatures, and proprietary &quot;verified&quot; badges are not. The proof outlives the issuer. The verifier doesn&#x27;t need permission. The math is the trust.</p>
   <p>Anyone whose work might one day be disputed should anchor it.</p>
   <hr>
-  <p><em>Orphograph is a Bitcoin file-timestamping service. Three free anchors every 24 hours. Pack of Fifty: $29 one-time, credits never expire. Standing Order: $9/month for unlimited. Open-source verifier. The file&#x27;s bytes never leave the browser; only the hash is submitted. <a href="https://orphograph.com/#sample">Try the sample receipt without signing up.</a></em> Related: <a href="/blog/bitcoin-block-height-as-source-of-truth.html" style="color:var(--confirm);">why a Bitcoin block height is the strongest anchor</a>. Method overview: <a href="/learn.html" style="color:var(--confirm);">how the protocol works end-to-end</a>.</p>
+  <p><em>Orphograph is a Bitcoin file-timestamping service. Three free anchors every 24 hours. Pack of Fifty: $29 one-time, credits never expire. Standing Order: $9/month for unlimited. Open-source verifier. The file&#x27;s bytes never leave the browser; only the hash is submitted. <a href="https://orphograph.com/#sample">Try the sample receipt without signing up.</a></em> Related: <a href="/blog/bitcoin-block-height-as-source-of-truth" style="color:var(--confirm);">why a Bitcoin block height is the strongest anchor</a>. Method overview: <a href="/learn" style="color:var(--confirm);">how the protocol works end-to-end</a>.</p>
 
   <p class="post-foot">
     Published 2026-05-17. <a href="/blog/" style="color:var(--muted);">More from the blog</a>.
   </p>
 
   <p class="post-foot" style="margin-top:8px;">
-    Start here: <a href="/what-is-this.html" style="color:var(--confirm);">What this office actually does</a>.
+    Start here: <a href="/what-is-this" style="color:var(--confirm);">What this office actually does</a>.
   </p>
 
   <div class="disclaimer-block">
@@ -238,6 +221,6 @@
   </div>
 </footer>
 
-<script src="/assets/event.js" defer></script>
+<script src="/assets/event.js?v=1" defer></script>
 </body>
 </html>

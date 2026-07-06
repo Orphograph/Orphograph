@@ -158,7 +158,7 @@ _PAGE_TEMPLATE = """<!DOCTYPE html>
   </div>
 </footer>
 
-<script src="/statusbar.js" defer></script>
+<script src="/statusbar.js?v=1" defer></script>
 </body>
 </html>
 """

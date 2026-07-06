@@ -181,6 +181,15 @@ def _send_pin_email_if_needed(record: dict) -> None:
         return
     if ok:
         record["pin_email_sent_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        # Afterglow follow-up: "what you can do with your receipt now" rides
+        # the pin moment (hours after anchoring — the habit-formation window).
+        # FOUNDER-GATED: sends only when ORPHO_INTEGRATION_EMAIL is set.
+        if os.environ.get("ORPHO_INTEGRATION_EMAIL") and not record.get("integration_email_sent_at"):
+            try:
+                if mailer.send_integration_email(notify_email.strip(), record):
+                    record["integration_email_sent_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+            except Exception as e:  # noqa: BLE001 — never crash the upgrade worker
+                sys.stderr.write(f"[upgrade:integration_email] {type(e).__name__}: {e}\n")
     # Webhook dispatch for `anchor.btc_pinned`. Done after the email
     # send so an email-side failure does not block notifying integrators
     # — and done only on the same transition the email path uses, so

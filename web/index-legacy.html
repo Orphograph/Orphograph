@@ -13,70 +13,9 @@
 <meta property="og:url" content="https://orphograph.com/">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="/og.svg">
-<link rel="stylesheet" href="/style.css?v=2">
-<style>
-  /* Overhaul-specific tweaks layered on top of style.css */
-  .header-cta { margin-left: 14px; padding: 6px 14px; background: var(--accent); color: #0c0e10; border-radius: 999px; font-weight: 500; text-decoration: none; font-size: 13px; white-space: nowrap; }
-  .header-cta:hover { filter: brightness(1.1); }
-  .trust-chips { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0 22px; padding: 0; list-style: none; }
-  .trust-chips li { padding: 6px 12px; border: 1px solid var(--panel-stroke); border-radius: 999px; font-size: 13px; color: var(--text-soft); background: var(--panel); }
-  .trust-chips li::before { content: "✓ "; color: var(--accent); }
-  .counter-strip { display: flex; flex-wrap: wrap; gap: 18px; justify-content: center; padding: 14px 18px; margin: 18px auto 28px; max-width: 760px; border: 1px solid var(--panel-stroke); background: var(--panel); border-radius: 12px; font-size: 14px; color: var(--text-soft); }
-  .counter-strip strong { color: var(--accent); font-variant-numeric: tabular-nums; }
-  .counter-strip .sep { color: var(--muted); }
-  .badge-section { border: 1px solid var(--panel-stroke); background: var(--panel); border-radius: 12px; padding: 22px; margin: 28px 0; }
-  .badge-snippet { background: #0c0e10; color: #e7e9ec; padding: 14px 16px; border-radius: 8px; font-family: var(--mono); font-size: 13px; overflow-x: auto; position: relative; }
-  .badge-snippet button { position: absolute; top: 8px; right: 8px; background: var(--accent); color: #0c0e10; border: 0; border-radius: 6px; padding: 4px 10px; font-size: 12px; cursor: pointer; }
-  details.tech-detail { margin-top: 18px; padding: 14px 18px; border: 1px solid var(--panel-stroke); border-radius: 10px; background: var(--panel); }
-  details.tech-detail summary { cursor: pointer; color: var(--accent); font-size: 14px; }
-  details.tech-detail[open] summary { margin-bottom: 12px; }
-  .verify-block { border: 1px solid var(--panel-stroke); background: var(--panel); border-radius: 12px; padding: 22px; margin: 28px 0; }
-  .pricing-footnote { margin-top: 18px; text-align: center; color: var(--muted); font-size: 14px; }
-  .waitlist-mini { margin-top: 10px; display: flex; gap: 6px; flex-wrap: wrap; }
-  .waitlist-mini input { flex: 1; min-width: 140px; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--panel-stroke); background: var(--bg); color: var(--text); font-size: 13px; }
-  .waitlist-mini button { padding: 8px 14px; border-radius: 6px; border: 0; background: var(--accent); color: #0c0e10; font-size: 13px; font-weight: 500; cursor: pointer; }
-  @media (max-width: 480px) {
-    .header-cta { display: none; } /* desktop only — mobile nav already short */
-    .trust-chips li { font-size: 12px; }
-    .counter-strip { font-size: 13px; gap: 12px; }
-  }
-
-  /* ── Tab navigation for lower sections ──────────────────────────── */
-  .tabs {
-    display: flex;
-    gap: 4px;
-    margin: 32px 0 0;
-    padding: 0;
-    border-bottom: 1px solid var(--panel-stroke);
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-  }
-  .tabs::-webkit-scrollbar { display: none; }
-  .tab-btn {
-    padding: 12px 18px;
-    background: transparent;
-    border: 0;
-    color: var(--text-soft);
-    font-size: 14px;
-    font-weight: 500;
-    cursor: pointer;
-    border-bottom: 2px solid transparent;
-    white-space: nowrap;
-    transition: color 120ms, border-color 120ms;
-  }
-  .tab-btn:hover { color: var(--text); }
-  .tab-btn[aria-selected="true"] {
-    color: var(--accent);
-    border-bottom-color: var(--accent);
-  }
-  .tab-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
-  .tab-panel { display: none; padding-top: 28px; }
-  .tab-panel.active { display: block; }
-  @media (max-width: 600px) {
-    .tab-btn { padding: 10px 12px; font-size: 13px; }
-  }
-</style>
+<link rel="stylesheet" href="/style.css?v=5">
+<link rel="stylesheet" href="/index-legacy.css?v=1">
+<meta name="robots" content="noindex">
 </head>
 <body>
 
@@ -87,9 +26,9 @@
     <a href="#pricing" data-tab="pricing">pricing</a>
     <a href="#verify"  data-tab="verify">verify</a>
     <a href="#faq"     data-tab="faq">faq</a>
-    <a href="/learn.html">learn</a>
-    <a href="/signin.html" id="nav-signin">sign in</a>
-    <a href="/account.html" id="nav-account" hidden>account</a>
+    <a href="/learn">learn</a>
+    <a href="/signin" id="nav-signin">vault</a>
+    <a href="/account" id="nav-account" hidden>account</a>
     <a href="#drop" class="header-cta">Anchor a file free</a>
   </nav>
 </header>
@@ -420,10 +359,10 @@
         <a class="btn" id="buy-pack" data-stripe-placeholder="true">Reserve a Pack</a>
       </p>
       <p class="tier-cta" style="margin-top:6px;">
-        <a class="btn" href="/pay/btc.html" style="background:#f7931a;color:#fff;">₿ Pay with Bitcoin</a>
+        <a class="btn" href="/pay/btc" style="background:#f7931a;color:#fff;">₿ Pay with Bitcoin</a>
       </p>
       <p class="tier-cta" style="margin-top:6px;" id="crypto-pay-link-wrap">
-        <a class="btn" href="/pay/crypto.html" id="crypto-pay-link" hidden>Pay in crypto (8 coins)</a>
+        <a class="btn" href="/pay/crypto" id="crypto-pay-link" hidden>Pay in crypto (8 coins)</a>
       </p>
       <p class="tier-note muted">Card checkout activating soon. Bitcoin pays now via any BTC wallet (Phantom, Electrum, hardware, exchange).</p>
       <p class="coupon-pill muted" id="coupon-pill" hidden></p>
@@ -522,7 +461,7 @@
       The proof binding is hash-based, which resists quantum attacks far
       better than signature schemes. We also embed a SHA-512 sibling witness
       in every receipt as an extra hedge.
-      Technical detail at <a href="/security.html">/security</a>.
+      Technical detail at <a href="/security">/security</a>.
     </p>
 
     <h3>Who's behind this?</h3>
@@ -546,14 +485,14 @@
 <!-- ============================================================== -->
 <footer>
   <small>
-    <a href="/about.html">About</a> ·
-    <a href="/learn.html">Learn</a> ·
-    <a href="/press.html">Press</a> ·
-    <a href="/docs/api.html">API</a> ·
-    <a href="/terms.html">Terms</a> ·
-    <a href="/privacy.html">Privacy</a> ·
-    <a href="/status.html">Status</a> ·
-    <a href="/stats.html">Stats</a> ·
+    <a href="/about">About</a> ·
+    <a href="/learn">Learn</a> ·
+    <a href="/press">Press</a> ·
+    <a href="/docs/api">API</a> ·
+    <a href="/terms">Terms</a> ·
+    <a href="/privacy">Privacy</a> ·
+    <a href="/status">Status</a> ·
+    <a href="/stats">Stats</a> ·
     <a href="https://github.com/Orphograph/Orphograph" target="_blank" rel="noopener">GitHub</a> ·
     <a href="mailto:hello@orphograph.com">Contact</a>
   </small>
@@ -572,6 +511,6 @@
 <script src="/exif.js"></script>
 <script src="/app.js"></script>
 <script src="/landing.js"></script>
-<script src="/assets/event.js" defer></script>
+<script src="/assets/event.js?v=1" defer></script>
 </body>
 </html>

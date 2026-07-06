@@ -9,24 +9,12 @@
 <link rel="icon" type="image/png" href="/favicon.png?v=8">
 <meta property="og:title" content="Orphograph — Frequently Asked">
 <meta property="og:description" content="What is anchored. What is private. What the receipt proves.">
-<meta property="og:url" content="https://orphograph.com/faq.html">
+<meta property="og:url" content="https://orphograph.com/faq">
 <meta property="og:type" content="article">
 <meta property="og:image" content="https://orphograph.com/og-image.png?v=8">
-<link rel="canonical" href="https://orphograph.com/faq.html">
-<link rel="stylesheet" href="/index.css?v=9">
-<style>
-  .faq-wrap { max-width: 760px; margin: 0 auto; padding: 0 24px 64px; }
-  .faq-item { border-bottom: 1px solid var(--line-soft); padding: 22px 0; }
-  .faq-item:last-child { border-bottom: 0; }
-  .faq-q { font-family: var(--serif); font-size: 21px; font-weight: 500; color: var(--ink); margin: 0 0 10px; line-height: 1.35; }
-  .faq-a { color: var(--ink-2); line-height: 1.7; margin: 0; font-size: 15px; }
-  .faq-a + .faq-a { margin-top: 10px; }
-  h1.faq-h1 { font-family: var(--serif); font-size: 38px; font-weight: 500; margin: 32px 0 6px; color: var(--ink); }
-  p.faq-lede { font-size: 17px; color: var(--ink-2); line-height: 1.65; margin: 0 0 8px; }
-  .faq-section { margin-top: 36px; }
-  .faq-section h2 { font-family: var(--serif); font-size: 22px; font-weight: 500; color: var(--ink); margin: 0 0 4px; letter-spacing: 0.01em; }
-  .faq-section .faq-section-rule { border-top: 1px solid var(--ink); width: 32px; margin: 10px 0 18px; opacity: 0.6; }
-</style>
+<link rel="canonical" href="https://orphograph.com/faq">
+<link rel="stylesheet" href="/index.css?v=15">
+<link rel="stylesheet" href="/faq.css?v=1">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -43,6 +31,7 @@
     {"@type":"Question","name":"What is recorded about me?","acceptedAnswer":{"@type":"Answer","text":"For free-tier visitors, only a truncated network address is retained for rate-limiting, and only briefly. For account-holders, the email used at sign-in and a non-reversible identifier derived from it. No file names, no content, no full IP addresses, no behavioral profiles."}},
     {"@type":"Question","name":"Does Orphograph attest that a file is human-made or not AI-generated?","acceptedAnswer":{"@type":"Answer","text":"No. The receipt records that a file existed at a given moment. Whether the file was created by a person, a model, or any other process is outside the scope of what is attested."}},
     {"@type":"Question","name":"Can I anchor a Bitcoin transaction directly instead of using calendars?","acceptedAnswer":{"@type":"Answer","text":"A premium direct-transaction option is on the roadmap for cases where the standard one-block-window is unsuitable. For the common case, the OpenTimestamps aggregator path is more cost-efficient and equally final."}},
+    {"@type":"Question","name":"Will quantum computers break this proof?","acceptedAnswer":{"@type":"Answer","text":"No, on current cryptographic understanding. Shor's algorithm threatens signatures, not hash structures — and an OpenTimestamps proof is a chain of hash commitments with no signature in the proof path. Grover's algorithm leaves SHA-256 preimage resistance at roughly 2^128 quantum operations, far beyond feasibility; NIST treats SHA-2 as secure for hashing in a post-quantum setting. A future quantum computer could disrupt Bitcoin's future operation — signature migration, mining economics — but it cannot silently falsify past commitments; rewriting history would mean publicly out-working the accumulated chain. Every receipt also carries a SHA-512 sibling fingerprint for cryptanalytic diversity on a scale of decades. The math your receipt rests on is the part quantum computers are worst at."}},
     {"@type":"Question","name":"What happens to the receipt if Orphograph closes?","acceptedAnswer":{"@type":"Answer","text":"Every receipt remains verifiable against the Bitcoin chain using the published MIT verifier or any OpenTimestamps client. The receipt is the instrument; this office is the issuer, not the trust anchor."}}
   ]
 }
@@ -55,11 +44,11 @@
   <div class="wrap row">
     <a href="/" class="brand">Orphograph</a>
     <nav>
-      <a href="/learn.html">Method</a>
-      <a href="/writers.html">Writers</a>
+      <a href="/learn">Method</a>
+      <a href="/writers">Writers</a>
       <a href="/#tiers">Pricing</a>
-      <a href="/about.html">Office</a>
-      <a href="/signin.html">Sign in</a>
+      <a href="/about">Office</a>
+      <a href="/signin">Vault</a>
       <a href="/#drop" class="cta">Anchor a file</a>
     </nav>
   </div>
@@ -67,7 +56,7 @@
 
 <main class="faq-wrap">
 
-  <p style="font-size:12px;letter-spacing:0.18em;text-transform:uppercase;color:var(--muted);margin:48px 0 8px;">Frequently Asked</p>
+  <p class="faq-eyebrow">Frequently Asked</p>
   <h1 class="faq-h1">Common questions, considered answers.</h1>
   <p class="faq-lede">
     The following are the questions most frequently put to the office. Where the answer is technical, it is exact; where the answer involves a judgement that lies outside our authority, that limit is stated plainly.
@@ -116,6 +105,11 @@
       <p class="faq-q">Can I anchor a Bitcoin transaction directly instead of using calendars?</p>
       <p class="faq-a">A premium direct-transaction option is on the roadmap for cases where the standard one-block-window is unsuitable. For the common case, the OpenTimestamps aggregator path is more cost-efficient and equally final.</p>
     </div>
+
+    <div class="faq-item">
+      <p class="faq-q">Will quantum computers break this proof?</p>
+      <p class="faq-a">No, on current cryptographic understanding. Shor's algorithm threatens signatures, not hash structures — and an OpenTimestamps proof is a chain of hash commitments with no signature in the proof path. Grover's algorithm leaves SHA-256 preimage resistance at roughly 2<sup>128</sup> quantum operations, far beyond feasibility; NIST treats SHA-2 as secure for hashing in a post-quantum setting. A future quantum computer could disrupt Bitcoin's future operation — signature migration, mining economics — but it cannot silently falsify past commitments; rewriting history would mean publicly out-working the accumulated chain. Every receipt also carries a SHA-512 sibling fingerprint for cryptanalytic diversity on a scale of decades. The math your receipt rests on is the part quantum computers are worst at.</p>
+    </div>
   </section>
 
   <section class="faq-section">
@@ -153,25 +147,24 @@
     </div>
   </section>
 
-  <p style="color:var(--muted);font-size:13px;margin-top:48px;">
-    A question not answered here may be put to the office at <a href="mailto:hello@orphograph.com" style="color:var(--confirm);">hello@orphograph.com</a>. Updates to this page are themselves anchored; the receipt is listed in the page footer of the latest revision.
+  <p class="faq-footnote">
+    A question not answered here may be put to the office at <a href="mailto:hello@orphograph.com" class="faq-footnote-link">hello@orphograph.com</a>. Updates to this page are themselves anchored; the receipt is listed in the page footer of the latest revision.
   </p>
 </main>
 
 <footer>
-  <div class="wrap" style="text-align:center;color:var(--muted);font-size:13px;padding:32px 0;">
+  <div class="wrap faq-footer-wrap">
     <p>Orphograph · An empirical notary.</p>
-    <p style="margin-top:8px;">
-      <a href="/" style="color:var(--muted);">Home</a> ·
-      <a href="/method" style="color:var(--muted);">Method</a> ·
-      <a href="/vs/c2pa.html" style="color:var(--muted);">Compare</a> ·
-      <a href="/terms.html" style="color:var(--muted);">Terms</a> ·
-      <a href="/privacy.html" style="color:var(--muted);">Privacy</a>
+    <p class="faq-footer-row">
+      <a href="/" class="faq-footer-link">Home</a> ·
+      <a href="/method" class="faq-footer-link">Method</a> ·
+      <a href="/terms" class="faq-footer-link">Terms</a> ·
+      <a href="/privacy" class="faq-footer-link">Privacy</a>
     </p>
   </div>
 </footer>
 
-<script src="/statusbar.js" defer></script>
-<script src="/assets/event.js" defer></script>
+<script src="/statusbar.js?v=1" defer></script>
+<script src="/assets/event.js?v=1" defer></script>
 </body>
 </html>

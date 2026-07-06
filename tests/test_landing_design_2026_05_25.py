@@ -24,7 +24,8 @@ import re
 import unittest
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
-INDEX_HTML = REPO / "web" / "index.html"
+INDEX_HTML = REPO / "web" / "index-cream.html"
+CRYPTO_JS = REPO / "web" / "pay" / "crypto.js"
 
 
 def _html() -> str:
@@ -230,7 +231,8 @@ class TestCheckoutWiringMatchesSKU(unittest.TestCase):
     10-credit tier (Writer Pack). Wiring it to the 50-credit "Pack of Fifty"
     under-delivers (buyer pays for 50, receives 10) — the bug this prevents
     from ever shipping. Pack of Fifty needs its own $29 / 50-credit Stripe
-    price (STRIPE_PRICE_PACK50) before it gets a card button.
+    price (STRIPE_PRICE_PACK50) before it gets a card button. crypto.js
+    separately honors the ?plan=pack_50 query param; see TestCryptoPlanDeepLink.
     """
 
     def _tier_chunk(self, name: str) -> str:
@@ -248,11 +250,16 @@ class TestCheckoutWiringMatchesSKU(unittest.TestCase):
         fifty = self._tier_chunk("Pack of Fifty")
         self.assertIn("50 anchor credits", fifty, "sanity: this is the 50-credit tier")
         self.assertNotIn(
-            'data-checkout="pack"',
+            "plan=writer_pack",
             fifty,
-            'Pack of Fifty must NOT use the card pack plan: that SKU grants '
-            "10 credits (PACK_CREDIT_COUNT) and would under-deliver the 50-pack. "
-            "Give it its own STRIPE_PRICE_PACK50 plan before adding a card button.",
+            "Pack of Fifty must NOT deep-link to the writer_pack plan: that SKU "
+            "grants 10 credits and would under-deliver the 50-pack.",
+        )
+        self.assertRegex(
+            fifty,
+            r'/pay/crypto(?:\.html)?\?plan=pack_50',
+            "Pack of Fifty should deep-link to the dedicated pack_50 plan, "
+            "which grants 50 credits.",
         )
 
     def test_writer_pack_routes_to_crypto(self):
@@ -267,10 +274,60 @@ class TestCheckoutWiringMatchesSKU(unittest.TestCase):
             "Writer Pack is crypto-only until Stripe is configured.",
         )
         self.assertRegex(
-            writer, r'href="/pay/crypto\.html\?plan=writer_pack"',
+            writer, r'href="/pay/crypto(?:\.html)?\?plan=writer_pack"',
             "Writer Pack CTA should route to the crypto checkout "
             "(plan=writer_pack).",
         )
+
+
+class TestCryptoPlanDeepLink(unittest.TestCase):
+    def test_crypto_page_honors_pack50_query_param(self):
+        """The landing links to /pay/crypto.html?plan=pack_50 for the 50-pack.
+        The crypto page must not silently default that buyer back to the
+        10-credit Writer Pack."""
+        js = CRYPTO_JS.read_text(encoding="utf-8")
+        self.assertIn('params.get("plan")', js)
+        self.assertIn('plan === "pack_50" ? "pack_50" : "writer_pack"', js)
+
+
+class TestCspInlineConsolidation(unittest.TestCase):
+    """The live site serves `style-src 'self'` with NO 'unsafe-inline', so every
+    inline <style> block and inline `style=` attribute is blocked by the browser
+    and silently dropped. All landing-page CSS must live in the external
+    /index.css (which IS 'self'-allowed). This guards both the post-redesign
+    markup invariants and the CSP hygiene (no inline CSS may creep back in)."""
+
+    def test_lockup_wordmark_present(self):
+        self.assertIn('class="lockup-wordmark">Orphograph', _html())
+
+    def test_lockup_tagline_present(self):
+        self.assertIn("Proof &middot; Permanence", _html())
+
+    def test_old_lockup_taglines_gone(self):
+        html = _html()
+        self.assertNotIn("Strategy", html)
+        self.assertNotIn("Stewardship", html)
+
+    def test_raster_lockup_references_gone(self):
+        html = _html()
+        self.assertNotIn("lockup.png", html)
+        self.assertNotIn("lockup-text-img", html)
+
+    def test_assurances_row_replaces_chips_and_lede(self):
+        html = _html()
+        self.assertIn('class="assurances"', html)
+        self.assertEqual(html.count('class="assure"'), 3)
+        self.assertNotIn('class="lede"', html)
+        self.assertNotIn('class="chips"', html)
+
+    def test_no_inline_style_block(self):
+        """CSP hygiene: no <style> block may remain — style-src 'self' drops it."""
+        self.assertNotIn("<style>", _html())
+
+    def test_no_inline_style_attribute(self):
+        """CSP hygiene: no inline `style=` attribute may remain — it is blocked
+        by style-src 'self' (no 'unsafe-inline')."""
+        self.assertNotIn(" style=", _html())
 
 
 if __name__ == "__main__":

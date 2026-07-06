@@ -8,6 +8,7 @@ Verifies the static SEO surface area:
 from __future__ import annotations
 
 import xml.etree.ElementTree as ET
+import re
 from pathlib import Path
 
 import pytest
@@ -18,62 +19,83 @@ WEB = ROOT / "web"
 # Canonical public-page set. Kept in lockstep with web/sitemap.xml.
 EXPECTED_URLS = [
     "https://orphograph.com/",
-    "https://orphograph.com/about.html",
-    "https://orphograph.com/buy.html",
-    "https://orphograph.com/account.html",
-    "https://orphograph.com/faq.html",
-    "https://orphograph.com/learn.html",
-    "https://orphograph.com/legal/",
-    "https://orphograph.com/changelog.html",
-    "https://orphograph.com/continuity.html",
-    "https://orphograph.com/recover.html",
-    "https://orphograph.com/signin.html",
-    "https://orphograph.com/status.html",
-    "https://orphograph.com/roadmap.html",
-    "https://orphograph.com/ios.html",
-    "https://orphograph.com/mcp.html",
-    "https://orphograph.com/badge.html",
-    "https://orphograph.com/verify-js.html",
-    "https://orphograph.com/press-kit.html",
-    "https://orphograph.com/method/folder-merkle.html",
-    "https://orphograph.com/method/evidence-law.html",
-    "https://orphograph.com/method/legal-recognition.html",
-    "https://orphograph.com/method/architecture.html",
-    "https://orphograph.com/method/bitcoin-attestation.html",
-    "https://orphograph.com/method/the-mit-verifier-annotated.html",
-    "https://orphograph.com/method/why-filenames-are-not-stored.html",
+    "https://orphograph.com/verify/",
+    "https://orphograph.com/blog/",
+    "https://orphograph.com/learn",
+    "https://orphograph.com/dataset-provenance",
+    "https://orphograph.com/integrations",
+    "https://orphograph.com/accept",
+    "https://orphograph.com/standing-record",
+    "https://orphograph.com/blog/prove-what-was-in-your-training-set",
+    "https://orphograph.com/buy",
+    "https://orphograph.com/lp/",
+    "https://orphograph.com/about",
+    "https://orphograph.com/faq",
+    "https://orphograph.com/verify-js",
+    "https://orphograph.com/lp/prove-photo-pre-ai",
+    "https://orphograph.com/lp/bitcoin-timestamp-file",
+    "https://orphograph.com/lp/c2pa-alternative",
+    "https://orphograph.com/lp/opentimestamps-explained",
+    "https://orphograph.com/lp/wedding-photographer-proof",
+    "https://orphograph.com/lp/manuscript-priority-date",
+    "https://orphograph.com/lp/screenshot-evidence-timestamp",
+    "https://orphograph.com/lp/ai-image-detector-vs-provenance",
+    "https://orphograph.com/method/architecture",
+    "https://orphograph.com/method/bitcoin-attestation",
+    "https://orphograph.com/method/evidence-law",
+    "https://orphograph.com/method/folder-merkle",
+    "https://orphograph.com/method/legal-recognition",
+    "https://orphograph.com/method/the-mit-verifier-annotated",
+    "https://orphograph.com/method/why-filenames-are-not-stored",
+    "https://orphograph.com/docs/api",
+    "https://orphograph.com/docs/webhooks",
+    "https://orphograph.com/stats",
+    "https://orphograph.com/gift",
+    "https://orphograph.com/status",
+    "https://orphograph.com/security",
+    "https://orphograph.com/continuity",
+    "https://orphograph.com/ios",
+    "https://orphograph.com/mcp",
+    "https://orphograph.com/badge",
+    "https://orphograph.com/badge-demo",
+    "https://orphograph.com/press",
+    "https://orphograph.com/press-kit",
+    "https://orphograph.com/roadmap",
+    "https://orphograph.com/changelog",
+    "https://orphograph.com/account",
     "https://orphograph.com/construction/",
     "https://orphograph.com/inspection/",
-    "https://orphograph.com/matters/",
     "https://orphograph.com/listings/",
+    "https://orphograph.com/matters/",
     "https://orphograph.com/practice/",
     "https://orphograph.com/workpapers/",
-    "https://orphograph.com/docs/api.html",
-    "https://orphograph.com/docs/webhooks.html",
-    "https://orphograph.com/blog/",
-    "https://orphograph.com/blog/prove-a-photo-was-not-edited.html",
-    "https://orphograph.com/blog/date-stamp-a-document-permanently.html",
-    "https://orphograph.com/blog/prove-i-created-something-before-someone-else.html",
-    "https://orphograph.com/blog/prove-you-wrote-it-not-ai.html",
-    "https://orphograph.com/blog/prove-a-contract-existed-before-a-date.html",
-    "https://orphograph.com/blog/what-makes-a-digital-timestamp-legally-defensible.html",
-    "https://orphograph.com/blog/prove-code-existed-before-a-competitors-commit.html",
-    "https://orphograph.com/blog/prove-photo-existed-before-ai.html",
-    "https://orphograph.com/blog/how-to-prove-photo-existed-before-ai-model-released.html",
-    "https://orphograph.com/blog/opentimestamps-for-non-developers.html",
-    "https://orphograph.com/blog/bitcoin-block-height-as-source-of-truth.html",
-    "https://orphograph.com/blog/bitcoin-merkle-roots-unforgeable-timestamps.html",
-    "https://orphograph.com/blog/why-5-opentimestamps-calendars-not-1.html",
-    "https://orphograph.com/blog/why-domain-dying-doesnt-kill-your-timestamp.html",
-    "https://orphograph.com/blog/digital-notary-vs-cryptographic-timestamp.html",
-    "https://orphograph.com/blog/reading-ots-file-by-hand.html",
-    "https://orphograph.com/blog/rss.xml",
     "https://orphograph.com/blog/atom.xml",
-    "https://orphograph.com/press-kit/orphograph-press-kit.zip",
-    "https://orphograph.com/security.html",
+    "https://orphograph.com/blog/rss.xml",
+    "https://orphograph.com/signin",
+    "https://orphograph.com/recover",
+    "https://orphograph.com/terms",
+    "https://orphograph.com/privacy",
+    "https://orphograph.com/legal/",
     "https://orphograph.com/.well-known/security.txt",
     "https://orphograph.com/humans.txt",
     "https://orphograph.com/sitemap-image.xml",
+    "https://orphograph.com/press-kit/orphograph-press-kit.zip",
+    "https://orphograph.com/blog/bitcoin-block-height-as-source-of-truth",
+    "https://orphograph.com/blog/bitcoin-merkle-roots-unforgeable-timestamps",
+    "https://orphograph.com/blog/date-stamp-a-document-permanently",
+    "https://orphograph.com/blog/digital-notary-vs-cryptographic-timestamp",
+    "https://orphograph.com/blog/how-to-prove-photo-existed-before-ai-model-released",
+    "https://orphograph.com/blog/opentimestamps-for-non-developers",
+    "https://orphograph.com/blog/prove-a-contract-existed-before-a-date",
+    "https://orphograph.com/blog/prove-a-photo-was-not-edited",
+    "https://orphograph.com/blog/prove-code-existed-before-a-competitors-commit",
+    "https://orphograph.com/blog/prove-i-created-something-before-someone-else",
+    "https://orphograph.com/blog/prove-photo-existed-before-ai",
+    "https://orphograph.com/blog/prove-you-wrote-it-not-ai",
+    "https://orphograph.com/blog/reading-ots-file-by-hand",
+    "https://orphograph.com/blog/what-makes-a-digital-timestamp-legally-defensible",
+    "https://orphograph.com/blog/why-5-opentimestamps-calendars-not-1",
+    "https://orphograph.com/blog/why-domain-dying-doesnt-kill-your-timestamp",
 ]
 
 SITEMAP_NS = "{http://www.sitemaps.org/schemas/sitemap/0.9}"
@@ -104,6 +126,28 @@ def test_sitemap_count_matches_expected() -> None:
     locs = _parse_sitemap_locs()
     assert len(locs) == len(EXPECTED_URLS), (
         f"Expected {len(EXPECTED_URLS)} URLs, found {len(locs)}"
+    )
+
+
+def test_sitemap_static_file_matches_generator() -> None:
+    """web/sitemap.xml is a committed snapshot of the SERVED sitemap, which the
+    server generates via _build_sitemap(). Locs and priorities must match
+    exactly (lastmod is file-mtime-derived and excluded). If this fails, the
+    generator's URL list changed: regenerate the static file from /sitemap.xml.
+    """
+    import sys as _sys
+    server_dir = ROOT / "server"
+    if str(server_dir) not in _sys.path:
+        _sys.path.insert(0, str(server_dir))
+    import app as _app
+
+    def _pairs(xml: str) -> list[tuple[str, str]]:
+        return re.findall(r"<loc>([^<]+)</loc>\s*(?:<lastmod>[^<]*</lastmod>\s*)?<priority>([^<]+)</priority>", xml)
+
+    static_pairs = _pairs((WEB / "sitemap.xml").read_text(encoding="utf-8"))
+    generated_pairs = _pairs(_app._build_sitemap())
+    assert static_pairs == generated_pairs, (
+        "web/sitemap.xml drifted from server _build_sitemap() — regenerate it"
     )
 
 

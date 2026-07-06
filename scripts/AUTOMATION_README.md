@@ -8,6 +8,7 @@ repo state, and watch the public package registries for newly-published
 | Job | Script | Schedule | Plist template |
 |---|---|---|---|
 | Brand-rule compliance sweep | `scripts/compliance_scan.py` | Daily 09:00 local | `scripts/com.orphograph.compliance.plist.template` |
+| Local/public SLO evidence | `scripts/slo_monitor.py` | Daily 09:15 local | `scripts/com.orphograph.slo_monitor.plist.template` |
 | Repo folder-anchor | `scripts/auto_anchor_repo.py` | Daily 23:55 local | `scripts/com.orphograph.auto_anchor.plist.template` |
 | Publish-cascade watcher | `scripts/publish_watcher.py` | Every 30 min | `scripts/com.orphograph.publish_watcher.plist.template` |
 
@@ -41,6 +42,32 @@ Read the report with any JSON tool, e.g.:
 jq '.high_severity_hits | length' outbox/compliance_scan_2026-05-20.json
 jq '.dollar_hits[] | "\(.path):\(.line)  \(.match)"' outbox/compliance_scan_2026-05-20.json
 ```
+
+### SLO evidence monitor
+Writes dated evidence that the product promise is still healthy without
+requiring GitHub, Fly, Stripe, Resend, or deploy credentials. It probes the
+public site when network access is available, scans local receipts for stale
+pending Bitcoin pins, and checks whether the upgrade-worker log is fresh while
+pending receipts exist.
+
+Default output:
+
+- `outbox/SLO_MONITOR.jsonl`
+- `deploy/SLO_REPORTS/<timestamp>.md` when run with `--write-report`
+
+Run during account-access suspension:
+
+```bash
+python3 scripts/slo_monitor.py --no-network --write-report
+```
+
+Run after public access is stable:
+
+```bash
+python3 scripts/slo_monitor.py --write-report
+```
+
+Full operator notes: `scripts/SLO_MONITOR_README.md`.
 
 ### Auto-anchor
 Hashes the meaningful repo state into one folder-Merkle root via
@@ -116,6 +143,8 @@ Log: `~/Library/Logs/orphograph_publish_watcher.log`.
    ```bash
    cp scripts/com.orphograph.compliance.plist.template \
       ~/Library/LaunchAgents/com.orphograph.compliance.plist
+   cp scripts/com.orphograph.slo_monitor.plist.template \
+      ~/Library/LaunchAgents/com.orphograph.slo_monitor.plist
    cp scripts/com.orphograph.auto_anchor.plist.template \
       ~/Library/LaunchAgents/com.orphograph.auto_anchor.plist
    ```
@@ -158,6 +187,7 @@ Disable temporarily without removing the plist:
 
 ```bash
 launchctl disable gui/$(id -u)/com.orphograph.compliance
+launchctl disable gui/$(id -u)/com.orphograph.slo_monitor
 launchctl disable gui/$(id -u)/com.orphograph.auto_anchor
 ```
 
@@ -168,16 +198,20 @@ Fully uninstall:
 
 ```bash
 launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/com.orphograph.compliance.plist
+launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/com.orphograph.slo_monitor.plist
 launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/com.orphograph.auto_anchor.plist
 rm ~/Library/LaunchAgents/com.orphograph.compliance.plist
+rm ~/Library/LaunchAgents/com.orphograph.slo_monitor.plist
 rm ~/Library/LaunchAgents/com.orphograph.auto_anchor.plist
 ```
 
 ## 4. Where logs live
 
 - `~/Library/Logs/orphograph_compliance.log` — daily compliance run stdout/stderr.
+- `~/Library/Logs/orphograph_slo_monitor.log` - daily SLO monitor stdout/stderr.
 - `~/Library/Logs/orphograph_auto_anchor.log` — daily anchor run stdout/stderr.
 - `outbox/compliance_scan_<UTC-date>.json` — structured compliance report.
+- `outbox/SLO_MONITOR.jsonl` - append-only SLO evidence.
 - `outbox/AUTO_ANCHOR_HISTORY.jsonl` — append-only anchor receipt log.
 
 ## 5. Verifying an auto-anchor receipt

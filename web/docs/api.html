@@ -8,197 +8,7 @@
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="stylesheet" href="/style.css?v=2">
 <link rel="stylesheet" href="/blog.css">
-<style>
-  /* Page-local refinements — keep the prose-like blog density and add
-     a compact endpoint catalog table on top of the cream-warm palette. */
-  .api-toc {
-    background: var(--panel);
-    border: 1px solid var(--panel-stroke);
-    border-radius: 12px;
-    padding: 18px 22px;
-    margin: 24px 0 36px;
-  }
-  .api-toc h2 {
-    font-size: 14px;
-    font-weight: 500;
-    color: var(--muted);
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    margin: 0 0 12px;
-  }
-  .api-toc ol {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    columns: 2;
-    column-gap: 32px;
-    font-size: 14px;
-  }
-  .api-toc li { margin: 4px 0; break-inside: avoid; color: var(--muted); }
-  .api-toc a { color: var(--accent); text-decoration: none; }
-  .api-toc a:hover { text-decoration: underline; }
-
-  .endpoint {
-    margin: 48px 0;
-    padding-top: 8px;
-    border-top: 1px solid var(--panel-stroke-soft);
-  }
-  .endpoint:first-of-type { border-top: 0; padding-top: 0; }
-  .endpoint h2 {
-    display: flex;
-    align-items: baseline;
-    gap: 10px;
-    font-size: 20px;
-    font-weight: 400;
-    margin: 0 0 8px;
-  }
-  .method {
-    display: inline-block;
-    font-family: var(--mono);
-    font-size: 11px;
-    font-weight: 500;
-    letter-spacing: 0.06em;
-    padding: 2px 8px;
-    border-radius: 4px;
-    background: var(--accent-soft);
-    color: var(--accent);
-    border: 1px solid var(--accent-stroke);
-    text-transform: uppercase;
-  }
-  .method.get { background: rgba(74,154,115,0.10); color: var(--accent); border-color: var(--accent-stroke); }
-  .method.post { background: rgba(192,138,62,0.10); color: var(--warn); border-color: rgba(192,138,62,0.30); }
-  .endpoint h2 .path {
-    font-family: var(--mono);
-    font-size: 16px;
-    font-weight: 500;
-    color: var(--text);
-    word-break: break-all;
-  }
-  .endpoint .lede {
-    font-size: 15px;
-    color: var(--text-soft);
-    margin: 0 0 16px;
-    max-width: 64ch;
-  }
-  .endpoint h3 {
-    font-size: 14px;
-    font-weight: 500;
-    color: var(--muted);
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    margin: 22px 0 8px;
-  }
-  .endpoint pre {
-    background: #f6f0e2;
-    border: 1px solid var(--panel-stroke);
-    border-radius: 8px;
-    padding: 14px 16px;
-    overflow-x: auto;
-    font-family: var(--mono);
-    font-size: 12.5px;
-    line-height: 1.55;
-    color: var(--text);
-    margin: 8px 0 12px;
-    white-space: pre;
-    word-break: normal;
-  }
-  .endpoint code {
-    font-family: var(--mono);
-    font-size: 13px;
-    background: var(--accent-soft);
-    color: var(--text);
-    padding: 1px 6px;
-    border-radius: 4px;
-  }
-  .endpoint p { color: var(--text-soft); font-size: 14.5px; margin: 0 0 12px; max-width: 70ch; line-height: 1.65; }
-
-  table.api-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 13.5px;
-    margin: 12px 0 18px;
-  }
-  table.api-table th, table.api-table td {
-    text-align: left;
-    padding: 9px 12px;
-    border-bottom: 1px solid var(--panel-stroke);
-    vertical-align: top;
-  }
-  table.api-table th {
-    color: var(--muted);
-    font-weight: 500;
-    font-size: 12px;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    background: var(--panel-stroke-soft);
-  }
-  table.api-table td code {
-    background: transparent;
-    padding: 0;
-    font-size: 12.5px;
-    color: var(--accent);
-  }
-
-  .anchor-link {
-    margin-left: auto;
-    color: var(--muted);
-    text-decoration: none;
-    font-size: 12px;
-    font-family: var(--mono);
-    opacity: 0.45;
-    transition: opacity .15s ease;
-  }
-  .endpoint h2:hover .anchor-link { opacity: 1; }
-  .anchor-link:hover { color: var(--accent); }
-
-  .callout {
-    border: 1px solid var(--accent-stroke);
-    background: var(--accent-soft);
-    border-radius: 10px;
-    padding: 14px 18px;
-    margin: 20px 0;
-    font-size: 14px;
-    color: var(--text-soft);
-  }
-  .callout strong { color: var(--accent); }
-  .callout.warn {
-    border-color: rgba(192,138,62,0.30);
-    background: rgba(192,138,62,0.08);
-  }
-  .callout.warn strong { color: var(--warn); }
-
-  .pill {
-    display: inline-block;
-    font-size: 11px;
-    padding: 2px 8px;
-    border-radius: 10px;
-    background: var(--panel-stroke-soft);
-    color: var(--muted);
-    border: 1px solid var(--panel-stroke);
-    margin-left: 6px;
-    letter-spacing: 0.02em;
-  }
-  .pill.planned { background: rgba(192,138,62,0.08); color: var(--warn); border-color: rgba(192,138,62,0.30); }
-
-  .lang-tabs {
-    display: flex;
-    gap: 4px;
-    margin-bottom: 0;
-  }
-  .lang-tabs span {
-    font-size: 12px;
-    padding: 4px 10px;
-    color: var(--muted);
-    background: var(--panel-stroke-soft);
-    border: 1px solid var(--panel-stroke);
-    border-bottom: 0;
-    border-radius: 6px 6px 0 0;
-    font-family: var(--mono);
-  }
-  .lang-tabs + pre { border-top-left-radius: 0; margin-top: 0; }
-
-  .small-muted { color: var(--muted); font-size: 12.5px; }
-</style>
+<link rel="stylesheet" href="/docs/api.css?v=1">
 <meta name="copyright" content="© 2026 Orphograph. MIT — see /LICENSE">
 </head>
 <body>
@@ -207,9 +17,9 @@
   <div class="brand"><a href="/">orphograph</a></div>
   <nav>
     <a href="/">home</a>
-    <a href="/about.html">about</a>
-    <a href="/status.html">status</a>
-    <a href="/account.html">account</a>
+    <a href="/about">about</a>
+    <a href="/status">status</a>
+    <a href="/account">account</a>
   </nav>
 </header>
 
@@ -295,7 +105,7 @@
 </table>
 
 <p>
-  Generate or rotate an API key from <a href="/account.html">your account dashboard</a>.
+  Generate or rotate an API key from <a href="/account">your account dashboard</a>.
   Keys look like <code>orpho_</code> + 32 URL-safe characters. We store only the SHA-256
   hash of the key — once shown, it cannot be retrieved. Lost a key? Revoke and re-issue.
 </p>
@@ -374,7 +184,7 @@
     <tr>
       <td><code>500</code></td>
       <td>Server error</td>
-      <td>Genuine internal failure. Retry with exponential backoff; if it persists, check <a href="/status.html">/status.html</a>.</td>
+      <td>Genuine internal failure. Retry with exponential backoff; if it persists, check <a href="/status">/status.html</a>.</td>
     </tr>
     <tr>
       <td><code>503</code></td>
@@ -638,7 +448,7 @@ print(receipt["status"], receipt.get("btc_pinned_at"))</pre>
     <strong>Trust-minimized verification belongs offline.</strong>
     For evidence-grade verification, ship the receipt JSON + the five
     <code>.ots</code> files through the open-source
-    <a href="https://github.com/orphograph/orphograph">verify_cli.py</a>
+    <a href="https://github.com/Orphograph/Orphograph">verify_cli.py</a>
     against your local copy of the file. This endpoint is a convenience
     for live integrations — it asks <em>us</em>; the CLI asks <em>Bitcoin</em>.
   </div>
@@ -877,7 +687,7 @@ Accept: image/svg+xml</pre>
         data-receipt="XwTULwlh76PcCst9"
         async&gt;&lt;/script&gt;</pre>
   <p>
-    See the <a href="/badge-demo.html">badge demo</a> for the live rendered
+    See the <a href="/badge-demo">badge demo</a> for the live rendered
     output and tampering notes.
   </p>
 </section>
@@ -960,7 +770,7 @@ Accept: image/svg+xml</pre>
 <h2 id="sla">SLA &amp; status</h2>
 <p>
   No formal SLA on the v0.1 free tier. Best-effort uptime; honest
-  reporting at <a href="/status.html">/status.html</a> and structured
+  reporting at <a href="/status">/status.html</a> and structured
   liveness at <a href="#get-api-health"><code>/api/health</code></a>.
   Calendar reachability is reported per-calendar — your client should
   treat 3-of-5 calendars succeeding as a healthy anchor (the
@@ -988,14 +798,14 @@ Accept: image/svg+xml</pre>
   </li>
   <li>
     <strong>Lightroom plugin</strong> —
-    <a href="https://github.com/orphograph/orphograph/tree/main/lightroom-plugin">github.com/orphograph/orphograph (<code>lightroom-plugin/</code>)</a>.
+    <a href="https://github.com/Orphograph/Orphograph/tree/master/lightroom-plugin">github.com/Orphograph/Orphograph (<code>lightroom-plugin/</code>)</a>.
     Anchors RAW and exported JPGs at export time from inside Adobe
     Lightroom Classic. SHA-256 is computed on the export filename's
     bytes locally; only the hash reaches the API.
   </li>
   <li>
     <strong>Capture daemon</strong> —
-    <a href="https://github.com/orphograph/orphograph/tree/main/capture">github.com/orphograph/orphograph (<code>capture/</code>)</a>.
+    <a href="https://github.com/Orphograph/Orphograph/tree/master/capture">github.com/Orphograph/Orphograph (<code>capture/</code>)</a>.
     Headless watcher that anchors files as they appear in a folder —
     DSLR tethering target, screenshot folder, recording dump. Targets
     the Creator tier's capture-time provenance use case.
@@ -1004,7 +814,7 @@ Accept: image/svg+xml</pre>
 <p>
   The standalone open-source verifier — useful when you need to verify
   a receipt without calling us, or after we are gone — lives at
-  <a href="https://github.com/orphograph/orphograph">github.com/orphograph/orphograph</a>
+  <a href="https://github.com/Orphograph/Orphograph">github.com/Orphograph/Orphograph</a>
   under <code>server/verify_cli.py</code>. Zero dependencies, stdlib only.
 </p>
 
@@ -1131,15 +941,15 @@ curl -s -b cookies.txt -O https://orphograph.com/api/me/anchors.zip</code></pre>
 <footer>
   <small>
     <a href="/">home</a> ·
-    <a href="/about.html">about</a> ·
-    <a href="/docs/api.html">API</a> ·
-    <a href="/status.html">status</a> ·
-    <a href="/terms.html">terms</a> ·
-    <a href="/privacy.html">privacy</a> ·
+    <a href="/about">about</a> ·
+    <a href="/docs/api">API</a> ·
+    <a href="/status">status</a> ·
+    <a href="/terms">terms</a> ·
+    <a href="/privacy">privacy</a> ·
     We never see your file
   </small>
 </footer>
 
-<script src="/assets/event.js" defer></script>
+<script src="/assets/event.js?v=1" defer></script>
 </body>
 </html>

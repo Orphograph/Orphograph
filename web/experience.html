@@ -14,227 +14,9 @@
   third-party calls, consistent with the file-never-leaves-the-device
   doctrine of the anchoring tool. Refresh libs via
   scripts/vendor_experience_libs.sh.
+  Styles live in /experience.css (strict CSP — no inline <style>/style=).
 -->
-<style>
-  :root{
-    --paper:#f7f1e3; --paper-soft:#fbf7ea; --paper-deep:#efe6d0;
-    --ink:#14110d; --ink-2:#2c2620; --muted:#6b6354; --muted-2:#948a76;
-    --line:#d9cfb6; --accent-warm:#b8835a; --gold:#caa46a; --confirm:#3a6a4c;
-    --serif:"EB Garamond","Cormorant Garamond","Iowan Old Style",Garamond,Georgia,serif;
-    --sans:-apple-system,BlinkMacSystemFont,"Inter","Segoe UI",system-ui,sans-serif;
-    --mono:"JetBrains Mono","SF Mono","Menlo",monospace;
-  }
-  *,*::before,*::after{box-sizing:border-box;}
-  html,body{margin:0;padding:0;background:var(--paper);color:var(--ink);}
-  html{ -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale; }
-  body{
-    font-family:var(--sans); font-size:18px; line-height:1.6;
-    overflow-x:hidden;
-    cursor:none; /* replaced by custom cursor; falls back to auto if JS off */
-  }
-  body.no-js{cursor:auto;}
-  a{color:inherit;}
-  img{max-width:100%;display:block;}
-
-  /* Lenis */
-  html.lenis,html.lenis body{height:auto;}
-  .lenis.lenis-smooth{scroll-behavior:auto !important;}
-  .lenis.lenis-stopped{overflow:hidden;}
-
-  /* ── Custom cursor ─────────────────────────────────────────── */
-  .cursor-dot,.cursor-ring{
-    position:fixed; top:0; left:0; z-index:9999; pointer-events:none;
-    border-radius:50%; mix-blend-mode:multiply; will-change:transform;
-  }
-  .cursor-dot{ width:6px; height:6px; background:var(--ink);
-    transform:translate(-50%,-50%); }
-  .cursor-ring{ width:38px; height:38px; border:1px solid rgba(58,47,36,.5);
-    transform:translate(-50%,-50%); transition:width .25s ease,height .25s ease,border-color .25s ease,background .25s ease; }
-  .cursor-ring.is-hover{ width:64px; height:64px; border-color:var(--accent-warm);
-    background:rgba(184,131,90,.06); }
-  @media (pointer:coarse){ .cursor-dot,.cursor-ring{display:none;} body{cursor:auto;} }
-
-  /* ── Progress hairline ─────────────────────────────────────── */
-  .scroll-progress{ position:fixed; top:0; left:0; height:2px; width:0%;
-    background:linear-gradient(90deg,var(--accent-warm),var(--gold)); z-index:9000; }
-
-  /* ── Fixed brand mark ──────────────────────────────────────── */
-  .brandmark{ position:fixed; top:24px; left:32px; z-index:200;
-    font-family:var(--serif); font-size:15px; letter-spacing:.34em;
-    text-transform:uppercase; color:var(--ink); mix-blend-mode:multiply; }
-  .toindex{ position:fixed; top:24px; right:32px; z-index:200;
-    font-family:var(--serif); font-size:12.5px; letter-spacing:.16em;
-    text-transform:uppercase; color:var(--muted); text-decoration:none;
-    border-bottom:1px solid transparent; transition:border-color .2s,color .2s; }
-  .toindex:hover{ color:var(--ink); border-bottom-color:var(--accent-warm); }
-
-  /* ── Generic section ───────────────────────────────────────── */
-  section{ position:relative; }
-  .pane{ min-height:100vh; display:flex; align-items:center; justify-content:center;
-    padding:0 6vw; }
-  .measure{ max-width:760px; }
-  .eyebrow{ font-family:var(--serif); font-size:12px; letter-spacing:.42em;
-    text-transform:uppercase; color:var(--muted-2); margin:0 0 22px; }
-  h1,h2,h3{ font-family:var(--serif); font-weight:500; color:var(--ink);
-    letter-spacing:-.01em; margin:0; }
-  h1{ font-size:clamp(44px,8vw,128px); line-height:.98; }
-  h2{ font-size:clamp(34px,5.4vw,76px); line-height:1.02; }
-  h3{ font-size:clamp(24px,3vw,40px); line-height:1.1; }
-  .lede{ font-size:clamp(18px,2vw,23px); color:var(--ink-2); line-height:1.55;
-    max-width:620px; }
-  .muted{ color:var(--muted); }
-  em{ font-style:italic; color:var(--ink-2); }
-
-  /* reveal primitives (GSAP toggles .is-in) */
-  .reveal{ opacity:0; transform:translateY(26px); }
-  .reveal.is-in{ opacity:1; transform:none; }
-  .reveal-line{ overflow:hidden; display:block; }
-  .reveal-line > span{ display:block; transform:translateY(110%); }
-  .reveal-line.is-in > span{ transform:none; }
-
-  /* ── HERO ──────────────────────────────────────────────────── */
-  #hero{ height:100vh; position:relative; overflow:hidden;
-    background:
-      radial-gradient(120% 80% at 50% 18%, var(--paper-soft), transparent 60%),
-      radial-gradient(90% 60% at 78% 110%, rgba(184,131,90,.10), transparent 60%),
-      var(--paper); }
-  #seal-stage{ position:absolute; inset:0; z-index:1; }
-  #seal-stage canvas{ display:block; }
-  .hero-copy{ position:absolute; inset:0; z-index:2; display:flex;
-    flex-direction:column; align-items:center; justify-content:flex-end;
-    text-align:center; pointer-events:none; padding-bottom:14vh; }
-  /* Soft paper scrim so copy reads cleanly over the busy seal. */
-  .hero-copy::before{ content:""; position:absolute; left:50%; bottom:0;
-    transform:translateX(-50%); width:min(1100px,100vw); height:54vh;
-    background:linear-gradient(180deg, transparent 0%, rgba(247,241,227,.0) 18%,
-      rgba(247,241,227,.62) 48%, rgba(247,241,227,.92) 100%);
-    z-index:-1; pointer-events:none; }
-  .hero-copy h1{ position:relative; }
-  .hero-copy .lede{ margin:22px auto 0; position:relative; }
-  .scrollcue{ position:absolute; bottom:34px; left:50%; transform:translateX(-50%);
-    z-index:3; font-family:var(--serif); font-size:11px; letter-spacing:.34em;
-    text-transform:uppercase; color:var(--muted); }
-  .scrollcue::after{ content:""; display:block; width:1px; height:46px; margin:14px auto 0;
-    background:linear-gradient(var(--muted),transparent); animation:cue 2.4s ease-in-out infinite; transform-origin:top; }
-  @keyframes cue{ 0%,100%{transform:scaleY(.3);opacity:.4;} 50%{transform:scaleY(1);opacity:1;} }
-
-  /* ── PINNED MANIFESTO ──────────────────────────────────────── */
-  #manifesto{ position:relative; }
-  .pin-wrap{ display:grid; grid-template-columns:1fr 1fr; gap:0; }
-  .pin-left{ height:100vh; position:relative; }
-  .pin-seal{ position:sticky; top:0; height:100vh; display:flex;
-    align-items:center; justify-content:center; }
-  .pin-seal img{ width:min(40vw,460px); height:auto;
-    filter:drop-shadow(0 24px 60px rgba(60,40,20,.16)) drop-shadow(0 4px 10px rgba(60,40,20,.08)); }
-  .pin-right{ padding:18vh 6vw; display:flex; flex-direction:column; gap:46vh; }
-  .pin-step{ max-width:460px; }
-  .pin-step .n{ font-family:var(--mono); font-size:12px; color:var(--accent-warm);
-    letter-spacing:.2em; display:block; margin-bottom:14px; }
-  @media (max-width:880px){
-    .pin-wrap{ grid-template-columns:1fr; }
-    .pin-left{ display:none; }
-    .pin-right{ gap:24vh; padding:14vh 8vw; }
-  }
-
-  /* ── PARALLAX DEPTH ────────────────────────────────────────── */
-  #depth{ position:relative; height:130vh; overflow:hidden;
-    background:linear-gradient(180deg,var(--paper) 0%,var(--paper-deep) 100%); }
-  .layer{ position:absolute; left:0; right:0; will-change:transform; }
-  .layer-1{ top:18%; text-align:center; }
-  .layer-2{ top:46%; text-align:center; }
-  .layer-3{ top:70%; text-align:center; }
-  .layer .big{ font-family:var(--serif); font-weight:500; color:var(--ink);
-    line-height:.9; }
-  .layer-1 .big{ font-size:clamp(60px,16vw,260px); color:rgba(20,17,13,.06); }
-  .layer-2 .big{ font-size:clamp(30px,5vw,72px); }
-  .layer-3 .big{ font-size:clamp(40px,10vw,160px); color:rgba(184,131,90,.10); }
-
-  /* ── IMAGE EXPANSION ───────────────────────────────────────── */
-  #expand{ height:200vh; position:relative; }
-  .expand-sticky{ position:sticky; top:0; height:100vh; display:flex;
-    align-items:center; justify-content:center; overflow:hidden; }
-  .expand-frame{ width:38vw; height:46vh; overflow:hidden; border-radius:6px;
-    box-shadow:0 30px 80px rgba(60,40,20,.18); will-change:width,height,border-radius; }
-  .expand-frame img{ width:100%; height:100%; object-fit:cover; transform:scale(1.15);
-    will-change:transform; }
-  .expand-caption{ position:absolute; z-index:3; color:var(--paper-soft);
-    mix-blend-mode:difference; text-align:center; opacity:0; }
-  .expand-caption h2{ color:var(--paper-soft); }
-
-  /* ── HORIZONTAL SCROLL-SNAP GALLERY ────────────────────────── */
-  #gallery{ padding:14vh 0; background:var(--paper-soft);
-    border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
-  .gallery-head{ padding:0 6vw 6vh; }
-  .rail{ display:flex; gap:28px; overflow-x:auto; padding:0 6vw 24px;
-    scroll-snap-type:x mandatory; -webkit-overflow-scrolling:touch; }
-  .rail::-webkit-scrollbar{ height:3px; }
-  .rail::-webkit-scrollbar-thumb{ background:var(--line); border-radius:3px; }
-  .card{ scroll-snap-align:center; flex:0 0 clamp(280px,30vw,420px);
-    background:var(--paper); border:1px solid var(--line); border-radius:10px;
-    padding:34px; min-height:440px; display:flex; flex-direction:column;
-    justify-content:space-between; transition:transform .4s ease,box-shadow .4s ease; }
-  .card:hover{ transform:translateY(-6px); box-shadow:0 26px 60px rgba(60,40,20,.12); }
-  .card .seal-mini{ width:54px; height:54px; opacity:.9; }
-  .card .stamp{ font-family:var(--mono); font-size:11px; color:var(--accent-warm);
-    letter-spacing:.14em; }
-  .card h3{ margin:18px 0 10px; }
-  .card p{ color:var(--muted); font-size:15.5px; margin:0; }
-  .card .verify{ margin-top:24px; font-family:var(--serif); font-size:13px;
-    letter-spacing:.04em; color:var(--ink-2); border-bottom:1px dotted var(--accent-warm);
-    display:inline-block; padding-bottom:2px; width:max-content; }
-
-  /* ── LOTTIE MOMENT ─────────────────────────────────────────── */
-  #commit{ min-height:100vh; display:flex; flex-direction:column;
-    align-items:center; justify-content:center; text-align:center;
-    padding:0 6vw; background:var(--paper); }
-  #lottie-anchor{ width:min(260px,46vw); height:min(260px,46vw); margin:0 auto 30px; }
-  #commit h2{ max-width:14ch; }
-
-  /* ── CLOSING ───────────────────────────────────────────────── */
-  #close{ min-height:100vh; display:flex; flex-direction:column;
-    align-items:center; justify-content:center; text-align:center; padding:0 6vw;
-    background:
-      radial-gradient(90% 60% at 50% 0%, rgba(184,131,90,.10), transparent 60%),
-      var(--paper-deep); }
-  .cta-final{ display:inline-flex; align-items:center; gap:12px; margin-top:36px;
-    padding:16px 30px; background:var(--ink); color:var(--paper-soft);
-    border-radius:999px; font-family:var(--serif); font-size:16px; letter-spacing:.04em;
-    text-decoration:none; transition:transform .25s ease,box-shadow .25s ease,background .25s ease; }
-  .cta-final:hover{ background:#000; transform:translateY(-2px); box-shadow:0 16px 40px rgba(60,40,20,.22); }
-  .fineprint{ margin-top:22px; font-size:13px; color:var(--muted); letter-spacing:.02em; }
-
-  /* ── Mobile / portrait ─────────────────────────────────────── */
-  @media (max-width:600px){
-    /* Fixed brand + back-link were colliding at the top — shrink and
-       tighten both so they sit on one row without overlapping. */
-    .brandmark{ top:16px; left:18px; font-size:11.5px; letter-spacing:.16em; }
-    .toindex{ top:16px; right:18px; font-size:10px; letter-spacing:.08em; }
-    /* Hero copy needs side gutters so the headline/lede don't touch edges. */
-    .hero-copy{ padding-left:22px; padding-right:22px; padding-bottom:11vh; }
-    .hero-copy h1{ font-size:clamp(34px,11vw,52px); }
-    .hero-copy .lede{ font-size:16px; line-height:1.5; }
-    /* On a short portrait viewport the cue collided with the lede — the
-       copy already sits low, so the scroll affordance is redundant. */
-    .scrollcue{ display:none; }
-    /* Pinned manifesto: seal column is hidden <880px already; give the
-       steps real gutters and tighter rhythm. */
-    .pin-right{ padding:12vh 22px; gap:18vh; }
-    /* Section padding so nothing runs edge-to-edge. */
-    .pane{ padding:0 22px; }
-    .gallery-head{ padding:0 22px 6vh; }
-    .rail{ padding:0 22px 24px; }
-    .card{ flex-basis:82vw; padding:28px; min-height:380px; }
-    /* Image-expansion frame starts smaller on a narrow screen. */
-    .expand-frame{ width:76vw; height:38vh; }
-    #commit h2, #close h2{ font-size:clamp(30px,9vw,46px); }
-    #lottie-anchor{ width:min(190px,52vw); height:min(190px,52vw); }
-  }
-
-  @media (prefers-reduced-motion:reduce){
-    .reveal,.reveal-line>span{ opacity:1 !important; transform:none !important; }
-    .scrollcue::after{ animation:none; }
-  }
-</style>
+<link rel="stylesheet" href="/experience.css?v=1">
 </head>
 <body class="no-js">
 
@@ -291,7 +73,7 @@
   <section id="depth" aria-label="On permanence">
     <div class="layer layer-1" data-depth="0.25"><div class="big">PERMANENCE</div></div>
     <div class="layer layer-2" data-depth="0.6">
-      <div class="big measure" style="margin:0 auto;">Sixteen years of an
+      <div class="big measure center-auto">Sixteen years of an
         <em>unbroken</em> ledger, working for you.</div>
     </div>
     <div class="layer layer-3" data-depth="1.05"><div class="big">2009 — ∞</div></div>
@@ -304,7 +86,7 @@
         <img src="/og-image.png?v=8" alt="">
       </div>
       <div class="expand-caption" id="expand-caption">
-        <p class="eyebrow" style="color:var(--paper-soft);">The record</p>
+        <p class="eyebrow eyebrow-light">The record</p>
         <h2>One page. <em>Verifiable forever.</em></h2>
       </div>
     </div>
@@ -318,28 +100,28 @@
     </div>
     <div class="rail" id="rail" data-cursor>
       <article class="card">
-        <div><img class="seal-mini" src="/favicon.png?v=8" alt=""><div class="stamp" style="margin-top:14px;">MANUSCRIPT</div>
+        <div><img class="seal-mini" src="/favicon.png?v=8" alt=""><div class="stamp">MANUSCRIPT</div>
           <h3>The draft, before submission.</h3>
           <p>Priority, ghostwriting, estate, attribution — every dispute reduces to
             who holds the older, independent record.</p></div>
         <span class="verify">Verify against the chain →</span>
       </article>
       <article class="card">
-        <div><img class="seal-mini" src="/favicon.png?v=8" alt=""><div class="stamp" style="margin-top:14px;">THE NEGATIVE</div>
+        <div><img class="seal-mini" src="/favicon.png?v=8" alt=""><div class="stamp">THE NEGATIVE</div>
           <h3>The frame, as shot.</h3>
           <p>A dated record of the file in those exact bytes — independent of any
             platform, any client, any later claim.</p></div>
         <span class="verify">Verify against the chain →</span>
       </article>
       <article class="card">
-        <div><img class="seal-mini" src="/favicon.png?v=8" alt=""><div class="stamp" style="margin-top:14px;">THE DATASET</div>
+        <div><img class="seal-mini" src="/favicon.png?v=8" alt=""><div class="stamp">THE DATASET</div>
           <h3>The finding, at the moment.</h3>
           <p>Pre-print and reviewer logs live inside an institution. The chain
             does not.</p></div>
         <span class="verify">Verify against the chain →</span>
       </article>
       <article class="card">
-        <div><img class="seal-mini" src="/favicon.png?v=8" alt=""><div class="stamp" style="margin-top:14px;">THE LEDGER</div>
+        <div><img class="seal-mini" src="/favicon.png?v=8" alt=""><div class="stamp">THE LEDGER</div>
           <h3>The contract, as agreed.</h3>
           <p>What was signed, when — pressed into a record neither party can
             quietly revise.</p></div>
@@ -352,14 +134,14 @@
   <section id="commit">
     <div id="lottie-anchor" aria-hidden="true"></div>
     <p class="eyebrow reveal">~ one hour to the block</p>
-    <h2 class="reveal measure" style="margin:0 auto;">Committed, and then
+    <h2 class="reveal measure center-auto">Committed, and then
       <em>permanent.</em></h2>
   </section>
 
   <!-- ── CLOSING ── -->
   <section id="close">
     <p class="eyebrow reveal">The empirical notary</p>
-    <h2 class="reveal measure" style="margin:0 auto;">Press your first seal.</h2>
+    <h2 class="reveal measure center-auto">Press your first seal.</h2>
     <a class="cta-final" href="/#drop" data-cursor>Anchor a file — free</a>
     <p class="fineprint reveal">Free for three a day · No account · The file stays on your device</p>
   </section>
@@ -374,6 +156,6 @@
   <script src="/vendor/lenis.min.js"></script>
   <script src="/vendor/lottie.min.js"></script>
   <script src="/experience.js?v=2"></script>
-  <script src="/assets/event.js" defer></script>
+  <script src="/assets/event.js?v=1" defer></script>
 </body>
 </html>

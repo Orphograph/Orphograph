@@ -18,22 +18,7 @@
 <link rel="alternate" type="application/atom+xml" title="Orphograph — Blog (Atom)" href="/blog/atom.xml">
 <link rel="icon" type="image/png" href="/favicon.png?v=8">
 <link rel="stylesheet" href="/index.css?v=9">
-<style>
-  .arch-wrap { max-width: 760px; margin: 0 auto; padding: 0 24px 64px; }
-  .arch-wrap h1 { font-family: var(--serif); font-size: 36px; font-weight: 500; margin: 32px 0 6px; }
-  .arch-wrap h2 { font-family: var(--serif); font-size: 22px; font-weight: 500; margin: 32px 0 4px; color: var(--ink); }
-  .arch-rule { border-top: 1px solid var(--ink); width: 32px; margin: 8px 0 16px; opacity: 0.6; }
-  .arch-wrap p, .arch-wrap li { color: var(--ink-2); line-height: 1.75; font-size: 15.5px; }
-  .arch-lede { font-size: 17px; line-height: 1.7; color: var(--ink-2); margin: 0 0 24px; }
-  .post-meta { font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); margin: 48px 0 8px; }
-  .post-list { list-style: none; padding: 0; margin: 32px 0; }
-  .post-list li { padding: 24px 0; border-top: 1px solid var(--line-soft); }
-  .post-list li:last-child { border-bottom: 1px solid var(--line-soft); }
-  .post-list h2 { margin: 0 0 8px; }
-  .post-list a.title { color: var(--ink); text-decoration: none; }
-  .post-list a.title:hover { text-decoration: underline; }
-  .post-list .date { font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); margin: 0 0 6px; }
-</style>
+<link rel="stylesheet" href="/blog/index.css?v=1">
 <meta name="copyright" content="© 2026 Orphograph. Code under MIT (see /LICENSE). Brand, content, and design — all rights reserved.">
 </head>
 <body>
@@ -42,11 +27,11 @@
   <div class="wrap row">
     <a href="/" class="brand">Orphograph</a>
     <nav>
-      <a href="/learn.html">Method</a>
-      <a href="/faq.html">FAQ</a>
-      <a href="/continuity.html">Continuity</a>
+      <a href="/learn">Method</a>
+      <a href="/faq">FAQ</a>
+      <a href="/continuity">Continuity</a>
       <a href="/#tiers">Pricing</a>
-      <a href="/signin.html">Sign in</a>
+      <a href="/signin">Sign in</a>
       <a href="/#drop" class="cta">Anchor a file</a>
     </nav>
   </div>
@@ -63,105 +48,111 @@
   <ul class="post-list">
 
     <li>
+      <p class="date">2026-06-30</p>
+      <h2><a class="title" href="/blog/prove-what-was-in-your-training-set">How to prove what was in your training set — and when.</a></h2>
+      <p>Audits, customer due-diligence, and the EU AI Act all ask the same question of a dataset — what was in it, and by when? A spreadsheet someone can edit later is not an answer. Bind the data, its licenses, and its acquisition log into one Bitcoin-anchored Merkle receipt: dated, independently checkable, and the data never leaves your environment.</p>
+    </li>
+
+    <li>
       <p class="date">2026-05-21</p>
-      <h2><a class="title" href="/blog/prove-you-wrote-it-not-ai.html">How to prove you wrote it — not an AI.</a></h2>
+      <h2><a class="title" href="/blog/prove-you-wrote-it-not-ai">How to prove you wrote it — not an AI.</a></h2>
       <p>A practical guide for writers facing AI-suspicion accusations. Anchor the draft's cryptographic fingerprint to the Bitcoin chain so a verifiable date of record pre-dates any future accusation. The receipt is one specific narrow fact — the file existed by Bitcoin block N — but for the most common version of the AI-use argument, date of record is the entire ballgame.</p>
     </li>
 
     <li>
       <p class="date">2026-05-21</p>
-      <h2><a class="title" href="/blog/prove-a-contract-existed-before-a-date.html">How to prove a contract existed before a date.</a></h2>
+      <h2><a class="title" href="/blog/prove-a-contract-existed-before-a-date">How to prove a contract existed before a date.</a></h2>
       <p>A method for fixing the byte-exact form of a contract on or before a specific calendar date, verifiable by any third party against the Bitcoin chain. The receipt converts the common "the clause was added later" or "we signed an earlier version" disputes from a credibility argument into a fingerprint-and-block-height check that the office is not required to be present to confirm.</p>
     </li>
 
     <li>
       <p class="date">2026-05-21</p>
-      <h2><a class="title" href="/blog/what-makes-a-digital-timestamp-legally-defensible.html">What makes a digital timestamp legally defensible.</a></h2>
+      <h2><a class="title" href="/blog/what-makes-a-digital-timestamp-legally-defensible">What makes a digital timestamp legally defensible.</a></h2>
       <p>An institutional explainer of the four properties that determine whether a digital timestamp survives examination — cryptographic binding to the file's bytes, public anchoring outside any party's control, independent verifiability without trusting the issuer, and continuity beyond the issuer's lifespan. Everyday timestamps fail at least one of the four.</p>
     </li>
 
     <li>
       <p class="date">2026-05-21</p>
-      <h2><a class="title" href="/blog/prove-code-existed-before-a-competitors-commit.html">How to prove a piece of code existed before a competitor's commit.</a></h2>
+      <h2><a class="title" href="/blog/prove-code-existed-before-a-competitors-commit">How to prove a piece of code existed before a competitor's commit.</a></h2>
       <p>A practical guide for engineers facing a priority-of-creation dispute over source code. A commit's author date is editable; a hosting provider's "pushed at" depends on the provider remaining cooperative years later. A Bitcoin-anchored fingerprint of a reproducible archive fixes the bytes at a public block height and verifies offline, without trusting the office or the host.</p>
     </li>
 
     <li>
       <p class="date">2026-05-21</p>
-      <h2><a class="title" href="/blog/prove-a-photo-was-not-edited.html">How to prove a photo was not edited.</a></h2>
+      <h2><a class="title" href="/blog/prove-a-photo-was-not-edited">How to prove a photo was not edited.</a></h2>
       <p>A practical method for showing a photograph is byte-for-byte identical to the file that existed at a recorded moment. Compute a SHA-256 fingerprint of the photograph on the device, submit only the fingerprint through a public timestamping protocol, and keep the receipt with the file. Any later copy of the photograph can be checked against the recorded fingerprint by an independent verifier with no trusted intermediary in the loop.</p>
     </li>
 
     <li>
       <p class="date">2026-05-21</p>
-      <h2><a class="title" href="/blog/date-stamp-a-document-permanently.html">How to date-stamp a document permanently.</a></h2>
+      <h2><a class="title" href="/blog/date-stamp-a-document-permanently">How to date-stamp a document permanently.</a></h2>
       <p>A method for placing a permanent, third-party-verifiable date on a digital document. Reduce the document to a short cryptographic fingerprint on the device, then anchor that fingerprint to the Bitcoin chain through OpenTimestamps. The document itself is never transmitted; the date does not expire; any party with the document and the receipt can verify the result against the public chain.</p>
     </li>
 
     <li>
       <p class="date">2026-05-21</p>
-      <h2><a class="title" href="/blog/prove-i-created-something-before-someone-else.html">How to prove you created something before someone else.</a></h2>
+      <h2><a class="title" href="/blog/prove-i-created-something-before-someone-else">How to prove you created something before someone else.</a></h2>
       <p>A method for establishing dated priority in a creation dispute — a manuscript, an illustration, a piece of code, a design master. Anchor the work as it stands today, re-anchor on milestones, and use the resulting chain of dated receipts to show that the bytes in the customer's possession existed before any competing claim. Verifiable by any third party against the public chain.</p>
     </li>
 
     <li>
       <p class="date">2026-05-17</p>
-      <h2><a class="title" href="/blog/prove-photo-existed-before-ai.html">How to prove your photo existed before AI scraped it (without a lawyer).</a></h2>
+      <h2><a class="title" href="/blog/prove-photo-existed-before-ai">How to prove your photo existed before AI scraped it (without a lawyer).</a></h2>
       <p>A practical guide for photographers who want timestamp-grade proof of when an image was made — using Bitcoin, no court appearance, no $400/hr attorney. Free path included.</p>
     </li>
 
     <li>
       <p class="date">2026-05-17</p>
-      <h2><a class="title" href="/blog/how-to-prove-photo-existed-before-ai-model-released.html">How to prove a photo existed before an AI model was released.</a></h2>
+      <h2><a class="title" href="/blog/how-to-prove-photo-existed-before-ai-model-released">How to prove a photo existed before an AI model was released.</a></h2>
       <p>A step-by-step walkthrough for photographers who want a Bitcoin-anchored receipt that locks the date of an image before any 2026-vintage AI model was trained on it.</p>
     </li>
 
     <li>
       <p class="date">2026-05-17</p>
-      <h2><a class="title" href="/blog/opentimestamps-for-non-developers.html">OpenTimestamps for non-developers — a 10-minute walkthrough.</a></h2>
+      <h2><a class="title" href="/blog/opentimestamps-for-non-developers">OpenTimestamps for non-developers — a 10-minute walkthrough.</a></h2>
       <p>A practical explainer of what OpenTimestamps is, why it works, and how to use it without ever opening a terminal. Bitcoin without the gas fees, timestamping without the CLI.</p>
     </li>
 
     <li>
       <p class="date">2026-05-17</p>
-      <h2><a class="title" href="/blog/bitcoin-block-height-as-source-of-truth.html">Why a Bitcoin block height is the strongest proof of existence in 2026.</a></h2>
+      <h2><a class="title" href="/blog/bitcoin-block-height-as-source-of-truth">Why a Bitcoin block height is the strongest proof of existence in 2026.</a></h2>
       <p>A Bitcoin block height has a sixteen-year track record without a reorganization past about six blocks. That track record is what makes it a useful anchor for the proof-of-existence claims a notary cares about.</p>
     </li>
 
     <li>
       <p class="date">2026-05-17</p>
-      <h2><a class="title" href="/blog/bitcoin-merkle-roots-unforgeable-timestamps.html">How Bitcoin merkle roots make file timestamps un-falsifiable.</a></h2>
+      <h2><a class="title" href="/blog/bitcoin-merkle-roots-unforgeable-timestamps">How Bitcoin merkle roots make file timestamps un-falsifiable.</a></h2>
       <p>A technical walkthrough of why a timestamp anchored to Bitcoin is fundamentally different from any conventional database record. With the math, but without the lecture.</p>
     </li>
 
     <li>
       <p class="date">2026-05-17</p>
-      <h2><a class="title" href="/blog/why-5-opentimestamps-calendars-not-1.html">Why Orphograph uses five OpenTimestamps calendars instead of one.</a></h2>
+      <h2><a class="title" href="/blog/why-5-opentimestamps-calendars-not-1">Why Orphograph uses five OpenTimestamps calendars instead of one.</a></h2>
       <p>Submitting a hash to five independent OpenTimestamps calendar servers removes any single point of failure. The redundancy argument, explained in full.</p>
     </li>
 
     <li>
       <p class="date">2026-05-17</p>
-      <h2><a class="title" href="/blog/why-domain-dying-doesnt-kill-your-timestamp.html">Why your domain dying shouldn't kill your timestamp receipt.</a></h2>
+      <h2><a class="title" href="/blog/why-domain-dying-doesnt-kill-your-timestamp">Why your domain dying shouldn't kill your timestamp receipt.</a></h2>
       <p>Most receipts are worthless when the issuer disappears. A Bitcoin-anchored timestamp is structurally different — the proof outlives the issuer by design. Here is how, and what to actually save.</p>
     </li>
 
     <li>
       <p class="date">2026-05-17</p>
-      <h2><a class="title" href="/blog/digital-notary-vs-cryptographic-timestamp.html">Digital notary vs cryptographic timestamp — what each one proves.</a></h2>
+      <h2><a class="title" href="/blog/digital-notary-vs-cryptographic-timestamp">Digital notary vs cryptographic timestamp — what each one proves.</a></h2>
       <p>Notaries verify a person signed a document. Cryptographic timestamps verify a file's bytes existed by a date. Different jobs, different proofs, no overlap.</p>
     </li>
 
     <li>
       <p class="date">2026-05-17</p>
-      <h2><a class="title" href="/blog/reading-ots-file-by-hand.html">Reading an .ots file by hand — a forensic walkthrough.</a></h2>
+      <h2><a class="title" href="/blog/reading-ots-file-by-hand">Reading an .ots file by hand — a forensic walkthrough.</a></h2>
       <p>A byte-by-byte walkthrough of what is actually inside an OpenTimestamps proof file. Useful for an investigator, a journalist verifying a tip, or anyone who wants to confirm the math is real and not just a logo.</p>
     </li>
 
   </ul>
 
   <p style="color:var(--muted);font-size:13px;margin-top:48px;border-top:1px solid var(--line-soft);padding-top:18px;">
-    The architectural method underlying all three posts is described at <a href="/method/folder-merkle.html">/method/folder-merkle.html</a>; the doctrinal grounding is at <a href="/method/evidence-law.html">/method/evidence-law.html</a>.
+    The architectural method underlying all three posts is described at <a href="/method/folder-merkle">/method/folder-merkle.html</a>; the doctrinal grounding is at <a href="/method/evidence-law">/method/evidence-law.html</a>.
   </p>
 
 </main>
@@ -172,6 +163,6 @@
   </div>
 </footer>
 
-<script src="/assets/event.js" defer></script>
+<script src="/assets/event.js?v=1" defer></script>
 </body>
 </html>

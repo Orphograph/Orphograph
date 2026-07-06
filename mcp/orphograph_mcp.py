@@ -22,6 +22,13 @@ Tools exposed
     POST {hash_hex, sha512_hex} to /api/anchor. Return the receipt
     id and receipt URL.
 
+- orphograph_anchor_folder(path)
+    Walk `path`, hash every file locally into an RFC-6962 Merkle tree,
+    and POST only the manifest (relative paths + SHA-256 digests + the
+    root) to /api/anchor_folder. Return the receipt id and a hosted
+    certificate URL. No file body leaves the device; each file stays
+    independently verifiable via an inclusion proof.
+
 - orphograph_verify_receipt(receipt_id)
     GET /api/verify/<id>. Return the verification result — including
     calendar counts, btc_pinned_at if available, and the receipt URL
@@ -197,6 +204,135 @@ def tool_anchor_file(args: dict) -> dict:
     }
 
 
+# ── folder (dataset) anchoring ─────────────────────────────────────
+# Mirrors server/merkle.py (orphograph-merkle-v1-rfc6962) so the root the
+# server recomputes from the submitted manifest matches ours. Stdlib only.
+_MERKLE_ALGORITHM = "orphograph-merkle-v1-rfc6962"
+_MERKLE_VERSION = 1
+_FOLDER_EXCLUDE = (
+    ".DS_Store", "Thumbs.db", "desktop.ini", ".git/*", "node_modules/*",
+    "__pycache__/*", "*.tmp", "*.swp", "*.swo", "~$*",
+)
+
+
+def _folder_excluded(rel_posix: str) -> bool:
+    # Faithful port of server/merkle._matches_any: a slash pattern matches the
+    # FULL posix path (top-level prefix only — e.g. ".git/*" catches ".git/x"
+    # but NOT "a/.git/x"); a no-slash pattern matches the basename at any depth.
+    import fnmatch
+    name = rel_posix.rsplit("/", 1)[-1]
+    for pat in _FOLDER_EXCLUDE:
+        if "/" in pat:
+            if fnmatch.fnmatch(rel_posix, pat):
+                return True
+            prefix = pat.rstrip("*").rstrip("/")
+            if prefix and (rel_posix == prefix or rel_posix.startswith(prefix + "/")):
+                return True
+        else:
+            if fnmatch.fnmatch(name, pat):
+                return True
+    return False
+
+
+def _merkle_root(leaves: list) -> bytes:
+    level = list(leaves)
+    while len(level) > 1:
+        nxt = []
+        for i in range(0, len(level), 2):
+            if i + 1 < len(level):
+                nxt.append(hashlib.sha256(b"\x01" + level[i] + level[i + 1]).digest())
+            else:
+                nxt.append(level[i])  # lone-last node promoted, never duplicated
+        level = nxt
+    return level[0]
+
+
+def _build_folder_manifest(root: str) -> tuple:
+    """Walk root, hash every file locally, build the RFC-6962 manifest.
+
+    Sort is UTF-8 byte order of the POSIX relative path (the canonical order);
+    symlinks are skipped. Raises ValueError for an empty folder.
+    """
+    root = os.path.abspath(root)
+    entries = []
+    for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
+        dirnames[:] = [d for d in dirnames if not os.path.islink(os.path.join(dirpath, d))]
+        for fn in filenames:
+            ap = os.path.join(dirpath, fn)
+            if os.path.islink(ap) or not os.path.isfile(ap):
+                continue
+            rel_posix = os.path.relpath(ap, root).replace(os.sep, "/")
+            if _folder_excluded(rel_posix):
+                continue
+            entries.append((rel_posix, ap))
+    if not entries:
+        raise ValueError("empty folder (no files to anchor)")
+    entries.sort(key=lambda e: e[0].encode("utf-8"))
+
+    leaves_meta = []
+    leaf_hashes = []
+    total = 0
+    for rel_posix, ap in entries:
+        h = hashlib.sha256()
+        size = 0
+        with open(ap, "rb") as f:
+            for chunk in iter(lambda: f.read(1 << 20), b""):
+                h.update(chunk)
+                size += len(chunk)
+        digest = h.digest()
+        leaf = hashlib.sha256(b"\x00" + rel_posix.encode("utf-8") + b"\x00" + digest).digest()
+        leaves_meta.append({
+            "path": rel_posix,
+            "file_sha256_hex": digest.hex(),
+            "leaf_hex": leaf.hex(),
+            "size_bytes": size,
+        })
+        leaf_hashes.append(leaf)
+        total += size
+    manifest = {
+        "algorithm": _MERKLE_ALGORITHM,
+        "version": _MERKLE_VERSION,
+        "root_hex": _merkle_root(leaf_hashes).hex(),
+        "leaves": leaves_meta,
+    }
+    return manifest, total
+
+
+def tool_anchor_folder(args: dict) -> dict:
+    path = args.get("path")
+    if not isinstance(path, str) or not path:
+        return {"error": "missing required argument: path"}
+    if not os.path.isdir(path):
+        return {"error": f"not a directory: {path}"}
+    try:
+        manifest, total = _build_folder_manifest(path)
+    except ValueError as e:
+        return {"ok": False, "error": str(e)}
+    except OSError as e:
+        return {"ok": False, "error": f"could not read folder: {type(e).__name__}: {e}"}
+    body = {"manifest": manifest}
+    label = args.get("label")
+    if isinstance(label, str) and label.strip():
+        body["client_label"] = label.strip()[:200]
+    log(f"anchor_folder: {len(manifest['leaves'])} files, "
+        f"root {manifest['root_hex'][:12]}…, submitting manifest …")
+    result = _http("POST", "/api/anchor_folder", body)
+    if result.get("error"):
+        return {"ok": False, "error": result.get("error"),
+                "detail": result.get("body") or result.get("reason")}
+    rid = result.get("receipt_id", "")
+    return {
+        "ok": True,
+        "receipt_id": rid,
+        "certificate_url": f"{BASE_URL}/certificate/{rid}" if rid else None,
+        "root_hex": manifest["root_hex"],
+        "file_count": len(manifest["leaves"]),
+        "size_bytes": total,
+        "note": ("No file body left this device — only the manifest (relative "
+                 "paths + SHA-256 digests + the Merkle root) was transmitted."),
+    }
+
+
 def hash_text(text: str) -> tuple[str, str, int]:
     """SHA-256 + SHA-512 of a UTF-8 string. Returns (sha256_hex, sha512_hex, byte_len)."""
     raw = text.encode("utf-8")
@@ -357,6 +493,31 @@ TOOL_DEFINITIONS = [
         },
     },
     {
+        "name": "orphograph_anchor_folder",
+        "description": (
+            "Anchor a whole folder (a dataset) to the Bitcoin chain via "
+            "Orphograph. Every file is hashed locally into an RFC-6962 Merkle "
+            "tree; ONLY the manifest (relative paths + SHA-256 digests + the "
+            "root) is transmitted — no file body leaves the device. Returns a "
+            "receipt id and a hosted certificate URL; each file stays "
+            "independently verifiable via an inclusion proof."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "Absolute or relative path to the folder (dataset bundle) to anchor.",
+                },
+                "label": {
+                    "type": "string",
+                    "description": "Optional human-readable label (max 200 chars). Stored on the receipt; do not include sensitive content.",
+                },
+            },
+            "required": ["path"],
+        },
+    },
+    {
         "name": "orphograph_anchor_output",
         "description": (
             "Anchor a string of generated OUTPUT (an AI agent's result, a model "
@@ -475,6 +636,8 @@ def handle(msg: dict) -> dict | None:
         args = params.get("arguments") or {}
         if name == "orphograph_anchor_file":
             return _reply(req_id, _wrap_tool_result(tool_anchor_file(args)))
+        if name == "orphograph_anchor_folder":
+            return _reply(req_id, _wrap_tool_result(tool_anchor_folder(args)))
         if name == "orphograph_anchor_output":
             return _reply(req_id, _wrap_tool_result(tool_anchor_output(args)))
         if name == "orphograph_verify_receipt":

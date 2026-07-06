@@ -1,0 +1,76 @@
+/* crypto.css — externalized from crypto.html (strict CSP: no inline styles). */
+
+.pay-wrap { max-width: 640px; margin: 40px auto; padding: 0 18px; }
+  .pay-card {
+    border: 1px solid var(--panel-stroke);
+    background: var(--panel);
+    border-radius: 14px;
+    padding: 28px;
+  }
+  .field { display: flex; flex-direction: column; gap: 6px; margin: 14px 0; }
+  .field label {
+    font-size: 13px;
+    color: var(--text-soft);
+    letter-spacing: 0.02em;
+  }
+  .field select, .field input {
+    padding: 10px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--panel-stroke);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 15px;
+    font-family: inherit;
+  }
+  .pack-pick { display: flex; gap: 8px; flex-wrap: wrap; margin: 6px 0 14px; }
+  .pack-pick button {
+    flex: 1 1 auto;
+    min-width: 140px;
+    padding: 12px;
+    border: 1px solid var(--panel-stroke);
+    background: transparent;
+    color: var(--text);
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    font-family: inherit;
+  }
+  .pack-pick button.active {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+  .pay-submit {
+    width: 100%;
+    padding: 13px;
+    background: var(--accent);
+    color: #ffffff;
+    border: 0;
+    border-radius: 8px;
+    font-size: 15px;
+    font-weight: 500;
+    cursor: pointer;
+    font-family: inherit;
+    margin-top: 10px;
+  }
+  .pay-submit:disabled { opacity: 0.6; cursor: progress; }
+  .pay-msg {
+    margin: 14px 0 0;
+    font-size: 13px;
+    color: var(--text-soft);
+    min-height: 18px;
+  }
+  .pay-msg.error { color: var(--bad); }
+  .coin-list {
+    display: flex; flex-wrap: wrap; gap: 6px;
+    margin: 8px 0 0;
+    list-style: none; padding: 0;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .coin-list li {
+    padding: 3px 9px;
+    background: var(--panel);
+    border: 1px solid var(--panel-stroke);
+    border-radius: 999px;
+  }

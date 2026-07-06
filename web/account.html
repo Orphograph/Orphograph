@@ -6,7 +6,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex">
 <link rel="icon" type="image/png" href="/favicon.png?v=8">
-<link rel="stylesheet" href="/style.css?v=2">
+<link rel="stylesheet" href="/style.css?v=5">
+<link rel="stylesheet" href="/account.css?v=1">
 <meta name="copyright" content="© 2026 Orphograph. MIT — see /LICENSE">
 </head>
 <body>
@@ -29,7 +30,7 @@
     <dt>Next renewal</dt><dd id="renewal">…</dd>
     <dt>Anchors on this plan</dt><dd id="anchor-count">…</dd>
   </dl>
-  <p class="hint" id="access-explainer" style="margin-top:10px;">
+  <p class="hint mt-10" id="access-explainer">
     Your subscription has no claim code. Your signed-in account
     <em>is</em> the access — drop a file on the home page and it
     anchors without rate limits. Claim codes only exist for one-time
@@ -41,14 +42,14 @@
     <button id="refund-request-btn" class="btn-secondary" hidden>Request a refund</button>
     <span id="sub-action-msg" class="muted small" hidden></span>
   </div>
-  <div id="refund-form" hidden style="margin-top:10px;">
+  <div id="refund-form" class="mt-10" hidden>
     <label class="muted small" for="refund-reason">Reason (optional, retained for the office record only):</label>
-    <textarea id="refund-reason" maxlength="500" rows="3" style="display:block;width:100%;margin-top:6px;"></textarea>
-    <div style="margin-top:8px;">
+    <textarea id="refund-reason" class="ta-block" maxlength="500" rows="3"></textarea>
+    <div class="mt-8">
       <button id="refund-submit" class="btn">Submit request</button>
       <button id="refund-cancel" class="btn-secondary" type="button">Cancel</button>
     </div>
-    <p id="refund-msg" class="muted small" hidden style="margin-top:8px;"></p>
+    <p id="refund-msg" class="muted small mt-8" hidden></p>
   </div>
 </section>
 
@@ -57,7 +58,7 @@
   <p class="hint">
     Use the API to anchor files programmatically — useful for automation,
     folder watchers, or integrating Orphograph into your own tools.
-    <a href="/docs/api.html">Read the API docs →</a>
+    <a href="/docs/api">Read the API docs →</a>
   </p>
   <dl class="kv">
     <dt>API key</dt>
@@ -93,7 +94,7 @@
     </thead>
     <tbody></tbody>
   </table>
-  <form id="webhook-add-form" class="inline-form" style="margin-top:12px;">
+  <form id="webhook-add-form" class="inline-form mt-12">
     <input id="webhook-url-input" type="url" placeholder="https://example.com/webhooks/orphograph" required autocomplete="off">
     <button type="submit" class="btn">Register</button>
     <span id="webhook-msg" class="muted small" hidden></span>
@@ -207,16 +208,17 @@
 </section>
 
 <section id="auth-required" hidden>
-  <p>You're not signed in. <a href="/signin.html">Sign in</a> to view your account.</p>
+  <h1>Your vault</h1>
+  <p class="lede">This is where the receipts you've anchored on a paid plan live — yours to re-download any time. <a href="/signin">Open it with a one-time email link</a>; no password. Free-tier anchoring needs no sign-in at all.</p>
 </section>
 </main>
 
 <footer>
-  <small><a href="/">home</a> · <a href="/terms.html">Terms</a> · <a href="/privacy.html">Privacy</a></small>
+  <small><a href="/">home</a> · <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a></small>
 </footer>
 
-<script src="/account.js"></script>
-<script src="/statusbar.js" defer></script>
-<script src="/assets/event.js" defer></script>
+<script src="/account.js?v=2"></script>
+<script src="/statusbar.js?v=1" defer></script>
+<script src="/assets/event.js?v=1" defer></script>
 </body>
 </html>

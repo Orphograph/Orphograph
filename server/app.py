@@ -18,6 +18,7 @@ import csv
 import io
 import json
 import mimetypes
+mimetypes.add_type("font/woff2", ".woff2")  # serve self-hosted fonts with correct type (X-Content-Type-Options: nosniff is set)
 import os
 import re
 import secrets
@@ -133,6 +134,7 @@ ALLOWED_STATIC_SUFFIXES = {
     ".py", ".md", ".tar", ".gz",  # self-hosted OSS verifier under web/verify/
     ".zip",  # offline verifier kit under web/dist/orphograph-verify.zip
     ".xml",  # sitemap.xml for SEO discoverability
+    ".woff2",  # self-hosted OFL fonts under web/fonts/ (Fraunces / Spectral / IBM Plex Mono)
 }
 
 # 10 anchors/hour/IP by default; refills at 10/3600 = ~0.00278 tokens/sec
@@ -191,6 +193,22 @@ FUNNEL_EVENTS = frozenset({
 FUNNEL_EVENT_FIELDS = frozenset({"event", "page"})
 FUNNEL_EVENTS_PATH = DATA_DIR / "events.jsonl"
 MAX_EVENT_PAGE_LEN = 256
+
+# ── homepage A/B experiment (cream "/" vs dark "/v2" document) ──────────────
+# ORPHO_AB_HOME = fraction of first-time human visitors who get the dark
+# document served AT "/" (0 = experiment off). Read per-request so ops can
+# flip it via env without code changes and tests can toggle it. Assignment is
+# sticky via a 1-bit HttpOnly cookie; bots always get cream (SEO stability).
+# Measurement is entirely server-side into data/ab_home.jsonl — the funnel
+# collector's privacy contract (no cookies recorded) stays untouched.
+AB_HOME_COOKIE = "orpho_ab_home"
+AB_LOG_PATH = DATA_DIR / "ab_home.jsonl"
+_AB_BOT_RE = re.compile(
+    r"bot|crawl|spider|slurp|bingpreview|facebookexternalhit|twitterbot|"
+    r"linkedinbot|whatsapp|telegram|lighthouse|headless|python-urllib|"
+    r"python-requests|curl|wget",
+    re.I,
+)
 
 
 def _subscription_active_for(email: str | None) -> bool:
@@ -340,47 +358,185 @@ def _send_xml(handler: BaseHTTPRequestHandler, status: int, xml_body: str, *, co
     handler.wfile.write(body)
 
 
+def _sitemap_lastmod(loc: str) -> str:
+    """Honest <lastmod>: the served file's mtime, YYYY-MM-DD (UTC).
+
+    Pages resolve to their .html sibling, directory paths to index.html;
+    anything unresolvable falls back to the homepage's mtime.
+    """
+    from datetime import datetime, timezone
+    rel = loc.lstrip("/")
+    cand = WEB_DIR / (rel + "index.html") if loc.endswith("/") else WEB_DIR / rel
+    if not cand.is_file():
+        html = WEB_DIR / (rel + ".html")
+        cand = html if html.is_file() else WEB_DIR / "index.html"
+    ts = cand.stat().st_mtime
+    return datetime.fromtimestamp(ts, timezone.utc).strftime("%Y-%m-%d")
+
+
 def _build_sitemap() -> str:
     site = os.environ.get("SITE_URL", "https://orphograph.com").rstrip("/")
+    # Canonical public-URL set — reconciled 2026-07-03 with the (previously
+    # drifted) static web/sitemap.xml; a test pins the two in lockstep.
     urls: list[tuple[str, str]] = [
         ("/", "1.0"),
         ("/verify/", "0.9"),
         ("/blog/", "0.8"),
-        ("/status.html", "0.5"),
-        ("/stats.html", "0.6"),
-        ("/terms.html", "0.3"),
-        ("/privacy.html", "0.3"),
-        ("/badge-demo.html", "0.4"),
-        ("/docs/api.html", "0.6"),
-        ("/about.html", "0.7"),
-        ("/learn.html", "0.8"),
-        ("/press.html", "0.4"),
-        ("/gift.html", "0.6"),
+        ("/learn", "0.8"),
+        ("/dataset-provenance", "0.8"),
+        ("/integrations", "0.7"),
+        ("/accept", "0.7"),
+        ("/standing-record", "0.5"),
+        ("/buy", "0.8"),
         ("/lp/", "0.8"),
-        ("/lp/prove-photo-pre-ai.html", "0.7"),
-        ("/lp/bitcoin-timestamp-file.html", "0.7"),
-        ("/lp/c2pa-alternative.html", "0.7"),
-        ("/lp/opentimestamps-explained.html", "0.7"),
-        ("/lp/wedding-photographer-proof.html", "0.7"),
-        ("/lp/manuscript-priority-date.html", "0.7"),
-        ("/lp/screenshot-evidence-timestamp.html", "0.7"),
-        ("/lp/ai-image-detector-vs-provenance.html", "0.7"),
+        ("/about", "0.7"),
+        ("/faq", "0.7"),
+        ("/verify-js", "0.7"),
+        ("/lp/prove-photo-pre-ai", "0.7"),
+        ("/lp/bitcoin-timestamp-file", "0.7"),
+        ("/lp/c2pa-alternative", "0.7"),
+        ("/lp/opentimestamps-explained", "0.7"),
+        ("/lp/wedding-photographer-proof", "0.7"),
+        ("/lp/manuscript-priority-date", "0.7"),
+        ("/lp/screenshot-evidence-timestamp", "0.7"),
+        ("/lp/ai-image-detector-vs-provenance", "0.7"),
+        ("/method/architecture", "0.6"),
+        ("/method/bitcoin-attestation", "0.6"),
+        ("/method/evidence-law", "0.6"),
+        ("/method/folder-merkle", "0.6"),
+        ("/method/legal-recognition", "0.6"),
+        ("/method/the-mit-verifier-annotated", "0.6"),
+        ("/method/why-filenames-are-not-stored", "0.6"),
+        ("/docs/api", "0.6"),
+        ("/docs/webhooks", "0.6"),
+        ("/stats", "0.6"),
+        ("/gift", "0.6"),
+        ("/status", "0.5"),
+        ("/security", "0.5"),
+        ("/continuity", "0.5"),
+        ("/ios", "0.5"),
+        ("/mcp", "0.5"),
+        ("/badge", "0.5"),
+        ("/badge-demo", "0.4"),
+        ("/press", "0.4"),
+        ("/press-kit", "0.4"),
+        ("/roadmap", "0.4"),
+        ("/changelog", "0.4"),
+        ("/account", "0.4"),
+        ("/construction/", "0.4"),
+        ("/inspection/", "0.4"),
+        ("/listings/", "0.4"),
+        ("/matters/", "0.4"),
+        ("/practice/", "0.4"),
+        ("/workpapers/", "0.4"),
+        ("/blog/atom.xml", "0.4"),
+        ("/blog/rss.xml", "0.4"),
+        ("/signin", "0.3"),
+        ("/recover", "0.3"),
+        ("/terms", "0.3"),
+        ("/privacy", "0.3"),
+        ("/legal/", "0.3"),
+        ("/.well-known/security.txt", "0.3"),
+        ("/humans.txt", "0.3"),
+        ("/sitemap-image.xml", "0.3"),
+        ("/press-kit/orphograph-press-kit.zip", "0.3"),
     ]
-    for post in blog.list_posts():
-        urls.append((f"/blog/{post['slug']}", "0.7"))
+    # Blog posts publish through two paths — the md router (blog.list_posts)
+    # and static long-form HTML files under web/blog/ — and either alone
+    # under-lists the sitemap (7 static-only posts were missing before the
+    # reconciliation). Union both, deduped, deterministic order.
+    blog_slugs = {post["slug"] for post in blog.list_posts()}
+    blog_dir = WEB_DIR / "blog"
+    if blog_dir.is_dir():
+        blog_slugs.update(f.stem for f in blog_dir.glob("*.html") if f.stem != "index")
+    for slug in sorted(blog_slugs):
+        urls.append((f"/blog/{slug}", "0.7"))
     lines = [
         '<?xml version="1.0" encoding="UTF-8"?>',
         '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
     ]
     for path, prio in urls:
+        # Emit clean URLs (the canonical form) — strip .html defensively so a
+        # future list entry can never reintroduce a .html loc.
+        loc = path[:-5] if path.endswith(".html") else path
         lines += [
             "  <url>",
-            f"    <loc>{site}{path}</loc>",
+            f"    <loc>{site}{loc}</loc>",
+            f"    <lastmod>{_sitemap_lastmod(loc)}</lastmod>",
             f"    <priority>{prio}</priority>",
             "  </url>",
         ]
     lines.append("</urlset>")
     return "\n".join(lines)
+
+
+def _ab_log(event: str, variant: str, extra: dict | None = None) -> None:
+    """Append one experiment record. Best-effort: analytics must never break serving."""
+    try:
+        from datetime import datetime, timezone
+        rec = {"ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+               "event": event, "variant": variant}
+        if extra:
+            rec.update(extra)
+        with open(AB_LOG_PATH, "a", encoding="utf-8") as f:
+            f.write(json.dumps(rec, separators=(",", ":")) + "\n")
+    except Exception:
+        pass
+
+
+def _ab_cookie_variant(handler: BaseHTTPRequestHandler) -> str | None:
+    """The visitor's experiment arm, or None when unassigned/invalid."""
+    try:
+        jar = SimpleCookie()
+        jar.load(handler.headers.get("Cookie", ""))
+        morsel = jar.get(AB_HOME_COOKIE)
+        value = morsel.value if morsel else ""
+        return value if value in ("cream", "dark") else None
+    except Exception:
+        return None
+
+
+def _serve_ab_home(handler: BaseHTTPRequestHandler) -> bool:
+    """Cream-vs-dark homepage split at "/". Returns True when this function
+    wrote the response; False → caller falls through to the normal cream
+    homepage (experiment off, bot traffic, or unreadable variant document).
+    Both arms are served with no-store so shared caches can't bleed arms.
+    """
+    try:
+        fraction = float(os.environ.get("ORPHO_AB_HOME", "0") or 0)
+    except ValueError:
+        fraction = 0.0
+    if fraction <= 0:
+        return False
+    if _AB_BOT_RE.search(handler.headers.get("User-Agent", "")):
+        return False
+    variant = _ab_cookie_variant(handler)
+    newly_assigned = variant is None
+    if newly_assigned:
+        variant = "dark" if secrets.randbelow(10_000) < int(fraction * 10_000) else "cream"
+    # Dark is now the canonical homepage (served as the static index.html); the
+    # "cream" arm serves the archived index-cream.html so a re-enabled A/B still
+    # compares the cream design against the live dark one.
+    doc = WEB_DIR / ("v2/index.html" if variant == "dark" else "index-cream.html")
+    try:
+        body = doc.read_bytes()
+    except OSError:
+        return False
+    handler.send_response(200)
+    handler.send_header("Content-Type", "text/html; charset=utf-8")
+    handler.send_header("Content-Length", str(len(body)))
+    handler.send_header("Cache-Control", "no-store")
+    handler.send_header("Vary", "Cookie")
+    if newly_assigned:
+        cookie = f"{AB_HOME_COOKIE}={variant}; Max-Age=2592000; Path=/; SameSite=Lax; HttpOnly"
+        if COOKIE_SECURE:
+            cookie += "; Secure"
+        handler.send_header("Set-Cookie", cookie)
+    _security_headers(handler)
+    handler.end_headers()
+    handler.wfile.write(body)
+    _ab_log("home_view", variant, {"new": newly_assigned})
+    return True
 
 
 def _serve_static(handler: BaseHTTPRequestHandler, rel_path: str) -> None:
@@ -391,9 +547,48 @@ def _serve_static(handler: BaseHTTPRequestHandler, rel_path: str) -> None:
     if WEB_DIR not in target.parents and target != WEB_DIR:
         handler.send_error(403, "forbidden")
         return
+    # Pages live at clean URLs: a direct GET of /<page>.html permanently
+    # redirects to the extensionless form (query string preserved, so old
+    # Stripe success URLs like /buy.html?stripe_session=… keep working).
+    # Assets never end in .html. /index.html is left alone because the
+    # root path is rewritten to it above and cannot be distinguished here.
+    # The clean form re-resolves to the same file via the sibling logic
+    # below (verified: no <name>.html coexists with <name>/index.html).
+    # Gate on the RAW REQUEST path, not rel_path: internal callers (the
+    # blog router, dir-index resolution) pass .html rel_paths for clean
+    # request URLs — redirecting those loops the clean URL onto itself.
+    from urllib.parse import urlparse as _urlparse
+    _req_path = _urlparse(getattr(handler, "path", "")).path
+    if _req_path.endswith(".html") and rel_path.endswith(".html") and rel_path != "index.html" and target.is_file():
+        clean_rel = rel_path[: -len(".html")]
+        if clean_rel.endswith("/index"):
+            clean_rel = clean_rel[: -len("index")]
+        from urllib.parse import urlparse
+        query = urlparse(getattr(handler, "path", "")).query
+        handler.send_response(301)
+        handler.send_header("Location", "/" + clean_rel + (("?" + query) if query else ""))
+        handler.send_header("Content-Length", "0")
+        _security_headers(handler)
+        handler.end_headers()
+        return
     # Directory-style paths (e.g. /verify/) → resolve to <dir>/index.html.
+    # But a directory with NO index.html that has a sibling <dir>.html
+    # (e.g. web/mcp/ alongside web/mcp.html, web/press-kit/ alongside
+    # web/press-kit.html) would otherwise 404 the clean URL /mcp. Prefer the
+    # .html page in that case; the directory's own files stay reachable at
+    # /<dir>/<file>.
     if target.is_dir():
-        target = target / "index.html"
+        idx = target / "index.html"
+        sibling = target.with_suffix(".html")
+        target = idx if idx.is_file() else (sibling if sibling.is_file() else idx)
+    # Clean URLs: an extensionless path (/faq, /method/architecture) serves the
+    # matching <path>.html. The .html form keeps working too (backward-compatible
+    # bookmarks/links); this only triggers when the bare path is not itself a
+    # file or dir and a .html sibling exists.
+    if target.suffix == "" and not target.exists():
+        html_sibling = target.with_suffix(".html")
+        if html_sibling.is_file():
+            target = html_sibling
     if not target.exists() or not target.is_file():
         handler.send_error(404, "not found")
         return
@@ -474,6 +669,19 @@ class Handler(BaseHTTPRequestHandler):
         truncated = truncate_ip(self.client_address[0] if self.client_address else "")
         sys.stderr.write(f"[{self.log_date_time_string()}] {truncated} - {fmt % args}\n")
 
+    def handle_one_request(self):  # noqa: N802 (stdlib name)
+        # Clients (browsers, health probes, proxies) routinely disconnect before a
+        # response finishes sending. The stdlib then propagates the write failure as
+        # an unhandled BrokenPipeError/ConnectionResetError and dumps a full traceback
+        # to stderr per occurrence — benign (the peer is gone, nothing more can be
+        # sent) but it flooded the error log (~9k tracebacks / 19MB). Swallow only
+        # those two connection-teardown errors, end the keep-alive loop, move on.
+        # Any other exception still propagates so real bugs stay visible.
+        try:
+            super().handle_one_request()
+        except (BrokenPipeError, ConnectionResetError):
+            self.close_connection = True
+
     def _client_key(self) -> str:
         peer = self.client_address[0] if self.client_address else ""
         chosen = _resolve_peer_ip(
@@ -496,6 +704,22 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):  # noqa: N802
         path = self.path.split("?", 1)[0]
+        # homepage A/B: split "/" between the cream and dark documents
+        if path == "/" and _serve_ab_home(self):
+            return
+        # /v2 is retired: the dark design is now the canonical homepage at "/".
+        # 301 the old page URL (EXACTLY — never the /v2/* assets the homepage
+        # still loads: /v2/style.css, /v2/app.js, /v2/fonts/*).
+        if path in ("/v2", "/v2/", "/v2/index.html"):
+            self.send_response(301)
+            self.send_header("Location", "/")
+            self.end_headers()
+            return
+        # homepage A/B: attribute checkout-page reach to the visitor's arm
+        if path.startswith("/pay/crypto"):
+            _ab_arm = _ab_cookie_variant(self)
+            if _ab_arm:
+                _ab_log("checkout_view", _ab_arm)
         # /api/event is POST-only. Reject any other method (incl. GET) with
         # 405 so we don't leak internal state via inadvertent GET-as-probe.
         if path == "/api/event":
@@ -750,6 +974,25 @@ class Handler(BaseHTTPRequestHandler):
                 # is required, but we still avoid injecting raw user
                 # input by limiting substitution to the validated id.
                 body = body.replace("{{RECEIPT_ID}}", rid)
+                # Per-receipt unfurl text: the sealed date travels in the
+                # og/twitter description (stdlib templating — the branded
+                # card image is static). Private receipts leak nothing.
+                _tail = " Verified against the Bitcoin chain — check it yourself, no account required."
+                sealed = "A file existed at the recorded moment." + _tail
+                try:
+                    _rec = engine.verify_receipt(rid)
+                    if not _rec.get("found"):
+                        # honest unfurl for dead links: claim nothing
+                        sealed = "No record with this id."
+                    elif not _rec.get("private"):
+                        _d = str(_rec.get("created_at", ""))[:10]
+                        if _d:
+                            sealed = f"Sealed {_d}." + _tail
+                            if _rec.get("btc_pinned_at"):
+                                sealed = f"Sealed {_d} — anchored in Bitcoin." + _tail
+                except Exception:
+                    pass
+                body = body.replace("{{OG_SEALED}}", sealed)
                 payload = body.encode("utf-8")
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -760,6 +1003,58 @@ class Handler(BaseHTTPRequestHandler):
                 self.wfile.write(payload)
             except OSError:
                 _serve_static(self, "/receipt.html")
+            return
+        if path.startswith("/certificate/"):
+            # Hosted dataset-provenance certificate view for folder anchors.
+            # Mirrors /r/<id>: the JS reads the id from the URL and fetches
+            # /api/verify_folder/<id>; we template the id into the page and
+            # the OG meta so a shared certificate link unfurls with its id.
+            rid = path[len("/certificate/"):].rstrip("/")
+            if not RECEIPT_ID_RE.match(rid):
+                self.send_error(400, "invalid receipt id")
+                return
+            _cert_missing = False
+            try:
+                _cert_missing = not engine.verify_receipt(rid).get("found")
+            except Exception:
+                pass
+            try:
+                html_path = WEB_DIR / "certificate.html"
+                body = html_path.read_text()
+                body = body.replace("{{RECEIPT_ID}}", rid)
+                if _cert_missing:
+                    body = body.replace(
+                        "A dataset existed in this exact form by the anchored date — every file independently verifiable against the Bitcoin chain.",
+                        "No certificate with this id.")
+                # Per-receipt unfurl text: the sealed date travels in the
+                # og/twitter description (stdlib templating — the branded
+                # card image is static). Private receipts leak nothing.
+                _tail = " Verified against the Bitcoin chain — check it yourself, no account required."
+                sealed = "A file existed at the recorded moment." + _tail
+                try:
+                    _rec = engine.verify_receipt(rid)
+                    if not _rec.get("found"):
+                        # honest unfurl for dead links: claim nothing
+                        sealed = "No record with this id."
+                    elif not _rec.get("private"):
+                        _d = str(_rec.get("created_at", ""))[:10]
+                        if _d:
+                            sealed = f"Sealed {_d}." + _tail
+                            if _rec.get("btc_pinned_at"):
+                                sealed = f"Sealed {_d} — anchored in Bitcoin." + _tail
+                except Exception:
+                    pass
+                body = body.replace("{{OG_SEALED}}", sealed)
+                payload = body.encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(payload)))
+                self.send_header("Cache-Control", "public, max-age=300")
+                _security_headers(self)
+                self.end_headers()
+                self.wfile.write(payload)
+            except OSError:
+                _serve_static(self, "/certificate.html")
             return
         if path.startswith("/buy/"):
             # BTC payment page — page is static; JS reads order_id from URL.
@@ -806,6 +1101,12 @@ class Handler(BaseHTTPRequestHandler):
             slug = rest.rstrip("/")
             if not re.match(r"^[a-z0-9-]{1,80}$", slug):
                 self.send_error(400, "invalid slug")
+                return
+            # Clean URL for a static HTML post: /blog/<slug> serves
+            # web/blog/<slug>.html when it exists (this is what the on-site
+            # links now use). Fall back to the markdown renderer otherwise.
+            if (WEB_DIR / "blog" / (slug + ".html")).is_file():
+                _serve_static(self, "/blog/" + slug + ".html")
                 return
             html_page = blog.render_post_html(slug)
             if not html_page:
@@ -903,7 +1204,7 @@ class Handler(BaseHTTPRequestHandler):
             from urllib.parse import parse_qs, urlparse
             qs = parse_qs(urlparse(self.path).query)
             next_raw = (qs.get("next", [""])[0] or "").strip()
-            location = "/account.html"
+            location = "/account"
             if next_raw.startswith("/") and not next_raw.startswith("//") and "\n" not in next_raw and "\r" not in next_raw and len(next_raw) < 200:
                 location = next_raw
             self.send_response(303)
@@ -1245,7 +1546,7 @@ class Handler(BaseHTTPRequestHandler):
             # static file. 302 (temporary) so a future landing page can
             # reclaim this URL without a cached 301 getting in the way.
             self.send_response(302)
-            self.send_header("Location", "/account.html")
+            self.send_header("Location", "/account")
             self.send_header("Content-Length", "0")
             _security_headers(self)
             self.end_headers()
@@ -1307,6 +1608,9 @@ class Handler(BaseHTTPRequestHandler):
         # explicitly with the correct Content-Type and a 1h cache. The
         # files live in web/; we bypass the generic static handler so
         # the response shape (and Content-Type) is unambiguous.
+        if path == "/api/standing-record":
+            _json_response(self, 200, {"anchors": _list_weekly_anchors()})
+            return
         if path in ("/sitemap.xml", "/robots.txt"):
             try:
                 rel = path.lstrip("/")
@@ -1537,6 +1841,10 @@ class Handler(BaseHTTPRequestHandler):
             _json_response(self, 400, {"error": str(e),
                                        "credit_refunded": pack_consumed})
             return
+        # homepage A/B: attribute the successful anchor to the visitor's arm
+        _ab_arm = _ab_cookie_variant(self)
+        if _ab_arm:
+            _ab_log("anchor", _ab_arm)
         low_redundancy = record["calendars_ok"] < MIN_CALENDARS_OK
         # Total calendar outage: 0 calendars accepted the hash, so the receipt
         # has no Bitcoin commitment and can never upgrade — it is worthless.
@@ -2740,6 +3048,10 @@ class Handler(BaseHTTPRequestHandler):
         else:
             source = "free"
         want_private = bool(payload.get("private", False)) and subscription_active
+        # Opt-in: publish the manifest's file paths so a shared certificate
+        # renders them to anyone (default keeps paths owner-only). Independent
+        # of `private`, which gates the whole receipt to its owner.
+        want_public_paths = bool(payload.get("paths_public", False))
         try:
             record = engine.anchor_hash(
                 root_hex,
@@ -2777,6 +3089,8 @@ class Handler(BaseHTTPRequestHandler):
             on_disk["kind"] = "folder"
             on_disk["leaf_count"] = len(leaves)
             on_disk["merkle_algorithm"] = merkle.ALGORITHM
+            if want_public_paths:
+                on_disk["paths_public"] = True
             if sig_verified is not None:
                 on_disk["signature_verified"] = sig_verified
                 on_disk["signer_kid"] = signer_kid
@@ -2796,6 +3110,8 @@ class Handler(BaseHTTPRequestHandler):
         if sig_verified is not None:
             response_body["signature_verified"] = sig_verified
             response_body["signer_kid"] = signer_kid
+        if want_public_paths:
+            response_body["paths_public"] = True
         _json_response(self, 200, response_body)
 
     def _handle_verify_folder(self, rid: str) -> None:
@@ -2837,7 +3153,7 @@ class Handler(BaseHTTPRequestHandler):
         # owner. The full manifest is required to construct inclusion proofs,
         # but inclusion-proof requests already require the caller to KNOW the
         # path — so withholding the index is the right default.
-        if not is_owner:
+        if not is_owner and not record.get("paths_public"):
             redacted_leaves = []
             for i, leaf in enumerate(manifest.get("leaves", [])):
                 redacted_leaves.append({
@@ -2852,9 +3168,12 @@ class Handler(BaseHTTPRequestHandler):
                 "leaves": redacted_leaves,
                 "paths_redacted": True,
                 "paths_redaction_reason": (
-                    "Leaf paths are visible only to the receipt owner. "
-                    "Inclusion proofs remain available to anyone who already "
-                    "knows the path of the file they wish to prove."
+                    "Leaf paths are visible only to the receipt owner. Each "
+                    "file's SHA-256 digest and size remain public, so anyone "
+                    "holding a candidate file can confirm its membership; only "
+                    "the human-readable paths are withheld. Inclusion proofs "
+                    "remain available to anyone who already knows the path of "
+                    "the file they wish to prove."
                 ),
             }
         _json_response(self, 200, {"receipt": record, "manifest": manifest})
@@ -3452,7 +3771,7 @@ class Handler(BaseHTTPRequestHandler):
                 return
             scheme = "http" if is_loopback else "https"
             site = f"{scheme}://{host or 'orphograph.com'}"
-        success_url = f"{site}/buy.html?stripe_session={{CHECKOUT_SESSION_ID}}&status=success"
+        success_url = f"{site}/buy?stripe_session={{CHECKOUT_SESSION_ID}}&status=success"
         cancel_url = f"{site}/?stripe=canceled"
 
         result = stripe_api.create_checkout_session(
@@ -3669,6 +3988,46 @@ def _count_anchors_for_email(email: str) -> int:
     return count
 
 
+_WEEKLY_CACHE: dict = {"ts": 0.0, "rows": []}
+
+
+def _list_weekly_anchors(limit: int = 16) -> list[dict]:
+    """Latest public weekly self-anchors (client_label weekly-*), 300s cache.
+
+    The office re-anchors its own foundations on a schedule
+    (scripts/weekly_anchor.py); this powers the public /standing-record page.
+    """
+    import time as _time
+    now = _time.time()
+    if now - _WEEKLY_CACHE["ts"] < 300:
+        return _WEEKLY_CACHE["rows"]
+    rows: list[dict] = []
+    receipts_dir = engine.RECEIPTS_DIR
+    if receipts_dir.exists():
+        for child in receipts_dir.iterdir():
+            if not child.is_dir():
+                continue
+            rfile = child / "receipt.json"
+            if not rfile.exists():
+                continue
+            try:
+                rec = json.loads(rfile.read_text())
+            except (OSError, json.JSONDecodeError):
+                continue
+            label = str(rec.get("client_label") or "")
+            if not label.startswith("weekly-") or rec.get("private"):
+                continue
+            rows.append({
+                "receipt_id": rec.get("receipt_id"),
+                "client_label": label,
+                "created_at": rec.get("created_at"),
+                "btc_pinned_at": rec.get("btc_pinned_at"),
+            })
+    rows.sort(key=lambda x: x.get("created_at") or "", reverse=True)
+    _WEEKLY_CACHE.update(ts=now, rows=rows[:limit])
+    return _WEEKLY_CACHE["rows"]
+
+
 def _list_anchors_for_email(
     email: str,
     limit: int = 50,
@@ -3814,6 +4173,38 @@ def _seed_sample_receipt() -> None:
             continue
         shutil.copy2(item, target / item.name, follow_symlinks=False)
     sys.stderr.write(f"seeded sample receipt {rid} from {sample_dir} → {target}\n")
+
+
+def _seed_sample_folder_receipt() -> None:
+    """Copy web/sample-folder/ → <RECEIPTS_DIR>/<id>/ on first boot if missing.
+
+    The folder analogue of _seed_sample_receipt: a permanent, git-tracked
+    dataset-provenance certificate sample (receipt.json + manifest.json + the
+    .ots proofs) so /certificate/<id> has a live demo that never prunes. The
+    seeded receipt sets paths_public so the manifest renders in full publicly.
+    """
+    sample_meta = WEB_DIR / "sample-folder" / "index.json"
+    if not sample_meta.exists():
+        return
+    import shutil
+    try:
+        meta = json.loads(sample_meta.read_text())
+    except (OSError, json.JSONDecodeError):
+        return
+    rid = meta.get("receipt_id")
+    if not rid:
+        return
+    target = engine.RECEIPTS_DIR / rid
+    if target.exists():
+        return
+    target.parent.mkdir(parents=True, exist_ok=True)
+    sample_dir = WEB_DIR / "sample-folder"
+    target.mkdir()
+    for item in sample_dir.iterdir():
+        if item.name in ("index.json",):
+            continue
+        shutil.copy2(item, target / item.name, follow_symlinks=False)
+    sys.stderr.write(f"seeded sample folder receipt {rid} from {sample_dir} → {target}\n")
 
 
 def _start_upgrade_scheduler() -> None:
@@ -4009,6 +4400,7 @@ def _start_funnel_digest_scheduler() -> None:
 def main() -> int:
     WEB_DIR.mkdir(parents=True, exist_ok=True)
     _seed_sample_receipt()
+    _seed_sample_folder_receipt()
     _start_upgrade_scheduler()
     _start_cadence_scheduler()
     _start_funnel_digest_scheduler()

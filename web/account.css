@@ -1,0 +1,6 @@
+/* account.html — externalized inline style= attributes (strict CSP: no inline).
+   Loaded after /style.css so these utilities win where needed. */
+.mt-12 { margin-top: 12px; }
+.mt-10 { margin-top: 10px; }
+.mt-8 { margin-top: 8px; }
+.ta-block { display: block; width: 100%; margin-top: 6px; }

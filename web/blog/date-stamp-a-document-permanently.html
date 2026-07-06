@@ -8,33 +8,16 @@
 <meta name="description" content="A plain-English guide to placing a permanent, third-party-verifiable date on a digital document — using a cryptographic fingerprint anchored to the Bitcoin chain, with no expiry and no trusted intermediary.">
 <meta property="og:title" content="How to date-stamp a document permanently">
 <meta property="og:description" content="A method for placing a permanent, verifier-neutral date on a document — the bytes you have today, on the public chain, forever.">
-<meta property="og:url" content="https://orphograph.com/blog/date-stamp-a-document-permanently.html">
+<meta property="og:url" content="https://orphograph.com/blog/date-stamp-a-document-permanently">
 <meta property="og:type" content="article">
 <meta property="og:image" content="https://orphograph.com/og-image.png?v=8">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="How to date-stamp a document permanently">
 <meta name="twitter:description" content="A method for placing a permanent, verifier-neutral date on a document.">
-<link rel="canonical" href="https://orphograph.com/blog/date-stamp-a-document-permanently.html">
+<link rel="canonical" href="https://orphograph.com/blog/date-stamp-a-document-permanently">
 <link rel="icon" type="image/png" href="/favicon.png?v=8">
 <link rel="stylesheet" href="/index.css?v=9">
-<style>
-  .arch-wrap { max-width: 760px; margin: 0 auto; padding: 0 24px 64px; }
-  .arch-wrap h1 { font-family: var(--serif); font-size: 34px; font-weight: 500; margin: 32px 0 6px; line-height: 1.2; }
-  .arch-wrap h2 { font-family: var(--serif); font-size: 22px; font-weight: 500; margin: 36px 0 4px; color: var(--ink); }
-  .arch-wrap h3 { font-family: var(--serif); font-size: 17px; font-weight: 500; margin: 24px 0 2px; color: var(--ink); }
-  .arch-rule { border-top: 1px solid var(--ink); width: 32px; margin: 8px 0 16px; opacity: 0.6; }
-  .arch-wrap p, .arch-wrap li { color: var(--ink-2); line-height: 1.75; font-size: 15.5px; }
-  .arch-wrap code { background: rgba(74,154,115,0.08); padding: 2px 6px; border-radius: 3px; font-size: 0.92em; }
-  .arch-lede { font-size: 17px; line-height: 1.7; color: var(--ink-2); margin: 0 0 24px; }
-  .arch-callout { background: rgba(74,154,115,0.06); border-left: 3px solid var(--confirm); padding: 16px 20px; margin: 24px 0; border-radius: 0 6px 6px 0; }
-  .arch-callout p { margin: 0; }
-  .means-bullets { list-style: none; padding: 0; margin: 16px 0 32px; }
-  .means-bullets li { padding: 8px 0 8px 24px; position: relative; }
-  .means-bullets li::before { content: "·"; position: absolute; left: 4px; color: var(--confirm); font-size: 22px; line-height: 1; top: 6px; }
-  .disclaimer-block { margin-top: 48px; padding: 20px 24px; background: #f1ead7; border-radius: 6px; font-size: 14px; line-height: 1.65; color: var(--muted); }
-  .post-meta { font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); margin: 48px 0 8px; }
-  .post-foot { color: var(--muted); font-size: 13px; margin-top: 48px; border-top: 1px solid var(--line-soft); padding-top: 18px; }
-</style>
+<link rel="stylesheet" href="/blog/date-stamp-a-document-permanently.css?v=1">
 <meta name="copyright" content="© 2026 Orphograph. Code under MIT (see /LICENSE). Brand, content, and design — all rights reserved.">
 <script type="application/ld+json">
 {
@@ -52,7 +35,7 @@
   },
   "mainEntityOfPage": {
     "@type": "WebPage",
-    "@id": "https://orphograph.com/blog/date-stamp-a-document-permanently.html"
+    "@id": "https://orphograph.com/blog/date-stamp-a-document-permanently"
   }
 }
 </script>
@@ -77,7 +60,7 @@
       "@type": "ListItem",
       "position": 3,
       "name": "How to date-stamp a document permanently",
-      "item": "https://orphograph.com/blog/date-stamp-a-document-permanently.html"
+      "item": "https://orphograph.com/blog/date-stamp-a-document-permanently"
     }
   ]
 }
@@ -89,11 +72,11 @@
   <div class="wrap row">
     <a href="/" class="brand">Orphograph</a>
     <nav>
-      <a href="/learn.html">Method</a>
-      <a href="/faq.html">FAQ</a>
-      <a href="/continuity.html">Continuity</a>
+      <a href="/learn">Method</a>
+      <a href="/faq">FAQ</a>
+      <a href="/continuity">Continuity</a>
       <a href="/#tiers">Pricing</a>
-      <a href="/signin.html">Sign in</a>
+      <a href="/signin">Sign in</a>
       <a href="/#drop" class="cta">Anchor a file</a>
     </nav>
   </div>
@@ -131,8 +114,8 @@
     <p><strong>2.</strong> Open the office at <a href="/">orphograph.com</a> and drop the file onto the anchor area. The browser computes the fingerprint locally. The document itself does not leave the device.</p>
     <p><strong>3.</strong> The office submits the fingerprint through OpenTimestamps. Within roughly an hour, the protocol's calendars confirm a Bitcoin block has been mined containing the aggregate commitment.</p>
     <p><strong>4.</strong> Download the receipt. Store it with the document in any backup the document already lives in — drive, archive, evidence folder. The receipt is a small file; it can sit beside the document indefinitely.</p>
-    <p><strong>5.</strong> When the date matters, hand the document and the receipt to any verifier. The independent verifier at <a href="/docs/verify.html">/docs/verify.html</a> reads both and returns a binary verdict: the recorded fingerprint matches the document, and the recorded Bitcoin block matches the public chain.</p>
-    <p>For a working set — a folder of contracts, exhibits, drafts, or workpapers — the same procedure applies once over the whole set using the folder extension at <a href="/method/folder-merkle.html">/method/folder-merkle.html</a>. One receipt covers the entire set; any single document inside it can be later proven to belong without revealing the rest.</p>
+    <p><strong>5.</strong> When the date matters, hand the document and the receipt to any verifier. The independent verifier at <a href="/docs/verify">/docs/verify.html</a> reads both and returns a binary verdict: the recorded fingerprint matches the document, and the recorded Bitcoin block matches the public chain.</p>
+    <p>For a working set — a folder of contracts, exhibits, drafts, or workpapers — the same procedure applies once over the whole set using the folder extension at <a href="/method/folder-merkle">/method/folder-merkle.html</a>. One receipt covers the entire set; any single document inside it can be later proven to belong without revealing the rest.</p>
   </section>
 
   <section>
@@ -140,10 +123,10 @@
     <div class="arch-rule"></div>
 
     <h3>Is a Bitcoin-anchored date admissible as evidence?</h3>
-    <p>Electronic-records authentication is addressed in the federal rules of evidence, in the model state code adopted by most states, and in several explicit blockchain-evidence statutes. Bitcoin-anchored receipts have been used in real disputes to authenticate the date of a digital record. The landscape is described at <a href="/method/evidence-law.html">/method/evidence-law.html</a>. Admissibility in any specific forum is a question for that forum and the customer's counsel.</p>
+    <p>Electronic-records authentication is addressed in the federal rules of evidence, in the model state code adopted by most states, and in several explicit blockchain-evidence statutes. Bitcoin-anchored receipts have been used in real disputes to authenticate the date of a digital record. The landscape is described at <a href="/method/evidence-law">/method/evidence-law.html</a>. Admissibility in any specific forum is a question for that forum and the customer's counsel.</p>
 
     <h3>Does the office see the contents of the document?</h3>
-    <p>No. The fingerprint is computed in the browser or the local command-line tool. Only the fingerprint, a short opaque string, is transmitted. The document itself stays on the customer's device. The architecture is described at <a href="/about-the-office.html">/about-the-office.html</a>.</p>
+    <p>No. The fingerprint is computed in the browser or the local command-line tool. Only the fingerprint, a short opaque string, is transmitted. The document itself stays on the customer's device. The architecture is described at <a href="/about-the-office">/about-the-office.html</a>.</p>
 
     <h3>What if the office is no longer operating?</h3>
     <p>The receipt continues to verify against the Bitcoin chain without any participation from the office. The open-source verifier and the underlying OpenTimestamps protocol are both free and public. The chain is the trust anchor; the office is the convenience layer.</p>
@@ -164,19 +147,19 @@
   <section>
     <h2>Try it</h2>
     <div class="arch-rule"></div>
-    <p>The office is at <a href="/">orphograph.com</a>. A walk-through of a first anchor is at <a href="/docs/quickstart.html">/docs/quickstart.html</a>. The architectural method is at <a href="/method/folder-merkle.html">/method/folder-merkle.html</a>. The independent verifier is at <a href="/docs/verify.html">/docs/verify.html</a>. The doctrinal grounding is at <a href="/method/evidence-law.html">/method/evidence-law.html</a>.</p>
+    <p>The office is at <a href="/">orphograph.com</a>. A walk-through of a first anchor is at <a href="/docs/quickstart">/docs/quickstart.html</a>. The architectural method is at <a href="/method/folder-merkle">/method/folder-merkle.html</a>. The independent verifier is at <a href="/docs/verify">/docs/verify.html</a>. The doctrinal grounding is at <a href="/method/evidence-law">/method/evidence-law.html</a>.</p>
   </section>
 
   <p class="post-foot">
-    Published 2026-05-21. Architectural method: <a href="/method/folder-merkle.html">Folder anchoring by Merkle root</a>. <a href="/blog/" style="color:var(--muted);">More from the blog</a>.
+    Published 2026-05-21. Architectural method: <a href="/method/folder-merkle">Folder anchoring by Merkle root</a>. <a href="/blog/" style="color:var(--muted);">More from the blog</a>.
   </p>
 
   <nav class="post-foot" style="margin-top:8px;">
-    Previous: <a href="/blog/prove-a-photo-was-not-edited.html" style="color:var(--muted);">How to prove a photo was not edited</a> &middot; Next: <a href="/blog/prove-i-created-something-before-someone-else.html" style="color:var(--muted);">How to prove you created something before someone else</a>
+    Previous: <a href="/blog/prove-a-photo-was-not-edited" style="color:var(--muted);">How to prove a photo was not edited</a> &middot; Next: <a href="/blog/prove-i-created-something-before-someone-else" style="color:var(--muted);">How to prove you created something before someone else</a>
   </nav>
 
   <p class="post-foot" style="margin-top:8px;">
-    Start here: <a href="/what-is-this.html" style="color:var(--confirm);">What this office actually does</a>.
+    Start here: <a href="/what-is-this" style="color:var(--confirm);">What this office actually does</a>.
   </p>
 
   <div class="disclaimer-block">
@@ -191,6 +174,6 @@
   </div>
 </footer>
 
-<script src="/assets/event.js" defer></script>
+<script src="/assets/event.js?v=1" defer></script>
 </body>
 </html>

@@ -9,31 +9,8 @@
 <meta name="description" content="Your Orphograph payment is confirmed. Your claim code is on its way by email.">
 <link rel="icon" type="image/png" href="/favicon.png?v=8">
 <link rel="stylesheet" href="/index.css?v=9">
-<style>
-  .ok-wrap { max-width: 600px; margin: 48px auto; padding: 0 24px 64px; }
-  .ok-card {
-    background: var(--panel, #fbf7ec);
-    border: 1px solid var(--panel-stroke, #e4dcc6);
-    border-radius: 14px;
-    padding: 32px;
-  }
-  .ok-wrap h1 { font-family: var(--serif); font-size: 30px; font-weight: 500; margin: 0 0 10px; }
-  .ok-wrap p { color: var(--ink-2, #4a4234); line-height: 1.7; font-size: 15.5px; }
-  .ok-seal {
-    width: 46px; height: 46px; border-radius: 50%;
-    border: 2px solid var(--accent, #3a2f24); color: var(--accent, #3a2f24);
-    display: flex; align-items: center; justify-content: center;
-    font-size: 24px; margin-bottom: 16px;
-  }
-  .ok-order {
-    margin: 18px 0; padding: 12px 14px; background: rgba(58,47,36,0.05);
-    border-radius: 8px; font-size: 13px; color: var(--ink-2, #4a4234);
-  }
-  .ok-order code { font-size: 14px; word-break: break-all; }
-  .ok-steps { margin: 18px 0 0; padding-left: 20px; }
-  .ok-steps li { color: var(--ink-2, #4a4234); line-height: 1.7; font-size: 14.5px; margin: 6px 0; }
-  .ok-cta { display: inline-block; margin-top: 22px; padding: 11px 20px; background: var(--ink, #14110d); color: #fff; text-decoration: none; border-radius: 8px; font-size: 15px; }
-</style>
+<link rel="stylesheet" href="/pay/success.css?v=1">
+<link rel="stylesheet" href="/pay/success.css?v=1">
 </head>
 <body>
 
@@ -41,8 +18,8 @@
   <a href="/" class="brand"><strong>Orphograph</strong></a>
   <nav>
     <a href="/verify/">Verify</a>
-    <a href="/docs/api.html">Docs</a>
-    <a href="/about.html">About</a>
+    <a href="/docs/api">Docs</a>
+    <a href="/about">About</a>
   </nav>
 </header>
 
@@ -68,7 +45,7 @@
         <li>Anchor your files. Each one produces a Bitcoin-verified receipt that's yours forever.</li>
       </ol>
 
-      <p style="margin-top:18px;font-size:14px;">
+      <p class="ok-resend">
         Didn't get the email? Write to
         <a href="mailto:hello@orphograph.com">hello@orphograph.com</a>
         with your order reference above and we'll re-send your code.
@@ -81,71 +58,11 @@
 
 <footer>
   <small>
-    <a href="/">Home</a> · <a href="/privacy.html">Privacy</a> · <a href="/terms.html">Terms</a>
+    <a href="/">Home</a> · <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a>
   </small>
 </footer>
 
-<script>
-  // Show the order reference from the NOWPayments success_url (?order=...).
-  // Safe DOM: textContent only, sanitized to the order-id charset.
-  (function () {
-    var clean = "";
-    try {
-      var raw = new URLSearchParams(location.search).get("order") || "";
-      clean = raw.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 64);
-      if (clean) {
-        document.getElementById("ok-order-id").textContent = clean;
-        document.getElementById("ok-order").hidden = false;
-      }
-    } catch (e) { /* no-op */ }
-
-    // Poll the status-only endpoint to see if the order has been credited
-    // (i.e. the claim code has been minted + emailed). Status only: the
-    // response never carries the code or email. When credited, update the
-    // on-page text — but keep the "check your email" guidance, since the
-    // code is delivered by email, never shown here. Safe DOM: textContent.
-    if (!clean) { return; }
-    var tries = 0;
-    var MAX_TRIES = 6;        // ~30s total
-    var INTERVAL_MS = 5000;   // every 5s
-
-    function markCredited() {
-      try {
-        var lede = document.getElementById("ok-lede");
-        if (lede) {
-          lede.textContent =
-            "Payment confirmed — your claim code has been emailed. " +
-            "It usually arrives within a few minutes (check spam if you " +
-            "don't see it).";
-        }
-      } catch (e) { /* no-op */ }
-    }
-
-    function poll() {
-      tries += 1;
-      fetch("/api/nowpayments/order/" + encodeURIComponent(clean), {
-        headers: { "Accept": "application/json" },
-      })
-        .then(function (r) { return r.ok ? r.json() : null; })
-        .then(function (data) {
-          if (data && data.credited === true) {
-            markCredited();
-            return; // stop polling
-          }
-          if (tries < MAX_TRIES) {
-            setTimeout(poll, INTERVAL_MS);
-          }
-        })
-        .catch(function () {
-          if (tries < MAX_TRIES) {
-            setTimeout(poll, INTERVAL_MS);
-          }
-        });
-    }
-
-    setTimeout(poll, INTERVAL_MS);
-  })();
-</script>
-<script src="/assets/event.js" defer></script>
+<script src="/pay/success.js?v=1"></script>
+<script src="/assets/event.js?v=1" defer></script>
 </body>
 </html>

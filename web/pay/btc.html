@@ -7,116 +7,7 @@
 <meta name="description" content="Buy an Orphograph Pack with Bitcoin. Send to a native-segwit address, then email proof for instant fulfillment.">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="stylesheet" href="/style.css?v=2">
-<style>
-  .pay-wrap { max-width: 680px; margin: 40px auto; padding: 0 18px; }
-  .pay-card {
-    border: 1px solid var(--panel-stroke);
-    background: var(--panel);
-    border-radius: 14px;
-    padding: 28px;
-  }
-  .addr-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin: 14px 0 6px;
-    padding: 12px 14px;
-    background: #0c0e10;
-    border-radius: 8px;
-    font-family: var(--mono);
-    font-size: 14px;
-    color: var(--text);
-    word-break: break-all;
-  }
-  .addr-row button {
-    background: var(--accent);
-    color: #0c0e10;
-    border: 0;
-    border-radius: 6px;
-    padding: 6px 12px;
-    font-size: 12px;
-    cursor: pointer;
-    flex: 0 0 auto;
-  }
-  .qr-wrap {
-    margin: 18px auto;
-    width: 220px;
-    height: 220px;
-    background: #fff;
-    border-radius: 8px;
-    padding: 12px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  .qr-wrap img { width: 100%; height: auto; display: block; }
-  .price-row {
-    display: flex;
-    gap: 18px;
-    align-items: baseline;
-    margin: 16px 0;
-    padding: 14px;
-    background: var(--accent-soft);
-    border-radius: 8px;
-  }
-  .price-row .usd { font-size: 24px; color: var(--accent); font-weight: 500; }
-  .price-row .btc { font-family: var(--mono); color: var(--text-soft); font-size: 14px; }
-  .pack-pick { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0 18px; }
-  .pack-pick button {
-    flex: 1 1 auto;
-    min-width: 100px;
-    padding: 10px;
-    border: 1px solid var(--panel-stroke);
-    background: transparent;
-    color: var(--text);
-    border-radius: 8px;
-    cursor: pointer;
-    font-size: 14px;
-  }
-  .pack-pick button.active {
-    border-color: var(--accent);
-    background: var(--accent-soft);
-    color: var(--accent);
-  }
-  ol.btc-steps { padding-left: 22px; line-height: 1.7; color: var(--text-soft); }
-  ol.btc-steps strong { color: var(--text); }
-  .email-form { margin-top: 18px; display: flex; flex-direction: column; gap: 8px; }
-  .email-form input, .email-form textarea {
-    padding: 10px 12px;
-    border-radius: 6px;
-    border: 1px solid var(--panel-stroke);
-    background: var(--bg);
-    color: var(--text);
-    font-size: 14px;
-    font-family: inherit;
-  }
-  .email-form button {
-    padding: 12px;
-    background: var(--accent);
-    color: #0c0e10;
-    border: 0;
-    border-radius: 8px;
-    font-weight: 500;
-    font-size: 15px;
-    cursor: pointer;
-  }
-  .wallet-list {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin: 12px 0;
-    list-style: none;
-    padding: 0;
-  }
-  .wallet-list li {
-    padding: 4px 10px;
-    background: var(--panel);
-    border: 1px solid var(--panel-stroke);
-    border-radius: 999px;
-    font-size: 12px;
-    color: var(--muted);
-  }
-</style>
+<link rel="stylesheet" href="/pay/btc.css?v=1">
 </head>
 <body>
 
@@ -216,14 +107,14 @@
 <footer>
   <small>
     <a href="/">Home</a> ·
-    <a href="/terms.html">Terms</a> ·
-    <a href="/privacy.html">Privacy</a> ·
+    <a href="/terms">Terms</a> ·
+    <a href="/privacy">Privacy</a> ·
     <a href="mailto:hello@orphograph.com">Contact</a>
   </small>
 </footer>
 
 <script src="/pay-btc.js"></script>
-<script src="/statusbar.js" defer></script>
-<script src="/assets/event.js" defer></script>
+<script src="/statusbar.js?v=1" defer></script>
+<script src="/assets/event.js?v=1" defer></script>
 </body>
 </html>

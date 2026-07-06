@@ -5,71 +5,15 @@
 <title>Orphograph — Founder Funnel Dashboard</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-<style>
-  :root {
-    --bg: #0a0e27;
-    --card: #161d3c;
-    --border: #2a3254;
-    --ink: #e8e9f3;
-    --muted: #b0b5c8;
-    --accent: #6db5fe;
-    --good: #6fcf97;
-    --warn: #f2c94c;
-    --bad:  #eb5757;
-  }
-  body { background: var(--bg); color: var(--ink); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 0; }
-  header { border-bottom: 1px solid var(--border); padding: 1rem 2rem; display: flex; align-items: baseline; gap: 1rem; }
-  header h1 { margin: 0; font-size: 1.15rem; font-weight: 500; }
-  header .ts { color: var(--muted); font-size: 0.85rem; }
-  header a { color: var(--accent); text-decoration: none; font-size: 0.85rem; margin-left: auto; }
-  main { padding: 2rem; max-width: 1100px; margin: 0 auto; }
-  .intro {
-    background: var(--card); border: 1px solid var(--border); border-radius: 8px;
-    padding: 1.25rem 1.5rem; margin-bottom: 1.5rem;
-  }
-  .intro h2 { margin: 0 0 0.5rem 0; font-size: 0.95rem; }
-  .intro p { margin: 0; font-size: 0.85rem; color: var(--muted); }
-  .token-input { display: flex; gap: 0.5rem; margin-top: 0.8rem; }
-  .token-input input {
-    flex: 1; padding: 0.5rem; background: var(--bg); border: 1px solid var(--border);
-    border-radius: 4px; color: var(--ink); font-family: monospace; font-size: 0.85rem;
-  }
-  .token-input button {
-    padding: 0.5rem 1rem; background: var(--accent); color: var(--bg); border: none;
-    border-radius: 4px; cursor: pointer; font-weight: 500;
-  }
-  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
-  .stat { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem 1.25rem; }
-  .stat .label { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
-  .stat .val { font-size: 1.8rem; font-weight: 500; margin-top: 0.25rem; }
-  .stat .sub { font-size: 0.75rem; color: var(--muted); margin-top: 0.15rem; }
-  .panel { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem 1.5rem; margin-bottom: 1.5rem; }
-  .panel h3 { margin: 0 0 1rem; font-size: 0.95rem; font-weight: 500; }
-  .rates { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; }
-  .rate-row { padding: 0.6rem 0; border-bottom: 1px solid var(--border); }
-  .rate-row:last-child { border-bottom: 0; }
-  .rate-row .name { font-size: 0.85rem; color: var(--muted); }
-  .rate-row .pct { font-size: 1.4rem; font-weight: 500; margin-top: 0.15rem; }
-  .rate-row .pct.zero { color: var(--muted); }
-  .rate-row .pct.low { color: var(--bad); }
-  .rate-row .pct.mid { color: var(--warn); }
-  .rate-row .pct.high { color: var(--good); }
-  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
-  th, td { text-align: right; padding: 0.4rem 0.8rem; border-bottom: 1px solid var(--border); }
-  th:first-child, td:first-child { text-align: left; }
-  th { color: var(--muted); font-weight: 500; }
-  .empty { color: var(--muted); padding: 1rem 0; }
-  .err { color: var(--bad); padding: 0.5rem 0; font-size: 0.9rem; }
-  code { background: var(--bg); padding: 0.1rem 0.4rem; border-radius: 3px; font-size: 0.8em; }
-</style>
+<link rel="stylesheet" href="/founder/funnel.css?v=1">
 </head>
 <body>
 
 <header>
   <h1>Funnel Dashboard</h1>
   <span class="ts" id="ts"></span>
-  <a href="/founder/metrics.html">→ metrics</a>
-  <a href="/founder/admin.html">→ admin</a>
+  <a href="/founder/metrics">→ metrics</a>
+  <a href="/founder/admin">→ admin</a>
 </header>
 
 <main>
@@ -222,6 +166,6 @@
 })();
 </script>
 
-<script src="/assets/event.js" defer></script>
+<script src="/assets/event.js?v=1" defer></script>
 </body>
 </html>

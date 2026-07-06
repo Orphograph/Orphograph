@@ -7,7 +7,7 @@ Privacy-by-construction:
   - Filename is included ONLY if --label is passed (opt-in).
 
 Usage:
-    anchor.py <file-or-hash> [--label LABEL] [--api-key KEY] [--endpoint URL]
+    anchor.py <file-or-hash> [--label LABEL] [--api-key KEY] [--pack-token TOK] [--endpoint URL]
 
 Exit codes:
     0  receipt created (5/5 calendars OK)
@@ -47,7 +47,7 @@ def hash_file(path: Path) -> tuple[str, str]:
 
 
 def post_anchor(endpoint: str, hash_hex: str, sha512_hex: str | None,
-                label: str, api_key: str) -> tuple[int, dict]:
+                label: str, api_key: str, pack_token: str = "") -> tuple[int, dict]:
     body = {"hash_hex": hash_hex, "client_label": label}
     if sha512_hex:
         body["sha512_hex"] = sha512_hex
@@ -55,6 +55,10 @@ def post_anchor(endpoint: str, hash_hex: str, sha512_hex: str | None,
     headers = {"Content-Type": "application/json", "User-Agent": "orphograph-skill/0.1"}
     if api_key:
         headers["X-Orpho-Api-Key"] = api_key
+    if pack_token:
+        # spends one prepaid Writer Pack credit; server bypasses the free-tier
+        # rate limit when the token is valid (and refunds on any failure).
+        headers["X-Pack-Token"] = pack_token
     req = urllib.request.Request(
         endpoint.rstrip("/") + "/api/anchor",
         data=data, method="POST", headers=headers,
@@ -77,8 +81,17 @@ def main() -> int:
     p.add_argument("target", help="path to a file, OR a 64-char hex SHA-256")
     p.add_argument("--label", default="",
                    help="optional filename/label stored alongside the hash (default: off — privacy)")
-    p.add_argument("--api-key", default=os.environ.get("ORPHOGRAPH_API_KEY", ""),
-                   help="orphograph API key (or set $ORPHOGRAPH_API_KEY); without it, uses free tier")
+    # Canonical env vars are ORPHO_* (matches the scripts, launchd plists, and
+    # server). ORPHOGRAPH_* is accepted as a back-compat alias so neither old
+    # nor new docs break.
+    p.add_argument("--api-key",
+                   default=os.environ.get("ORPHO_API_KEY") or os.environ.get("ORPHOGRAPH_API_KEY", ""),
+                   help="orphograph API key (or set $ORPHO_API_KEY; $ORPHOGRAPH_API_KEY also accepted); "
+                        "without it, uses free tier")
+    p.add_argument("--pack-token",
+                   default=os.environ.get("ORPHO_PACK_TOKEN") or os.environ.get("ORPHOGRAPH_PACK_TOKEN", ""),
+                   help="Writer Pack token to spend a prepaid anchor "
+                        "(or set $ORPHO_PACK_TOKEN; $ORPHOGRAPH_PACK_TOKEN also accepted)")
     p.add_argument("--endpoint", default=ENDPOINT,
                    help=f"orphograph endpoint (default: {ENDPOINT})")
     p.add_argument("--json", action="store_true", help="output JSON only (for scripting)")
@@ -100,13 +113,18 @@ def main() -> int:
             return 2
 
     code, data = post_anchor(args.endpoint, sha256_hex, sha512_hex,
-                             args.label, args.api_key)
+                             args.label, args.api_key, args.pack_token)
     if code == 0:
         print(f"network error: {data.get('error', 'unknown')}", file=sys.stderr)
         return 3
     if code == 429:
         print("rate limit reached on the free tier.", file=sys.stderr)
-        print(f"  buy a Writer Pack (10 anchors / $19): {args.endpoint}/buy.html",
+        if args.pack_token:
+            print("  (your pack token was not accepted — out of credits or invalid)",
+                  file=sys.stderr)
+        print(f"  buy a Writer Pack (10 anchors / $19): {args.endpoint.rstrip('/')}/buy.html",
+              file=sys.stderr)
+        print("  then spend it:  export ORPHO_PACK_TOKEN=<token>   (or pass --pack-token)",
               file=sys.stderr)
         return 3
     if code >= 400:

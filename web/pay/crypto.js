@@ -22,15 +22,34 @@
   // Pack toggle (writer_pack / pack_50). Buttons inside #pack-pick use
   // data-plan attributes; clicking one becomes the active selection.
   var packButtons = packPick.querySelectorAll("button[data-plan]");
+
+  function selectPlan(plan) {
+    currentPlan = plan;
+    packButtons.forEach(function (b) {
+      if (b.getAttribute("data-plan") === plan) {
+        b.classList.add("active");
+      } else {
+        b.classList.remove("active");
+      }
+    });
+  }
+
   packButtons.forEach(function (btn) {
     btn.addEventListener("click", function () {
       var plan = btn.getAttribute("data-plan");
       if (!plan) return;
-      currentPlan = plan;
-      packButtons.forEach(function (b) { b.classList.remove("active"); });
-      btn.classList.add("active");
+      selectPlan(plan);
     });
   });
+
+  // Honor the deep link from the pricing page: the Pack of Fifty tier links to
+  // /pay/crypto.html?plan=pack_50. Without this, that buyer silently lands on
+  // the default Writer Pack and gets invoiced for 10 credits instead of 50.
+  // Only pack_50 is accepted off the query string; anything else stays the
+  // 10-credit entry pack.
+  var params = new URLSearchParams(window.location.search);
+  var plan = params.get("plan");
+  selectPlan(plan === "pack_50" ? "pack_50" : "writer_pack");
 
   function setMsg(text, isError) {
     msgEl.textContent = text || "";

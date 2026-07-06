@@ -114,7 +114,7 @@ async function showStripeConfirmation(sessionId) {
     if (h) h.textContent = "Payment pending.";
     if (p) p.textContent =
       "Stripe reports this session is " + paymentStatus + ". " +
-      "If you completed payment, your access will arrive shortly — the webhook is the source of truth. Check back in a few minutes.";
+      "If you completed payment, your access will arrive shortly — confirmation is recorded automatically once Stripe reports the charge. Check back in a few minutes.";
     if (a) { a.textContent = ""; a.removeAttribute("href"); }
     return;
   }
@@ -143,7 +143,7 @@ async function showStripeConfirmation(sessionId) {
     }
     if (a) {
       a.textContent = "Sign in to your account →";
-      a.href = "/signin.html";
+      a.href = "/signin";
     }
     return;
   }
@@ -154,7 +154,7 @@ async function showStripeConfirmation(sessionId) {
     "Your Pack code has been emailed. If it doesn't arrive within a few minutes, check spam — then reply to the welcome email or head to your account.";
   if (a) {
     a.textContent = "Open your account →";
-    a.href = "/account.html";
+    a.href = "/account";
   }
 }
 function showStripeCanceled() {

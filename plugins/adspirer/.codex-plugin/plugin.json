@@ -1,0 +1,43 @@
+{
+  "name": "adspirer",
+  "version": "0.1.0",
+  "description": "Codex-native marketing workflows for Orphograph, with guardrails to avoid changing the existing Claude plugin.",
+  "author": {
+    "name": "Orphograph",
+    "url": "https://orphograph.com"
+  },
+  "homepage": "https://orphograph.com",
+  "repository": "https://github.com/Orphograph/Orphograph",
+  "license": "MIT",
+  "keywords": [
+    "marketing",
+    "growth",
+    "landing-page",
+    "outreach",
+    "funnel",
+    "copywriting",
+    "orphograph"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Adspirer",
+    "shortDescription": "Growth workflows for the Orphograph repo.",
+    "longDescription": "Codex plugin for Orphograph marketing work: landing-page audits, funnel instrumentation, and outreach drafting without altering the existing Claude plugin files.",
+    "developerName": "Orphograph",
+    "category": "Marketing",
+    "capabilities": [
+      "Read",
+      "Write",
+      "Plan"
+    ],
+    "websiteURL": "https://orphograph.com",
+    "privacyPolicyURL": "https://orphograph.com/privacy.html",
+    "termsOfServiceURL": "https://orphograph.com/terms.html",
+    "brandColor": "#6B6354",
+    "defaultPrompt": [
+      "Audit Orphograph's landing page and propose the next conversion test.",
+      "Draft an outreach asset for Orphograph using the repo's current rules.",
+      "Turn the current funnel notes into a prioritized marketing engineering backlog."
+    ]
+  }
+}

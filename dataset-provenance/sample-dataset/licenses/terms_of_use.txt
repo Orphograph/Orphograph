@@ -1,0 +1,2 @@
+CONSENT & TERMS OF USE
+All subjects/sources consented to dataset inclusion for ML training per the acquisition log.

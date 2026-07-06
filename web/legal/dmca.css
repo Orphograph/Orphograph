@@ -1,0 +1,9 @@
+/* dmca.css — externalized from dmca.html (strict CSP: no inline styles). */
+
+.lgl-wrap { max-width: 720px; margin: 0 auto; padding: 0 24px 64px; }
+  .lgl-wrap h1 { font-family: var(--serif); font-size: 32px; font-weight: 500; margin: 32px 0 8px; }
+  .lgl-wrap h2 { font-family: var(--serif); font-size: 20px; font-weight: 500; margin: 32px 0 4px; color: var(--ink); }
+  .lgl-rule { border-top: 1px solid var(--ink); width: 32px; margin: 8px 0 18px; opacity: 0.6; }
+  .lgl-wrap p, .lgl-wrap li { color: var(--ink-2); line-height: 1.75; font-size: 15.5px; }
+  .lgl-wrap a { color: var(--confirm); }
+  .lgl-wrap code { background: rgba(74,154,115,0.08); padding: 2px 6px; border-radius: 3px; font-size: 0.92em; }

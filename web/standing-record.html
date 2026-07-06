@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Orphograph — The Standing Record</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#f6f1e3">
+<meta name="description" content="The office anchors its own foundations every week — the license, the verifier source, the brand, the current code — and publishes the receipts here. A notary that notarizes itself.">
+<meta property="og:title" content="Orphograph — The Standing Record">
+<meta property="og:description" content="Every week the office anchors its own foundations and publishes the receipts. Check them like any other.">
+<meta property="og:url" content="https://orphograph.com/standing-record">
+<meta property="og:type" content="article">
+<meta property="og:image" content="https://orphograph.com/og-image.png?v=8">
+<link rel="canonical" href="https://orphograph.com/standing-record">
+<link rel="icon" type="image/png" href="/favicon.png?v=8">
+<link rel="stylesheet" href="/index.css?v=15">
+<link rel="stylesheet" href="/standing-record.css?v=1">
+<meta name="copyright" content="© 2026 Orphograph. Code under MIT (see /LICENSE). Brand, content, and design — all rights reserved.">
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap row">
+    <a href="/" class="brand">Orphograph</a>
+    <nav>
+      <a href="/learn">Method</a>
+      <a href="/integrations">Integrations</a>
+      <a href="/verify/">Verify</a>
+      <a href="/#drop" class="cta">Anchor a file</a>
+    </nav>
+  </div>
+</header>
+
+<main class="arch-wrap">
+  <h1>The Standing Record</h1>
+  <div class="arch-rule"></div>
+  <p class="arch-lede">
+    A notary should be held to its own standard. Every week the office
+    re-anchors its own foundations — the license, the open-source verifier,
+    the brand assets, the exact code running this site — and publishes the
+    receipts below. Each one verifies like any other: no account, no trust
+    in us required.
+  </p>
+
+  <div id="record" aria-live="polite">
+    <p id="record-loading" class="muted">Consulting the record&hellip;</p>
+    <ul id="record-list" class="record-list" hidden></ul>
+    <p id="record-empty" class="muted" hidden>No weekly anchors on record for
+    this deployment yet — the next scheduled run will populate this page.</p>
+  </div>
+
+  <div class="disclaimer-block">
+    These receipts prove that each artifact existed in exactly this form at
+    the recorded time, and has not changed since — a continuous, checkable
+    chain of custody for the office's own work. They do not, on their own,
+    constitute a legal determination. See <a href="/terms">Terms</a>.
+  </div>
+</main>
+
+<footer class="site">
+  <div class="wrap">
+    <small>&copy; 2026 Orphograph &middot; <a href="/terms">Terms</a> &middot; <a href="/privacy">Privacy</a> &middot; <a href="/status">Status</a></small>
+  </div>
+</footer>
+
+<script src="/standing-record.js?v=1"></script>
+</body>
+</html>

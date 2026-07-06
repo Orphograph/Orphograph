@@ -9,26 +9,12 @@
 <link rel="icon" type="image/png" href="/favicon.png?v=8">
 <meta property="og:title" content="Orphograph — Roadmap">
 <meta property="og:description" content="Anticipated additions to the office's instruments and surfaces.">
-<meta property="og:url" content="https://orphograph.com/roadmap.html">
+<meta property="og:url" content="https://orphograph.com/roadmap">
 <meta property="og:type" content="article">
 <meta property="og:image" content="https://orphograph.com/og-image.png?v=8">
-<link rel="canonical" href="https://orphograph.com/roadmap.html">
-<link rel="stylesheet" href="/index.css?v=9">
-<style>
-  .rm-wrap { max-width: 760px; margin: 0 auto; padding: 0 24px 64px; }
-  h1.rm-h1 { font-family: var(--serif); font-size: 38px; font-weight: 500; margin: 32px 0 6px; color: var(--ink); }
-  p.rm-lede { font-size: 17px; color: var(--ink-2); line-height: 1.65; margin: 0 0 8px; }
-  .rm-section { margin-top: 40px; }
-  .rm-section h2 { font-family: var(--serif); font-size: 22px; font-weight: 500; color: var(--ink); margin: 0 0 4px; letter-spacing: 0.01em; }
-  .rm-section .rm-section-rule { border-top: 1px solid var(--ink); width: 32px; margin: 10px 0 18px; opacity: 0.6; }
-  .rm-section p { color: var(--ink-2); line-height: 1.7; margin: 0 0 12px; font-size: 15px; }
-  .rm-section ul { color: var(--ink-2); line-height: 1.8; font-size: 15px; padding-left: 20px; margin: 8px 0 0; }
-  .rm-section li { margin-bottom: 6px; }
-  .rm-section li a { color: var(--confirm); }
-  .rm-tag { display: inline-block; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted-2); margin-left: 6px; }
-  .rm-foot { color: var(--muted); font-size: 13px; line-height: 1.7; margin-top: 48px; }
-  .rm-foot a { color: var(--confirm); }
-</style>
+<link rel="canonical" href="https://orphograph.com/roadmap">
+<link rel="stylesheet" href="/index.css?v=15">
+<link rel="stylesheet" href="/roadmap.css?v=1">
 <meta name="copyright" content="© 2026 Orphograph. MIT — see /LICENSE">
 </head>
 <body>
@@ -37,11 +23,11 @@
   <div class="wrap row">
     <a href="/" class="brand">Orphograph</a>
     <nav>
-      <a href="/learn.html">Method</a>
-      <a href="/writers.html">Writers</a>
+      <a href="/learn">Method</a>
+      <a href="/writers">Writers</a>
       <a href="/#tiers">Pricing</a>
-      <a href="/about.html">Office</a>
-      <a href="/signin.html">Sign in</a>
+      <a href="/about">Office</a>
+      <a href="/signin">Vault</a>
       <a href="/#drop" class="cta">Anchor a file</a>
     </nav>
   </div>
@@ -49,7 +35,7 @@
 
 <main class="rm-wrap">
 
-  <p style="font-size:12px;letter-spacing:0.18em;text-transform:uppercase;color:var(--muted);margin:48px 0 8px;">Register</p>
+  <p class="rm-eyebrow">Register</p>
   <h1 class="rm-h1">Roadmap.</h1>
   <p class="rm-lede">
     A public record of what is anticipated next from the office, organised by time horizon.
@@ -68,11 +54,10 @@
     <div class="rm-section-rule"></div>
     <p>The following instruments and surfaces are registered as shipped or imminent in the current quarter.</p>
     <ul>
-      <li>Standalone independent verifier (shipped — see <a href="/verify-js.html">/verify-js.html</a>).</li>
-      <li>Model Context Protocol server (shipped — see <a href="/mcp.html">/mcp.html</a>).</li>
-      <li>Anchoring from the iOS share sheet (shipped — see <a href="/ios.html">/ios.html</a>).</li>
-      <li>HMAC-signed webhook delivery on anchor and Bitcoin-commitment events (shipped — see <a href="/docs/webhooks.html">/docs/webhooks.html</a>).</li>
-      <li>C2PA manifest assertion mode at issuance (shipped).</li>
+      <li>Standalone independent verifier (shipped — see <a href="/verify-js">/verify-js.html</a>).</li>
+      <li>Model Context Protocol server (shipped — see <a href="/mcp">/mcp.html</a>).</li>
+      <li>Anchoring from the iOS share sheet (shipped — see <a href="/ios">/ios.html</a>).</li>
+      <li>HMAC-signed webhook delivery on anchor and Bitcoin-commitment events (shipped — see <a href="/docs/webhooks">/docs/webhooks.html</a>).</li>
       <li>Printable single-page receipt instrument (shipped).</li>
       <li>Vault export in JSON-LD shape for downstream verifiers (shipped).</li>
       <li>Account-level webhook management (shipped).</li>
@@ -113,7 +98,6 @@
     <ul>
       <li>Verifier and protocol bindings in further languages.</li>
       <li>Privately-operated regional calendar nodes.</li>
-      <li>Standardisation of the C2PA-coexistence shape with the Coalition.</li>
     </ul>
   </section>
 
@@ -139,20 +123,19 @@
 </main>
 
 <footer>
-  <div class="wrap" style="text-align:center;color:var(--muted);font-size:13px;padding:32px 0;">
+  <div class="wrap rm-footer-inner">
     <p>Orphograph · An empirical notary.</p>
-    <p style="margin-top:8px;">
-      <a href="/" style="color:var(--muted);">Home</a> ·
-      <a href="/method" style="color:var(--muted);">Method</a> ·
-      <a href="/vs/c2pa.html" style="color:var(--muted);">Compare</a> ·
-      <a href="/roadmap.html" style="color:var(--muted);">Roadmap</a> ·
-      <a href="/terms.html" style="color:var(--muted);">Terms</a> ·
-      <a href="/privacy.html" style="color:var(--muted);">Privacy</a>
+    <p class="rm-footer-links">
+      <a href="/" class="rm-footer-link">Home</a> ·
+      <a href="/method" class="rm-footer-link">Method</a> ·
+      <a href="/roadmap" class="rm-footer-link">Roadmap</a> ·
+      <a href="/terms" class="rm-footer-link">Terms</a> ·
+      <a href="/privacy" class="rm-footer-link">Privacy</a>
     </p>
   </div>
 </footer>
 
-<script src="/statusbar.js" defer></script>
-<script src="/assets/event.js" defer></script>
+<script src="/statusbar.js?v=1" defer></script>
+<script src="/assets/event.js?v=1" defer></script>
 </body>
 </html>

@@ -7,7 +7,9 @@ async function main() {
   try {
     const r = await fetch("/api/me");
     if (r.status === 401) {
-      $("#account-card").hidden = true;
+      // Signed out: hide every dashboard section so the page isn't a wall of
+      // empty headings — show only the clean "Your vault" prompt.
+      document.querySelectorAll("main > section").forEach((s) => { s.hidden = true; });
       $("#auth-required").hidden = false;
       return;
     }

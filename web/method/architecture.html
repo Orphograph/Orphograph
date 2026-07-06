@@ -8,26 +8,15 @@
 <meta name="description" content="A technical description of the Orphograph protocol — client-side hashing, multi-calendar OpenTimestamps aggregation, Bitcoin commitment, and the structural privacy contract. Published as defensive prior art.">
 <meta property="og:title" content="Orphograph — Architecture of the protocol">
 <meta property="og:description" content="A technical disclosure of the method.">
-<meta property="og:url" content="https://orphograph.com/method/architecture.html">
+<meta property="og:url" content="https://orphograph.com/method/architecture">
 <meta property="og:type" content="article">
 <meta property="og:image" content="https://orphograph.com/og-image.png?v=8">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Orphograph — Architecture of the protocol">
-<link rel="canonical" href="https://orphograph.com/method/architecture.html">
+<link rel="canonical" href="https://orphograph.com/method/architecture">
 <link rel="icon" type="image/png" href="/favicon.png?v=8">
 <link rel="stylesheet" href="/index.css?v=9">
-<style>
-  .arch-wrap { max-width: 820px; margin: 0 auto; padding: 0 24px 64px; }
-  .arch-wrap h1 { font-family: var(--serif); font-size: 36px; font-weight: 500; margin: 32px 0 6px; }
-  .arch-wrap h2 { font-family: var(--serif); font-size: 22px; font-weight: 500; margin: 36px 0 4px; color: var(--ink); }
-  .arch-rule { border-top: 1px solid var(--ink); width: 32px; margin: 8px 0 16px; opacity: 0.6; }
-  .arch-wrap p, .arch-wrap li { color: var(--ink-2); line-height: 1.75; font-size: 15.5px; }
-  .arch-wrap code { background: rgba(58, 47, 36, 0.06); padding: 2px 6px; border-radius: 3px; font-size: 0.92em; }
-  .arch-wrap pre { background: #f1ead7; border: 1px solid #d9d2c0; border-radius: 6px; padding: 14px 16px; overflow-x: auto; font-size: 13px; line-height: 1.55; }
-  .arch-lede { font-size: 17px; line-height: 1.7; color: var(--ink-2); margin: 0 0 24px; }
-  .arch-callout { background: rgba(58, 47, 36, 0.04); border-left: 3px solid var(--accent); padding: 16px 20px; margin: 24px 0; border-radius: 0; }
-  .arch-callout p { margin: 0; }
-</style>
+<link rel="stylesheet" href="/method/architecture.css?v=1">
 <meta name="copyright" content="© 2026 Orphograph. MIT — see /LICENSE">
 <script type="application/ld+json">
 {
@@ -44,13 +33,13 @@
       "@type": "ListItem",
       "position": 2,
       "name": "Method",
-      "item": "https://orphograph.com/learn.html"
+      "item": "https://orphograph.com/learn"
     },
     {
       "@type": "ListItem",
       "position": 3,
       "name": "Architecture of the protocol",
-      "item": "https://orphograph.com/method/architecture.html"
+      "item": "https://orphograph.com/method/architecture"
     }
   ]
 }
@@ -62,12 +51,11 @@
   <div class="wrap row">
     <a href="/" class="brand">Orphograph</a>
     <nav>
-      <a href="/learn.html">Method</a>
-      <a href="/faq.html">FAQ</a>
-      <a href="/vs/c2pa.html">vs. C2PA</a>
-      <a href="/continuity.html">Continuity</a>
+      <a href="/learn">Method</a>
+      <a href="/faq">FAQ</a>
+      <a href="/continuity">Continuity</a>
       <a href="/#tiers">Pricing</a>
-      <a href="/signin.html">Sign in</a>
+      <a href="/signin">Sign in</a>
       <a href="/#drop" class="cta">Anchor a file</a>
     </nav>
   </div>
@@ -146,7 +134,6 @@ const sha512_hex = hex(s512);
   "calendars_total": M,
   "successes":       [ { "calendar": URL, "ots_path": "...", "ots_bytes": N }, ... ],
   "failures":        [ ... ],
-  "c2pa_manifest_hash": "&lt;optional 64-char SHA-256 hex&gt;",
   "private":         true | false,
   "owner_id":        "&lt;HMAC-keyed identifier, 16 hex chars, or null&gt;",
   "btc_pinned_at":   "&lt;UTC ISO-8601 once committed, else null&gt;",
@@ -169,15 +156,9 @@ const sha512_hex = hex(s512);
     <ul>
       <li>a copy of the original file (held by the customer),</li>
       <li>the receipt JSON and the <code>.ots</code> proof files (held by the customer, or available at <code>orphograph.com/r/&lt;id&gt;</code>),</li>
-      <li>any OpenTimestamps client OR the 100-line MIT-licensed verifier at <a href="https://github.com/Orphograph/Orphograph">github.com/Orphograph/Orphograph</a> OR the single-file browser verifier at <a href="/verify-js.html">/verify-js.html</a>.</li>
+      <li>any OpenTimestamps client OR the 100-line MIT-licensed verifier at <a href="https://github.com/Orphograph/Orphograph">github.com/Orphograph/Orphograph</a> OR the single-file browser verifier at <a href="/verify-js">/verify-js.html</a>.</li>
     </ul>
-    <p>Notably absent from this list is any call to Orphograph's servers. The office issues the instrument; the chain is the trust anchor. The continuity statement at <a href="/continuity.html">/continuity.html</a> expands on the operational implications.</p>
-  </section>
-
-  <section>
-    <h2>10 · C2PA coexistence mode</h2>
-    <div class="arch-rule"></div>
-    <p>When a customer holds a Coalition for Content Provenance and Authenticity (C2PA) manifest for the same file, the SHA-256 of that manifest may be recorded on the Orphograph receipt as <code>c2pa_manifest_hash</code>. The receipt then references both attestations without disclosing the content of either. The two systems are complementary: C2PA documents how an asset was captured and edited; Orphograph attests when its fingerprint existed. A reader presented with both has the complete provenance picture; a reader presented with only Orphograph has the date-of-existence; a reader presented with only C2PA has the chain of capture.</p>
+    <p>Notably absent from this list is any call to Orphograph's servers. The office issues the instrument; the chain is the trust anchor. The continuity statement at <a href="/continuity">/continuity.html</a> expands on the operational implications.</p>
   </section>
 
   <section>
@@ -186,7 +167,7 @@ const sha512_hex = hex(s512);
     <p>The protocol's robustness is enumerated against the following failure scenarios:</p>
     <ul>
       <li><strong>Calendar unavailability.</strong> Five-calendar redundancy ensures any single failure is invisible to the customer.</li>
-      <li><strong>This office becoming unreachable.</strong> Every receipt verifies against the Bitcoin chain independently. See <a href="/continuity.html">/continuity.html</a>.</li>
+      <li><strong>This office becoming unreachable.</strong> Every receipt verifies against the Bitcoin chain independently. See <a href="/continuity">/continuity.html</a>.</li>
       <li><strong>Bitcoin fee-market degradation.</strong> Aggregation amortises per-block transaction fees across all customers anchored in that block, keeping per-anchor cost negligible even under sustained fee pressure.</li>
       <li><strong>Receipt vault data loss.</strong> The vault is convenience storage; the customer-held original file plus the <code>.ots</code> proof are sufficient to reconstruct the verification path.</li>
     </ul>
@@ -210,12 +191,11 @@ const sha512_hex = hex(s512);
     <h2>Citations and verification</h2>
     <div class="arch-rule"></div>
     <ul>
-      <li><a href="/verify-js.html">Standalone independent verifier (single HTML file)</a></li>
-      <li><a href="/vs/c2pa.html">Comparison with C2PA</a></li>
-      <li><a href="/faq.html">Frequently asked</a></li>
-      <li><a href="/continuity.html">Continuity statement</a></li>
-      <li><a href="/mcp.html">Model Context Protocol server</a></li>
-      <li><a href="/docs/webhooks.html">Webhook integration</a></li>
+      <li><a href="/verify-js">Standalone independent verifier (single HTML file)</a></li>
+      <li><a href="/faq">Frequently asked</a></li>
+      <li><a href="/continuity">Continuity statement</a></li>
+      <li><a href="/mcp">Model Context Protocol server</a></li>
+      <li><a href="/docs/webhooks">Webhook integration</a></li>
       <li><a href="https://github.com/Orphograph/Orphograph">github.com/Orphograph/Orphograph</a></li>
       <li><a href="https://opentimestamps.org/">opentimestamps.org</a></li>
     </ul>
@@ -231,15 +211,14 @@ const sha512_hex = hex(s512);
     <p>Orphograph · An empirical notary.</p>
     <p style="margin-top:8px;">
       <a href="/" style="color:var(--muted);">Home</a> ·
-      <a href="/faq.html" style="color:var(--muted);">FAQ</a> ·
-      <a href="/vs/c2pa.html" style="color:var(--muted);">Compare</a> ·
-      <a href="/roadmap.html" style="color:var(--muted);">Roadmap</a> ·
-      <a href="/continuity.html" style="color:var(--muted);">Continuity</a>
+      <a href="/faq" style="color:var(--muted);">FAQ</a> ·
+      <a href="/roadmap" style="color:var(--muted);">Roadmap</a> ·
+      <a href="/continuity" style="color:var(--muted);">Continuity</a>
     </p>
   </div>
 </footer>
 
-<script src="/statusbar.js" defer></script>
-<script src="/assets/event.js" defer></script>
+<script src="/statusbar.js?v=1" defer></script>
+<script src="/assets/event.js?v=1" defer></script>
 </body>
 </html>

@@ -1,0 +1,188 @@
+/* certificate.css — dataset provenance certificate view (/certificate/<id>).
+   Layers on top of style.css + index.css + receipt.css. CSP-safe (external). */
+
+/* Accessibility: lift muted-text contrast on the certificate to WCAG AA.
+   The global --muted (~#837e75) is ~3.9:1 on the cream background, which
+   fails AA for small text; this scoped value (#6b665d) is ~5.5:1. Print
+   already overrides muted to #555 (receipt.css), so this is screen-only. */
+.certificate-page .muted { color: #6b665d; }
+
+.certificate-card .dataset-name {
+  font-size: 1.05rem;
+  color: var(--text);
+  margin: 0.15rem 0 0.1rem;
+  word-break: break-word;
+}
+
+/* ── Summary band ─────────────────────────────────────────────────────── */
+.cert-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem 2.5rem;
+  margin: 1.4rem 0 0.4rem;
+  padding: 1.1rem 1.3rem;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-stroke);
+  border-radius: 10px;
+}
+.summary-stat { display: flex; flex-direction: column; gap: 0.15rem; }
+.summary-num {
+  font-family: var(--mono);
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.1;
+}
+.summary-label {
+  font-size: 0.78rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* ── Scope: certifies vs does-not-certify ─────────────────────────────── */
+.cert-scope {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.4rem;
+  margin: 1.8rem 0;
+}
+.scope-col h2 { font-size: 0.95rem; margin: 0 0 0.5rem; }
+.scope-col ul { margin: 0; padding-left: 1.1rem; }
+.scope-col li { margin: 0.3rem 0; font-size: 0.9rem; line-height: 1.45; }
+.scope-proves {
+  padding: 1rem 1.2rem;
+  background: var(--accent-soft);
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+}
+.scope-limits {
+  padding: 1rem 1.2rem;
+  background: rgba(178,80,80,0.06);
+  border-left: 3px solid var(--bad);
+  border-radius: 6px;
+}
+.scope-limits h2 em { font-style: italic; color: var(--bad); }
+
+/* ── License / acquisition-log document lists ─────────────────────────── */
+.cert-docs { margin: 1.6rem 0; }
+.cert-docs h2 { font-size: 0.95rem; margin: 0 0 0.5rem; }
+.cert-docs > div { margin-bottom: 1.1rem; }
+.doc-list { list-style: none; margin: 0; padding: 0; }
+.doc-item {
+  display: flex;
+  align-items: baseline;
+  gap: 0.9rem;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--panel-stroke-soft);
+  flex-wrap: wrap;
+}
+.doc-path { flex: 1 1 14rem; word-break: break-all; }
+.doc-hash { flex: 0 0 auto; }
+.doc-size { flex: 0 0 auto; min-width: 4rem; text-align: right; }
+
+/* ── File manifest table ──────────────────────────────────────────────── */
+.cert-manifest { margin: 1.8rem 0; }
+.cert-manifest h2 { font-size: 0.95rem; margin: 0 0 0.4rem; }
+.manifest-scroll { max-height: 22rem; overflow: auto; border: 1px solid var(--panel-stroke); border-radius: 8px; }
+.manifest-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.manifest-table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.78rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 0.5rem 0.7rem;
+  border-bottom: 1px solid var(--panel-stroke);
+}
+.manifest-table td { padding: 0.4rem 0.7rem; border-bottom: 1px solid var(--panel-stroke-soft); vertical-align: top; }
+.manifest-table td.num { text-align: right; white-space: nowrap; }
+.manifest-table th.num { text-align: right; }
+.manifest-path { word-break: break-all; cursor: pointer; color: var(--accent); }
+.manifest-path:hover, .manifest-path:focus { text-decoration: underline; outline: none; }
+.manifest-table tbody tr:hover { background: var(--accent-soft); }
+
+/* ── Inclusion verifier ───────────────────────────────────────────────── */
+.cert-inclusion { margin: 1.8rem 0; padding: 1.1rem 1.2rem; border: 1px solid var(--panel-stroke); border-radius: 10px; }
+.cert-inclusion h2 { font-size: 0.95rem; margin: 0 0 0.4rem; }
+.inclusion-row { display: flex; gap: 0.6rem; margin: 0.7rem 0; flex-wrap: wrap; }
+.inclusion-input {
+  flex: 1 1 16rem;
+  font-family: var(--mono);
+  font-size: 0.85rem;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--panel-stroke);
+  border-radius: 7px;
+  background: var(--panel);
+  color: var(--text);
+}
+.inclusion-input:focus { outline: 2px solid var(--accent-stroke); border-color: var(--accent); }
+
+/* drag-drop "is this file in the set?" checker */
+.dropcheck {
+  border: 2px dashed var(--accent-stroke);
+  border-radius: 10px;
+  padding: 1.5rem 1.2rem;
+  text-align: center;
+  cursor: pointer;
+  background: var(--panel);
+  transition: background .12s ease, border-color .12s ease;
+}
+.dropcheck:hover, .dropcheck:focus,
+.dropcheck-over { border-color: var(--accent); background: var(--accent-soft); outline: none; }
+.dropcheck-prompt { margin: 0 0 .25rem; }
+.dropcheck-sub { margin: 0; }
+.bypath-details { margin-top: 1rem; }
+.bypath-details > summary { cursor: pointer; color: var(--accent); font-size: .9rem; }
+.bypath-details[open] > summary { margin-bottom: .5rem; }
+.inclusion-result { margin-top: 0.8rem; padding: 0.9rem 1rem; border-radius: 8px; border: 1px solid var(--panel-stroke); }
+.inclusion-result.ok { background: var(--accent-soft); border-color: var(--accent-stroke); }
+.inclusion-result.bad { background: rgba(178,80,80,0.07); border-color: rgba(178,80,80,0.3); }
+.inclusion-result.pending { background: var(--panel); }
+.inclusion-verdict { font-weight: 600; margin: 0 0 0.5rem; }
+.inclusion-result.ok .inclusion-verdict { color: var(--accent); }
+.inclusion-result.bad .inclusion-verdict { color: var(--bad); }
+.inclusion-detail { display: grid; grid-template-columns: auto 1fr; gap: 0.2rem 0.8rem; margin: 0.4rem 0 0; }
+.inclusion-detail dt { color: var(--muted); white-space: nowrap; }
+.inclusion-detail dd { margin: 0; word-break: break-all; }
+
+#redaction-note {
+  padding: 0.6rem 0.8rem;
+  background: rgba(192,138,62,0.08);
+  border-left: 3px solid var(--warn);
+  border-radius: 6px;
+  margin: 0 0 0.7rem;
+}
+.cert-published-note {
+  padding: 0.6rem 0.8rem;
+  background: var(--accent-soft);
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+  margin: 0 0 0.7rem;
+  color: var(--text);
+}
+
+/* ── Mobile ───────────────────────────────────────────────────────────── */
+@media (max-width: 600px) {
+  .cert-scope { grid-template-columns: 1fr; gap: 0.9rem; }
+  .cert-summary { gap: 1rem 1.6rem; padding: 0.9rem 1rem; }
+  .summary-num { font-size: 1.25rem; }
+  .manifest-table { font-size: 0.78rem; }
+  .manifest-table td, .manifest-table thead th { padding: 0.35rem 0.45rem; }
+  .inclusion-detail { grid-template-columns: 1fr; gap: 0.05rem; }
+  .inclusion-detail dt { margin-top: 0.35rem; }
+}
+
+/* ── Print (certificate is meant to be saved as PDF) ──────────────────── */
+@media print {
+  .cert-summary, .scope-proves { background: #f3f7f4 !important; }
+  .scope-limits { background: #faf2f2 !important; }
+  .manifest-scroll { max-height: none; overflow: visible; border: 1px solid #ccc; }
+  .manifest-table thead th { position: static; background: #f6f6f6 !important; color: #333 !important; }
+  .manifest-path { color: #111 !important; text-decoration: none; }
+  .summary-num, .inclusion-result.ok .inclusion-verdict { color: #111 !important; }
+}

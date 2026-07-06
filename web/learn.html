@@ -10,101 +10,25 @@
 <meta property="og:description" content="Three ways to verify an Orphograph receipt, from one click to fully trustless command-line verification against a Bitcoin node.">
 <meta property="og:image" content="/og.svg">
 <meta property="og:type" content="article">
-<meta property="og:url" content="https://orphograph.com/learn.html">
-<link rel="stylesheet" href="/style.css?v=2">
+<meta property="og:url" content="https://orphograph.com/learn">
+<link rel="stylesheet" href="/style.css?v=5">
 <link rel="stylesheet" href="/blog.css">
-<link rel="stylesheet" href="/index.css?v=9">
-<style>
-  /* Institutional palette overrides — wash out style.css's white-card +
-     sage-accent + dark-terminal look so learn.html blends with the rest
-     of the cream-paper brand. Uses var() with hex fallbacks so this
-     works regardless of index.css load order. */
-  :root {
-    --bg: #f7f1e3;
-    --panel: transparent;
-    --panel-stroke: #e9e1cb;
-    --panel-stroke-soft: #f0e9d4;
-    --text: #14110d;
-    --text-soft: #2c2620;
-    --muted: #6b6354;
-    --accent: #3a2f24;
-    --accent-soft: rgba(58,47,36,0.06);
-    --accent-stroke: rgba(58,47,36,0.18);
-  }
-  body { font-family: var(--sans, -apple-system, "Inter", sans-serif); color: var(--ink, #14110d); background: var(--paper, #f7f1e3); }
-  .lvl-card {
-    border: none;
-    border-left: 3px solid var(--line, #d9cfb6);
-    background: var(--paper-soft, #fbf7ea);
-    border-radius: 8px;
-    padding: 24px 26px;
-    margin: 22px 0;
-    box-shadow: 0 1px 2px rgba(60,40,20,0.04), 0 2px 6px rgba(60,40,20,0.04);
-  }
-  .lvl-tag, .lvl-1, .lvl-2, .lvl-3 {
-    display: inline-block;
-    font-family: var(--serif, "EB Garamond", "Cormorant Garamond", Georgia, serif);
-    font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase;
-    padding: 4px 12px; border-radius: 999px; margin-bottom: 12px;
-    background: rgba(58,47,36,0.06);
-    color: var(--ink, #14110d);
-    border: 1px solid rgba(58,47,36,0.14);
-    font-weight: 500;
-  }
-  .lvl-card h3 { margin-top: 6px; font-family: var(--serif, Georgia, serif); font-weight: 500; color: var(--ink, #14110d); }
-  .step-row { display: flex; gap: 16px; align-items: flex-start; margin: 14px 0; }
-  .step-num {
-    flex: 0 0 32px; height: 32px; border-radius: 50%;
-    background: var(--ink, #14110d); color: var(--paper, #f7f1e3);
-    display: flex; align-items: center; justify-content: center;
-    font-family: var(--serif, Georgia, serif); font-weight: 500; font-size: 15px;
-  }
-  .step-row p { margin: 6px 0; color: var(--ink-2, #2c2620); }
-  pre.cmd {
-    background: var(--paper-soft, #fbf7ea);
-    border: 1px solid var(--line-soft, #e9e1cb);
-    border-radius: 8px;
-    padding: 14px 18px;
-    overflow-x: auto;
-    font-family: var(--mono, "JetBrains Mono", "SF Mono", Menlo, monospace);
-    font-size: 13px; line-height: 1.6;
-    color: var(--ink-2, #2c2620);
-  }
-  .callout {
-    border-left: 3px solid var(--confirm, #3a6a4c);
-    padding: 14px 18px;
-    background: rgba(58,106,76,0.05);
-    border-radius: 0 6px 6px 0;
-    margin: 22px 0;
-    font-family: var(--serif, Georgia, serif);
-    font-size: 15px; color: var(--ink-2, #2c2620);
-  }
-  .glossary dt { font-weight: 500; margin-top: 14px; color: var(--ink, #14110d); font-family: var(--serif, Georgia, serif); }
-  .glossary dd { margin: 4px 0 0 0; color: var(--muted, #6b6354); }
-  .anchor-skip { font-size: 13px; color: var(--muted, #6b6354); }
-  .anchor-skip a { margin-right: 14px; color: var(--muted, #6b6354); }
-  .anchor-skip a:hover { color: var(--ink, #14110d); }
-  .btn.primary {
-    background: var(--ink, #14110d); color: var(--paper, #f7f1e3);
-    border: none; padding: 10px 22px; border-radius: 8px;
-    font-family: var(--serif, Georgia, serif); font-size: 14px; letter-spacing: 0.04em;
-    text-decoration: none; display: inline-block;
-  }
-  .btn.primary:hover { background: #000; color: var(--paper-soft, #fbf7ea); }
-</style>
+<link rel="stylesheet" href="/index.css?v=15">
+<link rel="stylesheet" href="/learn.css?v=1">
 <meta name="copyright" content="© 2026 Orphograph. MIT — see /LICENSE">
+<link rel="canonical" href="https://orphograph.com/learn">
 </head>
 <body>
 
 <header>
-  <div class="brand"><a href="/" style="color:inherit;text-decoration:none;">orphograph</a></div>
+  <div class="brand"><a href="/" class="brand-link">orphograph</a></div>
   <nav>
-    <a href="/learn.html">how it works</a>
+    <a href="/learn">how it works</a>
     <a href="/verify/">verify</a>
     <a href="/#tiers">pricing</a>
-    <a href="/learn.html" aria-current="page">learn</a>
-    <a href="/about.html">about</a>
-    <a href="/signin.html">sign in</a>
+    <a href="/learn" aria-current="page">learn</a>
+    <a href="/about">about</a>
+    <a href="/signin">vault</a>
   </nav>
 </header>
 
@@ -118,15 +42,22 @@
 
 <div class="post-body">
 
-<p class="anchor-skip">
-  Skip to:
-  <a href="#what">What you got</a>
-  <a href="#three-ways">Three ways to verify</a>
-  <a href="#chain">Follow it to the chain</a>
-  <a href="#why-trust">Why this is trustworthy</a>
-  <a href="#glossary">Glossary</a>
-  <a href="#faq">FAQ</a>
-</p>
+<details class="jump-menu">
+  <summary class="jump-summary" aria-label="Jump to a section of this page">
+    <span class="jump-summary__label">Jump to a section</span>
+    <span class="jump-summary__chevron" aria-hidden="true"></span>
+  </summary>
+  <nav class="jump-panel" aria-label="Sections of this page">
+    <ul class="jump-list">
+      <li><a class="jump-link" href="#what">What you got</a></li>
+      <li><a class="jump-link" href="#three-ways">Three ways to verify</a></li>
+      <li><a class="jump-link" href="#chain">Follow it to the chain</a></li>
+      <li><a class="jump-link" href="#why-trust">Why this is trustworthy</a></li>
+      <li><a class="jump-link" href="#glossary">Glossary</a></li>
+      <li><a class="jump-link" href="#faq">FAQ</a></li>
+    </ul>
+  </nav>
+</details>
 
 <h2 id="what">What you actually got when you anchored a file</h2>
 
@@ -314,11 +245,10 @@ Success! Bitcoin block 824193 attests existence as of 2026-05-16 17:42:11 UTC</p
 <h2 id="how-people-learn">If you want to go deeper</h2>
 
 <ul>
-  <li><a href="/about.html">About Orphograph</a> — who runs this, and the trust contract</li>
-  <li><a href="/vs/c2pa.html">Orphograph vs NFTs, notaries, and certified mail</a></li>
-  <li><a href="/lp/opentimestamps-explained.html">OpenTimestamps, explained for non-cryptographers</a></li>
-  <li><a href="/lp/bitcoin-timestamp-file.html">How to timestamp a file on Bitcoin (long form)</a></li>
-  <li><a href="/docs/api.html">Developer API documentation</a></li>
+  <li><a href="/about">About Orphograph</a> — who runs this, and the trust contract</li>
+  <li><a href="/lp/opentimestamps-explained">OpenTimestamps, explained for non-cryptographers</a></li>
+  <li><a href="/lp/bitcoin-timestamp-file">How to timestamp a file on Bitcoin (long form)</a></li>
+  <li><a href="/docs/api">Developer API documentation</a></li>
   <li>External: <a href="https://opentimestamps.org" rel="noopener">opentimestamps.org</a> — the open standard Orphograph uses</li>
 </ul>
 
@@ -357,15 +287,17 @@ Success! Bitcoin block 824193 attests existence as of 2026-05-16 17:42:11 UTC</p
 
 <p><strong>Can I prove the file existed <em>after</em> a certain date?</strong> No. A timestamp only proves "this existed by no later than block N." It cannot prove "this did not exist before block N." If you need that direction, the standard answer is "anchor the file at the moment you want to prove its earliest existence, and never sit on it."</p>
 
-<p><strong>Is this the same as an NFT?</strong> No. An NFT records ownership of a token. Orphograph records the existence of a file's exact bytes at a point in time. <a href="/vs/c2pa.html">Full comparison →</a></p>
+<p><strong>Is this the same as an NFT?</strong> No. An NFT records ownership of a token. Orphograph records the existence of a file's exact bytes at a point in time.</p>
+
+<p><strong>Will quantum computers break this proof?</strong> No, on current cryptographic understanding. Shor's algorithm attacks signatures, and an <code>.ots</code> proof is a chain of hash commitments with no signature in the proof path. Grover's algorithm still leaves SHA-256 at ~2<sup>128</sup> quantum operations to reverse — NIST treats SHA-2 as secure for hashing post-quantum. A quantum computer could disrupt Bitcoin's <em>future</em> operation; it cannot silently falsify <em>past</em> commitments — rewriting history means publicly out-working the accumulated chain. Every receipt also carries a SHA-512 sibling fingerprint for extra cryptanalytic diversity.</p>
 
 <p><strong>What if a court asks?</strong> The OpenTimestamps protocol has been cited in academic and legal contexts since 2017. The Level 3 verification path produces an audit trail that any cryptography expert can independently confirm.</p>
 
 </div>
 </article>
 
-<section style="margin-top:48px; padding:32px; border:1px solid var(--panel-stroke); background:var(--panel); border-radius:14px; text-align:center;">
-  <h2 style="margin-top:0;">Have a receipt? Verify it now.</h2>
+<section class="verify-cta">
+  <h2 class="mt-0">Have a receipt? Verify it now.</h2>
   <p>Drop your file and paste the receipt ID — the page re-hashes locally in your browser and tells you if it matches.</p>
   <p><a href="/verify/" class="btn primary">Open the verifier</a></p>
 </section>
@@ -375,16 +307,15 @@ Success! Bitcoin block 824193 attests existence as of 2026-05-16 17:42:11 UTC</p
 <footer>
   <p>
     Orphograph · Bitcoin-anchored proof-of-existence ·
-    <a href="/about.html">about</a> ·
-    <a href="/learn.html">learn</a> ·
-    <a href="/vs/c2pa.html">compare</a> ·
-    <a href="/docs/api.html">API</a> ·
-    <a href="/privacy.html">privacy</a> ·
-    <a href="/terms.html">terms</a>
+    <a href="/about">about</a> ·
+    <a href="/learn">learn</a> ·
+    <a href="/docs/api">API</a> ·
+    <a href="/privacy">privacy</a> ·
+    <a href="/terms">terms</a>
   </p>
   <p class="muted small">Powered by OpenTimestamps · Receipts verify without us, by design.</p>
 </footer>
 
-<script src="/assets/event.js" defer></script>
+<script src="/assets/event.js?v=1" defer></script>
 </body>
 </html>

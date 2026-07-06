@@ -18,7 +18,7 @@ PAGE = ROOT / "web" / "method" / "legal-recognition.html"
 SITEMAP = ROOT / "web" / "sitemap.xml"
 
 SITEMAP_NS = {"s": "http://www.sitemaps.org/schemas/sitemap/0.9"}
-SITEMAP_URL = "https://orphograph.com/method/legal-recognition.html"
+SITEMAP_URL = "https://orphograph.com/method/legal-recognition"
 
 
 def test_legal_recognition_page_exists():

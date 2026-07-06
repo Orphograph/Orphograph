@@ -2,11 +2,13 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Sign in — Orphograph</title>
+<title>Open your vault — Orphograph</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="icon" type="image/png" href="/favicon.png?v=8">
-<link rel="stylesheet" href="/style.css?v=2">
+<link rel="stylesheet" href="/style.css?v=5">
 <meta name="copyright" content="© 2026 Orphograph. MIT — see /LICENSE">
+<link rel="canonical" href="https://orphograph.com/signin">
+<meta name="description" content="Open your Orphograph vault — a passwordless one-time email link for Pack subscribers to re-access their anchored receipts. Your files were never uploaded; nothing to expose.">
 </head>
 <body>
 
@@ -17,26 +19,33 @@
 
 <main>
 <section class="signin">
-  <h1>Sign in</h1>
+  <h1>Open your vault</h1>
   <p class="lede">
-    We email you a one-time link. No passwords, no account creation step.
-    Use the same email you used to subscribe.
+    Your vault holds every receipt you've anchored on a paid plan — yours to
+    re-download any time. Enter the email you subscribed with; we send a
+    one-time link. No password to create, none to remember.
   </p>
   <form id="signin-form" class="signin-form">
     <label for="email">Email</label>
     <input id="email" type="email" autocomplete="email" placeholder="you@example.com" required>
-    <button type="submit" id="submit-btn">Email me a link</button>
+    <button type="submit" id="submit-btn">Email me a sign-in link</button>
   </form>
   <p id="signin-msg" class="hint" hidden></p>
+  <p class="hint">
+    This isn't an account that tracks you. Your files never left your device —
+    only their fingerprints were anchored — so there's nothing here to expose.
+    Your local receipt and <code>.ots</code> files verify against Bitcoin on
+    their own, with or without us.
+  </p>
 </section>
 </main>
 
 <footer>
-  <small><a href="/">home</a> · <a href="/terms.html">Terms</a> · <a href="/privacy.html">Privacy</a></small>
+  <small><a href="/">home</a> · <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a></small>
 </footer>
 
 <script src="/signin.js"></script>
-<script src="/statusbar.js" defer></script>
-<script src="/assets/event.js" defer></script>
+<script src="/statusbar.js?v=1" defer></script>
+<script src="/assets/event.js?v=1" defer></script>
 </body>
 </html>

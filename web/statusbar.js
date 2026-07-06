@@ -152,10 +152,10 @@
     strip.appendChild(spacer);
 
     // Account link.
-    if (window.location.pathname !== "/account.html") {
+    if (window.location.pathname !== "/account") {
       const link = document.createElement("a");
       link.className = "ob-link";
-      link.href = "/account.html";
+      link.href = "/account";
       link.textContent = "account →";
       strip.appendChild(link);
     }

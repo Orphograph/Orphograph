@@ -404,16 +404,20 @@
   fetch("/api/stats")
     .then((r) => r.json())
     .then((j) => {
-      if (j.total_anchors != null && $("c-anchors")) {
-        $("c-anchors").textContent = fmtNum(j.total_anchors);
+      // /api/stats nests counts under `anchors` (anchors.total,
+      // anchors.last_anchor_at). The old flat keys never matched, so the
+      // "most recent receipt" clock silently froze at the hardcoded data-utc.
+      const a = j.anchors || {};
+      if (a.total != null && $("c-anchors")) {
+        $("c-anchors").textContent = fmtNum(a.total);
       }
       if (j.bitcoin_blocks_anchored != null && $("c-blocks")) {
         $("c-blocks").textContent = fmtNum(j.bitcoin_blocks_anchored);
       }
-      if (j.most_recent_anchor_at) {
+      if (a.last_anchor_at) {
         const tz = $("latest-tz-block");
         if (tz) {
-          tz.dataset.utc = j.most_recent_anchor_at;
+          tz.dataset.utc = a.last_anchor_at;
           while (tz.firstChild) tz.removeChild(tz.firstChild);
           if (window.Orphograph && window.Orphograph.renderTimezones) {
             window.Orphograph.renderTimezones();
@@ -526,10 +530,29 @@
         }),
       });
       if (!r.ok) {
+        if (r.status === 429) {
+          // Free daily limit hit — this user just showed intent. Offer the paid
+          // path instead of a dead error. (Crypto checkout works today.)
+          setStatusSimple(
+            "You've used today's free anchors.",
+            "A Writer Pack is 10 anchors for $19 — credits never expire, and you can pay with crypto in under a minute.",
+            "info"
+          );
+          const cta = document.createElement("a");
+          cta.href = "/pay/crypto?plan=writer_pack";
+          cta.className = "cta";
+          cta.textContent = "Get a Writer Pack →";
+          cta.style.display = "inline-block";
+          cta.style.marginTop = "10px";
+          status.appendChild(cta);
+          showStatusBanner("Free limit reached — a Writer Pack removes it.", "info");
+          clearAnchorState();
+          return;
+        }
         const txt = await r.text();
         setStatusSimple(
           "The office could not record this submission.",
-          "Server returned " + r.status + ". " + txt.slice(0, 200),
+          "Server returned " + r.status + ". Nothing was recorded — try again in a moment.",
           "error"
         );
         showStatusBanner("Anchor failed: server returned " + r.status + ".", "error");
@@ -563,6 +586,14 @@
         "  ·  Bitcoin confirmation arrives within ~1 hour."
       ));
       status.appendChild(p);
+
+      // afterglow: the habit forms right after the first success, not next week
+      const ag = document.createElement("p");
+      ag.style.margin = "6px 0 0";
+      ag.style.fontSize = "13px";
+      ag.style.opacity = "0.75";
+      ag.textContent = "The free tier covers three anchors a day — seal the next thing while you're here.";
+      status.appendChild(ag);
 
       // Optional: render created_at in local time if the server provided it.
       if (j.created_at) {
@@ -640,7 +671,7 @@
 
   // Render an inline failure inside the tier card. Two affordances:
   // "Try again" re-fires startCheckout for the same plan/button, and
-  // "Pay with crypto instead" routes to the existing /pay/crypto.html
+  // "Pay with crypto instead" routes to the existing /pay/crypto
   // flow that's already wired on the same card. No alert() — the prior
   // implementation blocked the page and offered no recovery path.
   function showCheckoutError(button, plan, message) {
@@ -670,7 +701,7 @@
     actions.appendChild(retry);
 
     const crypto = document.createElement("a");
-    crypto.href = "/pay/crypto.html";
+    crypto.href = "/pay/crypto";
     crypto.textContent = "Pay with crypto instead →";
     actions.appendChild(crypto);
 
