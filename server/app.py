@@ -382,7 +382,6 @@ def _build_sitemap() -> str:
         ("/", "1.0"),
         ("/verify/", "0.9"),
         ("/blog/", "0.8"),
-        ("/v2", "0.8"),
         ("/learn", "0.8"),
         ("/dataset-provenance", "0.8"),
         ("/integrations", "0.7"),
@@ -707,6 +706,14 @@ class Handler(BaseHTTPRequestHandler):
         path = self.path.split("?", 1)[0]
         # homepage A/B: split "/" between the cream and dark documents
         if path == "/" and _serve_ab_home(self):
+            return
+        # /v2 is retired: the dark design is now the canonical homepage at "/".
+        # 301 the old page URL (EXACTLY — never the /v2/* assets the homepage
+        # still loads: /v2/style.css, /v2/app.js, /v2/fonts/*).
+        if path in ("/v2", "/v2/", "/v2/index.html"):
+            self.send_response(301)
+            self.send_header("Location", "/")
+            self.end_headers()
             return
         # homepage A/B: attribute checkout-page reach to the visitor's arm
         if path.startswith("/pay/crypto"):
