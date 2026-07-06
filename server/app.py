@@ -3415,13 +3415,21 @@ class Handler(BaseHTTPRequestHandler):
 
         # 2. Look up the EXISTING claim code by source. Never mint.
         ledger_row = credits.find_claim_code_by_source(order_id)
+        # Harden against find_claim_code_by_source's SUBSTRING match: require
+        # order_id to be the EXACT final ":"-segment of the mint source
+        # ("nowpayments:<invoice>:<order_id>"), so a short/prefix order_id cannot
+        # resolve to a DIFFERENT customer's row. This closes the 200-vs-400
+        # enumeration oracle and the unsolicited-resend vector, on top of the
+        # email guard below.
+        row_source = ((ledger_row or {}).get("source") or "")
+        order_id_exact = row_source.rsplit(":", 1)[-1] == order_id
 
         # 3. CROSS-CUSTOMER-LEAK GUARD (load-bearing): the request email must
         #    equal the ledger-row email exactly (case-insensitive, stripped).
-        #    Not-found and mismatch collapse to the SAME generic 400 — no
-        #    enumeration, no confirmation of which side differed.
+        #    Not-found, prefix-only match, and email mismatch all collapse to the
+        #    SAME generic 400 — no enumeration, no confirmation of which differed.
         row_email = ((ledger_row or {}).get("email") or "").strip().lower()
-        if not ledger_row or not row_email or row_email != provided_email:
+        if not ledger_row or not order_id_exact or not row_email or row_email != provided_email:
             sys.stderr.write(
                 f"[recover] crypto recovery DENIED order={order_id} "
                 f"email={auth.mask_email(provided_email)} "

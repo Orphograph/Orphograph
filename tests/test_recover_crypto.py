@@ -274,3 +274,33 @@ def test_stripe_path_untouched_invalid_id_still_400(server):
     })
     assert status == 400
     assert body.get("error") == "invalid request"
+
+
+# ----------------------------------------------- prefix/substring abuse blocked
+
+def test_prefix_substring_order_id_rejected(server):
+    """A SHORT prefix of a real order_id substring-matches the seeded ledger
+    source, but must NOT recover — order_id must be the EXACT final source
+    segment. Even with the CORRECT on-file email, the prefix is rejected; under
+    the old substring match this exact combo would have re-sent the code (an
+    enumeration oracle + unsolicited-resend vector). No code is sent."""
+    base = server["base"]
+    ledger = server["ledger"]
+    stderr_log = server["stderr_log"]
+
+    before = _count_positive_rows(ledger)
+    err_before = len(_read_stderr(stderr_log))
+
+    # "np_pack10_" IS a substring of LEDGER_SOURCE but is NOT the exact order_id.
+    status, body = _post(f"{base}/api/recover", {
+        "stripe_session_id": "np_pack10_",
+        "email": LEDGER_EMAIL,            # the correct address on file
+    })
+
+    assert status == 400, f"prefix substring must be rejected, got {status}: {body}"
+    assert body.get("error") == "invalid request"
+
+    new_err = _read_stderr(stderr_log)[err_before:]
+    assert "resent crypto claim_code" not in new_err, "must NOT re-send for a prefix match"
+    assert "[email:inert] would send" not in new_err
+    assert _count_positive_rows(ledger) == before
