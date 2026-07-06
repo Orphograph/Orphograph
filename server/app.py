@@ -517,7 +517,7 @@ def _serve_ab_home(handler: BaseHTTPRequestHandler) -> bool:
     # Dark is now the canonical homepage (served as the static index.html); the
     # "cream" arm serves the archived index-cream.html so a re-enabled A/B still
     # compares the cream design against the live dark one.
-    doc = WEB_DIR / ("v2/index.html" if variant == "dark" else "index-cream.html")
+    doc = WEB_DIR / ("v2/index.html" if variant == "dark" else "index.html")
     try:
         body = doc.read_bytes()
     except OSError:
