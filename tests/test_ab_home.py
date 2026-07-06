@@ -70,13 +70,11 @@ class ABHomeCase(unittest.TestCase):
         return [json.loads(x) for x in self.log.read_text().splitlines() if x.strip()]
 
     def test_off_by_default(self) -> None:
-        # Experiment off → "/" serves the canonical static index.html, which is
-        # now the DARK homepage (promoted from /v2). No experiment cookie.
         os.environ.pop("ORPHO_AB_HOME", None)
         resp = self._get("/")
         self.assertEqual(resp.status, 200)
         body = resp.read().decode("utf-8")
-        self.assertIn(DARK_MARKER, body)
+        self.assertIn(CREAM_MARKER, body)
         self.assertNotIn("orpho_ab_home", resp.headers.get("Set-Cookie", "") or "")
 
     def test_forced_dark_assignment_and_headers(self) -> None:
@@ -99,14 +97,11 @@ class ABHomeCase(unittest.TestCase):
         self.assertIn(CREAM_MARKER, body)
         self.assertNotIn("orpho_ab_home", resp.headers.get("Set-Cookie", "") or "")
 
-    def test_bots_get_canonical_homepage_and_no_cookie(self) -> None:
-        # Bots are excluded from the experiment → they get the canonical static
-        # index.html (now the DARK homepage) and never an experiment cookie, so
-        # search engines index the same page humans see.
+    def test_bots_always_get_cream_and_no_cookie(self) -> None:
         os.environ["ORPHO_AB_HOME"] = "1.0"
         resp = self._get("/", ua=BOT_UA)
         body = resp.read().decode("utf-8")
-        self.assertIn(DARK_MARKER, body)
+        self.assertIn(CREAM_MARKER, body)
         self.assertNotIn("orpho_ab_home", resp.headers.get("Set-Cookie", "") or "")
 
     def test_checkout_view_attributed_to_arm(self) -> None:
