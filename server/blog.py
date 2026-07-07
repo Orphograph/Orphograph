@@ -285,7 +285,7 @@ _SHELL_HEAD = """<!DOCTYPE html>
 <title>{title}</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="description" content="{description}">
-<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="icon" type="image/png" href="/favicon.png?v=8">
 <link rel="alternate" type="application/atom+xml" title="Orphograph blog" href="/blog/atom.xml">
 <link rel="stylesheet" href="/style.css">
 <link rel="stylesheet" href="/blog.css">
@@ -324,7 +324,7 @@ def _og_tags(title: str, description: str, url: str) -> str:
         f'<meta property="og:description" content="{html.escape(description)}">\n'
         f'<meta property="og:url" content="{html.escape(url)}">\n'
         f'<meta property="og:type" content="article">\n'
-        f'<meta property="og:image" content="{SITE_URL}/og.svg">\n'
+        f'<meta property="og:image" content="{SITE_URL}/og-image.png?v=8">\n'
         f'<meta name="twitter:card" content="summary_large_image">\n'
     )
 
