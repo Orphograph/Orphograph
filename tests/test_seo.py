@@ -40,6 +40,7 @@ EXPECTED_URLS = [
     "https://orphograph.com/lp/manuscript-priority-date",
     "https://orphograph.com/lp/screenshot-evidence-timestamp",
     "https://orphograph.com/lp/ai-image-detector-vs-provenance",
+    "https://orphograph.com/lp/eu-ai-act-training-data",
     "https://orphograph.com/method/architecture",
     "https://orphograph.com/method/bitcoin-attestation",
     "https://orphograph.com/method/evidence-law",
