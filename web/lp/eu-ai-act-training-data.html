@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>EU AI Act training-data documentation, anchored — Orphograph</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="The EU AI Act asks what was in your training data, where it came from, and when. Bind the dataset, its licenses, and its acquisition log into one Bitcoin-anchored receipt — tamper-evident evidence for the documentation the Act makes you keep.">
+<link rel="canonical" href="https://orphograph.com/lp/eu-ai-act-training-data">
+<link rel="icon" type="image/png" href="/favicon.png?v=8">
+<meta property="og:title" content="EU AI Act training-data documentation, anchored">
+<meta property="og:description" content="Documentation you can edit afterward is weak evidence. Anchor the dataset, licenses, and acquisition log to Bitcoin — dated, tamper-evident, independently verifiable.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://orphograph.com/lp/eu-ai-act-training-data">
+<meta property="og:image" content="https://orphograph.com/og-image.png?v=8">
+<link rel="stylesheet" href="/style.css?v=2">
+<link rel="stylesheet" href="/blog.css">
+<link rel="stylesheet" href="/index.css?v=9">
+<link rel="stylesheet" href="/lp/eu-ai-act-training-data.css?v=1">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "Does anchoring a dataset make us EU AI Act compliant?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "No. Compliance turns on your full quality-management system, conformity assessment, bias analysis, and the rest of the Act's obligations. A dataset receipt is evidence, not a conformity assessment: it proves the documentation you are required to keep existed in an exact form by a date and has not changed since. It supports Article 10, Annex IV, and Article 53 documentation — it does not substitute for any of them."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Does our training data leave our environment?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "No. Every file is hashed locally with SHA-256 and combined into a Merkle tree on your machine. Only the manifest — relative paths, digests, and the root — is sent to be anchored. An air-gapped mode builds the receipt and certificate without sending anything at all."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "The Act requires keeping documentation for 10 years. What if Orphograph is gone by then?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "The receipt is an open format: an RFC 6962-style Merkle manifest plus OpenTimestamps proofs committed to the Bitcoin blockchain. Verification needs only the manifest, the .ots files, and the public chain — none of which depend on Orphograph existing. An MIT-licensed verifier is published for exactly this reason."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Which EU AI Act obligations does a dataset receipt support?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "It provides tamper-evident, independently datable records that support Article 10 data-governance documentation (data collection processes and the origin of data), Annex IV datasheets (provenance, scope, and main characteristics of training data sets), the record-keeping behind an Article 53(1)(d) training-content summary for general-purpose AI models, and the 10-year retention duty of Article 18."
+      }
+    }
+  ]
+}
+</script>
+</head>
+<body>
+
+<header>
+  <div class="brand"><a href="/">orphograph</a></div>
+  <nav>
+    <a href="/learn">how it works</a>
+    <a href="/#tiers">pricing</a>
+    <a href="/lp/">guides</a>
+    <a href="/about">about</a>
+    <a href="/signin">sign in</a>
+  </nav>
+</header>
+
+<main class="blog-post">
+  <article class="post-header">
+    <h1>The EU AI Act asks what was in your training data. Make your answer tamper-evident.</h1>
+    <p class="post-meta muted">For teams shipping AI models or AI-powered systems into the EU — ML engineering, data governance, and the counsel who signs off.</p>
+  </article>
+
+  <section class="post-body">
+
+    <h2>What the Act actually requires of training data</h2>
+    <p>Regulation (EU) 2024/1689 — the AI Act — turns training-data documentation from good practice into a legal duty, on a phased timeline:</p>
+    <ul>
+      <li><strong>Already in force.</strong> Since 2 August 2025, providers of general-purpose AI models must draw up and <em>publish</em> a sufficiently detailed summary of the content used for training, using the European Commission's AI Office template (Article 53(1)(d)). Models placed on the market before that date must comply by 2 August 2027.</li>
+      <li><strong>From 2 August 2026.</strong> The Commission's enforcement powers over general-purpose AI providers begin: documentation requests, model evaluations, and fines of up to €15&nbsp;million or 3% of worldwide annual turnover.</li>
+      <li><strong>From 2 December 2027</strong> (under the amending regulation the EU institutions adopted in June 2026), providers of high-risk AI systems must meet Article 10: documented data-governance practices covering <em>data collection processes and the origin of data</em>, labelling, cleaning, and bias examination — plus Annex IV technical documentation describing the training data sets, "their provenance, scope and main characteristics; how the data was obtained and selected." AI embedded in regulated products follows by 2 August 2028.</li>
+      <li><strong>For a decade.</strong> Article 18 requires providers of high-risk systems to keep that technical documentation at the disposal of authorities for 10 years after the system is placed on the market.</li>
+    </ul>
+
+    <h2>The problem with ordinary documentation</h2>
+    <p>A datasheet, an acquisition log, or a license folder that can be edited after the fact is indistinguishable from one written at the time. When the question arrives — from a regulator exercising Article 91 powers, an auditor, an enterprise customer's due-diligence team, or opposing counsel in a copyright dispute — the value of your documentation depends on being able to show <em>this is what the record said then, and it has not changed since</em>. A shared drive cannot show that. A spreadsheet cannot show that.</p>
+
+    <h2>What anchoring adds</h2>
+    <p>Orphograph binds a dataset bundle — the data, the license and consent documents, and the acquisition log — into a single Merkle tree, hashed entirely on your machine, and anchors the root to the Bitcoin blockchain. You get a dated receipt and a hosted <a href="/certificate/DatasetProvenanceSample">provenance certificate</a> where anyone you authorize can verify, in their own browser, that a specific file belonged to the certified set. Three properties matter for the Act's documentation duties:</p>
+    <ul>
+      <li><strong>Dated.</strong> The bundle provably existed, in exactly this form, by the time of a specific Bitcoin block. A record anchored before a model run cannot have been written after the questions started.</li>
+      <li><strong>Tamper-evident.</strong> Change any byte of any file — relabel an image, swap a license, edit the log — and the root no longer matches the receipt.</li>
+      <li><strong>Durable for the retention window.</strong> The proof is an open format that outlives any vendor: the manifest, the OpenTimestamps files, and the public chain are all a verifier needs, ten years from now, whether or not Orphograph is still here. <a href="/verify/">The verifier is open source.</a></li>
+    </ul>
+
+    <h2>What this is not</h2>
+    <p>Honesty is the product, so the scope is narrow and stated plainly. A dataset receipt is <strong>not</strong> a conformity assessment, <strong>not</strong> the AI Office's training-content template, and <strong>not</strong> proof that data was lawfully sourced, licensed, or owned. It does not make a provider "AI Act compliant." It makes the documentation the Act requires you to create and retain <em>tamper-evident and independently datable</em> — which is what turns documentation into evidence. Whether that evidence suffices in any particular proceeding is a question for that forum and your counsel. Nothing on this page is legal advice; timeline per the amending regulation adopted June 2026.</p>
+
+    <h2>Run it as a pipeline step</h2>
+    <p>The reference CLI anchors a bundle as a build step — a training run's data manifest becomes a dated, verifiable artifact alongside the model weights.</p>
+    <pre><code># Anchor a dataset bundle (only fingerprints leave the machine)
+python3 provenance.py anchor --bundle ./my-dataset --name "My Dataset v1"
+
+# Air-gapped: build the receipt + certificate, anchor nothing
+python3 provenance.py anchor --bundle ./my-dataset --name "My Dataset v1" --offline
+
+# Re-verify any time — rebuild the root from disk, compare to the certificate
+python3 provenance.py verify --cert out/certificate.json --bundle ./my-dataset</code></pre>
+    <p>The full workflow — bundle layout, certificate anatomy, per-file inclusion proofs — is on the <a href="/dataset-provenance">dataset provenance</a> page.</p>
+
+    <div class="cta-box">
+      <h2>Anchor a training set this week, not next quarter</h2>
+      <p>Assemble the bundle you already have — data, licenses, acquisition log — and anchor it. The receipt is dated from the day you do it; documentation anchored early is worth more than documentation reconstructed later.</p>
+      <p><a class="cta-btn" href="/dataset-provenance">See the dataset workflow →</a> <a class="cta-btn cta-secondary" href="/certificate/DatasetProvenanceSample">Inspect a live certificate →</a></p>
+    </div>
+
+    <h2 id="faq">FAQ</h2>
+    <div class="faq">
+      <h3>Does anchoring a dataset make us EU AI Act compliant?</h3>
+      <p>No. Compliance turns on your full quality-management system, conformity assessment, bias analysis, and the rest of the Act's obligations. A dataset receipt is evidence, not a conformity assessment: it proves the documentation you are required to keep existed in an exact form by a date and has not changed since. It supports Article 10, Annex IV, and Article 53 documentation — it does not substitute for any of them.</p>
+
+      <h3>Does our training data leave our environment?</h3>
+      <p>No. Every file is hashed locally with SHA-256 and combined into a Merkle tree on your machine. Only the manifest — relative paths, digests, and the root — is sent to be anchored. An air-gapped mode builds the receipt and certificate without sending anything at all.</p>
+
+      <h3>The Act requires keeping documentation for 10 years. What if Orphograph is gone by then?</h3>
+      <p>The receipt is an open format: an RFC&nbsp;6962-style Merkle manifest plus OpenTimestamps proofs committed to the Bitcoin blockchain. Verification needs only the manifest, the <code>.ots</code> files, and the public chain — none of which depend on Orphograph existing. An MIT-licensed verifier is published for exactly this reason.</p>
+
+      <h3>Which obligations does a dataset receipt support?</h3>
+      <p>Tamper-evident, independently datable records supporting Article 10 data-governance documentation (data collection processes and the origin of data), Annex IV datasheets (provenance, scope, and main characteristics of the training data sets), the record-keeping behind an Article 53(1)(d) training-content summary, and the 10-year retention duty of Article 18.</p>
+    </div>
+
+  </section>
+</main>
+
+<footer>
+  <small>
+    <a href="/">← Home</a> ·
+    <a href="/lp/">More guides</a> ·
+    <a href="/about">About</a> ·
+    <a href="/privacy">Privacy</a> ·
+    The office does not transmit your file
+  </small>
+</footer>
+
+<script src="/assets/event.js?v=1" defer></script>
+</body>
+</html>
