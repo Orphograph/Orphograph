@@ -6,6 +6,7 @@
 //
 // Wires:
 //   #buy-pack     -> cfg.stripe.pack_url             (Writer Pack, one-time $19)
+//   #buy-pack50   -> cfg.stripe.pack50_url           (Pack of Fifty, one-time $29)
 //   #buy-personal -> cfg.stripe.personal_monthly_url (Standing Order, $9/mo)
 (function () {
   "use strict";
@@ -28,6 +29,7 @@
   function apply(cfg) {
     var s = (cfg && cfg.stripe) || {};
     wire("buy-pack", s.pack_url || "");
+    wire("buy-pack50", s.pack50_url || "");
     wire("buy-personal", s.personal_monthly_url || "");
   }
 
