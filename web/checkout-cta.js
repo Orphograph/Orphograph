@@ -28,9 +28,13 @@
 
   function apply(cfg) {
     var s = (cfg && cfg.stripe) || {};
-    wire("buy-pack", s.pack_url || "");
-    wire("buy-pack50", s.pack50_url || "");
-    wire("buy-personal", s.personal_monthly_url || "");
+    // A configured URL is not enough: the Stripe ACCOUNT must be able to
+    // charge (card_charges_enabled). A restricted account with live links
+    // would otherwise collect card details and fail at pay time.
+    var ok = s.card_charges_enabled === true;
+    wire("buy-pack", ok ? (s.pack_url || "") : "");
+    wire("buy-pack50", ok ? (s.pack50_url || "") : "");
+    wire("buy-personal", ok ? (s.personal_monthly_url || "") : "");
   }
 
   fetch("/api/config", { credentials: "same-origin" })

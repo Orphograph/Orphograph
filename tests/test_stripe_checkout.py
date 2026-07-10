@@ -287,16 +287,72 @@ class TestStripeCheckoutHandler(unittest.TestCase):
         app.Handler._handle_stripe_checkout(handler)
         self.assertEqual(handler._status, 503)
 
-    def test_stripe_error_propagates_as_502(self):
+    def test_stripe_error_propagates_as_503(self):
+        # 503, NOT 502: Cloudflare replaces origin 502 bodies with its own
+        # opaque error page, so the JSON detail never reaches the client
+        # (observed live 2026-07-09). Origin 503 passes through intact.
         body = b'{"plan":"pack"}'
         handler = _StubHandler(body)
         with patch.object(self.app.stripe_api, "create_checkout_session",
                           return_value={"ok": False, "error": "No such price: price_x"}):
             self.app.Handler._handle_stripe_checkout(handler)
-        self.assertEqual(handler._status, 502)
+        self.assertEqual(handler._status, 503)
         # The customer-facing message must not leak our secret key
         body_bytes = self._read_response(handler)
         self.assertNotIn(b"sk_test", body_bytes)
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# Tests for stripe_api.charges_enabled() — the card-CTA gate.
+# ──────────────────────────────────────────────────────────────────────────
+
+class TestChargesEnabled(unittest.TestCase):
+    """A configured account is not necessarily a chargeable one (live
+    incident 2026-07-09: charges_enabled=false while every price/link/env
+    was valid). The gate must reflect Stripe's answer, cache it, and serve
+    the stale answer over flapping on transient API failures."""
+
+    def setUp(self):
+        sys.modules.pop("stripe_api", None)
+        os.environ["STRIPE_SECRET_KEY"] = "sk_test_unit_test_key"
+        import stripe_api
+        self.stripe_api = stripe_api
+
+    def tearDown(self):
+        os.environ.pop("STRIPE_SECRET_KEY", None)
+        sys.modules.pop("stripe_api", None)
+
+    def test_unconfigured_key_returns_none(self):
+        self.stripe_api.STRIPE_SECRET_KEY = ""
+        self.assertIsNone(self.stripe_api.charges_enabled())
+
+    def test_reads_account_and_caches(self):
+        calls = []
+
+        def fake_request(method, path, form=None):
+            calls.append(path)
+            return {"ok": True, "data": {"charges_enabled": True}}
+
+        with patch.object(self.stripe_api, "_request", side_effect=fake_request):
+            self.assertIs(self.stripe_api.charges_enabled(), True)
+            self.assertIs(self.stripe_api.charges_enabled(), True)
+        # Second call must come from cache — one API hit only.
+        self.assertEqual(calls, ["/account"])
+
+    def test_restricted_account_returns_false(self):
+        with patch.object(self.stripe_api, "_request",
+                          return_value={"ok": True, "data": {"charges_enabled": False}}):
+            self.assertIs(self.stripe_api.charges_enabled(), False)
+
+    def test_stale_if_error_keeps_last_known_answer(self):
+        with patch.object(self.stripe_api, "_request",
+                          return_value={"ok": True, "data": {"charges_enabled": True}}):
+            self.assertIs(self.stripe_api.charges_enabled(), True)
+        # Expire the cache, then fail the lookup: last known answer survives.
+        self.stripe_api._ACCOUNT_CACHE["ts"] = 0.0
+        with patch.object(self.stripe_api, "_request",
+                          return_value={"ok": False, "error": "boom"}):
+            self.assertIs(self.stripe_api.charges_enabled(), True)
 
 
 if __name__ == "__main__":

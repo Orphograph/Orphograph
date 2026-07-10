@@ -758,7 +758,18 @@ class Handler(BaseHTTPRequestHandler):
             })
             return
         if path == "/api/config":
-            _json_response(self, 200, public_config.snapshot())
+            cfg = public_config.snapshot()
+            # Card CTAs render only when the Stripe ACCOUNT can actually
+            # charge — a configured-but-restricted account (charges_enabled
+            # false) otherwise sends buyers into checkouts that die at pay
+            # time. Cached in stripe_api; never allowed to break config.
+            try:
+                stripe_cfg = cfg.get("stripe")
+                if isinstance(stripe_cfg, dict):
+                    stripe_cfg["card_charges_enabled"] = stripe_api.charges_enabled() is True
+            except Exception:
+                pass
+            _json_response(self, 200, cfg)
             return
         if path == "/api/stripe/session":
             # Read-only confirmation lookup. buy.js calls this on the
@@ -3568,7 +3579,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         result = stripe_api.cancel_at_period_end(sub_id)
         if not result.get("ok"):
-            _json_response(self, 502, {"error": "stripe error", "detail": result.get("error")})
+            _json_response(self, 503, {"error": "stripe error", "detail": result.get("error")})
             return
         _json_response(self, 200, {
             "ok": True,
@@ -3586,7 +3597,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         result = stripe_api.reactivate(sub_id)
         if not result.get("ok"):
-            _json_response(self, 502, {"error": "stripe error", "detail": result.get("error")})
+            _json_response(self, 503, {"error": "stripe error", "detail": result.get("error")})
             return
         _json_response(self, 200, {"ok": True, "message": "Subscription reactivated."})
 
@@ -3781,7 +3792,7 @@ class Handler(BaseHTTPRequestHandler):
             metadata=session_metadata,
         )
         if not result.get("ok"):
-            _json_response(self, 502, {"error": result.get("error", "stripe error")})
+            _json_response(self, 503, {"error": result.get("error", "stripe error")})
             return
         data = result.get("data") or {}
         _json_response(self, 200, {
@@ -3927,7 +3938,7 @@ class Handler(BaseHTTPRequestHandler):
             plan=plan,
         )
         if not result.get("ok"):
-            _json_response(self, 502, {
+            _json_response(self, 503, {
                 "ok": False,
                 "error": "Crypto payment provider unavailable.",
                 "reason": result.get("reason", ""),
@@ -3941,7 +3952,7 @@ class Handler(BaseHTTPRequestHandler):
             or ""
         )
         if not invoice_url:
-            _json_response(self, 502, {
+            _json_response(self, 503, {
                 "ok": False,
                 "error": "Payment provider returned no invoice URL.",
             })

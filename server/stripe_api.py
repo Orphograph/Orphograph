@@ -20,6 +20,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -31,6 +32,39 @@ STRIPE_BASE = "https://api.stripe.com/v1"
 
 def is_configured() -> bool:
     return bool(STRIPE_SECRET_KEY)
+
+
+# charges_enabled() cache — /api/config is hit on every homepage load, so the
+# account lookup must not become a per-request Stripe round-trip. Stale-if-error:
+# a transient API failure serves the last known answer instead of flapping the
+# card buttons.
+_ACCOUNT_CACHE: dict = {"ts": 0.0, "enabled": None}
+ACCOUNT_CACHE_TTL_SEC = 600
+
+
+def charges_enabled() -> bool | None:
+    """Whether the Stripe account can currently make live charges.
+
+    The account can be fully configured (valid key, prices, links) and still
+    unable to charge — details_submitted with charges_enabled=false means
+    Stripe is reviewing or restricting the account (observed live 2026-07-09:
+    every card checkout died with "Your account cannot currently make live
+    charges"). Card CTAs must not render while that is the state.
+
+    Returns True/False from Stripe (cached ACCOUNT_CACHE_TTL_SEC), or None when
+    unknown (key unset, or the lookup has never succeeded). Callers should
+    treat anything but True as "do not offer card checkout".
+    """
+    if not STRIPE_SECRET_KEY:
+        return None
+    now = time.time()
+    if _ACCOUNT_CACHE["enabled"] is not None and now - _ACCOUNT_CACHE["ts"] < ACCOUNT_CACHE_TTL_SEC:
+        return _ACCOUNT_CACHE["enabled"]
+    res = _request("GET", "/account")
+    if res.get("ok"):
+        _ACCOUNT_CACHE["ts"] = now
+        _ACCOUNT_CACHE["enabled"] = bool((res.get("data") or {}).get("charges_enabled"))
+    return _ACCOUNT_CACHE["enabled"]
 
 
 def _categorize_http_error(code: int) -> tuple[str, bool, bool]:
