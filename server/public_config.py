@@ -51,6 +51,7 @@ def snapshot() -> dict:
     return {
         "stripe": {
             "pack_url": os.environ.get("STRIPE_PACK_URL", "").strip(),
+            "pack50_url": os.environ.get("STRIPE_PACK50_URL", "").strip(),
             "personal_monthly_url": os.environ.get("STRIPE_PERSONAL_MONTHLY_URL", "").strip(),
             "personal_annual_url": os.environ.get("STRIPE_PERSONAL_ANNUAL_URL", "").strip(),
             "creator_monthly_url": os.environ.get("STRIPE_CREATOR_MONTHLY_URL", "").strip(),
