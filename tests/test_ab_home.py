@@ -13,6 +13,7 @@ import json
 import os
 import sys
 import threading
+import time
 import unittest
 import urllib.request
 from http.server import ThreadingHTTPServer
@@ -69,6 +70,17 @@ class ABHomeCase(unittest.TestCase):
             return []
         return [json.loads(x) for x in self.log.read_text().splitlines() if x.strip()]
 
+    def _event_rows(self, event: str, variant: str, deadline_s: float = 2.0) -> list[dict]:
+        """Ledger rows for (event, variant), polling briefly so a slow append
+        on a loaded CI runner can't race the assertion."""
+        end = time.monotonic() + deadline_s
+        while True:
+            rows = [r for r in self._log_lines()
+                    if r["event"] == event and r["variant"] == variant]
+            if rows or time.monotonic() >= end:
+                return rows
+            time.sleep(0.05)
+
     def test_off_by_default(self) -> None:
         os.environ.pop("ORPHO_AB_HOME", None)
         resp = self._get("/")
@@ -87,7 +99,7 @@ class ABHomeCase(unittest.TestCase):
         self.assertIn("HttpOnly", set_cookie)
         self.assertEqual(resp.headers.get("Cache-Control"), "no-store")
         self.assertIn("Cookie", resp.headers.get("Vary", "") or "")
-        views = [r for r in self._log_lines() if r["event"] == "home_view" and r["variant"] == "dark"]
+        views = self._event_rows("home_view", "dark")
         self.assertTrue(views and views[-1].get("new") is True)
 
     def test_sticky_cookie_wins_over_fraction(self) -> None:

@@ -523,6 +523,9 @@ def _serve_ab_home(handler: BaseHTTPRequestHandler) -> bool:
         body = doc.read_bytes()
     except OSError:
         return False
+    # Log before any response bytes go out, so a client that has received
+    # the body can rely on the view record existing (mirrors checkout_view).
+    _ab_log("home_view", variant, {"new": newly_assigned})
     handler.send_response(200)
     handler.send_header("Content-Type", "text/html; charset=utf-8")
     handler.send_header("Content-Length", str(len(body)))
@@ -536,7 +539,6 @@ def _serve_ab_home(handler: BaseHTTPRequestHandler) -> bool:
     _security_headers(handler)
     handler.end_headers()
     handler.wfile.write(body)
-    _ab_log("home_view", variant, {"new": newly_assigned})
     return True
 
 
