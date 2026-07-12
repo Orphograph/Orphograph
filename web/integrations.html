@@ -5,7 +5,7 @@
 <title>Orphograph — Integrations: seal where the work happens</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#f6f1e3">
-<meta name="description" content="Anchor files automatically where they are created: a watch-folder sealer, a GitHub Action for releases, an MCP server for AI agents, and a dataset-provenance CLI. Files never leave your machine — only fingerprints travel.">
+<meta name="description" content="Anchor files automatically where they are created: a watch-folder sealer, a GitHub Action for releases, an MCP server and audit-trail CLI for AI agents, and a dataset-provenance CLI. Files never leave your machine — only fingerprints travel.">
 <meta property="og:title" content="Orphograph — Integrations">
 <meta property="og:description" content="Seal your work where it happens: watch folders, releases, agents, and datasets anchor themselves.">
 <meta property="og:url" content="https://orphograph.com/integrations">
@@ -72,6 +72,19 @@ python3 orphograph-watch.py ~/Deliveries</pre>
       produces — proof of existence becomes part of the agent's output, not an
       afterthought.</p>
       <a class="int-link" href="/mcp">Set up the MCP server &rarr;</a>
+    </section>
+
+    <section class="int-card">
+      <p class="int-kicker">Autonomous agents</p>
+      <h2>Agent audit trail</h2>
+      <p>A dependency-free CLI plus a drop-in skill for OpenClaw-style agents.
+      The agent anchors one-line action records, a daily manifest of its memory
+      files, and any skill file it shares or receives — a tamper-evident trail
+      of what it did and when. Receipts prove the exact bytes existed at anchor
+      time; they don't prove the action was correct.</p>
+      <pre>python3 orpho_agent_anchor.py anchor-memory ~/workspace
+echo "sent invoice #42" | python3 orpho_agent_anchor.py anchor-text</pre>
+      <a class="int-link" href="https://github.com/Orphograph/Orphograph/tree/master/integrations/openclaw">Agent audit-trail documentation &rarr;</a>
     </section>
 
     <section class="int-card">
