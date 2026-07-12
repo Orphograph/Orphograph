@@ -1,0 +1,682 @@
+{
+  "format": "orphograph-verifier-vectors-v1",
+  "generated": "2026-07-12",
+  "source_of_truth": "server/engine.py verify_receipt / verify_hash_against_receipt and server/merkle.py MerkleTree.verify_inclusion. Expected values were produced by executing the engine itself; the engine is canon.",
+  "ots_header_magic_hex": "004f70656e54696d657374616d7073000050726f6f6600bf89e2e884e89294",
+  "vector_count": 20,
+  "vectors": [
+    {
+      "id": "v01_valid_receipt_one_ots",
+      "kind": "receipt",
+      "operation": "verify_receipt",
+      "description": "Well-formed receipt with one well-formed .ots whose embedded digest matches hash_hex.",
+      "receipt_id": "vec01aaaaaaaaaaa",
+      "receipt_json": "{\"receipt_id\": \"vec01aaaaaaaaaaa\", \"created_at\": \"2026-07-12T00:00:00+00:00\", \"hash_hex\": \"0f0db2b5d86c0341821c3941a3dc3af98556affa577720ca33c5ebd7776df72c\", \"sha512_hex\": \"af019dc05dc6b6c176451537e4d4ca19c72af4b608aa97df9c941fbba282d0dff8abb912b4f183747ebb00462b1f1134afbda03eeb1e34b16ccaeffc4aa0a1ba\", \"client_label\": \"conformance-vector\", \"status\": \"pending\"}",
+      "ots_files": {
+        "a.ots": "004f70656e54696d657374616d7073000050726f6f6600bf89e2e884e8929401080f0db2b5d86c0341821c3941a3dc3af98556affa577720ca33c5ebd7776df72c63616c656e6461722d626f6479"
+      },
+      "expect": {
+        "receipt_id": "vec01aaaaaaaaaaa",
+        "found": true,
+        "hash_hex": "0f0db2b5d86c0341821c3941a3dc3af98556affa577720ca33c5ebd7776df72c",
+        "sha512_hex": "af019dc05dc6b6c176451537e4d4ca19c72af4b608aa97df9c941fbba282d0dff8abb912b4f183747ebb00462b1f1134afbda03eeb1e34b16ccaeffc4aa0a1ba",
+        "calendars_ok": 1,
+        "calendars_total": 1,
+        "status": "pending",
+        "checks": [
+          {
+            "file": "a.ots",
+            "magic_ok": true,
+            "hash_match": true,
+            "ok": true
+          }
+        ]
+      },
+      "notes": {
+        "file_b64": "b3JwaG9ncmFwaCBjb25mb3JtYW5jZSB2ZWN0b3IgZmlsZSBBCg=="
+      }
+    },
+    {
+      "id": "v02_supplied_hash_match",
+      "kind": "receipt",
+      "operation": "verify_hash_against_receipt",
+      "description": "verify_hash_against_receipt with the exact lowercase anchored hash.",
+      "receipt_id": "vec02aaaaaaaaaaa",
+      "receipt_json": "{\"receipt_id\": \"vec02aaaaaaaaaaa\", \"created_at\": \"2026-07-12T00:00:00+00:00\", \"hash_hex\": \"0f0db2b5d86c0341821c3941a3dc3af98556affa577720ca33c5ebd7776df72c\", \"sha512_hex\": \"af019dc05dc6b6c176451537e4d4ca19c72af4b608aa97df9c941fbba282d0dff8abb912b4f183747ebb00462b1f1134afbda03eeb1e34b16ccaeffc4aa0a1ba\", \"client_label\": \"conformance-vector\", \"status\": \"pending\"}",
+      "ots_files": {
+        "a.ots": "004f70656e54696d657374616d7073000050726f6f6600bf89e2e884e8929401080f0db2b5d86c0341821c3941a3dc3af98556affa577720ca33c5ebd7776df72c63616c656e6461722d626f6479"
+      },
+      "expect": {
+        "receipt_id": "vec02aaaaaaaaaaa",
+        "found": true,
+        "hash_hex": "0f0db2b5d86c0341821c3941a3dc3af98556affa577720ca33c5ebd7776df72c",
+        "sha512_hex": "af019dc05dc6b6c176451537e4d4ca19c72af4b608aa97df9c941fbba282d0dff8abb912b4f183747ebb00462b1f1134afbda03eeb1e34b16ccaeffc4aa0a1ba",
+        "calendars_ok": 1,
+        "calendars_total": 1,
+        "status": "pending",
+        "checks": [
+          {
+            "file": "a.ots",
+            "magic_ok": true,
+            "hash_match": true,
+            "ok": true
+          }
+        ],
+        "supplied_hash": "0f0db2b5d86c0341821c3941a3dc3af98556affa577720ca33c5ebd7776df72c",
+        "supplied_matches_receipt": true
+      },
+      "supplied_hash": "0f0db2b5d86c0341821c3941a3dc3af98556affa577720ca33c5ebd7776df72c"
+    },
+    {
+      "id": "v03_supplied_hash_case_and_whitespace",
+      "kind": "receipt",
+      "operation": "verify_hash_against_receipt",
+      "description": "Supplied hash in UPPERCASE with surrounding whitespace MUST still match (strip + lowercase).",
+      "receipt_id": "vec03aaaaaaaaaaa",
+      "receipt_json": "{\"receipt_id\": \"vec03aaaaaaaaaaa\", \"created_at\": \"2026-07-12T00:00:00+00:00\", \"hash_hex\": \"0f0db2b5d86c0341821c3941a3dc3af98556affa577720ca33c5ebd7776df72c\", \"sha512_hex\": \"af019dc05dc6b6c176451537e4d4ca19c72af4b608aa97df9c941fbba282d0dff8abb912b4f183747ebb00462b1f1134afbda03eeb1e34b16ccaeffc4aa0a1ba\", \"client_label\": \"conformance-vector\", \"status\": \"pending\"}",
+      "ots_files": {
+        "a.ots": "004f70656e54696d657374616d7073000050726f6f6600bf89e2e884e8929401080f0db2b5d86c0341821c3941a3dc3af98556affa577720ca33c5ebd7776df72c63616c656e6461722d626f6479"
+      },
+      "expect": {
+        "receipt_id": "vec03aaaaaaaaaaa",
+        "found": true,
+        "hash_hex": "0f0db2b5d86c0341821c3941a3dc3af98556affa577720ca33c5ebd7776df72c",
+        "sha512_hex": "af019dc05dc6b6c176451537e4d4ca19c72af4b608aa97df9c941fbba282d0dff8abb912b4f183747ebb00462b1f1134afbda03eeb1e34b16ccaeffc4aa0a1ba",
+        "calendars_ok": 1,
+        "calendars_total": 1,
+        "status": "pending",
+        "checks": [
+          {
+            "file": "a.ots",
+            "magic_ok": true,
+            "hash_match": true,
+            "ok": true
+          }
+        ],
+        "supplied_hash": "0f0db2b5d86c0341821c3941a3dc3af98556affa577720ca33c5ebd7776df72c",
+        "supplied_matches_receipt": true
+      },
+      "supplied_hash": "  0F0DB2B5D86C0341821C3941A3DC3AF98556AFFA577720CA33C5EBD7776DF72C\n"
+    },
+    {
+      "id": "v04_supplied_hash_wrong",
+      "kind": "receipt",
+      "operation": "verify_hash_against_receipt",
+      "description": "Supplied hash is valid hex but not the anchored digest: no match, no error.",
+      "receipt_id": "vec04aaaaaaaaaaa",
+      "receipt_json": "{\"receipt_id\": \"vec04aaaaaaaaaaa\", \"created_at\": \"2026-07-12T00:00:00+00:00\", \"hash_hex\": \"0f0db2b5d86c0341821c3941a3dc3af98556affa577720ca33c5ebd7776df72c\", \"sha512_hex\": \"af019dc05dc6b6c176451537e4d4ca19c72af4b608aa97df9c941fbba282d0dff8abb912b4f183747ebb00462b1f1134afbda03eeb1e34b16ccaeffc4aa0a1ba\", \"client_label\": \"conformance-vector\", \"status\": \"pending\"}",
+      "ots_files": {
+        "a.ots": "004f70656e54696d657374616d7073000050726f6f6600bf89e2e884e8929401080f0db2b5d86c0341821c3941a3dc3af98556affa577720ca33c5ebd7776df72c63616c656e6461722d626f6479"
+      },
+      "expect": {
+        "receipt_id": "vec04aaaaaaaaaaa",
+        "found": true,
+        "hash_hex": "0f0db2b5d86c0341821c3941a3dc3af98556affa577720ca33c5ebd7776df72c",
+        "sha512_hex": "af019dc05dc6b6c176451537e4d4ca19c72af4b608aa97df9c941fbba282d0dff8abb912b4f183747ebb00462b1f1134afbda03eeb1e34b16ccaeffc4aa0a1ba",
+        "calendars_ok": 1,
+        "calendars_total": 1,
+        "status": "pending",
+        "checks": [
+          {
+            "file": "a.ots",
+            "magic_ok": true,
+            "hash_match": true,
+            "ok": true
+          }
+        ],
+        "supplied_hash": "ef7bfc3b42b9ddbbbd09d3ad57540297dad9017d5a886795de4a2ba97c12dfe7",
+        "supplied_matches_receipt": false
+      },
+      "supplied_hash": "ef7bfc3b42b9ddbbbd09d3ad57540297dad9017d5a886795de4a2ba97c12dfe7"
+    },
+    {
+      "id": "v05_supplied_hash_malformed_hex",
+      "kind": "receipt",
+      "operation": "verify_hash_against_receipt",
+      "description": "Supplied hash is not hex at all. Engine canon: treated as non-match (supplied_matches_receipt false), receipt still found; no exception, no error field.",
+      "receipt_id": "vec05aaaaaaaaaaa",
+      "receipt_json": "{\"receipt_id\": \"vec05aaaaaaaaaaa\", \"created_at\": \"2026-07-12T00:00:00+00:00\", \"hash_hex\": \"0f0db2b5d86c0341821c3941a3dc3af98556affa577720ca33c5ebd7776df72c\", \"sha512_hex\": \"af019dc05dc6b6c176451537e4d4ca19c72af4b608aa97df9c941fbba282d0dff8abb912b4f183747ebb00462b1f1134afbda03eeb1e34b16ccaeffc4aa0a1ba\", \"client_label\": \"conformance-vector\", \"status\": \"pending\"}",
+      "ots_files": {
+        "a.ots": "004f70656e54696d657374616d7073000050726f6f6600bf89e2e884e8929401080f0db2b5d86c0341821c3941a3dc3af98556affa577720ca33c5ebd7776df72c63616c656e6461722d626f6479"
+      },
+      "expect": {
+        "receipt_id": "vec05aaaaaaaaaaa",
+        "found": true,
+        "hash_hex": "0f0db2b5d86c0341821c3941a3dc3af98556affa577720ca33c5ebd7776df72c",
+        "sha512_hex": "af019dc05dc6b6c176451537e4d4ca19c72af4b608aa97df9c941fbba282d0dff8abb912b4f183747ebb00462b1f1134afbda03eeb1e34b16ccaeffc4aa0a1ba",
+        "calendars_ok": 1,
+        "calendars_total": 1,
+        "status": "pending",
+        "checks": [
+          {
+            "file": "a.ots",
+            "magic_ok": true,
+            "hash_match": true,
+            "ok": true
+          }
+        ],
+        "supplied_hash": "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
+        "supplied_matches_receipt": false
+      },
+      "supplied_hash": "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
+    },
+    {
+      "id": "v06_receipt_not_found",
+      "kind": "receipt",
+      "operation": "verify_hash_against_receipt",
+      "description": "No receipt directory exists for the id.",
+      "receipt_id": "vec06missing0000",
+      "receipt_json": null,
+      "ots_files": {},
+      "supplied_hash": "0f0db2b5d86c0341821c3941a3dc3af98556affa577720ca33c5ebd7776df72c",
+      "expect": {
+        "receipt_id": "vec06missing0000",
+        "found": false,
+        "error": "receipt not found"
+      }
+    },
+    {
+      "id": "v07_corrupt_receipt_json",
+      "kind": "receipt",
+      "operation": "verify_receipt",
+      "description": "receipt.json is not valid JSON.",
+      "receipt_id": "vec07aaaaaaaaaaa",
+      "receipt_json": "{not json!!",
+      "ots_files": {
+        "a.ots": "004f70656e54696d657374616d7073000050726f6f6600bf89e2e884e8929401080f0db2b5d86c0341821c3941a3dc3af98556affa577720ca33c5ebd7776df72c63616c656e6461722d626f6479"
+      },
+      "expect": {
+        "receipt_id": "vec07aaaaaaaaaaa",
+        "found": false,
+        "error": "corrupt receipt"
+      }
+    },
+    {
+      "id": "v08_receipt_hash_truncated_63_chars",
+      "kind": "receipt",
+      "operation": "verify_receipt",
+      "description": "Recorded hash_hex is 63 characters: corrupt receipt.",
+      "receipt_id": "vec08aaaaaaaaaaa",
+      "receipt_json": "{\"receipt_id\": \"vec08aaaaaaaaaaa\", \"created_at\": \"2026-07-12T00:00:00+00:00\", \"hash_hex\": \"0f0db2b5d86c0341821c3941a3dc3af98556affa577720ca33c5ebd7776df72\", \"sha512_hex\": \"af019dc05dc6b6c176451537e4d4ca19c72af4b608aa97df9c941fbba282d0dff8abb912b4f183747ebb00462b1f1134afbda03eeb1e34b16ccaeffc4aa0a1ba\", \"client_label\": \"conformance-vector\", \"status\": \"pending\"}",
+      "ots_files": {},
+      "expect": {
+        "receipt_id": "vec08aaaaaaaaaaa",
+        "found": false,
+        "error": "corrupt receipt"
+      }
+    },
+    {
+      "id": "v09_receipt_hash_stored_uppercase",
+      "kind": "receipt",
+      "operation": "verify_hash_against_receipt",
+      "description": "Recorded hash_hex is uppercase. Engine canon quirk: receipt is found and .ots bytes match, but verify_hash_against_receipt compares the lowercased supplied hash to the stored string verbatim, so a lowercase supplied hash does NOT match. anchor_hash never stores uppercase; conforming verifiers MUST reproduce this behaviour for out-of-band receipts.",
+      "receipt_id": "vec09aaaaaaaaaaa",
+      "receipt_json": "{\"receipt_id\": \"vec09aaaaaaaaaaa\", \"created_at\": \"2026-07-12T00:00:00+00:00\", \"hash_hex\": \"0F0DB2B5D86C0341821C3941A3DC3AF98556AFFA577720CA33C5EBD7776DF72C\", \"sha512_hex\": \"af019dc05dc6b6c176451537e4d4ca19c72af4b608aa97df9c941fbba282d0dff8abb912b4f183747ebb00462b1f1134afbda03eeb1e34b16ccaeffc4aa0a1ba\", \"client_label\": \"conformance-vector\", \"status\": \"pending\"}",
+      "ots_files": {
+        "a.ots": "004f70656e54696d657374616d7073000050726f6f6600bf89e2e884e8929401080f0db2b5d86c0341821c3941a3dc3af98556affa577720ca33c5ebd7776df72c63616c656e6461722d626f6479"
+      },
+      "expect": {
+        "receipt_id": "vec09aaaaaaaaaaa",
+        "found": true,
+        "hash_hex": "0F0DB2B5D86C0341821C3941A3DC3AF98556AFFA577720CA33C5EBD7776DF72C",
+        "sha512_hex": "af019dc05dc6b6c176451537e4d4ca19c72af4b608aa97df9c941fbba282d0dff8abb912b4f183747ebb00462b1f1134afbda03eeb1e34b16ccaeffc4aa0a1ba",
+        "calendars_ok": 1,
+        "calendars_total": 1,
+        "status": "pending",
+        "checks": [
+          {
+            "file": "a.ots",
+            "magic_ok": true,
+            "hash_match": true,
+            "ok": true
+          }
+        ],
+        "supplied_hash": "0f0db2b5d86c0341821c3941a3dc3af98556affa577720ca33c5ebd7776df72c",
+        "supplied_matches_receipt": false
+      },
+      "supplied_hash": "0f0db2b5d86c0341821c3941a3dc3af98556affa577720ca33c5ebd7776df72c"
+    },
+    {
+      "id": "v10_ots_bad_magic",
+      "kind": "receipt",
+      "operation": "verify_receipt",
+      "description": ".ots file does not start with the OpenTimestamps header magic.",
+      "receipt_id": "vec10aaaaaaaaaaa",
+      "receipt_json": "{\"receipt_id\": \"vec10aaaaaaaaaaa\", \"created_at\": \"2026-07-12T00:00:00+00:00\", \"hash_hex\": \"0f0db2b5d86c0341821c3941a3dc3af98556affa577720ca33c5ebd7776df72c\", \"sha512_hex\": \"af019dc05dc6b6c176451537e4d4ca19c72af4b608aa97df9c941fbba282d0dff8abb912b4f183747ebb00462b1f1134afbda03eeb1e34b16ccaeffc4aa0a1ba\", \"client_label\": \"conformance-vector\", \"status\": \"pending\"}",
+      "ots_files": {
+        "a.ots": "004e6f7454696d657374616d70730001080f0db2b5d86c0341821c3941a3dc3af98556affa577720ca33c5ebd7776df72c626f6479"
+      },
+      "expect": {
+        "receipt_id": "vec10aaaaaaaaaaa",
+        "found": true,
+        "hash_hex": "0f0db2b5d86c0341821c3941a3dc3af98556affa577720ca33c5ebd7776df72c",
+        "sha512_hex": "af019dc05dc6b6c176451537e4d4ca19c72af4b608aa97df9c941fbba282d0dff8abb912b4f183747ebb00462b1f1134afbda03eeb1e34b16ccaeffc4aa0a1ba",
+        "calendars_ok": 0,
+        "calendars_total": 1,
+        "status": "pending",
+        "checks": [
+          {
+            "file": "a.ots",
+            "magic_ok": false,
+            "hash_match": false,
+            "ok": false
+          }
+        ]
+      }
+    },
+    {
+      "id": "v11_ots_truncated",
+      "kind": "receipt",
+      "operation": "verify_receipt",
+      "description": ".ots is truncated mid-digest: magic ok, embedded digest incomplete, hash_match false.",
+      "receipt_id": "vec11aaaaaaaaaaa",
+      "receipt_json": "{\"receipt_id\": \"vec11aaaaaaaaaaa\", \"created_at\": \"2026-07-12T00:00:00+00:00\", \"hash_hex\": \"0f0db2b5d86c0341821c3941a3dc3af98556affa577720ca33c5ebd7776df72c\", \"sha512_hex\": \"af019dc05dc6b6c176451537e4d4ca19c72af4b608aa97df9c941fbba282d0dff8abb912b4f183747ebb00462b1f1134afbda03eeb1e34b16ccaeffc4aa0a1ba\", \"client_label\": \"conformance-vector\", \"status\": \"pending\"}",
+      "ots_files": {
+        "a.ots": "004f70656e54696d657374616d7073000050726f6f6600bf89e2e884e8929401080f0db2b5d86c0341821c3941a3dc3af9"
+      },
+      "expect": {
+        "receipt_id": "vec11aaaaaaaaaaa",
+        "found": true,
+        "hash_hex": "0f0db2b5d86c0341821c3941a3dc3af98556affa577720ca33c5ebd7776df72c",
+        "sha512_hex": "af019dc05dc6b6c176451537e4d4ca19c72af4b608aa97df9c941fbba282d0dff8abb912b4f183747ebb00462b1f1134afbda03eeb1e34b16ccaeffc4aa0a1ba",
+        "calendars_ok": 0,
+        "calendars_total": 1,
+        "status": "pending",
+        "checks": [
+          {
+            "file": "a.ots",
+            "magic_ok": true,
+            "hash_match": false,
+            "ok": false
+          }
+        ]
+      }
+    },
+    {
+      "id": "v12_ots_digest_mismatch_mixed",
+      "kind": "receipt",
+      "operation": "verify_receipt",
+      "description": "Two .ots files: one embeds the wrong digest, one is correct. Per-file checks diverge; calendars_ok counts only the good one.",
+      "receipt_id": "vec12aaaaaaaaaaa",
+      "receipt_json": "{\"receipt_id\": \"vec12aaaaaaaaaaa\", \"created_at\": \"2026-07-12T00:00:00+00:00\", \"hash_hex\": \"0f0db2b5d86c0341821c3941a3dc3af98556affa577720ca33c5ebd7776df72c\", \"sha512_hex\": \"af019dc05dc6b6c176451537e4d4ca19c72af4b608aa97df9c941fbba282d0dff8abb912b4f183747ebb00462b1f1134afbda03eeb1e34b16ccaeffc4aa0a1ba\", \"client_label\": \"conformance-vector\", \"status\": \"pending\"}",
+      "ots_files": {
+        "a.ots": "004f70656e54696d657374616d7073000050726f6f6600bf89e2e884e892940108ef7bfc3b42b9ddbbbd09d3ad57540297dad9017d5a886795de4a2ba97c12dfe763616c656e6461722d626f6479",
+        "b.ots": "004f70656e54696d657374616d7073000050726f6f6600bf89e2e884e8929401080f0db2b5d86c0341821c3941a3dc3af98556affa577720ca33c5ebd7776df72c63616c656e6461722d626f6479"
+      },
+      "expect": {
+        "receipt_id": "vec12aaaaaaaaaaa",
+        "found": true,
+        "hash_hex": "0f0db2b5d86c0341821c3941a3dc3af98556affa577720ca33c5ebd7776df72c",
+        "sha512_hex": "af019dc05dc6b6c176451537e4d4ca19c72af4b608aa97df9c941fbba282d0dff8abb912b4f183747ebb00462b1f1134afbda03eeb1e34b16ccaeffc4aa0a1ba",
+        "calendars_ok": 1,
+        "calendars_total": 2,
+        "status": "pending",
+        "checks": [
+          {
+            "file": "a.ots",
+            "magic_ok": true,
+            "hash_match": false,
+            "ok": false
+          },
+          {
+            "file": "b.ots",
+            "magic_ok": true,
+            "hash_match": true,
+            "ok": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "v13_zero_ots_files",
+      "kind": "receipt",
+      "operation": "verify_receipt",
+      "description": "Receipt with no .ots files at all: found, calendars_total 0.",
+      "receipt_id": "vec13aaaaaaaaaaa",
+      "receipt_json": "{\"receipt_id\": \"vec13aaaaaaaaaaa\", \"created_at\": \"2026-07-12T00:00:00+00:00\", \"hash_hex\": \"0f0db2b5d86c0341821c3941a3dc3af98556affa577720ca33c5ebd7776df72c\", \"sha512_hex\": \"af019dc05dc6b6c176451537e4d4ca19c72af4b608aa97df9c941fbba282d0dff8abb912b4f183747ebb00462b1f1134afbda03eeb1e34b16ccaeffc4aa0a1ba\", \"client_label\": \"conformance-vector\", \"status\": \"pending\"}",
+      "ots_files": {},
+      "expect": {
+        "receipt_id": "vec13aaaaaaaaaaa",
+        "found": true,
+        "hash_hex": "0f0db2b5d86c0341821c3941a3dc3af98556affa577720ca33c5ebd7776df72c",
+        "sha512_hex": "af019dc05dc6b6c176451537e4d4ca19c72af4b608aa97df9c941fbba282d0dff8abb912b4f183747ebb00462b1f1134afbda03eeb1e34b16ccaeffc4aa0a1ba",
+        "calendars_ok": 0,
+        "calendars_total": 0,
+        "status": "pending",
+        "checks": []
+      }
+    },
+    {
+      "id": "v14_inclusion_positive_promoted_tree",
+      "kind": "merkle_inclusion",
+      "operation": "verify_inclusion",
+      "description": "Valid inclusion proof for the middle leaf of a 3-leaf tree (odd level exercises RFC 6962 promotion).",
+      "manifest": {
+        "algorithm": "orphograph-merkle-v1-rfc6962",
+        "version": 1,
+        "root_hex": "51bc58a29d62ed5704309a33027b27f44f8786181dccc1664d8dae88df285537",
+        "leaves": [
+          {
+            "path": "docs/a.txt",
+            "file_sha256_hex": "946a4c596ad796553d56e587dfd6bea39635cc9fd02177158811325001dbbebc",
+            "leaf_hex": "e31d77586519a86d21d1a159b2ee6f29532b1aa2dc48c04c7b7087a898b0c81c",
+            "size_bytes": 20
+          },
+          {
+            "path": "docs/b.txt",
+            "file_sha256_hex": "7b0e4b4aea888359fdfaca3102414da8d2f0e59459fcec2c21ef26fd044f35bf",
+            "leaf_hex": "4b7392503cda31d326af8708695165f828e7e816b635282b34d063224ce8250b",
+            "size_bytes": 20
+          },
+          {
+            "path": "z.bin",
+            "file_sha256_hex": "5771dce653b2e34dedc6747a38c00af9c248b3bdd4b4a700a4b1262803fa2bc4",
+            "leaf_hex": "ad395d40fffe60e150a45f37cb6147ff5dd299ba0a14918a41194c99056b7344",
+            "size_bytes": 7
+          }
+        ]
+      },
+      "rel_path": "docs/b.txt",
+      "file_b64": "YnJhdm8gZmlsZSBjb250ZW50cwo=",
+      "file_sha256_hex": "7b0e4b4aea888359fdfaca3102414da8d2f0e59459fcec2c21ef26fd044f35bf",
+      "proof": [
+        [
+          "L",
+          "e31d77586519a86d21d1a159b2ee6f29532b1aa2dc48c04c7b7087a898b0c81c"
+        ],
+        [
+          "R",
+          "ad395d40fffe60e150a45f37cb6147ff5dd299ba0a14918a41194c99056b7344"
+        ]
+      ],
+      "root_hex": "51bc58a29d62ed5704309a33027b27f44f8786181dccc1664d8dae88df285537",
+      "expect": {
+        "included": true
+      }
+    },
+    {
+      "id": "v15_inclusion_positive_lone_promoted_leaf",
+      "kind": "merkle_inclusion",
+      "operation": "verify_inclusion",
+      "description": "Valid proof for the lone last leaf, which is promoted at level 0 (fewer proof steps).",
+      "manifest": {
+        "algorithm": "orphograph-merkle-v1-rfc6962",
+        "version": 1,
+        "root_hex": "51bc58a29d62ed5704309a33027b27f44f8786181dccc1664d8dae88df285537",
+        "leaves": [
+          {
+            "path": "docs/a.txt",
+            "file_sha256_hex": "946a4c596ad796553d56e587dfd6bea39635cc9fd02177158811325001dbbebc",
+            "leaf_hex": "e31d77586519a86d21d1a159b2ee6f29532b1aa2dc48c04c7b7087a898b0c81c",
+            "size_bytes": 20
+          },
+          {
+            "path": "docs/b.txt",
+            "file_sha256_hex": "7b0e4b4aea888359fdfaca3102414da8d2f0e59459fcec2c21ef26fd044f35bf",
+            "leaf_hex": "4b7392503cda31d326af8708695165f828e7e816b635282b34d063224ce8250b",
+            "size_bytes": 20
+          },
+          {
+            "path": "z.bin",
+            "file_sha256_hex": "5771dce653b2e34dedc6747a38c00af9c248b3bdd4b4a700a4b1262803fa2bc4",
+            "leaf_hex": "ad395d40fffe60e150a45f37cb6147ff5dd299ba0a14918a41194c99056b7344",
+            "size_bytes": 7
+          }
+        ]
+      },
+      "rel_path": "z.bin",
+      "file_b64": "AAECenVsdQ==",
+      "file_sha256_hex": "5771dce653b2e34dedc6747a38c00af9c248b3bdd4b4a700a4b1262803fa2bc4",
+      "proof": [
+        [
+          "L",
+          "a718e3a62619cbd89aa066789cb4e7810b16734ab6a639573f7b12a822b64510"
+        ]
+      ],
+      "root_hex": "51bc58a29d62ed5704309a33027b27f44f8786181dccc1664d8dae88df285537",
+      "expect": {
+        "included": true
+      }
+    },
+    {
+      "id": "v16_inclusion_negative_wrong_path",
+      "kind": "merkle_inclusion",
+      "operation": "verify_inclusion",
+      "description": "Same file bytes and proof but a different rel_path: MUST fail \u2014 the path is bound into the leaf hash.",
+      "manifest": {
+        "algorithm": "orphograph-merkle-v1-rfc6962",
+        "version": 1,
+        "root_hex": "51bc58a29d62ed5704309a33027b27f44f8786181dccc1664d8dae88df285537",
+        "leaves": [
+          {
+            "path": "docs/a.txt",
+            "file_sha256_hex": "946a4c596ad796553d56e587dfd6bea39635cc9fd02177158811325001dbbebc",
+            "leaf_hex": "e31d77586519a86d21d1a159b2ee6f29532b1aa2dc48c04c7b7087a898b0c81c",
+            "size_bytes": 20
+          },
+          {
+            "path": "docs/b.txt",
+            "file_sha256_hex": "7b0e4b4aea888359fdfaca3102414da8d2f0e59459fcec2c21ef26fd044f35bf",
+            "leaf_hex": "4b7392503cda31d326af8708695165f828e7e816b635282b34d063224ce8250b",
+            "size_bytes": 20
+          },
+          {
+            "path": "z.bin",
+            "file_sha256_hex": "5771dce653b2e34dedc6747a38c00af9c248b3bdd4b4a700a4b1262803fa2bc4",
+            "leaf_hex": "ad395d40fffe60e150a45f37cb6147ff5dd299ba0a14918a41194c99056b7344",
+            "size_bytes": 7
+          }
+        ]
+      },
+      "rel_path": "docs/renamed.txt",
+      "file_b64": "YnJhdm8gZmlsZSBjb250ZW50cwo=",
+      "file_sha256_hex": "7b0e4b4aea888359fdfaca3102414da8d2f0e59459fcec2c21ef26fd044f35bf",
+      "proof": [
+        [
+          "L",
+          "e31d77586519a86d21d1a159b2ee6f29532b1aa2dc48c04c7b7087a898b0c81c"
+        ],
+        [
+          "R",
+          "ad395d40fffe60e150a45f37cb6147ff5dd299ba0a14918a41194c99056b7344"
+        ]
+      ],
+      "root_hex": "51bc58a29d62ed5704309a33027b27f44f8786181dccc1664d8dae88df285537",
+      "expect": {
+        "included": false
+      }
+    },
+    {
+      "id": "v17_inclusion_negative_tampered_sibling",
+      "kind": "merkle_inclusion",
+      "operation": "verify_inclusion",
+      "description": "First sibling hash in the proof altered: MUST fail.",
+      "manifest": {
+        "algorithm": "orphograph-merkle-v1-rfc6962",
+        "version": 1,
+        "root_hex": "51bc58a29d62ed5704309a33027b27f44f8786181dccc1664d8dae88df285537",
+        "leaves": [
+          {
+            "path": "docs/a.txt",
+            "file_sha256_hex": "946a4c596ad796553d56e587dfd6bea39635cc9fd02177158811325001dbbebc",
+            "leaf_hex": "e31d77586519a86d21d1a159b2ee6f29532b1aa2dc48c04c7b7087a898b0c81c",
+            "size_bytes": 20
+          },
+          {
+            "path": "docs/b.txt",
+            "file_sha256_hex": "7b0e4b4aea888359fdfaca3102414da8d2f0e59459fcec2c21ef26fd044f35bf",
+            "leaf_hex": "4b7392503cda31d326af8708695165f828e7e816b635282b34d063224ce8250b",
+            "size_bytes": 20
+          },
+          {
+            "path": "z.bin",
+            "file_sha256_hex": "5771dce653b2e34dedc6747a38c00af9c248b3bdd4b4a700a4b1262803fa2bc4",
+            "leaf_hex": "ad395d40fffe60e150a45f37cb6147ff5dd299ba0a14918a41194c99056b7344",
+            "size_bytes": 7
+          }
+        ]
+      },
+      "rel_path": "docs/b.txt",
+      "file_b64": "YnJhdm8gZmlsZSBjb250ZW50cwo=",
+      "file_sha256_hex": "7b0e4b4aea888359fdfaca3102414da8d2f0e59459fcec2c21ef26fd044f35bf",
+      "proof": [
+        [
+          "L",
+          "0000000000000000000000000000000000000000000000000000000000000001"
+        ],
+        [
+          "R",
+          "ad395d40fffe60e150a45f37cb6147ff5dd299ba0a14918a41194c99056b7344"
+        ]
+      ],
+      "root_hex": "51bc58a29d62ed5704309a33027b27f44f8786181dccc1664d8dae88df285537",
+      "expect": {
+        "included": false
+      }
+    },
+    {
+      "id": "v18_inclusion_negative_bad_direction",
+      "kind": "merkle_inclusion",
+      "operation": "verify_inclusion",
+      "description": "Proof step direction is 'X' (not 'L'/'R'): MUST fail cleanly (false, no exception).",
+      "manifest": {
+        "algorithm": "orphograph-merkle-v1-rfc6962",
+        "version": 1,
+        "root_hex": "51bc58a29d62ed5704309a33027b27f44f8786181dccc1664d8dae88df285537",
+        "leaves": [
+          {
+            "path": "docs/a.txt",
+            "file_sha256_hex": "946a4c596ad796553d56e587dfd6bea39635cc9fd02177158811325001dbbebc",
+            "leaf_hex": "e31d77586519a86d21d1a159b2ee6f29532b1aa2dc48c04c7b7087a898b0c81c",
+            "size_bytes": 20
+          },
+          {
+            "path": "docs/b.txt",
+            "file_sha256_hex": "7b0e4b4aea888359fdfaca3102414da8d2f0e59459fcec2c21ef26fd044f35bf",
+            "leaf_hex": "4b7392503cda31d326af8708695165f828e7e816b635282b34d063224ce8250b",
+            "size_bytes": 20
+          },
+          {
+            "path": "z.bin",
+            "file_sha256_hex": "5771dce653b2e34dedc6747a38c00af9c248b3bdd4b4a700a4b1262803fa2bc4",
+            "leaf_hex": "ad395d40fffe60e150a45f37cb6147ff5dd299ba0a14918a41194c99056b7344",
+            "size_bytes": 7
+          }
+        ]
+      },
+      "rel_path": "docs/b.txt",
+      "file_b64": "YnJhdm8gZmlsZSBjb250ZW50cwo=",
+      "file_sha256_hex": "7b0e4b4aea888359fdfaca3102414da8d2f0e59459fcec2c21ef26fd044f35bf",
+      "proof": [
+        [
+          "X",
+          "e31d77586519a86d21d1a159b2ee6f29532b1aa2dc48c04c7b7087a898b0c81c"
+        ],
+        [
+          "R",
+          "ad395d40fffe60e150a45f37cb6147ff5dd299ba0a14918a41194c99056b7344"
+        ]
+      ],
+      "root_hex": "51bc58a29d62ed5704309a33027b27f44f8786181dccc1664d8dae88df285537",
+      "expect": {
+        "included": false
+      }
+    },
+    {
+      "id": "v19_inclusion_negative_malformed_sibling_hex",
+      "kind": "merkle_inclusion",
+      "operation": "verify_inclusion",
+      "description": "Proof sibling is not valid 32-byte hex: MUST fail cleanly (false, no exception).",
+      "manifest": {
+        "algorithm": "orphograph-merkle-v1-rfc6962",
+        "version": 1,
+        "root_hex": "51bc58a29d62ed5704309a33027b27f44f8786181dccc1664d8dae88df285537",
+        "leaves": [
+          {
+            "path": "docs/a.txt",
+            "file_sha256_hex": "946a4c596ad796553d56e587dfd6bea39635cc9fd02177158811325001dbbebc",
+            "leaf_hex": "e31d77586519a86d21d1a159b2ee6f29532b1aa2dc48c04c7b7087a898b0c81c",
+            "size_bytes": 20
+          },
+          {
+            "path": "docs/b.txt",
+            "file_sha256_hex": "7b0e4b4aea888359fdfaca3102414da8d2f0e59459fcec2c21ef26fd044f35bf",
+            "leaf_hex": "4b7392503cda31d326af8708695165f828e7e816b635282b34d063224ce8250b",
+            "size_bytes": 20
+          },
+          {
+            "path": "z.bin",
+            "file_sha256_hex": "5771dce653b2e34dedc6747a38c00af9c248b3bdd4b4a700a4b1262803fa2bc4",
+            "leaf_hex": "ad395d40fffe60e150a45f37cb6147ff5dd299ba0a14918a41194c99056b7344",
+            "size_bytes": 7
+          }
+        ]
+      },
+      "rel_path": "docs/b.txt",
+      "file_b64": "YnJhdm8gZmlsZSBjb250ZW50cwo=",
+      "file_sha256_hex": "7b0e4b4aea888359fdfaca3102414da8d2f0e59459fcec2c21ef26fd044f35bf",
+      "proof": [
+        [
+          "L",
+          "e31d77586519a86d21d1a159b2ee6f29532b1aa2dc48c04c7b7087a898b0c81zz"
+        ],
+        [
+          "R",
+          "ad395d40fffe60e150a45f37cb6147ff5dd299ba0a14918a41194c99056b7344"
+        ]
+      ],
+      "root_hex": "51bc58a29d62ed5704309a33027b27f44f8786181dccc1664d8dae88df285537",
+      "expect": {
+        "included": false
+      }
+    },
+    {
+      "id": "v20_inclusion_negative_wrong_root",
+      "kind": "merkle_inclusion",
+      "operation": "verify_inclusion",
+      "description": "Valid proof against a different (all-zero) root: MUST fail.",
+      "manifest": {
+        "algorithm": "orphograph-merkle-v1-rfc6962",
+        "version": 1,
+        "root_hex": "51bc58a29d62ed5704309a33027b27f44f8786181dccc1664d8dae88df285537",
+        "leaves": [
+          {
+            "path": "docs/a.txt",
+            "file_sha256_hex": "946a4c596ad796553d56e587dfd6bea39635cc9fd02177158811325001dbbebc",
+            "leaf_hex": "e31d77586519a86d21d1a159b2ee6f29532b1aa2dc48c04c7b7087a898b0c81c",
+            "size_bytes": 20
+          },
+          {
+            "path": "docs/b.txt",
+            "file_sha256_hex": "7b0e4b4aea888359fdfaca3102414da8d2f0e59459fcec2c21ef26fd044f35bf",
+            "leaf_hex": "4b7392503cda31d326af8708695165f828e7e816b635282b34d063224ce8250b",
+            "size_bytes": 20
+          },
+          {
+            "path": "z.bin",
+            "file_sha256_hex": "5771dce653b2e34dedc6747a38c00af9c248b3bdd4b4a700a4b1262803fa2bc4",
+            "leaf_hex": "ad395d40fffe60e150a45f37cb6147ff5dd299ba0a14918a41194c99056b7344",
+            "size_bytes": 7
+          }
+        ]
+      },
+      "rel_path": "docs/b.txt",
+      "file_b64": "YnJhdm8gZmlsZSBjb250ZW50cwo=",
+      "file_sha256_hex": "7b0e4b4aea888359fdfaca3102414da8d2f0e59459fcec2c21ef26fd044f35bf",
+      "proof": [
+        [
+          "L",
+          "e31d77586519a86d21d1a159b2ee6f29532b1aa2dc48c04c7b7087a898b0c81c"
+        ],
+        [
+          "R",
+          "ad395d40fffe60e150a45f37cb6147ff5dd299ba0a14918a41194c99056b7344"
+        ]
+      ],
+      "root_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+      "expect": {
+        "included": false
+      }
+    }
+  ]
+}

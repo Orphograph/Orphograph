@@ -80,6 +80,7 @@ def verify_folder(
     *,
     server_url: str = _client.DEFAULT_SERVER_URL,
     api_key: Optional[str] = None,
+    exclude: Optional[list] = None,
 ) -> bool:
     """Verify a local folder against a previously anchored receipt.
 
@@ -96,9 +97,10 @@ def verify_folder(
     server_root = manifest.get("root_hex")
     if not server_root:
         return False
-    # Use the same exclude list the server's manifest implies (the default
-    # deny list is the office convention).
-    tree = MerkleTree.from_folder(root, exclude=None)
+    # Must mirror whatever exclude list the folder was ANCHORED with —
+    # anchor_folder accepts a custom list, so verification has to as well
+    # or custom-exclude folders can never verify (AUDIT D2).
+    tree = MerkleTree.from_folder(root, exclude=exclude)
     return tree.root_hex() == server_root
 
 

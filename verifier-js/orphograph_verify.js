@@ -154,8 +154,12 @@ export async function verifyReceiptAgainstFile(fileBytes, receipt) {
     };
   }
 
-  const receiptSha256 = String(receipt.hash_hex || receipt.sha256_hex || receipt.sha256 || "").toLowerCase();
-  const receiptSha512 = String(receipt.sha512_hex || receipt.sha512 || "").toLowerCase();
+  // Canonical fields only, stored value compared as-is: the engine
+  // (server/engine.py verify_hash_against_receipt) lowercases the SUPPLIED
+  // side and takes the stored hash verbatim, so a receipt whose stored hash
+  // was tampered to uppercase must NOT verify here either (VERIFIER_SPEC.md).
+  const receiptSha256 = String(receipt.hash_hex || "");
+  const receiptSha512 = String(receipt.sha512_hex || "");
   const receiptId = String(receipt.receipt_id || receipt.id || receipt.receiptId || "");
 
   if (!receiptSha256) {
