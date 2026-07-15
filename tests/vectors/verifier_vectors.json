@@ -3,7 +3,7 @@
   "generated": "2026-07-12",
   "source_of_truth": "server/engine.py verify_receipt / verify_hash_against_receipt and server/merkle.py MerkleTree.verify_inclusion. Expected values were produced by executing the engine itself; the engine is canon.",
   "ots_header_magic_hex": "004f70656e54696d657374616d7073000050726f6f6600bf89e2e884e89294",
-  "vector_count": 20,
+  "vector_count": 21,
   "vectors": [
     {
       "id": "v01_valid_receipt_one_ots",
@@ -674,6 +674,54 @@
         ]
       ],
       "root_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+      "expect": {
+        "included": false
+      }
+    },
+    {
+      "id": "v21_inclusion_negative_sibling_hex_lenient_second_nibble",
+      "kind": "merkle_inclusion",
+      "operation": "verify_inclusion",
+      "description": "Proof sibling is 64 chars but its final pair is '1g' - a valid first nibble followed by a non-hex character. Strict hex decoding MUST reject it and the proof MUST fail cleanly (false, no exception). Guards against parseInt-style lenient parsers that decode '1g' as 0x01 (audit D4).",
+      "manifest": {
+        "algorithm": "orphograph-merkle-v1-rfc6962",
+        "version": 1,
+        "root_hex": "51bc58a29d62ed5704309a33027b27f44f8786181dccc1664d8dae88df285537",
+        "leaves": [
+          {
+            "path": "docs/a.txt",
+            "file_sha256_hex": "946a4c596ad796553d56e587dfd6bea39635cc9fd02177158811325001dbbebc",
+            "leaf_hex": "e31d77586519a86d21d1a159b2ee6f29532b1aa2dc48c04c7b7087a898b0c81c",
+            "size_bytes": 20
+          },
+          {
+            "path": "docs/b.txt",
+            "file_sha256_hex": "7b0e4b4aea888359fdfaca3102414da8d2f0e59459fcec2c21ef26fd044f35bf",
+            "leaf_hex": "4b7392503cda31d326af8708695165f828e7e816b635282b34d063224ce8250b",
+            "size_bytes": 20
+          },
+          {
+            "path": "z.bin",
+            "file_sha256_hex": "5771dce653b2e34dedc6747a38c00af9c248b3bdd4b4a700a4b1262803fa2bc4",
+            "leaf_hex": "ad395d40fffe60e150a45f37cb6147ff5dd299ba0a14918a41194c99056b7344",
+            "size_bytes": 7
+          }
+        ]
+      },
+      "rel_path": "docs/b.txt",
+      "file_b64": "YnJhdm8gZmlsZSBjb250ZW50cwo=",
+      "file_sha256_hex": "7b0e4b4aea888359fdfaca3102414da8d2f0e59459fcec2c21ef26fd044f35bf",
+      "proof": [
+        [
+          "L",
+          "e31d77586519a86d21d1a159b2ee6f29532b1aa2dc48c04c7b7087a898b0c81g"
+        ],
+        [
+          "R",
+          "ad395d40fffe60e150a45f37cb6147ff5dd299ba0a14918a41194c99056b7344"
+        ]
+      ],
+      "root_hex": "51bc58a29d62ed5704309a33027b27f44f8786181dccc1664d8dae88df285537",
       "expect": {
         "included": false
       }

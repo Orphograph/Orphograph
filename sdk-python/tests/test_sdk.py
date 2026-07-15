@@ -151,6 +151,21 @@ class TestInclusionProof(unittest.TestCase):
             )
             self.assertTrue(ok)
 
+    def test_verify_inclusion_missing_file_raises(self):
+        # AUDIT D7: a missing local file is an I/O precondition failure and
+        # must surface as FileNotFoundError — never a silent False that
+        # masquerades as a "not included" verdict (matches sdk-node, which
+        # rejects with the filesystem error).
+        with tempfile.TemporaryDirectory() as td:
+            missing = str(Path(td) / "does-not-exist.txt")
+            with self.assertRaises(FileNotFoundError):
+                orphograph.verify_inclusion(
+                    file_path=missing,
+                    rel_path="does-not-exist.txt",
+                    proof=[],
+                    root_hex="00" * 32,
+                )
+
     def test_verify_inclusion_rejects_wrong_root(self):
         with tempfile.TemporaryDirectory() as td:
             folder = Path(td)

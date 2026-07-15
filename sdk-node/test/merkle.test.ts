@@ -70,6 +70,35 @@ test("hex helpers round-trip", () => {
   assert.deepEqual(hexToBytes("deadbeef00ff"), bytes);
 });
 
+test("fromHex is strict — rejects any non-hex character (audit D4)", () => {
+  // parseInt-based parsing accepted a valid first nibble followed by
+  // garbage ("a?" -> 10, "1g" -> 1). Python's bytes.fromhex raises on
+  // both; VERIFIER_SPEC §4.1 requires strict hex.
+  assert.throws(() => hexToBytes("1g"), /invalid hex/);
+  assert.throws(() => hexToBytes("a?"), /invalid hex/);
+  assert.throws(() => hexToBytes("zz"), /invalid hex/);
+  assert.throws(() => hexToBytes("abc"), /invalid hex/); // odd length
+  // Uppercase remains acceptable (bytes.fromhex accepts it too).
+  assert.deepEqual(hexToBytes("DEADBEEF"), new Uint8Array([0xde, 0xad, 0xbe, 0xef]));
+});
+
+test("verifyInclusion returns false (no throw) on a lenient-nibble sibling (audit D4)", () => {
+  // A 64-char sibling whose final pair is "1g": the old parser decoded it
+  // to 0x01 and walked on; strict decode must fail the step. Either way the
+  // spec requires a clean `false`, never an exception (VERIFIER_SPEC §4.1).
+  const fileHash = new Uint8Array(
+    createHash("sha256").update("some file\n").digest(),
+  );
+  const badSibling = "ab".repeat(31) + "1g";
+  const ok = MerkleTree.verifyInclusion(
+    fileHash,
+    "f.txt",
+    [["L", badSibling]],
+    "cd".repeat(32),
+  );
+  assert.equal(ok, false);
+});
+
 // ─── tree-shape vectors (single file, three files, odd count) ────────────
 
 interface Fixture {
