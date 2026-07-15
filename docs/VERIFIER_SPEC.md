@@ -223,6 +223,10 @@ MUST behaviors:
   parsers do); the digest comparison is on raw bytes.
 - A promoted (lone-last) node contributes no proof step at that level, so
   valid proofs may be shorter than `ceil(log2(n))`.
+- Clarification (2026-07-15, audit D7): the no-raise rule governs the
+  proof/root/hash inputs of this pure function only; SDK wrappers that
+  accept a local file *path* MUST surface a missing/unreadable file as an
+  I/O error (raise/reject), never as a silent `false`.
 
 An empty proof list is valid and verifies iff `leaf_hash(rel_path,
 file_hash) == root` (single-file tree: root == leaf).
