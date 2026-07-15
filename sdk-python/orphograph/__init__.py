@@ -131,10 +131,17 @@ def verify_inclusion(
 
     Reads the file from disk, computes its SHA-256, and walks the proof
     upward against the supplied root. No network call is made.
+
+    Raises ``FileNotFoundError`` when ``file_path`` does not exist (or is
+    not a regular file). A missing local file is an I/O precondition
+    failure, not a "not included" verdict — for a notary, a distinguishable
+    error beats a silent ``False`` (audit D7; matches the Node SDK, whose
+    ``verifyInclusion`` rejects with the filesystem error). A malformed
+    proof or root still returns ``False`` per VERIFIER_SPEC §4.1.
     """
     p = Path(file_path)
     if not p.is_file():
-        return False
+        raise FileNotFoundError(f"no such file: {file_path}")
     h = hashlib.sha256()
     with p.open("rb") as f:
         while True:

@@ -69,7 +69,14 @@ negative, permanently). sdk-node `verifyFolder` accepts `options.exclude`
 answers for the same folder + receipt. Fix pass: add `exclude` kwarg to
 `verify_folder` (signature-compatible; not touched in this pass per scope).
 
-### D3. sdk-node `verifyFolder` falls back to `receipt.hash_hex` when the manifest root is absent — DIFFERENT ANSWER in the degraded path (severity: MEDIUM)
+### D3. sdk-node `verifyFolder` falls back to `receipt.hash_hex` when the manifest root is absent — DIFFERENT ANSWER in the degraded path (severity: MEDIUM) — **FIXED 2026-07-15**
+
+> **FIXED 2026-07-15** (branch `fix/verifier-minor-drifts`): fallback removed
+> in `sdk-node/src/index.ts` — remote side is `manifest.root_hex` or the
+> result is `false`, per spec §4.2. Verified live against a mock server:
+> degraded response (no manifest, matching `receipt.hash_hex`) → `false`;
+> full response → `true`. Regression tests added in
+> `sdk-node/test/client.test.ts`.
 
 `sdk-node/src/index.ts:135-138`: remote root :=
 `manifest.root_hex || receipt.hash_hex || ""`. sdk-python
@@ -78,7 +85,15 @@ For folder receipts `hash_hex == root_hex` so the fallback usually agrees,
 but on a redacted/partial response the node SDK can return `true` where
 Python returns `false`. Spec §4.2 rules: manifest root or fail.
 
-### D4. sdk-node `fromHex` is lenient in the second nibble — DIFFERENT ERROR / lenient parse (severity: MEDIUM-LOW)
+### D4. sdk-node `fromHex` is lenient in the second nibble — DIFFERENT ERROR / lenient parse (severity: MEDIUM-LOW) — **FIXED 2026-07-15**
+
+> **FIXED 2026-07-15** (branch `fix/verifier-minor-drifts`): strict per-pair
+> regex (`/^[0-9a-fA-F]{2}$/`) added to `fromHex` in
+> `sdk-node/src/merkle.ts`, per spec §4.1. Verified by execution:
+> `fromHex("a?")`, `fromHex("1g")`, `fromHex("zz")` all throw
+> "invalid hex string"; `"deadbeef"`/`"DEADBEEF"` still decode.
+> `verifyInclusion` with a lenient-nibble sibling stays a clean `false`.
+> Regression tests added in `sdk-node/test/merkle.test.ts`.
 
 `sdk-node/src/merkle.ts:79-90` uses `parseInt(pair, 16)`, which parses
 `"a?"` → 10 and `"1g"` → 1 (confirmed by execution: `fromHex("a?") → [10]`,
@@ -105,11 +120,20 @@ false` with the note "the file is not the one attested" (confirmed by
 execution) — a misleading diagnosis: the receipt is broken, the file may be
 fine. Cosmetic-to-different-error; note text worth fixing next SDK pass.
 
-### D7. sdk-python `verify_inclusion` returns False on missing file; sdk-node throws — DIFFERENT ERROR (severity: LOW)
+### D7. sdk-python `verify_inclusion` returns False on missing file; sdk-node throws — DIFFERENT ERROR (severity: LOW) — **FIXED 2026-07-15**
 
 `sdk-python/orphograph/__init__.py:134-135` conflates "file missing" with
 "not included" (silent `False`); sdk-node `verifyInclusion` rejects with the
 stream error. Same verdict class, different failure surface for callers.
+
+> **FIXED 2026-07-15** (branch `fix/verifier-minor-drifts`): aligned on the
+> error surface — a missing local file is an I/O precondition failure, not a
+> "not included" verdict; for a notary a distinguishable error beats a
+> silent `False`. sdk-python `verify_inclusion` now raises
+> `FileNotFoundError` (documented in its docstring); sdk-node keeps
+> rejecting with the filesystem error (ENOENT) and its JSDoc now documents
+> the contract. Malformed proof/root inputs still return `false` per spec
+> §4.1. Regression tests added on both sides.
 
 ### D8. Engine `verify_hash_against_receipt` has zero callers — dead canon (severity: LOW, process risk)
 

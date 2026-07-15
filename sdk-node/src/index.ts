@@ -132,10 +132,11 @@ export async function verifyFolder(
     apiKey: options.apiKey,
     timeoutMs: options.timeoutMs,
   });
-  const remoteRoot =
-    (remote.manifest && remote.manifest.root_hex) ||
-    (remote.receipt && (remote.receipt as { hash_hex?: string }).hash_hex) ||
-    "";
+  // The manifest's root_hex is the ONLY acceptable remote side. A degraded
+  // or partial response (missing manifest / missing root_hex) MUST NOT
+  // verify — no fallback to receipt.hash_hex (VERIFIER_SPEC §4.2, audit D3).
+  const remoteRoot = remote.manifest && remote.manifest.root_hex;
+  if (!remoteRoot) return false;
   return localRoot === remoteRoot;
 }
 
@@ -159,6 +160,12 @@ export async function inclusionProof(
  * in hand, the check is purely local. This is the intended path for a
  * third-party recipient who wants to confirm that a file they hold
  * belonged to a folder anchored by someone else.
+ *
+ * Rejects with the underlying filesystem error (e.g. ENOENT) when
+ * `localFilePath` does not exist — a missing local file is an I/O
+ * precondition failure, not a "not included" verdict (audit D7; the
+ * Python SDK raises FileNotFoundError for the same case). A malformed
+ * proof or root still resolves `false` per VERIFIER_SPEC §4.1.
  */
 export async function verifyInclusion(
   localFilePath: string,

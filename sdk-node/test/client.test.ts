@@ -17,7 +17,12 @@ import { join } from "node:path";
 // The tests import from the compiled dist/. Run `npm run build` (or `tsc`)
 // before `npm test`. This keeps the imports identical to what consumers
 // of the published package will write — no source-only path tricks.
-import { anchorFolder, verifyFolder, inclusionProof } from "../dist/index.js";
+import {
+  anchorFolder,
+  verifyFolder,
+  inclusionProof,
+  verifyInclusion,
+} from "../dist/index.js";
 import { submitManifest } from "../dist/client.js";
 import { MerkleTree } from "../dist/merkle.js";
 
@@ -224,6 +229,83 @@ test("verifyFolder returns false when local root differs from server root", asyn
     assert.equal(ok, false);
   } finally {
     await mock.close();
+    fix.cleanup();
+  }
+});
+
+test("verifyFolder returns false when the response has no manifest — no fallback to receipt.hash_hex (audit D3)", async () => {
+  const fix = makeFixture();
+  const localTree = await MerkleTree.fromFolder(fix.dir);
+  const expectedRoot = localTree.rootHex();
+  // Degraded/partial response: receipt present (hash_hex even MATCHES the
+  // local root) but the manifest is absent. The old fallback returned true
+  // here; VERIFIER_SPEC §4.2 rules manifest root or fail.
+  const mock = await startMock((req, res) => {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(
+      JSON.stringify({
+        receipt: {
+          receipt_id: "rid_degraded",
+          hash_hex: expectedRoot,
+          kind: "folder",
+          found: true,
+        },
+      }),
+    );
+  });
+  try {
+    const ok = await verifyFolder(fix.dir, "rid_degraded", { serverUrl: mock.url });
+    assert.equal(ok, false);
+  } finally {
+    await mock.close();
+    fix.cleanup();
+  }
+});
+
+test("verifyFolder returns false when the manifest lacks root_hex (audit D3)", async () => {
+  const fix = makeFixture();
+  const localTree = await MerkleTree.fromFolder(fix.dir);
+  const strippedManifest = localTree.manifest() as { root_hex?: string };
+  delete strippedManifest.root_hex;
+  const mock = await startMock((req, res) => {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(
+      JSON.stringify({
+        receipt: {
+          receipt_id: "rid_noroot",
+          hash_hex: localTree.rootHex(),
+          kind: "folder",
+          found: true,
+        },
+        manifest: strippedManifest,
+      }),
+    );
+  });
+  try {
+    const ok = await verifyFolder(fix.dir, "rid_noroot", { serverUrl: mock.url });
+    assert.equal(ok, false);
+  } finally {
+    await mock.close();
+    fix.cleanup();
+  }
+});
+
+// ─── verifyInclusion: missing local file is an I/O error, not "false" ────
+
+test("verifyInclusion rejects with the filesystem error when the local file is missing (audit D7)", async () => {
+  const fix = makeFixture();
+  try {
+    await assert.rejects(
+      () =>
+        verifyInclusion(
+          join(fix.dir, "does-not-exist.txt"),
+          "does-not-exist.txt",
+          [],
+          "0".repeat(64),
+        ),
+      (err: NodeJS.ErrnoException) => err.code === "ENOENT",
+    );
+  } finally {
     fix.cleanup();
   }
 });

@@ -76,15 +76,21 @@ function toHex(bytes: Uint8Array): string {
   return out;
 }
 
+const HEX_PAIR = /^[0-9a-fA-F]{2}$/;
+
 function fromHex(hex: string): Uint8Array {
   if (typeof hex !== "string" || hex.length % 2 !== 0) {
     throw new Error("invalid hex string");
   }
   const out = new Uint8Array(hex.length / 2);
   for (let i = 0; i < out.length; i++) {
-    const byte = parseInt(hex.substr(i * 2, 2), 16);
-    if (Number.isNaN(byte)) throw new Error("invalid hex string");
-    out[i] = byte;
+    const pair = hex.substr(i * 2, 2);
+    // Strict per-pair parse: parseInt would accept a valid first nibble
+    // followed by garbage ("a?" -> 10, "1g" -> 1). Python's bytes.fromhex
+    // rejects both, and the spec requires strict hex (VERIFIER_SPEC §4.1,
+    // audit D4).
+    if (!HEX_PAIR.test(pair)) throw new Error("invalid hex string");
+    out[i] = parseInt(pair, 16);
   }
   return out;
 }
