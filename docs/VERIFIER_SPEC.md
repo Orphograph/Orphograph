@@ -157,8 +157,9 @@ comparison still passes, but NO supplied hash can ever match it. The
 anchoring path never writes uppercase, so this arises only for
 out-of-band-edited receipts — but conforming verifiers MUST reproduce it
 rather than "helpfully" lowercasing both sides.
-(Vector `v09_receipt_hash_stored_uppercase`. Known deviation: verifier-js
-lowercases the stored side — see `AUDIT_VERIFIER_DRIFT_2026_07_12.md` D1.)
+(Vector `v09_receipt_hash_stored_uppercase`. Conformance: all shipped
+verifiers now compare the stored side as-is — see
+`AUDIT_VERIFIER_DRIFT_2026_07_12.md` D1, fixed 2026-07-12.)
 
 ### 3.3 Field-name strictness
 
@@ -217,8 +218,9 @@ MUST behaviors:
   MUST NOT raise. There is deliberately no error taxonomy here: an
   inclusion proof either verifies or it does not.
 - Hex decoding of siblings/roots MUST be strict — reject any character
-  outside `[0-9a-fA-F]` and any odd-length string. (Known deviation:
-  sdk-node's `fromHex` is lenient in the second nibble — audit D4.)
+  outside `[0-9a-fA-F]` and any odd-length string. (All shipped verifiers
+  conform; sdk-node's `fromHex` was made strict per-pair — audit D4, fixed
+  2026-07-15, pinned by vector `v21_inclusion_negative_sibling_hex_lenient_second_nibble`.)
 - Hex decoding MAY accept uppercase (both `bytes.fromhex` and strict
   parsers do); the digest comparison is on raw bytes.
 - A promoted (lone-last) node contributes no proof step at that level, so
