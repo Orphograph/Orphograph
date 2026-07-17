@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Agent action receipts — a tamper-evident audit trail for AI agents — Orphograph</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Autonomous agents send emails, move money, and change systems — and their logs are editable text. Anchor each consequential action to Bitcoin: a dated, tamper-evident receipt anyone you authorize can verify.">
+<link rel="canonical" href="https://orphograph.com/lp/agent-receipts">
+<link rel="icon" type="image/png" href="/favicon.png?v=8">
+<meta property="og:title" content="Agent action receipts — a tamper-evident audit trail for AI agents">
+<meta property="og:description" content="An agent's self-reported log proves nothing. A Bitcoin-anchored receipt proves the record existed, unmodified, at a point in time — and anyone can check it without trusting the operator.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://orphograph.com/lp/agent-receipts">
+<meta property="og:image" content="https://orphograph.com/og-image.png?v=8">
+<link rel="stylesheet" href="/style.css?v=2">
+<link rel="stylesheet" href="/blog.css">
+<link rel="stylesheet" href="/index.css?v=9">
+<link rel="stylesheet" href="/lp/agent-receipts.css?v=1">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "Does a receipt prove my agent's action was correct or authorized?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "No. A receipt proves one thing: the action record existed, in exactly this form, by the time of a specific Bitcoin block, and has not been altered since. Whether the action itself was correct, authorized, or wise is a question the record helps you argue — the receipt makes the record trustworthy, not the action."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Does the content of the agent's actions leave our environment?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "No. The action record is hashed locally with SHA-256; only the fingerprint is sent to be anchored. The record itself — what the agent did, to whom, with which parameters — stays on your machine."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "I'm hiring agent-driven work from someone else. How does this help me?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Ask the operator for receipts. Each one is a public certificate page you can open in your own browser and verify against the Bitcoin blockchain — no Orphograph account and no trust in the operator required. If the log they show you later doesn't match the receipt, the log changed."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "What happens to my receipts if Orphograph disappears?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "The receipt is an open format: a SHA-256 digest plus OpenTimestamps proofs committed to the Bitcoin blockchain. Verification needs only the record, the .ots files, and the public chain — none of which depend on Orphograph existing. An MIT-licensed verifier is published for exactly this reason."
+      }
+    }
+  ]
+}
+</script>
+</head>
+<body>
+
+<header>
+  <div class="brand"><a href="/">orphograph</a></div>
+  <nav>
+    <a href="/learn">how it works</a>
+    <a href="/#tiers">pricing</a>
+    <a href="/lp/">guides</a>
+    <a href="/about">about</a>
+    <a href="/signin">sign in</a>
+  </nav>
+</header>
+
+<main class="blog-post">
+  <article class="post-header">
+    <h1>Your AI agent did something. Prove exactly what, and when.</h1>
+    <p class="post-meta muted">For operators running autonomous agents that take consequential actions — and for the clients, counterparties, and reviewers who have to accept that work.</p>
+  </article>
+
+  <section class="post-body">
+
+    <h2>Self-reported logs are not evidence</h2>
+    <p>An autonomous agent that sends messages, changes systems, or moves value produces a log — a text file its operator controls. A log that can be edited after the fact is indistinguishable from one written at the time. When a question arrives — a client disputing what was delivered, a counterparty disputing what was sent, your own postmortem of an agent gone sideways — the log's value depends on being able to show <em>this is what the record said then, and it has not changed since</em>. A file on the operator's disk cannot show that.</p>
+
+    <h2>What anchoring adds</h2>
+    <p>Orphograph gives each consequential action record a Bitcoin-anchored receipt: the record is hashed on your machine, the fingerprint is anchored to the Bitcoin blockchain, and you get a dated receipt plus a hosted <a href="/certificate/XwTULwlh76PcCst9">certificate page</a> anyone you authorize can check in their own browser. Three properties do the work:</p>
+    <ul>
+      <li><strong>Dated.</strong> The record provably existed by the time of a specific Bitcoin block. A receipt anchored seconds after the action cannot have been written after the dispute started.</li>
+      <li><strong>Tamper-evident.</strong> Change one byte of the record — a recipient, an amount, a timestamp — and it no longer matches the receipt.</li>
+      <li><strong>Verifiable without trusting the operator.</strong> The proof is an open format checked against the public chain; <a href="/verify/">the verifier is open source</a>. The person relying on the record needs no account and no relationship with the person who made it.</li>
+    </ul>
+
+    <h2>If you are the one accepting agent work</h2>
+    <p>The receipt is built for your side of the table. Before you rely on a delivered artifact or a claimed action, ask for its receipt and <a href="/accept">verify it yourself</a> — drop the file or record you were given onto the acceptance page and check it against the certificate. A "yes" means the bytes in front of you are the bytes that existed at the anchored time. Operators who anchor as they work can answer any dispute with a link; operators who cannot produce receipts are asking you to take their logs on faith.</p>
+
+    <h2>What this is not</h2>
+    <p>Honesty is the product, so the scope is narrow and stated plainly. A receipt is <strong>not</strong> proof that an action was correct, authorized, safe, or legal, and anchoring is <strong>not</strong> a compliance regime or an agent-safety mechanism. It makes the record of what happened <em>tamper-evident and independently datable</em> — which is what turns a log into evidence. What that evidence establishes in any particular dispute is a question for that forum.</p>
+
+    <h2>Run it inside the agent</h2>
+    <p>A dependency-free CLI plus a drop-in skill let the agent anchor its own trail as it works — one-line action records, artifacts it produces, and a daily manifest of its memory files:</p>
+    <pre><code># Anchor a one-line action record the moment it happens
+echo "sent invoice #42 to client-7" | python3 orpho_agent_anchor.py anchor-text --label "billing"
+
+# Anchor an artifact the agent produced
+python3 orpho_agent_anchor.py anchor-file ./deliverable.zip --label "handoff"
+
+# Nightly: anchor a manifest of the agent's memory files
+python3 orpho_agent_anchor.py anchor-memory ./workspace --label "memory"</code></pre>
+    <p>MCP-capable agents can anchor through the <a href="/mcp">MCP server</a> instead — proof of existence becomes part of the agent's output, not an afterthought. Setup for both lives on the <a href="/integrations">integrations</a> page.</p>
+
+    <div class="cta-box">
+      <h2>Give your agents a paper trail today</h2>
+      <p>The receipt is dated from the moment you anchor — an audit trail started before the first dispute is worth more than one reconstructed after it.</p>
+      <p><a class="cta-btn" href="/integrations">Set up agent anchoring →</a> <a class="cta-btn cta-secondary" href="/certificate/XwTULwlh76PcCst9">Inspect a live certificate →</a></p>
+    </div>
+
+    <h2 id="faq">FAQ</h2>
+    <div class="faq">
+      <h3>Does a receipt prove my agent's action was correct or authorized?</h3>
+      <p>No. A receipt proves one thing: the action record existed, in exactly this form, by the time of a specific Bitcoin block, and has not been altered since. Whether the action itself was correct, authorized, or wise is a question the record helps you argue — the receipt makes the record trustworthy, not the action.</p>
+
+      <h3>Does the content of the agent's actions leave our environment?</h3>
+      <p>No. The action record is hashed locally with SHA-256; only the fingerprint is sent to be anchored. The record itself — what the agent did, to whom, with which parameters — stays on your machine.</p>
+
+      <h3>I'm hiring agent-driven work from someone else. How does this help me?</h3>
+      <p>Ask the operator for receipts. Each one is a public certificate page you can open in your own browser and verify against the Bitcoin blockchain — no Orphograph account and no trust in the operator required. If the log they show you later doesn't match the receipt, the log changed.</p>
+
+      <h3>What happens to my receipts if Orphograph disappears?</h3>
+      <p>The receipt is an open format: a SHA-256 digest plus OpenTimestamps proofs committed to the Bitcoin blockchain. Verification needs only the record, the <code>.ots</code> files, and the public chain — none of which depend on Orphograph existing. An MIT-licensed verifier is published for exactly this reason.</p>
+    </div>
+
+  </section>
+</main>
+
+<footer>
+  <small>
+    <a href="/">← Home</a> ·
+    <a href="/lp/">More guides</a> ·
+    <a href="/about">About</a> ·
+    <a href="/privacy">Privacy</a> ·
+    The office does not transmit your file
+  </small>
+</footer>
+
+<script src="/assets/event.js?v=1" defer></script>
+</body>
+</html>

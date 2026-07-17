@@ -1,4 +1,4 @@
-/* index.css — externalized from index.html (strict CSP: no inline styles). */
+/* agent-receipts.css — page CSS (strict CSP: no inline styles). */
 
 /* Institutional palette override: map style.css/blog.css sage tokens
      to cream/ink so LP pages read as instrument pages, not UI panels. */
@@ -15,10 +15,10 @@
     --accent-stroke: rgba(58,47,36,0.18);
   }
 
-/* CTA box — was inline style attributes, which style-src 'self' silently
-   drops; same class language as the other lp-family pages. */
+/* CTA box — same visual language as the lp-family post-footer blocks,
+   expressed as classes because inline style attributes are CSP-hostile. */
 .cta-box {
-  margin-top: 48px;
+  margin: 36px 0;
   padding: 24px;
   background: var(--accent-soft);
   border: 1px solid var(--accent-stroke);
@@ -28,8 +28,10 @@
 .cta-btn {
   display: inline-block;
   padding: 10px 18px;
+  margin: 4px 8px 0 0;
   border: 1px solid var(--accent);
   color: var(--accent);
   border-radius: 8px;
   text-decoration: none;
 }
+.cta-secondary { opacity: 0.85; }
