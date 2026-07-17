@@ -41,6 +41,7 @@ EXPECTED_URLS = [
     "https://orphograph.com/lp/screenshot-evidence-timestamp",
     "https://orphograph.com/lp/ai-image-detector-vs-provenance",
     "https://orphograph.com/lp/eu-ai-act-training-data",
+    "https://orphograph.com/lp/agent-receipts",
     "https://orphograph.com/method/architecture",
     "https://orphograph.com/method/bitcoin-attestation",
     "https://orphograph.com/method/evidence-law",
@@ -210,3 +211,31 @@ def test_method_pages_twitter_title_matches_title(html_path: Path) -> None:
     assert needle in head, (
         f"{html_path.name} twitter:title does not match page <title> {page_title!r}"
     )
+
+
+# start.html is an ad-landing variant: deliberately non-canonical and absent
+# from the sitemap, so it is exempt from the meta requirements below.
+LP_FILES = sorted(p for p in (WEB / "lp").glob("*.html") if p.name != "start.html")
+
+
+@pytest.mark.parametrize("html_path", LP_FILES, ids=lambda p: p.name)
+def test_lp_pages_have_required_meta(html_path: Path) -> None:
+    """Each lp/*.html page must carry canonical, og:title, and description."""
+    head = html_path.read_text(encoding="utf-8").split("</head>", 1)[0]
+    for fragment in ('<link rel="canonical"', '<meta property="og:title"', '<meta name="description"'):
+        assert fragment in head, f"{html_path.name} head is missing: {fragment}"
+
+
+# CSP is style-src 'self': inline <style> blocks and style= attributes are
+# silently dropped by the browser. These pages have been cleaned; keep them
+# clean. (The remaining lp pages carry pre-existing inline styles — tracked
+# as debt, add them here as they are cleaned.)
+CSP_CLEAN_LP = [WEB / "lp" / n for n in ("agent-receipts.html", "eu-ai-act-training-data.html", "index.html")]
+
+
+@pytest.mark.parametrize("html_path", CSP_CLEAN_LP, ids=lambda p: p.name)
+def test_lp_pages_no_inline_styles(html_path: Path) -> None:
+    """CSP-clean lp pages must not regress to inline styles."""
+    body = html_path.read_text(encoding="utf-8")
+    assert "<style" not in body, f"{html_path.name} has an inline <style> block"
+    assert 'style="' not in body, f"{html_path.name} has inline style= attributes"

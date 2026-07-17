@@ -401,6 +401,7 @@ def _build_sitemap() -> str:
         ("/lp/screenshot-evidence-timestamp", "0.7"),
         ("/lp/ai-image-detector-vs-provenance", "0.7"),
         ("/lp/eu-ai-act-training-data", "0.7"),
+        ("/lp/agent-receipts", "0.7"),
         ("/method/architecture", "0.6"),
         ("/method/bitcoin-attestation", "0.6"),
         ("/method/evidence-law", "0.6"),
