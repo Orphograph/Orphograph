@@ -959,3 +959,6 @@ section.band, section.tz, section.clauses, .action, .ledger-section, .sample-rec
   padding-top:var(--section-y); padding-bottom:var(--section-y);
 }
 @media (max-width:880px){ :root{ --section-y:48px; } }
+
+/* Site-wide UPL disclaimer (was inline style=; strict CSP discards those) */
+.legal-disclaimer{text-align:center;color:var(--muted);font-size:12px;line-height:1.5;padding:0 16px 28px;max-width:680px;margin:0 auto;}

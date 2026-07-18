@@ -83,7 +83,7 @@ _PAGE_TEMPLATE = """<!DOCTYPE html>
 <meta property="og:type" content="article">
 <meta property="og:image" content="https://orphograph.com/seal.png?v=8">
 <link rel="icon" type="image/png" href="/favicon.png?v=8">
-<link rel="stylesheet" href="/index.css?v=15">
+<link rel="stylesheet" href="/index.css?v=16">
 <style>
   body.vertical-page {{ background: #fdfaf3; }}
   .arch-wrap {{ max-width: 820px; margin: 0 auto; padding: 0 24px 64px; }}
