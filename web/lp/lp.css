@@ -1,0 +1,44 @@
+/* LP shared stylesheet — extracted from the per-page <style> blocks and
+   inline style= attributes so /lp/ pages comply with the site's strict CSP
+   (style-src 'self': external stylesheets only). Load AFTER style.css,
+   blog.css and index.css — the cascade below relies on source order. */
+
+/* Institutional palette override: map style.css/blog.css sage tokens
+   to cream/ink so LP pages read as instrument pages, not UI panels. */
+:root {
+  --bg: #f7f1e3;
+  --panel: #fbf7ea;
+  --panel-stroke: #e9e1cb;
+  --panel-stroke-soft: #f0e9d4;
+  --text: #14110d;
+  --text-soft: #2c2620;
+  --muted: #6b6354;
+  --accent: #3a2f24;
+  --accent-soft: rgba(58,47,36,0.06);
+  --accent-stroke: rgba(58,47,36,0.18);
+}
+
+/* CTA box — was inline style= on <div class="post-footer"> (guide pages)
+   and on the hub <section> (/lp/ index). Values are verbatim from the
+   removed inline styles. */
+.lp-cta {
+  margin: 36px 0;
+  padding: 24px;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-stroke);
+  border-radius: 12px;
+}
+/* Hub <section> variant: inline style set only margin-top:48px; the
+   bottom margin came from style.css `section { margin: 56px 0; }`. */
+.lp-cta-hub { margin: 48px 0 56px; }
+.lp-cta h2 { margin-top: 0; }
+.lp-cta a.btn {
+  display: inline-block;
+  padding: 10px 18px;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  border-radius: 8px;
+  text-decoration: none;
+}
+/* Inline style used to beat .post-footer a:hover; keep hover underline off. */
+.lp-cta a.btn:hover { text-decoration: none; }
