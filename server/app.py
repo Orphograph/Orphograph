@@ -852,13 +852,18 @@ class Handler(BaseHTTPRequestHandler):
             #      posts authored as HTML, served byte-for-byte.
             #   2. Markdown-rendered posts at content/blog/<slug>.md —
             #      addressed at /blog/<slug> with no extension.
-            # We dispatch by URL shape: anything ending in .html and matching
-            # a real static file goes to the static path; bare slugs go to
-            # the markdown renderer.
+            # We dispatch by URL shape: anything ending in .html or .css and
+            # matching a real static file goes to the static path; bare slugs
+            # go to the markdown renderer. The .css case covers the per-post
+            # stylesheets (web/blog/<slug>.css, cache-busted via ?v=N) that
+            # the static HTML posts reference — without it every dotted path
+            # fell through to the slug validator and 400ed.
             rest = path[len("/blog/"):]
-            if rest.endswith(".html") and re.match(r"^[a-z0-9-]{1,80}\.html$", rest):
+            if re.match(r"^[a-z0-9-]{1,80}\.(html|css)$", rest):
                 # Try the static file under web/blog/. _serve_static returns
-                # a 404 if the file is missing.
+                # a 404 if the file is missing. The slug charset ([a-z0-9-])
+                # admits no dots or slashes before the suffix, so traversal
+                # (../) can never reach this branch.
                 _serve_static(self, "/blog/" + rest)
                 return
             slug = rest.rstrip("/")
