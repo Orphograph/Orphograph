@@ -87,3 +87,26 @@ def test_bucket_handles_clock_rollback(tmp_path):
     # tokens stay at 0 (or the rollback time slowly catches up).
     allowed, _ = tb.check("alice")
     assert allowed is False, "clock rollback must not grant tokens"
+
+
+def test_peek_reports_without_consuming():
+    tb = TokenBucket(capacity=3, refill_per_sec=0.001)
+    assert tb.peek("k") == 3.0          # untouched key reports full capacity
+    assert tb.check("k")[0] is True
+    remaining = tb.peek("k")
+    assert 1.9 < remaining < 2.1        # one consumed (+ negligible refill)
+    assert tb.peek("k") == remaining or abs(tb.peek("k") - remaining) < 0.1
+    # peek must not have consumed anything: two more checks still allowed
+    assert tb.check("k")[0] is True
+    assert tb.check("k")[0] is True
+    assert tb.check("k")[0] is False
+
+
+def test_peek_applies_refill_read_only():
+    tb = TokenBucket(capacity=1, refill_per_sec=100.0)
+    assert tb.check("k")[0] is True
+    assert tb.peek("k") < 1.0
+    time.sleep(0.05)                    # ~5 tokens at 100/s, clamped to 1
+    assert tb.peek("k") == 1.0
+    # The stored state was not mutated by peek; check still succeeds.
+    assert tb.check("k")[0] is True

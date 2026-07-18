@@ -1,6 +1,10 @@
 // pay-btc.js — Bitcoin payment page logic.
-// - Fetches live BTC/USD from a public oracle (mempool.space).
-// - Generates a QR encoding a BIP-21 URI.
+// - Fetches live BTC/USD from the same-origin /api/btc/price proxy
+//   (server-side multi-oracle cache; no third-party hosts in the browser).
+// - Shows a server-rendered same-origin QR SVG for the BIP-21 URI —
+//   the server pins the address, so the QR cannot encode any other
+//   destination, and the strict CSP (img-src 'self', connect-src 'self')
+//   holds with zero exceptions.
 // - Routes "I paid" submissions to /api/btc/claim.
 
 (function () {
@@ -33,9 +37,10 @@
 
   async function fetchBtcUsd() {
     try {
-      const r = await fetch("https://mempool.space/api/v1/prices");
+      const r = await fetch("/api/btc/price");
+      if (!r.ok) return null;
       const j = await r.json();
-      return j.USD || null;
+      return j.usd || null;
     } catch (e) { return null; }
   }
 
@@ -53,9 +58,10 @@
   function renderQR() {
     if (!currentSats) return;
     const btc = (currentSats / 1e8).toFixed(8);
-    const uri = `bitcoin:${ADDR}?amount=${btc}&label=Orphograph%20Pack`;
     const qr = document.getElementById("qr");
-    qr.src = "https://api.qrserver.com/v1/create-qr-code/?size=196x196&data=" + encodeURIComponent(uri);
+    // Same-origin server-rendered SVG. The address is pinned server-side;
+    // only the (bounded) amount travels in the query string.
+    qr.src = "/api/btc/qr.svg?sats=" + currentSats;
     qr.alt = "Send " + btc + " BTC to " + ADDR;
   }
 

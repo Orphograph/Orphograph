@@ -182,6 +182,27 @@ EVENT_RATE_CAPACITY = 60
 EVENT_RATE_REFILL = 60 / 60.0  # 1 token/sec refill, burst 60
 _event_limiter = TokenBucket(EVENT_RATE_CAPACITY, EVENT_RATE_REFILL)
 
+# Founder-token brute-force limiter (2026-07-18 latent-security pass).
+# Counts FAILED X-Orpho-Founder guesses per truncated client IP; a correct
+# token never consumes, so the legitimate founder sees zero behavior change.
+# After 20 failed guesses the gate stops comparing entirely (still answers
+# 404, identical to a wrong token) until the bucket refills — 1 attempt
+# every 3 minutes. In-memory like _event_limiter: a restart resetting the
+# quota is acceptable for a defense-in-depth control.
+FOUNDER_FAIL_CAPACITY = 20
+FOUNDER_FAIL_REFILL = 20 / 3600.0  # full recovery in 1 hour
+_founder_fail_limiter = TokenBucket(FOUNDER_FAIL_CAPACITY, FOUNDER_FAIL_REFILL)
+
+# Fixed pack-payment address for the static /pay/btc.html page. The QR
+# endpoint (/api/btc/qr.svg) builds its BIP-21 URI from THIS server-side
+# constant — never from anything in the request — so a crafted URL cannot
+# redirect payments to a different address.
+PAY_BTC_ADDRESS = os.environ.get(
+    "ORPHO_PACK_BTC_ADDRESS", "bc1qclvjjmwmr294rydv4x0dc787nx9jd8j4ny4jaz"
+)
+PAY_BTC_MIN_SATS = 546          # standard dust threshold
+PAY_BTC_MAX_SATS = 5_000_000    # 0.05 BTC — far above any pack price
+
 # Allowlist for the 4 funnel events. Any value outside this set is rejected.
 FUNNEL_EVENTS = frozenset({
     "drop_zone_visible",
@@ -484,6 +505,37 @@ class Handler(BaseHTTPRequestHandler):
             TRUST_PROXY_HEADERS,
         )
         return truncate_ip(chosen)
+
+    def _founder_authorized(self) -> bool:
+        """Shared gate for every /api/founder/* endpoint.
+
+        Semantics (unchanged from the per-endpoint copies this replaces):
+        constant-time compare of the X-Orpho-Founder header against the
+        ORPHO_FOUNDER_TOKEN env var; unset token means the endpoints do not
+        exist. Callers answer 404 on False so a probe cannot distinguish
+        "wrong token" from "no such endpoint".
+
+        New (2026-07-18): failures-only brute-force lockout. A failed compare
+        consumes one token from _founder_fail_limiter (keyed by truncated
+        client IP); once the bucket is empty the gate refuses WITHOUT
+        comparing — so guessing is bounded at FOUNDER_FAIL_CAPACITY tries
+        per refill window. A correct token never consumes, so the founder's
+        own use is never throttled (unless an attacker on the founder's own
+        /24 has just exhausted the bucket, which self-heals on refill).
+        """
+        token = os.environ.get("ORPHO_FOUNDER_TOKEN", "").strip()
+        if not token:
+            return False
+        key = f"founder-fail:{self._client_key()}"
+        if _founder_fail_limiter.peek(key) < 1.0:
+            return False  # locked out — do not even run the compare
+        supplied = self.headers.get("X-Orpho-Founder", "").strip()
+        # Constant-time compare to avoid timing-side-channel leaks of the token.
+        import hmac as _hmac
+        if _hmac.compare_digest(supplied, token):
+            return True
+        _founder_fail_limiter.check(key)  # count the failed guess
+        return False
 
     def _session_email(self) -> str | None:
         cookies = SimpleCookie()
@@ -843,6 +895,46 @@ class Handler(BaseHTTPRequestHandler):
             _security_headers(self)
             self.end_headers()
             self.wfile.write(body_bytes)
+            return
+        if path == "/api/btc/price":
+            # Same-origin BTC/USD price for the static /pay/btc.html page.
+            # Proxies the server-side multi-oracle cache (btc_price, 60s
+            # in-process TTL) so the browser needs no connect-src exception
+            # for any third-party host — the strict CSP (connect-src 'self')
+            # stays intact and the page still shows a live price.
+            usd = btc_price.get_usd_per_btc()
+            if usd <= 0:
+                _json_response(self, 503, {"error": "BTC price feed unavailable; try again in a minute"})
+                return
+            _json_response(self, 200, {"usd": usd})
+            return
+        if path == "/api/btc/qr.svg":
+            # Server-rendered BIP-21 QR for the static /pay/btc.html page.
+            # The URI is built from the server-side PAY_BTC_ADDRESS constant
+            # — only the amount comes from the request, and it is bounded —
+            # so neither a crafted URL nor a compromised third-party QR host
+            # can redirect a payment. Replaces the former external QR-image
+            # service, which the CSP (img-src 'self' data:) blocked anyway.
+            from urllib.parse import urlparse, parse_qs
+            qs = parse_qs(urlparse(self.path).query)
+            raw_sats = (qs.get("sats", [""])[0] or "").strip()
+            try:
+                sats = int(raw_sats)
+            except ValueError:
+                _json_response(self, 400, {"error": "sats must be an integer"})
+                return
+            if not (PAY_BTC_MIN_SATS <= sats <= PAY_BTC_MAX_SATS):
+                _json_response(self, 400, {"error": "sats out of range"})
+                return
+            # NO label, NO email, NO order id in the QR payload — same
+            # privacy contract as /api/btc-order/<id>/qr.svg below.
+            bip21 = f"bitcoin:{PAY_BTC_ADDRESS}?amount={sats / 100_000_000:.8f}"
+            try:
+                svg = qrcode_svg.make_svg(bip21)
+            except ValueError as e:
+                self.send_error(500, f"qr encode failed: {e}")
+                return
+            _send_xml(self, 200, svg, content_type="image/svg+xml; charset=utf-8")
             return
         if path.startswith("/api/btc-order/"):
             # Status lookup for the buy page to poll. Sub-path /qr.svg
@@ -2084,14 +2176,7 @@ class Handler(BaseHTTPRequestHandler):
         if payout_monitor is None:
             self.send_error(404, "not found")
             return
-        token = os.environ.get("ORPHO_FOUNDER_TOKEN", "").strip()
-        if not token:
-            self.send_error(404, "not found")
-            return
-        supplied = self.headers.get("X-Orpho-Founder", "").strip()
-        # Constant-time compare to avoid timing-side-channel leaks of the token.
-        import hmac as _hmac
-        if not _hmac.compare_digest(supplied, token):
+        if not self._founder_authorized():
             self.send_error(404, "not found")  # Lie about endpoint existence.
             return
         _json_response(self, 200, payout_monitor.payout_status())
@@ -2110,13 +2195,7 @@ class Handler(BaseHTTPRequestHandler):
           "ltv": 15000.00
         }
         """
-        token = os.environ.get("ORPHO_FOUNDER_TOKEN", "").strip()
-        if not token:
-            self.send_error(404, "not found")
-            return
-        supplied = self.headers.get("X-Orpho-Founder", "").strip()
-        import hmac as _hmac
-        if not _hmac.compare_digest(supplied, token):
+        if not self._founder_authorized():
             self.send_error(404, "not found")
             return
         # Import here to avoid circular dependency
@@ -2130,13 +2209,7 @@ class Handler(BaseHTTPRequestHandler):
         Query params: ?email=buyer@example.com
         Returns customer profile: anchors, purchases, subscription, total spent.
         """
-        token = os.environ.get("ORPHO_FOUNDER_TOKEN", "").strip()
-        if not token:
-            self.send_error(404, "not found")
-            return
-        supplied = self.headers.get("X-Orpho-Founder", "").strip()
-        import hmac as _hmac
-        if not _hmac.compare_digest(supplied, token):
+        if not self._founder_authorized():
             self.send_error(404, "not found")
             return
 
@@ -2358,13 +2431,7 @@ class Handler(BaseHTTPRequestHandler):
           "timestamp": "2026-05-15T..."
         }
         """
-        token = os.environ.get("ORPHO_FOUNDER_TOKEN", "").strip()
-        if not token:
-            self.send_error(404, "not found")
-            return
-        supplied = self.headers.get("X-Orpho-Founder", "").strip()
-        import hmac as _hmac
-        if not _hmac.compare_digest(supplied, token):
+        if not self._founder_authorized():
             self.send_error(404, "not found")
             return
 
@@ -2385,13 +2452,7 @@ class Handler(BaseHTTPRequestHandler):
           2. Paying customers (MRR, active count, churned-this-month)
           3. Customer feedback (pending refund requests, recent support events)
         """
-        token = os.environ.get("ORPHO_FOUNDER_TOKEN", "").strip()
-        if not token:
-            self.send_error(404, "not found")
-            return
-        supplied = self.headers.get("X-Orpho-Founder", "").strip()
-        import hmac as _hmac
-        if not _hmac.compare_digest(supplied, token):
+        if not self._founder_authorized():
             self.send_error(404, "not found")
             return
 
@@ -2487,13 +2548,7 @@ class Handler(BaseHTTPRequestHandler):
         per-day event counts for the 4 funnel events, conversion rates
         between adjacent stages, and a 30-day rolling total.
         """
-        token = os.environ.get("ORPHO_FOUNDER_TOKEN", "").strip()
-        if not token:
-            self.send_error(404, "not found")
-            return
-        supplied = self.headers.get("X-Orpho-Founder", "").strip()
-        import hmac as _hmac
-        if not _hmac.compare_digest(supplied, token):
+        if not self._founder_authorized():
             self.send_error(404, "not found")
             return
 
