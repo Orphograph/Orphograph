@@ -111,3 +111,8 @@
   .reveal{opacity:0; transform:translateY(14px); animation:fade .7s cubic-bezier(.2,.7,.2,1) forwards;}
   .d1{animation-delay:.05s;} .d2{animation-delay:.16s;} .d3{animation-delay:.28s;} .d4{animation-delay:.4s;} .d5{animation-delay:.52s;}
   @media(prefers-reduced-motion:reduce){ .reveal{animation:none; opacity:1; transform:none;} }
+
+  /* Extracted from inline style= / JS-set styles for strict-CSP compliance
+     (style-src 'self'). Values verbatim from the removed inline styles. */
+  footer .foot-tag{margin-left:auto;}
+  .receipt-foot{margin-top:10px;}

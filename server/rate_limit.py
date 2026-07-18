@@ -125,6 +125,21 @@ class TokenBucket:
                 pass  # don't kill a request because the disk is grumpy
         return allowed, retry_after
 
+    def peek(self, key: str) -> float:
+        """Return the tokens currently available for `key` WITHOUT consuming.
+
+        Refill is applied read-only (the stored bucket state is untouched), so
+        callers can gate on quota before deciding whether an attempt should
+        count. Used by the founder-token gate to make lockout failures-only:
+        successful auth never consumes, so `peek` + consume-on-failure bounds
+        brute force without ever throttling the legitimate holder.
+        """
+        now = time.time()
+        with self._lock:
+            tokens, last = self._buckets.get(key, (self.capacity, now))
+            elapsed = max(0.0, now - last)
+            return min(self.capacity, tokens + elapsed * self.refill_per_sec)
+
     def _evict_if_needed(self) -> None:
         while len(self._buckets) > self.max_keys:
             self._buckets.popitem(last=False)

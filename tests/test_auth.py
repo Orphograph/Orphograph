@@ -66,6 +66,27 @@ def test_revoked_session_rejected():
     assert auth.session_email(sid) is None
 
 
+def test_revoke_all_sessions_kills_every_live_session_for_email():
+    a1, _ = auth.create_session("a@b.com")
+    a2, _ = auth.create_session("a@b.com")
+    other, _ = auth.create_session("other@b.com")
+    n = auth.revoke_all_sessions("a@b.com")
+    assert n == 2
+    assert auth.session_email(a1) is None
+    assert auth.session_email(a2) is None
+    # a different user's session is untouched
+    assert auth.session_email(other) == "other@b.com"
+
+
+def test_revoke_all_sessions_empty_and_idempotent():
+    assert auth.revoke_all_sessions("") == 0
+    sid, _ = auth.create_session("z@b.com")
+    assert auth.revoke_all_sessions("z@b.com") == 1
+    # second call: nothing live left to revoke
+    assert auth.revoke_all_sessions("z@b.com") == 0
+    assert auth.session_email(sid) is None
+
+
 def test_unknown_session_returns_none():
     assert auth.session_email("nope") is None
     assert auth.session_email("") is None
