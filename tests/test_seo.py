@@ -227,10 +227,11 @@ def test_lp_pages_have_required_meta(html_path: Path) -> None:
 
 
 # CSP is style-src 'self': inline <style> blocks and style= attributes are
-# silently dropped by the browser. These pages have been cleaned; keep them
-# clean. (The remaining lp pages carry pre-existing inline styles — tracked
-# as debt, add them here as they are cleaned.)
-CSP_CLEAN_LP = [WEB / "lp" / n for n in ("agent-receipts.html", "eu-ai-act-training-data.html", "index.html")]
+# silently dropped by the browser. Every lp page (start.html included) is now
+# clean — pin the whole directory so new pages can never regress to inline
+# styles. Note: even CSP-legal SVG presentation attributes like font-style=
+# must be expressed as classes here, since this check matches the substring.
+CSP_CLEAN_LP = sorted((WEB / "lp").glob("*.html"))
 
 
 @pytest.mark.parametrize("html_path", CSP_CLEAN_LP, ids=lambda p: p.name)
