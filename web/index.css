@@ -279,6 +279,34 @@
   @media (max-width:560px){.who-grid{grid-template-columns:1fr;gap:18px;}}
   .tier.featured .cta{background:var(--accent-warm);}
   .tier.featured .cta:hover{background:#a37047;}
+  /* Card-checkout notify fallback — shown by checkout-cta.js ONLY while
+     /api/config reports card_charges_enabled=false. Quiet, institutional:
+     a short notice, one email field, one button. Hidden again the moment
+     the flag flips true (same mechanism that reveals the card buttons). */
+  .tier .card-notify{margin:12px 0 0;}
+  .tier .card-notify-note{
+    font-size:11.5px;color:var(--muted);line-height:1.5;
+    margin:0 0 8px;letter-spacing:0.01em;
+  }
+  .tier .card-notify-row{display:flex;gap:8px;}
+  .tier .card-notify input[type="email"]{
+    flex:1 1 auto;min-width:0;
+    font-size:13px;color:var(--ink);background:var(--paper-soft);
+    border:1px solid var(--line-soft);border-radius:6px;padding:8px 10px;
+  }
+  .tier .card-notify input[type="email"]:focus{outline:1px solid var(--accent-warm);border-color:var(--accent-warm);}
+  .tier .card-notify button{
+    flex:0 0 auto;cursor:pointer;
+    font-size:12.5px;font-weight:500;color:var(--ink);
+    background:transparent;border:1px solid var(--ink);border-radius:999px;
+    padding:8px 14px;transition:background .15s ease,color .15s ease;
+  }
+  .tier .card-notify button:hover{background:var(--ink);color:var(--paper-soft);}
+  .tier .card-notify button:disabled{opacity:0.5;cursor:default;}
+  .tier .card-notify-done{
+    font-size:11.5px;color:var(--muted);line-height:1.5;margin:0;
+    letter-spacing:0.01em;font-style:italic;
+  }
   /* Side-by-side checkout buttons (card | crypto) — row layout with a
      subtle outline on the secondary so neither dominates the other. */
   .tier .cta-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:auto;}
