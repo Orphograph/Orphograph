@@ -246,3 +246,20 @@ class TestFunnelEndpointTokenSet(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LpCtaEventTests(unittest.TestCase):
+    """lp_cta_clicked is a whitelisted funnel event and the LP wires it up."""
+
+    def test_lp_cta_clicked_in_whitelist(self):
+        import app
+        self.assertIn("lp_cta_clicked", app.FUNNEL_EVENTS)
+
+    def test_agent_receipts_lp_loads_cta_binder(self):
+        html = (ROOT / "web" / "lp" / "agent-receipts.html").read_text()
+        self.assertIn('src="/assets/lp-cta.js', html)
+        self.assertIn('src="/assets/event.js', html)
+
+    def test_lp_cta_binder_asset_exists_and_calls_orpho_event(self):
+        js = (ROOT / "web" / "assets" / "lp-cta.js").read_text()
+        self.assertIn('orphoEvent("lp_cta_clicked")', js)
