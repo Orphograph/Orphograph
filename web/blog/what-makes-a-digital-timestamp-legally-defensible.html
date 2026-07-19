@@ -17,7 +17,7 @@
 <link rel="canonical" href="https://orphograph.com/blog/what-makes-a-digital-timestamp-legally-defensible">
 <link rel="icon" type="image/png" href="/favicon.png?v=8">
 <link rel="stylesheet" href="/index.css?v=16">
-<link rel="stylesheet" href="/blog/what-makes-a-digital-timestamp-legally-defensible.css?v=1">
+<link rel="stylesheet" href="/blog/what-makes-a-digital-timestamp-legally-defensible.css?v=2">
 <meta name="copyright" content="© 2026 Orphograph. Code under MIT (see /LICENSE). Brand, content, and design — all rights reserved.">
 <script type="application/ld+json">
 {
@@ -131,7 +131,7 @@
       The office uses the Bitcoin chain as the anchor. The chain has a sixteen-year track record without a reorganization past about six blocks. No one party controls it. The mined timestamp of a block is visible to anyone with a copy of the chain — which is to say, anyone with a moderately fast internet connection and a few hours of disk space. To alter the recorded date, an adversary would need to alter the chain itself, which has not been done at scale by any party, public or private, since the chain began.
     </p>
     <p>
-      The architectural explainer is at <a href="/method/bitcoin-attestation" style="color:var(--confirm);">/method/bitcoin-attestation.html</a>.
+      The architectural explainer is at <a href="/method/bitcoin-attestation" class="link-confirm">/method/bitcoin-attestation.html</a>.
     </p>
   </section>
 
@@ -142,7 +142,7 @@
       A defensible timestamp does not require the verifier to trust the issuer. The verifier needs only the file, the receipt, and any standard SHA-256 tool. The receipt's proof files reveal the block height and timestamp; any copy of the Bitcoin chain confirms when that block was mined. Nothing in that loop touches the office's servers.
     </p>
     <p>
-      A reference verifier under MIT is published at <a href="/method/the-mit-verifier-annotated" style="color:var(--confirm);">/method/the-mit-verifier-annotated.html</a>. The verifier is a few hundred lines of code and runs offline once the chain is local. Any opposing party, court-appointed expert, or auditor can run it without an account, an API key, or a cooperation request to the office. That is what verifiability without trust means in practice.
+      A reference verifier under MIT is published at <a href="/method/the-mit-verifier-annotated" class="link-confirm">/method/the-mit-verifier-annotated.html</a>. The verifier is a few hundred lines of code and runs offline once the chain is local. Any opposing party, court-appointed expert, or auditor can run it without an account, an API key, or a cooperation request to the office. That is what verifiability without trust means in practice.
     </p>
   </section>
 
@@ -153,7 +153,7 @@
       Every conventional timestamp service inherits a weakness from the structure of the service itself: the date is real until the company stops paying its hosting bill. When the database goes dark, the receipts in customer hands point at a tombstone. The proof is gone.
     </p>
     <p>
-      The office's receipts do not have that property. The proof is in the file the customer holds, the fingerprint the file produces, and the block height encoded in the <code>.ots</code> proof file. The office is a convenience for issuing the receipt; the receipt itself is independent of the office. If the office closes tomorrow, every receipt issued today still verifies tomorrow, next year, and as long as the Bitcoin chain is running. A treatment of this property is at <a href="/blog/why-domain-dying-doesnt-kill-your-timestamp" style="color:var(--confirm);">/blog/why-domain-dying-doesnt-kill-your-timestamp</a>.
+      The office's receipts do not have that property. The proof is in the file the customer holds, the fingerprint the file produces, and the block height encoded in the <code>.ots</code> proof file. The office is a convenience for issuing the receipt; the receipt itself is independent of the office. If the office closes tomorrow, every receipt issued today still verifies tomorrow, next year, and as long as the Bitcoin chain is running. A treatment of this property is at <a href="/blog/why-domain-dying-doesnt-kill-your-timestamp" class="link-confirm">/blog/why-domain-dying-doesnt-kill-your-timestamp</a>.
     </p>
   </section>
 
@@ -183,7 +183,7 @@
 
     <h3>Bitcoin-anchored timestamps</h3>
     <p>
-      Satisfy all four properties when implemented through a public standard with multiple independent calendars and a chain-based anchor. That is the configuration the office runs. The redundancy argument for using five calendars rather than one is at <a href="/blog/why-5-opentimestamps-calendars-not-1" style="color:var(--confirm);">/blog/why-5-opentimestamps-calendars-not-1</a>.
+      Satisfy all four properties when implemented through a public standard with multiple independent calendars and a chain-based anchor. That is the configuration the office runs. The redundancy argument for using five calendars rather than one is at <a href="/blog/why-5-opentimestamps-calendars-not-1" class="link-confirm">/blog/why-5-opentimestamps-calendars-not-1</a>.
     </p>
   </section>
 
@@ -201,7 +201,7 @@
     <h2>Try it</h2>
     <div class="arch-rule"></div>
     <p>
-      Open <a href="/" style="color:var(--confirm);">orphograph.com</a>. Drop any file. The browser hashes it on the device; the office anchors the fingerprint through five independent calendars and into the Bitcoin chain. The receipt that comes back satisfies the four properties above and will be verifiable by any third party for as long as the chain is running.
+      Open <a href="/" class="link-confirm">orphograph.com</a>. Drop any file. The browser hashes it on the device; the office anchors the fingerprint through five independent calendars and into the Bitcoin chain. The receipt that comes back satisfies the four properties above and will be verifiable by any third party for as long as the chain is running.
     </p>
   </section>
 
@@ -209,14 +209,14 @@
     <p><strong>Disclaimer.</strong> This post is an architectural explainer, not a legal opinion. Defensibility under examination depends on jurisdiction, the relevance of the underlying fact, and the foundation laid by counsel. Consult counsel for advice specific to a matter.</p>
   </div>
 
-  <p class="post-foot">Posted 2026-05-21 &middot; <a href="/blog/" style="color:var(--muted);">More from the blog</a></p>
+  <p class="post-foot">Posted 2026-05-21 &middot; <a href="/blog/" class="link-muted">More from the blog</a></p>
 
-  <nav class="post-foot" style="margin-top:8px;">
-    Previous: <a href="/blog/prove-a-contract-existed-before-a-date" style="color:var(--muted);">How to prove a contract existed before a date</a> &middot; Next: <a href="/blog/prove-code-existed-before-a-competitors-commit" style="color:var(--muted);">How to prove code existed before a competitor's commit</a>
+  <nav class="post-foot follow">
+    Previous: <a href="/blog/prove-a-contract-existed-before-a-date" class="link-muted">How to prove a contract existed before a date</a> &middot; Next: <a href="/blog/prove-code-existed-before-a-competitors-commit" class="link-muted">How to prove code existed before a competitor's commit</a>
   </nav>
 
-  <p class="post-foot" style="margin-top:8px;">
-    Start here: <a href="/what-is-this" style="color:var(--confirm);">What this office actually does</a>.
+  <p class="post-foot follow">
+    Start here: <a href="/what-is-this" class="link-confirm">What this office actually does</a>.
   </p>
 
 </main>
