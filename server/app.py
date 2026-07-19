@@ -195,6 +195,18 @@ FOUNDER_FAIL_CAPACITY = 20
 FOUNDER_FAIL_REFILL = 20 / 3600.0  # full recovery in 1 hour
 _founder_fail_limiter = TokenBucket(FOUNDER_FAIL_CAPACITY, FOUNDER_FAIL_REFILL)
 
+# Global (all-IPs) founder-failure counter (funnel-hygiene pass). The per-IP
+# bucket above is keyed on truncated client IP, so an attacker rotating source
+# addresses mints a fresh 20-guess budget per /24. This second bucket counts
+# every failed guess regardless of origin: once FOUNDER_GLOBAL_FAIL_CAPACITY
+# failures accumulate across the whole fleet, the gate refuses (identical 404)
+# until refill. Same failures-only semantics — a correct token never consumes,
+# so the founder is only impacted while an active spray is underway.
+FOUNDER_GLOBAL_FAIL_CAPACITY = 100
+FOUNDER_GLOBAL_FAIL_REFILL = 100 / 3600.0  # full recovery in 1 hour
+_founder_fail_global_limiter = TokenBucket(FOUNDER_GLOBAL_FAIL_CAPACITY, FOUNDER_GLOBAL_FAIL_REFILL)
+_FOUNDER_GLOBAL_FAIL_KEY = "founder-fail:GLOBAL"
+
 # Fixed pack-payment address for the static /pay/btc.html page. The QR
 # endpoint (/api/btc/qr.svg) builds its BIP-21 URI from THIS server-side
 # constant — never from anything in the request — so a crafted URL cannot
@@ -746,12 +758,28 @@ class Handler(BaseHTTPRequestHandler):
         key = f"founder-fail:{self._client_key()}"
         if _founder_fail_limiter.peek(key) < 1.0:
             return False  # locked out — do not even run the compare
+        if _founder_fail_global_limiter.peek(_FOUNDER_GLOBAL_FAIL_KEY) < 1.0:
+            return False  # global lockout — distributed spray in progress
         supplied = self.headers.get("X-Orpho-Founder", "").strip()
         # Constant-time compare to avoid timing-side-channel leaks of the token.
         import hmac as _hmac
         if _hmac.compare_digest(supplied, token):
             return True
-        _founder_fail_limiter.check(key)  # count the failed guess
+        _founder_fail_limiter.check(key)  # count the failed guess (per-IP)
+        _founder_fail_global_limiter.check(_FOUNDER_GLOBAL_FAIL_KEY)  # and globally
+        # Log lockout ENGAGEMENT transitions server-side only (stderr → fly
+        # logs). Emitted exactly when the failed guess that emptied a bucket
+        # lands; subsequent locked-out probes short-circuit above and stay
+        # silent, so a spray cannot flood the log. Truncated IP only — the
+        # same privacy posture as every other rate-limit key.
+        if _founder_fail_limiter.peek(key) < 1.0:
+            sys.stderr.write(
+                f"[founder-auth] per-IP lockout engaged ip_trunc={self._client_key()} "
+                f"after {FOUNDER_FAIL_CAPACITY} failed token guesses\n")
+        if _founder_fail_global_limiter.peek(_FOUNDER_GLOBAL_FAIL_KEY) < 1.0:
+            sys.stderr.write(
+                f"[founder-auth] GLOBAL lockout engaged after "
+                f"{FOUNDER_GLOBAL_FAIL_CAPACITY} failed token guesses across all IPs\n")
         return False
 
     def _session_email(self) -> str | None:

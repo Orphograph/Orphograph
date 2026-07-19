@@ -162,6 +162,107 @@ class TestFounderBruteforceLockout(unittest.TestCase):
             self.assertEqual(status, 404, f"{path} should share the lockout")
 
 
+class TestFounderGlobalLockout(unittest.TestCase):
+    """Funnel-hygiene pass: second, all-IPs failure counter + lockout logging.
+
+    The per-IP bucket alone lets an attacker rotating source addresses mint a
+    fresh guess budget per /24. The global bucket bounds total guesses across
+    the fleet. Trust-proxy mode is enabled here so tests can rotate the
+    platform real-IP header (Fly-Client-IP) to simulate distributed sources.
+    """
+
+    ENDPOINT = "/api/founder/admin/toggles"
+
+    @classmethod
+    def setUpClass(cls):
+        cls._tmp = tempfile.TemporaryDirectory()
+        cls._old_env = {k: os.environ.get(k) for k in (
+            "ORPHO_FOUNDER_TOKEN", "ORPHO_DATA_DIR", "HOST", "PORT",
+            "ORPHO_COOKIE_SECURE", "ORPHO_TRUST_PROXY_HEADERS",
+        )}
+        os.environ["ORPHO_FOUNDER_TOKEN"] = TOKEN
+        os.environ["ORPHO_TRUST_PROXY_HEADERS"] = "1"
+        cls._saved = _evict()
+        cls._server, cls._base, cls._app = _start(Path(cls._tmp.name))
+
+    @classmethod
+    def tearDownClass(cls):
+        _stop(cls._server)
+        cls._tmp.cleanup()
+        _restore(cls._saved)
+        for k, v in cls._old_env.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
+    def setUp(self):
+        # Small, fresh buckets per test so lockout triggers fast. The handler
+        # resolves the module globals at call time, so swapping is safe.
+        self._app._founder_fail_limiter = self._app.TokenBucket(3, 3 / 900.0)
+        self._app._founder_fail_global_limiter = self._app.TokenBucket(5, 5 / 900.0)
+
+    def _fail_from(self, ip: str):
+        return _get(self._base, self.ENDPOINT,
+                    {"X-Orpho-Founder": "guess", "Fly-Client-IP": ip})
+
+    def test_rotating_ips_hits_global_lockout_and_logs(self):
+        import contextlib
+        import io
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            # 5 failures from 5 different /24s — each far below the per-IP cap.
+            for i in range(5):
+                status, _ = self._fail_from(f"10.{i}.{i}.1")
+                self.assertEqual(status, 404)
+            # Global bucket now empty: even the CORRECT token from a brand-new
+            # IP answers 404 — the rotation strategy is dead.
+            status, _ = _get(self._base, self.ENDPOINT,
+                             {"X-Orpho-Founder": TOKEN, "Fly-Client-IP": "172.16.9.9"})
+            self.assertEqual(status, 404)
+        self.assertIn("GLOBAL lockout engaged", err.getvalue())
+
+    def test_global_lockout_expires_with_refill(self):
+        for i in range(5):
+            self._fail_from(f"10.{i}.{i}.1")
+        status, _ = _get(self._base, self.ENDPOINT,
+                         {"X-Orpho-Founder": TOKEN, "Fly-Client-IP": "172.16.9.9"})
+        self.assertEqual(status, 404, "lockout should be engaged")
+        # Simulate the lockout window elapsing: rewind the bucket's clock a
+        # full refill period. peek() then sees a refilled bucket.
+        import time as _time
+        g = self._app._founder_fail_global_limiter
+        key = self._app._FOUNDER_GLOBAL_FAIL_KEY
+        tokens, _last = g._buckets[key]
+        g._buckets[key] = (tokens, _time.time() - 900)
+        status, _ = _get(self._base, self.ENDPOINT,
+                         {"X-Orpho-Founder": TOKEN, "Fly-Client-IP": "172.16.9.9"})
+        self.assertEqual(status, 200, "founder access must self-heal after the window")
+
+    def test_per_ip_lockout_logs_and_expires(self):
+        import contextlib
+        import io
+        import time as _time
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            for _ in range(3):  # per-IP capacity swapped to 3 in setUp
+                status, _ = self._fail_from("10.99.99.1")
+                self.assertEqual(status, 404)
+        self.assertIn("per-IP lockout engaged", err.getvalue())
+        # Locked: correct token from the SAME /24 refuses...
+        status, _ = _get(self._base, self.ENDPOINT,
+                         {"X-Orpho-Founder": TOKEN, "Fly-Client-IP": "10.99.99.2"})
+        self.assertEqual(status, 404)
+        # ...until the window elapses (rewind the per-IP bucket's clock).
+        lim = self._app._founder_fail_limiter
+        key = "founder-fail:" + self._app.truncate_ip("10.99.99.1")
+        tokens, _last = lim._buckets[key]
+        lim._buckets[key] = (tokens, _time.time() - 900)
+        status, _ = _get(self._base, self.ENDPOINT,
+                         {"X-Orpho-Founder": TOKEN, "Fly-Client-IP": "10.99.99.2"})
+        self.assertEqual(status, 200)
+
+
 class TestFounderTokenUnset(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
