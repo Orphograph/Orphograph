@@ -13,7 +13,7 @@
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://orphograph.com/">
 <meta name="twitter:card" content="summary_large_image">
-<link rel="stylesheet" href="/index.css?v=16">
+<link rel="stylesheet" href="/index.css?v=17">
 <link rel="preload" as="image" href="/seal-display.png?v=8" fetchpriority="high">
 <meta name="copyright" content="© 2026 Orphograph. MIT — see /LICENSE">
 <script type="application/ld+json">
@@ -409,6 +409,14 @@
           <a id="buy-pack" class="cta" hidden>Pay with card</a>
           <a href="/pay/crypto?plan=writer_pack" class="cta cta-alt">Pay with crypto</a>
         </div>
+        <form class="card-notify" id="notify-pack" hidden>
+          <p class="card-notify-note">Card checkout is briefly unavailable. Leave an email and the office will send one notice when it returns. Crypto checkout remains open above.</p>
+          <div class="card-notify-row">
+            <input type="email" name="email" autocomplete="email" required placeholder="you@example.com" aria-label="Email address for the card-checkout notice">
+            <button type="submit">Notify me</button>
+          </div>
+          <p class="card-notify-done" hidden>Noted. One notice will be sent when card checkout returns; nothing else.</p>
+        </form>
       </div>
       <div class="tier featured">
         <span class="ribbon">Most Popular</span>
@@ -429,6 +437,14 @@
           <a id="buy-pack50" class="cta" hidden>Pay with card</a>
           <a href="/pay/crypto?plan=pack_50" class="cta cta-alt">Pay with crypto</a>
         </div>
+        <form class="card-notify" id="notify-pack50" hidden>
+          <p class="card-notify-note">Card checkout is briefly unavailable. Leave an email and the office will send one notice when it returns. Crypto checkout remains open above.</p>
+          <div class="card-notify-row">
+            <input type="email" name="email" autocomplete="email" required placeholder="you@example.com" aria-label="Email address for the card-checkout notice">
+            <button type="submit">Notify me</button>
+          </div>
+          <p class="card-notify-done" hidden>Noted. One notice will be sent when card checkout returns; nothing else.</p>
+        </form>
         <p class="cta-fineprint">
           <span class="crypto-tokens" id="crypto-pay-fineprint">9 cryptos accepted (BTC, USDC, ETH, SOL, USDT, LTC, XRP, DOGE, MATIC) · non-custodial via NOWPayments</span>
         </p>
@@ -447,6 +463,14 @@
           <a id="buy-personal" class="cta" hidden>Pay with card</a>
           <a href="/pay/crypto?plan=pack_50" class="cta cta-alt">Pay with crypto</a>
         </div>
+        <form class="card-notify" id="notify-personal" hidden>
+          <p class="card-notify-note">Card checkout is briefly unavailable. Leave an email and the office will send one notice when it returns. Crypto checkout remains open above.</p>
+          <div class="card-notify-row">
+            <input type="email" name="email" autocomplete="email" required placeholder="you@example.com" aria-label="Email address for the card-checkout notice">
+            <button type="submit">Notify me</button>
+          </div>
+          <p class="card-notify-done" hidden>Noted. One notice will be sent when card checkout returns; nothing else.</p>
+        </form>
         <p class="cta-fineprint">
           <span class="crypto-tokens" id="crypto-pay-sub-fineprint">Card bills $9/month, cancel anytime. Crypto bills as a Pack of Fifty for equivalent value.</span>
         </p>
@@ -570,6 +594,6 @@
 <script src="/status-badge.js?v=1" defer></script>
 <script src="/assets/event.js?v=1" defer></script>
 <script src="/assets/drop-observer.js?v=1" defer></script>
-<script src="/checkout-cta.js?v=3" defer></script>
+<script src="/checkout-cta.js?v=4" defer></script>
 </body>
 </html>

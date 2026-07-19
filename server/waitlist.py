@@ -20,7 +20,11 @@ ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = Path(os.environ.get("ORPHO_DATA_DIR", str(ROOT / "data") if (ROOT / "data").is_dir() else str(ROOT)))
 WAITLIST_PATH = Path(os.environ.get("ORPHO_WAITLIST", str(DATA_DIR / "waitlist.jsonl")))
 
-ALLOWED_INTERESTS = {"personal", "creator", "capture", "b2b", "other"}
+ALLOWED_INTERESTS = {"personal", "creator", "capture", "b2b", "other",
+                     # Card-checkout notify list: buyers who arrived while
+                     # card_charges_enabled was false and asked to be told
+                     # when card checkout returns. Value encodes the tier.
+                     "card_pack", "card_pack50", "card_personal"}
 
 
 def add(email: str, interest: str) -> bool:

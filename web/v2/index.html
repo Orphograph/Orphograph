@@ -69,7 +69,7 @@
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png?v=8">
 <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png?v=8">
 <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon-180.png?v=8">
-<link rel="stylesheet" href="/v2/style.css?v=7">
+<link rel="stylesheet" href="/v2/style.css?v=8">
 </head>
 <body>
 <a class="skip" href="#hero-drop">Skip to content</a>
@@ -266,6 +266,14 @@
         </ul>
         <a class="buy card" id="buy-pack" hidden>Pay with card</a>
         <a class="buy" href="/pay/crypto?plan=writer_pack">Pay with crypto</a>
+        <form class="card-notify" id="notify-pack" hidden>
+          <p class="card-notify-note">Card checkout is briefly unavailable. Leave an email and the office will send one notice when it returns. Crypto checkout remains open above.</p>
+          <div class="card-notify-row">
+            <input type="email" name="email" autocomplete="email" required placeholder="you@example.com" aria-label="Email address for the card-checkout notice">
+            <button type="submit">Notify me</button>
+          </div>
+          <p class="card-notify-done" hidden>Noted. One notice will be sent when card checkout returns; nothing else.</p>
+        </form>
       </div>
       <div class="plan feature">
         <div class="tag">Pack of Fifty</div>
@@ -291,6 +299,14 @@
         </ul>
         <a class="buy card" id="buy-personal" hidden>Pay with card</a>
         <a class="buy" href="/pay/crypto?plan=pack_50">Pay with crypto</a>
+        <form class="card-notify" id="notify-personal" hidden>
+          <p class="card-notify-note">Card checkout is briefly unavailable. Leave an email and the office will send one notice when it returns. Crypto checkout remains open above.</p>
+          <div class="card-notify-row">
+            <input type="email" name="email" autocomplete="email" required placeholder="you@example.com" aria-label="Email address for the card-checkout notice">
+            <button type="submit">Notify me</button>
+          </div>
+          <p class="card-notify-done" hidden>Noted. One notice will be sent when card checkout returns; nothing else.</p>
+        </form>
         <p class="so-fineprint">Card bills $9/month, cancel anytime. Crypto bills as a Pack of Fifty for equivalent value.</p>
       </div>
     </div>
@@ -398,7 +414,7 @@ date    existed on or before
   </div>
 </footer>
 
-<script src="/checkout-cta.js?v=3" defer></script>
+<script src="/checkout-cta.js?v=4" defer></script>
 <script src="/v2/app.js?v=3"></script>
 </body>
 </html>
