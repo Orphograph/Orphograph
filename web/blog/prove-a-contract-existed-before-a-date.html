@@ -17,7 +17,7 @@
 <link rel="canonical" href="https://orphograph.com/blog/prove-a-contract-existed-before-a-date">
 <link rel="icon" type="image/png" href="/favicon.png?v=8">
 <link rel="stylesheet" href="/index.css?v=16">
-<link rel="stylesheet" href="/blog/prove-a-contract-existed-before-a-date.css?v=1">
+<link rel="stylesheet" href="/blog/prove-a-contract-existed-before-a-date.css?v=2">
 <meta name="copyright" content="© 2026 Orphograph. Code under MIT (see /LICENSE). Brand, content, and design — all rights reserved.">
 <script type="application/ld+json">
 {
@@ -120,7 +120,7 @@
     <div class="arch-rule"></div>
     <ul class="means-bullets">
       <li><strong>Save</strong> the final contract as a single file — typically the executed PDF, but the method does not care about format. Word, plain text, scanned image, even a zip of the contract and its exhibits — anything that reduces to a stable byte sequence works.</li>
-      <li><strong>Drop the file</strong> at <a href="/" style="color:var(--confirm);">orphograph.com</a>. The browser computes the SHA-256 fingerprint locally; the contract's contents never leave the device. Only the sixty-four-character fingerprint is submitted to the calendars.</li>
+      <li><strong>Drop the file</strong> at <a href="/" class="link-confirm">orphograph.com</a>. The browser computes the SHA-256 fingerprint locally; the contract's contents never leave the device. Only the sixty-four-character fingerprint is submitted to the calendars.</li>
       <li><strong>Save the receipt.</strong> The receipt consists of a sixteen-character ID, a public URL of the form <code>orphograph.com/r/&lt;id&gt;</code>, and five small <code>.ots</code> proof files from five independent calendars. Keep them in the matter file alongside the executed contract.</li>
     </ul>
     <p>
@@ -160,7 +160,7 @@
       <li>Confirm that block height was mined on or before the date being claimed.</li>
     </ul>
     <p>
-      A reference verifier is published under MIT at <a href="/method/the-mit-verifier-annotated" style="color:var(--confirm);">/method/the-mit-verifier-annotated.html</a>. Any party in any jurisdiction can run it. The office is not required to be present, reachable, or in business for verification to succeed.
+      A reference verifier is published under MIT at <a href="/method/the-mit-verifier-annotated" class="link-confirm">/method/the-mit-verifier-annotated.html</a>. Any party in any jurisdiction can run it. The office is not required to be present, reachable, or in business for verification to succeed.
     </p>
   </section>
 
@@ -178,7 +178,7 @@
     <h2>What survives the office</h2>
     <div class="arch-rule"></div>
     <p>
-      Receipts are verifiable through <a href="https://opentimestamps.org" style="color:var(--confirm);">OpenTimestamps</a>, the open public standard the office uses underneath, against any copy of the Bitcoin chain. The receipt is the artifact. The office is the convenience. The artifact outlives the office by design.
+      Receipts are verifiable through <a href="https://opentimestamps.org" class="link-confirm">OpenTimestamps</a>, the open public standard the office uses underneath, against any copy of the Bitcoin chain. The receipt is the artifact. The office is the convenience. The artifact outlives the office by design.
     </p>
   </section>
 
@@ -186,7 +186,7 @@
     <h2>Try it</h2>
     <div class="arch-rule"></div>
     <p>
-      Open <a href="/" style="color:var(--confirm);">orphograph.com</a>. Drop the executed contract. Save the receipt to the matter file. The date of record is now fixed, and a counterparty's later claim about when the document came into being can be answered with a fingerprint and a block height rather than a credibility argument.
+      Open <a href="/" class="link-confirm">orphograph.com</a>. Drop the executed contract. Save the receipt to the matter file. The date of record is now fixed, and a counterparty's later claim about when the document came into being can be answered with a fingerprint and a block height rather than a credibility argument.
     </p>
   </section>
 
@@ -194,14 +194,14 @@
     <p><strong>Disclaimer.</strong> Proof of existence is not a legal opinion. A receipt establishes that a specific byte sequence existed by a specific Bitcoin block — it is one piece of evidence in a contract dispute, not a determination of enforceability, validity, or breach. Consult counsel for legal advice specific to a matter.</p>
   </div>
 
-  <p class="post-foot">Posted 2026-05-21 &middot; <a href="/blog/" style="color:var(--muted);">More from the blog</a></p>
+  <p class="post-foot">Posted 2026-05-21 &middot; <a href="/blog/" class="link-muted">More from the blog</a></p>
 
-  <nav class="post-foot" style="margin-top:8px;">
-    Previous: <a href="/blog/prove-you-wrote-it-not-ai" style="color:var(--muted);">How to prove you wrote it &mdash; not an AI</a> &middot; Next: <a href="/blog/what-makes-a-digital-timestamp-legally-defensible" style="color:var(--muted);">What makes a digital timestamp legally defensible</a>
+  <nav class="post-foot follow">
+    Previous: <a href="/blog/prove-you-wrote-it-not-ai" class="link-muted">How to prove you wrote it &mdash; not an AI</a> &middot; Next: <a href="/blog/what-makes-a-digital-timestamp-legally-defensible" class="link-muted">What makes a digital timestamp legally defensible</a>
   </nav>
 
-  <p class="post-foot" style="margin-top:8px;">
-    Start here: <a href="/what-is-this" style="color:var(--confirm);">What this office actually does</a>.
+  <p class="post-foot follow">
+    Start here: <a href="/what-is-this" class="link-confirm">What this office actually does</a>.
   </p>
 
 </main>

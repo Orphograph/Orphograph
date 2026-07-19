@@ -239,3 +239,22 @@ def test_lp_pages_no_inline_styles(html_path: Path) -> None:
     body = html_path.read_text(encoding="utf-8")
     assert "<style" not in body, f"{html_path.name} has an inline <style> block"
     assert 'style="' not in body, f"{html_path.name} has inline style= attributes"
+
+
+# All blog pages were cleaned in one pass (fix/blog-inline-css), so the
+# whole directory is enforced by glob — a new post with inline styles
+# fails here on arrival instead of shipping unstyled under the CSP.
+CSP_CLEAN_BLOG = sorted((WEB / "blog").glob("*.html"))
+
+
+def test_blog_dir_has_pages() -> None:
+    """Guard the glob above: an empty list would silently skip enforcement."""
+    assert len(CSP_CLEAN_BLOG) >= 17, "web/blog/*.html glob came back near-empty"
+
+
+@pytest.mark.parametrize("html_path", CSP_CLEAN_BLOG, ids=lambda p: p.name)
+def test_blog_pages_no_inline_styles(html_path: Path) -> None:
+    """CSP-clean blog pages must not regress to inline styles."""
+    body = html_path.read_text(encoding="utf-8")
+    assert "<style" not in body, f"{html_path.name} has an inline <style> block"
+    assert 'style="' not in body, f"{html_path.name} has inline style= attributes"

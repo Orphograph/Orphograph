@@ -17,7 +17,7 @@
 <link rel="canonical" href="https://orphograph.com/blog/prove-code-existed-before-a-competitors-commit">
 <link rel="icon" type="image/png" href="/favicon.png?v=8">
 <link rel="stylesheet" href="/index.css?v=16">
-<link rel="stylesheet" href="/blog/prove-code-existed-before-a-competitors-commit.css?v=1">
+<link rel="stylesheet" href="/blog/prove-code-existed-before-a-competitors-commit.css?v=2">
 <meta name="copyright" content="© 2026 Orphograph. Code under MIT (see /LICENSE). Brand, content, and design — all rights reserved.">
 <script type="application/ld+json">
 {
@@ -97,7 +97,7 @@
       A commit's author date is a field in the commit object. The field is editable. A repository's history can be rewritten, force-pushed, rebased onto an earlier base, or constructed from scratch with arbitrary dates. A hosting provider's "pushed at" timestamp is more credible because the provider records it, but it depends on the provider being trusted by the disputing party — and the provider's records being available, intact, and admissible when the dispute arises, sometimes years later.
     </p>
     <p>
-      A defensible date of record needs three things the commit date does not provide on its own: cryptographic binding to the byte-exact state of the tree, anchoring outside any party's control, and verifiability that does not depend on a hosting provider remaining cooperative. The architectural treatment of those properties is at <a href="/blog/what-makes-a-digital-timestamp-legally-defensible" style="color:var(--confirm);">/blog/what-makes-a-digital-timestamp-legally-defensible.html</a>.
+      A defensible date of record needs three things the commit date does not provide on its own: cryptographic binding to the byte-exact state of the tree, anchoring outside any party's control, and verifiability that does not depend on a hosting provider remaining cooperative. The architectural treatment of those properties is at <a href="/blog/what-makes-a-digital-timestamp-legally-defensible" class="link-confirm">/blog/what-makes-a-digital-timestamp-legally-defensible.html</a>.
     </p>
   </section>
 
@@ -106,7 +106,7 @@
     <div class="arch-rule"></div>
     <ul class="means-bullets">
       <li><strong>Produce a single file from the tree.</strong> The simplest form is a reproducible archive — for example, <code>git archive --format=tar.gz HEAD &gt; snapshot.tar.gz</code>, or a tarball of the working tree with deterministic ordering. Any byte-stable single-file representation works. A commit hash itself is also a valid input: the SHA-1 or SHA-256 of a commit binds to the entire reachable history.</li>
-      <li><strong>Drop the file</strong> at <a href="/" style="color:var(--confirm);">orphograph.com</a>. The browser computes the SHA-256 fingerprint locally. The archive's contents never leave the device. Only the sixty-four-character fingerprint is submitted.</li>
+      <li><strong>Drop the file</strong> at <a href="/" class="link-confirm">orphograph.com</a>. The browser computes the SHA-256 fingerprint locally. The archive's contents never leave the device. Only the sixty-four-character fingerprint is submitted.</li>
       <li><strong>Save the receipt.</strong> The receipt is a sixteen-character ID, a public URL of the form <code>orphograph.com/r/&lt;id&gt;</code>, and five small <code>.ots</code> proof files from five independent calendars. Commit the receipt into the repository, or keep it in the engineering matter folder alongside the archive.</li>
     </ul>
     <p>
@@ -158,7 +158,7 @@
       <li>Confirm the block was mined before the competitor's commit date.</li>
     </ul>
     <p>
-      A reference verifier under MIT is at <a href="/method/the-mit-verifier-annotated" style="color:var(--confirm);">/method/the-mit-verifier-annotated.html</a>. It runs offline once the chain is local. The office is not in the verification loop.
+      A reference verifier under MIT is at <a href="/method/the-mit-verifier-annotated" class="link-confirm">/method/the-mit-verifier-annotated.html</a>. It runs offline once the chain is local. The office is not in the verification loop.
     </p>
   </section>
 
@@ -183,7 +183,7 @@
 
     <h3>Folder-mode for engineering organisations</h3>
     <p>
-      Standing Order accounts can anchor a folder of receipts continuously, producing a daily merkle root that fixes the state of every tracked archive in a single chain entry. The mechanism is described at <a href="/method/folder-merkle" style="color:var(--confirm);">/method/folder-merkle.html</a>.
+      Standing Order accounts can anchor a folder of receipts continuously, producing a daily merkle root that fixes the state of every tracked archive in a single chain entry. The mechanism is described at <a href="/method/folder-merkle" class="link-confirm">/method/folder-merkle.html</a>.
     </p>
   </section>
 
@@ -201,7 +201,7 @@
     <h2>Try it</h2>
     <div class="arch-rule"></div>
     <p>
-      Open <a href="/" style="color:var(--confirm);">orphograph.com</a>. Drop a tarball of the current tree. Save the receipt into the repository. The codebase now has a defensible date of record, and any later argument about when a feature came into being can be answered with a fingerprint and a block height rather than a chain-of-trust dispute over a hosting provider's logs.
+      Open <a href="/" class="link-confirm">orphograph.com</a>. Drop a tarball of the current tree. Save the receipt into the repository. The codebase now has a defensible date of record, and any later argument about when a feature came into being can be answered with a fingerprint and a block height rather than a chain-of-trust dispute over a hosting provider's logs.
     </p>
   </section>
 
@@ -209,14 +209,14 @@
     <p><strong>Disclaimer.</strong> Proof of existence is not a legal opinion. A receipt establishes that a specific byte sequence existed by a specific Bitcoin block — it is one piece of evidence in a priority dispute, not a determination of authorship, originality, or infringement. Consult counsel for legal advice specific to a matter.</p>
   </div>
 
-  <p class="post-foot">Posted 2026-05-21 &middot; <a href="/blog/" style="color:var(--muted);">More from the blog</a></p>
+  <p class="post-foot">Posted 2026-05-21 &middot; <a href="/blog/" class="link-muted">More from the blog</a></p>
 
-  <nav class="post-foot" style="margin-top:8px;">
-    Previous: <a href="/blog/what-makes-a-digital-timestamp-legally-defensible" style="color:var(--muted);">What makes a digital timestamp legally defensible</a> &middot; Next: <a href="/blog/prove-a-photo-was-not-edited" style="color:var(--muted);">How to prove a photo was not edited</a>
+  <nav class="post-foot follow">
+    Previous: <a href="/blog/what-makes-a-digital-timestamp-legally-defensible" class="link-muted">What makes a digital timestamp legally defensible</a> &middot; Next: <a href="/blog/prove-a-photo-was-not-edited" class="link-muted">How to prove a photo was not edited</a>
   </nav>
 
-  <p class="post-foot" style="margin-top:8px;">
-    Start here: <a href="/what-is-this" style="color:var(--confirm);">What this office actually does</a>.
+  <p class="post-foot follow">
+    Start here: <a href="/what-is-this" class="link-confirm">What this office actually does</a>.
   </p>
 
 </main>
