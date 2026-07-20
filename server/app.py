@@ -709,6 +709,56 @@ class Handler(BaseHTTPRequestHandler):
     server_version = "orphograph/0.1"
     timeout = REQUEST_TIMEOUT_SEC  # close slow / dead connections so a thread isn't pinned
 
+    # send_error() previously rendered the stdlib "Error response" template —
+    # unbranded, no stylesheet, no path back into the site. A visitor who
+    # mistypes a URL (e.g. /lp/agent-receipt for /lp/agent-receipts) should
+    # land on a page that looks like Orphograph and links onward. External
+    # stylesheets only (CSP is style-src 'self'; inline styles are dropped).
+    # The stdlib substitutes %(code)d / %(message)s and HTML-escapes the
+    # message, so dynamic error text cannot inject markup here.
+    error_content_type = "text/html;charset=utf-8"
+    error_message_format = """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>%(code)d — Orphograph</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<link rel="icon" type="image/png" href="/favicon.png?v=8">
+<link rel="stylesheet" href="/style.css?v=5">
+<link rel="stylesheet" href="/blog.css">
+<link rel="stylesheet" href="/index.css?v=16">
+</head>
+<body>
+<header>
+  <div class="brand"><a href="/">orphograph</a></div>
+  <nav>
+    <a href="/learn">how it works</a>
+    <a href="/#tiers">pricing</a>
+    <a href="/lp/">guides</a>
+    <a href="/about">about</a>
+  </nav>
+</header>
+<main class="blog-post">
+  <article class="post-header">
+    <h1>%(code)d — %(message)s</h1>
+    <p class="post-meta muted">The address may have been mistyped, or the page may have moved.</p>
+  </article>
+  <section class="post-body">
+    <ul>
+      <li><a href="/">Home</a> — anchor a file, inspect the tiers</li>
+      <li><a href="/lp/">Guides</a> — including agent action receipts</li>
+      <li><a href="/learn">How anchoring works</a></li>
+    </ul>
+  </section>
+</main>
+<footer>
+  <small><a href="/">← Home</a> · <a href="/lp/">Guides</a> · The office does not transmit your file</small>
+</footer>
+</body>
+</html>
+"""
+
     def log_message(self, fmt, *args):
         truncated = truncate_ip(self.client_address[0] if self.client_address else "")
         sys.stderr.write(f"[{self.log_date_time_string()}] {truncated} - {fmt % args}\n")
