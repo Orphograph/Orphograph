@@ -259,3 +259,38 @@ def test_blog_pages_no_inline_styles(html_path: Path) -> None:
     body = html_path.read_text(encoding="utf-8")
     assert "<style" not in body, f"{html_path.name} has an inline <style> block"
     assert 'style="' not in body, f"{html_path.name} has inline style= attributes"
+
+
+# ── launch LP: full social-card pin ────────────────────────────────────
+# /lp/agent-receipts is a primary share target (HN / Reddit / X). Reddit
+# renders og:*; X requires twitter:card to render any card at all. Pin the
+# complete set so a head edit cannot silently degrade the share preview.
+
+AGENT_RECEIPTS_LP = WEB / "lp" / "agent-receipts.html"
+
+
+def test_agent_receipts_lp_full_social_card() -> None:
+    head = AGENT_RECEIPTS_LP.read_text(encoding="utf-8").split("</head>", 1)[0]
+    required = [
+        '<link rel="canonical" href="https://orphograph.com/lp/agent-receipts">',
+        '<meta property="og:title"',
+        '<meta property="og:description"',
+        '<meta property="og:image" content="https://orphograph.com/og-image.png',
+        '<meta name="twitter:card" content="summary_large_image">',
+        '<meta name="twitter:title"',
+        '<meta name="twitter:description"',
+        '<meta name="twitter:image" content="https://orphograph.com/og-image.png',
+    ]
+    for fragment in required:
+        assert fragment in head, f"agent-receipts.html head is missing: {fragment}"
+
+
+def test_agent_receipts_lp_twitter_title_matches_title() -> None:
+    """Same convention as method pages: twitter:title echoes <title>."""
+    head = AGENT_RECEIPTS_LP.read_text(encoding="utf-8").split("</head>", 1)[0]
+    start = head.find("<title>")
+    end = head.find("</title>", start)
+    assert start != -1 and end != -1, "agent-receipts.html has no <title>"
+    page_title = head[start + len("<title>"):end].strip()
+    needle = f'<meta name="twitter:title" content="{page_title}">'
+    assert needle in head, f"twitter:title does not match page <title> {page_title!r}"
