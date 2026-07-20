@@ -223,6 +223,7 @@ FUNNEL_EVENTS = frozenset({
     "file_anchored",
     "checkout_clicked",
     "checkout_returned_success",
+    "lp_cta_clicked",
 })
 FUNNEL_EVENT_FIELDS = frozenset({"event", "page"})
 FUNNEL_EVENTS_PATH = DATA_DIR / "events.jsonl"
