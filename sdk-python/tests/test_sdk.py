@@ -119,6 +119,58 @@ class TestVerifyFolder(unittest.TestCase):
                 ok = orphograph.verify_folder(str(folder), "rid-test")
             self.assertFalse(ok)
 
+    def test_verify_folder_default_excludes(self):
+        # A folder anchored with the DEFAULT deny-list must verify with the
+        # default deny-list, even when OS detritus appears on disk afterward.
+        with tempfile.TemporaryDirectory() as td:
+            folder = Path(td)
+            manifest = _make_folder(folder)  # built with defaults
+            (folder / ".DS_Store").write_bytes(b"finder junk")  # excluded by default
+
+            def fake_get(receipt_id, **kwargs):
+                return {"receipt": {"receipt_id": receipt_id}, "manifest": manifest}
+
+            with mock.patch.object(orphograph._client, "get_verify_folder", side_effect=fake_get):
+                ok = orphograph.verify_folder(str(folder), "rid-test")
+            self.assertTrue(ok)
+
+    def test_verify_folder_custom_excludes_roundtrip(self):
+        # AUDIT D2: a folder anchored with a CUSTOM exclude list must verify
+        # when the same list is supplied — verify_folder mirrors
+        # anchor_folder's exclude parameter.
+        with tempfile.TemporaryDirectory() as td:
+            folder = Path(td)
+            (folder / "a.txt").write_bytes(b"alpha")
+            (folder / "scratch.log").write_bytes(b"working notes, not evidence")
+            custom = ["*.log"]
+            manifest = _merkle.MerkleTree.from_folder(folder, exclude=custom).manifest()
+            self.assertEqual([l["path"] for l in manifest["leaves"]], ["a.txt"])
+
+            def fake_get(receipt_id, **kwargs):
+                return {"receipt": {"receipt_id": receipt_id}, "manifest": manifest}
+
+            with mock.patch.object(orphograph._client, "get_verify_folder", side_effect=fake_get):
+                ok = orphograph.verify_folder(str(folder), "rid-test", exclude=custom)
+            self.assertTrue(ok)
+
+    def test_verify_folder_custom_exclude_anchor_needs_matching_excludes(self):
+        # The D2 failure case, pinned: verifying a custom-exclude anchor
+        # WITHOUT the matching excludes recomputes a different root and
+        # returns False. Before the fix this was permanent (no way to pass
+        # excludes at all); now it is simply the documented contract.
+        with tempfile.TemporaryDirectory() as td:
+            folder = Path(td)
+            (folder / "a.txt").write_bytes(b"alpha")
+            (folder / "scratch.log").write_bytes(b"working notes, not evidence")
+            manifest = _merkle.MerkleTree.from_folder(folder, exclude=["*.log"]).manifest()
+
+            def fake_get(receipt_id, **kwargs):
+                return {"receipt": {"receipt_id": receipt_id}, "manifest": manifest}
+
+            with mock.patch.object(orphograph._client, "get_verify_folder", side_effect=fake_get):
+                ok = orphograph.verify_folder(str(folder), "rid-test")
+            self.assertFalse(ok)
+
 
 class TestInclusionProof(unittest.TestCase):
     def test_round_trip_inclusion_proof(self):
@@ -253,6 +305,55 @@ class TestCli(unittest.TestCase):
                  mock.patch("sys.stdout", new_callable=io.StringIO):
                 rc = _cli.main(["verify", str(folder), "rid-bad"])
             self.assertEqual(rc, 1)
+
+    def test_cli_verify_custom_excludes_end_to_end(self):
+        # AUDIT D2, CLI surface: before the fix `orphograph verify` had no
+        # --exclude flag, so a custom-exclude anchor could NEVER verify from
+        # the CLI (permanent false negative). Exercise the real verify path
+        # with only the HTTP layer stubbed.
+        from orphograph import _cli
+
+        with tempfile.TemporaryDirectory() as td:
+            folder = Path(td)
+            (folder / "a.txt").write_bytes(b"alpha")
+            (folder / "scratch.log").write_bytes(b"working notes")
+            manifest = _merkle.MerkleTree.from_folder(folder, exclude=["*.log"]).manifest()
+
+            def fake_get(receipt_id, **kwargs):
+                return {"receipt": {"receipt_id": receipt_id}, "manifest": manifest}
+
+            with mock.patch.object(orphograph._client, "get_verify_folder", side_effect=fake_get):
+                # The failure case: no excludes -> wrong root -> exit 1.
+                with mock.patch("sys.stdout", new_callable=io.StringIO) as out_bad:
+                    rc_bad = _cli.main(["verify", str(folder), "rid-x"])
+                # The fix: same excludes as at anchor time -> exit 0.
+                with mock.patch("sys.stdout", new_callable=io.StringIO) as out_ok:
+                    rc_ok = _cli.main(["verify", str(folder), "rid-x", "--exclude", "*.log"])
+            self.assertEqual(rc_bad, 1)
+            self.assertEqual(json.loads(out_bad.getvalue())["match"], False)
+            self.assertEqual(rc_ok, 0)
+            self.assertEqual(json.loads(out_ok.getvalue())["match"], True)
+
+    def test_cli_anchor_passes_excludes_through(self):
+        from orphograph import _cli
+
+        with tempfile.TemporaryDirectory() as td:
+            folder = Path(td)
+            (folder / "a.txt").write_bytes(b"alpha")
+            (folder / "scratch.log").write_bytes(b"working notes")
+            captured = {}
+
+            def fake_post(manifest, **kwargs):
+                captured["manifest"] = manifest
+                return {"receipt_id": "rid-cli", "root_hex": manifest["root_hex"]}
+
+            with mock.patch.object(orphograph._client, "post_anchor_folder", side_effect=fake_post), \
+                 mock.patch("sys.stdout", new_callable=io.StringIO):
+                rc = _cli.main(["anchor", str(folder), "--exclude", "*.log"])
+            self.assertEqual(rc, 0)
+            self.assertEqual(
+                [l["path"] for l in captured["manifest"]["leaves"]], ["a.txt"]
+            )
 
 
 if __name__ == "__main__":

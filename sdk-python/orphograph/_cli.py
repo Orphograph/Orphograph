@@ -5,6 +5,11 @@ Subcommands:
     anchor <folder>                 Anchor a folder; prints one line of JSON.
     verify <folder> <receipt_id>    Verify a folder against a receipt.
     inclusion-proof <rid> <path>    Fetch an inclusion proof; prints JSON.
+
+Both ``anchor`` and ``verify`` accept repeatable ``--exclude GLOB`` flags.
+A folder anchored with custom excludes can only re-derive the same Merkle
+root when verified with the SAME excludes (AUDIT_VERIFIER_DRIFT D2) — the
+flag exists on both subcommands for exactly that reason.
 """
 from __future__ import annotations
 
@@ -44,13 +49,25 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
+    exclude_help = (
+        "Glob pattern to exclude (repeatable). Supplying any --exclude "
+        "REPLACES the default deny-list rather than extending it. "
+        "Verification must use the same excludes the folder was anchored with."
+    )
+
     p_anchor = sub.add_parser("anchor", help="Anchor a folder.")
     p_anchor.add_argument("folder", help="Local folder to anchor.")
     p_anchor.add_argument("--label", default=None, help="Optional short client label.")
+    p_anchor.add_argument(
+        "--exclude", action="append", default=None, metavar="GLOB", help=exclude_help
+    )
 
     p_verify = sub.add_parser("verify", help="Verify a folder against a receipt.")
     p_verify.add_argument("folder", help="Local folder to verify.")
     p_verify.add_argument("receipt_id", help="Receipt id returned at anchor time.")
+    p_verify.add_argument(
+        "--exclude", action="append", default=None, metavar="GLOB", help=exclude_help
+    )
 
     p_proof = sub.add_parser("inclusion-proof", help="Fetch an inclusion proof.")
     p_proof.add_argument("receipt_id", help="Folder receipt id.")
@@ -72,6 +89,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                 server_url=server_url,
                 api_key=api_key,
                 client_label=args.label,
+                exclude=args.exclude,
             )
             sys.stdout.write(json.dumps(result) + "\n")
             return 0
@@ -81,6 +99,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                 args.receipt_id,
                 server_url=server_url,
                 api_key=api_key,
+                exclude=args.exclude,
             )
             sys.stdout.write(json.dumps({"match": bool(ok)}) + "\n")
             return 0 if ok else 1
