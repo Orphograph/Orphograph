@@ -8,7 +8,7 @@ at the top of that file). No `pip install` is required.
 Two subcommands are provided:
 
     verify.py file   --file F --proof P.json [--ots O.ots]
-    verify.py folder --dir D  --manifest M.json [--ots O.ots]
+    verify.py folder --dir D  --manifest M.json [--ots O.ots] [--exclude GLOB ...]
 
 `file` mode walks an inclusion proof bottom-up from the local file's
 SHA-256 and checks that the result matches the manifest root recorded
@@ -17,7 +17,10 @@ in the proof JSON.
 `folder` mode walks the local directory through the same RFC 6962
 algorithm `server/merkle.py` uses on the server, compares the
 recomputed root against the supplied manifest's `root_hex`, and prints
-OK/FAIL.
+OK/FAIL. A folder anchored with custom excludes can only re-derive the
+same root when verified with the SAME excludes — pass the identical
+repeatable `--exclude GLOB` flags the anchor used (supplying any
+--exclude replaces the default deny-list, matching the SDK CLI).
 
 When `--ots` is supplied, the script additionally invokes the local
 `ots` binary (the OpenTimestamps reference client) via subprocess with
@@ -124,10 +127,19 @@ def _verify_file(args: argparse.Namespace) -> int:
     print(f"  file sha256: {file_digest.hex()}")
 
     # Cross-check against the recorded file_sha256_hex when present.
+    # The stored side is compared VERBATIM — the office issues lowercase hex
+    # and only the locally computed side is ever normalised (the local
+    # .hex() is already lowercase). A proof whose recorded hash matches
+    # only after lowercasing was edited out-of-band and MUST fail
+    # (docs/VERIFIER_SPEC.md §3.2; AUDIT_VERIFIER_DRIFT D1).
     expected_file_hex = proof_doc.get("file_sha256_hex")
-    if isinstance(expected_file_hex, str) and expected_file_hex.lower() != file_digest.hex():
-        print(f"  [FAIL] local file SHA-256 does not match proof's file_sha256_hex")
-        print(f"         expected: {expected_file_hex}")
+    if isinstance(expected_file_hex, str) and expected_file_hex != file_digest.hex():
+        if expected_file_hex.lower() == file_digest.hex():
+            print("  [FAIL] proof's file_sha256_hex is not in canonical form")
+            print("         (matches only after lowercasing — the proof was edited)")
+        else:
+            print("  [FAIL] local file SHA-256 does not match proof's file_sha256_hex")
+            print(f"         expected: {expected_file_hex}")
         return 3
 
     # Normalise proof step shape — accept both [dir, hex] lists and tuples.
@@ -191,14 +203,23 @@ def _verify_folder(args: argparse.Namespace) -> int:
     print(f"  expected root: {expected_root}")
 
     try:
-        tree = merkle.MerkleTree.from_folder(folder)
+        tree = merkle.MerkleTree.from_folder(folder, exclude=args.exclude)
     except ValueError as e:
         print(f"  [FAIL] could not build tree from folder: {e}")
         return 3
     actual_root = tree.root_hex()
     print(f"  recomputed:    {actual_root}")
-    if actual_root.lower() != expected_root.lower():
-        print("  [FAIL] recomputed root does not match manifest")
+    # Exact comparison of lowercase hex strings (docs/VERIFIER_SPEC.md §4.2).
+    # root_hex() is lowercase by construction; the manifest side is compared
+    # VERBATIM. A manifest root that matches only after lowercasing is not
+    # in canonical form — it was edited out-of-band and MUST fail
+    # (AUDIT_VERIFIER_DRIFT D1: never "helpfully" lowercase the stored side).
+    if actual_root != expected_root:
+        if actual_root == expected_root.lower():
+            print("  [FAIL] manifest root_hex is not in canonical form")
+            print("         (matches only after lowercasing — the manifest was edited)")
+        else:
+            print("  [FAIL] recomputed root does not match manifest")
         return 3
     print("  [OK]   recomputed root matches manifest")
 
@@ -229,6 +250,18 @@ def main(argv: list[str] | None = None) -> int:
     pd.add_argument("--dir", required=True, help="path to the folder to verify")
     pd.add_argument("--manifest", required=True, help="path to manifest.json")
     pd.add_argument("--ots", default=None, help="optional .ots file for chain sub-check")
+    pd.add_argument(
+        "--exclude",
+        action="append",
+        default=None,
+        metavar="GLOB",
+        help=(
+            "glob pattern to exclude (repeatable). Supplying any --exclude "
+            "REPLACES the default deny-list rather than extending it. "
+            "Verification must use the same excludes the folder was "
+            "anchored with, or the recomputed root cannot match."
+        ),
+    )
 
     args = p.parse_args(argv)
     if args.command == "file":

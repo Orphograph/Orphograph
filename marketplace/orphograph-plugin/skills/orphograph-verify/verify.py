@@ -56,8 +56,14 @@ def main() -> int:
         print(f"error loading receipt: {e}", file=sys.stderr)
         return 2
 
-    expected = rec.get("hash_hex", "").lower()
-    if not HEX64.match(expected):
+    # Canonical field only, stored value compared AS-IS: the engine
+    # (server/engine.py verify_hash_against_receipt) lowercases only the
+    # locally computed side (hash_file() already returns lowercase hex) and
+    # takes the stored hash verbatim — receipts are issued in lowercase hex.
+    # A receipt whose stored hash was tampered to uppercase must NOT verify
+    # (docs/VERIFIER_SPEC.md §3.2; AUDIT_VERIFIER_DRIFT D1).
+    expected = rec.get("hash_hex", "")
+    if not isinstance(expected, str) or not HEX64.match(expected):
         print("error: receipt has no valid hash_hex", file=sys.stderr)
         return 2
 
@@ -76,6 +82,11 @@ def main() -> int:
         if rec.get("btc_pinned_at"):
             print(f"✓ Bitcoin pin at: {rec['btc_pinned_at']}")
         return 0
+    if expected.lower() == actual:
+        print("✗ MISMATCH — the receipt is not in canonical form.")
+        print("  The stored hash matches only after lowercasing: the receipt")
+        print("  JSON was edited out-of-band. Fetch a fresh copy of the receipt.")
+        return 1
     print("✗ FILE DOES NOT MATCH the receipt.")
     print("  The receipt is real, but this file is NOT the one that was anchored.")
     return 1

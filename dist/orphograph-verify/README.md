@@ -65,13 +65,22 @@ proof bottom-up using the RFC 6962 algorithm defined in `merkle.py`.
 ```
 python3 verify.py folder --dir path/to/folder \
                          --manifest path/to/manifest.json \
-                         [--ots path/to/root.ots]
+                         [--ots path/to/root.ots] \
+                         [--exclude GLOB ...]
 ```
 
 The verifier walks the local directory through the same RFC 6962
 algorithm the server uses, computes the root, and compares it to the
 `root_hex` recorded in the manifest. A mismatch is a `FAIL`; an
-exact match is an `OK`.
+exact match is an `OK`. The comparison is strict: the recomputed root
+(lowercase by construction) must equal the manifest's `root_hex`
+byte-for-byte — a manifest edited to uppercase does not verify.
+
+If the folder was anchored with custom excludes, pass the SAME
+repeatable `--exclude GLOB` flags here. Supplying any `--exclude`
+replaces the default deny-list rather than extending it (identical
+semantics to the Orphograph SDK CLI); with different excludes the
+recomputed root cannot match the manifest.
 
 ### Optional OpenTimestamps sub-check
 

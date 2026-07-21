@@ -1,0 +1,33 @@
+Orphograph offline verifier kit
+================================
+
+Python 3.11 or later required. No installation, no internet, no
+account, no third-party packages.
+
+To verify a single file against an inclusion proof:
+
+  python3 verify.py file --file YOUR_FILE --proof PROOF.json --ots ROOT.ots
+
+To re-hash a whole folder and check it matches a folder receipt:
+
+  python3 verify.py folder --dir YOUR_FOLDER --manifest MANIFEST.json --ots ROOT.ots
+
+If the folder was anchored with custom exclude patterns, pass the same
+repeatable --exclude GLOB flags here (any --exclude replaces the default
+deny-list); with different excludes the recomputed root cannot match.
+
+The optional --ots argument runs the public OpenTimestamps client to
+verify the Bitcoin commitment. If `ots` is not installed locally the
+verifier will still recompute the Merkle tree and compare to the
+recorded root; the OTS check can be re-run later from any machine
+that has the ots client installed.
+
+The script source is short enough to read in one sitting. It depends
+only on the Python standard library.
+
+Anchor receipts issued by the Orphograph office can be re-verified
+forever using only this kit, the original files, and a Bitcoin node
+(or any block explorer). Verification does not require contacting
+the office.
+
+LICENSE: MIT, see LICENSE.txt.
