@@ -177,7 +177,8 @@ const sha512_hex = hex(s512);
     <h2>12 · What is stored, what is not</h2>
     <div class="arch-rule"></div>
     <p>The office persists, per anchor: the receipt JSON, the per-calendar <code>.ots</code> proof files, the HMAC-keyed <code>owner_id</code> when the receipt is private, the <code>source</code> attribution. The office persists, per account-holder: the email used at sign-in, the HMAC-keyed identifier derived from it, the Stripe customer identifier for billing.</p>
-    <p>The office does NOT persist: file contents, file paths, file names, plaintext owner email tied to a private receipt, full network addresses (only truncated /24 prefixes, briefly, for rate-limiting), browser or device fingerprints, behavioural profiles, page-level analytics tied to individual visitors.</p>
+    <p>The office does NOT persist, for any anchor: file contents, plaintext owner email tied to a private receipt, full network addresses (only truncated /24 prefixes, briefly, for rate-limiting), browser or device fingerprints, behavioural profiles, page-level analytics tied to individual visitors.</p>
+    <p>File paths and file names divide by anchor kind. Single-file anchoring transmits and persists neither: the fingerprint is the only trace of the file the office ever holds. Folder anchoring persists the manifest, which records each leaf's relative path and byte size — the trade-off stated in §7 of the <a href="/method/folder-merkle">folder-anchoring paper</a>. The office serves those paths only to the receipt's owner; every other requester receives the manifest with paths redacted, leaf hashes and file digests intact, unless the owner elected at anchor time to make the paths public.</p>
   </section>
 
   <section>
