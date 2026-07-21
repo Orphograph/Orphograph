@@ -443,6 +443,7 @@ def _build_sitemap() -> str:
         ("/method/folder-merkle", "0.6"),
         ("/method/legal-recognition", "0.6"),
         ("/method/the-mit-verifier-annotated", "0.6"),
+        ("/method/whitepaper", "0.6"),
         ("/method/why-filenames-are-not-stored", "0.6"),
         ("/docs/api", "0.6"),
         ("/docs/webhooks", "0.6"),

@@ -146,6 +146,11 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://orphograph.com/method/whitepaper</loc>
+    <lastmod>2026-07-21</lastmod>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://orphograph.com/method/why-filenames-are-not-stored</loc>
     <lastmod>2026-07-06</lastmod>
     <priority>0.6</priority>

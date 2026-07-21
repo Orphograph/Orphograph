@@ -48,6 +48,7 @@ EXPECTED_URLS = [
     "https://orphograph.com/method/folder-merkle",
     "https://orphograph.com/method/legal-recognition",
     "https://orphograph.com/method/the-mit-verifier-annotated",
+    "https://orphograph.com/method/whitepaper",
     "https://orphograph.com/method/why-filenames-are-not-stored",
     "https://orphograph.com/docs/api",
     "https://orphograph.com/docs/webhooks",
