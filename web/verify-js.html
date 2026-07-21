@@ -200,7 +200,7 @@
   }
 
   function describeReceipt(r) {
-    var hash = (r && (r.hash_hex || r.sha256_hex || r.sha256)) || "";
+    var hash = (r && typeof r.hash_hex === "string") ? r.hash_hex : "";
     var rid = (r && (r.receipt_id || r.id || r.receiptId)) || "";
     var parts = [];
     if (rid) parts.push("receipt_id: " + rid);
@@ -434,13 +434,17 @@
     setBusy();
 
     var receipt = state.receipt;
-    var receiptSha256 = receipt.hash_hex || receipt.sha256_hex || receipt.sha256 || "";
-    var receiptSha512 = receipt.sha512_hex || receipt.sha512 || "";
+    // Canonical fields only, stored value compared AS-IS: the engine
+    // (server/engine.py verify_hash_against_receipt) lowercases only the
+    // locally computed side and takes the stored hash verbatim — receipts
+    // are issued in lowercase hex (engine.py anchor_hash normalises once,
+    // at write time). A receipt whose stored hash was tampered to uppercase,
+    // or that carries only alias fields, must NOT verify here either
+    // (docs/VERIFIER_SPEC.md §3.2–3.3; AUDIT_VERIFIER_DRIFT D1/D5).
+    var receiptSha256 = typeof receipt.hash_hex === "string" ? receipt.hash_hex : "";
+    var receiptSha512 = typeof receipt.sha512_hex === "string" ? receipt.sha512_hex : "";
     var receiptId = receipt.receipt_id || receipt.id || receipt.receiptId || "";
     var anchoredAt = receipt.bitcoin_block_time || receipt.anchored_at || receipt.attested_at || receipt.issued_at || "";
-
-    receiptSha256 = (receiptSha256 || "").toLowerCase();
-    receiptSha512 = (receiptSha512 || "").toLowerCase();
 
     readFileBuf(state.file).then(function (buf) {
       var p256 = digest("SHA-256", buf);
@@ -458,6 +462,13 @@
       var allRequired = sha256Match && (receiptSha512 ? sha512Match : true);
       var valid = !!receiptSha256 && allRequired;
 
+      // Case-tamper diagnosis: a stored hash that matches only after
+      // lowercasing is NOT a canonical Orphograph fingerprint — the
+      // receipt was edited out-of-band. Still a mismatch; better note.
+      var caseTamper =
+        (!sha256Match && !!receiptSha256 && receiptSha256.toLowerCase() === localSha256) ||
+        (!!receiptSha512 && !sha512Match && receiptSha512.toLowerCase() === localSha512 && sha256Match);
+
       var headline, note;
       if (!receiptSha256) {
         headline = "Receipt incomplete";
@@ -467,6 +478,9 @@
         note = receiptSha512
           ? "SHA-256 and SHA-512 both match. For full chain-level verification, run the receipt's .ots files through the published Python verifier or any OpenTimestamps client."
           : "SHA-256 matches. The receipt does not carry SHA-512; the single-hash check is sufficient for binding. For chain-level verification, see the .ots files.";
+      } else if (caseTamper) {
+        headline = "Mismatch — the receipt is not in canonical form.";
+        note = "The receipt's stored fingerprint differs from the canonical lowercase hex this office issues. The receipt has been altered or re-typed since issue; it does not verify as-is.";
       } else {
         headline = "Mismatch — the file does not correspond to the receipt.";
         note = "The local fingerprint differs from the fingerprint recorded in the receipt. The file may have been modified, or the receipt belongs to a different file.";
