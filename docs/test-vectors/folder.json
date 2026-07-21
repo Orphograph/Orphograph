@@ -1,0 +1,132 @@
+{
+  "format": "orphograph-published-vectors-v1",
+  "suite": "folder",
+  "generated_by": "docs/test-vectors/generate.py",
+  "canon": "server/merkle.py (MerkleTree.from_folder, inclusion_proof, verify_inclusion)",
+  "spec": "docs/VERIFIER_SPEC.md \u00a74",
+  "algorithm": "orphograph-merkle-v1-rfc6962",
+  "leaf_rule": "SHA-256(0x00 || utf8(rel_path) || 0x00 || file_sha256)",
+  "internal_rule": "SHA-256(0x01 || left || right)",
+  "odd_level_rule": "lone last node PROMOTED unchanged (RFC 6962; never duplicated)",
+  "ordering_rule": "leaves sorted by UTF-8 byte order of the POSIX relative path",
+  "folder_files": {
+    "alpha.txt": "7468652066697273742066696c650a",
+    "beta/gamma.txt": "746865207365636f6e642066696c650a",
+    "delta.bin": "000102ff"
+  },
+  "manifest": {
+    "algorithm": "orphograph-merkle-v1-rfc6962",
+    "version": 1,
+    "root_hex": "d5d5db7bc05c905ed75c910c4873a745990b66025dfa94c5455ee51dfd88b613",
+    "leaves": [
+      {
+        "path": "alpha.txt",
+        "file_sha256_hex": "95a2c91d3a8dea036c1306b1722816367e3c5889f87219981b5ee01c7c32ae2e",
+        "leaf_hex": "72b65cbcce24d024dce5efca88b75018e9f3028283e5fc49241186415afbccc0",
+        "size_bytes": 15
+      },
+      {
+        "path": "beta/gamma.txt",
+        "file_sha256_hex": "4eed6d99488885a2af4fe15aab5c5385b6b3dc81658d0803c8401f15e7d02c4e",
+        "leaf_hex": "c03cae2491f36d7180f39204f5987eca30e76798ce0da59029a6256b55c1e8b8",
+        "size_bytes": 16
+      },
+      {
+        "path": "delta.bin",
+        "file_sha256_hex": "3d1f57c984978ef98a18378c8166c1cb8ede02c03eeb6aee7e2f121dfeee3e56",
+        "leaf_hex": "d682bd3887079cedcf8e933f0ae277b345eaa4819ac8603656bab0b28c42647f",
+        "size_bytes": 4
+      }
+    ]
+  },
+  "root_hex": "d5d5db7bc05c905ed75c910c4873a745990b66025dfa94c5455ee51dfd88b613",
+  "vector_count": 4,
+  "vectors": [
+    {
+      "id": "f01_inclusion_middle_leaf",
+      "kind": "merkle_inclusion",
+      "description": "Inclusion proof for beta/gamma.txt (leaf index 1 of 3): sibling L at the leaf level, sibling R (the promoted third leaf) at level 1.",
+      "rel_path": "beta/gamma.txt",
+      "content_hex": "746865207365636f6e642066696c650a",
+      "file_sha256_hex": "4eed6d99488885a2af4fe15aab5c5385b6b3dc81658d0803c8401f15e7d02c4e",
+      "proof": [
+        [
+          "L",
+          "72b65cbcce24d024dce5efca88b75018e9f3028283e5fc49241186415afbccc0"
+        ],
+        [
+          "R",
+          "d682bd3887079cedcf8e933f0ae277b345eaa4819ac8603656bab0b28c42647f"
+        ]
+      ],
+      "root_hex": "d5d5db7bc05c905ed75c910c4873a745990b66025dfa94c5455ee51dfd88b613",
+      "expect": {
+        "included": true
+      }
+    },
+    {
+      "id": "f02_inclusion_promoted_leaf",
+      "kind": "merkle_inclusion",
+      "description": "Inclusion proof for delta.bin (leaf index 2 of 3, the RFC 6962 promoted node). The promoted level contributes no proof step, so the proof is a single L step \u2014 shorter than ceil(log2(3)).",
+      "rel_path": "delta.bin",
+      "content_hex": "000102ff",
+      "file_sha256_hex": "3d1f57c984978ef98a18378c8166c1cb8ede02c03eeb6aee7e2f121dfeee3e56",
+      "proof": [
+        [
+          "L",
+          "d8227e94c643aae2c9a4702e17a880a1f7284926902935329b9d654ed82ee12a"
+        ]
+      ],
+      "root_hex": "d5d5db7bc05c905ed75c910c4873a745990b66025dfa94c5455ee51dfd88b613",
+      "expect": {
+        "included": true
+      }
+    },
+    {
+      "id": "f03_negative_tampered_leaf_content",
+      "kind": "merkle_inclusion_negative",
+      "description": "Same path and proof as f01, but the first byte of the file content is flipped. verify_inclusion MUST return false.",
+      "rel_path": "beta/gamma.txt",
+      "content_hex": "756865207365636f6e642066696c650a",
+      "original_content_hex": "746865207365636f6e642066696c650a",
+      "file_sha256_hex": "512ef677134b35997d8252357be0065417efb8ef7adc34ac3078b74dcd7b74e7",
+      "proof": [
+        [
+          "L",
+          "72b65cbcce24d024dce5efca88b75018e9f3028283e5fc49241186415afbccc0"
+        ],
+        [
+          "R",
+          "d682bd3887079cedcf8e933f0ae277b345eaa4819ac8603656bab0b28c42647f"
+        ]
+      ],
+      "root_hex": "d5d5db7bc05c905ed75c910c4873a745990b66025dfa94c5455ee51dfd88b613",
+      "expect": {
+        "included": false
+      }
+    },
+    {
+      "id": "f04_negative_renamed_path",
+      "kind": "merkle_inclusion_negative",
+      "description": "Byte-identical content presented under the path beta/renamed.txt with f01's proof. The relative path is bound into the leaf (SHA-256(0x00 || path || 0x00 || file_sha256)), so verify_inclusion MUST return false.",
+      "rel_path": "beta/renamed.txt",
+      "committed_path": "beta/gamma.txt",
+      "content_hex": "746865207365636f6e642066696c650a",
+      "file_sha256_hex": "4eed6d99488885a2af4fe15aab5c5385b6b3dc81658d0803c8401f15e7d02c4e",
+      "proof": [
+        [
+          "L",
+          "72b65cbcce24d024dce5efca88b75018e9f3028283e5fc49241186415afbccc0"
+        ],
+        [
+          "R",
+          "d682bd3887079cedcf8e933f0ae277b345eaa4819ac8603656bab0b28c42647f"
+        ]
+      ],
+      "root_hex": "d5d5db7bc05c905ed75c910c4873a745990b66025dfa94c5455ee51dfd88b613",
+      "expect": {
+        "included": false
+      }
+    }
+  ]
+}

@@ -1,0 +1,279 @@
+{
+  "format": "orphograph-published-vectors-v1",
+  "suite": "single-file",
+  "generated_by": "docs/test-vectors/generate.py",
+  "canon": "server/engine.py (verify_receipt, verify_hash_against_receipt)",
+  "spec": "docs/VERIFIER_SPEC.md",
+  "created_at_constant": "2026-07-21T00:00:00+00:00",
+  "ots_header_magic_hex": "004f70656e54696d657374616d7073000050726f6f6600bf89e2e884e89294",
+  "ots_note": "ots_files are hex-encoded blobs in the engine's layout: 31-byte magic, version 0x01, tag 0x08 (SHA-256), the 32-byte digest at offset 33, then a SYNTHETIC body \u2014 the body is opaque to the binding checks these vectors pin and is NOT a real calendar proof.",
+  "vector_count": 5,
+  "vectors": [
+    {
+      "id": "sf01_empty_file_valid",
+      "kind": "single_file",
+      "description": "Empty byte string; canonical lowercase digest; one well-formed .ots; supplied hash matches. The supplied side is stripped+lowercased before comparison, so an UPPERCASE *supplied* hash still matches this lowercase-stored receipt.",
+      "content_hex": "",
+      "expected_sha256_hex": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "expected_sha512_hex": "cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e",
+      "receipt_id": "vec-sf01-empty",
+      "receipt_json": "{\n  \"receipt_id\": \"vec-sf01-empty\",\n  \"created_at\": \"2026-07-21T00:00:00+00:00\",\n  \"hash_hex\": \"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\",\n  \"sha512_hex\": \"cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e\",\n  \"status\": \"pending\"\n}",
+      "ots_files": {
+        "a.ots": "004f70656e54696d657374616d7073000050726f6f6600bf89e2e884e892940108e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b85573796e7468657469632d63616c656e6461722d626f64792d6e6f742d612d7265616c2d70726f6f66"
+      },
+      "operations": [
+        {
+          "operation": "verify_receipt",
+          "expect": {
+            "found": true,
+            "hash_hex": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "sha512_hex": "cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e",
+            "calendars_ok": 1,
+            "calendars_total": 1,
+            "status": "pending",
+            "checks": [
+              {
+                "file": "a.ots",
+                "magic_ok": true,
+                "hash_match": true,
+                "ok": true
+              }
+            ]
+          }
+        },
+        {
+          "operation": "verify_hash_against_receipt",
+          "supplied_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "expect": {
+            "found": true,
+            "hash_hex": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "sha512_hex": "cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e",
+            "calendars_ok": 1,
+            "calendars_total": 1,
+            "status": "pending",
+            "supplied_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "supplied_matches_receipt": true,
+            "checks": [
+              {
+                "file": "a.ots",
+                "magic_ok": true,
+                "hash_match": true,
+                "ok": true
+              }
+            ]
+          }
+        },
+        {
+          "operation": "verify_hash_against_receipt",
+          "supplied_hash": "  E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855  ",
+          "expect": {
+            "found": true,
+            "hash_hex": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "sha512_hex": "cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e",
+            "calendars_ok": 1,
+            "calendars_total": 1,
+            "status": "pending",
+            "supplied_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "supplied_matches_receipt": true,
+            "checks": [
+              {
+                "file": "a.ots",
+                "magic_ok": true,
+                "hash_match": true,
+                "ok": true
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "sf02_abc_valid",
+      "kind": "single_file",
+      "description": "The three bytes 'abc' (the FIPS 180-4 example message). Two well-formed .ots files; supplied hash matches.",
+      "content_utf8": "abc",
+      "content_hex": "616263",
+      "expected_sha256_hex": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+      "expected_sha512_hex": "ddaf35a193617abacc417349ae20413112e6fa4e89a97ea20a9eeee64b55d39a2192992a274fc1a836ba3c23a3feebbd454d4423643ce80e2a9ac94fa54ca49f",
+      "receipt_id": "vec-sf02-abc",
+      "receipt_json": "{\n  \"receipt_id\": \"vec-sf02-abc\",\n  \"created_at\": \"2026-07-21T00:00:00+00:00\",\n  \"hash_hex\": \"ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad\",\n  \"sha512_hex\": \"ddaf35a193617abacc417349ae20413112e6fa4e89a97ea20a9eeee64b55d39a2192992a274fc1a836ba3c23a3feebbd454d4423643ce80e2a9ac94fa54ca49f\",\n  \"status\": \"pending\"\n}",
+      "ots_files": {
+        "a.ots": "004f70656e54696d657374616d7073000050726f6f6600bf89e2e884e892940108ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad73796e7468657469632d63616c656e6461722d626f64792d6e6f742d612d7265616c2d70726f6f66",
+        "b.ots": "004f70656e54696d657374616d7073000050726f6f6600bf89e2e884e892940108ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad73796e7468657469632d63616c656e6461722d626f64792d6e6f742d612d7265616c2d70726f6f66"
+      },
+      "operations": [
+        {
+          "operation": "verify_receipt",
+          "expect": {
+            "found": true,
+            "hash_hex": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+            "sha512_hex": "ddaf35a193617abacc417349ae20413112e6fa4e89a97ea20a9eeee64b55d39a2192992a274fc1a836ba3c23a3feebbd454d4423643ce80e2a9ac94fa54ca49f",
+            "calendars_ok": 2,
+            "calendars_total": 2,
+            "status": "pending",
+            "checks": [
+              {
+                "file": "a.ots",
+                "magic_ok": true,
+                "hash_match": true,
+                "ok": true
+              },
+              {
+                "file": "b.ots",
+                "magic_ok": true,
+                "hash_match": true,
+                "ok": true
+              }
+            ]
+          }
+        },
+        {
+          "operation": "verify_hash_against_receipt",
+          "supplied_hash": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+          "expect": {
+            "found": true,
+            "hash_hex": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+            "sha512_hex": "ddaf35a193617abacc417349ae20413112e6fa4e89a97ea20a9eeee64b55d39a2192992a274fc1a836ba3c23a3feebbd454d4423643ce80e2a9ac94fa54ca49f",
+            "calendars_ok": 2,
+            "calendars_total": 2,
+            "status": "pending",
+            "supplied_hash": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+            "supplied_matches_receipt": true,
+            "checks": [
+              {
+                "file": "a.ots",
+                "magic_ok": true,
+                "hash_match": true,
+                "ok": true
+              },
+              {
+                "file": "b.ots",
+                "magic_ok": true,
+                "hash_match": true,
+                "ok": true
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "sf03_negative_stored_hash_uppercase",
+      "kind": "single_file_negative",
+      "description": "Same receipt as sf02 but with hash_hex UPPERCASED in the stored receipt JSON. The .ots byte comparison still passes (hex decoding is case-insensitive), but the strict string comparison against the stored hash MUST fail for every supplied digest \u2014 lowercasing the stored side to force a match is a verifier bug (historical verifier-js drift D1).",
+      "content_utf8": "abc",
+      "content_hex": "616263",
+      "expected_sha256_hex": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+      "receipt_id": "vec-sf03-upper",
+      "receipt_json": "{\n  \"receipt_id\": \"vec-sf03-upper\",\n  \"created_at\": \"2026-07-21T00:00:00+00:00\",\n  \"hash_hex\": \"BA7816BF8F01CFEA414140DE5DAE2223B00361A396177A9CB410FF61F20015AD\",\n  \"status\": \"pending\"\n}",
+      "ots_files": {
+        "a.ots": "004f70656e54696d657374616d7073000050726f6f6600bf89e2e884e892940108ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad73796e7468657469632d63616c656e6461722d626f64792d6e6f742d612d7265616c2d70726f6f66"
+      },
+      "operations": [
+        {
+          "operation": "verify_receipt",
+          "expect": {
+            "found": true,
+            "hash_hex": "BA7816BF8F01CFEA414140DE5DAE2223B00361A396177A9CB410FF61F20015AD",
+            "sha512_hex": null,
+            "calendars_ok": 1,
+            "calendars_total": 1,
+            "status": "pending",
+            "checks": [
+              {
+                "file": "a.ots",
+                "magic_ok": true,
+                "hash_match": true,
+                "ok": true
+              }
+            ]
+          }
+        },
+        {
+          "operation": "verify_hash_against_receipt",
+          "supplied_hash": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+          "expect": {
+            "found": true,
+            "hash_hex": "BA7816BF8F01CFEA414140DE5DAE2223B00361A396177A9CB410FF61F20015AD",
+            "sha512_hex": null,
+            "calendars_ok": 1,
+            "calendars_total": 1,
+            "status": "pending",
+            "supplied_hash": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+            "supplied_matches_receipt": false,
+            "checks": [
+              {
+                "file": "a.ots",
+                "magic_ok": true,
+                "hash_match": true,
+                "ok": true
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "sf04_negative_one_byte_flipped_content",
+      "kind": "single_file_negative",
+      "description": "Receipt anchors sha256('abc'); the candidate file is 'abd' (last byte flipped). The recomputed digest differs, so verification MUST fail.",
+      "content_utf8": "abc",
+      "flipped_content_utf8": "abd",
+      "flipped_content_hex": "616264",
+      "expected_sha256_hex": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+      "flipped_sha256_hex": "a52d159f262b2c6ddb724a61840befc36eb30c88877a4030b65cbe86298449c9",
+      "receipt_id": "vec-sf04-flip",
+      "receipt_json": "{\n  \"receipt_id\": \"vec-sf04-flip\",\n  \"created_at\": \"2026-07-21T00:00:00+00:00\",\n  \"hash_hex\": \"ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad\",\n  \"status\": \"pending\"\n}",
+      "ots_files": {
+        "a.ots": "004f70656e54696d657374616d7073000050726f6f6600bf89e2e884e892940108ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad73796e7468657469632d63616c656e6461722d626f64792d6e6f742d612d7265616c2d70726f6f66"
+      },
+      "operations": [
+        {
+          "operation": "verify_hash_against_receipt",
+          "supplied_hash": "a52d159f262b2c6ddb724a61840befc36eb30c88877a4030b65cbe86298449c9",
+          "expect": {
+            "found": true,
+            "hash_hex": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+            "sha512_hex": null,
+            "calendars_ok": 1,
+            "calendars_total": 1,
+            "status": "pending",
+            "supplied_hash": "a52d159f262b2c6ddb724a61840befc36eb30c88877a4030b65cbe86298449c9",
+            "supplied_matches_receipt": false,
+            "checks": [
+              {
+                "file": "a.ots",
+                "magic_ok": true,
+                "hash_match": true,
+                "ok": true
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "sf05_negative_truncated_stored_hash",
+      "kind": "single_file_negative",
+      "description": "Stored hash_hex truncated to 63 characters. A wrong-length stored hash renders the receipt CORRUPT (found: false), not merely mismatched.",
+      "content_utf8": "abc",
+      "content_hex": "616263",
+      "expected_sha256_hex": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+      "truncated_hash_hex": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015a",
+      "receipt_id": "vec-sf05-trunc",
+      "receipt_json": "{\n  \"receipt_id\": \"vec-sf05-trunc\",\n  \"created_at\": \"2026-07-21T00:00:00+00:00\",\n  \"hash_hex\": \"ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015a\",\n  \"status\": \"pending\"\n}",
+      "ots_files": {
+        "a.ots": "004f70656e54696d657374616d7073000050726f6f6600bf89e2e884e892940108ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad73796e7468657469632d63616c656e6461722d626f64792d6e6f742d612d7265616c2d70726f6f66"
+      },
+      "operations": [
+        {
+          "operation": "verify_receipt",
+          "expect": {
+            "found": false,
+            "error": "corrupt receipt"
+          }
+        }
+      ]
+    }
+  ]
+}

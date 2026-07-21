@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Orphograph — The whitepaper</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#f6f1e3">
+<meta name="description" content="The Orphograph receipt in full: the exact claim of existence-by-a-time, the SHA-256 and RFC 6962 Merkle construction as implemented, the five-calendar redundancy model and receipt states, the offline verification path, the threat model, and the honest limits. Published as defensive prior art.">
+<meta property="og:title" content="Orphograph — The whitepaper">
+<meta property="og:description" content="Construction, redundancy, verification, and limits of the receipt — grounded in the shipped implementation.">
+<meta property="og:url" content="https://orphograph.com/method/whitepaper">
+<meta property="og:type" content="article">
+<meta property="og:image" content="https://orphograph.com/og-image.png?v=8">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Orphograph — The whitepaper">
+<link rel="canonical" href="https://orphograph.com/method/whitepaper">
+<link rel="icon" type="image/png" href="/favicon.png?v=8">
+<link rel="stylesheet" href="/index.css?v=16">
+<link rel="stylesheet" href="/method/whitepaper.css?v=1">
+<meta name="copyright" content="© 2026 Orphograph. Code under MIT (see /LICENSE). Brand, content, and design — all rights reserved.">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Orphograph",
+      "item": "https://orphograph.com/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Method",
+      "item": "https://orphograph.com/learn"
+    },
+    {
+      "@type": "ListItem",
+      "position": 3,
+      "name": "The whitepaper",
+      "item": "https://orphograph.com/method/whitepaper"
+    }
+  ]
+}
+</script>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap row">
+    <a href="/" class="brand">Orphograph</a>
+    <nav>
+      <a href="/learn">Method</a>
+      <a href="/faq">FAQ</a>
+      <a href="/continuity">Continuity</a>
+      <a href="/#tiers">Pricing</a>
+      <a href="/signin">Sign in</a>
+      <a href="/#drop" class="cta">Anchor a file</a>
+    </nav>
+  </div>
+</header>
+
+<main class="arch-wrap">
+
+  <p class="wp-eyebrow">Method · Whitepaper</p>
+  <h1>The receipt, in full.</h1>
+  <p class="arch-lede">
+    This document states, with precision, what an Orphograph receipt claims, how the claim is constructed, how redundancy is arranged, how the claim is verified without trusting the office, what an adversary would have to defeat, and what the receipt honestly cannot do. It describes the shipped implementation — nothing aspirational appears below. The source form of this document is maintained at <code>docs/WHITEPAPER.md</code> in the public repository, alongside published test vectors at <code>docs/test-vectors/</code>; where any description here disagrees with the code, the code is authoritative.
+  </p>
+
+  <section>
+    <h2>1 · The claim</h2>
+    <div class="arch-rule"></div>
+    <p>An Orphograph receipt attests exactly one proposition: a byte sequence whose SHA-256 digest equals the receipt's recorded <code>hash_hex</code> existed no later than the time at which that digest was committed, through the OpenTimestamps protocol, to the Bitcoin chain. Existence <em>by</em> a time. Nothing further.</p>
+    <p>The non-claims are stated with the same care as the claim, because a receipt misread as more than it is would be a defective instrument. The receipt does not establish authorship — it records that a digest was submitted, with no evidence of who created the underlying bytes. It does not establish truth of content; a photograph of an event that did not occur receives the same receipt as any other byte sequence. It does not establish originality or priority of creation: it proves the bytes existed by the anchor time, not that they failed to exist earlier or elsewhere, and earlier copies, where they exist, are equally genuine. It does not establish lawful possession or capture. It does not establish the submitter's identity; the optional Ed25519 signature block on folder manifests binds a key, not a person. And it does not establish the wall-clock moment of creation — a file anchored a year after it was created proves existence at anchor time only.</p>
+    <p>The receipt's <code>created_at</code> field is the office's own UTC clock at submission and is informational. The evidentiary time bound is the Bitcoin block attestation carried in the <code>.ots</code> proof files, not the office's clock. Everything below is tamper-evident by construction; nothing is tamper-proof. The design guarantees that alteration is detectable by an independent party, not that alteration is impossible.</p>
+  </section>
+
+  <section>
+    <h2>2 · Construction — the file digest</h2>
+    <div class="arch-rule"></div>
+    <p>The unit of attestation is the SHA-256 digest (FIPS 180-4) of the exact byte sequence of the file, computed on the customer's machine. The file body is not transmitted; only the hex digest crosses the wire. The anchoring path canonicalises before accepting: the supplied string is whitespace-stripped and lowercased, then rejected unless it is exactly 64 characters of <code>0-9 a-f</code>. A service-issued receipt therefore always stores <code>hash_hex</code> as lowercase hex. An optional SHA-512 sibling of the same bytes is recorded alongside; the OpenTimestamps commitment covers the SHA-256 only, and the sibling's value is that a forged file-to-receipt binding must collide both functions at once.</p>
+  </section>
+
+  <section>
+    <h2>3 · Construction — the folder tree</h2>
+    <div class="arch-rule"></div>
+    <p>A folder is committed as a single 32-byte root using an RFC 6962-style binary hash tree (algorithm tag <code>orphograph-merkle-v1-rfc6962</code>), with one deliberate extension: each leaf binds the file's relative path together with its content digest.</p>
+<pre><code>leaf     = SHA-256( 0x00 || utf8(rel_path) || 0x00 || sha256(file_bytes) )
+internal = SHA-256( 0x01 || left || right )</code></pre>
+    <p>Leaves are sorted by the UTF-8 byte order of the POSIX relative path (forward slashes, case preserved, no Unicode normalisation — a documented v1 limitation). When a level holds an odd number of nodes, the lone last node is promoted to the next level unchanged — never duplicated, which avoids the second-preimage ambiguity catalogued as CVE-2012-2459. A single-file folder yields root equal to leaf; empty folders are rejected. Files are streamed through SHA-256 in one-mebibyte chunks; symbolic links are skipped, not followed, and are not recorded; hidden dotfiles are included; a default exclusion list removes operating-system and tooling detritus and may be replaced or disabled by the caller.</p>
+    <p>The customer's machine builds the tree and transmits only the manifest — paths, per-file digests, leaf hashes, sizes, and the root. The server reconstructs every node from the manifest and refuses to anchor if the recomputed root does not equal the manifest's <code>root_hex</code>. The root then enters the same anchoring path as a single-file digest. An inclusion proof for any one file — sibling hashes tagged <code>L</code> or <code>R</code>, leaf upward, with promoted nodes contributing no step — lets a third party confirm membership without learning anything else about the set.</p>
+  </section>
+
+  <section>
+    <h2>4 · Construction — the OpenTimestamps commitment</h2>
+    <div class="arch-rule"></div>
+    <p>The digest is submitted in parallel to five independently operated OpenTimestamps calendars. Each calendar aggregates submissions into its own Merkle tree and commits that tree's root to the Bitcoin chain in a single transaction; each submitter receives a per-digest proof path, stored as an <code>.ots</code> file:</p>
+<pre><code>offset  0   31-byte OpenTimestamps header magic
+offset 31   version byte 0x01
+offset 32   hash-algorithm tag 0x08 (SHA-256)
+offset 33   the 32-byte anchored digest, raw
+offset 65+  the calendar's proof body (append / prepend / sha256
+            operations ending in an attestation)</code></pre>
+    <p>Executing the proof body's operation chain from the anchored digest yields the commitment the calendar wrote toward the chain; once the calendar's batch is folded into a Bitcoin transaction, the upgraded chain terminates in a Bitcoin block attestation that any OpenTimestamps client checks against the block header. The office does not modify the OTS format in any way.</p>
+  </section>
+
+  <section>
+    <h2>5 · Redundancy — five calendars, and the states of a receipt</h2>
+    <div class="arch-rule"></div>
+    <p>The receipt records <code>calendars_ok</code> acceptances out of five, with per-calendar failures listed verbatim. Acceptance is not confirmation, and the two are kept as distinct states with distinct counters. At anchor time, a receipt accepted by fewer than the acceptance threshold (<code>MIN_CALENDARS_OK</code>, default three) is returned flagged <code>low_redundancy</code>; a receipt accepted by zero calendars holds no commitment path, can never upgrade, and is treated as worthless — a consumed paid credit is refunded. Bitcoin-pin confirmation is tracked separately as <code>pinned_count</code> of <code>pinned_total</code>, maintained by the upgrade worker, and can be a strict subset of the acceptances.</p>
+    <p>The receipt's <code>status</code> field takes exactly one of the following values, as the upgrade worker computes them:</p>
+    <dl class="wp-states">
+      <dt>pending</dt>
+      <dd>No calendar has yet returned an upgraded, Bitcoin-attested proof. Every fresh receipt begins here; calendars typically fold their batches into the chain within about an hour.</dd>
+      <dt>partial</dt>
+      <dd>At least one, but not all, of the accepted calendars' proofs have upgraded.</dd>
+      <dt>pinned</dt>
+      <dd>Every accepted calendar's proof has upgraded. <code>btc_pinned_at</code> is set once, at the first transition, and is never rewritten.</dd>
+      <dt>frozen</dt>
+      <dd>After twenty-four consecutive polling runs with no forward progress, the worker stops re-querying a stuck receipt (<code>upgrade_frozen</code>). Freezing is a polling-cadence decision only; it never alters proof bytes, and it may be cleared to resume.</dd>
+    </dl>
+    <p>One honesty note, stated in the worker's own source and repeated here: the worker stores each calendar's latest proof and records the pin; it does not itself re-parse the upgraded proof to independently confirm Bitcoin inclusion. <code>status: "pinned"</code> is a server-side hint that the proof is no longer calendar-pending. The authoritative check is independent verification against the chain — which requires no trust in the office's reported status at all.</p>
+  </section>
+
+  <section>
+    <h2>6 · Verification</h2>
+    <div class="arch-rule"></div>
+    <p>Verification is performed offline, with open-source tools, without contacting the office: the original file, the receipt JSON with its <code>.ots</code> files, and — for folder claims — the manifest and an inclusion proof suffice. Three levels, in increasing independence: the receipt page (trusts the office to display honestly); the bundled MIT-licensed standard-library verifier (trusts only code the verifier can read); and the upstream OpenTimestamps reference client, which walks the proof to a Bitcoin block header (trusts only Bitcoin and audited open-source software maintained outside the office).</p>
+    <p>What a verifier is required to check is specified normatively in <code>docs/VERIFIER_SPEC.md</code> and pinned by the published vectors in <code>docs/test-vectors/</code>. The digest comparison is strict: only the <em>supplied</em> side is whitespace-stripped and lowercased; the receipt's stored <code>hash_hex</code> is compared verbatim, with no case-normalisation. A stored hash containing uppercase characters therefore matches no supplied digest — the service never writes uppercase, so such a receipt is by definition edited after issuance, and a verifier that lowercased both sides would accept exactly the tampered artifact a verifier exists to reject. The digest lives in <code>hash_hex</code> and nowhere else; alias fields are not accepted; a stored hash of the wrong length or containing non-hex characters renders the receipt corrupt rather than merely mismatched. Each <code>.ots</code> file must begin with the header magic and carry the decoded digest at offset 33. Folder verification recomputes the leaf, walks the proof, and compares raw bytes against the root; every malformed input verifies false rather than raising, and sibling hex is parsed strictly.</p>
+  </section>
+
+  <section>
+    <h2>7 · Threat model</h2>
+    <div class="arch-rule"></div>
+    <p><strong>Operator tamper.</strong> The office holds no signing key whose compromise could forge a receipt. A receipt altered after issuance fails independent verification: the <code>.ots</code> files bind the digest, the proof path binds it to a Bitcoin commitment, and the customer may hold the entire bundle. The office's storage is a convenience mirror, not the instrument. What the office could do is misreport status on its own pages — which is precisely why the verification path never consults the office.</p>
+    <p><strong>Back-dating.</strong> Asserting an earlier time than the truth requires placing the digest inside a Bitcoin block that closed before the digest existed — rewriting the chain from that depth forward at a cost that grows without bound as blocks accumulate, or defeating the hash function itself. The converse is stated plainly: the receipt cannot prove the bytes did <em>not</em> exist before the anchor. Anchoring late proves nothing about early.</p>
+    <p><strong>Calendar failure.</strong> Five independently operated calendars each hold an independent commitment path; the evidentiary claim survives if any single calendar's proof upgrades to a Bitcoin attestation. A calendar that goes silent or disappears reduces redundancy without invalidating the receipt. Receipts whose remaining calendars permanently fail to upgrade are frozen rather than silently re-polled forever, and remain independently checkable.</p>
+    <p><strong>Service disappearance.</strong> Verification requires no call to the office. Every receipt already issued continues to verify against the chain using the customer-held bundle and open tooling; the sole capability that would be lost is the issuance of new receipts.</p>
+    <p><strong>Compromised customer device at anchor time.</strong> Out of scope. The office anchors what the customer's software submits; an adversary controlling that software can anchor anything the customer could.</p>
+    <p><strong>The honest arithmetic.</strong> The receipt's strength is bounded by SHA-256. Producing some colliding pair costs on the order of 2<sup>128</sup> work; producing a second preimage for a given digest costs on the order of 2<sup>256</sup> classically, reduced toward roughly 2<sup>128</sup> under a hypothetical large-scale quantum adversary. No practical attack on either is known. Receipts recording the SHA-512 sibling require an attacker to defeat both functions on the same bytes simultaneously. These are work estimates, not impossibilities: the design goal is that forgery be detectably infeasible, and the office says infeasible, never impossible. And the receipt cannot prove authorship — it records the existence of a byte sequence by a time; that, and only that.</p>
+  </section>
+
+  <section>
+    <h2>8 · Continuity</h2>
+    <div class="arch-rule"></div>
+    <p>The receipt is built to outlive its issuer. The <code>.ots</code> format is an open standard with multiple independent implementations; the verifier the office ships is MIT-licensed, standard-library-only, and vendorable; the Merkle construction is fully specified; the trust anchor is the Bitcoin chain, which the office does not operate. A customer holding the original file and the receipt bundle possesses everything verification requires, indefinitely. The office regards this asymmetry as the design's central obligation: the instrument must not depend on the persistence of the issuer. The operational statement is at <a href="/continuity">/continuity</a>.</p>
+  </section>
+
+  <section>
+    <h2>Citations and verification</h2>
+    <div class="arch-rule"></div>
+    <ul>
+      <li>FIPS 180-4 — Secure Hash Standard (SHA-256, SHA-512)</li>
+      <li><a href="https://datatracker.ietf.org/doc/html/rfc6962">RFC 6962 — Certificate Transparency</a> (Merkle construction, domain separation, promotion)</li>
+      <li><a href="https://datatracker.ietf.org/doc/html/rfc9162">RFC 9162 — Certificate Transparency Version 2.0</a></li>
+      <li><a href="https://opentimestamps.org/">opentimestamps.org</a> — the commitment protocol and proof format</li>
+      <li><a href="/method/architecture">Architecture of the protocol</a> · <a href="/method/folder-merkle">Folder anchoring by Merkle root</a> · <a href="/method/bitcoin-attestation">What a Bitcoin block attests to</a></li>
+      <li><a href="/verify-js">Standalone independent verifier (single HTML file)</a></li>
+      <li><a href="https://github.com/Orphograph/Orphograph">github.com/Orphograph/Orphograph</a> — <code>docs/WHITEPAPER.md</code>, <code>docs/VERIFIER_SPEC.md</code>, <code>docs/test-vectors/</code></li>
+    </ul>
+  </section>
+
+  <p class="wp-footnote">
+    Publication receipt for this revision: pending Bitcoin commitment (the receipt id is recorded once issuance completes).
+  </p>
+</main>
+
+<footer>
+  <div class="wrap footer-inner">
+    <p>Orphograph · An empirical notary.</p>
+    <p class="footer-links">
+      <a href="/">Home</a> ·
+      <a href="/method">Method</a> ·
+      <a href="/faq">FAQ</a> ·
+      <a href="/continuity">Continuity</a>
+    </p>
+  </div>
+</footer>
+
+<script src="/statusbar.js?v=1" defer></script>
+<script src="/assets/event.js?v=1" defer></script>
+</body>
+</html>
