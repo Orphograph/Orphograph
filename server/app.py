@@ -219,6 +219,7 @@ PAY_BTC_MAX_SATS = 5_000_000    # 0.05 BTC — far above any pack price
 
 # Allowlist for the 4 funnel events. Any value outside this set is rejected.
 FUNNEL_EVENTS = frozenset({
+    "page_view",
     "drop_zone_visible",
     "file_anchored",
     "checkout_clicked",
