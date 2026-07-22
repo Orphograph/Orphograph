@@ -217,14 +217,34 @@ PAY_BTC_ADDRESS = os.environ.get(
 PAY_BTC_MIN_SATS = 546          # standard dust threshold
 PAY_BTC_MAX_SATS = 5_000_000    # 0.05 BTC — far above any pack price
 
-# Allowlist for the 4 funnel events. Any value outside this set is rejected.
+# Allowlist for the funnel events the client actually emits. Any value outside
+# this set is rejected with 400. This set MUST stay in sync with every
+# track()/orphoEvent() call in web/**/*.js — tests/test_funnel_event_whitelist.py
+# greps the client JS and fails if a client-emitted name is missing here (that
+# gap is exactly what silently dropped the homepage funnel before this fix).
+# The stored row is always {ts, event, page, ip_trunc}; the event name is a
+# fixed vocabulary label, so adding names here cannot widen what is persisted.
 FUNNEL_EVENTS = frozenset({
-    "page_view",
-    "drop_zone_visible",
-    "file_anchored",
-    "checkout_clicked",
-    "checkout_returned_success",
-    "lp_cta_clicked",
+    # page + section visibility
+    "page_view",           # any page load (homepage, LP); page= distinguishes
+    "drop_zone_visible",   # #drop scrolled into view (homepage)
+    # anchor funnel
+    "anchor_start",        # user began an anchor (cream/app.js homepage)
+    "anchor_done",         # anchor completed (cream/app.js homepage)
+    "file_anchored",       # anchor completed (dark/v2.js homepage)
+    # purchase / pricing intent
+    "buy_pack_click",      # clicked buy-pack CTA
+    "buy_personal_click",  # clicked buy-personal CTA
+    "billing_toggle",      # toggled monthly/annual pricing
+    "pack_waitlist_join",  # joined a pack waitlist
+    "checkout_clicked",    # checkout initiated (v2)
+    "checkout_error",      # checkout attempt errored (v2) — funnel-loss signal
+    "checkout_returned_success",  # returned from Stripe success
+    # engagement / secondary CTAs
+    "try_sample_click",    # clicked "try a sample"
+    "verify_sample_click", # clicked "verify sample"
+    "share_link_click",    # clicked a share link
+    "lp_cta_clicked",      # landing-page CTA click
 })
 FUNNEL_EVENT_FIELDS = frozenset({"event", "page"})
 FUNNEL_EVENTS_PATH = DATA_DIR / "events.jsonl"
