@@ -872,6 +872,38 @@
   renderOpsBanner();
   hydrateAnchorStateOnLoad();
 
+  // ── Durable page_view for the dark homepage ────────────────────
+  // The dark document is served at "/" (web/index.html loads this file), so
+  // without this fire the homepage funnel had NO durable visit record. We do
+  // NOT route this through window.orphoEvent(): that helper forces
+  // page=location.pathname ("/"), which would be indistinguishable from any
+  // other root-served variant. A fixed page="landing-v2" label makes dark
+  // homepage visits countable and cleanly distinct from the cream/app.js
+  // homepage (which sends page="landing"). Same privacy posture as event.js:
+  // the body is exactly {event, page} — no cookies, no fingerprinting. The
+  // idempotent flag guards against a double-loaded <script>.
+  if (typeof window !== "undefined" && !window.__orphoV2PageView) {
+    window.__orphoV2PageView = true;
+    try {
+      const body = JSON.stringify({ event: "page_view", page: "landing-v2" });
+      let sent = false;
+      if (navigator && typeof navigator.sendBeacon === "function") {
+        const blob = new Blob([body], { type: "application/json" });
+        sent = navigator.sendBeacon("/api/event", blob);
+      }
+      if (!sent) {
+        fetch("/api/event", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: body,
+          keepalive: true,
+          credentials: "omit",
+          mode: "same-origin",
+        }).catch(() => {});
+      }
+    } catch (e) { /* analytics is best-effort */ }
+  }
+
   // Expose hideStatusBanner so a future UI affordance (e.g. dismiss
   // button on #sticky-status) can clear the banner. Touching window
   // here keeps the IIFE encapsulated otherwise.
