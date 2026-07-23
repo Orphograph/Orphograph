@@ -74,8 +74,11 @@ class TestStaticMarkup(unittest.TestCase):
     """Both homepage documents ship the notify forms hidden by default —
     a visitor with card checkout LIVE (or JS off) never sees them."""
 
+    # Homepage-lean-v2 (2026-07-23): the full tiers/checkout/notify block moved
+    # off the homepage onto the dedicated /pricing page (web/pricing.html). The
+    # homepage now carries only a compact one-line pricing strip → /pricing.
     NOTIFY_IDS = {
-        "web/index.html": ("notify-pack", "notify-pack50", "notify-personal"),
+        "web/pricing.html": ("notify-pack", "notify-pack50", "notify-personal"),
         "web/v2/index.html": ("notify-pack", "notify-personal"),
     }
 
@@ -119,9 +122,13 @@ class TestStaticMarkup(unittest.TestCase):
 
     def test_cache_busted_asset_versions(self):
         """Changed assets must carry bumped ?v= or Cloudflare serves stale 24h."""
+        # Homepage-lean-v2: checkout-cta.js + the tiers block moved to /pricing;
+        # the homepage bumped its stylesheet to index.css?v=19.
         index = (ROOT / "web" / "index.html").read_text()
-        self.assertIn("/checkout-cta.js?v=4", index)
-        self.assertIn("/index.css?v=18", index)
+        self.assertIn("/index.css?v=19", index)
+        pricing = (ROOT / "web" / "pricing.html").read_text()
+        self.assertIn("/checkout-cta.js?v=4", pricing)
+        self.assertIn("/index.css?v=19", pricing)
         v2 = (ROOT / "web" / "v2" / "index.html").read_text()
         self.assertIn("/checkout-cta.js?v=4", v2)
         self.assertIn("/v2/style.css?v=8", v2)

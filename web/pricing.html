@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Pricing — Orphograph</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#f6f1e3">
+<meta name="description" content="Orphograph schedule of fees. Free tier: 3 anchors per day. Writer Pack $19, Pack of Fifty $29, Standing Order $9/month. Same calendars, same chain on every tier.">
+<link rel="icon" type="image/png" href="/favicon.png?v=8">
+<meta property="og:title" content="Pricing — Orphograph">
+<meta property="og:description" content="Free tier, one-time Packs, or a Standing Order. Same Bitcoin attestation on every tier.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://orphograph.com/pricing">
+<link rel="stylesheet" href="/index.css?v=19">
+<meta name="copyright" content="© 2026 Orphograph. MIT — see /LICENSE">
+<link rel="canonical" href="https://orphograph.com/pricing">
+</head>
+<body>
+
+<!-- ─────────────────────── HEADER ─────────────────────── -->
+<header class="nav">
+  <div class="wrap row">
+    <a href="/" class="brand">Orphograph</a>
+    <nav>
+      <a href="/learn">Why it matters</a>
+      <a href="/method">Procedure</a>
+      <a href="/writers">Whom it serves</a>
+      <a href="/pricing">Pricing</a>
+      <a href="/about-the-office">Office</a>
+      <a href="/verify/" class="nav-verify">Verify receipt</a>
+      <a href="/status" id="live-status-badge" class="live-status-badge" data-state="checking" aria-label="Live service status"><span class="dot" aria-hidden="true"></span><span class="label">status</span></a>
+      <a href="/#drop" class="cta cta-btn">Anchor a file</a>
+    </nav>
+  </div>
+</header>
+
+<!-- ─────────────────────── PRICE ANCHOR ─────────────────────── -->
+<div class="price-anchor" aria-label="Schedule of fees, at a glance">
+  <span class="pa-item"><strong>Free</strong> — 3/day</span>
+  <span class="pa-sep" aria-hidden="true">·</span>
+  <span class="pa-item"><strong>Writer Pack</strong> — 10 anchors · $19</span>
+  <span class="pa-sep" aria-hidden="true">·</span>
+  <span class="pa-item"><strong>Pack of Fifty</strong> — 50 anchors · $29</span>
+  <span class="pa-sep" aria-hidden="true">·</span>
+  <span class="pa-item"><strong>Standing Order</strong> — $9 / month</span>
+  <a class="pa-link" href="/#drop">Anchor a file →</a>
+</div>
+
+<!-- ────────────────────────────────── TIERS ────────────────────────────── -->
+<section class="band band-glow" id="tiers">
+  <div class="wrap">
+    <div class="head">
+      <div class="eyebrow">Schedule of fees</div>
+      <h2>One file. One receipt. No surprises.</h2>
+      <p class="head-sub">Free tier resets every twenty-four hours by the server's clock. Paid tiers verify identically — same calendars, same chain.</p>
+    </div>
+    <div class="tiers tiers-4">
+      <div class="tier">
+        <div class="t-name">Free</div>
+        <div class="t-price">$0</div>
+        <p class="t-desc">The rite. For trying it out, for occasional creators. Perpetual.</p>
+        <ul>
+          <li>3 anchors every 24 hours</li>
+          <li>Full Bitcoin attestation</li>
+          <li>All 5 calendars</li>
+          <li>Open-source verifier</li>
+        </ul>
+        <a href="/#drop" class="cta">Begin</a>
+        <p class="cta-fineprint">No account · no card · file stays on your device.</p>
+      </div>
+      <div class="tier">
+        <div class="t-name">Writer Pack</div>
+        <div class="t-price">$19<small> one-time</small></div>
+        <p class="t-desc">The practice. The entry pack. For writers, journalists, anyone proving a draft predated something.</p>
+        <ul>
+          <li>10 anchor credits</li>
+          <li>Use them anytime</li>
+          <li>Credits never expire</li>
+          <li>Gift to a friend</li>
+        </ul>
+        <div class="cta-row">
+          <a id="buy-pack" class="cta" hidden>Pay with card</a>
+          <a href="/pay/crypto?plan=writer_pack" class="cta cta-alt">Pay with crypto</a>
+        </div>
+        <form class="card-notify" id="notify-pack" hidden>
+          <p class="card-notify-note">Card checkout is briefly unavailable. Leave an email and the office will send one notice when it returns. Crypto checkout remains open above.</p>
+          <div class="card-notify-row">
+            <input type="email" name="email" autocomplete="email" required placeholder="you@example.com" aria-label="Email address for the card-checkout notice">
+            <button type="submit">Notify me</button>
+          </div>
+          <p class="card-notify-done" hidden>Noted. One notice will be sent when card checkout returns; nothing else.</p>
+        </form>
+      </div>
+      <div class="tier featured">
+        <span class="ribbon">Most Popular</span>
+        <div class="t-name">Pack of Fifty</div>
+        <div class="t-price">$29<small> one-time</small></div>
+        <p class="t-desc">The body of work. For working creators with a backlog. Best value per anchor.</p>
+        <ul>
+          <li>50 anchor credits</li>
+          <li>Use them anytime</li>
+          <li>Credits never expire</li>
+          <li>Gift to a friend</li>
+        </ul>
+        <!-- Card CTA lights up from cfg.stripe.pack50_url (STRIPE_PACK50_URL):
+             the $29 Payment Link whose metadata carries credit_count=50, which
+             the webhook honors (entry pack still defaults to 10). Never wire
+             the plain pack hook here — that SKU grants 10 credits. -->
+        <div class="cta-row">
+          <a id="buy-pack50" class="cta" hidden>Pay with card</a>
+          <a href="/pay/crypto?plan=pack_50" class="cta cta-alt">Pay with crypto</a>
+        </div>
+        <form class="card-notify" id="notify-pack50" hidden>
+          <p class="card-notify-note">Card checkout is briefly unavailable. Leave an email and the office will send one notice when it returns. Crypto checkout remains open above.</p>
+          <div class="card-notify-row">
+            <input type="email" name="email" autocomplete="email" required placeholder="you@example.com" aria-label="Email address for the card-checkout notice">
+            <button type="submit">Notify me</button>
+          </div>
+          <p class="card-notify-done" hidden>Noted. One notice will be sent when card checkout returns; nothing else.</p>
+        </form>
+        <p class="cta-fineprint">
+          <span class="crypto-tokens" id="crypto-pay-fineprint">9 cryptos accepted (BTC, USDC, ETH, SOL, USDT, LTC, XRP, DOGE, MATIC) · non-custodial via NOWPayments</span>
+        </p>
+      </div>
+      <div class="tier">
+        <div class="t-name">Standing Order</div>
+        <div class="t-price">$9<small> / month</small></div>
+        <p class="t-desc">The standing record. For working creators and small teams. Cancel anytime.</p>
+        <ul>
+          <li>Unrestricted anchoring</li>
+          <li>Private receipts</li>
+          <li>Receipt vault</li>
+          <li>API access</li>
+        </ul>
+        <div class="cta-row">
+          <a id="buy-personal" class="cta" hidden>Pay with card</a>
+          <a href="/pay/crypto?plan=pack_50" class="cta cta-alt">Pay with crypto</a>
+        </div>
+        <form class="card-notify" id="notify-personal" hidden>
+          <p class="card-notify-note">Card checkout is briefly unavailable. Leave an email and the office will send one notice when it returns. Crypto checkout remains open above.</p>
+          <div class="card-notify-row">
+            <input type="email" name="email" autocomplete="email" required placeholder="you@example.com" aria-label="Email address for the card-checkout notice">
+            <button type="submit">Notify me</button>
+          </div>
+          <p class="card-notify-done" hidden>Noted. One notice will be sent when card checkout returns; nothing else.</p>
+        </form>
+        <p class="cta-fineprint">
+          <span class="crypto-tokens" id="crypto-pay-sub-fineprint">Card bills $9/month, cancel anytime. Crypto bills as a Pack of Fifty for equivalent value.</span>
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="after-tiers">
+  <p><strong>For studios, firms, and teams.</strong> Shared vaults, anchoring at volume, and a named contact at the office — the standing record serious practices keep on file. <a href="mailto:hello@orphograph.com?subject=Practice%20enquiry">Speak to the office &rarr;</a></p>
+</section>
+
+<section class="after-tiers">
+  <p>Already used a Bitcoin-anchored receipt to settle a dispute? <a href="mailto:hello@orphograph.com">Write to the office</a>. The office keeps a public record of real-world uses where the customer consents to publication; the receipt itself is yours.</p>
+</section>
+
+<footer class="site">
+  <div class="wrap">
+    <div class="cols">
+      <div class="col">
+        <h4>Product</h4>
+        <a href="/what-is-this">First time?</a>
+        <a href="/pricing">Pricing</a>
+        <a href="/docs/verify">Verify a receipt</a>
+        <a href="/ios">iOS</a>
+        <a href="/recover">Recover</a>
+        <a href="/status">Status</a>
+      </div>
+      <div class="col">
+        <h4>Understand</h4>
+        <a href="/learn">Why it matters</a>
+        <a href="/method">The procedure</a>
+        <a href="/method/evidence-law">Evidence law</a>
+        <a href="/faq">FAQ</a>
+        <a href="/blog/">Blog</a>
+        <a href="/changelog">Changelog</a>
+      </div>
+      <div class="col">
+        <h4>Office</h4>
+        <a href="/about-the-office">About the office</a>
+        <a href="/press">Press</a>
+        <a href="/press-kit">Press kit</a>
+        <a href="/continuity">Continuity</a>
+        <a href="/terms">Terms</a>
+        <a href="/privacy">Privacy</a>
+      </div>
+    </div>
+    <div class="brand-line">Orphograph &nbsp;·&nbsp; Bitcoin-Anchored Notary</div>
+  </div>
+  <!-- legal-disclaimer -->
+  <div class="wrap legal-disclaimer">
+    Orphograph is not a law firm, not a notary, and not a qualified electronic-trust-service provider — a receipt is cryptographic proof that a file existed before a point in time, not legal advice.
+  </div>
+</footer>
+
+<script src="/assets/event.js?v=1" defer></script>
+<script src="/status-badge.js?v=1" defer></script>
+<script src="/checkout-cta.js?v=4" defer></script>
+</body>
+</html>
