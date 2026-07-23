@@ -245,6 +245,11 @@ FUNNEL_EVENTS = frozenset({
     "verify_sample_click", # clicked "verify sample"
     "share_link_click",    # clicked a share link
     "lp_cta_clicked",      # landing-page CTA click
+    # scroll-depth telemetry (native, cookieless — see web/assets/scroll-depth.js)
+    "scroll_25",           # visitor scrolled past 25% of the page (fires once)
+    "scroll_50",           # visitor scrolled past 50% of the page (fires once)
+    "scroll_75",           # visitor scrolled past 75% of the page (fires once)
+    "scroll_100",          # visitor reached the bottom of the page (fires once)
 })
 FUNNEL_EVENT_FIELDS = frozenset({"event", "page"})
 FUNNEL_EVENTS_PATH = DATA_DIR / "events.jsonl"

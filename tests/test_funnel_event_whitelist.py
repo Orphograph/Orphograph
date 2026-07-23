@@ -39,8 +39,10 @@ WEB_DIR = REPO_ROOT / "web"
 V2_JS = WEB_DIR / "v2.js"
 
 # Matches both `track("name"` and `window.orphoEvent("name"` (with or without
-# a trailing second argument). Event names are lower_snake_case string literals.
-_EVENT_CALL_RE = re.compile(r'(?:orphoEvent|track)\(\s*"([a-z_]+)"')
+# a trailing second argument). Event names are lower_snake_case string literals
+# and may include digits (e.g. scroll_25 / scroll_50 / scroll_75 / scroll_100)
+# so the depth-telemetry beacons are covered by the recurrence guard too.
+_EVENT_CALL_RE = re.compile(r'(?:orphoEvent|track)\(\s*"([a-z0-9_]+)"')
 
 
 def _iter_client_js() -> list[Path]:
@@ -93,6 +95,7 @@ def test_inventory_matches_expected_set():
         "checkout_returned_success",
         "try_sample_click", "verify_sample_click", "share_link_click",
         "lp_cta_clicked",
+        "scroll_25", "scroll_50", "scroll_75", "scroll_100",
     }
     assert set(_client_emitted_events()) == expected
 
