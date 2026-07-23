@@ -19,7 +19,7 @@
 <link rel="stylesheet" href="/style.css?v=5">
 <link rel="stylesheet" href="/blog.css">
 <link rel="stylesheet" href="/index.css?v=16">
-<link rel="stylesheet" href="/lp/agent-receipts.css?v=1">
+<link rel="stylesheet" href="/lp/agent-receipts.css?v=2">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -93,6 +93,8 @@
       <li><strong>Verifiable without trusting the operator.</strong> The proof is an open format checked against the public chain; <a href="/verify/">the verifier is open source</a>. The person relying on the record needs no account and no relationship with the person who made it.</li>
     </ul>
 
+    <p class="cta-inline"><a class="cta-btn" href="/integrations">Set up agent anchoring →</a></p>
+
     <h2>If you are the one accepting agent work</h2>
     <p>The receipt is built for your side of the table. Before you rely on a delivered artifact or a claimed action, ask for its receipt and <a href="/accept">verify it yourself</a> — drop the file or record you were given onto the acceptance page and check it against the certificate. A "yes" means the bytes in front of you are the bytes that existed at the anchored time. Operators who anchor as they work can answer any dispute with a link; operators who cannot produce receipts are asking you to take their logs on faith.</p>
 
@@ -132,6 +134,11 @@ python3 orpho_agent_anchor.py anchor-memory ./workspace --label "memory"</code><
       <p>The receipt is an open format: a SHA-256 digest plus OpenTimestamps proofs committed to the Bitcoin blockchain. Verification needs only the record, the <code>.ots</code> files, and the public chain — none of which depend on Orphograph existing. An MIT-licensed verifier is published for exactly this reason.</p>
     </div>
 
+    <div class="cta-box cta-box-close">
+      <p>Setup for the CLI, the drop-in skill, and the MCP server lives on the integrations page.</p>
+      <p><a class="cta-btn" href="/integrations">Set up agent anchoring →</a></p>
+    </div>
+
   </section>
 </main>
 
@@ -144,6 +151,10 @@ python3 orpho_agent_anchor.py anchor-memory ./workspace --label "memory"</code><
     The office does not transmit your file
   </small>
 </footer>
+
+<div class="lp-sticky-cta" aria-label="Set up agent anchoring">
+  <a class="cta-btn" href="/integrations">Set up agent anchoring →</a>
+</div>
 
 <script src="/assets/event.js?v=1" defer></script>
 <script src="/assets/lp-cta.js?v=2" defer></script>
