@@ -89,7 +89,7 @@
   <p class="post-meta">Blog · Document timestamping</p>
   <h1>Why a Bitcoin block height is the strongest proof of existence in 2026</h1>
 
-  <p>When you anchor a file&#x27;s hash to a Bitcoin block, the receipt references a specific block height — for example, &quot;this file&#x27;s hash is committed to the Merkle root inside block 892,341, mined at 2026-05-17 14:00 UTC.&quot;</p>
+  <p>When you anchor a file&#x27;s hash to a Bitcoin block, the receipt references a specific block height — for example, &quot;this file&#x27;s hash is committed to the Merkle root inside block 949,114, mined at 2026-05-12 18:34 UTC.&quot;</p>
   <p>That block height is the load-bearing piece of the proof. Everything else in the receipt — the Merkle path, the calendar servers, the issuing service — is auxiliary. The block height is the part that anyone can independently check against a public record sixteen years long.</p>
   <p>This post explains why a block height is currently the strongest existence-proof anchor available, what its actual track record looks like, and what would have to be true for a Bitcoin-anchored timestamp to fail. The goal is to give you enough information to decide for yourself whether you trust it.</p>
   <h2>What a block height represents</h2>
@@ -100,7 +100,7 @@
   <li>A timestamp set by the miner, validated by the network to be within roughly two hours of consensus time.</li>
   <li>A nonce, found by trial and error, that makes the block&#x27;s own hash satisfy a target difficulty.</li>
   </ul>
-  <p>The block height is just the position of that block in the chain. Block 0 is the genesis block, mined in January 2009. Block 892,341 is the 892,341st block in the chain. Each block can only have one predecessor, and the predecessor&#x27;s hash is baked into the successor&#x27;s header. Changing block N requires changing every block from N onward, because each header is cryptographically bound to the one before it.</p>
+  <p>The block height is just the position of that block in the chain. Block 0 is the genesis block, mined in January 2009. Block 949,114 is the 949,114th block in the chain. Each block can only have one predecessor, and the predecessor&#x27;s hash is baked into the successor&#x27;s header. Changing block N requires changing every block from N onward, because each header is cryptographically bound to the one before it.</p>
   <p>This is the structural property that makes a block height useful as a timestamp anchor. The block exists at exactly one point in a totally ordered sequence, and that ordering is enforced by hashes, not by any operator&#x27;s policy.</p>
   <h2>The sixteen-year track record</h2>
   <p>As of May 2026, Bitcoin has been producing blocks continuously for just over sixteen years. The chain has never been rewritten beyond about six blocks deep — and even those shallow reorganizations have been rare events caused by near-simultaneous block discovery, not by attack.</p>
