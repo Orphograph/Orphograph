@@ -33,8 +33,7 @@
   width: 72px; height: 72px; display: block;
   object-fit: cover; object-position: center 16%;
   background: transparent;
-  filter: drop-shadow(0 4px 14px rgba(60,40,20,0.10))
-          drop-shadow(0 1px 3px rgba(60,40,20,0.06));
+  filter: none;
 }
 @media print {
   .brand-stamp .receipt-seal { width: 68px; height: 68px; opacity: 1; filter: none; }
