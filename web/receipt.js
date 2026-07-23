@@ -202,9 +202,6 @@ function renderVerdict(rec) {
       checkedLine
     );
     document.getElementById("verdict").classList.add("verdict-anchored");
-    const ctaText = document.querySelector("#visitor-cta .cta-text");
-    if (ctaText) ctaText.textContent =
-      "You just verified this proof yourself — that feeling is the product. Anchoring your own file is free.";
   } else if ((rec.calendars_ok || 0) > 0) {
     setVerdict(
       `Sealed ${when} — awaiting Bitcoin confirmation.`,
@@ -291,7 +288,7 @@ async function main() {
   // Owner view: a signed-in visitor gets integration hints, not sales CTAs.
   fetch("/api/me").then((res) => {
     if (!res.ok) return;
-    for (const id of ["visitor-cta", "visitor-cta-pack", "visitor-cta-what"]) {
+    for (const id of ["visitor-cta-what"]) {
       const el = document.getElementById(id);
       if (el) el.hidden = true;
     }

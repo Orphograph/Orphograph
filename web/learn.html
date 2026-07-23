@@ -107,7 +107,7 @@
   <ul>
     <li>The SHA-256 (and SHA-512) hash that was anchored</li>
     <li>How many of the five calendars confirmed it (e.g. <strong>5/5 OK</strong>)</li>
-    <li>The exact moment <strong>BTC pinned at</strong> — populated automatically once your hash makes it into a Bitcoin block (usually within an hour)</li>
+    <li>The <strong>BTC pinned at</strong> field — the reported time of the block your hash was committed to, populated automatically once your hash makes it into a Bitcoin block (usually within an hour)</li>
     <li>A re-hash widget: drop the original file on the page, your browser re-computes the SHA-256, and the page reports ✓ match or ✗ mismatch</li>
     <li>Download links for all five <code>.ots</code> proof files</li>
   </ul>
@@ -150,7 +150,7 @@ tar xzf orphograph-verify-0.1.tar.gz</pre>
       <p>Output looks like:</p>
       <pre class="cmd">[ok] SHA-256 matches receipt
 [ok] 5 / 5 calendar proofs valid
-[ok] earliest Bitcoin block: 824,193  (2026-05-16 17:42 UTC)
+[ok] earliest Bitcoin block: 949,114  (2026-05-12 18:34 UTC)
 PASS</pre>
     </div>
   </div>
@@ -190,7 +190,7 @@ PASS</pre>
       <pre class="cmd">ots verify my-original-file.jpg.ots</pre>
       <p>If the proof has already been pinned to Bitcoin (~1 hour after anchoring), you'll see something like:</p>
       <pre class="cmd">Assuming target filename is 'my-original-file.jpg'
-Success! Bitcoin block 824193 attests existence as of 2026-05-16 17:42:11 UTC</pre>
+Success! Bitcoin block 949114 attests existence as of 2026-05-12 18:34:43 UTC</pre>
     </div>
   </div>
 
@@ -214,7 +214,7 @@ Success! Bitcoin block 824193 attests existence as of 2026-05-16 17:42:11 UTC</p
 
 <ol>
   <li>
-    Run <code>ots info my-file.ots</code> on any one of your <code>.ots</code> files. The output prints the Bitcoin block height the proof commits to (e.g. <code>block 824193</code>) and the transaction ID of the calendar's commitment transaction.
+    Run <code>ots info my-file.ots</code> on any one of your <code>.ots</code> files. The output prints the Bitcoin block height the proof commits to (e.g. <code>block 949114</code>) and the transaction ID of the calendar's commitment transaction.
   </li>
   <li>
     Open a public Bitcoin block explorer — for example
@@ -230,7 +230,7 @@ Success! Bitcoin block 824193 attests existence as of 2026-05-16 17:42:11 UTC</p
 </ol>
 
 <div class="callout">
-  <strong>Plain-English version:</strong> Your <code>.ots</code> file is a recipe. The recipe says "take this hash, do this hashing sequence, and you'll get a number that appears inside Bitcoin block #824,193." Anyone with the original file and a copy of the Bitcoin chain can run the recipe and check.
+  <strong>Plain-English version:</strong> Your <code>.ots</code> file is a recipe. The recipe says "take this hash, do this hashing sequence, and you'll get a number that appears inside Bitcoin block #949,114." Anyone with the original file and a copy of the Bitcoin chain can run the recipe and check.
 </div>
 
 <h2 id="why-trust">Why this evidence is trustworthy</h2>
