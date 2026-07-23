@@ -13,7 +13,7 @@
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://orphograph.com/">
 <meta name="twitter:card" content="summary_large_image">
-<link rel="stylesheet" href="/index.css?v=17">
+<link rel="stylesheet" href="/index.css?v=18">
 <link rel="preload" as="image" href="/seal-display.png?v=8" fetchpriority="high">
 <meta name="copyright" content="© 2026 Orphograph. MIT — see /LICENSE">
 <script type="application/ld+json">
@@ -89,6 +89,20 @@
   </div>
 </header>
 
+<!-- ───────────────────────── IN-PAGE JUMP NAVIGATION ───────────────────── -->
+<nav class="jumpnav" id="jumpnav" aria-label="Jump to a section of this page">
+  <div class="wrap jumpnav-row">
+    <div class="jumpnav-links">
+      <a href="#how" data-jump>How it works</a>
+      <a href="#proof" data-jump>Proof</a>
+      <a href="#verify" data-jump>Verify</a>
+      <a href="#who" data-jump>Who it&rsquo;s for</a>
+      <a href="#tiers" data-jump>Schedule of fees</a>
+    </div>
+    <a href="#drop" class="cta jump-cta">Anchor a file</a>
+  </div>
+</nav>
+
 <!-- ────────────────────────────────── MASTHEAD ─────────────────────────── -->
 <section class="masthead">
   <div class="wrap">
@@ -110,6 +124,9 @@
     <h1>Proof a file existed —<br><em>before anyone could argue otherwise.</em></h1>
     <p class="plain-subtitle">An empirical notary. Drop a file in your browser and walk away with a permanent, Bitcoin-anchored record that it existed &mdash; the receipt is issued in seconds, confirmed on-chain within hours, verifiable by anyone.</p>
     <p class="reassure">Free &middot; No account required.</p>
+    <div class="hero-cta">
+      <a href="#drop" class="cta">Anchor a file</a>
+    </div>
     <div class="assurances" aria-label="What this guarantees">
       <div class="assure">
         <h3>Stays on your device</h3>
@@ -165,7 +182,7 @@
 </div>
 
 <!-- ────────────────────────────────── ACTION ───────────────────────────── -->
-<section class="action">
+<section class="action" id="how">
   <div class="wrap">
     <div class="action-card">
       <div>
@@ -248,7 +265,7 @@
 </section>
 
 <!-- ────────────────────────────────── SAMPLE RECEIPT ───────────────────── -->
-<section class="sample-receipt-section" aria-labelledby="sample-receipt-title">
+<section class="sample-receipt-section" id="proof" aria-labelledby="sample-receipt-title">
   <div class="sample-receipt-card">
     <div class="eyebrow">Proof, not promises</div>
     <h3 id="sample-receipt-title">Don't take our word for it. Verify a real one yourself.</h3>
@@ -291,7 +308,7 @@
 </section>
 
 <!-- ────────────────────────────────── VERIFICATION ─────────────────────── -->
-<section class="band">
+<section class="band" id="verify">
   <div class="wrap">
     <div class="head">
       <div class="eyebrow">Verification</div>
@@ -324,7 +341,7 @@
 </section>
 
 <!-- ────────────────────────────────── WHO ──────────────────────────────── -->
-<section class="band">
+<section class="band" id="who">
   <div class="wrap">
     <div class="head">
       <div class="eyebrow">Whom it serves</div>
@@ -370,6 +387,14 @@
     <p class="who-note">
       The instrument is the same in every case: a Bitcoin-anchored attestation that a file with a particular fingerprint existed by the recorded block. Its evidentiary weight is a matter for the practitioner and, where relevant, counsel.
     </p>
+  </div>
+</section>
+
+<!-- ─────────────────────────── MID-PAGE CTA (repeat) ───────────────────── -->
+<section class="mid-cta">
+  <div class="wrap">
+    <a href="#drop" class="cta">Anchor a file</a>
+    <p class="mid-cta-note">Free &middot; no account &middot; the file never leaves your device.</p>
   </div>
 </section>
 
@@ -522,6 +547,15 @@
   </div>
 </section>
 
+<!-- ─────────────────────────── FOOTER CTA (repeat) ─────────────────────── -->
+<section class="foot-cta">
+  <div class="wrap">
+    <h2>Anchor your first file now.</h2>
+    <a href="#drop" class="cta">Anchor a file</a>
+    <p class="foot-cta-note">Free &middot; no account required &middot; verifiable without us.</p>
+  </div>
+</section>
+
 <footer class="site">
   <div class="wrap">
     <div class="made-for">
@@ -596,5 +630,6 @@
 <script src="/assets/scroll-depth.js?v=1" defer></script>
 <script src="/assets/drop-observer.js?v=1" defer></script>
 <script src="/checkout-cta.js?v=4" defer></script>
+<script src="/jumpnav.js?v=1" defer></script>
 </body>
 </html>

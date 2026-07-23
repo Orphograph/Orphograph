@@ -128,11 +128,16 @@ class TestSinglePrimaryCTA(unittest.TestCase):
 
     def _extract_tier_blocks(self) -> list[str]:
         html = _html()
+        # Scope to the #tiers <section> first, so `.cta` buttons elsewhere on
+        # the page (e.g. the repeated hero / mid-page / footer "Anchor a file"
+        # CTAs) can't bleed into the LAST tier's block — the naive split lets
+        # the final tier run to end-of-file otherwise.
+        sec = re.search(r'id="tiers".*?</section>', html, re.DOTALL)
+        scope = sec.group(0) if sec else html
         # Pull each <div class="tier"...> ... </div> at depth 1 inside .tiers.
         # Simple greedy split: every `<div class="tier` opens a tier; the next
-        # one closes the prior. Last one closes at `</div>\s*</div>` (the .tiers).
-        # Good enough for this regression file.
-        parts = re.split(r'<div class="tier(?: featured)?">', html)
+        # one closes the prior. Last one closes at the tiers </section>.
+        parts = re.split(r'<div class="tier(?: featured)?">', scope)
         # parts[0] is everything before the first tier
         return parts[1:5]  # exactly 4 tiers expected
 

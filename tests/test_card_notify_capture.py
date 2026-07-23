@@ -121,7 +121,7 @@ class TestStaticMarkup(unittest.TestCase):
         """Changed assets must carry bumped ?v= or Cloudflare serves stale 24h."""
         index = (ROOT / "web" / "index.html").read_text()
         self.assertIn("/checkout-cta.js?v=4", index)
-        self.assertIn("/index.css?v=17", index)
+        self.assertIn("/index.css?v=18", index)
         v2 = (ROOT / "web" / "v2" / "index.html").read_text()
         self.assertIn("/checkout-cta.js?v=4", v2)
         self.assertIn("/v2/style.css?v=8", v2)
