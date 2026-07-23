@@ -1,3 +1,20 @@
+// Pack-code bounce: a buyer's registration email points at {SITE_URL}/#pack=…
+// but this lean homepage anchor flow does not spend pack credits. Redirect any
+// such landing to /pack (the canonical pack surface) so the code is honoured
+// and remaining anchors can actually be drawn. Fires only when a pack code is
+// present in the URL; touches no credits/payment/anchor logic.
+(function(){
+  try{
+    var pack='';
+    var hp=new URLSearchParams((location.hash||'').replace(/^#/,''));
+    if(hp.get('pack')) pack=hp.get('pack');
+    if(!pack){ var qs=new URLSearchParams(location.search); if(qs.get('pack')) pack=qs.get('pack'); }
+    if(pack && /^pk_[A-Za-z0-9_-]+$/.test(pack)){
+      location.replace('/pack#pack='+encodeURIComponent(pack));
+    }
+  }catch(e){/* never block the homepage on a bounce failure */}
+})();
+
 const picker   = document.getElementById('picker');
 const center   = document.getElementById('ringCenter');
 const receipt  = document.getElementById('receipt');

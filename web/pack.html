@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Orphograph — Access your Pack</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#f6f1e3">
+<meta name="description" content="Access the anchors remaining on your Writer Pack or Pack of Fifty, anchor a file against them, or recover a lost claim code — no account required.">
+<link rel="icon" type="image/png" href="/favicon.png?v=8">
+<link rel="canonical" href="https://orphograph.com/pack">
+<meta property="og:title" content="Orphograph — Access your Pack">
+<meta property="og:url" content="https://orphograph.com/pack">
+<meta property="og:type" content="article">
+<meta property="og:image" content="https://orphograph.com/og-image.png?v=8">
+<meta name="copyright" content="© 2026 Orphograph. MIT — see /LICENSE">
+<link rel="stylesheet" href="/index.css?v=16">
+<link rel="stylesheet" href="/pack.css?v=1">
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap row">
+    <a href="/" class="brand">Orphograph</a>
+    <nav>
+      <a href="/pricing">Pricing</a>
+      <a href="/faq">FAQ</a>
+      <a href="/verify/">Verify receipt</a>
+      <a href="/#drop" class="cta">Anchor a file</a>
+    </nav>
+  </div>
+</header>
+
+<main class="pk-wrap">
+
+  <p class="pk-eyebrow">Pack access</p>
+  <h1>Access your Pack.</h1>
+  <p class="pk-lede">
+    A Writer Pack or Pack of Fifty is held against a single claim code — the instrument issued to you at purchase. Enter it below to see the anchors remaining and to seal a file against them. The code is stored only in this browser; credits do not expire.
+  </p>
+
+  <!-- ── Enter code / balance ─────────────────────────────────────── -->
+  <form class="pk-form" id="pk-code-form" novalidate>
+    <label for="pk-code">Pack code</label>
+    <input type="text" id="pk-code" name="pack_code" placeholder="pk_…" autocomplete="off" spellcheck="false" autocapitalize="off" required>
+    <p class="hint">The code begins <code>pk_</code>. It appears in the registration notice emailed at purchase, on the redemption line.</p>
+    <button class="submit" type="submit" id="pk-code-submit">Show remaining anchors</button>
+    <div id="pk-balance" role="status" aria-live="polite"></div>
+  </form>
+
+  <!-- ── Anchor against this pack ─────────────────────────────────── -->
+  <section class="pk-anchor" id="pk-anchor" hidden aria-label="Anchor a file with this pack">
+    <h2>Anchor a file with this pack</h2>
+    <p class="pk-anchor-note">The file is fingerprinted here in your browser with SHA-256; only the fingerprint is submitted, and one credit is drawn from the pack above.</p>
+    <div class="pk-drop" id="pk-drop" tabindex="0" role="button" aria-label="Choose or drop a file to anchor against this pack">
+      <svg class="pk-drop-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true" focusable="false"><path d="M12 16V4m0 0l-4 4m4-4l4 4" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2" stroke-linecap="round"/></svg>
+      <span class="pk-drop-title">Drop a file, or choose one</span>
+      <span class="pk-drop-hint">Nothing is uploaded — only the fingerprint travels.</span>
+    </div>
+    <input type="file" id="pk-file" hidden aria-label="Choose a file to anchor">
+    <div id="pk-anchor-status" role="status" aria-live="polite"></div>
+    <div class="pk-receipt" id="pk-receipt" hidden>
+      <p class="pk-receipt-title">Existence sealed.</p>
+      <dl class="pk-receipt-meta">
+        <div><dt>File</dt><dd id="pk-r-name"></dd></div>
+        <div><dt>SHA-256</dt><dd class="mono" id="pk-r-hash"></dd></div>
+        <div><dt>Sealed</dt><dd id="pk-r-ts"></dd></div>
+      </dl>
+      <a class="pk-r-link" id="pk-r-link" hidden>View the receipt &rarr;</a>
+    </div>
+  </section>
+
+  <!-- ── Lost-code recovery ───────────────────────────────────────── -->
+  <section class="pk-recover" id="pk-recover" aria-label="Recover a lost pack code">
+    <h2>Lost your code?</h2>
+    <p class="pk-recover-note">Enter the email address used at purchase. If a pack is associated with it, the office will re-send the claim code(s) to that address. No new code is minted, and no reply is given as to whether an address is on file.</p>
+    <form class="pk-form" id="pk-recover-form" novalidate>
+      <label for="pk-email">Email on file</label>
+      <input type="email" id="pk-email" name="email" placeholder="you@example.com" autocomplete="email" required>
+      <button class="submit" type="submit" id="pk-recover-submit">Re-send my code</button>
+      <div id="pk-recover-result" role="status" aria-live="polite"></div>
+    </form>
+  </section>
+
+  <section class="pk-faq">
+    <h3>How is my code stored?</h3>
+    <p>Only in this browser, and only after you enter it. It is never written to an account, because Orphograph keeps no accounts for packs — the code itself is the instrument. Clearing your browser data removes it; recover it above with the email you bought with.</p>
+
+    <h3>Do credits expire?</h3>
+    <p>No. Anchors on a pack remain available until they are spent, however long that takes.</p>
+
+    <h3>Can I anchor from anywhere?</h3>
+    <p>Yes. The code is a bearer instrument: enter it on any device to draw from the same pack. Treat it like a key — anyone holding it can spend the remaining anchors.</p>
+
+    <h3>I have not bought a pack yet.</h3>
+    <p>See the <a href="/pricing">pricing</a>. Three anchors are free every day with no account and no code.</p>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap footer-inner">
+    <p>Orphograph · An empirical notary.</p>
+    <p class="footer-links">
+      <a href="/" class="footer-link">Home</a> ·
+      <a href="/pricing" class="footer-link">Pricing</a> ·
+      <a href="/faq" class="footer-link">FAQ</a> ·
+      <a href="/terms" class="footer-link">Terms</a> ·
+      <a href="/privacy" class="footer-link">Privacy</a>
+    </p>
+  </div>
+  <!-- legal-disclaimer -->
+  <div class="wrap legal-disclaimer">
+    Orphograph is not a law firm, not a notary, and not a qualified electronic-trust-service provider. A receipt is cryptographic proof that a file existed before a point in time — it is not legal advice.
+  </div>
+</footer>
+
+<script src="/assets/pack.js?v=1" defer></script>
+<script src="/statusbar.js?v=1" defer></script>
+<script src="/assets/event.js?v=1" defer></script>
+</body>
+</html>

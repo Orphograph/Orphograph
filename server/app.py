@@ -487,6 +487,7 @@ def _build_sitemap() -> str:
         ("/roadmap", "0.4"),
         ("/changelog", "0.4"),
         ("/account", "0.4"),
+        ("/pack", "0.6"),
         ("/construction/", "0.4"),
         ("/inspection/", "0.4"),
         ("/listings/", "0.4"),
@@ -1928,6 +1929,9 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/api/recover":
             self._handle_recover_payment()
             return
+        if self.path == "/api/pack/recover":
+            self._handle_pack_recover()
+            return
         if self.path == "/api/me/affiliate/payout":
             self._handle_affiliate_payout()
             return
@@ -2494,6 +2498,68 @@ class Handler(BaseHTTPRequestHandler):
             return
         waitlist.add(email.strip(), interest if isinstance(interest, str) else "personal")
         _json_response(self, 200, {"ok": True, "message": "On the list."})
+
+    # Neutral response for the pack-recovery endpoint. Identical wording is
+    # returned whether or not the address has a pack on file so the endpoint
+    # can never be used to enumerate which emails purchased a Pack.
+    _PACK_RECOVER_NEUTRAL = (
+        "If a pack is associated with that email, we've sent the code(s)."
+    )
+
+    def _handle_pack_recover(self) -> None:
+        """Lost-code recovery for a Pack buyer.
+
+        Input:  { "email": "you@example.com" }
+        Output: ALWAYS the same neutral 200 (see _PACK_RECOVER_NEUTRAL) so the
+                endpoint leaks nothing about which addresses own a Pack.
+
+        On a genuine hit, the customer's claim code(s) — those still holding a
+        positive balance — are re-sent to the address on file via
+        mailer.send_pack_claim_email. No new code is minted; no PII is stored.
+
+        Rate-limited per IP with the shared _anchor_limiter (same pattern as
+        /api/waitlist and /api/recover) to blunt enumeration/mail-flood abuse.
+
+        Residual side-channel (accepted for this threat model): a hit performs
+        a ledger scan + mail send while a miss returns almost immediately, so
+        response timing weakly distinguishes the two. The rate limit bounds how
+        much an attacker can sample this.
+        """
+        allowed, retry = _anchor_limiter.check(f"pack_recover:{self._client_key()}")
+        if not allowed:
+            _json_response(self, 429, {"error": "too many requests", "retry_after_seconds": int(retry) + 1})
+            return
+        length = _read_content_length(self)
+        if length <= 0 or length > MAX_BODY_BYTES:
+            _json_response(self, 400, {"error": "invalid body size"})
+            return
+        try:
+            payload = json.loads(self.rfile.read(length).decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            _json_response(self, 400, {"error": "body must be JSON"})
+            return
+        email = payload.get("email", "")
+        # A malformed address returns the SAME neutral response as a valid one
+        # with no pack — never a distinguishing 400 (mirrors _handle_waitlist).
+        if isinstance(email, str) and EMAIL_RE.match(email.strip()):
+            addr = email.strip()
+            try:
+                codes = credits.find_claim_codes_by_email(addr)
+                for code in codes:
+                    remaining = credits.balance(code)
+                    # Only re-send codes with anchors still on them — a fully
+                    # spent pack has nothing to reuse, and a "Pack of 0" notice
+                    # would be misleading. The neutral response is unchanged.
+                    if remaining > 0:
+                        try:
+                            mailer.send_pack_claim_email(addr, code, remaining)
+                        except Exception:
+                            # Never surface a mailer failure — it would turn the
+                            # neutral response into an oracle.
+                            pass
+            except Exception:
+                pass
+        _json_response(self, 200, {"ok": True, "message": self._PACK_RECOVER_NEUTRAL})
 
     def _handle_btc_claim(self) -> None:
         """Buyer self-reports a Bitcoin payment. Stored for manual fulfillment."""
