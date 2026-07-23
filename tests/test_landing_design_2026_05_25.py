@@ -25,11 +25,21 @@ import unittest
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
 INDEX_HTML = REPO / "web" / "index.html"
+# Homepage-lean-v2 (2026-07-23): the full tiers/checkout block + the complete
+# price-anchor strip moved off the homepage onto the dedicated /pricing page
+# (web/pricing.html). The homepage keeps only a compact one-line pricing strip.
+# Tier / SKU / checkout-wiring guards therefore read the pricing page; the
+# masthead + CSP-hygiene + nav-badge guards still read the homepage.
+PRICING_HTML = REPO / "web" / "pricing.html"
 CRYPTO_JS = REPO / "web" / "pay" / "crypto.js"
 
 
 def _html() -> str:
     return INDEX_HTML.read_text(encoding="utf-8")
+
+
+def _pricing() -> str:
+    return PRICING_HTML.read_text(encoding="utf-8")
 
 
 class TestNavBadgeLabel(unittest.TestCase):
@@ -66,7 +76,7 @@ class TestNavBadgeLabel(unittest.TestCase):
 
 class TestFourTierPricing(unittest.TestCase):
     def test_all_four_canonical_skus_present(self):
-        html = _html()
+        html = _pricing()
         for sku in ("Free", "Writer Pack", "Pack of Fifty", "Standing Order"):
             self.assertIn(
                 f">{sku}<",
@@ -77,7 +87,7 @@ class TestFourTierPricing(unittest.TestCase):
     def test_canonical_prices_displayed(self):
         """Prices must match founder canon (2026-05-25):
         Free $0, Writer Pack $19, Pack of Fifty $29, Standing Order $9/month."""
-        html = _html()
+        html = _pricing()
         # Free
         self.assertRegex(html, r'class="t-name">Free</div>\s*<div class="t-price">\$0')
         # Writer Pack
@@ -99,7 +109,7 @@ class TestFourTierPricing(unittest.TestCase):
     def test_first_party_jargon_removed(self):
         """'First Party' was unintelligible jargon as a tier name. Should
         be gone in favor of plain 'Free'."""
-        html = _html()
+        html = _pricing()
         # Pull just the tiers block (id="tiers") and look there — the phrase
         # may legitimately appear elsewhere in the doc (e.g. about the office).
         m = re.search(r'id="tiers".*?</section>', html, re.DOTALL)
@@ -114,7 +124,7 @@ class TestFourTierPricing(unittest.TestCase):
 
 class TestPriceAnchorStrip(unittest.TestCase):
     def test_strip_renders_all_skus_inline(self):
-        html = _html()
+        html = _pricing()
         m = re.search(r'<div class="price-anchor".*?</div>', html, re.DOTALL)
         self.assertIsNotNone(m, "Price-anchor strip missing.")
         strip = m.group(0)
@@ -127,7 +137,7 @@ class TestSinglePrimaryCTA(unittest.TestCase):
     competing ones (Pay-by-card / Pay-with-crypto side by side)."""
 
     def _extract_tier_blocks(self) -> list[str]:
-        html = _html()
+        html = _pricing()
         # Scope to the #tiers <section> first, so `.cta` buttons elsewhere on
         # the page (e.g. the repeated hero / mid-page / footer "Anchor a file"
         # CTAs) can't bleed into the LAST tier's block — the naive split lets
@@ -168,7 +178,7 @@ class TestCTAVerbs(unittest.TestCase):
     card button can't silently reappear before Stripe is configured."""
 
     def test_free_begins_and_paid_tiers_are_crypto(self):
-        html = _html()
+        html = _pricing()
         m = re.search(r'id="tiers".*?</section>', html, re.DOTALL)
         self.assertIsNotNone(m)
         tiers_block = m.group(0)
@@ -189,7 +199,7 @@ class TestCTAVerbs(unittest.TestCase):
         """No live card-checkout hook may sit on the homepage while the card
         rails are unconfigured — neither a data-checkout button nor the old
         Buy/Subscribe card verbs as CTAs (a dead button 'looks bad' and 503s)."""
-        html = _html()
+        html = _pricing()
         m = re.search(r'id="tiers".*?</section>', html, re.DOTALL)
         self.assertIsNotNone(m)
         # Strip HTML comments first: the Pack-of-Fifty card-enable note mentions
@@ -208,23 +218,11 @@ class TestCTAVerbs(unittest.TestCase):
             )
 
 
-class TestExamplesRepetitionTrimmed(unittest.TestCase):
-    """The pre-fix copy repeated 'the office anchors only the fingerprint;
-    the file itself never leaves your device' five times across the
-    examples block. Trim to at most two occurrences."""
-
-    def test_office_boilerplate_appears_at_most_twice(self):
-        html = _html()
-        m = re.search(r'<details class="examples">.*?</details>', html, re.DOTALL)
-        self.assertIsNotNone(m)
-        examples = m.group(0)
-        count = examples.count("the office anchors only the fingerprint")
-        self.assertLessEqual(
-            count,
-            2,
-            f"Privacy boilerplate repeated {count}× in examples; "
-            "should be at most 2× (was 5× pre-fix).",
-        )
+# NOTE (homepage-lean-v2, 2026-07-23): the hero "examples" <details> block was
+# removed in the lean rebuild, so TestExamplesRepetitionTrimmed (which guarded
+# against a 5× privacy-boilerplate repetition inside it) no longer has a target
+# and was retired. The privacy contract now lives once in the three trust
+# statements (see TestTrustStatements below).
 
 
 class TestCheckoutWiringMatchesSKU(unittest.TestCase):
@@ -243,7 +241,7 @@ class TestCheckoutWiringMatchesSKU(unittest.TestCase):
     def _tier_chunk(self, name: str) -> str:
         # Strip HTML comments (not rendered/active) then split on the tier
         # delimiter so each chunk is exactly one tier card's markup.
-        html = re.sub(r"<!--.*?-->", "", _html(), flags=re.DOTALL)
+        html = re.sub(r"<!--.*?-->", "", _pricing(), flags=re.DOTALL)
         chunks = re.split(r'<div class="tier', html)
         marker = f'<div class="t-name">{name}</div>'
         for c in chunks:
@@ -318,10 +316,13 @@ class TestCspInlineConsolidation(unittest.TestCase):
         self.assertNotIn("lockup.png", html)
         self.assertNotIn("lockup-text-img", html)
 
-    def test_assurances_row_replaces_chips_and_lede(self):
+    def test_trust_statements_row_present(self):
+        # Homepage-lean-v2: the hero "assurances" 3-up became a dedicated
+        # three-column "trust statements" section (exactly 3 columns), and the
+        # legacy chips/lede blocks stay gone.
         html = _html()
-        self.assertIn('class="assurances"', html)
-        self.assertEqual(html.count('class="assure"'), 3)
+        self.assertIn('class="trust-statements"', html)
+        self.assertEqual(html.count('class="trust-col"'), 3)
         self.assertNotIn('class="lede"', html)
         self.assertNotIn('class="chips"', html)
 

@@ -88,10 +88,8 @@
   .lockup-seal{
     width:150px;height:auto;flex-shrink:0;display:block;
     background:transparent;
-    /* Very soft warm drop-shadow so the seal feels engraved on the
-       paper, not pasted on. No hard rectangle frame. */
-    filter:drop-shadow(0 6px 18px rgba(60,40,20,0.10))
-           drop-shadow(0 2px 4px rgba(60,40,20,0.06));
+    /* Flat: no drop-shadow, no box behind the seal (founder directive).
+       The transparent seal sits directly on the cream paper. */
   }
   .lockup-text{display:flex;flex-direction:column;align-items:center;}
   .lockup-wordmark{
@@ -420,7 +418,7 @@
     /* Sticky nav: keep brand + CTA visible, drop tertiary links */
     header.nav .row{height:54px;}
     header.nav .brand{font-size:15px;letter-spacing:0.18em;}
-    header.nav nav a:not(.cta):not([href="#tiers"]):not([href="/learn.html"]){display:none;}
+    header.nav nav a:not(.cta):not(.live-status-badge){display:none;}
     header.nav .cta{padding:8px 14px;font-size:12.5px;}
     /* Hero text only — masthead handled by its own block above */
     .hero{padding:24px 0 32px;}
@@ -1030,8 +1028,8 @@ section.band, section.tz, section.clauses, .action, .ledger-section, .sample-rec
    (header + jump-nav). --stick-offset is measured live by jumpnav.js; the
    calc() fallback keeps it correct with JS disabled. Scoped by id so it beats
    the global :target{scroll-margin-top:84px} on specificity. */
-#how, #proof, #verify, #who, #tiers, #drop{
-  scroll-margin-top: var(--stick-offset, calc(var(--header-h) + var(--jump-h) + 14px));
+#how, #proof, #drop{
+  scroll-margin-top: var(--stick-offset, calc(var(--header-h) + 14px));
 }
 
 /* Repeated primary CTA blocks (hero / mid-page / footer) — same #drop action,
@@ -1060,3 +1058,58 @@ section.band, section.tz, section.clauses, .action, .ledger-section, .sample-rec
   .jumpnav .jump-cta{ display:none; }
   .jumpnav-links{ width:100%; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   HOMEPAGE LEAN v2 (2026-07-23) — new components for the 8-section rebuild.
+   Cream tokens only; original Orphograph-native styling. No inline CSS
+   (strict style-src 'self'). ══════════════════════════════════════════ */
+
+/* Header — the standalone "Verify receipt" link reads as an action, not a
+   tab; a hairline underline sets it apart without becoming a second CTA. */
+header.nav nav a.nav-verify{color:var(--ink-2);border-bottom:1px solid var(--line);border-radius:0;padding:8px 6px;margin:0 4px;}
+header.nav nav a.nav-verify:hover{background:transparent;color:var(--ink);border-bottom-color:var(--accent-warm);}
+
+/* Hero — two-button row: dominant [Anchor a file] + ghost [Verify a receipt]. */
+.hero-cta{display:flex;justify-content:center;align-items:center;gap:12px;flex-wrap:wrap;margin:26px 0 14px;}
+.hero-cta .cta.cta-ghost{
+  background:transparent;color:var(--ink);
+  border:1px solid var(--ink);box-shadow:none;
+}
+.hero-cta .cta.cta-ghost:hover{background:var(--ink);color:var(--paper-soft);box-shadow:var(--shadow-1);}
+
+/* Instrument — the drop widget stands alone (procedure moved to /method). */
+.action-card--solo{grid-template-columns:1fr;max-width:640px;margin:0 auto;}
+.instrument-title{font-family:var(--serif);font-size:26px;font-weight:500;margin:0 0 6px;line-height:1.2;color:var(--ink);letter-spacing:-0.01em;text-align:center;}
+.instrument-sub{margin:0 0 20px;color:var(--muted);font-size:14.5px;text-align:center;}
+
+/* Three trust statements — narrow 3-up on desktop, stacked on mobile. */
+.trust-statements{padding:8px 0 8px;}
+.trust-cols{display:grid;grid-template-columns:repeat(3,1fr);gap:30px;max-width:900px;margin:0 auto;}
+.trust-col h3{font-family:var(--serif);font-size:16px;font-weight:500;color:var(--ink);margin:0 0 7px;letter-spacing:0.01em;padding-top:16px;border-top:1px solid var(--line);}
+.trust-col p{font-size:13.5px;color:var(--muted);line-height:1.55;margin:0;}
+@media (max-width:760px){.trust-cols{grid-template-columns:1fr;gap:14px;max-width:440px;}}
+
+/* Live receipt card — flat seal (no shadow, no box), compact status line. */
+.sample-receipt-card .receipt-seal{width:56px;height:auto;display:block;margin:0 auto 14px;background:transparent;}
+.sample-receipt-card .receipt-status{font-family:var(--mono);font-size:13px;color:var(--ink-2);margin:0 0 22px;letter-spacing:0.01em;}
+
+/* Four gateway cards — link to existing pages; 2 sentences each. */
+.gateways{padding:8px 0 8px;}
+.gateway-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:20px;}
+.gateway{
+  display:flex;flex-direction:column;
+  background:var(--paper-soft);border:1px solid var(--line-soft);border-radius:var(--radius-sm);
+  padding:26px 24px;box-shadow:var(--shadow-1);border-bottom:1px solid var(--line-soft);
+  transition:transform .25s cubic-bezier(.2,.8,.2,1), box-shadow .25s ease, border-color .25s ease;
+  color:var(--ink);
+}
+.gateway:hover{transform:translateY(-3px);box-shadow:var(--shadow-2);border-color:var(--line);color:var(--ink);}
+.gateway h3{font-family:var(--serif);font-size:20px;font-weight:500;margin:0 0 10px;color:var(--ink);line-height:1.3;}
+.gateway p{font-size:14px;color:var(--muted);margin:0 0 16px;line-height:1.6;flex:1;}
+.gateway .gateway-link{font-family:var(--serif);font-size:13.5px;color:var(--accent);letter-spacing:0.01em;}
+.gateway:hover .gateway-link{color:var(--ink);}
+@media (max-width:980px){.gateway-grid{grid-template-columns:repeat(2,1fr);}}
+@media (max-width:520px){.gateway-grid{grid-template-columns:1fr;}}
+
+/* Section rhythm for the new lean sections. */
+.trust-statements, .gateways{padding-top:var(--section-y);padding-bottom:0;}

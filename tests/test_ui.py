@@ -89,13 +89,16 @@ class _IdCollector(HTMLParser):
 REQUIRED_IDS = {
     # Institutional homepage (v0.1+) IDs that v2.js depends on.
     # If you rename or remove any of these in web/index.html, the
-    # drop zone, status panel, or live ledger strip will silently
-    # stop working — keep this set in sync with v2.js's getElementById
-    # calls.
+    # drop zone or status panel will silently stop working — keep this
+    # set in sync with v2.js's getElementById calls.
+    #
+    # Homepage-lean-v2 (2026-07-23): the live-ledger strip (c-anchors /
+    # c-blocks) and the timezone block (latest-tz-block) were removed from
+    # the lean homepage. v2.js already guards every one of those lookups
+    # (`&& $("c-anchors")`, `if (tz)`), so their absence is a no-op; the
+    # drop-zone / status IDs below remain load-bearing.
     "drop", "drop-input", "drop-btn",
     "status",
-    "c-anchors", "c-blocks",
-    "latest-tz-block",
 }
 
 
