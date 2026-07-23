@@ -1,0 +1,57 @@
+/* pack.css — /pack access surface. External per CSP (style-src 'self'). */
+.pk-wrap { max-width: 660px; margin: 0 auto; padding: 0 24px 72px; }
+.pk-eyebrow { font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); margin: 48px 0 8px; }
+.pk-wrap h1 { font-family: var(--serif); font-size: 34px; font-weight: 500; margin: 0 0 8px; }
+.pk-lede { font-size: 16px; color: var(--ink-2); line-height: 1.7; margin: 0 0 28px; }
+
+/* shared form shell (code entry + recovery) */
+.pk-form { background: rgba(58,106,76,0.04); border: 1px solid var(--line-soft); border-radius: 8px; padding: 24px; }
+.pk-form label { display: block; font-size: 13px; color: var(--muted-2); letter-spacing: 0.04em; text-transform: uppercase; margin-bottom: 6px; }
+.pk-form input { width: 100%; padding: 11px 14px; border: 1px solid var(--line-soft); border-radius: 4px; font: inherit; font-size: 15px; background: var(--paper-soft); color: var(--ink); box-sizing: border-box; }
+.pk-form input:focus { outline: none; border-color: var(--confirm); }
+.pk-form .hint { font-size: 12.5px; color: var(--muted); margin: 8px 0 0; font-style: italic; }
+.pk-form .submit { margin-top: 20px; padding: 12px 26px; background: #1a1a1a; color: var(--paper-soft); border: 0; border-radius: 4px; font-family: var(--serif); font-size: 15px; letter-spacing: 0.03em; cursor: pointer; }
+.pk-form .submit:hover { background: #000; }
+.pk-form .submit:disabled { opacity: 0.6; cursor: progress; }
+
+/* status readouts */
+#pk-balance, #pk-recover-result, #pk-anchor-status {
+  margin-top: 18px; padding: 14px 16px; border-radius: 4px; font-size: 14.5px; line-height: 1.6; display: none;
+}
+#pk-balance.ok, #pk-recover-result.ok { background: rgba(58,106,76,0.10); border-left: 3px solid var(--confirm); color: var(--ink); }
+#pk-balance.err, #pk-recover-result.err, #pk-anchor-status.err { background: rgba(160,58,44,0.10); border-left: 3px solid #a03a2c; color: var(--ink); }
+#pk-balance.wait, #pk-recover-result.wait, #pk-anchor-status.wait { background: rgba(184,131,90,0.12); border-left: 3px solid var(--accent-warm); color: var(--ink); }
+#pk-anchor-status.wait, #pk-anchor-status { font-family: var(--mono); font-size: 13px; }
+
+/* anchor-against-pack block */
+.pk-anchor { margin-top: 40px; }
+.pk-anchor h2, .pk-recover h2 { font-family: var(--serif); font-size: 22px; font-weight: 500; margin: 0 0 6px; }
+.pk-anchor-note, .pk-recover-note { font-size: 14px; color: var(--muted); line-height: 1.65; margin: 0 0 16px; }
+.pk-drop { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center;
+  padding: 34px 20px; border: 1.5px dashed var(--line); border-radius: 10px; background: var(--paper-soft);
+  color: var(--ink-2); cursor: pointer; transition: border-color .15s ease, background .15s ease; }
+.pk-drop:hover, .pk-drop:focus { outline: none; border-color: var(--accent-warm); background: rgba(184,131,90,0.05); }
+.pk-drop.drag { border-color: var(--confirm); background: rgba(58,106,76,0.06); }
+.pk-drop-icon { width: 30px; height: 30px; color: var(--accent-warm); }
+.pk-drop-title { font-family: var(--serif); font-size: 16px; color: var(--ink); }
+.pk-drop-hint { font-size: 12.5px; color: var(--muted); }
+
+/* receipt */
+.pk-receipt { margin-top: 20px; padding: 20px 22px; border: 1px solid var(--line-soft); border-radius: 8px; background: var(--paper-card); }
+.pk-receipt-title { font-family: var(--serif); font-size: 17px; color: var(--confirm); margin: 0 0 12px; }
+.pk-receipt-meta { margin: 0; }
+.pk-receipt-meta > div { display: flex; gap: 14px; padding: 5px 0; border-bottom: 1px solid var(--line-soft); }
+.pk-receipt-meta dt { flex: none; width: 76px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted-2); }
+.pk-receipt-meta dd { margin: 0; font-size: 13.5px; color: var(--ink); word-break: break-all; }
+.pk-receipt-meta dd.mono, .mono { font-family: var(--mono); font-size: 12.5px; }
+.pk-r-link { display: inline-block; margin-top: 14px; font-family: var(--serif); font-size: 15px; }
+
+/* recovery + faq */
+.pk-recover { margin-top: 48px; padding-top: 40px; border-top: 1px solid var(--line-soft); }
+.pk-faq { margin-top: 44px; font-size: 14.5px; color: var(--ink-2); line-height: 1.7; }
+.pk-faq h3 { font-family: var(--serif); font-size: 17px; font-weight: 500; color: var(--ink); margin: 24px 0 4px; }
+
+/* footer (mirrors recover.css) */
+.footer-inner { text-align: center; color: var(--muted); font-size: 13px; padding: 32px 0; }
+.footer-links { margin-top: 8px; }
+.footer-link { color: var(--muted); }

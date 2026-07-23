@@ -14,6 +14,7 @@ Public API:
     consume_credit(claim_code) -> tuple[bool, int]  # (allowed, remaining)
     balance(claim_code) -> int
     new_claim_code() -> str
+    find_claim_codes_by_email(email) -> list[str]  # read-only recovery lookup
     revoke_credits_by_source(source_substring, revoke_source) -> list[dict]
 """
 from __future__ import annotations
@@ -154,6 +155,43 @@ def find_claim_code_by_source(source_substring: str) -> dict | None:
         "ts": latest.get("ts"),
         "credits_delta": int(latest.get("credits_delta", 0)),
     }
+
+
+def find_claim_codes_by_email(email: str) -> list[str]:
+    """Return the distinct claim_codes ever minted against `email`, in
+    first-seen order.
+
+    Used by the /api/pack/recover endpoint so a customer who lost their
+    claim instrument can have it re-sent to the address they bought with.
+    Read-only: it never mutates the ledger and never mints a code.
+
+    Only mint rows carry a non-empty `email` (consume/refund/revoke rows
+    write email=""), so a case-insensitive exact match on the address
+    naturally selects the original purchase rows. Append-only means the
+    same code can appear on several rows; we dedupe, preserving order.
+    """
+    if not email:
+        return []
+    needle = email.strip().lower()
+    if not needle or not LEDGER_PATH.exists():
+        return []
+    seen: dict[str, None] = {}
+    with _lock:
+        with LEDGER_PATH.open() as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    row = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                row_email = (row.get("email") or "").strip().lower()
+                if row_email and row_email == needle:
+                    code = row.get("claim_code")
+                    if code and code not in seen:
+                        seen[code] = None
+    return list(seen.keys())
 
 
 def revoke_credits_by_source(source_substring: str, revoke_source: str) -> list[dict]:
