@@ -35,3 +35,43 @@
   text-decoration: none;
 }
 .cta-secondary { opacity: 0.85; }
+
+/* Standalone mid-page CTA — a single primary button at a section break,
+   so a scroller reaches an action without hunting for the box. */
+.cta-inline { margin: 28px 0; }
+
+/* Closing CTA box after the FAQ — same visual language as .cta-box,
+   set off with a little more breathing room as the page's final call. */
+.cta-box-close { margin-top: 44px; }
+
+/* Mobile-only persistent CTA bar. Desktop keeps the inline CTAs, which
+   suffice at wider widths; on phones the button stays within reach at the
+   bottom of the viewport. Non-obtrusive: a slim bar, and body gains
+   padding so it never covers the footer. left/right:0 + border-box keeps
+   it from ever exceeding the viewport width (no horizontal overflow). */
+.lp-sticky-cta { display: none; }
+@media (max-width: 640px) {
+  .lp-sticky-cta {
+    display: block;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 50;
+    box-sizing: border-box;
+    padding: 10px 14px;
+    background: var(--panel);
+    border-top: 1px solid var(--panel-stroke);
+  }
+  .lp-sticky-cta .cta-btn {
+    display: block;
+    box-sizing: border-box;
+    width: 100%;
+    margin: 0;
+    text-align: center;
+    background: var(--accent);
+    color: var(--bg);
+  }
+  /* Keep the fixed bar from obscuring the footer / last content. */
+  body { padding-bottom: 76px; }
+}
