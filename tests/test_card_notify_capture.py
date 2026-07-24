@@ -128,7 +128,8 @@ class TestStaticMarkup(unittest.TestCase):
         self.assertIn("/index.css?v=19", index)
         pricing = (ROOT / "web" / "pricing.html").read_text()
         self.assertIn("/checkout-cta.js?v=4", pricing)
-        self.assertIn("/index.css?v=19", pricing)
+        # pricing bumped to v=20 for the ribbon-overlap fix.
+        self.assertIn("/index.css?v=20", pricing)
         v2 = (ROOT / "web" / "v2" / "index.html").read_text()
         self.assertIn("/checkout-cta.js?v=4", v2)
         self.assertIn("/v2/style.css?v=8", v2)
