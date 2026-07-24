@@ -487,6 +487,7 @@ def _build_sitemap() -> str:
         ("/roadmap", "0.4"),
         ("/changelog", "0.4"),
         ("/account", "0.4"),
+        ("/access", "0.6"),
         ("/pack", "0.6"),
         ("/construction/", "0.4"),
         ("/inspection/", "0.4"),

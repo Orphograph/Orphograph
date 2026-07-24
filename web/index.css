@@ -1068,6 +1068,9 @@ section.band, section.tz, section.clauses, .action, .ledger-section, .sample-rec
    tab; a hairline underline sets it apart without becoming a second CTA. */
 header.nav nav a.nav-verify{color:var(--ink-2);border-bottom:1px solid var(--line);border-radius:0;padding:8px 6px;margin:0 4px;}
 header.nav nav a.nav-verify:hover{background:transparent;color:var(--ink);border-bottom-color:var(--accent-warm);}
+/* Sign in — subordinate text link to the /access hub (not a second CTA). */
+header.nav nav a.nav-signin{color:var(--ink-2);}
+header.nav nav a.nav-signin[aria-current="page"]{color:var(--ink);}
 
 /* Hero — two-button row: dominant [Anchor a file] + ghost [Verify a receipt]. */
 .hero-cta{display:flex;justify-content:center;align-items:center;gap:12px;flex-wrap:wrap;margin:26px 0 14px;}

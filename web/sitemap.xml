@@ -236,6 +236,11 @@
     <priority>0.4</priority>
   </url>
   <url>
+    <loc>https://orphograph.com/access</loc>
+    <lastmod>2026-07-23</lastmod>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://orphograph.com/pack</loc>
     <lastmod>2026-07-23</lastmod>
     <priority>0.6</priority>
