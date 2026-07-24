@@ -251,6 +251,9 @@
   .tier:hover{transform:translateY(-3px);box-shadow:var(--shadow-2);}
   .tier.featured{background:linear-gradient(180deg, #fffaef 0%, var(--paper-soft) 100%);box-shadow:var(--shadow-2);transform:scale(1.02);border:1px solid var(--accent-warm);}
   .tier .ribbon{position:absolute;top:14px;right:14px;font-size:10px;letter-spacing:0.22em;text-transform:uppercase;background:var(--accent);color:var(--paper-soft);padding:4px 10px;border-radius:999px;}
+  /* Reserve space so the absolute ribbon never overlaps the tier name. */
+  .tier:has(.ribbon){padding-top:50px;}
+  .tier:has(.ribbon) .t-name{padding-right:96px;}
   .tier .t-name{font-size:12px;letter-spacing:0.24em;text-transform:uppercase;color:var(--muted-2);font-weight:500;}
   .tier .t-price{font-family:var(--serif);font-size:46px;font-weight:500;color:var(--ink);margin:10px 0 4px;line-height:1;}
   .tier .t-price small{font-size:14px;color:var(--muted);font-family:var(--sans);}
