@@ -264,6 +264,29 @@ def test_blog_pages_no_inline_styles(html_path: Path) -> None:
     assert 'style="' not in body, f"{html_path.name} has inline style= attributes"
 
 
+# The pay pages are the money surface: under style-src 'self' an inline style
+# renders the checkout unstyled, which reads as a broken payment page. #121
+# cleaned web/pay/ but could not add a guard (this file was owned by #122 at
+# the time). Every page in the directory — btc, crypto and success — was
+# re-checked as clean, so the whole directory is pinned by glob, matching the
+# lp/ and blog/ pattern above: a new pay page with inline styles fails here on
+# arrival instead of shipping broken.
+CSP_CLEAN_PAY = sorted((WEB / "pay").glob("*.html"))
+
+
+def test_pay_dir_has_pages() -> None:
+    """Guard the glob above: an empty list would silently skip enforcement."""
+    assert len(CSP_CLEAN_PAY) >= 3, "web/pay/*.html glob came back near-empty"
+
+
+@pytest.mark.parametrize("html_path", CSP_CLEAN_PAY, ids=lambda p: p.name)
+def test_pay_pages_no_inline_styles(html_path: Path) -> None:
+    """CSP-clean pay pages must not regress to inline styles."""
+    body = html_path.read_text(encoding="utf-8")
+    assert "<style" not in body, f"{html_path.name} has an inline <style> block"
+    assert 'style="' not in body, f"{html_path.name} has inline style= attributes"
+
+
 # CSP is script-src 'self': an inline <script> block is silently discarded
 # by the browser, so any page whose behaviour depends on one is dead in
 # production. /recover is the payment-recovery surface (its form handler was
@@ -277,7 +300,21 @@ def test_blog_pages_no_inline_styles(html_path: Path) -> None:
 # not subject to script-src, so structured data (FAQPage markup on the blog,
 # /lp/, index.html, faq.html, dataset-provenance.html, and the question list
 # on /recover) stays legal and is excluded below.
-CSP_CLEAN_SCRIPT = ["recover.html", "verify-js.html"]
+# The seven paths below were externalized by fix/inline-script-sweep (#119)
+# and fix/pay-pages-csp (#121) but landed while this file was owned by #122,
+# so they shipped clean and unguarded. Each was re-checked as clean before
+# being listed here, per the rule in the paragraph above.
+CSP_CLEAN_SCRIPT = [
+    "recover.html",
+    "verify-js.html",
+    "team/join.html",
+    "founder/admin.html",
+    "founder/funnel.html",
+    "founder/metrics.html",
+    "founder/support.html",
+    "pay/btc.html",
+    "pay/crypto.html",
+]
 
 _INLINE_SCRIPT_RE = re.compile(r"<script(?![^>]*\ssrc=)[^>]*>", re.IGNORECASE)
 

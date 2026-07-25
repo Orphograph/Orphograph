@@ -209,7 +209,35 @@
     }
   });
 
-  // Optional fetch by receipt_id
+  // Optional fetch by receipt_id.
+  //
+  // Endpoint resolution. Served over http(s), the verifier must query the
+  // origin that served it: an absolute host baked into the script makes a
+  // staging, mirror, localhost or self-hosted copy silently query production.
+  // A saved file:// copy has no origin to be relative to — "/api/verify/<id>"
+  // there resolves to file:///api/verify/<id>, which is not a degraded request
+  // but a nonsense URL the fetch layer rejects outright, so a bare relative URL
+  // would make the saved-copy experience worse, not better. That case names the
+  // public office explicitly and says so on screen before the request leaves.
+  //
+  // Nothing else on this page touches the network: the file is hashed locally
+  // and compared to the receipt locally. This fetch is the single optional
+  // convenience and it runs only on an explicit button press.
+  var PUBLIC_OFFICE = "https://orphograph.com";
+  var FETCH_TIMEOUT_MS = 15000;
+
+  function resolveVerifyEndpoint(id) {
+    var path = "/api/verify/" + encodeURIComponent(id);
+    var proto = (window.location && window.location.protocol) || "";
+    if (proto === "http:" || proto === "https:") {
+      return { url: path, note: "Fetching..." };
+    }
+    return {
+      url: PUBLIC_OFFICE + path,
+      note: "This saved copy has no origin of its own; querying the public office at orphograph.com."
+    };
+  }
+
   fetchBtn.addEventListener("click", function () {
     var id = (fetchId.value || "").trim();
     if (!id) {
@@ -220,15 +248,31 @@
       setText(fetchStatus, "Receipt id has an unexpected shape; fetch was not attempted.");
       return;
     }
-    setText(fetchStatus, "Fetching...");
+    var endpoint = resolveVerifyEndpoint(id);
+    setText(fetchStatus, endpoint.note);
+    if (typeof fetch !== "function") {
+      setText(fetchStatus, "This browser cannot fetch. Paste the receipt JSON above; verification itself runs locally and needs no network.");
+      return;
+    }
     try {
-      var url = "https://orphograph.com/api/verify/" + encodeURIComponent(id);
-      fetch(url, { method: "GET", credentials: "omit", cache: "no-store" })
+      // No request may hang: without a deadline a stalled connection leaves
+      // the status line reading "Fetching..." forever, which is exactly the
+      // silent failure this surface must not produce.
+      var opts = { method: "GET", credentials: "omit", cache: "no-store" };
+      var timer = null;
+      if (typeof AbortController === "function") {
+        var ctrl = new AbortController();
+        opts.signal = ctrl.signal;
+        timer = setTimeout(function () { ctrl.abort(); }, FETCH_TIMEOUT_MS);
+      }
+      var clearTimer = function () { if (timer !== null) { clearTimeout(timer); timer = null; } };
+      fetch(endpoint.url, opts)
         .then(function (r) {
           if (!r.ok) throw new Error("HTTP " + r.status);
           return r.text();
         })
         .then(function (txt) {
+          clearTimer();
           var obj = parseReceiptText(txt);
           if (!obj) throw new Error("Response was not JSON.");
           receiptPaste.value = txt;
@@ -236,10 +280,14 @@
           setText(fetchStatus, "Fetched.");
         })
         .catch(function (err) {
-          setText(fetchStatus, "Fetch did not succeed: " + (err && err.message ? err.message : String(err)));
+          clearTimer();
+          var why = err && err.name === "AbortError"
+            ? "no response within " + (FETCH_TIMEOUT_MS / 1000) + " seconds"
+            : (err && err.message ? err.message : String(err));
+          setText(fetchStatus, "The receipt could not be fetched (" + why + "). Paste the receipt JSON above instead; verification itself runs locally and needs no network.");
         });
     } catch (err) {
-      setText(fetchStatus, "Fetch was not attempted in this environment.");
+      setText(fetchStatus, "The receipt could not be fetched in this environment. Paste the receipt JSON above instead; verification itself runs locally and needs no network.");
     }
   });
 
