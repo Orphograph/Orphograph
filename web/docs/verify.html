@@ -48,7 +48,7 @@
   <section>
     <h2>1 · Browser verifier</h2>
     <div class="arch-rule"></div>
-    <p>The simplest path, and the one that requires no installation. Paste the receipt identifier into the verifier at <a href="/verify-js">/verify-js.html</a>; the page hashes the file you select locally, walks the OpenTimestamps proof in JavaScript, and reports the result. No call to the office is made by the verifier — the page is a single HTML file with embedded JavaScript that can be saved to disk and used offline thereafter.</p>
+    <p>The simplest path, and the one that requires no installation. Paste the receipt identifier into the verifier at <a href="/verify-js">/verify-js.html</a>; the page hashes the file you select locally, walks the OpenTimestamps proof in JavaScript, and reports the result. No call to the office is made by the verifier — the page and its verifier script can be saved to disk with the browser's complete-page option and used offline thereafter.</p>
 <pre><code>1. open /verify-js.html
 2. paste the receipt id (16 hex chars)
 3. select the original file
@@ -142,7 +142,7 @@ Confirmed. Bitcoin block 949114 attests existence as of
       <li><a href="/docs/quickstart">A five-minute walkthrough for first-time visitors</a></li>
       <li><a href="/method/folder-merkle">Folder anchoring by Merkle root</a></li>
       <li><a href="/method/evidence-law">Why a Bitcoin-anchored hash matters</a></li>
-      <li><a href="/verify-js">Standalone independent verifier (single HTML file)</a></li>
+      <li><a href="/verify-js">Standalone independent verifier (in the browser)</a></li>
       <li><a href="https://opentimestamps.org/">opentimestamps.org</a></li>
       <li><a href="https://datatracker.ietf.org/doc/html/rfc6962">RFC 6962 — Certificate Transparency</a></li>
     </ul>

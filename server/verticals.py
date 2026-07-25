@@ -137,7 +137,7 @@ _PAGE_TEMPLATE = """<!DOCTYPE html>
       <li><a href="/method/folder-merkle.html">Folder anchoring by Merkle root</a></li>
       <li><a href="/method/architecture.html">Architecture of the protocol</a></li>
       <li><a href="/faq.html">Frequently asked</a></li>
-      <li><a href="/verify-js.html">Standalone independent verifier (single HTML file)</a></li>
+      <li><a href="/verify-js.html">Standalone independent verifier (in the browser)</a></li>
     </ul>
   </section>
 
