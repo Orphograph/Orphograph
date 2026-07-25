@@ -65,3 +65,14 @@
   .footer-bar { display: flex; justify-content: space-between; align-items: center; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--line-soft, #e9e1cb); color: var(--muted, #6b6354); font-size: 0.8rem; }
   .refresh-btn { padding: 0.4rem 0.9rem; background: var(--ink, #14110d); border: none; border-radius: 4px; color: var(--paper-soft, #fbf7ea); cursor: pointer; font-size: 0.85rem; font-family: var(--serif, Georgia, serif); letter-spacing: 0.02em; }
   .refresh-btn:hover { background: var(--ink-2, #2c2620); }
+
+  /* ── extracted from admin.html style= attributes (strict CSP:
+     style-src 'self' blocks inline style attributes). Values verbatim.
+     #loading / #admin-content keep their initial display:none here; the
+     script still toggles them via element.style, which overrides this. */
+  #loading { display: none; }
+  #admin-content { display: none; }
+  .banner-actions { margin-left: auto; }
+  #version-val { font-size: 1.1rem; font-family: monospace; }
+  #btc-val { font-size: 1.1rem; }
+  #anchors-by-source { margin-top: 0.5rem; }
