@@ -118,6 +118,33 @@ def test_resolved_ipv6_truncates_to_slash_48():
     assert src == "cf"
 
 
+def test_compressed_ipv6_yields_a_stable_if_ugly_slash_48_label():
+    """Documents existing `truncate_ip` behaviour, newly exercised by this fix.
+
+    Cloudflare sends RFC 5952 compressed IPv6. `truncate_ip` is string-based,
+    so a compressed run can leave an empty group and produce a malformed-
+    looking label ("2001:db8:::/48"). This is COSMETIC, not count-affecting:
+    the mapping is deterministic, so one address always lands in one bucket,
+    and two addresses only collide when their third group is genuinely zero
+    in both — i.e. when they really do share a /48.
+
+    Deliberately NOT fixed here: `truncate_ip` is the shared rate-limit helper
+    and is pinned by tests/test_security_hardening.py. Changing it belongs in
+    its own PR, outside the analytics path.
+    """
+    # Realistic Cloudflare visitor addresses truncate cleanly.
+    ip, _ = app._resolve_analytics_ip("2606:4700:3031::ac43:cfd5", "", "", True)
+    assert truncate_ip(ip) == "2606:4700:3031::/48"
+
+    # Degenerate short form: ugly label, but stable and correctly grouped.
+    assert truncate_ip("2001:db8::1") == "2001:db8:::/48"
+    assert truncate_ip("2001:db8::2") == truncate_ip("2001:db8::1")   # same /48, truly
+    assert truncate_ip("2001:db8:1::1") != truncate_ip("2001:db8::1")  # different /48
+
+    # Whatever the label looks like, no full address survives.
+    assert "db8::1" not in truncate_ip("2001:db8::1").replace("2001:db8:::/48", "")
+
+
 def test_truncated_output_never_contains_the_host_octet():
     for host in ("1", "7", "254"):
         ip, _ = app._resolve_analytics_ip(f"203.0.113.{host}", "", "", True)
@@ -248,10 +275,22 @@ def _rows_for(data_dir: Path, page: str) -> list[dict]:
     return out
 
 
-def test_logged_row_uses_cf_header_and_labels_the_source(live_server):
+@pytest.mark.parametrize("tag,spelling", [
+    ("canonical", "CF-Connecting-IP"),   # canonical
+    ("lower", "cf-connecting-ip"),       # HTTP/2 lowercases header names on the wire
+    ("mixed", "Cf-Connecting-Ip"),
+])
+def test_logged_row_uses_cf_header_and_labels_the_source(live_server, tag, spelling):
+    """Header lookup must be case-insensitive.
+
+    If it were not, the fix would be a silent no-op in production — Cloudflare
+    talks HTTP/2 to the origin, which lowercases header names. The failure
+    would surface as ip_src="socket" on every row, i.e. the defect unchanged.
+    """
     base, data_dir = live_server
-    assert _post_event(base, "/e2e-cf", {"CF-Connecting-IP": "203.0.113.7"}) == 204
-    rows = _rows_for(data_dir, "/e2e-cf")
+    page = f"/e2e-cf-{tag}"
+    assert _post_event(base, page, {spelling: "203.0.113.7"}) == 204
+    rows = _rows_for(data_dir, page)
     assert len(rows) == 1
     assert rows[0]["ip_trunc"] == "203.0.113.0/24"   # NOT 127.0.0.0/24
     assert rows[0]["ip_src"] == "cf"
