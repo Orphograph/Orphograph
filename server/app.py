@@ -106,6 +106,52 @@ TRUST_PROXY_HEADERS = os.environ.get("ORPHO_TRUST_PROXY_HEADERS", "0") == "1"
 # Used in preference to XFF for rate-limit bucketing so the limiter can't be
 # bypassed by rotating a client-supplied XFF value.
 REAL_IP_HEADER = os.environ.get("ORPHO_REAL_IP_HEADER", "Fly-Client-IP")
+# CDN-set real-client-IP header. Cloudflare sets `CF-Connecting-IP` to the true
+# visitor IP at ITS edge. This matters because the site is fronted by
+# Cloudflare: the connection Fly.io sees originates from a Cloudflare egress
+# node, so BOTH the socket peer AND `Fly-Client-IP` are Cloudflare-owned
+# addresses, not the visitor's. Cloudflare rotates egress per request, so one
+# visitor's successive events land in several different /24s. Used for the
+# funnel-analytics ip_trunc field only — see `_resolve_analytics_ip`.
+CDN_CLIENT_IP_HEADER = os.environ.get("ORPHO_CDN_CLIENT_IP_HEADER", "CF-Connecting-IP")
+
+
+def _resolve_analytics_ip(cdn_ip_value: str, xff_value: str, peer_addr: str,
+                          trust_proxy: bool) -> tuple[str, str]:
+    """Pick the visitor IP for funnel analytics. Pure (no I/O) for testing.
+
+    Returns (ip, source) where source is one of "cf" | "xff" | "socket" so
+    every logged row self-declares where its address came from. Precedence:
+
+      1. CF-Connecting-IP  — Cloudflare's true-visitor header ("cf")
+      2. first (leftmost) X-Forwarded-For entry — the original client as
+         recorded by the first proxy in the chain ("xff")
+      3. the socket peer address — last resort ("socket")
+
+    Deliberately DIFFERENT from `_resolve_peer_ip`, which serves rate-limit
+    bucketing and therefore takes the RIGHTMOST XFF entry (the leftmost token
+    is client-supplied and rotating it would mint unlimited fresh limiter
+    buckets). Analytics wants the most accurate available *identity* rather
+    than the least forgeable one, so it reads leftmost. The tradeoff is
+    accepted knowingly: these values are advisory counts, never an
+    authorization or throttling input.
+
+    The `trust_proxy` gate is inherited from `_resolve_peer_ip` — with no
+    trusted proxy in front, client-supplied headers are ignored entirely and
+    the row records ("socket"). Production sets ORPHO_TRUST_PROXY_HEADERS=1.
+
+    Caller truncates; this function never returns a truncated value.
+    """
+    peer = peer_addr or ""
+    if not trust_proxy:
+        return peer, "socket"
+    cdn = (cdn_ip_value or "").strip()
+    if cdn:
+        return cdn, "cf"
+    parts = [p.strip() for p in (xff_value or "").split(",") if p.strip()]
+    if parts:
+        return parts[0], "xff"
+    return peer, "socket"
 
 
 def _resolve_peer_ip(real_ip_value: str, xff_value: str, peer_addr: str,
@@ -814,6 +860,25 @@ class Handler(BaseHTTPRequestHandler):
             TRUST_PROXY_HEADERS,
         )
         return truncate_ip(chosen)
+
+    def _analytics_ip(self) -> tuple[str, str]:
+        """(/24-or-/48 truncated visitor IP, source label) for funnel rows.
+
+        Separate from `_client_key` on purpose: that one buckets rate limits
+        and must prefer the least-forgeable value; this one measures distinct
+        visitors and must prefer the most accurate one. See
+        `_resolve_analytics_ip`. Truncation is identical (`truncate_ip`), so
+        the privacy posture is unchanged — a /24 for IPv4, /48 for IPv6, never
+        a full address.
+        """
+        peer = self.client_address[0] if self.client_address else ""
+        chosen, source = _resolve_analytics_ip(
+            self.headers.get(CDN_CLIENT_IP_HEADER, ""),
+            self.headers.get("X-Forwarded-For", ""),
+            peer,
+            TRUST_PROXY_HEADERS,
+        )
+        return truncate_ip(chosen), source
 
     def _founder_authorized(self) -> bool:
         """Shared gate for every /api/founder/* endpoint.
@@ -2410,6 +2475,17 @@ class Handler(BaseHTTPRequestHandler):
         IPs, no user-agent, no referer recorded — only the truncated IP
         prefix (/24 for v4, /48 for v6) for abuse-detection bucketing.
 
+        Stored row shape (authoritative): {ts, event, page, ip_trunc, ip_src}.
+
+        `ip_trunc` is derived from the real VISITOR address via
+        `_resolve_analytics_ip` (CF-Connecting-IP → first X-Forwarded-For
+        entry → socket peer), then truncated. Before 2026-07-25 it was the
+        socket/Fly-edge address, which behind Cloudflare is a Cloudflare
+        egress IP that rotates per request — inflating distinct-IP counts.
+        `ip_src` ("cf" | "xff" | "socket") records which source was used, so
+        pre-fix rows (no ip_src) are never silently mixed with post-fix rows
+        when the funnel is read. Existing lines are left exactly as written.
+
         Returns 204 No Content on success (success is silent so beacon
         clients don't waste bandwidth on a body they won't read).
         """
@@ -2455,11 +2531,16 @@ class Handler(BaseHTTPRequestHandler):
         # which is well under this cap. We do NOT coerce the value — it's
         # written verbatim so the funnel report can show real paths.
         page = page[:MAX_EVENT_PAGE_LEN]
+        # NOT client_key: that is the rate-limit bucket (Fly-edge address,
+        # i.e. Cloudflare behind the CDN). The recorded row wants the real
+        # visitor, truncated the same way.
+        ip_trunc, ip_src = self._analytics_ip()
         row = {
             "ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "event": event,
             "page": page,
-            "ip_trunc": client_key,
+            "ip_trunc": ip_trunc,
+            "ip_src": ip_src,
         }
         try:
             FUNNEL_EVENTS_PATH.parent.mkdir(parents=True, exist_ok=True)
