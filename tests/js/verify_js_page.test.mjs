@@ -1,6 +1,7 @@
 /*!
  * verify_js_page.test.mjs — conformance tests for the /verify-js page's
- * inline verifier, executed exactly as shipped (via the DOM-stub harness).
+ * verifier script (web/verify-js.js), executed exactly as shipped (via the
+ * DOM-stub harness).
  *
  * Canon (server/engine.py verify_hash_against_receipt, VERIFIER_SPEC §3.2):
  * the stored receipt hash is compared VERBATIM; only the locally computed
@@ -15,7 +16,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { runPageVerify, sha256Hex, sha512Hex } from "./verify_js_page_harness.mjs";
 
-const PAGE = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "web", "verify-js.html");
+const PAGE = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "web", "verify-js.js");
 
 const fileBytes = new TextEncoder().encode("orphograph evidence file v1\n");
 const otherBytes = new TextEncoder().encode("a different byte sequence\n");

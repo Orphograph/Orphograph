@@ -1,7 +1,12 @@
 /*!
- * verify_js_page_harness.mjs — executes the REAL inline verifier script from
- * web/verify-js.html inside a minimal DOM stub, so the page's verification
- * logic can be exercised byte-for-byte as shipped (no browser required).
+ * verify_js_page_harness.mjs — executes the REAL verifier script served to
+ * the /verify-js page (web/verify-js.js) inside a minimal DOM stub, so the
+ * page's verification logic can be exercised byte-for-byte as shipped (no
+ * browser required).
+ *
+ * The script formerly lived in an inline <script> block in verify-js.html,
+ * which the site CSP (script-src 'self') never executed; it was externalized
+ * unchanged, and web/verify-js.js is now the source of truth read here.
  *
  * The harness drives the same path a reader uses: select a file, paste a
  * receipt, press Verify — then reports the rendered verdict.
@@ -48,23 +53,20 @@ const IDS = [
   "fetchBtn", "fetchId", "fetchStatus",
 ];
 
-export function extractInlineScript(htmlPath) {
-  const html = readFileSync(htmlPath, "utf8");
-  const m = html.match(/<script>\n([\s\S]*?)<\/script>/);
-  if (!m) throw new Error("no inline <script> found in " + htmlPath);
-  return m[1];
+export function extractInlineScript(scriptPath) {
+  return readFileSync(scriptPath, "utf8");
 }
 
 /**
  * Run the page's verify flow.
  *
- * @param {string} htmlPath   path to web/verify-js.html
+ * @param {string} scriptPath  path to web/verify-js.js
  * @param {Uint8Array} fileBytes  the "selected" file's bytes
  * @param {string} receiptText   the pasted receipt JSON text
  * @returns {Promise<{verdictClass: string, verdict: string, rows: string[]}>}
  */
-export async function runPageVerify(htmlPath, fileBytes, receiptText) {
-  const src = extractInlineScript(htmlPath);
+export async function runPageVerify(scriptPath, fileBytes, receiptText) {
+  const src = extractInlineScript(scriptPath);
 
   const els = {};
   for (const id of IDS) els[id] = makeEl(id);
@@ -114,7 +116,7 @@ export async function runPageVerify(htmlPath, fileBytes, receiptText) {
     setTimeout,
   };
   vm.createContext(context);
-  vm.runInContext(src, context, { filename: "verify-js.html<inline>" });
+  vm.runInContext(src, context, { filename: "verify-js.js" });
 
   // Step 1 — select the file (synchronous handler).
   const buf = fileBytes.buffer.slice(

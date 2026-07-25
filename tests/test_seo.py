@@ -264,6 +264,57 @@ def test_blog_pages_no_inline_styles(html_path: Path) -> None:
     assert 'style="' not in body, f"{html_path.name} has inline style= attributes"
 
 
+# CSP is script-src 'self': an inline <script> block is silently discarded
+# by the browser, so any page whose behaviour depends on one is dead in
+# production. /verify-js is the public "verify your receipt in your browser"
+# trust surface — its entire verifier was inline and never ran. Pages listed
+# here are externalized; the check fails any regression back to an inline
+# block. Add a page here once it is clean (a page still carrying an inline
+# block must not be listed).
+# Unlike the style checks above this one is NOT deliberately over-strict:
+# a <script type="application/ld+json"> data block is never executed and is
+# not subject to script-src, so structured data (FAQPage markup on the blog,
+# /lp/, index.html, faq.html, dataset-provenance.html) stays legal and is
+# excluded below.
+CSP_CLEAN_SCRIPT = ["verify-js.html"]
+
+_INLINE_SCRIPT_RE = re.compile(r"<script(?![^>]*\ssrc=)[^>]*>", re.IGNORECASE)
+
+
+@pytest.mark.parametrize("page_name", CSP_CLEAN_SCRIPT)
+def test_pages_no_inline_script(page_name: str) -> None:
+    """CSP-clean pages must not regress to an inline <script> block."""
+    path = WEB / page_name
+    assert path.is_file(), f"{page_name} is missing from web/"
+    body = path.read_text(encoding="utf-8")
+    hits = [h for h in _INLINE_SCRIPT_RE.findall(body) if "ld+json" not in h.lower()]
+    assert not hits, f"{page_name} has an inline <script> block: {hits}"
+
+
+def test_inline_script_check_catches_a_real_inline_block() -> None:
+    """Guard the pin above: prove the matcher fires on the pattern this
+    PR removed, so the check can never degrade into a silent no-op."""
+    assert _INLINE_SCRIPT_RE.findall('<script>\n(function(){})();\n</script>')
+    assert _INLINE_SCRIPT_RE.findall('<script type="text/javascript">x=1</script>')
+    assert not _INLINE_SCRIPT_RE.findall('<script src="/verify-js.js?v=1"></script>')
+    # ld+json is data, not script-src-governed: the filter must let it pass.
+    assert not [
+        h for h in _INLINE_SCRIPT_RE.findall(
+            '<script type="application/ld+json">{"@type":"FAQPage"}</script>'
+        )
+        if "ld+json" not in h.lower()
+    ]
+
+
+def test_verify_js_assets_are_pinned() -> None:
+    """The externalized verify-js assets must carry ?v= pins (Cloudflare
+    serves an unpinned asset stale for 24h)."""
+    body = (WEB / "verify-js.html").read_text(encoding="utf-8")
+    assert '<script src="/verify-js.js?v=' in body, "verify-js.js reference is missing or unpinned"
+    assert '<link rel="stylesheet" href="/verify-js.css?v=' in body, "verify-js.css reference is unpinned"
+    assert (WEB / "verify-js.js").is_file(), "web/verify-js.js is missing"
+
+
 # ── launch LP: full social-card pin ────────────────────────────────────
 # /lp/agent-receipts is a primary share target (HN / Reddit / X). Reddit
 # renders og:*; X requires twitter:card to render any card at all. Pin the
