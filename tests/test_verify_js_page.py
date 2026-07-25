@@ -1,4 +1,4 @@
-"""Regression guards for the /verify-js page's inline verifier (AUDIT D1/D5).
+"""Regression guards for the /verify-js page's verifier script (AUDIT D1/D5).
 
 Two layers:
 
