@@ -270,6 +270,10 @@ def test_blog_pages_no_inline_styles(html_path: Path) -> None:
 # was inline and never ran. Pages listed here are externalized; the check
 # fails any regression back to an inline block. Add a page here once it is
 # clean (a page still carrying an inline block must not be listed).
+# Unlike the style checks above this one is NOT deliberately over-strict:
+# a <script type="application/ld+json"> data block is never executed and is
+# not subject to script-src, so structured data (e.g. FAQPage markup for the
+# question list on /recover) stays legal and is excluded below.
 CSP_CLEAN_SCRIPT = ["recover.html"]
 
 _INLINE_SCRIPT_RE = re.compile(r"<script(?![^>]*\ssrc=)[^>]*>", re.IGNORECASE)
@@ -281,8 +285,16 @@ def test_pages_no_inline_script(page_name: str) -> None:
     path = WEB / page_name
     assert path.is_file(), f"{page_name} is missing from web/"
     body = path.read_text(encoding="utf-8")
-    hits = _INLINE_SCRIPT_RE.findall(body)
+    hits = [h for h in _INLINE_SCRIPT_RE.findall(body) if "ld+json" not in h.lower()]
     assert not hits, f"{page_name} has an inline <script> block: {hits}"
+
+
+def test_inline_script_check_catches_a_real_inline_block() -> None:
+    """Guard the pin above: prove the matcher fires on the pattern this
+    PR removed, so the check can never degrade into a silent no-op."""
+    assert _INLINE_SCRIPT_RE.findall('<script>\n(function(){})();\n</script>')
+    assert _INLINE_SCRIPT_RE.findall('<script type="text/javascript">x=1</script>')
+    assert not _INLINE_SCRIPT_RE.findall('<script src="/recover.js?v=1"></script>')
 
 
 def test_recover_assets_are_pinned() -> None:
