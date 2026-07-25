@@ -74,3 +74,20 @@
     border: 1px solid var(--panel-stroke);
     border-radius: 999px;
   }
+
+/* --- Extracted from inline style= attributes (strict CSP: style-src 'self'
+   silently drops every style= attribute, so none of this was rendering).
+   Declarations below are verbatim from the removed inline styles. --- */
+
+  /* Was style="color:var(--text-soft);" on the page lede <p>. */
+  .pay-lede { color: var(--text-soft); }
+  /* Was style="margin-top:24px;color:var(--muted);font-size:13px;
+     text-align:center;" on the "Want pure Bitcoin?" note. NOTE: the
+     margin-top here is 24px; btc.css's same-named rule is 30px — the two
+     sheets are never co-loaded, and each value is kept verbatim per page. */
+  .pay-foot-note {
+    margin-top: 24px;
+    color: var(--muted);
+    font-size: 13px;
+    text-align: center;
+  }

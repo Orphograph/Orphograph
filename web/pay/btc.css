@@ -70,7 +70,8 @@
     background: var(--accent-soft);
     color: var(--accent);
   }
-  ol.btc-steps { padding-left: 22px; line-height: 1.7; color: var(--text-soft); }
+  /* margin-top was an inline style= on the <ol> (dropped under CSP). */
+  ol.btc-steps { padding-left: 22px; line-height: 1.7; color: var(--text-soft); margin-top: 24px; }
   ol.btc-steps strong { color: var(--text); }
   .email-form { margin-top: 18px; display: flex; flex-direction: column; gap: 8px; }
   .email-form input, .email-form textarea {
@@ -107,4 +108,29 @@
     border-radius: 999px;
     font-size: 12px;
     color: var(--muted);
+  }
+
+/* --- Extracted from inline style= attributes (strict CSP: style-src 'self'
+   silently drops every style= attribute, so none of this was rendering).
+   Declarations below are verbatim from the removed inline styles. --- */
+
+  /* Was style="color:var(--text-soft);" on the page lede <p> and on the
+     "3. Tell us you paid" <p>. */
+  .pay-lede { color: var(--text-soft); }
+  /* Was style="margin-left:auto;font-size:12px;color:var(--muted);" on the
+     trailing <span> in .price-row (flex row — margin-left:auto right-aligns). */
+  .price-row .price-tag { margin-left: auto; font-size: 12px; color: var(--muted); }
+  /* Was style="font-size:12px;color:var(--muted);margin:4px 0 0;" on the
+     under/over-payment note beneath .addr-row. */
+  .addr-note { font-size: 12px; color: var(--muted); margin: 4px 0 0; }
+  /* Was style="font-size:13px;color:var(--text-soft);margin:0;" on
+     #claim-msg (margin:0 matters — .email-form is a flex column with gap). */
+  .claim-msg { font-size: 13px; color: var(--text-soft); margin: 0; }
+  /* Was style="margin-top:30px;color:var(--muted);font-size:13px;
+     text-align:center;" on the closing card/checkout note. */
+  .pay-foot-note {
+    margin-top: 30px;
+    color: var(--muted);
+    font-size: 13px;
+    text-align: center;
   }
