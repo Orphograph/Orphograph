@@ -2,7 +2,7 @@
 
 Two layers:
 
-1. Static guards (always run): the page's inline script must compare the
+1. Static guards (always run): the page's verifier script must compare the
    STORED receipt hash verbatim — no ``.toLowerCase()`` on the receipt side,
    no alias hash fields. The engine is canon
    (``server/engine.py:verify_hash_against_receipt`` lowercases only the
@@ -10,22 +10,26 @@ Two layers:
    byte-for-byte-different receipt "verified".
 
 2. Behavioural conformance (when node is available): drives the page's REAL
-   inline script through ``tests/js/verify_js_page.test.mjs`` and the
+   verifier script through ``tests/js/verify_js_page.test.mjs`` and the
    standalone module through ``tests/js/verifier_module.test.mjs`` with a
    tampered-fixture suite (uppercase / mixed-case / alias-only receipts).
    Skipped with an explicit message when node is absent — that skip is the
    documented JS coverage gap for such environments.
+
+The script used to live in an inline ``<script>`` block in
+``web/verify-js.html``. Under the site CSP (``script-src 'self'``) that block
+never executed, so it was externalized to ``web/verify-js.js`` — which is now
+the source of truth these guards read.
 """
 from __future__ import annotations
 
-import re
 import shutil
 import subprocess
 import unittest
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
-PAGE = REPO / "web" / "verify-js.html"
+PAGE_SCRIPT = REPO / "web" / "verify-js.js"
 MODULE = REPO / "verifier-js" / "orphograph_verify.js"
 JS_TESTS = [
     REPO / "tests" / "js" / "verify_js_page.test.mjs",
@@ -33,16 +37,11 @@ JS_TESTS = [
 ]
 
 
-def _inline_script(html: str) -> str:
-    m = re.search(r"<script>\n(.*?)</script>", html, re.S)
-    if not m:
-        raise AssertionError("no inline <script> found in verify-js.html")
-    return m.group(1)
-
-
 class TestVerifyJsPageStaticGuards(unittest.TestCase):
     def setUp(self):
-        self.script = _inline_script(PAGE.read_text())
+        if not PAGE_SCRIPT.is_file():
+            raise AssertionError(f"verifier script missing: {PAGE_SCRIPT}")
+        self.script = PAGE_SCRIPT.read_text()
 
     def test_receipt_side_is_never_lowercased(self):
         # The exact regression that shipped: receiptSha256/512 lowercased
