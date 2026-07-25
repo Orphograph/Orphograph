@@ -11,9 +11,9 @@
 .rec-form .submit:hover { background: #000; }
 .rec-form .submit:disabled { opacity: 0.6; cursor: progress; }
 #rec-result { margin-top: 18px; padding: 14px 16px; border-radius: 4px; font-size: 14.5px; line-height: 1.6; display: none; }
-#rec-result.ok { background: rgba(74,154,115,0.10); border-left: 3px solid var(--confirm); color: var(--ink); }
-#rec-result.err { background: rgba(176,74,58,0.10); border-left: 3px solid var(--bad); color: var(--ink); }
-#rec-result.wait { background: rgba(212,168,42,0.12); border-left: 3px solid #b8860b; color: var(--ink); }
+#rec-result.ok { display: block; background: rgba(74,154,115,0.10); border-left: 3px solid var(--confirm); color: var(--ink); }
+#rec-result.err { display: block; background: rgba(176,74,58,0.10); border-left: 3px solid var(--bad); color: var(--ink); }
+#rec-result.wait { display: block; background: rgba(212,168,42,0.12); border-left: 3px solid #b8860b; color: var(--ink); }
 .rec-faq { margin-top: 40px; font-size: 14.5px; color: var(--ink-2); line-height: 1.7; }
 .rec-faq h3 { font-family: var(--serif); font-size: 17px; font-weight: 500; color: var(--ink); margin: 24px 0 4px; }
 
