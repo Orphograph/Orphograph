@@ -193,3 +193,11 @@
   }
 
   .refresh-btn:hover { background: var(--ink-2, #2c2620); }
+
+  /* ── extracted from metrics.html style= attributes (strict CSP:
+     style-src 'self' blocks inline style attributes). Values verbatim.
+     #loading / #metrics-content keep their initial display:none here; the
+     script still toggles them via element.style, which overrides this. */
+  #loading { display: none; }
+  #metrics-content { display: none; }
+  .status-box h3 { margin: 0 0 1rem 0; }
