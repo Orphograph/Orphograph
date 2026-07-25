@@ -266,17 +266,18 @@ def test_blog_pages_no_inline_styles(html_path: Path) -> None:
 
 # CSP is script-src 'self': an inline <script> block is silently discarded
 # by the browser, so any page whose behaviour depends on one is dead in
-# production. /verify-js is the public "verify your receipt in your browser"
-# trust surface — its entire verifier was inline and never ran. Pages listed
-# here are externalized; the check fails any regression back to an inline
-# block. Add a page here once it is clean (a page still carrying an inline
-# block must not be listed).
+# production. /recover is the payment-recovery surface (its form handler was
+# inline and never ran); /verify-js is the public "verify your receipt in
+# your browser" trust surface (its entire verifier was inline and never ran).
+# Pages listed here are externalized; the check fails any regression back to
+# an inline block. Add a page here once it is clean (a page still carrying an
+# inline block must not be listed).
 # Unlike the style checks above this one is NOT deliberately over-strict:
 # a <script type="application/ld+json"> data block is never executed and is
 # not subject to script-src, so structured data (FAQPage markup on the blog,
-# /lp/, index.html, faq.html, dataset-provenance.html) stays legal and is
-# excluded below.
-CSP_CLEAN_SCRIPT = ["verify-js.html"]
+# /lp/, index.html, faq.html, dataset-provenance.html, and the question list
+# on /recover) stays legal and is excluded below.
+CSP_CLEAN_SCRIPT = ["recover.html", "verify-js.html"]
 
 _INLINE_SCRIPT_RE = re.compile(r"<script(?![^>]*\ssrc=)[^>]*>", re.IGNORECASE)
 
@@ -296,6 +297,7 @@ def test_inline_script_check_catches_a_real_inline_block() -> None:
     PR removed, so the check can never degrade into a silent no-op."""
     assert _INLINE_SCRIPT_RE.findall('<script>\n(function(){})();\n</script>')
     assert _INLINE_SCRIPT_RE.findall('<script type="text/javascript">x=1</script>')
+    assert not _INLINE_SCRIPT_RE.findall('<script src="/recover.js?v=1"></script>')
     assert not _INLINE_SCRIPT_RE.findall('<script src="/verify-js.js?v=1"></script>')
     # ld+json is data, not script-src-governed: the filter must let it pass.
     assert not [
@@ -304,6 +306,15 @@ def test_inline_script_check_catches_a_real_inline_block() -> None:
         )
         if "ld+json" not in h.lower()
     ]
+
+
+def test_recover_assets_are_pinned() -> None:
+    """The externalized recover assets must carry ?v= pins (Cloudflare
+    serves an unpinned asset stale for 24h)."""
+    body = (WEB / "recover.html").read_text(encoding="utf-8")
+    assert '<script src="/recover.js?v=' in body, "recover.js reference is missing or unpinned"
+    assert '<link rel="stylesheet" href="/recover.css?v=' in body, "recover.css reference is unpinned"
+    assert (WEB / "recover.js").is_file(), "web/recover.js is missing"
 
 
 def test_verify_js_assets_are_pinned() -> None:
