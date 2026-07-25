@@ -67,6 +67,77 @@ class TestVerifyJsPageStaticGuards(unittest.TestCase):
         )
 
 
+class TestVerifyJsEndpointResolution(unittest.TestCase):
+    """The optional receipt-fetch must not be bound to one hostname.
+
+    /verify-js is meant to be saved and kept: a hardcoded
+    ``https://orphograph.com/api/verify/`` makes every copy of the page —
+    staging, a mirror, localhost, a self-hosted deployment — silently query
+    production, which is the dependency this page exists to remove.
+
+    The rule pinned here is deliberately NOT "the string orphograph.com may
+    never appear". A saved ``file://`` copy has no origin for a relative URL
+    to resolve against ("/api/verify/<id>" becomes ``file:///api/verify/<id>``,
+    which the fetch layer rejects outright), so exactly one disclosed fallback
+    to the public office is legitimate — and must be announced on screen.
+    What must never exist is an UNCONDITIONAL absolute endpoint.
+    """
+
+    def setUp(self):
+        self.script = PAGE_SCRIPT.read_text()
+
+    def test_no_hardcoded_absolute_endpoint(self):
+        self.assertNotIn(
+            "https://orphograph.com/api/verify/",
+            self.script,
+            "the receipt-fetch endpoint must not be a hardcoded absolute URL; "
+            "it must resolve against the origin that served the page",
+        )
+
+    def test_endpoint_path_is_relative(self):
+        self.assertIn(
+            '"/api/verify/"',
+            self.script,
+            "the fetch path must be built as an origin-relative '/api/verify/'",
+        )
+
+    def test_scheme_is_checked_before_choosing_an_endpoint(self):
+        # Relative is only meaningful over http(s); the script must branch on
+        # the scheme rather than assume one.
+        self.assertIn(
+            "location.protocol",
+            self.script,
+            "the script must inspect location.protocol to decide whether a "
+            "relative endpoint is meaningful",
+        )
+
+    def test_absolute_host_appears_only_as_the_disclosed_fallback(self):
+        # Exactly one absolute-host literal: the file:// fallback constant.
+        self.assertEqual(
+            self.script.count("https://orphograph.com"),
+            1,
+            "only the single disclosed file:// fallback constant may carry an "
+            "absolute host; a second occurrence means an endpoint was hardcoded",
+        )
+        # ...and the user is told before the request leaves the machine.
+        self.assertIn(
+            "querying the public office at orphograph.com",
+            self.script,
+            "the file:// fallback must disclose on screen which host it queries",
+        )
+
+    def test_failed_fetch_degrades_with_an_honest_message(self):
+        # No silent failure and no hang: a deadline plus a message that points
+        # at the paste path, which needs no network at all.
+        self.assertIn("AbortController", self.script)
+        self.assertIn("FETCH_TIMEOUT_MS", self.script)
+        self.assertIn(
+            "verification itself runs locally and needs no network",
+            self.script,
+            "a failed fetch must say what still works, not just that it failed",
+        )
+
+
 class TestVerifyJsBehaviouralConformance(unittest.TestCase):
     def test_node_suite_tampered_fixtures(self):
         node = shutil.which("node")
