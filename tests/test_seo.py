@@ -264,6 +264,36 @@ def test_blog_pages_no_inline_styles(html_path: Path) -> None:
     assert 'style="' not in body, f"{html_path.name} has inline style= attributes"
 
 
+# CSP is script-src 'self': an inline <script> block is silently discarded
+# by the browser, so any page whose behaviour depends on one is dead in
+# production. /recover is the payment-recovery surface — its form handler
+# was inline and never ran. Pages listed here are externalized; the check
+# fails any regression back to an inline block. Add a page here once it is
+# clean (a page still carrying an inline block must not be listed).
+CSP_CLEAN_SCRIPT = ["recover.html"]
+
+_INLINE_SCRIPT_RE = re.compile(r"<script(?![^>]*\ssrc=)[^>]*>", re.IGNORECASE)
+
+
+@pytest.mark.parametrize("page_name", CSP_CLEAN_SCRIPT)
+def test_pages_no_inline_script(page_name: str) -> None:
+    """CSP-clean pages must not regress to an inline <script> block."""
+    path = WEB / page_name
+    assert path.is_file(), f"{page_name} is missing from web/"
+    body = path.read_text(encoding="utf-8")
+    hits = _INLINE_SCRIPT_RE.findall(body)
+    assert not hits, f"{page_name} has an inline <script> block: {hits}"
+
+
+def test_recover_assets_are_pinned() -> None:
+    """The externalized recover assets must carry ?v= pins (Cloudflare
+    serves an unpinned asset stale for 24h)."""
+    body = (WEB / "recover.html").read_text(encoding="utf-8")
+    assert '<script src="/recover.js?v=' in body, "recover.js reference is missing or unpinned"
+    assert '<link rel="stylesheet" href="/recover.css?v=' in body, "recover.css reference is unpinned"
+    assert (WEB / "recover.js").is_file(), "web/recover.js is missing"
+
+
 # ── launch LP: full social-card pin ────────────────────────────────────
 # /lp/agent-receipts is a primary share target (HN / Reddit / X). Reddit
 # renders og:*; X requires twitter:card to render any card at all. Pin the
