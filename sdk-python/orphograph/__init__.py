@@ -97,10 +97,22 @@ def verify_folder(
     server_root = manifest.get("root_hex")
     if not server_root:
         return False
-    # Must mirror whatever exclude list the folder was ANCHORED with —
-    # anchor_folder accepts a custom list, so verification has to as well
-    # or custom-exclude folders can never verify (AUDIT D2).
-    tree = MerkleTree.from_folder(root, exclude=exclude)
+    # The manifest is authoritative for its own scope.
+    #
+    # Previously this mirrored whatever the CALLER passed, which only moved the
+    # problem: a folder anchored with custom excludes still could not verify
+    # unless the verifier independently remembered the exact list used at
+    # capture, months earlier, possibly on another machine. That is not a
+    # property evidence should have.
+    #
+    # Manifests now record the effective patterns (see merkle.build_scope), so
+    # they are read from the manifest when present. The caller's `exclude` is
+    # only a fallback for manifests issued before scope existed.
+    effective_exclude = exclude
+    scope = manifest.get("scope")
+    if isinstance(scope, dict) and isinstance(scope.get("exclude"), list):
+        effective_exclude = list(scope["exclude"])
+    tree = MerkleTree.from_folder(root, exclude=effective_exclude)
     return tree.root_hex() == server_root
 
 

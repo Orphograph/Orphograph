@@ -42,7 +42,7 @@ class TestMerkleReexport(unittest.TestCase):
     def test_sha256_banner_present_in_module(self):
         src = Path(_merkle.__file__).read_text()
         self.assertIn("AUTO-COPIED from server/merkle.py", src)
-        self.assertIn("564dd480a4e793867c20c6fe22d265a3382674250023e8095b48b951db2d352d", src)
+        self.assertIn("e68c897382a41e5cb479d00af5fb31e8cb50a45490702ead82d03a25948a87f5", src)
 
 
 class TestAnchorFolder(unittest.TestCase):

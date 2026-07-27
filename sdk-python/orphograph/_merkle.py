@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # AUTO-COPIED from server/merkle.py — keep in sync.
 # Source SHA-256 (server/merkle.py at copy time):
-#   564dd480a4e793867c20c6fe22d265a3382674250023e8095b48b951db2d352d
+#   e68c897382a41e5cb479d00af5fb31e8cb50a45490702ead82d03a25948a87f5
 # If the upstream file changes, recompute with:
 #   shasum -a 256 server/merkle.py
 # and update both this banner and this file. The SDK refuses to drift
@@ -47,6 +47,64 @@ CHUNK_SIZE = 1024 * 1024  # 1 MiB
 
 LEAF_PREFIX = b"\x00"
 INTERNAL_PREFIX = b"\x01"
+
+# ── scope: the intake record ────────────────────────────────────────
+# A manifest says what WAS captured. It has never said what was deliberately
+# left out, who captured it, or under what instruction — so the first question
+# a hostile reader asks ("what did you omit?") could only be answered by the
+# holder's memory, months later, which is not evidence.
+#
+# `scope` is strictly ADDITIVE metadata. It is NOT an input to the Merkle root
+# — the root derives from the leaves alone — so adding it cannot invalidate any
+# previously issued receipt, and VERSION is deliberately NOT bumped.
+#
+# LIMIT, stated plainly: scope_hex makes the block self-checksummed, so an
+# accidental or careless edit is detectable inside the manifest. It does NOT
+# make scope tamper-evident against a determined party, because the anchored
+# value is still root_hex alone. Binding scope into the anchor is a separate
+# change to the anchoring contract and is not claimed here.
+SCOPE_FIELDS = (
+    "exclude",
+    "exclude_source",
+    "captured_at",
+    "captured_by",
+    "instruction",
+    "omitted_note",
+)
+
+
+def _canonical_scope_bytes(scope: dict) -> bytes:
+    """Deterministic serialisation of the scope block, minus its own hash."""
+    payload = {k: scope[k] for k in SCOPE_FIELDS if scope.get(k) not in (None, "")}
+    return json.dumps(payload, sort_keys=True, separators=(",", ":"),
+                      ensure_ascii=False).encode("utf-8")
+
+
+def scope_hex(scope: dict) -> str:
+    """SHA-256 over the canonical scope block, excluding ``scope_hex``."""
+    return hashlib.sha256(_canonical_scope_bytes(scope)).hexdigest()
+
+
+def build_scope(
+    *,
+    exclude: list[str],
+    exclude_source: str = "custom",
+    captured_at: str | None = None,
+    captured_by: str | None = None,
+    instruction: str | None = None,
+    omitted_note: str | None = None,
+) -> dict:
+    """Assemble a scope block and stamp it with its own checksum."""
+    scope: dict = {
+        "exclude": list(exclude),
+        "exclude_source": exclude_source,
+    }
+    for key, value in (("captured_at", captured_at), ("captured_by", captured_by),
+                       ("instruction", instruction), ("omitted_note", omitted_note)):
+        if value not in (None, ""):
+            scope[key] = str(value)
+    scope["scope_hex"] = scope_hex(scope)
+    return scope
 
 # Default deny-list — files the office considers incidental to the evidence
 # itself (OS detritus, editor backups, build caches). The caller may supply a
@@ -185,24 +243,42 @@ class MerkleTree:
     rebuilding.
     """
 
-    __slots__ = ("_leaves_meta", "_levels")
+    __slots__ = ("_leaves_meta", "_levels", "_scope")
 
-    def __init__(self, leaves_meta: list[dict], levels: list[list[bytes]]):
+    def __init__(self, leaves_meta: list[dict], levels: list[list[bytes]],
+                 scope: dict | None = None):
         # Internal constructor — callers use the classmethods.
         self._leaves_meta = leaves_meta
         self._levels = levels
+        self._scope = dict(scope) if scope else None
 
     # ------------------------------------------------------------------ build
 
     @classmethod
     def from_folder(
-        cls, root: Path, exclude: list[str] | None = None
+        cls, root: Path, exclude: list[str] | None = None,
+        *,
+        captured_by: str | None = None,
+        instruction: str | None = None,
+        omitted_note: str | None = None,
+        captured_at: str | None = None,
     ) -> "MerkleTree":
         """Build a tree by walking ``root`` and streaming each file.
 
         ``exclude`` defaults to the office's standard deny-list. Passing
         ``[]`` disables exclusion entirely; passing a custom list replaces
         the defaults (it does not extend them).
+
+        The remaining keyword arguments record the SCOPING DECISION — who
+        captured, under what instruction, and what was deliberately left out.
+        A hash set with no scoping record invites the obvious question in a
+        dispute ("what did you omit?"), and a manifest that cannot answer it
+        from its own contents makes the holder's memory part of the evidence.
+        All are optional; the effective exclude patterns are recorded whether
+        or not the caller supplies anything.
+
+        This does not affect ``root_hex``: the root derives from the leaves
+        alone, so scope is metadata ABOUT a tree, never an input to it.
         """
         root = Path(root)
         if not root.is_dir():
@@ -226,7 +302,15 @@ class MerkleTree:
             leaf_hashes.append(leaf)
 
         levels = _build_levels(leaf_hashes)
-        return cls(leaves_meta, levels)
+        scope = build_scope(
+            exclude=list(patterns),
+            exclude_source="default" if exclude is None else "custom",
+            captured_by=captured_by,
+            instruction=instruction,
+            omitted_note=omitted_note,
+            captured_at=captured_at,
+        )
+        return cls(leaves_meta, levels, scope)
 
     @classmethod
     def from_manifest(cls, manifest: dict) -> "MerkleTree":
@@ -274,7 +358,20 @@ class MerkleTree:
         root_hex_expected = manifest.get("root_hex")
         if levels[-1][0].hex() != root_hex_expected:
             raise ValueError("manifest root_hex does not match recomputed root")
-        return cls(leaves_meta, levels)
+
+        # Scope is optional: manifests issued before it existed carry none, and
+        # must keep verifying unchanged. When present it is checked against its
+        # own recorded hash so a careless edit does not pass silently.
+        scope = manifest.get("scope")
+        if scope is not None:
+            if not isinstance(scope, dict):
+                raise ValueError("manifest scope must be an object")
+            recorded = scope.get("scope_hex")
+            if recorded is not None and recorded != scope_hex(scope):
+                raise ValueError(
+                    "manifest scope_hex does not match the scope block it describes"
+                )
+        return cls(leaves_meta, levels, scope)
 
     # --------------------------------------------------------------- accessors
 
@@ -286,14 +383,37 @@ class MerkleTree:
         """Return the root as 64 lowercase hex characters."""
         return self.root().hex()
 
+    def scope(self) -> dict | None:
+        """The intake record, or None for a tree built without one."""
+        return dict(self._scope) if self._scope else None
+
+    def exclude_patterns(self) -> list[str] | None:
+        """The exclude patterns this tree was built with, if recorded.
+
+        This is what makes verification self-sufficient: a verifier reads the
+        patterns from the manifest instead of requiring the caller to remember
+        which list was used at capture time, months earlier, possibly on a
+        different machine.
+        """
+        if not self._scope:
+            return None
+        got = self._scope.get("exclude")
+        return list(got) if isinstance(got, list) else None
+
     def manifest(self) -> dict:
         """Return a JSON-serialisable manifest describing the tree."""
-        return {
+        out = {
             "algorithm": ALGORITHM,
             "version": VERSION,
             "root_hex": self.root_hex(),
             "leaves": [dict(m) for m in self._leaves_meta],
         }
+        # Additive and optional: a manifest emitted before scope existed is
+        # still valid, and one emitted now is still readable by an old verifier
+        # that ignores unknown keys.
+        if self._scope:
+            out["scope"] = dict(self._scope)
+        return out
 
     # --------------------------------------------------------------- proofs
 
