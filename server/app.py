@@ -772,10 +772,41 @@ def _serve_ab_home(handler: BaseHTTPRequestHandler) -> bool:
     return True
 
 
+# Files that live under web/ but must never be publicly reachable.
+# web/** ships wholesale, so anything dropped in there is served by default —
+# internal design mockups and superseded pages included. Audited 2026-07-26:
+# /_mockups/{A_pure,B_broadsheet,C_instrument} and /index-legacy were all
+# returning 200 to the open internet, carrying claim wording that contradicts
+# the canonical pages.
+#
+# Matched against the path with any .html suffix stripped, because pages are
+# served at clean extensionless URLs — /index-legacy and /index-legacy.html are
+# the same document and both must 404.
+_PRIVATE_PATH_PREFIXES = ("_mockups/",)
+_PRIVATE_PATH_EXACT = frozenset({"index-legacy"})
+
+
+def _is_private_path(rel_path: str) -> bool:
+    """True if this static path is internal-only and must 404 publicly."""
+    p = rel_path.lstrip("/")
+    if p.endswith(".html"):
+        p = p[: -len(".html")]
+    p = p.rstrip("/")
+    if p in _PRIVATE_PATH_EXACT:
+        return True
+    return any(p == pre.rstrip("/") or p.startswith(pre)
+               for pre in _PRIVATE_PATH_PREFIXES)
+
+
 def _serve_static(handler: BaseHTTPRequestHandler, rel_path: str) -> None:
     if rel_path in ("", "/"):
         rel_path = "index.html"
     rel_path = rel_path.lstrip("/")
+    # Checked BEFORE the redirect and sibling-resolution logic below, so the
+    # extensionless form cannot slip past by re-entering through another route.
+    if _is_private_path(rel_path):
+        handler.send_error(404, "not found")
+        return
     target = (WEB_DIR / rel_path).resolve()
     if WEB_DIR not in target.parents and target != WEB_DIR:
         handler.send_error(403, "forbidden")
