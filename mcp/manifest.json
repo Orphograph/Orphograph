@@ -1,0 +1,60 @@
+{
+  "manifest_version": "0.2",
+  "name": "orphograph",
+  "display_name": "Orphograph",
+  "version": "0.1.0",
+  "description": "Anchor a file's fingerprint to the Bitcoin chain via Orphograph. The file never leaves the device — only the SHA-256 fingerprint crosses the wire.",
+  "long_description": "A single-file, stdlib-only Model Context Protocol server that lets any MCP host anchor files to the Bitcoin chain via Orphograph (https://orphograph.com). The file body never leaves the user's machine: the server hashes locally and transmits only the SHA-256/SHA-512 fingerprints. Receipts are verifiable independently of Orphograph via OpenTimestamps. Tools: anchor a file, verify a receipt, list the subscriber vault. A receipt proves a file existed in exactly this form by a recorded date; it does not prove authorship, ownership, or that the file's contents are true.",
+  "author": {
+    "name": "Orphograph",
+    "email": "hello@orphograph.com",
+    "url": "https://orphograph.com"
+  },
+  "homepage": "https://orphograph.com/mcp.html",
+  "documentation": "https://orphograph.com/mcp.html",
+  "support": "https://github.com/Orphograph/Orphograph/issues",
+  "license": "MIT",
+  "keywords": ["bitcoin", "timestamp", "provenance", "notary", "opentimestamps", "proof-of-existence"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Orphograph/Orphograph"
+  },
+  "server": {
+    "type": "python",
+    "entry_point": "orphograph_mcp.py",
+    "mcp_config": {
+      "command": "python3",
+      "args": ["${__dirname}/orphograph_mcp.py"],
+      "env": {}
+    }
+  },
+  "tools": [
+    {
+      "name": "orphograph_anchor_file",
+      "description": "Anchor a local file to the Bitcoin chain. Hashes locally; only fingerprints are transmitted."
+    },
+    {
+      "name": "orphograph_verify_receipt",
+      "description": "Verify an existing Orphograph receipt against the calendars and Bitcoin chain."
+    },
+    {
+      "name": "orphograph_list_vault",
+      "description": "List the signed-in subscriber's anchored receipts (requires ORPHO_API_KEY)."
+    }
+  ],
+  "user_config": {
+    "ORPHO_API_KEY": {
+      "type": "string",
+      "title": "Orphograph API key",
+      "description": "Optional API key from https://orphograph.com/account.html. Without it, anchors use the free tier (three anchors per 24h per IP).",
+      "required": false,
+      "sensitive": true
+    }
+  },
+  "compatibility": {
+    "platforms": ["darwin", "linux", "win32"],
+    "runtimes": {
+      "python": ">=3.9"
+    }
+  }
+}
