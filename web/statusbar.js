@@ -11,82 +11,16 @@
   const STRIP_ID = "orpho-statusbar";
 
   function injectStyles() {
+    // CSP note: the site serves style-src 'self' with no 'unsafe-inline',
+    // so an injected <style> element is silently BLOCKED (the strip then
+    // renders as unstyled run-together text — 2026-07-27 mobile bug).
+    // A same-origin external stylesheet via <link> is CSP-compliant.
     if (document.getElementById(STYLE_ID)) return;
-    const style = document.createElement("style");
-    style.id = STYLE_ID;
-    // !important on layout/chrome so a stray page-level rule cannot
-    // collapse the pills back into a continuous run of text (the
-    // 2026-05-18 "muddled status page" regression).
-    // Margin-right on each child instead of flex `gap` so older Safari
-    // builds without flex-gap support still space pills correctly.
-    style.textContent = `
-#${STRIP_ID} {
-  position: sticky !important; top: 0 !important; z-index: 50 !important;
-  background: #efe6d2 !important;
-  border-bottom: 1px solid #a89e80 !important;
-  font-family: Georgia, 'Times New Roman', serif !important;
-  font-size: 13px !important; color: #2a2a2a !important;
-  padding: 10px 16px !important;
-  display: flex !important; align-items: center !important;
-  flex-wrap: wrap !important;
-  line-height: 1.4 !important;
-}
-#${STRIP_ID} > * { margin-right: 12px !important; margin-bottom: 0 !important; }
-#${STRIP_ID} > *:last-child { margin-right: 0 !important; }
-#${STRIP_ID} .ob-pill {
-  display: inline-block !important;
-  padding: 4px 11px !important;
-  border-radius: 999px !important;
-  background: #ffffff !important;
-  border: 1px solid #a89e80 !important;
-  color: #2a2a2a !important;
-  font-size: 12px !important;
-  line-height: 1.4 !important;
-  white-space: nowrap !important;
-}
-#${STRIP_ID} .ob-pill.ob-plan {
-  background: #1a1a1a !important; color: #f5efe0 !important;
-  border-color: #1a1a1a !important;
-  font-weight: 600 !important; letter-spacing: 0.02em !important;
-}
-#${STRIP_ID} .ob-pill.ob-warn {
-  background: #fff3cd !important; border-color: #d4a82a !important;
-  color: #5a4a00 !important;
-}
-#${STRIP_ID} .ob-email {
-  color: #555 !important;
-  font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Menlo, monospace !important;
-  font-size: 12px !important;
-  white-space: nowrap !important;
-}
-#${STRIP_ID} .ob-spacer { flex: 1 1 auto !important; margin-right: 0 !important; }
-#${STRIP_ID} a.ob-link {
-  color: #2a5d4a !important;
-  text-decoration: underline !important;
-  font-size: 12px !important;
-  padding: 4px 0 !important;
-  white-space: nowrap !important;
-}
-#${STRIP_ID} button.ob-signout {
-  background: #ffffff !important;
-  border: 1px solid #a89e80 !important;
-  color: #2a2a2a !important;
-  padding: 4px 11px !important;
-  border-radius: 999px !important;
-  cursor: pointer !important;
-  font-family: inherit !important;
-  font-size: 12px !important;
-  line-height: 1.4 !important;
-  white-space: nowrap !important;
-}
-#${STRIP_ID} button.ob-signout:hover { background: #1a1a1a !important; color: #f5efe0 !important; border-color: #1a1a1a !important; }
-@media (max-width: 560px) {
-  #${STRIP_ID} { font-size: 12px !important; padding: 8px 12px !important; }
-  #${STRIP_ID} > * { margin-right: 8px !important; }
-  #${STRIP_ID} .ob-email { display: none !important; }
-}
-    `;
-    document.head.appendChild(style);
+    const link = document.createElement("link");
+    link.id = STYLE_ID;
+    link.rel = "stylesheet";
+    link.href = "/statusbar.css?v=1";
+    document.head.appendChild(link);
   }
 
   function mountStrip(data) {
