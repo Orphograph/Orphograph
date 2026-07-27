@@ -8,6 +8,10 @@ containing:
   - The Orphograph receipt JSON
   - The 5 .ots Bitcoin proof files
   - The standalone open-source verifier (stdlib Python, no deps)
+  - VERIFIER_SPEC.md — the normative algorithm, so a recipient can write a
+    second implementation and compare instead of trusting ours
+  - SUMMARY.txt / RESUMEN.txt — the plain-language sheet (EN / ES) a
+    non-technical reader can act on, stating the claim ceiling
   - VERIFY.md — step-by-step verification instructions
   - sha256sum.txt — checksums for every file in the bundle
 
@@ -46,6 +50,10 @@ offline using only Python standard library — no Orphograph server required.
 - `receipt.json` — Orphograph receipt metadata (hashes, calendars, attestation)
 - `*.ots` — 5 OpenTimestamps binary proof files
 - `verify_cli.py` — standalone verifier, stdlib Python only
+- `VERIFIER_SPEC.md` — the normative algorithm the verifier implements, so you
+  can write your own checker and compare rather than trusting ours
+- `SUMMARY.txt` / `RESUMEN.txt` — one plain-language page (English / Spanish)
+  stating what this shows, what it does not, and how to check it
 - `sha256sum.txt` — checksums for every file in the bundle
 - `VERIFY.md` — this file
 
@@ -110,6 +118,147 @@ def sha256_of(path: Path) -> str:
     return h.hexdigest()
 
 
+# ── plain-language summary (Wedge 04) ───────────────────────────────────────
+# The last mile is a document, not a digest. One page a non-technical reader —
+# an adjuster, a paralegal, a contractor — gets through without help, stating
+# the claim ceiling explicitly. Shipped in English and Spanish: Puerto Rico is
+# the first market, and a sheet nobody can read is not a deliverable.
+
+_SUMMARY = {
+    "en": {
+        "file": "SUMMARY.txt",
+        "title": "WHAT THIS FOLDER IS",
+        "body": """\
+Someone gave you this folder to show that a file existed by a certain date.
+You do not need an account, a password, or their permission to check it, and
+you do not need to take their word for anything. Everything needed is here.
+
+THE FILE
+    Name         {filename}
+    Fingerprint  {hash_hex}
+
+    A fingerprint is a short code calculated from the file's contents. Change
+    one character anywhere in the file and the code comes out completely
+    different. That is what makes it useful as evidence.
+
+WHAT THIS SHOWS
+    This exact file existed no later than {created}.
+
+    That date is recorded in the public Bitcoin ledger. No single person or
+    company controls that ledger, and older entries are not rewritten, which
+    is why a date recorded there is hard to argue with. This folder holds
+    {ots_count} independent records of it.
+
+WHAT THIS DOES NOT SHOW
+    Who wrote or created the file.
+    Whether anything written in the file is true, accurate, or complete.
+    Who owns the file or holds any rights to it.
+    Whether a court will accept it. That is for a court and a lawyer to
+        decide, and nothing in this folder decides it for them.
+
+    If someone tells you this folder proves any of the four things above,
+    they are overstating it.
+
+HOW TO CHECK IT YOURSELF (about five minutes)
+    You need a computer with Python installed. No internet connection is
+    required for steps 1 and 2.
+
+    1. Open a terminal in this folder.
+    2. Run:  python3 verify_cli.py receipt.json
+       It reads the records here and reports whether they match the
+       fingerprint above.
+    3. Optional, and the strongest check: confirm the date directly against
+       Bitcoin itself, using the free OpenTimestamps tool. VERIFY.md has the
+       exact commands.
+
+    VERIFIER_SPEC.md describes exactly how the checking works, so a
+    programmer you trust can write their own checker and compare answers
+    rather than relying on ours.
+
+IF YOU READ ONE LINE
+    This says WHEN a file existed. It says nothing about who made it or
+    whether it is true.
+""",
+    },
+    "es": {
+        "file": "RESUMEN.txt",
+        "title": "QUE ES ESTA CARPETA",
+        "body": """\
+Alguien le entrego esta carpeta para demostrar que un archivo ya existia en
+cierta fecha. Usted no necesita una cuenta, una contrasena, ni el permiso de
+esa persona para comprobarlo, y no tiene que confiar en su palabra. Todo lo
+necesario esta aqui.
+
+EL ARCHIVO
+    Nombre        {filename}
+    Huella        {hash_hex}
+
+    La huella es un codigo corto que se calcula a partir del contenido del
+    archivo. Si se cambia un solo caracter, el codigo cambia por completo.
+    Eso es lo que la hace util como evidencia.
+
+LO QUE ESTO DEMUESTRA
+    Que este archivo exacto ya existia a mas tardar el {created}.
+
+    Esa fecha esta registrada en el libro publico de Bitcoin. Ninguna persona
+    ni empresa controla ese registro, y las entradas antiguas no se reescriben,
+    por eso una fecha registrada alli es dificil de disputar. Esta carpeta
+    contiene {ots_count} registros independientes.
+
+LO QUE ESTO NO DEMUESTRA
+    Quien escribio o creo el archivo.
+    Si lo que dice el archivo es cierto, exacto o completo.
+    Quien es el dueno del archivo ni que derechos tiene sobre el.
+    Si un tribunal lo va a aceptar. Eso lo decide un tribunal y un abogado,
+        y nada en esta carpeta lo decide por ellos.
+
+    Si alguien le dice que esta carpeta demuestra alguna de esas cuatro
+    cosas, esta exagerando.
+
+COMO COMPROBARLO USTED MISMO (unos cinco minutos)
+    Necesita una computadora con Python instalado. No hace falta conexion a
+    internet para los pasos 1 y 2.
+
+    1. Abra una terminal en esta carpeta.
+    2. Ejecute:  python3 verify_cli.py receipt.json
+       Lee los registros que estan aqui e indica si coinciden con la huella
+       que aparece arriba.
+    3. Opcional, y la comprobacion mas fuerte: confirme la fecha directamente
+       contra Bitcoin con la herramienta gratuita OpenTimestamps. VERIFY.md
+       tiene los comandos exactos.
+
+    VERIFIER_SPEC.md explica exactamente como funciona la comprobacion, para
+    que un programador de su confianza escriba su propio verificador y compare
+    los resultados en vez de depender del nuestro.
+
+SI SOLO LEE UNA LINEA
+    Esto dice CUANDO existia un archivo. No dice nada sobre quien lo hizo ni
+    sobre si es cierto.
+""",
+    },
+}
+
+
+def summary_text(lang: str, filename: str, receipt: dict, ots_count: int) -> str:
+    """Render the plain-language sheet for one language.
+
+    Deliberately ASCII-only in the Spanish text: the sheet is meant to be
+    printed and emailed through arbitrary systems, and a mangled accent in a
+    legal-adjacent document reads as carelessness. Plain wording survives
+    transcoding; accented characters do not always.
+    """
+    spec = _SUMMARY[lang]
+    created = str(receipt.get("created_at", "") or "an unrecorded date")[:19].replace("T", " ")
+    body = spec["body"].format(
+        filename=filename,
+        hash_hex=receipt.get("hash_hex", "(not recorded)"),
+        created=created,
+        ots_count=ots_count,
+    )
+    bar = "=" * len(spec["title"])
+    return f"ORPHOGRAPH\n{spec['title']}\n{bar}\n\n{body}"
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("file", help="path to the original file")
@@ -172,7 +321,30 @@ def main() -> int:
         # Write VERIFY.md (substituting filename)
         verify_md = VERIFY_MD.replace("<filename>", src_file.name)
         (td_path / "VERIFY.md").write_text(verify_md)
-        # Build sha256sum.txt
+
+        # Ship the verifier's SPEC alongside the verifier itself. Without it a
+        # recipient can run our checker but cannot independently write a second
+        # one to compare against — which is the whole point of shipping a
+        # checker for inspection. Non-fatal if absent: an older checkout should
+        # still produce a usable bundle.
+        spec_src = next((p for p in (here / "docs" / "VERIFIER_SPEC.md",
+                                     here / "VERIFIER_SPEC.md") if p.is_file()), None)
+        if spec_src:
+            shutil.copy2(spec_src, td_path / "VERIFIER_SPEC.md")
+        else:
+            print("warning: VERIFIER_SPEC.md not found; bundle will ship without it",
+                  file=sys.stderr)
+
+        # Plain-language sheets — the deliverable a non-technical reader acts on.
+        ots_count = len(list(src_dir.glob("*.ots")))
+        for lang, spec in _SUMMARY.items():
+            (td_path / spec["file"]).write_text(
+                summary_text(lang, src_file.name, rec, ots_count),
+                encoding="utf-8",
+            )
+
+        # Build sha256sum.txt — iterates the directory, so every file added
+        # above is covered automatically. Keep it LAST.
         sums = []
         for f in sorted(td_path.iterdir()):
             if f.is_file():
