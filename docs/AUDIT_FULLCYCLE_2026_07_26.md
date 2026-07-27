@@ -1,5 +1,40 @@
 # ORPHOGRAPH — full-cycle audit, 2026-07-26 (INTERNAL)
 
+> ## CORRECTIONS — 2026-07-27. Two HIGH findings below were over-claimed.
+>
+> Both were diagnosed from a symptom without reading the code that consumes it.
+> The corrected versions are narrower and, in one case, point somewhere else
+> entirely. Left in place rather than rewritten, so the error is visible.
+>
+> **1. "Every receipt reports `status: partial` forever" — the field is CORRECT.**
+> `upgrade_worker.py:244-249` recomputes it every run. Measured across all 214
+> production receipts: `a.pool` and `b.pool.opentimestamps.org` return **HTTP 404**
+> for their commitments and never upgrade; `alice`, `btc` and `finney` upgrade every
+> time. 209 receipts sit at 3-of-5 pinned, 5 at 2-of-4, and **213 are
+> `upgrade_frozen`** after ~24 no-progress runs. "partial" is an accurate report of
+> a permanent state, not a stale field.
+> **What was actually wrong:** the public API said "partial" about receipts that ARE
+> Bitcoin-anchored, to the audience least able to interpret it — SDKs and
+> third-party verifiers. Fixed additively with `bitcoin_attested` (commit `38ffb8c`).
+> The proposed fix in the remediation table ("derive status at read time") was based
+> on the wrong diagnosis and was NOT implemented.
+>
+> **2. "Entitlement is served off a stale `active` flag" — FALSE. It is not.**
+> `subscriptions.is_active()` (`server/subscriptions.py:160-165`) already gates on
+> `current_period_end > now`, not on the status string. Verified live against the
+> real subscriber: stored status `active`, period end 2026-06-18, and
+> `is_active()` returns **False**. Entitlement is correctly denied. Nobody is being
+> served for free.
+> **What remains true:** no subscription-lifecycle webhook has been processed since
+> 2026-05-18, so you cannot tell whether that customer renewed or lapsed. That is a
+> Stripe dashboard subscription setting — the handler already covers the events
+> (`stripe_webhook.py:175`). Consequence is "you don't know", not "you're losing
+> money".
+>
+> Method note: both errors came from inferring a cause from a data pattern instead
+> of reading the consumer. The receipt-status one was caught by asking *why* 214/214
+> looked identical; the entitlement one by opening `is_active` before "fixing" it.
+
 Phase 1 reconnaissance. **Zero application files modified.** New files are confined to
 `tools/audit/` and `docs/`.
 
@@ -498,18 +533,18 @@ Stated plainly rather than implied complete:
 
 | # | Sev | Fix | Touches |
 |---|---|---|---|
-| 0 | HIGH | **Stripe dashboard:** confirm the webhook endpoint is subscribed to `customer.subscription.updated` / `.deleted` / `invoice.payment_*`. The handler already covers them (`stripe_webhook.py:175`) — the events are not arriving. One live subscriber is 38 days past period end and still reads `active`. Founder action, not code. | Stripe endpoint config |
-| 0b | HIGH | Derive entitlement from `current_period_end` vs now, never from the stored `status` string | subscription read path |
-| 0c | HIGH | BTC amount: change `//` floor to ceiling so the charge can never fall below true price | `server/btc_price.py:193` |
-| 1 | HIGH | Derive receipt `status` from `btc_pinned_at`+calendars at read time; stop shipping `partial` for anchored receipts on the public API | `server/engine.py` `verify_receipt` |
-| 2 | HIGH | Stop serving `web/_mockups/**` and `*-legacy.html` publicly | deploy artifact / route guard |
-| 3 | HIGH | Remove "proof of authorship" from `/lp/` pages; adopt the `web/writers.html:181` wording | `web/lp/index.html`, `web/lp/c2pa-alternative.html` |
-| 4 | MED | Persist exclude patterns in the manifest; verify reads them from the manifest, not caller args (Field Kit semantics) | `server/merkle.py` manifest(), `from_folder` callers, both SDKs |
-| 5 | MED | Strict digest validation on the supplied side — `^[0-9a-f]{64}$` after normalize, raise on malformed, strip `0x` | `server/engine.py:352` |
-| 6 | MED | Re-word "guarantee" framing on the homepage | `web/index.html:113,494` |
-| 7 | LOW | Distinguish "malformed receipt" from "file does not match" in verifier-js notes (D6) | `verifier-js/orphograph_verify.js` |
+| 0 | HIGH | **OPEN — founder action.** Stripe dashboard: subscribe the webhook endpoint to `customer.subscription.updated` / `.deleted` / `invoice.payment_*`. Handler already covers them (`stripe_webhook.py:175`); the events are not arriving. Consequence is "you cannot tell if the subscriber renewed" — NOT lost entitlement (see Corrections). | Stripe endpoint config |
+| 0b | ~~HIGH~~ | **WITHDRAWN — was false.** `subscriptions.is_active()` already gates on `current_period_end > now`; verified returning False for the expired subscriber. | — |
+| 0c | HIGH | **DONE** `02f6720` — BTC tag is additive and price-aware; undercharge now arithmetically impossible. | `server/btc_price.py` |
+| 1 | ~~HIGH~~ | **RE-SCOPED, DONE** `38ffb8c` — `status` was accurate, not stale. Added `bitcoin_attested` so integrators get the answer they need. | `server/engine.py` |
+| 2 | HIGH | **DONE** `77084b0` — route guard 404s all three mockups + `index-legacy`; verified against a running server. | `server/app.py` |
+| 3 | HIGH | **DONE** `38ffb8c` — now "timestamped record"; guard test blocks re-introduction. | `web/lp/*` |
+| 4 | MED | **DONE** `891e950` (Wedge 01) — manifest carries `scope` with the effective patterns; sdk-python reads them from the manifest. VERSION not bumped; root unchanged. | `server/merkle.py`, SDKs |
+| 5 | MED | **PARTIAL** `7e421fa` — added `supplied_hash_valid` so a parse failure is distinguishable. Raising + `0x`-stripping deliberately NOT done: pinned by `verifier_vectors.json` v05 and the conformance target for all four implementations; that is a spec change, not a one-file edit. | `server/engine.py` |
+| 6 | MED | **DONE (partly withdrawn)** `38ffb8c` — removed the absolute "can't be forged or revoked" and the aria-label. Line 494 "On the guarantee" left intact: read in context it is well-written ("structural, not promissory"). | `web/index.html` |
+| 7 | LOW | **DONE** `7e421fa` — malformed receipt no longer blames the file. Verdict unchanged. | `verifier-js/orphograph_verify.js` |
 | 8 | LOW | Merge `fix/verifier-minor-drifts` (D3/D4/D7) — premortem first, it deploys | `sdk-node`, `sdk-python` |
-| 9 | — | Pin `stored_UPPERCASE` and `custom_excludes_forgotten` as permanent pytest regressions | `tests/` |
+| 9 | — | **DONE** — regressions pinned across `test_btc_*`, `test_manifest_scope`, `test_attestation_and_claims`, `test_dispute_bundle_contents`, `test_private_pages_not_public`. 1152 tests pass. | `tests/` |
 
 ---
 
