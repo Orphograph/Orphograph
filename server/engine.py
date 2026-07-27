@@ -809,6 +809,25 @@ def verify_receipt(receipt_id: str) -> dict:
         "calendars_ok": sum(1 for c in checks if c["ok"]),
         "calendars_total": len(checks),
         "status": record.get("status", "pending"),
+        # `status` answers "are ALL calendars Bitcoin-pinned?" — which for every
+        # receipt issued so far is permanently "partial", because
+        # a.pool/b.pool.opentimestamps.org return 404 for their commitments and
+        # never upgrade (measured 2026-07-26: pending on 214/214, while alice,
+        # btc and finney upgraded on every receipt). The upgrade worker
+        # correctly freezes after repeated no-progress runs.
+        #
+        # That leaves the API saying "partial" about a receipt that IS anchored,
+        # to consumers — SDKs, third-party verifiers — who reasonably read it as
+        # incomplete. The question they actually need answered is the one below,
+        # and it is answered factually: at least one calendar carries a Bitcoin
+        # attestation, which is what makes the timestamp checkable against the
+        # chain. Additive; `status` semantics are unchanged.
+        "bitcoin_attested": int(record.get("pinned_count", 0) or 0) > 0,
+        "pinned_count": int(record.get("pinned_count", 0) or 0),
+        "pinned_total": int(record.get("pinned_total", 0) or 0),
+        # Surfaced so a stalled receipt is diagnosable rather than mysterious:
+        # frozen means polling has stopped, not that anything is wrong.
+        "upgrade_frozen": bool(record.get("upgrade_frozen", False)),
         "btc_pinned_at": record.get("btc_pinned_at"),
         "checks": checks,
     }
