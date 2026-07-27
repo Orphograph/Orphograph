@@ -891,6 +891,22 @@ def verify_hash_against_receipt(receipt_id: str, hash_hex: str) -> dict:
     result = verify_receipt(receipt_id)
     if not result.get("found"):
         return result
-    result["supplied_hash"] = hash_hex.strip().lower()
-    result["supplied_matches_receipt"] = result["supplied_hash"] == result["hash_hex"]
+    supplied = hash_hex.strip().lower() if isinstance(hash_hex, str) else ""
+    result["supplied_hash"] = supplied
+    result["supplied_matches_receipt"] = supplied == result["hash_hex"]
+    # A malformed digest currently lands as "does not match", which is
+    # indistinguishable from a genuine mismatch: the caller cannot tell "you
+    # pasted something that is not a SHA-256" from "this is the wrong file".
+    # Surfaced separately so the two can be reported differently.
+    #
+    # SCOPE NOTE: full Field Kit semantics would RAISE on malformed input and
+    # strip a leading "0x" before comparing. Both are deliberately not done
+    # here. `verify_hash_against_receipt` is pinned by tests/vectors/
+    # verifier_vectors.json — v05 expects malformed input to return a result,
+    # not an exception — and those vectors are the conformance target for
+    # verifier-js and both SDKs. Changing the comparison contract is a spec
+    # change that has to move the spec, the vectors and all four
+    # implementations together, not a one-file edit. This field is additive and
+    # creates no drift.
+    result["supplied_hash_valid"] = _is_hex(supplied, 64)
     return result
