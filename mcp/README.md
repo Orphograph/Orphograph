@@ -5,6 +5,11 @@ Cursor / any-MCP-host instance anchor files to the Bitcoin chain via
 [Orphograph](https://orphograph.com) without the file ever leaving the user's
 machine.
 
+<!-- Ownership marker for the official MCP registry (registry.modelcontextprotocol.io).
+     The registry fetches this README from PyPI and requires this exact line to
+     confirm the package belongs to the io.github.Orphograph namespace. -->
+`mcp-name: io.github.Orphograph/orphograph`
+
 - **License:** MIT
 - **Dependencies:** Python ≥ 3.9 standard library only. No `pip install` required.
 - **Lines of code:** ~310, single file.
