@@ -1,0 +1,70 @@
+/* statusbar.css — styles for the auth status strip (statusbar.js).
+   Extracted from the JS <style> injection, which the site CSP
+   (style-src 'self', no unsafe-inline) silently blocked — the strip
+   rendered as unstyled run-together text on every page. External
+   same-origin stylesheet = CSP-compliant. */
+#orpho-statusbar {
+  position: sticky !important; top: 0 !important; z-index: 50 !important;
+  background: #efe6d2 !important;
+  border-bottom: 1px solid #a89e80 !important;
+  font-family: Georgia, 'Times New Roman', serif !important;
+  font-size: 13px !important; color: #2a2a2a !important;
+  padding: 10px 16px !important;
+  display: flex !important; align-items: center !important;
+  flex-wrap: wrap !important;
+  line-height: 1.4 !important;
+}
+#orpho-statusbar > * { margin-right: 12px !important; margin-bottom: 0 !important; }
+#orpho-statusbar > *:last-child { margin-right: 0 !important; }
+#orpho-statusbar .ob-pill {
+  display: inline-block !important;
+  padding: 4px 11px !important;
+  border-radius: 999px !important;
+  background: #ffffff !important;
+  border: 1px solid #a89e80 !important;
+  color: #2a2a2a !important;
+  font-size: 12px !important;
+  line-height: 1.4 !important;
+  white-space: nowrap !important;
+}
+#orpho-statusbar .ob-pill.ob-plan {
+  background: #1a1a1a !important; color: #f5efe0 !important;
+  border-color: #1a1a1a !important;
+  font-weight: 600 !important; letter-spacing: 0.02em !important;
+}
+#orpho-statusbar .ob-pill.ob-warn {
+  background: #fff3cd !important; border-color: #d4a82a !important;
+  color: #5a4a00 !important;
+}
+#orpho-statusbar .ob-email {
+  color: #555 !important;
+  font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Menlo, monospace !important;
+  font-size: 12px !important;
+  white-space: nowrap !important;
+}
+#orpho-statusbar .ob-spacer { flex: 1 1 auto !important; margin-right: 0 !important; }
+#orpho-statusbar a.ob-link {
+  color: #2a5d4a !important;
+  text-decoration: underline !important;
+  font-size: 12px !important;
+  padding: 4px 0 !important;
+  white-space: nowrap !important;
+}
+#orpho-statusbar button.ob-signout {
+  background: #ffffff !important;
+  border: 1px solid #a89e80 !important;
+  color: #2a2a2a !important;
+  padding: 4px 11px !important;
+  border-radius: 999px !important;
+  cursor: pointer !important;
+  font-family: inherit !important;
+  font-size: 12px !important;
+  line-height: 1.4 !important;
+  white-space: nowrap !important;
+}
+#orpho-statusbar button.ob-signout:hover { background: #1a1a1a !important; color: #f5efe0 !important; border-color: #1a1a1a !important; }
+@media (max-width: 560px) {
+  #orpho-statusbar { font-size: 12px !important; padding: 8px 12px !important; }
+  #orpho-statusbar > * { margin-right: 8px !important; }
+  #orpho-statusbar .ob-email { display: none !important; }
+}
