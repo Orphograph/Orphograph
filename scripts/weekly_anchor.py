@@ -64,6 +64,9 @@ if API_KEY:
 ARTIFACTS = [
     "LICENSE",
     "mcp/orphograph_mcp.py",
+    "mcp/manifest.json",
+    "mcp/server.json",
+    "mcp/Dockerfile",
     "mcp/README.md",
     "web/mcp.html",
     "web/seal.png",
