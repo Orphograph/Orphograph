@@ -937,6 +937,22 @@ class Handler(BaseHTTPRequestHandler):
             return None
         return auth.session_email(sid.value)
 
+    def _vault_email(self) -> str | None:
+        """Resolve the requester for the vault endpoints (/api/me/anchors*).
+
+        Precedence mirrors /api/anchor: an `X-Orpho-Api-Key` belonging to an
+        active subscriber authenticates first (this is what the MCP server and
+        SDKs send — they have no cookie jar), then the session cookie. A key
+        whose owner's subscription has lapsed falls through to the cookie
+        rather than erroring, matching the anchor path's behavior.
+        """
+        api_key = self.headers.get("X-Orpho-Api-Key", "").strip()
+        if api_key:
+            email = api_keys.email_for_key(api_key)
+            if email and _subscription_active_for(email):
+                return email
+        return self._session_email()
+
     def do_GET(self):  # noqa: N802
         path = self.path.split("?", 1)[0]
         # homepage A/B: split "/" between the cream and dark documents
@@ -1616,7 +1632,7 @@ class Handler(BaseHTTPRequestHandler):
             _json_response(self, 200, {"team": t, "role": "owner" if t.get("owner") == email else "member"})
             return
         if path == "/api/me/anchors":
-            email = self._session_email()
+            email = self._vault_email()
             if not email:
                 _json_response(self, 401, {"error": "not authenticated"})
                 return
@@ -1662,7 +1678,7 @@ class Handler(BaseHTTPRequestHandler):
             })
             return
         if path == "/api/me/anchors.zip":
-            email = self._session_email()
+            email = self._vault_email()
             if not email:
                 _json_response(self, 401, {"error": "not authenticated"})
                 return
@@ -1696,7 +1712,7 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(body)
             return
         if path == "/api/me/anchors.csv":
-            email = self._session_email()
+            email = self._vault_email()
             if not email:
                 _json_response(self, 401, {"error": "not authenticated"})
                 return
