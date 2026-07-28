@@ -4430,7 +4430,12 @@ def _list_anchors_for_email(
     """
     if not email:
         return ([], False) if with_more_flag else []
-    expected_source = "sub:" + auth.email_id(email)
+    # Session-anchored receipts are tagged sub:<email_id>; API-key-anchored
+    # receipts are tagged api:<key[:10]>. Both belong in the owner's vault,
+    # including receipts anchored under a since-rotated key.
+    expected_sources = {"sub:" + auth.email_id(email)}
+    expected_sources.update(
+        "api:" + p for p in api_keys.source_prefixes_for_email(email))
     receipts_dir = engine.RECEIPTS_DIR
     if not receipts_dir.exists():
         return ([], False) if with_more_flag else []
@@ -4448,7 +4453,7 @@ def _list_anchors_for_email(
             rec = json.loads(rfile.read_text())
         except (OSError, json.JSONDecodeError):
             continue
-        if rec.get("source") != expected_source:
+        if rec.get("source") not in expected_sources:
             continue
         created = rec.get("created_at", "")
         if before is not None and created >= before:
