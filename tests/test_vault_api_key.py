@@ -87,9 +87,9 @@ class TestVaultApiKey(unittest.TestCase):
         cls.other_email = "other@example.com"
         cls.lapsed_email = "lapsed@example.com"
         # Active for owner + other; lapsed subscriber has a key but no sub.
+        cls._active_emails = {cls.owner_email, cls.other_email}
         cls._orig_is_active = subs_mod.is_active
-        subs_mod.is_active = lambda email: email in (
-            cls.owner_email, cls.other_email)
+        subs_mod.is_active = lambda email: email in cls._active_emails
         cls.owner_id = auth_mod.email_id(cls.owner_email)
         cls.other_id = auth_mod.email_id(cls.other_email)
 
@@ -108,6 +108,12 @@ class TestVaultApiKey(unittest.TestCase):
                                       f"sub:{cls.owner_id}")
             cls.r_other = cls._anchor(engine_mod, "other-doc",
                                       f"sub:{cls.other_id}")
+            # Receipts anchored VIA the key carry the api:<key[:10]> source
+            # tag — they must land in the same vault as session anchors.
+            cls.r_owner_api = cls._anchor(engine_mod, "owner-keyed-doc",
+                                          f"api:{cls.owner_key[:10]}")
+            cls.r_other_api = cls._anchor(engine_mod, "other-keyed-doc",
+                                          f"api:{cls.other_key[:10]}")
         finally:
             engine_mod._submit = original_submit
 
@@ -160,14 +166,44 @@ class TestVaultApiKey(unittest.TestCase):
         self.assertEqual(status, 200)
         ids = self._receipt_ids(body)
         self.assertIn(self.r_owner["receipt_id"], ids)
+        self.assertIn(self.r_owner_api["receipt_id"], ids)
         self.assertNotIn(self.r_other["receipt_id"], ids)
+        self.assertNotIn(self.r_other_api["receipt_id"], ids)
 
     def test_key_scopes_to_its_owner(self):
         status, body, _ = self._get("/api/me/anchors", api_key=self.other_key)
         self.assertEqual(status, 200)
         ids = self._receipt_ids(body)
         self.assertIn(self.r_other["receipt_id"], ids)
+        self.assertIn(self.r_other_api["receipt_id"], ids)
         self.assertNotIn(self.r_owner["receipt_id"], ids)
+        self.assertNotIn(self.r_owner_api["receipt_id"], ids)
+
+    def test_cookie_session_sees_keyed_receipts(self):
+        # The dashboard (cookie auth) must show receipts anchored via the key.
+        status, body, _ = self._get("/api/me/anchors", cookie=True)
+        self.assertEqual(status, 200)
+        self.assertIn(self.r_owner_api["receipt_id"], self._receipt_ids(body))
+
+    def test_rotated_key_receipts_survive(self):
+        # Receipts anchored under an old key stay in the vault after rotation.
+        rot_email = "rotate@example.com"
+        self._active_emails.add(rot_email)
+        try:
+            key1 = self.api_keys.issue(rot_email)
+            original_submit = self.engine._submit
+            self.engine._submit = lambda cal, h: (False, "stubbed: no network")
+            try:
+                rec = self._anchor(self.engine, "rotated-doc",
+                                   f"api:{key1[:10]}")
+            finally:
+                self.engine._submit = original_submit
+            key2 = self.api_keys.issue(rot_email)  # supersedes key1
+            status, body, _ = self._get("/api/me/anchors", api_key=key2)
+            self.assertEqual(status, 200)
+            self.assertIn(rec["receipt_id"], self._receipt_ids(body))
+        finally:
+            self._active_emails.discard(rot_email)
 
     def test_bogus_key_is_401(self):
         status, _, _ = self._get("/api/me/anchors",

@@ -120,6 +120,21 @@ def revoke(email: str) -> bool:
     return False
 
 
+def source_prefixes_for_email(email: str) -> set[str]:
+    """10-char plaintext prefixes of every key ever issued to this email —
+    the form receipts are tagged with at anchor time (`api:<key[:10]>`).
+    Rotated-away keys are included so their receipts stay reachable."""
+    if not email:
+        return set()
+    out: set[str] = set()
+    for row in _read_rows():
+        if row.get("email") == email and row.get("event") == "issued":
+            kp = row.get("key_prefix") or ""
+            if len(kp) >= 10:
+                out.add(kp[:10])
+    return out
+
+
 def email_for_key(key: str) -> str | None:
     """Return the email a key belongs to if the key is currently active,
     else None. Constant work cost regardless of validity."""
