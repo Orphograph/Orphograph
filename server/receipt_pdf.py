@@ -212,13 +212,54 @@ def _composite_over_cream(width: int, height: int, channels: int, pixels: bytes)
     return bytes(out)
 
 
+def _downsample_rgb(width: int, height: int, rgb: bytes, factor: int):
+    """Box-average an RGB buffer by an integer factor. Trailing rows/columns
+    that don't fill a full box are dropped (at most factor-1 pixels)."""
+    if factor <= 1:
+        return width, height, rgb
+    new_w = width // factor
+    new_h = height // factor
+    out = bytearray(new_w * new_h * 3)
+    f2 = factor * factor
+    di = 0
+    for by in range(new_h):
+        y0 = by * factor
+        for bx in range(new_w):
+            x0 = bx * factor
+            rs = gs = bs = 0
+            for dy in range(factor):
+                row = ((y0 + dy) * width + x0) * 3
+                for _ in range(factor):
+                    rs += rgb[row]
+                    gs += rgb[row + 1]
+                    bs += rgb[row + 2]
+                    row += 3
+            out[di] = (rs + f2 // 2) // f2
+            out[di + 1] = (gs + f2 // 2) // f2
+            out[di + 2] = (bs + f2 // 2) // f2
+            di += 3
+    return new_w, new_h, bytes(out)
+
+
+# The seal is drawn into a box ~78pt tall; ~200px is >180 dpi effective there,
+# indistinguishable on screen and print while cutting the attachment size
+# roughly 30x (the 1254px source alone made each mailed PDF ~1.7 MB).
+_SEAL_TARGET_PX = 200
+
+
 def _try_load_seal(path: str):
-    """Return (width, height, flate_rgb_bytes) for the embedded seal, or None."""
+    """Return (width, height, flate_rgb_bytes) for the embedded seal, or None.
+
+    Width/height are the EMBEDDED dimensions (post-downsample); callers derive
+    the draw aspect from them rather than assuming any particular ratio.
+    """
     try:
         with open(path, "rb") as f:
             data = f.read()
         w, h, ch, raw = _decode_png_rgba_or_rgb(data)
         flat_rgb = _composite_over_cream(w, h, ch, raw)
+        factor = max(1, min(w, h) // _SEAL_TARGET_PX)
+        w, h, flat_rgb = _downsample_rgb(w, h, flat_rgb, factor)
         compressed = zlib.compress(flat_rgb, 6)
         return w, h, compressed
     except Exception:
@@ -232,14 +273,18 @@ def _try_load_seal(path: str):
 # Content stream
 # ---------------------------------------------------------------------------
 
-def _content_stream(receipt: dict, site_url: str, seal_available: bool) -> bytes:
-    rid = _escape(str(receipt.get("receipt_id", "")))
-    hash_hex = _escape(str(receipt.get("hash_hex", "")))
-    created_at = _escape(str(receipt.get("created_at", "")))
+def _content_stream(receipt: dict, site_url: str, seal_aspect: float | None) -> bytes:
+    # Values stay RAW here; _escape() is applied exactly once, at the point
+    # each string is written into a (…) Tj literal. Escaping earlier caused
+    # double-escaping — "(pending)" rendered as literal "\(pending\)".
+    rid = str(receipt.get("receipt_id", ""))
+    hash_hex = str(receipt.get("hash_hex", ""))
+    created_at = str(receipt.get("created_at", ""))
     cal_ok = int(receipt.get("calendars_ok", 0))
     cal_total = int(receipt.get("calendars_total", 0))
-    pinned_at = _escape(str(receipt.get("btc_pinned_at", "") or "(pending)"))
-    site = _escape(site_url.rstrip("/"))
+    pinned_at = str(receipt.get("btc_pinned_at", "") or "(pending)")
+    site = site_url.rstrip("/")
+    seal_available = seal_aspect is not None
 
     lines: list[str] = []
     add = lines.append
@@ -250,19 +295,17 @@ def _content_stream(receipt: dict, site_url: str, seal_available: bool) -> bytes
     add("0 0 612 792 re f")
     add("Q")
 
-    # ---- Header band: seal (aspect-preserved, taller than wide) at the
-    # left, wordmark + subline beside it. Both elements sit just above the
-    # horizontal rule at y=700. Seal source is web/seal.png at 170x285
-    # (aspect 0.596 — taller than wide). Forcing it into a square box
-    # made the cord-coil look elliptical; we preserve the native ratio.
+    # ---- Header band: seal at the left, wordmark + subline beside it. Both
+    # elements sit just above the horizontal rule at y=700. The seal's draw
+    # box uses the aspect ratio MEASURED from the decoded PNG (web/seal.png
+    # is 1254x1254 — square); a hardcoded ratio here once squashed the
+    # medallion into a 0.6 portrait and it shipped stretched to customers.
     RULE_Y = 700.0                              # horizontal rule baseline
     GAP_ABOVE_RULE = 4.0                        # both elements end this many pts above the rule
     seal_x = 72.0
-    seal_h = 78.0                               # taller logo, "long not stretched"
-    seal_aspect_w_over_h = 170.0 / 285.0        # native PNG aspect
-    seal_w = seal_h * seal_aspect_w_over_h      # ~46.5pt — slim portrait
+    seal_h = 78.0
+    seal_w = seal_h * (seal_aspect if seal_aspect else 1.0)
     seal_y_bottom = RULE_Y + GAP_ABOVE_RULE     # 704 — sits just above the rule
-    seal_y_top = seal_y_bottom + seal_h         # 782
 
     if seal_available:
         # PDF image space is 1×1; the cm matrix scales + translates into place.
@@ -272,8 +315,8 @@ def _content_stream(receipt: dict, site_url: str, seal_available: bool) -> bytes
         add("/Im1 Do")
         add("Q")
     else:
-        # Vector fallback: vertical oval (matches the native portrait aspect)
-        # with a serif "O" inside, drawn so the bottom kisses the rule.
+        # Vector fallback: ellipse matching the draw box (a circle when the
+        # aspect is square) with a serif "O", bottom kissing the rule.
         cx = seal_x + seal_w / 2.0
         cy = seal_y_bottom + seal_h / 2.0
         rx = seal_w / 2.0 - 2.0
@@ -329,7 +372,7 @@ def _content_stream(receipt: dict, site_url: str, seal_available: bool) -> bytes
     add("BT")
     add("/F1 18 Tf")
     add(f"{DARK_R} {DARK_G} {DARK_B} rg")
-    add(f"72 670 Td (Receipt {rid}) Tj")
+    add(f"72 670 Td (Receipt {_escape(rid)}) Tj")
     add("ET")
 
     # Subtitle in muted color.
@@ -378,7 +421,7 @@ def _content_stream(receipt: dict, site_url: str, seal_available: bool) -> bytes
     add("BT")
     add("/F1 10 Tf")
     add(f"{DARK_R} {DARK_G} {DARK_B} rg")
-    add(f"72 96 Td ({site}/r/{rid}) Tj")
+    add(f"72 96 Td ({_escape(site)}/r/{_escape(rid)}) Tj")
     add("ET")
     add("BT")
     add("/F1 8 Tf")
@@ -400,8 +443,9 @@ def render_receipt_pdf(receipt: dict, site_url: str = "https://orphograph.com") 
     """
     seal = _try_load_seal(SEAL_PATH_DEFAULT)
     seal_available = seal is not None
+    seal_aspect = (seal[0] / seal[1]) if seal_available else None
 
-    content = _content_stream(receipt, site_url, seal_available)
+    content = _content_stream(receipt, site_url, seal_aspect)
 
     # Object plan:
     #   1 — Catalog
