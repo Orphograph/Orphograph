@@ -59,6 +59,42 @@ beyond `curl` and `shasum`.
 
 ---
 
+## MCP server (Model Context Protocol)
+
+Orphograph ships an **MCP server**: a single stdlib-only Python file (682
+lines, MIT) that implements the Model Context Protocol — JSON-RPC 2.0 over
+stdio, protocol version `2024-11-05`, with the `initialize`, `tools/list`,
+and `tools/call` methods implemented directly, no SDK — so AI agents and
+MCP hosts (Claude Code, Claude Desktop, or any MCP client) can anchor and
+verify files as tool calls.
+
+Listed in the official MCP registry as `io.github.Orphograph/orphograph`.
+
+**MCP tools exposed** (full JSON Schemas in [`mcp/manifest.json`](mcp/manifest.json)):
+
+| Tool | What it does |
+| --- | --- |
+| `orphograph_anchor_file` | Hash a local file (SHA-256/SHA-512 computed in-process) and anchor the fingerprints to Bitcoin via OpenTimestamps. The file body never leaves the machine. |
+| `orphograph_anchor_folder` | Build an RFC-6962 Merkle manifest over a folder and anchor one root that covers every file. |
+| `orphograph_anchor_output` | Anchor an AI agent's generated output at creation time — provenance receipts for agent actions. |
+| `orphograph_verify_receipt` | Verify an existing receipt against the OpenTimestamps calendars and the Bitcoin chain. No API key required. |
+| `orphograph_list_vault` | List the authenticated subscriber's anchored receipts. |
+
+Quickstart (stdio transport):
+
+```bash
+curl -sSL https://orphograph.com/mcp/orphograph_mcp.py -o orphograph_mcp.py
+claude mcp add orphograph -- python3 orphograph_mcp.py
+```
+
+The free tier needs no API key; set `ORPHO_API_KEY` to use vault features.
+An MCPB bundle is attached to release `mcp-v0.1.0`, and
+[`mcp/Dockerfile`](mcp/Dockerfile) builds a minimal container for MCP
+directory crawlers — the server starts and answers MCP introspection with
+no configuration. Full tool schemas and options: [`mcp/README.md`](mcp/README.md).
+
+---
+
 ## Architecture
 
 Python 3.11+ stdlib only on the server (`http.server`, `urllib`, `hashlib`,
