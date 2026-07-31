@@ -1,5 +1,13 @@
 # Verifier Drift Audit — 2026-07-12 (INTERNAL)
 
+> **STATUS 2026-07-31: NO OPEN HIGH FINDINGS.** D1 and D2 (the two HIGHs)
+> are FIXED on master and re-verified by adversarial execution; D3, D4, D7
+> were fixed 2026-07-15; D5's hash-field leniency is closed by the D1 fix
+> (remaining alias use is receipt_id display only); D6 is a cosmetic note
+> text. If a summary elsewhere claims "two open HIGH-severity bugs," it
+> predates this annotation — trust the per-finding FIXED blocks below,
+> which cite code and executed evidence.
+
 Scope: the three shipped independent verification implementations —
 `sdk-python/`, `sdk-node/`, `verifier-js/` — audited against the canonical
 server logic (`server/engine.py:verify_receipt` /
@@ -41,7 +49,15 @@ should be pointed at the pairing explicitly.
 
 ## 2. Drift matrix — worst first
 
-### D1. verifier-js lowercases the receipt's stored hash — WRONG ANSWER vs canon (severity: HIGH)
+### D1. verifier-js lowercases the receipt's stored hash — WRONG ANSWER vs canon (severity: HIGH) — **FIXED**
+
+> **FIXED** (on master; re-verified by execution 2026-07-31): verifier-js now
+> compares the stored hash verbatim and lowercases only the supplied side
+> (`orphograph_verify.js` — "Canonical fields only, stored value compared
+> as-is"). Adversarial re-run: uppercase-stored receipt → `ok: false` (canon
+> agrees); lowercase control → `ok: true`. Alias-only receipt (`sha256`
+> without `hash_hex`) → `ok: false`, which also closes **D5** for the hash
+> fields (receipt_id display aliases remain, cosmetic only).
 
 `verifier-js/orphograph_verify.js:157` —
 `String(receipt.hash_hex || …).toLowerCase()`. The engine
@@ -58,7 +74,13 @@ Mitigation in practice: `anchor_hash` normalises to lowercase at write time
 only on out-of-band-edited receipt JSON — which is exactly the adversarial
 case a verifier exists for. Spec §3.2 pins the canon behaviour.
 
-### D2. sdk-python `verify_folder` hardcodes the default exclude list — WRONG ANSWER between SDKs (severity: HIGH)
+### D2. sdk-python `verify_folder` hardcodes the default exclude list — WRONG ANSWER between SDKs (severity: HIGH) — **FIXED**
+
+> **FIXED** (on master; re-verified 2026-07-31): `verify_folder` now accepts
+> an `exclude` kwarg mirrored into `MerkleTree.from_folder`
+> (`sdk-python/orphograph/__init__.py:83,103`, with an inline AUDIT D2
+> comment). Custom-exclude folders verify through the Python SDK; SDKs agree.
+> Vector suite (24) + sdk-python tests (18) all pass.
 
 `sdk-python/orphograph/__init__.py:101` — `MerkleTree.from_folder(root,
 exclude=None)` with no way for the caller to override, while
