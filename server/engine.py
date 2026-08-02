@@ -103,6 +103,7 @@ def anchor_hash(
     attestation: dict | None = None,
     metadata: dict | None = None,
     c2pa_manifest_hash: str | None = None,
+    zk_proof: dict | None = None,
 ) -> dict:
     """Anchor a client-supplied SHA-256 hex digest. Returns the receipt record.
 
@@ -215,6 +216,12 @@ def anchor_hash(
         "successes": successes,
         "failures": failures,
     }
+    # Optional zero-knowledge provenance proof (machine proof, distinct from
+    # the human `attestation` claim above). Sanitized to a strict shape; only
+    # written when present so existing receipts remain shape-stable.
+    zk_sanitized = _sanitize_zk_provenance(zk_proof, hash_hex)
+    if zk_sanitized is not None:
+        record["zk_provenance"] = zk_sanitized
     receipt_file = receipt_dir / "receipt.json"
     receipt_file.write_text(json.dumps(record, indent=2))
     try:
@@ -243,6 +250,44 @@ def _sanitize_attestation(attestation: dict | None) -> dict | None:
             if stripped:
                 out[k] = stripped[:500]
     return out or None
+
+
+def _sanitize_zk_provenance(proof: dict | None, hash_hex: str) -> dict | None:
+    """Strictly validate a zero-knowledge provenance proof for the receipt.
+
+    Unlike `attestation` (a brief human authorship claim), this field carries
+    a machine-verifiable proof whose numeric fields are large decimal strings
+    (a 2048-bit group element is ~617 digits) — so it gets its own sanitizer
+    with shape validation instead of the attestation allowlist's short caps.
+
+    Rejects the whole proof (returns None) on ANY violation rather than
+    persisting a partial proof that could never re-verify.
+    """
+    if not proof or not isinstance(proof, dict):
+        return None
+    if proof.get("proof_type") not in ("schnorr-zk-pok-v1",):
+        return None
+    # The proof must be bound to the hash being anchored — a proof for a
+    # different output riding on this receipt is meaningless at best.
+    output_hash = proof.get("output_hash")
+    if not isinstance(output_hash, str) or output_hash.strip().lower() != hash_hex:
+        return None
+    out = {"proof_type": proof["proof_type"], "output_hash": hash_hex}
+    model_id = proof.get("model_id")
+    if not isinstance(model_id, str) or not model_id.strip():
+        return None
+    out["model_id"] = model_id.strip()[:200]
+    # Decimal group elements / scalars: digits only, bounded well above the
+    # 2048-bit maximum (~617 digits) but low enough to stop blob-smuggling.
+    for k in ("commitment", "A", "s1", "s2", "challenge"):
+        v = proof.get(k)
+        if not isinstance(v, str):
+            return None
+        v = v.strip()
+        if not v or len(v) > 700 or not v.isdigit():
+            return None
+        out[k] = v
+    return out
 
 
 def _sanitize_metadata(metadata: dict | None) -> dict | None:
@@ -323,6 +368,10 @@ def verify_receipt(receipt_id: str) -> dict:
     # Folder anchors carry three extra fields so verifiers can fetch the
     # manifest in addition to the .ots files. Only surface them when set
     # so single-file receipts remain shape-stable.
+    # ZK provenance proof: surfaced only when present (same shape-stability
+    # rule as the folder fields below).
+    if record.get("zk_provenance"):
+        out["zk_provenance"] = record["zk_provenance"]
     if record.get("kind"):
         out["kind"] = record["kind"]
     if record.get("leaf_count") is not None:
