@@ -1,0 +1,11 @@
+node_modules/
+build_dev/
+build_full/
+package-lock.json
+*.ptau
+*.zkey
+*.wtns
+input.json
+expected.json
+public.json
+proof.json
