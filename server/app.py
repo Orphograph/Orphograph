@@ -3362,6 +3362,33 @@ class Handler(BaseHTTPRequestHandler):
         except (KeyError, TypeError, ValueError) as e:
             _json_response(self, 400, {"error": f"manifest invalid: {e}"})
             return
+        # Optional edit-lineage elements (design: docs/DESIGN_EDIT_LINEAGE.md).
+        # Validate BEFORE anchoring so a malformed lineage costs a 400, not a
+        # burned anchor. verify_tree=False: from_manifest already re-folded
+        # the tree two lines up. A plain folder manifest returns None here
+        # and anchors exactly as before.
+        try:
+            lineage_pre = engine.derive_lineage_from_manifest(manifest, verify_tree=False)
+        except ValueError as e:
+            _json_response(self, 400, {"error": f"lineage invalid: {e}"})
+            return
+        if lineage_pre is not None:
+            # Fail-fast twin of attach_lineage's local-parent rule: if the
+            # named parent receipt exists on this server, its anchored hash
+            # must equal the committed parent root — catch the contradiction
+            # before spending calendar submissions.
+            parent_file = engine.RECEIPTS_DIR / lineage_pre["parent_receipt_id"] / "receipt.json"
+            if parent_file.exists():
+                try:
+                    parent_rec = json.loads(parent_file.read_text())
+                except (OSError, json.JSONDecodeError):
+                    parent_rec = {}
+                if parent_rec.get("hash_hex") != lineage_pre["parent_root"]:
+                    _json_response(self, 400, {
+                        "error": "lineage invalid: parent receipt exists but its "
+                                 "anchored hash does not match the committed parent root",
+                    })
+                    return
         # Optional Ed25519 authorship signature. The signature block is
         # additive: a manifest with no signature anchors exactly as before.
         # If a signature IS present, it MUST verify — a manifest that claims
@@ -3448,6 +3475,17 @@ class Handler(BaseHTTPRequestHandler):
             rfile.write_text(json.dumps(on_disk, indent=2))
         except OSError:
             pass
+        # Mirror committed lineage onto the persisted receipt (design §2.4).
+        # Pre-anchor validation above means this can only fail on a race;
+        # the receipt itself is already real either way, so a late failure
+        # is reported inside the response, never as an error status.
+        lineage_out = None
+        if lineage_pre is not None:
+            try:
+                lineage_out = engine.attach_lineage(rid, manifest_to_store)
+            except ValueError as e:
+                lineage_out = {**lineage_pre, "committed": False,
+                               "error": f"lineage not mirrored: {e}"}
         response_body = {
             "receipt_id": rid,
             "root_hex": root_hex,
@@ -3458,6 +3496,8 @@ class Handler(BaseHTTPRequestHandler):
             "calendars_total": record["calendars_total"],
             "created_at": record["created_at"],
         }
+        if lineage_out is not None:
+            response_body["lineage"] = lineage_out
         if sig_verified is not None:
             response_body["signature_verified"] = sig_verified
             response_body["signer_kid"] = signer_kid
