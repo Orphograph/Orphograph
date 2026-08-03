@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+launchd template for the Orphograph USB provenance recorder (macOS).
+
+TEMPLATE — launchd does NOT expand $HOME or any shell variable inside plist
+strings. Replace every $HOME below with your real home directory before
+installing (see capture/USB_DAEMON.md for a one-line sed that does it).
+
+Runs orphograph_usb.py as a SCHEDULED ONE-SHOT, not a resident daemon.
+
+Why StartInterval and not KeepAlive: in volume mode the recorder exits
+immediately when the drive is not mounted (it does NOT block waiting for it).
+Under KeepAlive that becomes a crash-loop restarting every ThrottleInterval,
+forever, whenever no stick is plugged in. A periodic one-shot is the correct
+shape for plug-in-when-you-want hardware: each run checks for the drive, does
+one pass if it is there, and exits cleanly if it is not.
+
+NOTE on the API key: orphograph_usb.py reads ORPHOGRAPH_API_KEY (the env var
+behind its api-key flag). No key is set here, so anchoring runs on the free
+(rate-limited) tier. Uncomment and set the key below before pointing this at
+a full drive.
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.orphograph.usb</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/python3</string>
+        <string>$HOME/orphograph/capture/orphograph_usb.py</string>
+        <string>--volume</string>
+        <string>ORPHOGRAPH</string>
+        <string>--once</string>
+    </array>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>ORPHO_ENDPOINT</key>
+        <string>https://orphograph.com</string>
+        <!-- <key>ORPHOGRAPH_API_KEY</key><string>...</string> -->
+    </dict>
+
+    <key>StartInterval</key>
+    <integer>300</integer>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>ThrottleInterval</key>
+    <integer>60</integer>
+
+    <key>StandardOutPath</key>
+    <string>$HOME/Library/Logs/orphograph-usb.out</string>
+
+    <key>StandardErrorPath</key>
+    <string>$HOME/Library/Logs/orphograph-usb.err</string>
+
+    <key>ProcessType</key>
+    <string>Background</string>
+
+    <key>Nice</key>
+    <integer>10</integer>
+</dict>
+</plist>
