@@ -19,23 +19,21 @@ OTS calendars, ledger-backup freshness, www TLS, GitHub access).
 
 ## Real blockers as of 2026-08-02
 
-### 1. www.orphograph.com TLS — FOUNDER: one Cloudflare toggle
+### 1. www.orphograph.com TLS — ✅ RESOLVED 2026-08-03T01:34Z
 - Root cause: `www` is a **grey-cloud CNAME → orphograph.com** in Cloudflare.
   Cloudflare flattens that through the proxied apex to the Fly *origin* IPs,
   so browsers reach Fly directly with SNI `www.…` — and Fly had no cert.
-- Machine-side DONE: `fly certs add www.orphograph.com` staged 2026-08-02.
-  It cannot validate while the CNAME answer points at the proxied apex.
-- **Founder action (pick one, ~60s in the Cloudflare DNS dashboard):**
-  - **A (recommended):** click the cloud on the `www` CNAME record → **orange
-    (Proxied)**. Cloudflare Universal SSL then terminates `www` immediately;
-    no Fly cert needed. Optionally add a redirect rule www → apex.
-  - **B:** add `CNAME _acme-challenge.www` →
-    `www.orphograph.com.gmzrg5k.flydns.net.` (DNS only) so the staged Fly
-    cert issues.
-- Verify after: `curl -sI https://www.orphograph.com/` returns a status line.
-  Monitor flips `www_tls_ok: true` and sends a recovery notice on its own.
-- Note: no Cloudflare API token exists on this machine (`.env.local` token is
-  empty) — that's why this is founder-gated.
+- FIXED via Cloudflare MCP plugin (OAuth as the zone-owning login): www CNAME
+  + apex AAAA orange-clouded, edge redirect rule www->apex (301, path+query
+  preserved), _acme-challenge.www CNAME added so the staged Fly cert can
+  issue. Verified live: www 301->apex, deep links 200, monitor www_tls_ok=true.
+- (History) Machine-side prep: `fly certs add www.orphograph.com` staged
+  2026-08-02; both options A+B were executed via API on 2026-08-03 after the
+  Cloudflare plugin OAuth landed on the zone-owning login.
+- Cloudflare API access NOW EXISTS on this machine: `cloudflare@cloudflare`
+  Claude Code plugin, OAuth'd as the zone-owning login. That account holds
+  one other, unrelated zone — scope every API call to the orphograph.com
+  zone id and never enumerate-and-modify across zones.
 
 ### 2. Ledger backup freshness — machine-side, fix in flight
 - Snapshots stalled after 2026-07-29T1133Z: the 07:15 launchd runs hit local
