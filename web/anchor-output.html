@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Orphograph — Anchor an Agent Output</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#f6f1e3">
+<meta name="description" content="Anchor the output of an AI agent or model run. The text is fingerprinted in your browser — only its SHA-256 is submitted and committed to Bitcoin via OpenTimestamps.">
+<link rel="icon" type="image/png" href="/favicon.png?v=8">
+<meta property="og:title" content="Orphograph — Anchor an Agent Output">
+<meta property="og:description" content="Tamper-evident receipts for AI agent outputs. Fingerprinted in the browser, anchored to Bitcoin.">
+<meta property="og:url" content="https://orphograph.com/anchor-output">
+<meta property="og:type" content="article">
+<meta property="og:image" content="https://orphograph.com/og-image.png?v=8">
+<link rel="canonical" href="https://orphograph.com/anchor-output">
+<link rel="stylesheet" href="/index.css?v=16">
+<link rel="stylesheet" href="/anchor-output.css?v=1">
+<meta name="copyright" content="© 2026 Orphograph. Code MIT — see /LICENSE. The Orphograph wordmark and seal are reserved.">
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap row">
+    <a href="/" class="brand">Orphograph</a>
+    <nav>
+      <a href="/learn">Method</a>
+      <a href="/writers">Writers</a>
+      <a href="/pricing">Pricing</a>
+      <a href="/about">Office</a>
+      <a href="/signin">Vault</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap ao-main">
+  <h1>Anchor an agent output</h1>
+  <p class="ao-lede">
+    Paste the output of an AI agent, model run, or generated draft. It is
+    fingerprinted <strong>in your browser</strong> — the text itself never
+    leaves this page. Only the SHA-256 (with a SHA-512 sibling witness) is
+    submitted and committed to Bitcoin via OpenTimestamps. The receipt is
+    later verifiable by anyone, offline, without Orphograph.
+  </p>
+
+  <form id="ao-form">
+    <label for="ao-text" class="ao-label">Agent output</label>
+    <textarea id="ao-text" rows="10" required
+      placeholder="Paste the exact output text here. It stays in your browser."></textarea>
+    <p class="ao-hint"><span id="ao-count">0</span> characters · hashed locally with WebCrypto</p>
+
+    <label for="ao-label" class="ao-label">Label <span class="ao-opt">(optional — recorded on the receipt)</span></label>
+    <input id="ao-label" type="text" maxlength="120"
+      placeholder="e.g. research-agent draft 3, model gpt-class-v3">
+
+    <label for="ao-c2pa" class="ao-label">C2PA manifest hash <span class="ao-opt">(optional — 64-hex SHA-256 of a Content Credentials manifest)</span></label>
+    <input id="ao-c2pa" type="text" maxlength="64" spellcheck="false"
+      placeholder="If this output ships with a C2PA manifest, bind its fingerprint here.">
+    <p class="ao-hint ao-c2pa-note">The manifest itself stays with you; the receipt records only its hash, so the two provenance trails corroborate each other.</p>
+
+    <label for="ao-claim" class="ao-label">Claim <span class="ao-opt">(optional — a brief statement recorded at anchor time)</span></label>
+    <input id="ao-claim" type="text" maxlength="500"
+      placeholder="e.g. Produced by our drafting agent on this date, prompt withheld.">
+
+    <button type="submit" class="cta" id="ao-submit">Fingerprint &amp; anchor</button>
+  </form>
+
+  <div id="ao-status" class="ao-status" hidden></div>
+
+  <div id="ao-receipt" class="ao-receipt" hidden>
+    <h2>Receipt created</h2>
+    <p class="ao-mono">SHA-256: <span id="ao-r-hash"></span></p>
+    <p>Receipt <a id="ao-r-link" href="/">view &amp; download proofs</a> —
+      keep the .ots files with the output text; together they verify offline
+      against the Bitcoin chain, with no Orphograph account and no server.</p>
+    <p class="ao-hint">A receipt shows this exact text existed no later than
+      its Bitcoin attestation. It does not, by itself, show how the text was
+      produced — pair it with your own run records for that.</p>
+  </div>
+
+  <section class="ao-how">
+    <h2>What this proves — and what it doesn't</h2>
+    <p>
+      The receipt is cryptographic proof that this exact output existed
+      before a point in time. It is provenance, not detection: it makes no
+      claim about whether content is human- or machine-made, and no claim of
+      authorship. Agents can anchor programmatically through the
+      <a href="/mcp">MCP server</a> — this page is the same anchor, by hand.
+    </p>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap footer-inner">
+    <p>Orphograph · An empirical notary.</p>
+    <p class="mt-8">
+      <a href="/" class="link-muted">Home</a> ·
+      <a href="/method" class="link-muted">Method</a> ·
+      <a href="/pricing" class="link-muted">Pricing</a> ·
+      <a href="/terms" class="link-muted">Terms</a> ·
+      <a href="/privacy" class="link-muted">Privacy</a>
+    </p>
+  </div>
+  <!-- legal-disclaimer -->
+  <div class="wrap legal-disclaimer">
+    Orphograph is not a law firm, not a notary, and not a qualified electronic-trust-service provider. A receipt is cryptographic proof that a file existed before a point in time — it is not legal advice.
+  </div>
+</footer>
+
+<script src="/statusbar.js?v=2" defer></script>
+<script src="/assets/event.js?v=1" defer></script>
+<script src="/anchor-output.js?v=1" defer></script>
+</body>
+</html>
