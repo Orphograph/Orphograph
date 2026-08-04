@@ -34,9 +34,19 @@ is ~2-10x faster and drop-in if installed later).
    AND st0 against the Python transcript (circuit hash 489c0fc1…9de2099f).
    ~2h wall-clock on an M-series laptop with the WASM/pure-JS toolchain,
    dominated by the powers-of-tau prepare step.
-3. ☐ Full 8-round profile proven (needs 2^20 ptau: generate locally
-   overnight, or fetch a public ceremony file and verify its published
-   hash before trusting it).
+3. ✅ Full 8-round profile PASSED 2026-08-04: public Hermez 2^20 ceremony
+   file (`powersOfTau28_hez_final_20.ptau`, blake2b verified against the
+   published hash — twice, wrapper + runner) → groth16 setup (595,040
+   constraints) → prove → verify OK → `check_public.py` MATCH on stN,
+   commitment, AND st0 vs the Python transcript (circuit hash
+   4842082b…6ffc359c; stN f462ad35…5caf4986, commitment 4c4b8ec6…ebe1c2d3
+   for model gpt-class-v3 / prompt "hidden P" / seed "seed-1").
+   Evidence: `evidence_8round_2026_08_04/` (proof, public signals,
+   verification key, expected transcript — the private input.json is
+   deliberately NOT committed). Ops note: the 1.2GB fetch needed a
+   resume loop with long backoff (ISP throttling + connection resets)
+   and `caffeinate`; setup itself was fast because the hez "final" file
+   is already phase-2 prepared.
 4. ☐ `snark-exec-v1` receipt integration (sanitizer arm + tests + the
    REQUIRED forgery test: a (O, proof) pair where O was not produced by
    PROGRAM_V2 must fail).
