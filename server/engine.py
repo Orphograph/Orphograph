@@ -10,6 +10,7 @@ Public API:
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import secrets
@@ -93,6 +94,186 @@ def _is_hex(s: str, length: int) -> bool:
     return isinstance(s, str) and len(s) == length and all(c in "0123456789abcdef" for c in s)
 
 
+# ── edit-lineage (docs/DESIGN_EDIT_LINEAGE.md) ────────────────────────────
+# Reserved manifest path whose file_sha256_hex carries the PARENT receipt's
+# anchored root. The leaf rides the existing orphograph-merkle-v1-rfc6962
+# manifest unchanged (no merkle.py change, no algorithm-tag bump — design Q1
+# working assumption), so the parent root is committed inside the anchored
+# 32 bytes. The `.orphograph/` path prefix is documented as reserved.
+RESERVED_PARENT_PATH = ".orphograph/parent"
+
+
+def _is_receipt_id(s: object) -> bool:
+    """True when s matches the receipt-id alphabet (alnum + _ -, 1..64 chars).
+
+    Same rule the MCP applies before hitting /api/verify — the id is used to
+    build filesystem paths under RECEIPTS_DIR, so the alphabet check doubles
+    as a traversal guard.
+    """
+    return (
+        isinstance(s, str)
+        and 0 < len(s) <= 64
+        and all(c.isalnum() or c in ("_", "-") for c in s)
+    )
+
+
+def _lineage_leaf_hex(parent_root_hex: str) -> str:
+    """Recompute the reserved parent leaf exactly per merkle._leaf_hash.
+
+    SHA-256(0x00 || ".orphograph/parent" || 0x00 || parent_root). Kept local
+    (stdlib hashlib) so this module stays import-light; byte-identical to
+    server/merkle._leaf_hash(RESERVED_PARENT_PATH, parent_root_bytes).
+    """
+    return hashlib.sha256(
+        b"\x00" + RESERVED_PARENT_PATH.encode("utf-8") + b"\x00" + bytes.fromhex(parent_root_hex)
+    ).hexdigest()
+
+
+def derive_lineage_from_manifest(manifest: dict, verify_tree: bool = True) -> dict | None:
+    """Derive the receipt's `lineage` mirror block from a folder manifest.
+
+    Returns None when the manifest carries no lineage elements (the common
+    case — plain folder anchors are untouched). Otherwise returns
+    ``{"parent_receipt_id", "parent_root", "committed": True}`` — the block
+    §2.3 of docs/DESIGN_EDIT_LINEAGE.md specifies — after recomputing the
+    commitment from the reserved leaf itself. Hints are never trusted:
+    ``committed`` is True only because the reserved leaf's ``leaf_hex`` is
+    re-derived here from ``(RESERVED_PARENT_PATH, file_sha256_hex)`` and,
+    with ``verify_tree=True``, the whole manifest is re-folded to its root
+    via merkle.MerkleTree.from_manifest.
+
+    Raises ValueError on every malformed-lineage shape (server maps these to
+    400 per design §2.1):
+      * reserved leaf present without a top-level ``parent`` block, or the
+        converse;
+      * ``parent.root_hex`` differing from the reserved leaf's
+        ``file_sha256_hex``;
+      * more than one reserved leaf;
+      * reserved path with ``size_bytes != 0`` (design Q2 working
+        assumption: a real user file may not shadow the reserved path);
+      * non-canonical (not 64 lowercase hex) parent root;
+      * a reserved ``leaf_hex`` that does not derive from its
+        ``file_sha256_hex``;
+      * an invalid ``parent.receipt_id``.
+    """
+    if not isinstance(manifest, dict):
+        raise ValueError("manifest must be a dict")
+    leaves = manifest.get("leaves")
+    if not isinstance(leaves, list):
+        raise ValueError("manifest leaves must be a list")
+    reserved = [
+        leaf for leaf in leaves
+        if isinstance(leaf, dict) and leaf.get("path") == RESERVED_PARENT_PATH
+    ]
+    parent_block = manifest.get("parent")
+    if not reserved:
+        if parent_block is not None:
+            raise ValueError(
+                "manifest has a top-level parent block but no reserved "
+                f"{RESERVED_PARENT_PATH!r} leaf"
+            )
+        return None
+    if len(reserved) > 1:
+        raise ValueError(f"manifest has more than one reserved {RESERVED_PARENT_PATH!r} leaf")
+    leaf = reserved[0]
+    # Q2 working assumption: reject a reserved-path leaf that claims bytes on
+    # disk — the reserved leaf is synthetic and must carry size_bytes == 0.
+    if leaf.get("size_bytes") != 0:
+        raise ValueError(
+            f"reserved {RESERVED_PARENT_PATH!r} leaf must have size_bytes 0 "
+            "(the path is reserved for the parent-root commitment; rename any "
+            "real file under .orphograph/)"
+        )
+    parent_root = leaf.get("file_sha256_hex")
+    if not _is_hex(parent_root, 64):
+        raise ValueError(
+            "reserved parent leaf's file_sha256_hex must be 64 lowercase hex "
+            "characters (the parent receipt's anchored root, canonical form)"
+        )
+    # Recompute the commitment — the hint block is never the authority.
+    if _lineage_leaf_hex(parent_root) != leaf.get("leaf_hex"):
+        raise ValueError(
+            "reserved parent leaf_hex does not derive from its file_sha256_hex"
+        )
+    if not isinstance(parent_block, dict):
+        raise ValueError(
+            f"a manifest with a reserved {RESERVED_PARENT_PATH!r} leaf must "
+            "carry a top-level parent block {receipt_id, root_hex}"
+        )
+    if parent_block.get("root_hex") != parent_root:
+        raise ValueError(
+            "parent.root_hex does not match the reserved leaf's file_sha256_hex"
+        )
+    parent_receipt_id = parent_block.get("receipt_id")
+    if not _is_receipt_id(parent_receipt_id):
+        raise ValueError("parent.receipt_id is not a valid receipt id")
+    if verify_tree:
+        # Confirm the reserved leaf is actually folded into root_hex — the
+        # same recomputation the server runs at anchor time. Import is lazy
+        # so engine keeps zero import-time coupling to merkle.
+        try:
+            import merkle as _merkle
+        except ImportError:  # pragma: no cover — package-style import fallback
+            from server import merkle as _merkle  # type: ignore[no-redef]
+        _merkle.MerkleTree.from_manifest(manifest)  # raises ValueError on any mismatch
+    return {
+        "parent_receipt_id": parent_receipt_id,
+        "parent_root": parent_root,
+        "committed": True,
+    }
+
+
+def attach_lineage(receipt_id: str, manifest: dict) -> dict | None:
+    """Mirror a manifest's committed lineage onto an existing receipt.
+
+    Additive companion to the folder-anchor path: after a lineage manifest is
+    anchored (its root is the receipt's hash_hex) and persisted, this derives
+    the `lineage` block from the reserved leaf — recomputed, never trusted
+    from hints — and rewrites ``receipt.json`` with it, the same post-anchor
+    rewrite pattern the folder path already uses for kind/leaf_count.
+
+    Returns ``{parent_receipt_id, parent_root, committed, parent_receipt_found}``
+    (the design §2.4 response delta), or None for a non-lineage manifest.
+    Raises ValueError when the manifest does not bind to this receipt, when
+    the lineage elements are malformed, or when a locally known parent
+    receipt's anchored hash contradicts the committed parent root.
+    """
+    if not _is_receipt_id(receipt_id):
+        raise ValueError("invalid receipt id")
+    lineage = derive_lineage_from_manifest(manifest)
+    if lineage is None:
+        return None
+    receipt_file = RECEIPTS_DIR / receipt_id / "receipt.json"
+    if not receipt_file.exists():
+        raise ValueError("receipt not found")
+    record = json.loads(receipt_file.read_text())
+    if record.get("hash_hex") != manifest.get("root_hex"):
+        raise ValueError("manifest root_hex does not match the receipt's anchored hash")
+    # Design §2.1 rule 2: when the parent receipt exists locally its anchored
+    # hash MUST equal the committed parent root; a missing parent is fine —
+    # the commitment is self-contained (anchored elsewhere or pruned).
+    parent_receipt_found = False
+    parent_file = RECEIPTS_DIR / lineage["parent_receipt_id"] / "receipt.json"
+    if parent_file.exists():
+        try:
+            parent_record = json.loads(parent_file.read_text())
+        except (OSError, json.JSONDecodeError):
+            parent_record = {}
+        if parent_record.get("hash_hex") != lineage["parent_root"]:
+            raise ValueError(
+                "parent receipt exists locally but its anchored hash does not "
+                "match the committed parent root"
+            )
+        parent_receipt_found = True
+    record["lineage"] = lineage
+    receipt_file.write_text(json.dumps(record, indent=2))
+    try:
+        os.chmod(receipt_file, 0o600)
+    except OSError:
+        pass
+    return {**lineage, "parent_receipt_found": parent_receipt_found}
+
+
 def anchor_hash(
     hash_hex: str,
     client_label: str | None = None,
@@ -103,6 +284,9 @@ def anchor_hash(
     attestation: dict | None = None,
     metadata: dict | None = None,
     c2pa_manifest_hash: str | None = None,
+    zk_proof: dict | None = None,
+    parent_root: str | None = None,
+    parent_receipt_id: str | None = None,
 ) -> dict:
     """Anchor a client-supplied SHA-256 hex digest. Returns the receipt record.
 
@@ -128,6 +312,19 @@ def anchor_hash(
         c2pa_manifest_hash = c2pa_manifest_hash.strip().lower()
         if not _is_hex(c2pa_manifest_hash, 64):
             raise ValueError("c2pa_manifest_hash must be 64 lowercase hex characters")
+    # Optional edit-lineage hints (docs/DESIGN_EDIT_LINEAGE.md §2.2). On this
+    # bare single-hash path they are RECORDED ONLY — never committed inside
+    # the anchored 32 bytes. Binding lineage goes through the folder-manifest
+    # path (reserved leaf + attach_lineage), which is the only place
+    # `committed` becomes true. Canonical form is required, not repaired.
+    if parent_root is not None:
+        parent_root = parent_root.strip()
+        if not _is_hex(parent_root, 64):
+            raise ValueError("parent_root must be 64 lowercase hex characters")
+    if parent_receipt_id is not None:
+        parent_receipt_id = parent_receipt_id.strip()
+        if not _is_receipt_id(parent_receipt_id):
+            raise ValueError("parent_receipt_id is not a valid receipt id")
     hash_bytes = bytes.fromhex(hash_hex)
 
     receipt_id = _new_receipt_id()
@@ -215,6 +412,22 @@ def anchor_hash(
         "successes": successes,
         "failures": failures,
     }
+    # Optional zero-knowledge provenance proof (machine proof, distinct from
+    # the human `attestation` claim above). Sanitized to a strict shape; only
+    # written when present so existing receipts remain shape-stable.
+    zk_sanitized = _sanitize_zk_provenance(zk_proof, hash_hex)
+    if zk_sanitized is not None:
+        record["zk_provenance"] = zk_sanitized
+    # Edit-lineage hints: written only when supplied so existing receipts
+    # remain shape-stable. `committed` is False here by construction — a
+    # bare hash anchor cannot commit a parent inside the anchored bytes;
+    # offline verifiers report such links as recorded_only, never committed.
+    if parent_root is not None or parent_receipt_id is not None:
+        record["lineage"] = {
+            "parent_receipt_id": parent_receipt_id,
+            "parent_root": parent_root,
+            "committed": False,
+        }
     receipt_file = receipt_dir / "receipt.json"
     receipt_file.write_text(json.dumps(record, indent=2))
     try:
@@ -243,6 +456,44 @@ def _sanitize_attestation(attestation: dict | None) -> dict | None:
             if stripped:
                 out[k] = stripped[:500]
     return out or None
+
+
+def _sanitize_zk_provenance(proof: dict | None, hash_hex: str) -> dict | None:
+    """Strictly validate a zero-knowledge provenance proof for the receipt.
+
+    Unlike `attestation` (a brief human authorship claim), this field carries
+    a machine-verifiable proof whose numeric fields are large decimal strings
+    (a 2048-bit group element is ~617 digits) — so it gets its own sanitizer
+    with shape validation instead of the attestation allowlist's short caps.
+
+    Rejects the whole proof (returns None) on ANY violation rather than
+    persisting a partial proof that could never re-verify.
+    """
+    if not proof or not isinstance(proof, dict):
+        return None
+    if proof.get("proof_type") not in ("schnorr-zk-pok-v1",):
+        return None
+    # The proof must be bound to the hash being anchored — a proof for a
+    # different output riding on this receipt is meaningless at best.
+    output_hash = proof.get("output_hash")
+    if not isinstance(output_hash, str) or output_hash.strip().lower() != hash_hex:
+        return None
+    out = {"proof_type": proof["proof_type"], "output_hash": hash_hex}
+    model_id = proof.get("model_id")
+    if not isinstance(model_id, str) or not model_id.strip():
+        return None
+    out["model_id"] = model_id.strip()[:200]
+    # Decimal group elements / scalars: digits only, bounded well above the
+    # 2048-bit maximum (~617 digits) but low enough to stop blob-smuggling.
+    for k in ("commitment", "A", "s1", "s2", "challenge"):
+        v = proof.get(k)
+        if not isinstance(v, str):
+            return None
+        v = v.strip()
+        if not v or len(v) > 700 or not v.isdigit():
+            return None
+        out[k] = v
+    return out
 
 
 def _sanitize_metadata(metadata: dict | None) -> dict | None:
@@ -323,6 +574,15 @@ def verify_receipt(receipt_id: str) -> dict:
     # Folder anchors carry three extra fields so verifiers can fetch the
     # manifest in addition to the .ots files. Only surface them when set
     # so single-file receipts remain shape-stable.
+    # ZK provenance proof: surfaced only when present (same shape-stability
+    # rule as the folder fields below).
+    if record.get("zk_provenance"):
+        out["zk_provenance"] = record["zk_provenance"]
+    # Edit-lineage mirror: surfaced only when present (same shape-stability
+    # rule). The block is an index, not the proof — the committed authority
+    # is the reserved leaf inside the manifest + the .ots files.
+    if record.get("lineage"):
+        out["lineage"] = record["lineage"]
     if record.get("kind"):
         out["kind"] = record["kind"]
     if record.get("leaf_count") is not None:

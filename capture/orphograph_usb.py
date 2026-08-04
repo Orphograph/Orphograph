@@ -120,7 +120,10 @@ def anchor_hash(endpoint: str, hash_hex: str, sha512_hex: str,
 def _is_rate_limited(resp: dict) -> bool:
     if resp.get("status_code") == 429:
         return True
-    return "rate" in str(resp.get("error", "")).lower()
+    # Match rate-limit phrasing only — a bare "rate" substring misclassified
+    # errors like "cannot operate on closed file" and aborted the whole pass.
+    err = str(resp.get("error", "")).lower()
+    return "rate limit" in err or "rate-limit" in err or "too many requests" in err
 
 
 def fetch_proof_bundle(endpoint: str, rid: str, dest_dir: Path, api_key: str = "") -> bool:

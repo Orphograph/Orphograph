@@ -417,6 +417,199 @@ def tool_verify_receipt(args: dict) -> dict:
     }
 
 
+# ── edit-lineage verification ──────────────────────────────────────
+# Walks the parent links of a folder anchor's edit lineage server-side
+# (GET /api/verify_folder/<rid> per link) and re-runs the commitment
+# checks LOCALLY with the same leaf/internal rules as _merkle_root —
+# the server's `lineage` hints are never trusted without recomputing
+# the reserved-leaf commitment. Reports anchor-time ordering only.
+
+_RESERVED_PARENT_PATH = ".orphograph/parent"
+_LINEAGE_NOTE = (
+    "Verified anchor-time ordering of these anchors. This does not establish "
+    "that any draft is a derivative of another, nor that no other versions exist."
+)
+
+
+def _lineage_leaf_hex(path: str, digest: bytes) -> str:
+    """RFC-6962-style leaf: SHA-256(0x00 || path || 0x00 || digest) — the same
+    rule _build_folder_manifest applies."""
+    return hashlib.sha256(b"\x00" + path.encode("utf-8") + b"\x00" + digest).hexdigest()
+
+
+def _lineage_examine_link(receipt: dict, manifest: dict) -> dict:
+    """Recompute one link's commitment checks locally.
+
+    Returns {"problems": [...], "parent_root": str|None, "parent_rid_hint": str|None}.
+    Works with path-redacted manifests too: the reserved leaf is identified
+    structurally, by testing the KNOWN reserved path against each leaf's
+    (file_sha256_hex, leaf_hex) pair — no path field required.
+    """
+    problems: list[str] = []
+    hash_hex = receipt.get("hash_hex")
+    leaves = manifest.get("leaves")
+    if not isinstance(hash_hex, str) or len(hash_hex) != 64:
+        return {"problems": ["receipt hash_hex malformed"], "parent_root": None,
+                "parent_rid_hint": None}
+    if not isinstance(leaves, list) or not leaves:
+        return {"problems": ["manifest has no leaves"], "parent_root": None,
+                "parent_rid_hint": None}
+
+    # Recompute the root from the leaf hashes (committed order) and, for any
+    # leaf whose path is visible, re-derive the leaf from (path, file hash).
+    leaf_bytes: list[bytes] = []
+    reserved: list[dict] = []
+    for leaf in leaves:
+        if not isinstance(leaf, dict):
+            problems.append("malformed leaf entry")
+            continue
+        leaf_hex = leaf.get("leaf_hex")
+        file_hex = leaf.get("file_sha256_hex")
+        try:
+            lb = bytes.fromhex(leaf_hex) if isinstance(leaf_hex, str) else b""
+            fb = bytes.fromhex(file_hex) if isinstance(file_hex, str) else b""
+        except ValueError:
+            lb, fb = b"", b""
+        if len(lb) != 32:
+            problems.append("leaf_hex is not 32 bytes of hex")
+            continue
+        leaf_bytes.append(lb)
+        path = leaf.get("path")
+        if isinstance(path, str) and len(fb) == 32:
+            if _lineage_leaf_hex(path, fb) != leaf_hex:
+                problems.append(f"leaf_hex does not derive from (path, file hash) for {path!r}")
+        # Structural reserved-leaf detection: survives path redaction because
+        # the reserved path is a known constant.
+        if len(fb) == 32 and isinstance(file_hex, str) and file_hex == file_hex.lower() \
+                and _lineage_leaf_hex(_RESERVED_PARENT_PATH, fb) == leaf_hex:
+            reserved.append(leaf)
+    if not problems and leaf_bytes:
+        if _merkle_root(leaf_bytes).hex() != hash_hex:
+            problems.append("recomputed manifest root does not match receipt hash_hex")
+
+    parent_root: str | None = None
+    parent_rid_hint: str | None = None
+    hint = receipt.get("lineage")
+    manifest_parent = manifest.get("parent")
+    if len(reserved) > 1:
+        problems.append("more than one reserved parent leaf")
+    elif reserved:
+        leaf = reserved[0]
+        if leaf.get("size_bytes") != 0:
+            problems.append("reserved parent leaf must have size_bytes 0")
+        parent_root = leaf.get("file_sha256_hex")
+        # Hints (receipt.lineage + manifest.parent) must agree with the
+        # committed leaf — the leaf is the authority.
+        if isinstance(hint, dict) and hint.get("parent_root") != parent_root:
+            problems.append("receipt lineage.parent_root disagrees with the committed reserved leaf")
+        if isinstance(manifest_parent, dict) and manifest_parent.get("root_hex") != parent_root:
+            problems.append("manifest parent.root_hex disagrees with the committed reserved leaf")
+        if isinstance(hint, dict) and isinstance(hint.get("parent_receipt_id"), str):
+            parent_rid_hint = hint["parent_receipt_id"]
+        elif isinstance(manifest_parent, dict) and isinstance(manifest_parent.get("receipt_id"), str):
+            parent_rid_hint = manifest_parent["receipt_id"]
+    else:
+        if isinstance(hint, dict) and hint.get("committed"):
+            problems.append("receipt claims committed lineage but no reserved parent leaf is in the manifest")
+    return {"problems": problems, "parent_root": parent_root,
+            "parent_rid_hint": parent_rid_hint}
+
+
+def tool_verify_lineage(args: dict) -> dict:
+    rid = args.get("receipt_id")
+    if not isinstance(rid, str) or not rid:
+        return {"error": "missing required argument: receipt_id"}
+    safe = "".join(c for c in rid if c.isalnum() or c in ("_", "-"))[:64]
+    if safe != rid:
+        return {"error": "receipt_id contains characters not in the receipt-id alphabet"}
+    try:
+        max_depth = int(args.get("max_depth", 32))
+    except (TypeError, ValueError):
+        max_depth = 32
+    max_depth = max(1, min(max_depth, 256))
+
+    chain: list[dict] = []          # collected tip → downward
+    seen: set[str] = set()
+    broken_at: str | None = None
+    depth_capped = False
+    all_ok = True
+    expected_root: str | None = None  # what the next receipt's root must equal
+    current: str | None = safe
+    while current is not None:
+        if current in seen:
+            broken_at = current
+            all_ok = False
+            break
+        if len(chain) >= max_depth:
+            depth_capped = True
+            all_ok = False
+            break
+        seen.add(current)
+        result = _http("GET", f"/api/verify_folder/{urllib.parse.quote(current)}")
+        if result.get("error"):
+            if not chain:
+                return {"ok": False, "error": result.get("error"),
+                        "detail": result.get("body") or result.get("reason")}
+            broken_at = current
+            all_ok = False
+            break
+        receipt = result.get("receipt") or {}
+        manifest = result.get("manifest") or {}
+        problems: list[str] = []
+        # Never trust the hint that led us here: the fetched receipt must
+        # anchor exactly the root the child committed.
+        if expected_root is not None and receipt.get("hash_hex") != expected_root:
+            problems.append(
+                "parent hint led to a receipt whose anchored root does not "
+                "match the committed parent root"
+            )
+        examined = _lineage_examine_link(receipt, manifest)
+        problems.extend(examined["problems"])
+        entry = {
+            "receipt_id": receipt.get("receipt_id") or current,
+            "root_hex": receipt.get("hash_hex"),
+            "created_at": receipt.get("created_at"),
+            "btc_pinned_at": receipt.get("btc_pinned_at"),
+            "status": receipt.get("status", "pending"),
+            "link": "committed" if examined["parent_root"] else "genesis",
+            "checks_ok": not problems,
+        }
+        if problems:
+            entry["problems"] = problems
+            all_ok = False
+        chain.append(entry)
+        if problems:
+            broken_at = current
+            break
+        if examined["parent_root"] is None:
+            break  # genesis reached
+        if not examined["parent_rid_hint"]:
+            broken_at = current
+            all_ok = False
+            entry["problems"] = [
+                "committed parent root has no discoverable receipt id "
+                "(no lineage hint); walk cannot continue server-side"
+            ]
+            entry["checks_ok"] = False
+            break
+        expected_root = examined["parent_root"]
+        current = examined["parent_rid_hint"]
+
+    chain.reverse()  # report oldest anchor first
+    out = {
+        "ok": all_ok and broken_at is None and not depth_capped,
+        "tip": safe,
+        "chain": chain,
+        "depth": len(chain),
+        "broken_at": broken_at,
+        "forks_seen": [],
+        "note": _LINEAGE_NOTE,
+    }
+    if depth_capped:
+        out["depth_capped"] = True
+    return out
+
+
 def tool_list_vault(args: dict) -> dict:
     if not API_KEY:
         return {
@@ -566,6 +759,29 @@ TOOL_DEFINITIONS = [
         },
     },
     {
+        "name": "orphograph_verify_lineage",
+        "description": (
+            "Walk the parent links of a receipt's edit lineage and verify each "
+            "link. Reports anchor-time ordering only — it does not assess content "
+            "similarity, authorship, or whether siblings exist."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "receipt_id": {
+                    "type": "string",
+                    "description": "tip receipt id",
+                },
+                "max_depth": {
+                    "type": "integer",
+                    "default": 32,
+                    "description": "Maximum number of links to walk (1-256). Defaults to 32.",
+                },
+            },
+            "required": ["receipt_id"],
+        },
+    },
+    {
         "name": "orphograph_list_vault",
         "description": (
             "List the signed-in subscriber's anchored receipts. Requires "
@@ -642,6 +858,8 @@ def handle(msg: dict) -> dict | None:
             return _reply(req_id, _wrap_tool_result(tool_anchor_output(args)))
         if name == "orphograph_verify_receipt":
             return _reply(req_id, _wrap_tool_result(tool_verify_receipt(args)))
+        if name == "orphograph_verify_lineage":
+            return _reply(req_id, _wrap_tool_result(tool_verify_lineage(args)))
         if name == "orphograph_list_vault":
             return _reply(req_id, _wrap_tool_result(tool_list_vault(args)))
         return _reply(req_id, error={"code": -32601, "message": f"unknown tool: {name}"})

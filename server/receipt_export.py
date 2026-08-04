@@ -49,6 +49,12 @@ def export_zip(receipt_id: str) -> tuple[bytes | None, str | None]:
     try:
         with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
             zf.write(receipt_json, arcname="receipt.json")
+            # Folder/lineage anchors: the manifest is part of the verifiable
+            # bundle (offline lineage walking needs it — design §3). Absent
+            # for single-file receipts; included only when present.
+            manifest_json = receipt_dir / "manifest.json"
+            if manifest_json.exists():
+                zf.write(manifest_json, arcname="manifest.json")
             for ots_file in sorted(receipt_dir.glob("*.ots")):
                 zf.write(ots_file, arcname=ots_file.name)
     except (OSError, zipfile.BadZipFile) as e:
