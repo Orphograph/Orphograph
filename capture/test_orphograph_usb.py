@@ -269,13 +269,16 @@ def test_is_rate_limited_by_status_code_and_message(tmp_path):
     assert usb._is_rate_limited({}) is False
 
 
-def test_is_rate_limited_substring_overmatch_documented():
-    # SUSPECTED BUG (orphograph_usb.py:123): the fallback does a bare
-    # `"rate" in error` substring check, so any error containing words like
-    # "operate", "separate", or "moderate" is misclassified as a rate limit,
-    # which aborts the whole scan pass instead of recording a plain failure.
-    # This test documents CURRENT behavior; if the check is tightened, flip it.
-    assert usb._is_rate_limited({"error": "cannot operate on closed file"}) is True
+def test_is_rate_limited_no_substring_overmatch():
+    # Regression: the fallback used a bare `"rate" in error` substring check,
+    # so errors containing "operate"/"separate"/"moderate" were misclassified
+    # as rate limits, aborting the whole scan pass instead of recording a
+    # plain failure. Only genuine rate-limit phrasing may match.
+    assert usb._is_rate_limited({"error": "cannot operate on closed file"}) is False
+    assert usb._is_rate_limited({"error": "failed to generate receipt"}) is False
+    assert usb._is_rate_limited({"error": "Rate limit exceeded"}) is True
+    assert usb._is_rate_limited({"error": "rate-limited, retry later"}) is True
+    assert usb._is_rate_limited({"error": "429 Too Many Requests"}) is True
 
 
 # --------------------------------------------------------------------------- #

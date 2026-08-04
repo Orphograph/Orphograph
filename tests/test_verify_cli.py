@@ -60,3 +60,20 @@ def test_tampered_ots_exits_4(tmp_path):
         target.write_bytes(data[:50] + b"\x00" * 32 + data[82:])
     code, out = _run(str(fake / "receipt.json"))
     assert code == 4, out
+
+
+def test_empty_bundle_fails_instead_of_vacuous_pass(tmp_path):
+    # Regression: with zero .ots files the validation loop never ran, `bad`
+    # stayed 0, and an empty bundle printed "all receipts valid" with exit 0.
+    # A bundle with nothing to verify must fail loudly.
+    bundle = tmp_path / "empty-bundle"
+    bundle.mkdir()
+    (bundle / "receipt.json").write_text(json.dumps({
+        "receipt_id": "EMPTY00000000000",
+        "created_at": "2026-08-03T00:00:00+00:00",
+        "hash_hex": "ab" * 32,
+    }))
+    code, out = _run(str(bundle / "receipt.json"))
+    assert code == 4, out
+    assert "proves nothing" in out
+    assert "all receipts valid" not in out

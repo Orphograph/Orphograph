@@ -418,17 +418,18 @@ def test_seen_db_corrupt_lines_are_tolerated(watch_dir, recorder):
     assert len(recorder.calls) == 1
 
 
-def test_modified_file_at_same_path_is_not_reanchored(watch_dir, recorder):
-    # Documents actual behavior: the seen-tracker keys on PATH, not hash.
-    # New content at an already-anchored path is silently never anchored.
+def test_modified_file_at_same_path_is_reanchored(watch_dir, recorder):
+    # Regression (was pinned as a documented bug): the seen-tracker keyed on
+    # PATH, so new content at an already-anchored path silently never got a
+    # proof. Dedup now keys on content — v2 gets its own anchor.
     p = _write_capture_file(watch_dir, "edit.jpg", b"version 1")
     _scan(watch_dir)
     p.write_bytes(b"version 2 -- different content")
     _age_file(p)
     counts = _scan(watch_dir)
-    assert counts["anchored"] == 0          # v2 gets NO anchor (path-keyed dedup)
-    assert counts["skipped_seen"] == 1
-    assert len(recorder.calls) == 1
+    assert counts["anchored"] == 1          # v2 gets its own anchor
+    assert len(recorder.calls) == 2
+    assert recorder.calls[1]["hash_hex"] == _sha256(b"version 2 -- different content")
 
 
 # --------------------------------------------------------------------------- #
@@ -452,3 +453,50 @@ def test_nonexistent_watch_dir_is_skipped_without_crash(tmp_path, recorder):
                           "https://example.invalid", "", 0)
     assert counts["anchored"] == 0
     assert counts["checked"] == 0
+
+
+# --------------------------------------------------------------------------- #
+# Content-keyed dedup — an edited file is a NEW version and gets a new anchor
+# --------------------------------------------------------------------------- #
+
+
+def test_edited_file_is_reanchored_as_new_version(watch_dir, recorder):
+    # Regression: seen-tracking used to key on path alone, so a file edited
+    # in place was never re-anchored — every version after the first lost
+    # its proof. Dedup must key on content.
+    f = _write_capture_file(watch_dir, "draft.md", b"version one")
+    counts = _scan(watch_dir)
+    assert counts["anchored"] == 1
+
+    _write_capture_file(watch_dir, "draft.md", b"version two, edited")
+    counts = _scan(watch_dir)
+    assert counts["anchored"] == 1, "edited content must get a fresh anchor"
+    assert len(recorder.calls) == 2
+    assert recorder.calls[0]["hash_hex"] != recorder.calls[1]["hash_hex"]
+    assert recorder.calls[1]["hash_hex"] == _sha256(b"version two, edited")
+
+    # Third pass: current version already anchored — nothing new.
+    counts = _scan(watch_dir)
+    assert counts["anchored"] == 0
+    assert counts["skipped_seen"] == 1
+    assert len(recorder.calls) == 2
+
+
+def test_touch_only_mtime_change_is_not_reanchored(watch_dir, recorder):
+    f = _write_capture_file(watch_dir, "photo.jpg", b"stable bytes")
+    _scan(watch_dir)
+    assert len(recorder.calls) == 1
+
+    # Same content, new mtime (e.g. `touch`, backup-restore) — must re-hash
+    # once, recognise the content, and NOT anchor again.
+    t = time.time() - 60
+    os.utime(f, (t, t))
+    counts = _scan(watch_dir)
+    assert counts["anchored"] == 0
+    assert counts["skipped_seen"] == 1
+    assert len(recorder.calls) == 1
+
+    # And the refreshed row restores the no-rehash fast path.
+    counts = _scan(watch_dir)
+    assert counts["skipped_seen"] == 1
+    assert len(recorder.calls) == 1

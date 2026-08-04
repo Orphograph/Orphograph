@@ -82,6 +82,9 @@ def verify(receipt_path: Path, file_path: Path | None) -> int:
         ots_files = sorted((receipt_dir.parent.parent / s["ots_path"]).resolve()
                            for s in record["successes"])
     print(f"  ots receipts:   {len(ots_files)}")
+    if not ots_files:
+        print("\n  no .ots proofs found — an empty bundle proves nothing", file=sys.stderr)
+        return 4
     for ots in ots_files:
         data = ots.read_bytes() if ots.exists() else b""
         magic_ok = data.startswith(OTS_HEADER_MAGIC)

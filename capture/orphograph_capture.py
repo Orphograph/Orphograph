@@ -105,11 +105,20 @@ def anchor_hash(endpoint: str, hash_hex: str, sha512_hex: str,
         return False, {"error": f"{type(e).__name__}: {e}"}
 
 
-# ─── Seen-tracker (so we don't anchor the same file twice) ──────────────────
-def _load_seen() -> set[str]:
+# ─── Seen-tracker (so we don't anchor the same content twice) ────────────────
+def _load_seen() -> tuple[dict[str, dict], set[str]]:
+    """Returns (by_path, pairs).
+
+    by_path maps path -> its latest row, used as an mtime+size fast-skip so
+    unchanged files are not re-hashed every pass. pairs holds "path|sha256"
+    keys — the actual dedup identity. Keying on path alone meant a file
+    EDITED in place was never re-anchored, silently dropping proof of every
+    version after the first; content is what a receipt attests, so content
+    is what dedup must key on."""
+    by_path: dict[str, dict] = {}
+    pairs: set[str] = set()
     if not SEEN_DB.exists():
-        return set()
-    seen = set()
+        return by_path, pairs
     try:
         with SEEN_DB.open() as f:
             for line in f:
@@ -117,21 +126,29 @@ def _load_seen() -> set[str]:
                     continue
                 try:
                     row = json.loads(line)
-                    seen.add(row.get("path", ""))
                 except json.JSONDecodeError:
                     continue
+                path = row.get("path", "")
+                if not path:
+                    continue
+                by_path[path] = row
+                if row.get("sha256"):
+                    pairs.add(f"{path}|{row['sha256']}")
     except OSError:
-        return set()
-    return seen
+        return {}, set()
+    return by_path, pairs
 
 
-def _record_seen(path: Path, receipt_id: str, sha256_hex: str) -> None:
+def _record_seen(path: Path, receipt_id: str, sha256_hex: str,
+                 mtime: float | None = None, size: int | None = None) -> None:
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     with SEEN_DB.open("a") as f:
         f.write(json.dumps({
             "path": str(path),
             "receipt_id": receipt_id,
             "sha256": sha256_hex,
+            "mtime": mtime,
+            "size": size,
             "ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         }, separators=(",", ":")) + "\n")
 
@@ -159,7 +176,7 @@ def _write_receipt_sidecar(file_path: Path, receipt: dict, endpoint: str) -> Pat
 def scan_once(watch_dirs: list[Path], extensions: set[str], include_filename: bool,
               endpoint: str, api_key: str, min_age: int) -> dict:
     """One scan pass. Returns counts."""
-    seen = _load_seen()
+    seen_by_path, seen_pairs = _load_seen()
     counts = {"checked": 0, "skipped_seen": 0, "skipped_young": 0,
               "skipped_ext": 0, "anchored": 0, "failed": 0}
     now = time.time()
@@ -176,25 +193,38 @@ def scan_once(watch_dirs: list[Path], extensions: set[str], include_filename: bo
                 continue
             # Skip files still being written.
             try:
-                mtime = entry.stat().st_mtime
+                st = entry.stat()
             except OSError:
                 continue
-            if (now - mtime) < min_age:
+            if (now - st.st_mtime) < min_age:
                 counts["skipped_young"] += 1
                 continue
-            # Skip sidecars + already-anchored.
+            # Skip sidecars + already-anchored content.
             if entry.name.endswith(".orpho.json"):
                 continue
-            if str(entry) in seen:
+            prior = seen_by_path.get(str(entry))
+            if (prior is not None and prior.get("mtime") == st.st_mtime
+                    and prior.get("size") == st.st_size):
+                # unchanged since last anchor — skip without re-hashing
                 counts["skipped_seen"] += 1
                 continue
-            # Anchor.
+            # Hash first: dedup keys on content, so an edited file (same
+            # path, new bytes) gets a fresh anchor for the new version.
             try:
                 sha256, sha512 = hash_file(entry)
             except OSError as e:
                 _log(f"hash failed for {entry}: {e}")
                 counts["failed"] += 1
                 continue
+            if f"{entry}|{sha256}" in seen_pairs:
+                # same content already anchored (touch-only change, or an
+                # old-format row without mtime) — refresh the row so the
+                # next pass fast-skips without re-hashing
+                counts["skipped_seen"] += 1
+                _record_seen(entry, (prior or {}).get("receipt_id", ""),
+                             sha256, st.st_mtime, st.st_size)
+                continue
+            # Anchor.
             label = entry.name if include_filename else ""
             ok, resp = anchor_hash(endpoint, sha256, sha512, label, api_key)
             if not ok:
@@ -203,7 +233,7 @@ def scan_once(watch_dirs: list[Path], extensions: set[str], include_filename: bo
                 continue
             rid = resp.get("receipt_id", "")
             _write_receipt_sidecar(entry, resp, endpoint)
-            _record_seen(entry, rid, sha256)
+            _record_seen(entry, rid, sha256, st.st_mtime, st.st_size)
             _log(f"anchored {entry.name} → {rid} ({resp.get('calendars_ok', 0)}/{resp.get('calendars_total', 0)} OTS)")
             counts["anchored"] += 1
     return counts
@@ -230,8 +260,8 @@ def watch_loop(watch_dirs: list[Path], extensions: set[str], include_filename: b
 
 # ─── Status command ─────────────────────────────────────────────────────────
 def status() -> dict:
-    seen = _load_seen()
-    total = len(seen)
+    _by_path, pairs = _load_seen()
+    total = len(pairs)  # anchored versions, not just paths
     last_ts = None
     if SEEN_DB.exists():
         try:
