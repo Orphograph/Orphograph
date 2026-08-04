@@ -42,6 +42,7 @@ import public_config  # noqa: E402
 import qrcode_svg  # noqa: E402
 import badge_svg  # noqa: E402
 import credits  # noqa: E402
+import lightning  # noqa: E402
 import auth  # noqa: E402
 import gdpr  # noqa: E402
 import health  # noqa: E402
@@ -2126,6 +2127,9 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/api/anchor_folder":
             self._handle_anchor_folder()
             return
+        if self.path == "/api/ln/quote":
+            self._handle_ln_quote()
+            return
         if self.path != "/api/anchor":
             self.send_error(404, "not found")
             return
@@ -2141,6 +2145,23 @@ class Handler(BaseHTTPRequestHandler):
         pack_remaining = 0
         if pack_token:
             pack_consumed, pack_remaining = credits.consume_credit(pack_token)
+        # L402 Lightning payment: `Authorization: L402 <macaroon>:<preimage>`.
+        # A valid, settled, UNSPENT credential buys exactly one anchor — the
+        # agent-pays path (docs/LIGHTNING_L402.md). An invalid attempt fails
+        # loudly with 401; it never silently falls through to the free tier.
+        ln_payment_hash = None
+        auth_header = self.headers.get("Authorization", "").strip()
+        if not pack_consumed and auth_header.startswith("L402 "):
+            ln_payment_hash, ln_err = lightning.verify_l402(auth_header)
+            if ln_payment_hash is None:
+                _json_response(self, 401, {"error": f"L402 rejected: {ln_err}"})
+                return
+            if lightning.is_spent(ln_payment_hash):
+                _json_response(self, 401, {
+                    "error": "L402 rejected: credential already spent",
+                    "hint": "each payment buys exactly one anchor — request "
+                            "a new quote at POST /api/ln/quote"})
+                return
         # API key path: alternative to session cookie / pack token. The key
         # owner must have an active subscription for the key to bypass limits.
         api_key = self.headers.get("X-Orpho-Api-Key", "").strip()
@@ -2149,8 +2170,36 @@ class Handler(BaseHTTPRequestHandler):
         # Authenticated subscribers bypass the free-tier rate limit.
         subscriber_email = api_key_email or (self._session_email() if not pack_consumed else None)
         subscription_active = api_key_active or _subscription_active_for(subscriber_email)
-        if not pack_consumed and not subscription_active:
+        if not pack_consumed and not subscription_active and ln_payment_hash is None:
             allowed, retry_after = _anchor_limiter.check(self._client_key())
+            if not allowed and lightning.configured():
+                # L402 challenge: agents past the free tier can pay sats for
+                # one anchor, no account. Falls back to the classic 429 when
+                # Lightning isn't armed, so behavior is unchanged until then.
+                ok, inv = lightning.create_invoice(
+                    lightning.PRICE_SATS, "orphograph anchor")
+                if ok:
+                    macaroon = lightning.mint_macaroon(
+                        inv["payment_hash"], lightning.PRICE_SATS)
+                    self.send_response(402)
+                    self.send_header("Content-Type", "application/json; charset=utf-8")
+                    self.send_header(
+                        "WWW-Authenticate",
+                        f'L402 token="{macaroon}", invoice="{inv["bolt11"]}"')
+                    body = json.dumps({
+                        "error": "payment required",
+                        "price_sats": lightning.PRICE_SATS,
+                        "invoice": inv["bolt11"],
+                        "macaroon": macaroon,
+                        "how": "pay the invoice, then retry with "
+                               "Authorization: L402 <macaroon>:<preimage_hex>",
+                        "free_tier_retry_after_seconds": int(retry_after) + 1,
+                    }).encode("utf-8")
+                    self.send_header("Content-Length", str(len(body)))
+                    _security_headers(self)
+                    self.end_headers()
+                    self.wfile.write(body)
+                    return
             if not allowed:
                 self.send_response(429)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -2219,6 +2268,8 @@ class Handler(BaseHTTPRequestHandler):
         # Pack tokens are bearer credentials so we record only a short prefix.
         if pack_consumed:
             source = f"pack:{pack_token[:8]}"
+        elif ln_payment_hash is not None:
+            source = f"ln:{ln_payment_hash[:10]}"
         elif api_key_active:
             source = f"api:{api_key[:10]}"
         elif subscription_active:
@@ -2266,6 +2317,12 @@ class Handler(BaseHTTPRequestHandler):
             credits.refund_credit(pack_token, reason="anchor-refund:no-calendars")
             credit_refunded = True
             pack_remaining += 1
+        # L402 spend is marked ONLY here — after a receipt exists AND at
+        # least one calendar accepted the hash. A worthless 0-calendar
+        # anchor leaves the credential unspent so the agent can retry, the
+        # same fairness the pack refund above gives card buyers.
+        if ln_payment_hash is not None and record["calendars_ok"] > 0:
+            lightning.mark_spent(ln_payment_hash, record["receipt_id"])
         # Receipt email: fires for any paid path (Pack consumed, active
         # subscription, or active API key). Previously this was Pack-only,
         # which silently dropped receipts for subscribers — exact 2026-05-18
@@ -3386,6 +3443,35 @@ class Handler(BaseHTTPRequestHandler):
             return
         # The secret is returned ONCE here; clients must persist it.
         _json_response(self, 200, result)
+
+    def _handle_ln_quote(self) -> None:
+        """L402 quote: mint an invoice + macaroon for one pay-per-anchor.
+
+        Proactive form of the 402 challenge — an agent can fetch payment
+        terms before burning a free-tier slot. 503 until the founder arms a
+        Lightning backend (fly secrets), so today's behavior is unchanged.
+        """
+        if not lightning.configured():
+            _json_response(self, 503, {
+                "error": "lightning payments not configured",
+                "hint": "card packs and subscriptions remain available"})
+            return
+        ok, inv = lightning.create_invoice(lightning.PRICE_SATS,
+                                           "orphograph anchor")
+        if not ok:
+            _json_response(self, 503, {"error": f"invoice creation failed: {inv}"})
+            return
+        macaroon = lightning.mint_macaroon(inv["payment_hash"], lightning.PRICE_SATS)
+        _json_response(self, 200, {
+            "price_sats": lightning.PRICE_SATS,
+            "invoice": inv["bolt11"],
+            "macaroon": macaroon,
+            "expires_in_seconds": lightning.MACAROON_TTL_SEC,
+            "how": "pay the invoice, then POST /api/anchor with "
+                   "Authorization: L402 <macaroon>:<preimage_hex>",
+            "scope": "one anchor per payment; the receipt then verifies "
+                     "independently of Orphograph forever",
+        })
 
     def _handle_anchor_folder(self) -> None:
         """Anchor a folder-Merkle root.
