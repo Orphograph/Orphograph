@@ -20,7 +20,7 @@
 <link rel="icon" type="image/png" href="/favicon.png?v=8">
 <link rel="stylesheet" href="/style.css?v=5">
 <link rel="stylesheet" href="/index.css?v=16">
-<link rel="stylesheet" href="/receipt.css?v=4">
+<link rel="stylesheet" href="/receipt.css?v=5">
 <meta name="copyright" content="© 2026 Orphograph. MIT — see /LICENSE">
 </head>
 <body class="receipt-page">
@@ -71,6 +71,12 @@
       <p>Who created the file, who owns it, or whether its contents are true. This is a record of existence in time, not a claim of authorship and not a legal determination.</p>
     </div>
   </section>
+
+  <!-- 3b · VERSION HISTORY (edit-lineage) — server-templated by the /r/<id>
+       route only when the receipt carries a committed lineage block; the
+       comment token below is replaced with the section markup (or removed).
+       Invisible in plain static serving. -->
+  <!--LINEAGE_SECTION-->
 
   <!-- 4 · CHECK IT YOURSELF -->
   <section class="check-yourself needs-record" aria-label="Verify this receipt independently">

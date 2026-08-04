@@ -47,9 +47,17 @@ is ~2-10x faster and drop-in if installed later).
    resume loop with long backoff (ISP throttling + connection resets)
    and `caffeinate`; setup itself was fast because the hez "final" file
    is already phase-2 prepared.
-4. ☐ `snark-exec-v1` receipt integration (sanitizer arm + tests + the
-   REQUIRED forgery test: a (O, proof) pair where O was not produced by
-   PROGRAM_V2 must fail).
+4. ✅ `snark-exec-v1` receipt integration PASSED 2026-08-04: engine
+   sanitizer arm (`_sanitize_snark_exec_v1`) recomputes every pure-hash
+   binding server-side (anchored hash == SHA-256("out2:"+hex(stN)) from
+   the proof's own public signals; st0 == model commitment), whole-record
+   rejection; `build_snark_anchor_payload` in zk_provenance.py; 9 tests
+   in tests/test_snark_receipt.py over the COMMITTED evidence proof,
+   including the four forgery classes — A: same proof/different anchor,
+   B: output not derived from stN, C: model swap (all engine-rejected),
+   and D: tampered-but-hash-consistent signals REJECTED by live
+   `groth16 verify` while the genuine proof passes. The pairing check is
+   deliberately client-side; the server's checks are hashing only.
 5. ☐ Production trusted-setup story (a single-contributor local ceremony
    is fine for development and WORTHLESS as a public trust claim — the
    contributor can forge proofs; needs a real MPC or a universal-setup

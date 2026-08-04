@@ -97,6 +97,59 @@ MAX_BATCH_ITEMS = 50
 MAX_FOLDER_MANIFEST_BYTES = 8 * 1024 * 1024
 MAX_FOLDER_LEAVES = 50_000
 RECEIPT_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")  # secrets.token_urlsafe(12) shape
+
+
+def _lineage_section_html(rid: str, lineage) -> str:
+    """Server-rendered "Version history" section for /r/<rid> (edit-lineage).
+
+    Returns "" unless the receipt carries a committed lineage block whose
+    fields re-validate against the receipt-id / lowercase-hex alphabets.
+    Defense in depth: the values were validated at anchor time, but they are
+    being placed into HTML here, so re-check before injection — both
+    alphabets are HTML-inert, so no escaping pass is needed (same argument
+    as the {{RECEIPT_ID}} substitution below). CSP-safe: markup only, no
+    inline style or script; all styling lives in web/receipt.css.
+    """
+    if not isinstance(lineage, dict) or not lineage.get("committed"):
+        return ""
+    parent_id = lineage.get("parent_receipt_id")
+    parent_root = lineage.get("parent_root")
+    if not isinstance(parent_id, str) or not RECEIPT_ID_RE.match(parent_id):
+        return ""
+    if not engine._is_hex(parent_root, 64):
+        return ""
+    parent_found = (engine.RECEIPTS_DIR / parent_id / "receipt.json").exists()
+    if parent_found:
+        # /r/<id> is the canonical receipt URL for both kinds — folder
+        # parents forward to their /certificate view client-side.
+        parent_node = f'<a class="mono lineage-id" href="/r/{parent_id}">{parent_id}</a>'
+        parent_note = ""
+    else:
+        parent_node = f'<span class="mono lineage-id">{parent_id}</span>'
+        parent_note = (
+            '  <p class="muted small lineage-missing">The parent receipt does not '
+            "resolve on this server; its committed root is shown above.</p>\n"
+        )
+    root_short = f"{parent_root[:10]}&hellip;{parent_root[-6:]}"
+    return (
+        '<section id="version-history" class="version-history needs-record" '
+        'aria-label="Version history">\n'
+        "  <h2>Version history</h2>\n"
+        '  <p class="lineage-chain">\n'
+        '    <span class="lineage-hop"><span class="lineage-hop-label">This version</span>'
+        f'<span class="mono lineage-id">{rid}</span></span>\n'
+        '    <span class="lineage-arrow" aria-hidden="true">&#8594;</span>\n'
+        '    <span class="lineage-hop"><span class="lineage-hop-label">Parent</span>'
+        f"{parent_node}</span>\n"
+        "  </p>\n"
+        '  <p class="muted small lineage-root-line">Parent anchored root '
+        f'<code class="mono lineage-root" title="{parent_root}">{root_short}</code></p>\n'
+        f"{parent_note}"
+        '  <p class="muted small lineage-scope">Lineage shows only that this '
+        "version&#8217;s anchored root committed to the parent&#8217;s anchored root. "
+        "It does not show what changed, when the edit happened, or who made it.</p>\n"
+        "</section>"
+    )
 TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]{16,64}$")
 EMAIL_RE = re.compile(r"^[^@\s,]{1,64}@[^@\s,]{1,255}$")
 COOKIE_SECURE = os.environ.get("ORPHO_COOKIE_SECURE", "1") != "0"
@@ -1238,6 +1291,7 @@ class Handler(BaseHTTPRequestHandler):
                 # card image is static). Private receipts leak nothing.
                 _tail = " Verified against the Bitcoin chain — check it yourself, no account required."
                 sealed = "A file existed at the recorded moment." + _tail
+                lineage_html = ""
                 try:
                     _rec = engine.verify_receipt(rid)
                     if not _rec.get("found"):
@@ -1249,9 +1303,18 @@ class Handler(BaseHTTPRequestHandler):
                             sealed = f"Sealed {_d}." + _tail
                             if _rec.get("btc_pinned_at"):
                                 sealed = f"Sealed {_d} — anchored in Bitcoin." + _tail
+                        # Edit-lineage "Version history" — server-rendered so
+                        # the section (incl. the parent link) travels in the
+                        # HTML itself, no JS required. Public receipts only:
+                        # templating the parent id into a private receipt's
+                        # page would leak it to anyone holding the URL
+                        # (owners still see lineage on the certificate view,
+                        # gated by /api/verify_folder).
+                        lineage_html = _lineage_section_html(rid, _rec.get("lineage"))
                 except Exception:
                     pass
                 body = body.replace("{{OG_SEALED}}", sealed)
+                body = body.replace("<!--LINEAGE_SECTION-->", lineage_html)
                 payload = body.encode("utf-8")
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -1935,6 +1998,31 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body_bytes)
             return
+        # Agent discoverability — /llms.txt (the agent-readable site summary)
+        # and the MCP server card at /.well-known/mcp/server-card.json. Served
+        # explicitly (same pattern as security.txt / robots.txt above) so the
+        # Content-Type is unambiguous and the dotted .well-known path never
+        # depends on the generic static handler's resolution rules. Both files
+        # live in web/; this route is purely additive.
+        if path in ("/llms.txt", "/.well-known/mcp/server-card.json"):
+            try:
+                body_bytes = (WEB_DIR / path.lstrip("/")).read_bytes()
+            except OSError:
+                self.send_error(404, "Not found")
+                return
+            content_type = (
+                "application/json; charset=utf-8"
+                if path.endswith(".json")
+                else "text/plain; charset=utf-8"
+            )
+            self.send_response(200)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(body_bytes)))
+            self.send_header("Cache-Control", "public, max-age=3600")
+            _security_headers(self)
+            self.end_headers()
+            self.wfile.write(body_bytes)
+            return
         _serve_static(self, path)
 
     def do_POST(self):  # noqa: N802
@@ -2106,6 +2194,11 @@ class Handler(BaseHTTPRequestHandler):
         # sanitizes (allowlist + size caps); unknown fields are dropped.
         attestation = payload.get("attestation") if isinstance(payload.get("attestation"), dict) else None
         metadata = payload.get("metadata") if isinstance(payload.get("metadata"), dict) else None
+        # Hardware attestation: a device-resident-key signature over the
+        # anchored hash (docs/HARDWARE_ATTESTATION_SPIKE.md). The engine
+        # strictly validates shape + hash binding and rejects the whole
+        # record on any violation; absent field changes nothing.
+        hardware_attestation = payload.get("hardware_attestation") if isinstance(payload.get("hardware_attestation"), dict) else None
         # Optional C2PA manifest hash — the engine validates shape before
         # accepting. Coexistence-first: an Orphograph receipt can reference
         # a C2PA manifest hash so verifiers see both attestations.
@@ -2141,6 +2234,7 @@ class Handler(BaseHTTPRequestHandler):
                 attestation=attestation,
                 metadata=metadata,
                 c2pa_manifest_hash=c2pa_manifest_hash,
+                hardware_attestation=hardware_attestation,
             )
         except ValueError as e:
             # Anchor definitively failed (bad hash, etc.); no receipt produced.

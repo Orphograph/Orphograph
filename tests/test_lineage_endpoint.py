@@ -100,6 +100,25 @@ class TestLineageEndpoint(unittest.TestCase):
         except urllib.error.HTTPError as e:
             return e.code, json.loads(e.read())
 
+    def _get(self, path: str):
+        try:
+            resp = urllib.request.urlopen(f"{self._base}{path}", timeout=10)
+            return resp.status, resp.read().decode("utf-8")
+        except urllib.error.HTTPError as e:
+            return e.code, e.read().decode("utf-8")
+
+    def _anchor_chain(self, tag: bytes):
+        """Anchor a 2-link chain (v1 → v2) and return both response bodies."""
+        m1 = self._manifest_for({"draft.md": b"v1 " + tag})
+        status, b1 = self._post_folder(m1)
+        self.assertEqual(status, 200, b1)
+        m2 = self._manifest_for({"draft.md": b"v2 " + tag},
+                                parent_root=b1["root_hex"],
+                                parent_rid=b1["receipt_id"])
+        status, b2 = self._post_folder(m2)
+        self.assertEqual(status, 200, b2)
+        return b1, b2
+
     def _manifest_for(self, files: dict, parent_root: str | None = None,
                       parent_rid: str | None = None) -> dict:
         """Build a manifest from raw leaves — the same construction the
@@ -191,6 +210,54 @@ class TestLineageEndpoint(unittest.TestCase):
         status, body = self._post_folder(m2)
         self.assertEqual(status, 400)
         self.assertIn("lineage invalid", body["error"])
+
+    # -- UI surface: /api/verify + /r/<rid> version history -----------------
+
+    def test_api_verify_surfaces_lineage_only_when_set(self):
+        b1, b2 = self._anchor_chain(b"api-verify")
+        # (a) lineage receipt: block present, parent_receipt_found live.
+        status, text = self._get(f"/api/verify/{b2['receipt_id']}")
+        self.assertEqual(status, 200)
+        rec = json.loads(text)
+        self.assertIn("lineage", rec)
+        self.assertEqual(rec["lineage"]["parent_receipt_id"], b1["receipt_id"])
+        self.assertEqual(rec["lineage"]["parent_root"], b1["root_hex"])
+        self.assertTrue(rec["lineage"]["committed"])
+        self.assertTrue(rec["lineage"]["parent_receipt_found"])
+        # Plain receipt: shape-stable, no lineage key at all.
+        status, text = self._get(f"/api/verify/{b1['receipt_id']}")
+        self.assertEqual(status, 200)
+        self.assertNotIn("lineage", json.loads(text))
+
+    def test_receipt_page_version_history_for_lineage_receipt(self):
+        b1, b2 = self._anchor_chain(b"r-page")
+        status, html = self._get(f"/r/{b2['receipt_id']}")
+        self.assertEqual(status, 200)
+        # (b) section markers + both receipt ids + linked parent.
+        self.assertIn('id="version-history"', html)
+        self.assertIn("Version history", html)
+        self.assertIn(b2["receipt_id"], html)
+        self.assertIn(b1["receipt_id"], html)
+        self.assertIn(f'href="/r/{b1["receipt_id"]}"', html)
+        # Parent root: truncated text, full 64-hex on hover via title=.
+        self.assertIn(f'title="{b1["root_hex"]}"', html)
+        # Honest scope note — commits-to only, no change/time/authorship claim.
+        self.assertIn("It does not show what changed, when the edit happened, "
+                      "or who made it.", html)
+        # CSP doctrine: the injected section carries no inline style/script.
+        self.assertNotIn("style=", html)
+        self.assertNotIn("onclick", html)
+
+    def test_receipt_page_plain_receipt_has_no_version_history(self):
+        m1 = self._manifest_for({"solo.txt": b"no lineage here"})
+        status, b1 = self._post_folder(m1)
+        self.assertEqual(status, 200)
+        status, html = self._get(f"/r/{b1['receipt_id']}")
+        self.assertEqual(status, 200)
+        # (c) no section markers and the template token is consumed.
+        self.assertNotIn("version-history", html)
+        self.assertNotIn("Version history", html)
+        self.assertNotIn("LINEAGE_SECTION", html)
 
     def test_export_zip_includes_manifest(self):
         m1 = self._manifest_for({"a.txt": b"alpha"})

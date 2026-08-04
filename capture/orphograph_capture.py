@@ -82,8 +82,15 @@ def hash_file(path: Path) -> tuple[str, str]:
 
 
 def anchor_hash(endpoint: str, hash_hex: str, sha512_hex: str,
-                label: str, api_key: str) -> tuple[bool, dict]:
+                label: str, api_key: str,
+                hardware_attestation: dict | None = None) -> tuple[bool, dict]:
     body = {"hash_hex": hash_hex, "sha512_hex": sha512_hex, "client_label": label}
+    # Opt-in hardware attestation (--attest): a Secure-Enclave-held key's
+    # signature over this hash (docs/HARDWARE_ATTESTATION_SPIKE.md). Only
+    # added when actually produced — absent field keeps the wire shape
+    # identical to every prior daemon.
+    if hardware_attestation is not None:
+        body["hardware_attestation"] = hardware_attestation
     data = json.dumps(body).encode("utf-8")
     headers = {"Content-Type": "application/json", "User-Agent": USER_AGENT}
     if api_key:
@@ -168,13 +175,30 @@ def _write_receipt_sidecar(file_path: Path, receipt: dict, endpoint: str) -> Pat
         "calendars_total": receipt.get("calendars_total"),
         "captured_by": "orphograph-capture/0.1",
     }
+    # Hardware attestation rides in the sidecar only when the server echoed
+    # it in the receipt — additive, shape-stable for every existing sidecar.
+    if receipt.get("hardware_attestation"):
+        payload["hardware_attestation"] = receipt["hardware_attestation"]
     sidecar.write_text(json.dumps(payload, indent=2))
     return sidecar
 
 
 # ─── Watcher loop ───────────────────────────────────────────────────────────
+def _make_hw_attestation(hash_hex: str) -> dict | None:
+    """Opt-in Secure Enclave attestation for one hash. Honest degrade: any
+    failure (non-macOS, no swiftc, no SE, denied) returns None and the file
+    is anchored WITHOUT attestation — never faked, never blocked."""
+    try:
+        import orphograph_attest
+        return orphograph_attest.make_attestation(hash_hex, log=_log)
+    except Exception as e:  # noqa: BLE001 — attestation must never block anchoring
+        _log(f"hw-attest unavailable ({type(e).__name__}: {e}); anchoring without attestation")
+        return None
+
+
 def scan_once(watch_dirs: list[Path], extensions: set[str], include_filename: bool,
-              endpoint: str, api_key: str, min_age: int) -> dict:
+              endpoint: str, api_key: str, min_age: int, *,
+              attest: bool = False) -> dict:
     """One scan pass. Returns counts."""
     seen_by_path, seen_pairs = _load_seen()
     counts = {"checked": 0, "skipped_seen": 0, "skipped_young": 0,
@@ -224,9 +248,14 @@ def scan_once(watch_dirs: list[Path], extensions: set[str], include_filename: bo
                 _record_seen(entry, (prior or {}).get("receipt_id", ""),
                              sha256, st.st_mtime, st.st_size)
                 continue
-            # Anchor.
+            # Anchor. Attestation is opt-in and best-effort: when it cannot
+            # be produced the call falls back to the exact pre-existing shape.
             label = entry.name if include_filename else ""
-            ok, resp = anchor_hash(endpoint, sha256, sha512, label, api_key)
+            hw = _make_hw_attestation(sha256) if attest else None
+            if hw is not None:
+                ok, resp = anchor_hash(endpoint, sha256, sha512, label, api_key, hw)
+            else:
+                ok, resp = anchor_hash(endpoint, sha256, sha512, label, api_key)
             if not ok:
                 _log(f"anchor failed for {entry}: {resp.get('error', resp)}")
                 counts["failed"] += 1
@@ -240,14 +269,16 @@ def scan_once(watch_dirs: list[Path], extensions: set[str], include_filename: bo
 
 
 def watch_loop(watch_dirs: list[Path], extensions: set[str], include_filename: bool,
-              endpoint: str, api_key: str, interval: int, min_age: int) -> None:
-    _log(f"orphograph-capture starting; watching {len(watch_dirs)} dir(s), interval={interval}s")
+              endpoint: str, api_key: str, interval: int, min_age: int, *,
+              attest: bool = False) -> None:
+    _log(f"orphograph-capture starting; watching {len(watch_dirs)} dir(s), interval={interval}s"
+         + (" [hw-attest]" if attest else ""))
     for wd in watch_dirs:
         _log(f"  watch: {wd}")
     while True:
         try:
             counts = scan_once(watch_dirs, extensions, include_filename,
-                              endpoint, api_key, min_age)
+                              endpoint, api_key, min_age, attest=attest)
             if counts["anchored"] > 0 or counts["failed"] > 0:
                 _log(f"scan: {counts}")
         except KeyboardInterrupt:
@@ -298,6 +329,10 @@ def main() -> int:
                    help=f"skip files modified within last N seconds (default {DEFAULT_MIN_FILE_AGE})")
     p.add_argument("--include-filename", action="store_true",
                    help="include the filename in the anchor (default: off, privacy-preserving)")
+    p.add_argument("--attest", action="store_true",
+                   help="opt-in hardware attestation: sign each anchored hash with a "
+                        "Secure-Enclave-held device key (macOS; degrades honestly — "
+                        "anchors without attestation when unavailable)")
     p.add_argument("--all-extensions", action="store_true",
                    help="anchor every file regardless of extension (default: photo/audio/doc only)")
     p.add_argument("--once", action="store_true",
@@ -318,13 +353,15 @@ def main() -> int:
 
     if args.once:
         counts = scan_once(watch, extensions, args.include_filename,
-                          args.endpoint, args.api_key, args.min_age)
+                          args.endpoint, args.api_key, args.min_age,
+                          attest=args.attest)
         print(json.dumps(counts, indent=2))
         return 0
 
     try:
         watch_loop(watch, extensions, args.include_filename,
-                  args.endpoint, args.api_key, args.interval, args.min_age)
+                  args.endpoint, args.api_key, args.interval, args.min_age,
+                  attest=args.attest)
     except KeyboardInterrupt:
         return 0
     return 0

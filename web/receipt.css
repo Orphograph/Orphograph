@@ -475,3 +475,40 @@ dl.kv dd { margin: 0; font-size: 14px; word-break: break-all; overflow-wrap: any
 .tech-details[open] > summary { border-bottom: 1px solid var(--line-soft); }
 .tech-details > *:not(summary) { padding: 0 16px; }
 .tech-details > dl.kv { padding-top: 12px; }
+
+/* ── edit-lineage: "Version history" section (receipt + certificate) ──────
+   Rendered server-side on /r/<id> and filled by JS on /certificate/<id>.
+   Same hairline-rule language as the honesty box above. */
+.version-history {
+  border-top: 1px solid var(--line-soft, #e9e1cb);
+  padding: 20px 0 4px;
+  margin: 0 0 26px;
+}
+.version-history h2 { font-size: 15px; margin: 0 0 10px; font-weight: 600; letter-spacing: 0; }
+.lineage-chain {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px 14px;
+  margin: 0 0 10px;
+}
+.lineage-hop { display: inline-flex; flex-direction: column; gap: 3px; }
+.lineage-hop-label {
+  font-family: var(--mono, ui-monospace, Menlo, monospace);
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted, #6b6354);
+}
+.lineage-id { font-size: 14px; overflow-wrap: anywhere; color: var(--ink, #14110d); }
+a.lineage-id {
+  color: var(--accent, #3a2f24);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.lineage-arrow { color: var(--muted, #6b6354); font-size: 16px; padding-bottom: 1px; }
+.lineage-root-line { margin: 0 0 8px; }
+.lineage-root { overflow-wrap: anywhere; cursor: help; }
+.lineage-missing { margin: 0 0 8px; }
+.lineage-scope { margin: 0; line-height: 1.5; }
+@media print { .version-history { break-inside: avoid; } }

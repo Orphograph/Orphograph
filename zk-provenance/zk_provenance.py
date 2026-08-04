@@ -219,6 +219,57 @@ def build_anchor_payload(proof: ProvenanceProof, label: str | None = None) -> di
     }
 
 
+# ── snark-exec-v1 (honesty-ladder rung 4) ──────────────────────────────
+# Packages a groth16 proof of PROGRAM_V2 execution (circuits in snark/)
+# into the receipt payload. Unlike schnorr-zk-pok-v1 this DOES prove the
+# 8-round transform ran — but with a dev/public-ceremony trust posture
+# until rung 5, and it still does not prove an LLM produced the output.
+
+def _bits_to_hex(bits: list) -> str:
+    v = 0
+    for b in bits:
+        v = (v << 1) | int(b)
+    return v.to_bytes(len(bits) // 8, "big").hex()
+
+
+def build_snark_anchor_payload(model_id: str, proof_path, public_path,
+                               vk_path, label: str | None = None) -> dict:
+    """Build the engine.anchor_hash() payload for a snarkjs groth16 run.
+
+    Reads snarkjs's proof.json/public.json/verification_key.json, derives
+    the anchored hash from the circuit's OWN public signals
+    (SHA-256("out2:" + hex(stN))), and pins the verification key by hash.
+    The engine's sanitizer independently recomputes every binding.
+    """
+    import json as _json
+    from pathlib import Path as _Path
+    proof = _json.loads(_Path(proof_path).read_text())
+    signals = _json.loads(_Path(public_path).read_text())
+    if len(signals) != 768:
+        raise ValueError(f"expected 768 public signals, got {len(signals)}")
+    st_n = _bits_to_hex(signals[0:256])
+    output = "out2:" + st_n
+    output_hash = hashlib.sha256(output.encode()).hexdigest()
+    vk_sha256 = hashlib.sha256(_Path(vk_path).read_bytes()).hexdigest()
+    return {
+        "hash_hex": output_hash,
+        "sha512_hex": None,
+        "client_label": label,
+        "zk_proof": {
+            "proof_type": "snark-exec-v1",
+            "output_hash": output_hash,
+            "model_id": model_id,
+            "program": "orpho-prog-v2/8",
+            "protocol": "groth16",
+            "curve": "bn128",
+            "vk_sha256": vk_sha256,
+            "public_signals": signals,
+            "proof": {"pi_a": proof["pi_a"], "pi_b": proof["pi_b"],
+                      "pi_c": proof["pi_c"]},
+        },
+    }
+
+
 if __name__ == "__main__":
     print("group self-check:", _group_check())
     out, prf = prove("gpt-class-v3", "Summarize Q2 report", "seed-4417")

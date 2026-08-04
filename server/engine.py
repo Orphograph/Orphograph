@@ -10,9 +10,12 @@ Public API:
 """
 from __future__ import annotations
 
+import base64
+import binascii
 import hashlib
 import json
 import os
+import re
 import secrets
 import socket
 import ssl
@@ -285,6 +288,7 @@ def anchor_hash(
     metadata: dict | None = None,
     c2pa_manifest_hash: str | None = None,
     zk_proof: dict | None = None,
+    hardware_attestation: dict | None = None,
     parent_root: str | None = None,
     parent_receipt_id: str | None = None,
 ) -> dict:
@@ -418,6 +422,15 @@ def anchor_hash(
     zk_sanitized = _sanitize_zk_provenance(zk_proof, hash_hex)
     if zk_sanitized is not None:
         record["zk_provenance"] = zk_sanitized
+    # Optional hardware attestation (docs/HARDWARE_ATTESTATION_SPIKE.md §3):
+    # a device-resident-key signature over the anchored hash. Machine artifact
+    # like zk_provenance, NOT a human claim — so it gets its own strict
+    # sanitizer and is only written when present (shape-stability rule).
+    # Honest scope: it says "a hardware-resident key signed this hash at
+    # capture time" — never scene/content authenticity or authorship.
+    hw_sanitized = _sanitize_hardware_attestation(hardware_attestation, hash_hex)
+    if hw_sanitized is not None:
+        record["hardware_attestation"] = hw_sanitized
     # Edit-lineage hints: written only when supplied so existing receipts
     # remain shape-stable. `committed` is False here by construction — a
     # bare hash anchor cannot commit a parent inside the anchored bytes;
@@ -471,6 +484,8 @@ def _sanitize_zk_provenance(proof: dict | None, hash_hex: str) -> dict | None:
     """
     if not proof or not isinstance(proof, dict):
         return None
+    if proof.get("proof_type") == "snark-exec-v1":
+        return _sanitize_snark_exec_v1(proof, hash_hex)
     if proof.get("proof_type") not in ("schnorr-zk-pok-v1",):
         return None
     # The proof must be bound to the hash being anchored — a proof for a
@@ -493,6 +508,243 @@ def _sanitize_zk_provenance(proof: dict | None, hash_hex: str) -> dict | None:
         if not v or len(v) > 700 or not v.isdigit():
             return None
         out[k] = v
+    return out
+
+
+def _snark_bits_to_hex(bits: list) -> str | None:
+    """MSB-first bit list ('0'/'1' strings) → hex, or None if malformed.
+
+    Mirrors zk-provenance/snark/check_public.py exactly — the two must never
+    diverge or receipts and the circuit toolchain would disagree on identity.
+    """
+    v = 0
+    for b in bits:
+        if b not in ("0", "1"):
+            return None
+        v = (v << 1) | int(b)
+    return v.to_bytes(len(bits) // 8, "big").hex()
+
+
+def _sanitize_snark_exec_v1(proof: dict, hash_hex: str) -> dict | None:
+    """snark-exec-v1: a groth16 proof that PROGRAM_V2 (the 8-round SHA-256
+    chain) produced the anchored output.
+
+    The server performs every check that is PURE HASHING — these are real
+    bindings, not decoration:
+      1. output_hash == the hash being anchored;
+      2. output_hash == SHA-256("out2:" + hex(stN)) recomputed from the
+         proof's own public signals (signals [0:256], MSB-first) — a proof
+         whose circuit output does not hash to the anchored value is
+         rejected outright;
+      3. st0 (signals [512:768]) == SHA-256("orpho-prog-v2" || model_id) —
+         the claimed model binds to the circuit's public input.
+    The groth16 pairing check itself is NOT run here (no snarkjs on the
+    server); verifiers run it client-side against vk_sha256's key. A proof
+    that passes 1-3 but fails the pairing check is caught there — see the
+    forgery test in tests/test_snark_receipt.py. Whole-record rejection on
+    any violation, like every provenance sanitizer in this file.
+    """
+    output_hash = proof.get("output_hash")
+    if not isinstance(output_hash, str) or output_hash.strip().lower() != hash_hex:
+        return None
+    model_id = proof.get("model_id")
+    if not isinstance(model_id, str) or not model_id.strip():
+        return None
+    model_id = model_id.strip()[:200]
+    if proof.get("program") != "orpho-prog-v2/8":
+        return None
+    if proof.get("protocol") != "groth16" or proof.get("curve") != "bn128":
+        return None
+    vk_sha256 = proof.get("vk_sha256")
+    if not isinstance(vk_sha256, str):
+        return None
+    vk_sha256 = vk_sha256.strip().lower()
+    if len(vk_sha256) != 64 or any(c not in "0123456789abcdef" for c in vk_sha256):
+        return None
+
+    signals = proof.get("public_signals")
+    if not isinstance(signals, list) or len(signals) != 768:
+        return None
+    st_n = _snark_bits_to_hex(signals[0:256])
+    commitment = _snark_bits_to_hex(signals[256:512])
+    st0 = _snark_bits_to_hex(signals[512:768])
+    if st_n is None or commitment is None or st0 is None:
+        return None
+    # Binding 2: the anchored hash must be the hash of the circuit's output.
+    recomputed = hashlib.sha256(("out2:" + st_n).encode()).hexdigest()
+    if recomputed != hash_hex:
+        return None
+    # Binding 3: st0 is the program's domain-separated model commitment.
+    expected_st0 = hashlib.sha256(b"orpho-prog-v2" + model_id.encode()).hexdigest()
+    if st0 != expected_st0:
+        return None
+
+    # groth16 proof shape: bn128 field elements are < 2^254 (≤ 77 decimal
+    # digits); cap at 80. pi_a/pi_c: 3 elements; pi_b: 3 pairs.
+    def _dec(v) -> bool:
+        return isinstance(v, str) and 0 < len(v) <= 80 and v.isdigit()
+
+    p = proof.get("proof")
+    if not isinstance(p, dict):
+        return None
+    pi_a, pi_b, pi_c = p.get("pi_a"), p.get("pi_b"), p.get("pi_c")
+    if not (isinstance(pi_a, list) and len(pi_a) == 3 and all(_dec(v) for v in pi_a)):
+        return None
+    if not (isinstance(pi_c, list) and len(pi_c) == 3 and all(_dec(v) for v in pi_c)):
+        return None
+    if not (isinstance(pi_b, list) and len(pi_b) == 3
+            and all(isinstance(row, list) and len(row) == 2
+                    and all(_dec(v) for v in row) for row in pi_b)):
+        return None
+
+    return {
+        "proof_type": "snark-exec-v1",
+        "output_hash": hash_hex,
+        "model_id": model_id,
+        "program": "orpho-prog-v2/8",
+        "protocol": "groth16",
+        "curve": "bn128",
+        "vk_sha256": vk_sha256,
+        "public_signals": signals,
+        "proof": {"pi_a": pi_a, "pi_b": pi_b, "pi_c": pi_c},
+        # Derived identities — stored so verifiers and humans read them
+        # without re-deriving; the sanitizer proved them consistent above.
+        "stN_hex": st_n,
+        "commitment_hex": commitment,
+        "st0_hex": st0,
+    }
+# ─── Hardware attestation (docs/HARDWARE_ATTESTATION_SPIKE.md §3.2) ──────────
+# v1 attestation types. "p256-device-sig-v1" is the element-agnostic P-256
+# shape the spike doc specifies; SE / ATECC / TPM all emit it.
+HW_ATTESTATION_TYPES = ("p256-device-sig-v1",)
+HW_COUNTER_KINDS = ("software", "hardware")
+# Fixed 26-byte SubjectPublicKeyInfo prefix for an uncompressed P-256 point
+# (ecPublicKey OID + prime256v1 OID + BIT STRING header). A v1 device_pubkey
+# MUST be exactly this prefix + 0x04 || X || Y (91 bytes total).
+HW_P256_SPKI_PREFIX = bytes.fromhex(
+    "3059301306072a8648ce3d020106082a8648ce3d030107034200"
+)
+# ISO-8601 UTC-ish timestamp: claimed client clock readings, format-checked
+# only — they are corroborating hints, never load-bearing time (H3: the only
+# load-bearing time bound remains the OTS→Bitcoin path).
+_HW_TS_RE = re.compile(
+    r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})?$"
+)
+
+
+def _hw_b64_decode(value: str, max_chars: int) -> bytes | None:
+    """Strict base64 decode with a length cap. None on any violation."""
+    if not isinstance(value, str):
+        return None
+    value = value.strip()
+    if not value or len(value) > max_chars:
+        return None
+    try:
+        return base64.b64decode(value, validate=True)
+    except (binascii.Error, ValueError):
+        return None
+
+
+def _sanitize_hardware_attestation(att: dict | None, hash_hex: str) -> dict | None:
+    """Strictly validate a hardware-attestation payload for the receipt.
+
+    Mirrors `_sanitize_zk_provenance`: this is a machine-verifiable
+    cryptographic artifact (a device-resident-key ECDSA signature over the
+    anchored hash), not a human claim, so it gets its own shape validator
+    instead of the `attestation` allowlist's short caps.
+
+    Rejects the WHOLE record (returns None) on ANY violation — never
+    persists a partial attestation that could not re-verify offline.
+
+    Honest scope (binding): a valid record means "a device-held key signed
+    this hash at capture time" under first-use (TOFU) pinning. It does NOT
+    mean the content is authentic capture, who made it, or that the device
+    was uncompromised. The signature is checked offline by verifiers
+    (dist/orphograph-verify/verify_hw.py), not here — the server stays
+    dependency-free and never becomes the trust root.
+    """
+    if not att or not isinstance(att, dict):
+        return None
+    if att.get("attestation_type") not in HW_ATTESTATION_TYPES:
+        return None
+    # Bind to the hash being anchored — an attestation for a different hash
+    # riding on this receipt is the attestation-swapper adversary.
+    att_hash = att.get("hash_hex")
+    if not isinstance(att_hash, str) or att_hash.strip().lower() != hash_hex:
+        return None
+    # Device public key: base64 DER SubjectPublicKeyInfo, uncompressed P-256.
+    pubkey_b64 = att.get("device_pubkey")
+    pubkey_der = _hw_b64_decode(pubkey_b64, 200) if isinstance(pubkey_b64, str) else None
+    if pubkey_der is None or len(pubkey_der) != 91:
+        return None
+    if not pubkey_der.startswith(HW_P256_SPKI_PREFIX):
+        return None
+    # device_id is DERIVED (SHA-256 of the pubkey DER), never merely asserted
+    # — so it cannot disagree with device_pubkey.
+    device_id = att.get("device_id")
+    if not isinstance(device_id, str):
+        return None
+    device_id = device_id.strip().lower()
+    if device_id != hashlib.sha256(pubkey_der).hexdigest():
+        return None
+    # Claimed timestamps: signed_at (signing moment, inside the signed
+    # message) and key_created_at (the TOFU pinning moment — when the device
+    # key was first created). Format-checked, corroborating only.
+    signed_at = att.get("signed_at")
+    if not isinstance(signed_at, str) or len(signed_at) > 40 \
+            or not _HW_TS_RE.match(signed_at.strip()):
+        return None
+    key_created_at = att.get("key_created_at")
+    if not isinstance(key_created_at, str) or len(key_created_at) > 40 \
+            or not _HW_TS_RE.match(key_created_at.strip()):
+        return None
+    # Counter: ordering hint. bool is an int subclass — reject explicitly.
+    counter = att.get("counter")
+    if isinstance(counter, bool) or not isinstance(counter, int) \
+            or not (0 <= counter < 2 ** 64):
+        return None
+    if att.get("counter_kind") not in HW_COUNTER_KINDS:
+        return None
+    # Signature: base64 DER ECDSA-SHA256 (SEQUENCE of two INTEGERs).
+    sig_b64 = att.get("signature")
+    sig_der = _hw_b64_decode(sig_b64, 200) if isinstance(sig_b64, str) else None
+    if sig_der is None or not (8 <= len(sig_der) <= 72) or sig_der[0] != 0x30:
+        return None
+    out = {
+        "attestation_type": att["attestation_type"],
+        "hash_hex": hash_hex,
+        "device_id": device_id,
+        "device_pubkey": pubkey_b64.strip(),
+        "signed_at": signed_at.strip(),
+        "key_created_at": key_created_at.strip(),
+        "counter": counter,
+        "counter_kind": att["counter_kind"],
+        "signature": sig_b64.strip(),
+    }
+    # element: a client-asserted label (like model_id in the ZK layer — no
+    # cryptographic tie to the actual silicon in v1). Optional.
+    element = att.get("element")
+    if element is not None:
+        if not isinstance(element, str):
+            return None
+        element = element.strip()
+        if not element or len(element) > 60:
+            return None
+        out["element"] = element
+    # cert_chain: OPTIONAL, expected ABSENT in v1 (TOFU). Present only for
+    # elements that ship manufacturer certs; capped hard.
+    cert_chain = att.get("cert_chain")
+    if cert_chain is not None:
+        if not isinstance(cert_chain, list) or not (1 <= len(cert_chain) <= 4):
+            return None
+        chain_out = []
+        for cert in cert_chain:
+            if not isinstance(cert, str):
+                return None
+            if _hw_b64_decode(cert, 4000) is None:
+                return None
+            chain_out.append(cert.strip())
+        out["cert_chain"] = chain_out
     return out
 
 
@@ -578,11 +830,25 @@ def verify_receipt(receipt_id: str) -> dict:
     # rule as the folder fields below).
     if record.get("zk_provenance"):
         out["zk_provenance"] = record["zk_provenance"]
+    # Hardware attestation: surfaced only when present (same shape-stability
+    # rule). Scope: "a device-held key signed this hash at capture time"
+    # under TOFU pinning — offline signature check is verify_hw.py's job.
+    if record.get("hardware_attestation"):
+        out["hardware_attestation"] = record["hardware_attestation"]
     # Edit-lineage mirror: surfaced only when present (same shape-stability
     # rule). The block is an index, not the proof — the committed authority
-    # is the reserved leaf inside the manifest + the .ots files.
+    # is the reserved leaf inside the manifest + the .ots files. The
+    # parent_receipt_found flag is recomputed live on every verify (never
+    # stored) so a parent pruned after anchoring is reported honestly and
+    # the UI links /r/<parent> only when it actually resolves here.
     if record.get("lineage"):
-        out["lineage"] = record["lineage"]
+        lineage_out = dict(record["lineage"])
+        parent_id = lineage_out.get("parent_receipt_id")
+        if _is_receipt_id(parent_id):
+            lineage_out["parent_receipt_found"] = (
+                RECEIPTS_DIR / parent_id / "receipt.json"
+            ).exists()
+        out["lineage"] = lineage_out
     if record.get("kind"):
         out["kind"] = record["kind"]
     if record.get("leaf_count") is not None:

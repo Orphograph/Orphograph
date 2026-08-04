@@ -412,6 +412,41 @@ function initShareBlock(rid) {
   }
 }
 
+// ─── edit-lineage: version history (docs/DESIGN_EDIT_LINEAGE.md) ─────────
+// Fills and reveals the hidden #version-history section when the receipt
+// carries a committed lineage block. The parent id becomes a /r/<id> link
+// only when the server reports the parent receipt actually resolves here
+// (lineage.parent_receipt_found, recomputed live by /api/verify*).
+function renderLineage(rec) {
+  const lineage = rec.lineage;
+  const section = $("#version-history");
+  if (!section || !lineage || !lineage.committed) return;
+  const pid = String(lineage.parent_receipt_id || "");
+  const root = String(lineage.parent_root || "");
+  if (!/^[A-Za-z0-9_-]{1,64}$/.test(pid) || !/^[0-9a-f]{64}$/.test(root)) return;
+  const current = $("#lineage-current");
+  if (current) current.textContent = rec.receipt_id || CERT_RID;
+  const slot = $("#lineage-parent-slot");
+  if (slot) {
+    slot.replaceChildren();
+    if (lineage.parent_receipt_found) {
+      // /r/<id> is the canonical receipt URL for both kinds — a folder
+      // parent forwards to its /certificate view client-side.
+      slot.appendChild(el("a", { className: "mono lineage-id", href: "/r/" + encodeURIComponent(pid), textContent: pid }));
+    } else {
+      slot.appendChild(el("span", { className: "mono lineage-id", textContent: pid }));
+      const missing = $("#lineage-missing");
+      if (missing) missing.hidden = false;
+    }
+  }
+  const rootEl = $("#lineage-root");
+  if (rootEl) {
+    rootEl.title = root;           // full 64-hex on hover
+    rootEl.textContent = _shortHash(root);
+  }
+  section.hidden = false;
+}
+
 // ─── status copy (shared with receipt.js) ────────────────────────────────
 function friendlyStatus(rec) {
   const raw = rec.status || "pending";
@@ -460,6 +495,9 @@ async function main() {
   $("#cals").textContent = `${rec.calendars_ok || 0} of ${rec.calendars_total || 5} OTS proofs valid`;
   if (rec.btc_pinned_at) renderTimeInto($("#btc"), rec.btc_pinned_at);
   else $("#btc").textContent = "pending — block-pinning happens within ~1 hour";
+
+  // Version history (edit-lineage) — no-op unless rec.lineage is present.
+  renderLineage(rec);
 
   // Categorised documents — only possible when paths are visible (owner view)
   if (!redacted) {
