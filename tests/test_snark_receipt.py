@@ -146,17 +146,22 @@ class TestSnarkExecReceipt(unittest.TestCase):
 
     # ── structural rejection matrix ─────────────────────────────────────
 
-    def test_rejects_wrong_signal_count(self):
-        p = copy.deepcopy(self.payload)
-        p["zk_proof"]["public_signals"] = p["zk_proof"]["public_signals"][:-1]
-        record = ENGINE.anchor_hash(p["hash_hex"], zk_proof=p["zk_proof"])
-        self.assertNotIn("zk_provenance", record)
+    def test_rejects_malformed_signal_identities(self):
+        for field, bad in (("stN_hex", "zz" * 32), ("commitment_hex", "ab" * 31),
+                           ("st0_hex", None), ("stN_hex", ("AB" * 32))):
+            p = copy.deepcopy(self.payload)
+            p["zk_proof"][field] = bad
+            record = ENGINE.anchor_hash(p["hash_hex"], zk_proof=p["zk_proof"])
+            self.assertNotIn("zk_provenance", record,
+                             f"{field}={bad!r} must reject the whole proof")
 
-    def test_rejects_non_bit_signal(self):
-        p = copy.deepcopy(self.payload)
-        p["zk_proof"]["public_signals"][5] = "2"
-        record = ENGINE.anchor_hash(p["hash_hex"], zk_proof=p["zk_proof"])
-        self.assertNotIn("zk_provenance", record)
+    def test_payload_fits_api_anchor_body_cap(self):
+        # The whole reason for the compact wire format: the 768-bit array
+        # blew /api/anchor's 4KB cap in prod (found by live verification).
+        body = json.dumps({"hash_hex": self.payload["hash_hex"],
+                           "zk_proof": self.payload["zk_proof"]}).encode()
+        self.assertLessEqual(len(body), 4096,
+                             f"snark anchor body is {len(body)}B — exceeds MAX_BODY_BYTES")
 
     def test_rejects_bad_vk_hash_and_missing_fields(self):
         for mutate in (
@@ -183,9 +188,19 @@ class TestSnarkExecReceipt(unittest.TestCase):
         "repo-local snarkjs unavailable (zk-provenance/snark/node_modules)")
     def test_forgery_d_tampered_signals_fail_groth16_verify(self):
         # Flip one stN bit and rebind output_hash so ALL server-side hash
-        # checks pass — the pairing check must be what kills it.
-        p = copy.deepcopy(self.payload)
-        signals = p["zk_proof"]["public_signals"]
+        # checks pass — the pairing check must be what kills it. The bit
+        # array is reconstructed from the receipt's compact hex identities
+        # exactly the way verify_snark.py does.
+        def hex_to_bits(h):
+            v = int(h, 16)
+            return [str((v >> (255 - i)) & 1) for i in range(256)]
+        zkp = self.payload["zk_proof"]
+        signals = (hex_to_bits(zkp["stN_hex"]) + hex_to_bits(zkp["commitment_hex"])
+                   + hex_to_bits(zkp["st0_hex"]))
+        genuine_signals = json.loads((EVIDENCE / "public.json").read_text())
+        self.assertEqual(signals, genuine_signals,
+                         "hex reconstruction must be lossless vs snarkjs output")
+        signals = list(signals)
         signals[0] = "1" if signals[0] == "0" else "0"
         with tempfile.TemporaryDirectory() as td:
             tampered_pub = Path(td) / "public.json"

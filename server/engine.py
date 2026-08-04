@@ -511,20 +511,6 @@ def _sanitize_zk_provenance(proof: dict | None, hash_hex: str) -> dict | None:
     return out
 
 
-def _snark_bits_to_hex(bits: list) -> str | None:
-    """MSB-first bit list ('0'/'1' strings) → hex, or None if malformed.
-
-    Mirrors zk-provenance/snark/check_public.py exactly — the two must never
-    diverge or receipts and the circuit toolchain would disagree on identity.
-    """
-    v = 0
-    for b in bits:
-        if b not in ("0", "1"):
-            return None
-        v = (v << 1) | int(b)
-    return v.to_bytes(len(bits) // 8, "big").hex()
-
-
 def _sanitize_snark_exec_v1(proof: dict, hash_hex: str) -> dict | None:
     """snark-exec-v1: a groth16 proof that PROGRAM_V2 (the 8-round SHA-256
     chain) produced the anchored output.
@@ -562,14 +548,17 @@ def _sanitize_snark_exec_v1(proof: dict, hash_hex: str) -> dict | None:
     if len(vk_sha256) != 64 or any(c not in "0123456789abcdef" for c in vk_sha256):
         return None
 
-    signals = proof.get("public_signals")
-    if not isinstance(signals, list) or len(signals) != 768:
-        return None
-    st_n = _snark_bits_to_hex(signals[0:256])
-    commitment = _snark_bits_to_hex(signals[256:512])
-    st0 = _snark_bits_to_hex(signals[512:768])
-    if st_n is None or commitment is None or st0 is None:
-        return None
+    # Public signals travel as the three 64-hex identities, NOT the raw
+    # 768-bit array snarkjs emits — the array is fully reconstructible
+    # (MSB-first) from these, and the compact form keeps the payload
+    # inside /api/anchor's 4KB body cap. verify_snark.py rebuilds the
+    # bit array before the pairing check.
+    st_n = proof.get("stN_hex")
+    commitment = proof.get("commitment_hex")
+    st0 = proof.get("st0_hex")
+    for v in (st_n, commitment, st0):
+        if not isinstance(v, str) or not _is_hex(v, 64):
+            return None
     # Binding 2: the anchored hash must be the hash of the circuit's output.
     recomputed = hashlib.sha256(("out2:" + st_n).encode()).hexdigest()
     if recomputed != hash_hex:
@@ -605,10 +594,10 @@ def _sanitize_snark_exec_v1(proof: dict, hash_hex: str) -> dict | None:
         "protocol": "groth16",
         "curve": "bn128",
         "vk_sha256": vk_sha256,
-        "public_signals": signals,
         "proof": {"pi_a": pi_a, "pi_b": pi_b, "pi_c": pi_c},
-        # Derived identities — stored so verifiers and humans read them
-        # without re-deriving; the sanitizer proved them consistent above.
+        # The three public-signal identities — proven consistent with the
+        # anchored hash and model commitment above; verifiers reconstruct
+        # the full 768-bit snarkjs array from these.
         "stN_hex": st_n,
         "commitment_hex": commitment,
         "st0_hex": st0,

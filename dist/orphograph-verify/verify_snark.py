@@ -33,13 +33,10 @@ import tempfile
 from pathlib import Path
 
 
-def bits_to_hex(bits: list) -> str | None:
-    v = 0
-    for b in bits:
-        if b not in ("0", "1"):
-            return None
-        v = (v << 1) | int(b)
-    return v.to_bytes(len(bits) // 8, "big").hex()
+def hex_to_bits(hex_str: str) -> list[str]:
+    """64-hex → 256 '0'/'1' strings, MSB-first — the exact snarkjs order."""
+    v = int(hex_str, 16)
+    return [str((v >> (255 - i)) & 1) for i in range(256)]
 
 
 def main() -> int:
@@ -61,15 +58,17 @@ def main() -> int:
         return 2
 
     hash_hex = record.get("hash_hex", "")
-    signals = zk.get("public_signals") or []
-    if len(signals) != 768:
-        print(f"FAIL  expected 768 public signals, got {len(signals)}")
-        return 1
-    st_n = bits_to_hex(signals[0:256])
-    st0 = bits_to_hex(signals[512:768])
-    if st_n is None or st0 is None:
-        print("FAIL  malformed public signals (non-bit entries)")
-        return 1
+    st_n = zk.get("stN_hex", "")
+    st0 = zk.get("st0_hex", "")
+    commitment = zk.get("commitment_hex", "")
+    for name, v in (("stN_hex", st_n), ("commitment_hex", commitment), ("st0_hex", st0)):
+        if not (isinstance(v, str) and len(v) == 64
+                and all(c in "0123456789abcdef" for c in v)):
+            print(f"FAIL  {name} missing or not 64 lowercase hex")
+            return 1
+    # The receipt stores the compact identities; rebuild the snarkjs
+    # 768-bit public-signal array losslessly for the pairing check.
+    signals = hex_to_bits(st_n) + hex_to_bits(commitment) + hex_to_bits(st0)
 
     ok = True
     recomputed = hashlib.sha256(("out2:" + st_n).encode()).hexdigest()
