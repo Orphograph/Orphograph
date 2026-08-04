@@ -2194,6 +2194,11 @@ class Handler(BaseHTTPRequestHandler):
         # sanitizes (allowlist + size caps); unknown fields are dropped.
         attestation = payload.get("attestation") if isinstance(payload.get("attestation"), dict) else None
         metadata = payload.get("metadata") if isinstance(payload.get("metadata"), dict) else None
+        # Hardware attestation: a device-resident-key signature over the
+        # anchored hash (docs/HARDWARE_ATTESTATION_SPIKE.md). The engine
+        # strictly validates shape + hash binding and rejects the whole
+        # record on any violation; absent field changes nothing.
+        hardware_attestation = payload.get("hardware_attestation") if isinstance(payload.get("hardware_attestation"), dict) else None
         # Optional C2PA manifest hash — the engine validates shape before
         # accepting. Coexistence-first: an Orphograph receipt can reference
         # a C2PA manifest hash so verifiers see both attestations.
@@ -2229,6 +2234,7 @@ class Handler(BaseHTTPRequestHandler):
                 attestation=attestation,
                 metadata=metadata,
                 c2pa_manifest_hash=c2pa_manifest_hash,
+                hardware_attestation=hardware_attestation,
             )
         except ValueError as e:
             # Anchor definitively failed (bad hash, etc.); no receipt produced.
