@@ -27,6 +27,9 @@ and credit packs raise the limit via an API key issued from the account page.
 ## API
 
 - POST https://orphograph.com/api/anchor — anchor a single SHA-256 fingerprint
+- POST https://orphograph.com/api/ln/quote — Lightning L402 pay-per-anchor for
+  agents (503 until armed): pay the returned invoice, retry /api/anchor with
+  Authorization: L402 <macaroon>:<preimage_hex>. One payment = one anchor.
   (JSON body; the free tier needs no API key)
 - POST https://orphograph.com/api/anchor_folder — anchor a folder manifest: an
   RFC 6962 Merkle root plus a {leaves} list of relative paths and per-file digests
