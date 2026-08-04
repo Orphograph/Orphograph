@@ -248,9 +248,14 @@ def build_snark_anchor_payload(model_id: str, proof_path, public_path,
     if len(signals) != 768:
         raise ValueError(f"expected 768 public signals, got {len(signals)}")
     st_n = _bits_to_hex(signals[0:256])
+    commitment = _bits_to_hex(signals[256:512])
+    st0 = _bits_to_hex(signals[512:768])
     output = "out2:" + st_n
     output_hash = hashlib.sha256(output.encode()).hexdigest()
     vk_sha256 = hashlib.sha256(_Path(vk_path).read_bytes()).hexdigest()
+    # Wire format carries the three 64-hex identities, not the 768-bit
+    # array — reconstructible losslessly, and it keeps the whole payload
+    # inside /api/anchor's 4KB body cap.
     return {
         "hash_hex": output_hash,
         "sha512_hex": None,
@@ -263,7 +268,9 @@ def build_snark_anchor_payload(model_id: str, proof_path, public_path,
             "protocol": "groth16",
             "curve": "bn128",
             "vk_sha256": vk_sha256,
-            "public_signals": signals,
+            "stN_hex": st_n,
+            "commitment_hex": commitment,
+            "st0_hex": st0,
             "proof": {"pi_a": proof["pi_a"], "pi_b": proof["pi_b"],
                       "pi_c": proof["pi_c"]},
         },
