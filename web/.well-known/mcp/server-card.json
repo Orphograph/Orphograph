@@ -1,0 +1,40 @@
+{
+  "name": "io.github.Orphograph/orphograph",
+  "title": "Orphograph",
+  "description": "Anchor a file's SHA-256 fingerprint to the Bitcoin blockchain via OpenTimestamps and verify the receipt later. Proves WHEN, not who: a receipt establishes that a hash existed at a point in time, never authorship, ownership, or originality. Hashing is local; file bodies never leave the device. Records are tamper-evident, not tamper-proof.",
+  "vendor": "Orphograph",
+  "homepage": "https://orphograph.com",
+  "repository": "https://github.com/Orphograph/Orphograph",
+  "registry": {
+    "name": "io.github.Orphograph/orphograph",
+    "url": "https://registry.modelcontextprotocol.io"
+  },
+  "transport": "stdio",
+  "version": "0.1.0",
+  "tools": [
+    {
+      "name": "orphograph_anchor_file",
+      "description": "Anchor a local file to the Bitcoin chain: computes SHA-256/SHA-512 in-process, transmits only the fingerprints, and returns a receipt id, receipt URL, and calendar attestation counts."
+    },
+    {
+      "name": "orphograph_anchor_folder",
+      "description": "Anchor a whole folder (a dataset) as an RFC-6962 Merkle tree; only the manifest (relative paths, digests, root) is transmitted, and each file stays independently verifiable via an inclusion proof."
+    },
+    {
+      "name": "orphograph_anchor_output",
+      "description": "Anchor a string of generated output (an agent's result, a model response, a transcript) without writing a file first; only the SHA-256/512 fingerprints are transmitted."
+    },
+    {
+      "name": "orphograph_verify_receipt",
+      "description": "Verify an existing Orphograph receipt against the calendars and Bitcoin chain; returns the anchored hashes, attestation counts, and Bitcoin block commitment time when available. No API key required."
+    },
+    {
+      "name": "orphograph_verify_lineage",
+      "description": "Walk the parent links of a receipt's edit lineage and verify each link; reports anchor-time ordering only, not content similarity, authorship, or whether siblings exist."
+    },
+    {
+      "name": "orphograph_list_vault",
+      "description": "List the signed-in subscriber's anchored receipts; requires ORPHO_API_KEY in the environment."
+    }
+  ]
+}

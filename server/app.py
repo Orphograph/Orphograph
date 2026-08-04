@@ -1935,6 +1935,31 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body_bytes)
             return
+        # Agent discoverability — /llms.txt (the agent-readable site summary)
+        # and the MCP server card at /.well-known/mcp/server-card.json. Served
+        # explicitly (same pattern as security.txt / robots.txt above) so the
+        # Content-Type is unambiguous and the dotted .well-known path never
+        # depends on the generic static handler's resolution rules. Both files
+        # live in web/; this route is purely additive.
+        if path in ("/llms.txt", "/.well-known/mcp/server-card.json"):
+            try:
+                body_bytes = (WEB_DIR / path.lstrip("/")).read_bytes()
+            except OSError:
+                self.send_error(404, "Not found")
+                return
+            content_type = (
+                "application/json; charset=utf-8"
+                if path.endswith(".json")
+                else "text/plain; charset=utf-8"
+            )
+            self.send_response(200)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(body_bytes)))
+            self.send_header("Cache-Control", "public, max-age=3600")
+            _security_headers(self)
+            self.end_headers()
+            self.wfile.write(body_bytes)
+            return
         _serve_static(self, path)
 
     def do_POST(self):  # noqa: N802

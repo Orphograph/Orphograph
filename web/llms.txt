@@ -1,0 +1,59 @@
+# Orphograph
+
+> Bitcoin-anchored proof of existence at https://orphograph.com. Orphograph anchors a
+> file's SHA-256 fingerprint to the Bitcoin blockchain via OpenTimestamps and issues a
+> verifiable receipt. It proves WHEN, not who: a receipt establishes that a file or hash
+> existed at a point in time. It does not establish authorship, ownership, or
+> originality. Records are tamper-evident, not tamper-proof. Orphograph is not a notary
+> and does not provide legal advice.
+
+Orphograph never receives file contents. Hashing happens on the client; only the
+SHA-256/SHA-512 fingerprints (or, for folders, a manifest of relative paths, per-file
+digests, and the RFC 6962 Merkle root) are transmitted. A free tier requires no
+account: three anchors per twenty-four hours per IP, no sign-up. Paid subscriptions
+and credit packs raise the limit via an API key issued from the account page.
+
+## Key pages
+
+- Home: https://orphograph.com/ — what the service proves and how anchoring works
+- Verifier: https://orphograph.com/verify/ — verify a receipt in the browser; ships the
+  MIT-licensed offline verifier (verify.py)
+- Anchor an output: https://orphograph.com/anchor-output — anchor pasted text (an
+  agent's result, a transcript) without writing a file first
+- Agent receipts: https://orphograph.com/lp/agent-receipts — receipts for AI-agent
+  outputs and memory
+- Receipt page: https://orphograph.com/r/<receipt_id> — the public page for one receipt
+
+## API
+
+- POST https://orphograph.com/api/anchor — anchor a single SHA-256 fingerprint
+  (JSON body; the free tier needs no API key)
+- POST https://orphograph.com/api/anchor_folder — anchor a folder manifest: an
+  RFC 6962 Merkle root plus a {leaves} list of relative paths and per-file digests
+- GET https://orphograph.com/api/verify/<receipt_id> — receipt status: calendar
+  attestation counts and, once confirmed, the Bitcoin block commitment time
+
+## MCP server
+
+- Single-file stdio server, MIT-licensed: https://github.com/Orphograph/Orphograph
+  (mcp/orphograph_mcp.py)
+- Registry entry: io.github.Orphograph/orphograph on registry.modelcontextprotocol.io
+- Server card: https://orphograph.com/.well-known/mcp/server-card.json
+- Tools: orphograph_anchor_file, orphograph_anchor_folder, orphograph_anchor_output,
+  orphograph_verify_receipt, orphograph_verify_lineage, orphograph_list_vault
+
+## Independent verification
+
+Every receipt carries an OpenTimestamps proof. The verifier at
+https://orphograph.com/verify/ is MIT-licensed Python (verify.py) that checks the
+proof against the Bitcoin chain directly. Verification does not depend on
+Orphograph's continued existence: with the service gone, the receipt file, the
+proof, and the open-source verifier are sufficient.
+
+## What a receipt does not claim
+
+- It proves WHEN a hash existed — never who created the content, authorship,
+  ownership, or originality.
+- It performs no AI-versus-human detection of any kind.
+- It is not court admissibility and not legal advice; Orphograph is not a notary.
+- It is tamper-evident, not tamper-proof: alterations are detectable, not prevented.
