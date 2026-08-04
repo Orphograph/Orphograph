@@ -471,6 +471,8 @@ def _sanitize_zk_provenance(proof: dict | None, hash_hex: str) -> dict | None:
     """
     if not proof or not isinstance(proof, dict):
         return None
+    if proof.get("proof_type") == "snark-exec-v1":
+        return _sanitize_snark_exec_v1(proof, hash_hex)
     if proof.get("proof_type") not in ("schnorr-zk-pok-v1",):
         return None
     # The proof must be bound to the hash being anchored — a proof for a
@@ -494,6 +496,110 @@ def _sanitize_zk_provenance(proof: dict | None, hash_hex: str) -> dict | None:
             return None
         out[k] = v
     return out
+
+
+def _snark_bits_to_hex(bits: list) -> str | None:
+    """MSB-first bit list ('0'/'1' strings) → hex, or None if malformed.
+
+    Mirrors zk-provenance/snark/check_public.py exactly — the two must never
+    diverge or receipts and the circuit toolchain would disagree on identity.
+    """
+    v = 0
+    for b in bits:
+        if b not in ("0", "1"):
+            return None
+        v = (v << 1) | int(b)
+    return v.to_bytes(len(bits) // 8, "big").hex()
+
+
+def _sanitize_snark_exec_v1(proof: dict, hash_hex: str) -> dict | None:
+    """snark-exec-v1: a groth16 proof that PROGRAM_V2 (the 8-round SHA-256
+    chain) produced the anchored output.
+
+    The server performs every check that is PURE HASHING — these are real
+    bindings, not decoration:
+      1. output_hash == the hash being anchored;
+      2. output_hash == SHA-256("out2:" + hex(stN)) recomputed from the
+         proof's own public signals (signals [0:256], MSB-first) — a proof
+         whose circuit output does not hash to the anchored value is
+         rejected outright;
+      3. st0 (signals [512:768]) == SHA-256("orpho-prog-v2" || model_id) —
+         the claimed model binds to the circuit's public input.
+    The groth16 pairing check itself is NOT run here (no snarkjs on the
+    server); verifiers run it client-side against vk_sha256's key. A proof
+    that passes 1-3 but fails the pairing check is caught there — see the
+    forgery test in tests/test_snark_receipt.py. Whole-record rejection on
+    any violation, like every provenance sanitizer in this file.
+    """
+    output_hash = proof.get("output_hash")
+    if not isinstance(output_hash, str) or output_hash.strip().lower() != hash_hex:
+        return None
+    model_id = proof.get("model_id")
+    if not isinstance(model_id, str) or not model_id.strip():
+        return None
+    model_id = model_id.strip()[:200]
+    if proof.get("program") != "orpho-prog-v2/8":
+        return None
+    if proof.get("protocol") != "groth16" or proof.get("curve") != "bn128":
+        return None
+    vk_sha256 = proof.get("vk_sha256")
+    if not isinstance(vk_sha256, str):
+        return None
+    vk_sha256 = vk_sha256.strip().lower()
+    if len(vk_sha256) != 64 or any(c not in "0123456789abcdef" for c in vk_sha256):
+        return None
+
+    signals = proof.get("public_signals")
+    if not isinstance(signals, list) or len(signals) != 768:
+        return None
+    st_n = _snark_bits_to_hex(signals[0:256])
+    commitment = _snark_bits_to_hex(signals[256:512])
+    st0 = _snark_bits_to_hex(signals[512:768])
+    if st_n is None or commitment is None or st0 is None:
+        return None
+    # Binding 2: the anchored hash must be the hash of the circuit's output.
+    recomputed = hashlib.sha256(("out2:" + st_n).encode()).hexdigest()
+    if recomputed != hash_hex:
+        return None
+    # Binding 3: st0 is the program's domain-separated model commitment.
+    expected_st0 = hashlib.sha256(b"orpho-prog-v2" + model_id.encode()).hexdigest()
+    if st0 != expected_st0:
+        return None
+
+    # groth16 proof shape: bn128 field elements are < 2^254 (≤ 77 decimal
+    # digits); cap at 80. pi_a/pi_c: 3 elements; pi_b: 3 pairs.
+    def _dec(v) -> bool:
+        return isinstance(v, str) and 0 < len(v) <= 80 and v.isdigit()
+
+    p = proof.get("proof")
+    if not isinstance(p, dict):
+        return None
+    pi_a, pi_b, pi_c = p.get("pi_a"), p.get("pi_b"), p.get("pi_c")
+    if not (isinstance(pi_a, list) and len(pi_a) == 3 and all(_dec(v) for v in pi_a)):
+        return None
+    if not (isinstance(pi_c, list) and len(pi_c) == 3 and all(_dec(v) for v in pi_c)):
+        return None
+    if not (isinstance(pi_b, list) and len(pi_b) == 3
+            and all(isinstance(row, list) and len(row) == 2
+                    and all(_dec(v) for v in row) for row in pi_b)):
+        return None
+
+    return {
+        "proof_type": "snark-exec-v1",
+        "output_hash": hash_hex,
+        "model_id": model_id,
+        "program": "orpho-prog-v2/8",
+        "protocol": "groth16",
+        "curve": "bn128",
+        "vk_sha256": vk_sha256,
+        "public_signals": signals,
+        "proof": {"pi_a": pi_a, "pi_b": pi_b, "pi_c": pi_c},
+        # Derived identities — stored so verifiers and humans read them
+        # without re-deriving; the sanitizer proved them consistent above.
+        "stN_hex": st_n,
+        "commitment_hex": commitment,
+        "st0_hex": st0,
+    }
 
 
 def _sanitize_metadata(metadata: dict | None) -> dict | None:
