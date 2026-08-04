@@ -686,9 +686,18 @@ def verify_receipt(receipt_id: str) -> dict:
         out["zk_provenance"] = record["zk_provenance"]
     # Edit-lineage mirror: surfaced only when present (same shape-stability
     # rule). The block is an index, not the proof — the committed authority
-    # is the reserved leaf inside the manifest + the .ots files.
+    # is the reserved leaf inside the manifest + the .ots files. The
+    # parent_receipt_found flag is recomputed live on every verify (never
+    # stored) so a parent pruned after anchoring is reported honestly and
+    # the UI links /r/<parent> only when it actually resolves here.
     if record.get("lineage"):
-        out["lineage"] = record["lineage"]
+        lineage_out = dict(record["lineage"])
+        parent_id = lineage_out.get("parent_receipt_id")
+        if _is_receipt_id(parent_id):
+            lineage_out["parent_receipt_found"] = (
+                RECEIPTS_DIR / parent_id / "receipt.json"
+            ).exists()
+        out["lineage"] = lineage_out
     if record.get("kind"):
         out["kind"] = record["kind"]
     if record.get("leaf_count") is not None:

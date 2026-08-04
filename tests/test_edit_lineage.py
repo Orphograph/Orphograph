@@ -324,7 +324,13 @@ class TestEngineLineage(unittest.TestCase):
                 "committed": True,
             })
             out = ENGINE.verify_receipt(rid)
-            self.assertEqual(out["lineage"], on_disk["lineage"])
+            # verify_receipt surfaces the stored block plus a LIVE (never
+            # stored) parent_receipt_found flag, so the UI links the parent
+            # only when it actually resolves on this server.
+            self.assertEqual(
+                out["lineage"],
+                {**on_disk["lineage"], "parent_receipt_found": True},
+            )
         # Genesis receipt stays shape-stable.
         self.assertNotIn(
             "lineage",

@@ -97,6 +97,59 @@ MAX_BATCH_ITEMS = 50
 MAX_FOLDER_MANIFEST_BYTES = 8 * 1024 * 1024
 MAX_FOLDER_LEAVES = 50_000
 RECEIPT_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")  # secrets.token_urlsafe(12) shape
+
+
+def _lineage_section_html(rid: str, lineage) -> str:
+    """Server-rendered "Version history" section for /r/<rid> (edit-lineage).
+
+    Returns "" unless the receipt carries a committed lineage block whose
+    fields re-validate against the receipt-id / lowercase-hex alphabets.
+    Defense in depth: the values were validated at anchor time, but they are
+    being placed into HTML here, so re-check before injection — both
+    alphabets are HTML-inert, so no escaping pass is needed (same argument
+    as the {{RECEIPT_ID}} substitution below). CSP-safe: markup only, no
+    inline style or script; all styling lives in web/receipt.css.
+    """
+    if not isinstance(lineage, dict) or not lineage.get("committed"):
+        return ""
+    parent_id = lineage.get("parent_receipt_id")
+    parent_root = lineage.get("parent_root")
+    if not isinstance(parent_id, str) or not RECEIPT_ID_RE.match(parent_id):
+        return ""
+    if not engine._is_hex(parent_root, 64):
+        return ""
+    parent_found = (engine.RECEIPTS_DIR / parent_id / "receipt.json").exists()
+    if parent_found:
+        # /r/<id> is the canonical receipt URL for both kinds — folder
+        # parents forward to their /certificate view client-side.
+        parent_node = f'<a class="mono lineage-id" href="/r/{parent_id}">{parent_id}</a>'
+        parent_note = ""
+    else:
+        parent_node = f'<span class="mono lineage-id">{parent_id}</span>'
+        parent_note = (
+            '  <p class="muted small lineage-missing">The parent receipt does not '
+            "resolve on this server; its committed root is shown above.</p>\n"
+        )
+    root_short = f"{parent_root[:10]}&hellip;{parent_root[-6:]}"
+    return (
+        '<section id="version-history" class="version-history needs-record" '
+        'aria-label="Version history">\n'
+        "  <h2>Version history</h2>\n"
+        '  <p class="lineage-chain">\n'
+        '    <span class="lineage-hop"><span class="lineage-hop-label">This version</span>'
+        f'<span class="mono lineage-id">{rid}</span></span>\n'
+        '    <span class="lineage-arrow" aria-hidden="true">&#8594;</span>\n'
+        '    <span class="lineage-hop"><span class="lineage-hop-label">Parent</span>'
+        f"{parent_node}</span>\n"
+        "  </p>\n"
+        '  <p class="muted small lineage-root-line">Parent anchored root '
+        f'<code class="mono lineage-root" title="{parent_root}">{root_short}</code></p>\n'
+        f"{parent_note}"
+        '  <p class="muted small lineage-scope">Lineage shows only that this '
+        "version&#8217;s anchored root committed to the parent&#8217;s anchored root. "
+        "It does not show what changed, when the edit happened, or who made it.</p>\n"
+        "</section>"
+    )
 TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]{16,64}$")
 EMAIL_RE = re.compile(r"^[^@\s,]{1,64}@[^@\s,]{1,255}$")
 COOKIE_SECURE = os.environ.get("ORPHO_COOKIE_SECURE", "1") != "0"
@@ -1238,6 +1291,7 @@ class Handler(BaseHTTPRequestHandler):
                 # card image is static). Private receipts leak nothing.
                 _tail = " Verified against the Bitcoin chain — check it yourself, no account required."
                 sealed = "A file existed at the recorded moment." + _tail
+                lineage_html = ""
                 try:
                     _rec = engine.verify_receipt(rid)
                     if not _rec.get("found"):
@@ -1249,9 +1303,18 @@ class Handler(BaseHTTPRequestHandler):
                             sealed = f"Sealed {_d}." + _tail
                             if _rec.get("btc_pinned_at"):
                                 sealed = f"Sealed {_d} — anchored in Bitcoin." + _tail
+                        # Edit-lineage "Version history" — server-rendered so
+                        # the section (incl. the parent link) travels in the
+                        # HTML itself, no JS required. Public receipts only:
+                        # templating the parent id into a private receipt's
+                        # page would leak it to anyone holding the URL
+                        # (owners still see lineage on the certificate view,
+                        # gated by /api/verify_folder).
+                        lineage_html = _lineage_section_html(rid, _rec.get("lineage"))
                 except Exception:
                     pass
                 body = body.replace("{{OG_SEALED}}", sealed)
+                body = body.replace("<!--LINEAGE_SECTION-->", lineage_html)
                 payload = body.encode("utf-8")
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
