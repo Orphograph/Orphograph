@@ -2199,6 +2199,12 @@ class Handler(BaseHTTPRequestHandler):
         # strictly validates shape + hash binding and rejects the whole
         # record on any violation; absent field changes nothing.
         hardware_attestation = payload.get("hardware_attestation") if isinstance(payload.get("hardware_attestation"), dict) else None
+        # ZK provenance proof (schnorr-zk-pok-v1 / snark-exec-v1): the engine
+        # sanitizer recomputes every hash binding and rejects the whole
+        # record on any violation. This passthrough was MISSING from the
+        # HTTP surface until 2026-08-04 — engine-level tests all passed
+        # while the field silently vanished on the wire.
+        zk_proof = payload.get("zk_proof") if isinstance(payload.get("zk_proof"), dict) else None
         # Optional C2PA manifest hash — the engine validates shape before
         # accepting. Coexistence-first: an Orphograph receipt can reference
         # a C2PA manifest hash so verifiers see both attestations.
@@ -2235,6 +2241,7 @@ class Handler(BaseHTTPRequestHandler):
                 metadata=metadata,
                 c2pa_manifest_hash=c2pa_manifest_hash,
                 hardware_attestation=hardware_attestation,
+                zk_proof=zk_proof,
             )
         except ValueError as e:
             # Anchor definitively failed (bad hash, etc.); no receipt produced.
@@ -2318,6 +2325,13 @@ class Handler(BaseHTTPRequestHandler):
             "subscription_active": subscription_active,
             "successes": [{"calendar": s["calendar"], "ots_path": s["ots_path"]} for s in record["successes"]],
             "failures": record["failures"],
+            # Provenance fields echo only when the sanitizer accepted them —
+            # a client that sent a proof needs to SEE whether it survived
+            # (the capture daemon's sidecar writer relies on this echo).
+            **({"zk_provenance": record["zk_provenance"]}
+               if record.get("zk_provenance") else {}),
+            **({"hardware_attestation": record["hardware_attestation"]}
+               if record.get("hardware_attestation") else {}),
             # Distribution-friendly URLs. Every API caller (a workflow tool,
             # an SDK user, a curl script) gets the receipt's public URL and
             # an embeddable badge URL without having to read docs and

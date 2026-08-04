@@ -179,6 +179,39 @@ class TestSnarkExecReceipt(unittest.TestCase):
             self.assertNotIn("zk_provenance", record,
                              f"mutation {mutate} must reject the whole proof")
 
+    def test_zk_proof_rides_the_http_wire(self):
+        # Regression for the gap prod verification exposed twice: (1) the
+        # 768-bit array blew the 4KB body cap, (2) /api/anchor never passed
+        # zk_proof to the engine at all. Engine-level tests can't see either
+        # — this drives the REAL HTTP handler end to end.
+        import threading
+        import urllib.request
+        for m in ("app",):
+            sys.modules.pop(m, None)
+        import app  # noqa: PLC0415
+        from http.server import ThreadingHTTPServer
+        server = ThreadingHTTPServer(("127.0.0.1", 0), app.Handler)
+        port = server.server_address[1]
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        try:
+            p = copy.deepcopy(self.payload)
+            body = json.dumps({"hash_hex": p["hash_hex"],
+                               "zk_proof": p["zk_proof"]}).encode()
+            self.assertLessEqual(len(body), 4096)
+            req = urllib.request.Request(
+                f"http://127.0.0.1:{port}/api/anchor", data=body,
+                headers={"Content-Type": "application/json"})
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                out = json.loads(resp.read())
+            zk = out.get("zk_provenance")
+            self.assertIsNotNone(zk, "zk_proof must survive the HTTP wire")
+            self.assertEqual(zk["proof_type"], "snark-exec-v1")
+            self.assertEqual(zk["stN_hex"], p["zk_proof"]["stN_hex"])
+        finally:
+            server.shutdown()
+            server.server_close()
+            sys.modules.pop("app", None)
+
     # ── forgery D: pairing-level rejection (the cryptographic gate) ─────
 
     SNARKJS_CLI = REPO_ROOT / "zk-provenance" / "snark" / "node_modules" / "snarkjs" / "build" / "cli.cjs"
