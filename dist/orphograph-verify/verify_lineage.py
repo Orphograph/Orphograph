@@ -360,10 +360,13 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     p.add_argument("--chain", required=True, help="directory of per-link bundles (<rid>/receipt.json …)")
-    p.add_argument("--tip", default=None, help="receipt id of the newest link (auto-detected when unique)")
+    p.add_argument("--tip", default=None,
+                   help="receipt id of the newest link (auto-detected when unique). "
+                        "Receipt ids may begin with '-': use the --tip=<id> form.")
     p.add_argument(
         "--dir", action="append", default=None, metavar="RID=PATH",
-        help="optionally recompute a link's root from a local draft folder (repeatable)",
+        help="optionally recompute a link's root from a local draft folder "
+             "(repeatable; use --dir=<rid>=<path> if the rid begins with '-')",
     )
     p.add_argument("--ots-check", action="store_true",
                    help="additionally run the local `ots` binary per .ots file")

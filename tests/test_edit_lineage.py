@@ -412,7 +412,7 @@ class TestOfflineLineageVerifier(unittest.TestCase):
         self.assertIn("anchor-time ordering", out.stdout)
 
     def _run_ok(self, chain_dir: Path, *extra: str) -> subprocess.CompletedProcess:
-        out = _run_verifier("--chain", str(chain_dir), "--tip", self.chain["rids"][2], *extra)
+        out = _run_verifier("--chain", str(chain_dir), f"--tip={self.chain['rids'][2]}", *extra)
         self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
         return out
 
@@ -426,9 +426,9 @@ class TestOfflineLineageVerifier(unittest.TestCase):
         folders = self.chain["folders"]
         out = self._run_ok(
             self._fresh_chain_dir(),
-            "--dir", f"{rids[0]}={folders['d1']}",
-            "--dir", f"{rids[1]}={folders['d2']}",
-            "--dir", f"{rids[2]}={folders['d3']}",
+            f"--dir={rids[0]}={folders['d1']}",
+            f"--dir={rids[1]}={folders['d2']}",
+            f"--dir={rids[2]}={folders['d3']}",
         )
         self.assertIn("synthetic parent leaf", out.stdout)
 
@@ -438,8 +438,8 @@ class TestOfflineLineageVerifier(unittest.TestCase):
         (tampered / "draft.md").write_text("draft v2 — silently rewritten after anchoring\n")
         out = _run_verifier(
             "--chain", str(self._fresh_chain_dir()),
-            "--tip", self.chain["rids"][2],
-            "--dir", f"{self.chain['rids'][1]}={tampered}",
+            f"--tip={self.chain['rids'][2]}",
+            f"--dir={self.chain['rids'][1]}={tampered}",
         )
         self.assertEqual(out.returncode, 3, out.stdout + out.stderr)
         self.assertIn("draft bytes differ", out.stdout)
@@ -453,7 +453,7 @@ class TestOfflineLineageVerifier(unittest.TestCase):
             if leaf["path"] == "draft.md":
                 leaf["file_sha256_hex"] = "55" * 32
         mpath.write_text(json.dumps(manifest))
-        out = _run_verifier("--chain", str(chain_dir), "--tip", self.chain["rids"][2])
+        out = _run_verifier("--chain", str(chain_dir), f"--tip={self.chain['rids'][2]}")
         self.assertEqual(out.returncode, 3, out.stdout + out.stderr)
 
     def test_hint_vs_commitment_mismatch_detected(self):
@@ -463,7 +463,7 @@ class TestOfflineLineageVerifier(unittest.TestCase):
         receipt = json.loads(rpath.read_text())
         receipt["lineage"]["parent_root"] = self.chain["roots"][0]  # points at root1
         rpath.write_text(json.dumps(receipt))
-        out = _run_verifier("--chain", str(chain_dir), "--tip", rid3)
+        out = _run_verifier("--chain", str(chain_dir), f"--tip={rid3}")
         self.assertEqual(out.returncode, 3, out.stdout + out.stderr)
         self.assertIn("committed leaf wins", out.stdout)
 
@@ -476,7 +476,7 @@ class TestOfflineLineageVerifier(unittest.TestCase):
         receipt = json.loads(rpath.read_text())
         receipt["lineage"]["parent_receipt_id"] = self.chain["rids"][0]
         rpath.write_text(json.dumps(receipt))
-        out = _run_verifier("--chain", str(chain_dir), "--tip", rid3)
+        out = _run_verifier("--chain", str(chain_dir), f"--tip={rid3}")
         self.assertEqual(out.returncode, 3, out.stdout + out.stderr)
         self.assertIn("disagrees", out.stdout)
 
@@ -484,7 +484,7 @@ class TestOfflineLineageVerifier(unittest.TestCase):
         chain_dir = self._fresh_chain_dir(
             [self.chain["rids"][0], self.chain["rids"][2]]  # R2 withheld
         )
-        out = _run_verifier("--chain", str(chain_dir), "--tip", self.chain["rids"][2])
+        out = _run_verifier("--chain", str(chain_dir), f"--tip={self.chain['rids'][2]}")
         self.assertEqual(out.returncode, 5, out.stdout + out.stderr)
         self.assertIn("BROKEN", out.stdout)
         self.assertIn(self.chain["roots"][1][:16], out.stdout)
@@ -498,7 +498,7 @@ class TestOfflineLineageVerifier(unittest.TestCase):
         m2b = _lineage_manifest(fork_folder, self.chain["rids"][0], self.chain["roots"][0])
         rid2b = _anchor_link(m2b)
         chain_dir = self._fresh_chain_dir(self.chain["rids"] + [rid2b])
-        out = _run_verifier("--chain", str(chain_dir), "--tip", self.chain["rids"][2])
+        out = _run_verifier("--chain", str(chain_dir), f"--tip={self.chain['rids'][2]}")
         self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
         self.assertIn("FORK", out.stdout)
         self.assertIn(rid2b, out.stdout)
@@ -514,7 +514,7 @@ class TestOfflineLineageVerifier(unittest.TestCase):
             if leaf["path"] == ".orphograph/parent":
                 leaf["size_bytes"] = 7
         mpath.write_text(json.dumps(manifest))
-        out = _run_verifier("--chain", str(chain_dir), "--tip", self.chain["rids"][2])
+        out = _run_verifier("--chain", str(chain_dir), f"--tip={self.chain['rids'][2]}")
         self.assertEqual(out.returncode, 3, out.stdout + out.stderr)
         self.assertIn("size_bytes", out.stdout)
 
@@ -525,7 +525,7 @@ class TestOfflineLineageVerifier(unittest.TestCase):
         manifest = json.loads(mpath.read_text())
         manifest["root_hex"] = manifest["root_hex"].upper()
         mpath.write_text(json.dumps(manifest))
-        out = _run_verifier("--chain", str(chain_dir), "--tip", self.chain["rids"][2])
+        out = _run_verifier("--chain", str(chain_dir), f"--tip={self.chain['rids'][2]}")
         self.assertEqual(out.returncode, 3, out.stdout + out.stderr)
 
     def test_tampered_ots_binding_detected(self):
@@ -536,17 +536,33 @@ class TestOfflineLineageVerifier(unittest.TestCase):
         offset = len(b"\x00OpenTimestamps\x00\x00Proof\x00\xbf\x89\xe2\xe8\x84\xe8\x92\x94") + 2
         data[offset] ^= 0xFF  # flip a byte of the embedded hash
         opath.write_bytes(bytes(data))
-        out = _run_verifier("--chain", str(chain_dir), "--tip", self.chain["rids"][2])
+        out = _run_verifier("--chain", str(chain_dir), f"--tip={self.chain['rids'][2]}")
         self.assertEqual(out.returncode, 3, out.stdout + out.stderr)
         self.assertIn(".ots binding failed", out.stdout)
 
     def test_bad_arguments(self):
         out = _run_verifier("--chain", str(self.work / "nonexistent"))
         self.assertEqual(out.returncode, 2)
-        out = _run_verifier("--chain", str(self._fresh_chain_dir()), "--tip", "NoSuchRid")
+        out = _run_verifier("--chain", str(self._fresh_chain_dir()), "--tip=NoSuchRid")
         self.assertEqual(out.returncode, 2)
-        out = _run_verifier("--chain", str(self.work / "chain"), "--dir", "malformed")
+        out = _run_verifier("--chain", str(self.work / "chain"), "--dir=malformed")
         self.assertEqual(out.returncode, 2)
+
+    def test_leading_dash_receipt_id_not_misparsed_as_flag(self):
+        # Regression: token_urlsafe ids can begin with '-'. Passed as
+        # `--tip <id>` argparse read the id as an option flag and died with
+        # "expected one argument" (exit 2 + usage) — which is how the deploy
+        # workflow's test step failed on a 1-in-64 unlucky id. The supported
+        # `--tip=<id>` form must reach the verifier's own not-found path,
+        # never the argparse usage error.
+        chain_dir = self._fresh_chain_dir()
+        out = _run_verifier("--chain", str(chain_dir), "--tip=-DashLeadingRid")
+        self.assertEqual(out.returncode, 2)
+        self.assertNotIn("expected one argument", out.stderr)
+        out = _run_verifier("--chain", str(chain_dir),
+                            "--dir=-DashRid=/nonexistent")
+        self.assertEqual(out.returncode, 2)
+        self.assertNotIn("expected one argument", out.stderr)
 
 
 # ── MCP tool ───────────────────────────────────────────────────────────
