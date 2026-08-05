@@ -255,3 +255,54 @@ class TestSnarkExecReceipt(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestVerifierRefusesUncheckedPass(unittest.TestCase):
+    """dist/orphograph-verify/verify_snark.py must never print PASS/exit 0
+    when the groth16 proof itself was not verified. Found by the quantum
+    exposure audit: without --vk the tool checked only the hash bindings yet
+    reported PASS, so a forged proof with correct bindings read as verified."""
+
+    VERIFIER = REPO_ROOT / "dist" / "orphograph-verify" / "verify_snark.py"
+
+    def _receipt(self, tmp: Path) -> Path:
+        if str(ZK_DIR) not in sys.path:
+            sys.path.insert(0, str(ZK_DIR))
+        import zk_provenance
+        p = zk_provenance.build_snark_anchor_payload(
+            "gpt-class-v3", EVIDENCE / "proof.json", EVIDENCE / "public.json",
+            EVIDENCE / "verification_key.json")
+        path = tmp / "receipt.json"
+        path.write_text(json.dumps({"receipt_id": "TESTRECEIPT00000",
+                                    "created_at": "2026-08-04T00:00:00+00:00",
+                                    "hash_hex": p["hash_hex"],
+                                    "zk_provenance": p["zk_proof"]}))
+        return path
+
+    def test_without_vk_reports_incomplete_not_pass(self):
+        if not (EVIDENCE / "proof.json").exists():
+            self.skipTest("committed 8-round evidence not present")
+        with tempfile.TemporaryDirectory() as td:
+            receipt = self._receipt(Path(td))
+            r = subprocess.run([sys.executable, str(self.VERIFIER), str(receipt)],
+                               capture_output=True, text=True, timeout=120)
+        self.assertNotEqual(r.returncode, 0,
+                            "exit 0 without a pairing check reads as verified")
+        self.assertEqual(r.returncode, 5)
+        self.assertIn("INCOMPLETE", r.stdout)
+        self.assertNotIn("PASS —", r.stdout)
+
+    @unittest.skipUnless(
+        shutil.which("node") and TestSnarkExecReceipt.SNARKJS_CLI.exists(),
+        "repo-local snarkjs unavailable")
+    def test_with_vk_reports_pass(self):
+        if not (EVIDENCE / "proof.json").exists():
+            self.skipTest("committed 8-round evidence not present")
+        with tempfile.TemporaryDirectory() as td:
+            receipt = self._receipt(Path(td))
+            r = subprocess.run(
+                [sys.executable, str(self.VERIFIER), str(receipt),
+                 "--vk", str(EVIDENCE / "verification_key.json")],
+                capture_output=True, text=True, timeout=300)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("PASS", r.stdout)
