@@ -39,7 +39,7 @@
   <p class="mcp-eyebrow">Model Context Protocol</p>
   <h1 class="mcp-h1">An office at the coding assistant's elbow.</h1>
   <p class="mcp-lede">
-    The Orphograph MCP server is a single-file Python program, MIT-licensed and approximately four hundred lines, with no third-party dependencies. It is hosted within the user's own Claude Desktop, Claude Code, or Cursor environment; it is never hosted on Orphograph's servers. The server exposes three tools to the assistant. When the assistant invokes <code class="inline">anchor_file</code>, the file is read locally, its SHA-256 and SHA-512 fingerprints are computed in the local process, and only those fingerprints are transmitted to the office. The file itself does not cross the wire.
+    The Orphograph MCP server is a single-file Python program, MIT-licensed and approximately four hundred lines, with no third-party dependencies. It is hosted within the user's own Claude Desktop, Claude Code, or Cursor environment; it is never hosted on Orphograph's servers. The server exposes six tools to the assistant. When the assistant invokes <code class="inline">anchor_file</code>, the file is read locally, its SHA-256 and SHA-512 fingerprints are computed in the local process, and only those fingerprints are transmitted to the office. The file itself does not cross the wire.
   </p>
 
   <section class="mcp-section">
@@ -88,7 +88,7 @@
   </section>
 
   <section class="mcp-section">
-    <h2>The three tools</h2>
+    <h2>The six tools</h2>
     <div class="mcp-rule"></div>
     <p>
       Each tool is registered with the host on startup and made available to the assistant. The file is read locally for the anchor operation; the script never transmits the file body to any external endpoint.
@@ -101,6 +101,18 @@
         <tr>
           <td>orphograph.anchor_file(path)</td>
           <td>Reads the file at the given absolute path locally. Computes its SHA-256 and SHA-512 fingerprints in the local Python process. Submits only those fingerprints to <code class="inline">https://orphograph.com/api/anchor</code>. Returns the receipt identifier and the receipt URL. The file body is not transmitted.</td>
+        </tr>
+        <tr>
+          <td>orphograph.anchor_folder(path)</td>
+          <td>Builds an RFC-6962 Merkle manifest over the folder's files locally and anchors the single root fingerprint. The manifest may commit to a parent receipt, forming an edit-lineage chain. File bodies are not transmitted.</td>
+        </tr>
+        <tr>
+          <td>orphograph.anchor_output(text)</td>
+          <td>Hashes assistant output in the local process and anchors the fingerprint — a receipt for what an agent produced, at the moment it produced it. An optional zero-knowledge execution proof may accompany the anchor; it proves a fixed hash-chain procedure ran — not that a specific AI model ran — and the proving key ceremony is development-grade; we do not yet make this claim in any certified sense.</td>
+        </tr>
+        <tr>
+          <td>orphograph.verify_lineage(receipt_id)</td>
+          <td>Walks an edit-lineage chain from the given receipt, re-deriving each parent commitment from the manifests. Reports the order of commitment only — never what changed, when the edit happened, or who made it.</td>
         </tr>
         <tr>
           <td>orphograph.verify_receipt(receipt_id)</td>

@@ -111,7 +111,15 @@ python3 orpho_agent_anchor.py anchor-file ./deliverable.zip --label "handoff"
 
 # Nightly: anchor a manifest of the agent's memory files
 python3 orpho_agent_anchor.py anchor-memory ./workspace --label "memory"</code></pre>
-    <p>MCP-capable agents can anchor through the <a href="/mcp">MCP server</a> instead — proof of existence becomes part of the agent's output, not an afterthought. Setup for both lives on the <a href="/integrations">integrations</a> page.</p>
+    <p>MCP-capable agents can anchor through the <a href="/mcp">MCP server</a> instead — proof of existence becomes part of the agent's output, not an afterthought. Setup for both lives on the <a href="/integrations">integrations</a> page. Agents without a filesystem in the loop can anchor pasted output directly at <a href="/anchor-output">/anchor-output</a>.</p>
+
+    <h2>Anchor revisions as a chain</h2>
+    <p>Where an agent's deliverable goes through drafts, each revision can be anchored committing to the prior receipt — the receipt page then shows the chain, so draft two provably committed to draft one. The scope is narrow by design: the chain proves the order of commitment, never what changed, when the edit happened, or who made it.</p>
+
+    <h2>Execution proof — the narrow case it covers</h2>
+    <p>A receipt created through the API or the MCP server can carry an optional zero-knowledge execution proof: evidence that a fixed, published hash-chain procedure produced the anchored output while the inputs stay private. Two caveats travel with it wherever it is shown. It proves a fixed hash-chain procedure ran — not that a specific AI model ran. And the proving key ceremony is development-grade; we do not yet make this claim in any certified sense. Like the receipt itself, the proof is portable and verifies with our service gone.</p>
+
+    <p>Coming: pay-per-anchor over Lightning for agents — no account needed. Until that opens, the free tier and API keys above are the ways in.</p>
 
     <div class="cta-box">
       <h2>Give your agents a paper trail today</h2>
