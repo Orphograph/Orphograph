@@ -44,6 +44,11 @@ COMING_ADJ = re.compile(r"(?i)\b(coming|soon)\b")
 # Pages that must carry the lineage-scope sentence.
 LINEAGE_PAGES = [
     WEB / "index.html",
+    # The A/B "dark" arm serves web/v2/index.html (server/app.py homepage
+    # route). A visitor holding an ab_home=dark cookie gets THIS file, so it
+    # must carry the same capability copy — the first pass missed it and the
+    # security review caught the coverage gap.
+    WEB / "v2" / "index.html",
     WEB / "docs" / "api.html",
     WEB / "lp" / "agent-receipts.html",
     WEB / "llms.txt",

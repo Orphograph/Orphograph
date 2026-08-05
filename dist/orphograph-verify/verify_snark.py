@@ -19,7 +19,9 @@ What PASS does NOT mean:
 
 Usage:
     python3 verify_snark.py <receipt.json> [--vk verification_key.json]
-Exit: 0 = all performed checks pass · 1 = a check failed · 2 = bad input.
+Exit: 0 = fully verified (bindings AND groth16 pairing check) · 1 = a check
+failed · 2 = bad input · 5 = INCOMPLETE: bindings hold but the proof itself
+was never verified (no --vk, or snarkjs unavailable). Never treat 5 as pass.
 """
 from __future__ import annotations
 
@@ -93,7 +95,9 @@ def main() -> int:
         if snarkjs is None:
             print("SKIP groth16 pairing check — node/snarkjs not found "
                   "(npm i snarkjs, then re-run)")
+            pairing_checked = False
         else:
+            pairing_checked = True
             with tempfile.TemporaryDirectory() as td:
                 pub = Path(td) / "public.json"
                 prf = Path(td) / "proof.json"
@@ -109,15 +113,27 @@ def main() -> int:
             ok &= passed
             print(("OK  " if passed else "FAIL") + " groth16 pairing check (snarkjs)")
     else:
+        pairing_checked = False
         print("SKIP groth16 pairing check — pass --vk to enable")
 
-    if ok:
-        print("\nPASS — scope: proves the 8-round PROGRAM_V2 hash chain "
-              "produced this output under the pinned key. It does NOT prove "
-              "an LLM ran, and the ceremony is not production-grade.")
-        return 0
-    print("\nFAIL — at least one binding did not hold")
-    return 1
+    if not ok:
+        print("\nFAIL — at least one binding did not hold")
+        return 1
+    if not pairing_checked:
+        # The proof itself was never verified. Saying PASS here would let a
+        # forged proof with correct hash bindings read as verified — exactly
+        # the failure this tool exists to prevent. Distinct exit code so
+        # scripts cannot mistake an unchecked run for a verified one.
+        print("\nINCOMPLETE — the hash bindings hold, but the proof itself "
+              "was NOT verified (no verification key / no snarkjs). This does "
+              "NOT establish that a valid proof exists. Re-run with --vk and "
+              "snarkjs installed for a real verdict.")
+        return 5
+    print("\nPASS — scope: proves the 8-round PROGRAM_V2 hash chain "
+          "produced this output under the pinned key. It does NOT prove "
+          "an LLM ran, and the ceremony is not production-grade. Groth16 "
+          "over BN254 is not post-quantum; see docs/QUANTUM_EXPOSURE_AUDIT.md.")
+    return 0
 
 
 def _find_snarkjs() -> list[str] | None:

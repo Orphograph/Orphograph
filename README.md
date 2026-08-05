@@ -134,7 +134,7 @@ What touches what, in one table.
 |---|---|---|---|---|
 | File bytes | yes | never | never | WebCrypto hashes locally |
 | SHA-256 (32 bytes) | yes | yes | yes | The only thing on-chain |
-| SHA-512 sibling (64 bytes) | yes | yes | no | Quantum hedge; stored in receipt only |
+| SHA-512 sibling (64 bytes) | yes | yes | no | Quantum hedge; OPTIONAL (client-supplied), stored in receipt only, never anchored |
 | Filename / label | yes | opt-in | no | Off by default; pass `--label` to include |
 | Email address | yes | only when needed | no | Required only for Pack delivery + Personal subscriptions |
 | IP address | n/a | truncated to /24 (IPv4) or /48 (IPv6) | no | Full IPs are never persisted |
