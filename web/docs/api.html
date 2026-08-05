@@ -29,7 +29,7 @@
 <header class="post-header">
   <h1>API documentation</h1>
   <p class="post-meta small-muted">
-    Version <strong>0.1</strong> · Base URL <code>https://orphograph.com</code> · Last revised 2026-05-14
+    Version <strong>0.1</strong> · Base URL <code>https://orphograph.com</code> · Last revised 2026-08-04
   </p>
 </header>
 
@@ -818,12 +818,48 @@ Accept: image/svg+xml</pre>
   under <code>server/verify_cli.py</code>. Zero dependencies, stdlib only.
 </p>
 
+<h2 id="recent-additions">Recent additions (2026-08)</h2>
+
+<h3 id="edit-lineage">Edit lineage — version history on receipts</h3>
+<p>
+  A folder manifest submitted to <code>/api/anchor_folder</code> may include one
+  reserved leaf whose digest is the parent receipt's anchored root. The new
+  anchor then cryptographically commits to the prior one, and the receipt page
+  at <code>/r/&lt;id&gt;</code> renders the version chain — draft two provably
+  committed to draft one. The scope is deliberately narrow: lineage proves the
+  order of commitment — never what changed, when the edit happened, or who made
+  it. The chain checks offline with the open-source verifier and the
+  <code>orphograph_verify_lineage</code> MCP tool; like every receipt, it
+  verifies with our service gone.
+</p>
+
+<h3 id="zk-proof">Optional <code>zk_proof</code> — execution proof for agent outputs</h3>
+<p>
+  <code>POST /api/anchor</code> accepts an optional <code>zk_proof</code>
+  object. When it validates, the receipt records a zero-knowledge execution
+  proof — evidence that a fixed, published hash-chain procedure produced the
+  anchored output while the inputs stay private — echoed back as
+  <code>zk_provenance</code> on the response. Two caveats are part of the
+  contract and belong in any UI that displays it: it proves a fixed hash-chain
+  procedure ran — not that a specific AI model ran. And the proving key
+  ceremony is development-grade; we do not yet make this claim in any
+  certified sense.
+</p>
+
+<h3 id="lightning">Coming: pay-per-anchor over Lightning</h3>
+<p>
+  Pay-per-anchor over Lightning for agents — no account needed — is coming.
+  It is not available today; the endpoint will be documented here when it
+  opens.
+</p>
+
 <h2 id="changelog">Changelog</h2>
 <table class="api-table">
   <thead>
     <tr><th>Date</th><th>Version</th><th>Change</th></tr>
   </thead>
   <tbody>
+    <tr><td>2026-08-04</td><td>0.1</td><td>Edit-lineage version chains render on receipt pages; optional <code>zk_proof</code> execution-proof field accepted on <code>/api/anchor</code> (see <a href="#recent-additions">Recent additions</a> for the scope caveats). Both additive and backward-compatible.</td></tr>
     <tr><td>2026-05-14</td><td>0.1</td><td>Public docs page published. Endpoint surface stable; <code>/api/stats</code> and <code>/api/badge/&lt;id&gt;.svg</code> announced as planned for v0.2.</td></tr>
     <tr><td>2026-05-13</td><td>0.1</td><td>Added <code>sha512_hex</code> quantum-hedge sibling field on <code>/api/anchor</code> and <code>/api/anchor/batch</code>. Both backward-compatible.</td></tr>
     <tr><td>2026-05-10</td><td>0.1</td><td>Batch endpoint <code>/api/anchor/batch</code> shipped (50 items max).</td></tr>

@@ -28,8 +28,9 @@ and credit packs raise the limit via an API key issued from the account page.
 
 - POST https://orphograph.com/api/anchor — anchor a single SHA-256 fingerprint
 - POST https://orphograph.com/api/ln/quote — Lightning L402 pay-per-anchor for
-  agents (503 until armed): pay the returned invoice, retry /api/anchor with
-  Authorization: L402 <macaroon>:<preimage_hex>. One payment = one anchor.
+  agents (coming soon; answers 503 until armed): pay the returned invoice,
+  retry /api/anchor with Authorization: L402 <macaroon>:<preimage_hex>.
+  One payment = one anchor.
   (JSON body; the free tier needs no API key)
 - POST https://orphograph.com/api/anchor_folder — anchor a folder manifest: an
   RFC 6962 Merkle root plus a {leaves} list of relative paths and per-file digests
@@ -44,6 +45,32 @@ and credit packs raise the limit via an API key issued from the account page.
 - Server card: https://orphograph.com/.well-known/mcp/server-card.json
 - Tools: orphograph_anchor_file, orphograph_anchor_folder, orphograph_anchor_output,
   orphograph_verify_receipt, orphograph_verify_lineage, orphograph_list_vault
+
+## Edit lineage (version history)
+
+A folder manifest may commit to a parent receipt: one reserved leaf carries the
+parent receipt's anchored root, so the new anchor cryptographically commits to
+the prior one. Receipt pages at /r/<receipt_id> render the chain, and the
+orphograph_verify_lineage MCP tool walks and re-checks it. Scope: lineage
+proves the order of commitment — never what changed, when the edit happened,
+or who made it.
+
+## Agent output receipts and execution proof
+
+Agents anchor outputs via the MCP tools or POST /api/anchor; the
+/anchor-output page is the same anchor by hand. A receipt may carry an
+optional zero-knowledge execution proof (zk_proof on the request, echoed as
+zk_provenance) that a fixed, published hash-chain procedure produced the
+output while the inputs stay private. Caveats, which any relaying agent should
+repeat: it proves a fixed hash-chain procedure ran — not that a specific AI
+model ran. And the proving key ceremony is development-grade; we do not yet
+make this claim in any certified sense.
+
+## Coming (not available today)
+
+Pay-per-anchor over Lightning for agents — no account needed — is coming.
+The endpoint (POST /api/ln/quote) exists but answers 503 until payments are
+armed; treat 503 there as "not yet", not an outage.
 
 ## Independent verification
 
