@@ -2495,9 +2495,13 @@ class Handler(BaseHTTPRequestHandler):
         pack_token = self.headers.get("X-Pack-Token", "").strip()
         api_key = self.headers.get("X-Orpho-Api-Key", "").strip()
         api_key_email = api_keys.email_for_key(api_key) if api_key else None
-        api_key_active = bool(api_key_email and subscriptions.is_active(api_key_email))
+        # _subscription_active_for (not subscriptions.is_active) — the former
+        # resolves TEAM-INHERITED subscriptions. With the direct call, a team
+        # member's batch anchors were tagged source="free" and expire_worker
+        # rmtree'd them after 30 days: silent data loss for a paying customer.
+        api_key_active = bool(api_key_email and _subscription_active_for(api_key_email))
         session_email = self._session_email()
-        sub_active = api_key_active or bool(session_email and subscriptions.is_active(session_email))
+        sub_active = api_key_active or bool(session_email and _subscription_active_for(session_email))
         effective_email = api_key_email or session_email
 
         # Free tier is rate-limited per IP; consume ONE token for the whole
@@ -3485,7 +3489,7 @@ class Handler(BaseHTTPRequestHandler):
         served later without rebuilding from the original folder.
         """
         if ORPHO_DISABLE_ANCHORING:
-            _json_response(self, 503, {
+            _reject(503, {
                 "error": "anchoring temporarily unavailable",
                 "detail": "Calendar service unavailable. Anchoring is temporarily disabled.",
             })
@@ -3495,6 +3499,21 @@ class Handler(BaseHTTPRequestHandler):
         pack_consumed = False
         if pack_token:
             pack_consumed, _ = credits.consume_credit(pack_token)
+
+        def _reject(code: int, payload: dict) -> None:
+            """Respond to a REJECTED folder anchor, refunding the credit.
+
+            The credit is consumed above (it gates access), but a request
+            that yields no receipt must not cost a paid anchor. Every
+            rejection path below goes through here — previously each one
+            returned directly and the customer silently lost a credit per
+            failed attempt, including the 503 that ADVISES retrying without
+            a signature block.
+            """
+            if pack_consumed:
+                credits.refund_credit(pack_token, reason="folder-anchor-rejected")
+                payload = {**payload, "credit_refunded": True}
+            _json_response(self, code, payload)
         api_key = self.headers.get("X-Orpho-Api-Key", "").strip()
         api_key_email = api_keys.email_for_key(api_key) if api_key else None
         api_key_active = bool(api_key_email and _subscription_active_for(api_key_email))
@@ -3519,13 +3538,13 @@ class Handler(BaseHTTPRequestHandler):
                 return
         length = _read_content_length(self)
         if length <= 0 or length > MAX_FOLDER_MANIFEST_BYTES:
-            _json_response(self, 400, {"error": "invalid body size"})
+            _reject(400, {"error": "invalid body size"})
             return
         raw = self.rfile.read(length)
         try:
             payload = json.loads(raw.decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError):
-            _json_response(self, 400, {"error": "body must be JSON"})
+            _reject(400, {"error": "body must be JSON"})
             return
         # Accept either { manifest: {...}, client_label?: "..." } or the raw
         # manifest as the top-level object. The frontend currently posts the
@@ -3537,11 +3556,11 @@ class Handler(BaseHTTPRequestHandler):
         elif payload.get("algorithm") == merkle.ALGORITHM:
             manifest = payload
         else:
-            _json_response(self, 400, {"error": "manifest is required"})
+            _reject(400, {"error": "manifest is required"})
             return
         leaves = manifest.get("leaves")
         if not isinstance(leaves, list) or not leaves or len(leaves) > MAX_FOLDER_LEAVES:
-            _json_response(self, 400, {
+            _reject(400, {
                 "error": "manifest leaves must be a non-empty list",
                 "max_leaves": MAX_FOLDER_LEAVES,
             })
@@ -3554,7 +3573,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             tree = merkle.MerkleTree.from_manifest(manifest)
         except (KeyError, TypeError, ValueError) as e:
-            _json_response(self, 400, {"error": f"manifest invalid: {e}"})
+            _reject(400, {"error": f"manifest invalid: {e}"})
             return
         # Optional edit-lineage elements (design: docs/DESIGN_EDIT_LINEAGE.md).
         # Validate BEFORE anchoring so a malformed lineage costs a 400, not a
@@ -3564,7 +3583,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             lineage_pre = engine.derive_lineage_from_manifest(manifest, verify_tree=False)
         except ValueError as e:
-            _json_response(self, 400, {"error": f"lineage invalid: {e}"})
+            _reject(400, {"error": f"lineage invalid: {e}"})
             return
         if lineage_pre is not None:
             # Fail-fast twin of attach_lineage's local-parent rule: if the
@@ -3578,7 +3597,7 @@ class Handler(BaseHTTPRequestHandler):
                 except (OSError, json.JSONDecodeError):
                     parent_rec = {}
                 if parent_rec.get("hash_hex") != lineage_pre["parent_root"]:
-                    _json_response(self, 400, {
+                    _reject(400, {
                         "error": "lineage invalid: parent receipt exists but its "
                                  "anchored hash does not match the committed parent root",
                     })
@@ -3591,14 +3610,14 @@ class Handler(BaseHTTPRequestHandler):
         signer_kid: str | None = None
         if isinstance(manifest.get("signature"), dict):
             if manifest_signature is None:
-                _json_response(self, 503, {
+                _reject(503, {
                     "error": "manifest signature verification unavailable in this build",
                     "detail": "Anchor the manifest without a signature block, or use a build with Ed25519 support.",
                 })
                 return
             ok, reason = manifest_signature.verify_manifest_signature(manifest)
             if not ok:
-                _json_response(self, 400, {
+                _reject(400, {
                     "error": "manifest signature invalid",
                     "detail": reason,
                 })
@@ -3633,7 +3652,7 @@ class Handler(BaseHTTPRequestHandler):
                 owner_id=auth.email_id(subscriber_email) if (want_private and subscriber_email) else None,
             )
         except ValueError as e:
-            _json_response(self, 400, {"error": str(e)})
+            _reject(400, {"error": str(e)})
             return
         # Persist the manifest alongside the receipt. The receipt's hash_hex
         # already equals manifest.root_hex, so the OTS anchor binds every
@@ -3651,7 +3670,7 @@ class Handler(BaseHTTPRequestHandler):
             except OSError:
                 pass
         except OSError as e:
-            _json_response(self, 500, {"error": f"could not persist manifest: {e}"})
+            _reject(500, {"error": f"could not persist manifest: {e}"})
             return
         # Mark the receipt itself as a folder anchor so verifiers know to
         # fetch the manifest in addition to the .ots files.

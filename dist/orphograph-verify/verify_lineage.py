@@ -150,13 +150,21 @@ def _committed_parent_root(manifest: dict | None) -> str | None:
 
 def _ots_static_check(link_dir: Path, hash_hex: str) -> tuple[bool, list[str]]:
     """Magic + embedded-hash check on every *.ots — the exact check
-    engine.verify_receipt performs. Zero .ots files is reported, not failed
-    (the calendar attestations may live elsewhere)."""
+    engine.verify_receipt performs. Zero .ots files FAILS the link: with no
+    proof file the checks below never run, so a proofless bundle would
+    otherwise be reported as verified."""
     msgs: list[str] = []
     ots_files = sorted(link_dir.glob("*.ots"))
     if not ots_files:
-        msgs.append("no .ots files present in this link's bundle (informational)")
-        return True, msgs
+        # NOT informational — this is the whole evidence base for the link.
+        # With zero .ots files the loop below never runs and the link was
+        # reported as passing: a fabricated chain with no proof file anywhere
+        # exited 0 claiming "anchor-time ordering holds", even with
+        # --ots-check explicitly passed. A link with no attestation proves
+        # nothing about when it existed.
+        msgs.append("NO .ots FILES — this link carries no timestamp evidence; "
+                    "nothing here establishes when it existed")
+        return False, msgs
     expected = bytes.fromhex(hash_hex)
     offset = len(OTS_HEADER_MAGIC) + 2
     ok = True

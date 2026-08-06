@@ -1,9 +1,21 @@
 #!/usr/bin/env python3
-"""verify_cli.py — standalone verifier for orphograph receipts.
+"""verify_cli.py — standalone structural verifier for orphograph receipts.
 
-Validates that a receipt's .ots files are well-formed and that the
-hash embedded in each .ots matches the receipt's claimed hash.
-Optionally re-hashes a file to confirm it produced the receipt.
+WHAT THIS CHECKS (all offline, no network):
+  * each .ots file carries a well-formed OpenTimestamps header;
+  * the hash embedded in each .ots equals the receipt's claimed hash;
+  * optionally, that re-hashing your file reproduces that hash.
+
+WHAT THIS DOES NOT CHECK — read this before relying on it:
+  * it does NOT contact Bitcoin and does NOT confirm the timestamp was
+    ever included in a block. This script makes zero network calls. A
+    well-formed .ots that no calendar ever attested will pass every
+    check here.
+  * therefore a PASS means "this bundle is internally consistent", not
+    "this was proven to exist at a date". For the chain check run the
+    OpenTimestamps reference client:
+        pip install opentimestamps-client && ots verify <file>.ots
+    which is the step that actually consults Bitcoin.
 
 This script is self-contained — no imports from server/engine.py — so
 it can be vendored as the public open-source verifier.
@@ -96,8 +108,11 @@ def verify(receipt_path: Path, file_path: Path | None) -> int:
     if bad:
         print(f"\n  {bad} receipt(s) failed validation")
         return 4
-    print("\n  all receipts valid — to upgrade to a full Bitcoin merkle proof,")
-    print("  run:  pip install opentimestamps-client && ots upgrade <ots-file>")
+    print("\n  STRUCTURE OK — every .ots is well-formed and commits to this")
+    print("  receipt's hash. This did NOT check Bitcoin: no network call was")
+    print("  made, and a well-formed .ots that no calendar attested would also")
+    print("  reach this line. To confirm the timestamp is actually in a block:")
+    print("      pip install opentimestamps-client && ots verify <ots-file>")
     return 0
 
 
