@@ -22,8 +22,12 @@
 <section>
   <h1>Open-source verifier</h1>
   <p class="lede">
-    A 100-line, MIT-licensed Python file that validates Orphograph
-    receipts against the public Bitcoin chain — without trusting any
+    A 100-line, MIT-licensed Python file that checks an Orphograph
+    receipt's structure offline — that every .ots proof is well-formed and
+    commits to the receipt's hash, and that your file reproduces that hash.
+    It makes no network call, so it does not itself consult Bitcoin: for
+    that, run the OpenTimestamps client (<code>ots verify</code>), which is
+    the step that reads the chain. Both run
     Orphograph infrastructure. The trust artifact, hosted at the
     canonical URL.
   </p>

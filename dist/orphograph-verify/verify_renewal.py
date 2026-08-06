@@ -38,9 +38,19 @@ KIND = "orphograph-renewal-v1"
 LEAF_PREFIX = b"\x00"
 INTERNAL_PREFIX = b"\x01"
 
+# NOTE (2026-08-05, found by the Stage 3e mutation-vs-commitment sweep):
+# `private` and `owner_id` were in this list and MUST NOT BE. They are
+# access-control state, not evidentiary anchor-time facts, and
+# POST /api/me/receipt/<id>/privacy rewrites both on an issued receipt
+# (server/app.py). A customer toggling privacy after a renewal cycle would
+# have permanently voided every prior renewal record — on-chain,
+# unrepairable, HTTP 200, detected only when a stranger ran the verifier.
+# Removed before any renewal record existed in production, so no corpus
+# split. The rule this enforces: a commitment may only cover fields no
+# endpoint can rewrite.
 CORE_ALWAYS = (
     "receipt_id", "created_at", "hash_hex", "sha512_hex", "client_label",
-    "source", "private", "owner_id", "attestation", "c2pa_manifest_hash",
+    "source", "attestation", "c2pa_manifest_hash",
     "metadata", "calendars_ok", "calendars_total", "successes", "failures",
 )
 CORE_IF_PRESENT = ("zk_provenance", "hardware_attestation")
@@ -154,8 +164,24 @@ def main() -> int:
                   f"expected {str(prev_digest)[:16]}…")
             ok = False
 
+        # renewed_at is the record's central claim — print it, or an operator
+        # has nothing to eyeball even when suspicious.
+        print(f"       renewed_at: {rr.get('renewed_at')}")
+
         batch = rr.get("batch")
-        if isinstance(batch, dict):
+        if not isinstance(batch, dict):
+            # SOUNDNESS: the inclusion proof is the ONLY thing binding this
+            # record to Bitcoin. Nothing in a record is signed, so without a
+            # batch block every remaining field is recomputable by anyone
+            # holding the receipt — the whole chain would be forgeable.
+            # renew_corpus always attaches `batch` before writing, so no
+            # genuine record ever lacks one.
+            print(f"FAIL  {label}: no batch block — this record carries NO "
+                  f"anchoring evidence and proves nothing")
+            ok = False
+            prev_digest = record_digest(rr)
+            continue
+        if True:
             running = _leaf_hash(batch.get("leaf_path", ""),
                                  bytes.fromhex(record_digest(rr)))
             good = True
@@ -177,13 +203,15 @@ def main() -> int:
                     good = False
                     break
             good = good and running.hex() == batch.get("root_hex")
+            # Print the FULL root and the anchor receipt id: the scope note
+            # tells the reader to check that anchor's .ots, and a truncated
+            # 16-hex prefix is both uncheckable and grindable.
             print(("  OK  " if good else "FAIL") +
-                  f" {label}: inclusion proof → batch root "
-                  f"{str(batch.get('root_hex'))[:16]}…")
+                  f" {label}: inclusion proof → batch root\n"
+                  f"       root_hex:   {batch.get('root_hex')}\n"
+                  f"       anchored by receipt: {batch.get('anchor_receipt_id')}")
             if not good:
                 ok = False
-        else:
-            print(f"  OK  {label}: digests + chain (no batch block)")
 
         prev_digest = record_digest(rr)
 

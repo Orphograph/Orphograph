@@ -54,9 +54,19 @@ RENEWAL_DIRNAME = "renewal"
 # detail: a strict canonical serializer emits different bytes for
 # {"sha512_hex": null} and {}, so two verifiers would silently disagree on the
 # very common receipt-with-no-ZK-block.
+# NOTE (2026-08-05, found by the Stage 3e mutation-vs-commitment sweep):
+# `private` and `owner_id` were in this list and MUST NOT BE. They are
+# access-control state, not evidentiary anchor-time facts, and
+# POST /api/me/receipt/<id>/privacy rewrites both on an issued receipt
+# (server/app.py). A customer toggling privacy after a renewal cycle would
+# have permanently voided every prior renewal record — on-chain,
+# unrepairable, HTTP 200, detected only when a stranger ran the verifier.
+# Removed before any renewal record existed in production, so no corpus
+# split. The rule this enforces: a commitment may only cover fields no
+# endpoint can rewrite.
 CORE_ALWAYS = (
     "receipt_id", "created_at", "hash_hex", "sha512_hex", "client_label",
-    "source", "private", "owner_id", "attestation", "c2pa_manifest_hash",
+    "source", "attestation", "c2pa_manifest_hash",
     "metadata", "calendars_ok", "calendars_total", "successes", "failures",
 )
 CORE_IF_PRESENT = ("zk_provenance", "hardware_attestation")
@@ -64,6 +74,18 @@ CORE_IF_PRESENT = ("zk_provenance", "hardware_attestation")
 
 class RenewalError(ValueError):
     """Raised for a malformed receipt or a broken renewal chain."""
+
+
+def _is_safe_receipt_id(s: object) -> bool:
+    """Receipt-id alphabet — the same rule engine._is_receipt_id applies.
+
+    Kept local so this module stays import-light, but the check is NOT
+    optional: every path this module builds is rooted at a receipt id, so
+    the alphabet check doubles as the traversal guard. Rejects "..", "/",
+    absolute paths, NUL and everything else outside [A-Za-z0-9_-].
+    """
+    return (isinstance(s, str) and 0 < len(s) <= 64
+            and all(c.isalnum() or c in ("_", "-") for c in s))
 
 
 def canonical_bytes(obj: dict) -> bytes:
@@ -234,7 +256,15 @@ def next_sequence(receipts_dir: Path, rid: str) -> tuple[int, str | None]:
     if not existing:
         return 1, None
     latest = json.loads(existing[-1].read_text())
-    return int(latest.get("sequence", len(existing))) + 1, record_digest(latest)
+    seq = latest.get("sequence", len(existing))
+    # A corrupt or hostile record must not drive the next filename: seq 0
+    # would re-emit 001.json over a genuine record, and a non-int would
+    # raise a bare ValueError that the caller's except-RenewalError misses.
+    if not isinstance(seq, int) or isinstance(seq, bool) or not 1 <= seq < 10**6:
+        raise RenewalError(
+            f"renewal record {existing[-1].name} has an invalid sequence "
+            f"{seq!r} — refusing to derive the next filename from it")
+    return seq + 1, record_digest(latest)
 
 
 def renew_corpus(receipts_dir: Path, anchor_fn, renewed_at: str | None = None,
@@ -263,6 +293,17 @@ def renew_corpus(receipts_dir: Path, anchor_fn, renewed_at: str | None = None,
             skipped.append({"receipt_id": rid, "reason": f"unreadable: {e}"})
             continue
         try:
+            # TRUST BOUNDARY: read by directory name, and REFUSE to write by
+            # the JSON-declared id. A receipt.json carrying
+            # "receipt_id": "../../escaped/x" would otherwise create
+            # directories and write outside receipts/ entirely (verified).
+            # The directory name is authoritative; the JSON must agree.
+            rid_json = record.get("receipt_id")
+            if not _is_safe_receipt_id(rid) or rid_json != rid:
+                raise RenewalError(
+                    f"receipt_id in receipt.json ({rid_json!r}) does not match "
+                    f"its directory ({rid!r}), or the id is not a safe path "
+                    f"component — refusing to write")
             seq, prev = next_sequence(receipts_dir, rid)
             records.append(build_record(record, seq, renewed_at, prev))
         except RenewalError as e:
@@ -290,7 +331,10 @@ def renew_corpus(receipts_dir: Path, anchor_fn, renewed_at: str | None = None,
         d = renewal_dir(receipts_dir, rid)
         d.mkdir(parents=True, exist_ok=True)
         out = d / f"{rr['sequence']:03d}.json"
-        out.write_text(json.dumps(rr, indent=2, sort_keys=True))
+        # "x" mode: an existing record is evidence; refuse to clobber it
+        # rather than silently replacing an anchored artifact.
+        with out.open("x") as fh:
+            json.dump(rr, fh, indent=2, sort_keys=True)
         try:
             os.chmod(out, 0o600)
         except OSError:

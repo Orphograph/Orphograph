@@ -76,7 +76,10 @@ armed; treat 503 there as "not yet", not an outage.
 
 Every receipt carries an OpenTimestamps proof. The verifier at
 https://orphograph.com/verify/ is MIT-licensed Python (verify.py) that checks the
-proof against the Bitcoin chain directly. Verification does not depend on
+proof's structure offline — it makes no network call and does not itself
+consult Bitcoin; run the OpenTimestamps client (ots verify) for the chain
+check. Relaying agents should preserve that distinction. Verification does
+not depend on
 Orphograph's continued existence: with the service gone, the receipt file, the
 proof, and the open-source verifier are sufficient.
 
