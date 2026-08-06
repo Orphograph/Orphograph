@@ -814,8 +814,13 @@ def _static_cache_control(suffix: str, rel_path: str = "") -> str:
     Brand assets — seal*.png, lockup.png, favicon*, apple-touch-icon-*.png,
     og-image.png — are served with a 30-day immutable cache. These filenames
     are cache-busted via ?v=N query strings, so the response is safe to pin.
-    Blog HTML pages are also pinned for 30 days: post slugs are append-only,
-    so an existing slug never changes its content within a 30-day window.
+    Blog HTML was ALSO pinned 30-day immutable on the premise that "an
+    existing slug never changes its content" — but every post in web/blog/
+    has been edited since publication, and `immutable` blocks revalidation
+    even on an explicit reload. A published correction was therefore
+    invisible to anyone who had loaded the page, for up to 30 days, with no
+    cache-bust available (HTML carries no ?v=). Blog HTML now takes the same
+    short-lived treatment as every other HTML page.
     """
     name = rel_path.rsplit("/", 1)[-1].lower()
     is_brand_asset = (
@@ -825,8 +830,9 @@ def _static_cache_control(suffix: str, rel_path: str = "") -> str:
         or (name.startswith("apple-touch-icon-") and name.endswith(".png"))
         or name == "og-image.png"
     )
-    is_blog_post = rel_path.startswith("/blog/") or rel_path.startswith("blog/")
-    if is_brand_asset or (is_blog_post and suffix == ".html"):
+    if is_brand_asset:
+        # Versioned filenames only — safe to pin because the URL changes
+        # when the bytes do.
         return "public, max-age=2592000, immutable"
     short_lived = {".html", ".json", ".webmanifest"}
     if suffix in short_lived:
@@ -2576,7 +2582,17 @@ class Handler(BaseHTTPRequestHandler):
                     source=source,
                 )
             except ValueError as e:
+                # A credit was consumed above but this item produced NO
+                # receipt — refund it. Previously a batch of malformed
+                # hashes silently burned one credit per bad item and still
+                # returned HTTP 200 with no refund signal at all.
+                refunded_here = False
+                if pack_consumed_here:
+                    credits.refund_credit(pack_token,
+                                          reason="batch-item-rejected")
+                    refunded_here = True
                 results.append({"index": idx, "ok": False, "error": str(e),
+                                "credit_refunded": refunded_here,
                                 "client_label": client_label})
                 continue
             site = os.environ.get("SITE_URL", "https://orphograph.com").rstrip("/")

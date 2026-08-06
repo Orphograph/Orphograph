@@ -513,7 +513,7 @@ def send_pin_email(to: str, receipt: dict) -> bool:
     text = (
         f"The instrument is now committed to the Bitcoin chain.\n\n"
         f"  Receipt           {rid}\n"
-        f"  Block-time (UTC)  {btc_pinned_at}\n"
+        f"  Pin observed (UTC)  {btc_pinned_at}\n"
         f"  Calendars         {pinned_count} of {total} confirmed\n\n"
         f"  Full receipt      {receipt_url}\n\n"
         f"From this point forward the receipt verifies against the chain "
@@ -528,7 +528,7 @@ def send_pin_email(to: str, receipt: dict) -> bool:
         f"style=\"margin:18px 0;border-collapse:collapse;font-size:14px;\">"
         f"<tr><td style=\"padding:4px 14px 4px 0;color:#666;\">Receipt</td>"
         f"<td style=\"font-family:Menlo,Consolas,monospace;color:#1a1a1a;\"><code>{rid}</code></td></tr>"
-        f"<tr><td style=\"padding:4px 14px 4px 0;color:#666;\">Block-time (UTC)</td>"
+        f"<tr><td style=\"padding:4px 14px 4px 0;color:#666;\">Pin observed (UTC)</td>"
         f"<td>{btc_pinned_at}</td></tr>"
         f"<tr><td style=\"padding:4px 14px 4px 0;color:#666;\">Calendars</td>"
         f"<td>{pinned_count} of {total} confirmed</td></tr>"

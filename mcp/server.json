@@ -42,54 +42,22 @@
     ],
     "tools": [
       {
-        "name": "orphograph_anchor_file",
-        "description": "Anchor a local file to the Bitcoin chain via Orphograph. The file body never leaves the device; SHA-256 + SHA-512 fingerprints are transmitted, the receipt and Bitcoin commitment are returned.",
-        "inputSchema": {
-          "type": "object",
-          "required": [
-            "path"
-          ],
-          "properties": {
-            "path": {
-              "type": "string"
-            },
-            "label": {
-              "type": "string"
-            },
-            "c2pa_manifest_hash": {
-              "type": "string"
-            }
-          }
-        }
+        "name": "orphograph_anchor_file"
       },
       {
-        "name": "orphograph_verify_receipt",
-        "description": "Verify an existing Orphograph receipt against the calendars and Bitcoin chain. Returns the anchored hashes, calendar attestation counts, and Bitcoin-commitment time when available.",
-        "inputSchema": {
-          "type": "object",
-          "required": [
-            "receipt_id"
-          ],
-          "properties": {
-            "receipt_id": {
-              "type": "string"
-            }
-          }
-        }
+        "name": "orphograph_anchor_folder"
       },
       {
-        "name": "orphograph_list_vault",
-        "description": "List the signed-in subscriber's anchored receipts. Requires ORPHO_API_KEY in the environment.",
-        "inputSchema": {
-          "type": "object",
-          "properties": {
-            "limit": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 500
-            }
-          }
-        }
+        "name": "orphograph_anchor_output"
+      },
+      {
+        "name": "orphograph_list_vault"
+      },
+      {
+        "name": "orphograph_verify_lineage"
+      },
+      {
+        "name": "orphograph_verify_receipt"
       }
     ]
   },

@@ -107,7 +107,7 @@
   <ul>
     <li>The SHA-256 (and SHA-512) hash that was anchored</li>
     <li>How many of the five calendars confirmed it (e.g. <strong>5/5 OK</strong>)</li>
-    <li>The <strong>BTC pinned at</strong> field — the reported time of the block your hash was committed to, populated automatically once your hash makes it into a Bitcoin block (usually within an hour)</li>
+    <li>The <strong>BTC pinned at</strong> field — when this office <em>observed</em> that your hash had been committed to a Bitcoin block, written by the polling worker at the moment it noticed (usually within an hour). It is our observation time, not the block's own timestamp: two receipts anchored days apart can share a BTC-pinned time one second apart because the same polling pass upgraded both. The authoritative time is the Bitcoin block itself — read it with <code>ots verify</code></li>
     <li>A re-hash widget: drop the original file on the page, your browser re-computes the SHA-256, and the page reports ✓ match or ✗ mismatch</li>
     <li>Download links for all five <code>.ots</code> proof files</li>
   </ul>
