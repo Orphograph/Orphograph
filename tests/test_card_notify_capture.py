@@ -122,14 +122,23 @@ class TestStaticMarkup(unittest.TestCase):
 
     def test_cache_busted_asset_versions(self):
         """Changed assets must carry bumped ?v= or Cloudflare serves stale 24h."""
-        # Homepage-lean-v2: checkout-cta.js + the tiers block moved to /pricing;
-        # the homepage bumped its stylesheet to index.css?v=19.
+        # Homepage-lean-v2: checkout-cta.js + the tiers block moved to /pricing.
+        # 2026-08-05: index.css -> v=21 on EVERY page that loads it (mobile
+        # sleekness pass + the [hidden] fix). Versions had drifted per page
+        # (v=16/19/20), which defeats the bump: a page left behind keeps
+        # serving stale CSS for up to 24h from the CDN. The loop below is the
+        # drift guard — it is the part that actually prevents a recurrence.
         index = (ROOT / "web" / "index.html").read_text()
-        self.assertIn("/index.css?v=19", index)
+        self.assertIn("/index.css?v=21", index)
         pricing = (ROOT / "web" / "pricing.html").read_text()
         self.assertIn("/checkout-cta.js?v=4", pricing)
-        # pricing bumped to v=20 for the ribbon-overlap fix.
-        self.assertIn("/index.css?v=20", pricing)
+        self.assertIn("/index.css?v=21", pricing)
+        # No page may still reference a stale index.css version.
+        for page in (ROOT / "web").rglob("*.html"):
+            body = page.read_text()
+            if "/index.css?v=" in body:
+                self.assertIn("/index.css?v=21", body,
+                              f"{page.name} loads a stale index.css version")
         v2 = (ROOT / "web" / "v2" / "index.html").read_text()
         self.assertIn("/checkout-cta.js?v=4", v2)
         self.assertIn("/v2/style.css?v=8", v2)

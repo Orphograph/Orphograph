@@ -1,3 +1,8 @@
+/* The `hidden` attribute must always win. A class that sets `display`
+   outranks the UA sheet's [hidden]{display:none}, which silently
+   revealed elements the markup marked hidden (found 2026-08-05:
+   .pack-form showed an Enter-Pack-code form to every visitor). */
+[hidden]{display:none !important;}
 /* Self-hosted premium type — same faces as index.css so every page that
    loads style.css (privacy, terms, account, about, buy, gift, signin, stats…)
    renders in Fraunces (display) + Spectral (text) + IBM Plex Mono, matching
