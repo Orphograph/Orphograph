@@ -312,7 +312,15 @@ def main(argv: list[str] | None = None) -> int:
         ok = sum(1 for c in checks if c["magic_ok"] and c["hash_match"])
         print(f"[4] .ots structural check: {ok}/{len(checks)} carry this hash "
               f"(full chain: run the `ots` reference client)")
-        if checks and ok == 0:
+        if not checks:
+            # An empty/misspelled --ots-dir yielded "0/0" and then printed
+            # VERIFIED: the user explicitly asked for the .ots check and got
+            # a pass without one ever running. Silence on a requested check
+            # is a failure, not a skip.
+            print("FAIL: --ots-dir was given but contains no .ots files — "
+                  "the check you asked for did not run")
+            return 1
+        if ok == 0:
             print("FAIL: no .ots file matches the anchored hash")
             return 1
 

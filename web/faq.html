@@ -20,7 +20,7 @@
   "@context": "https://schema.org",
   "@type": "FAQPage",
   "mainEntity": [
-    {"@type":"Question","name":"Does the file leave my machine?","acceptedAnswer":{"@type":"Answer","text":"No. The browser computes the file's SHA-256 and SHA-512 fingerprints locally; only those fingerprints are submitted to the calendars and ultimately committed to Bitcoin. The file itself is never transmitted."}},
+    {"@type":"Question","name":"Does the file leave my machine?","acceptedAnswer":{"@type":"Answer","text":"No. The browser computes the file's SHA-256 and SHA-512 fingerprints locally and only those fingerprints are submitted. The SHA-256 is what the calendars commit to Bitcoin; the SHA-512 sibling is recorded in the receipt as cryptanalytic diversity and is not itself anchored. The file is never transmitted."}},
     {"@type":"Question","name":"What does the receipt prove?","acceptedAnswer":{"@type":"Answer","text":"That a file with this fingerprint existed by the time of the recorded Bitcoin block. Nothing is claimed about authorship, ownership, originality, or content."}},
     {"@type":"Question","name":"Why Bitcoin?","acceptedAnswer":{"@type":"Answer","text":"Bitcoin has not reorganized beyond a handful of blocks in sixteen years. A block from an hour ago is, for any practical purpose, immutable. Orphograph commits to that chain via the OpenTimestamps protocol, which aggregates many fingerprints into a single transaction so the marginal cost per anchor is effectively zero."}},
     {"@type":"Question","name":"How is the receipt verified later?","acceptedAnswer":{"@type":"Answer","text":"Two tools, and it is worth knowing which does what. Our published one-hundred-line MIT verifier checks a receipt's structure offline: that each .ots proof is well-formed and commits to the receipt's hash. It makes no network call, so it does not itself consult Bitcoin. The OpenTimestamps client (ots verify) is what reads the chain and confirms the timestamp is in a block. Neither tool requires Orphograph; if this office were to close, every receipt remains independently checkable with both."}},
@@ -69,7 +69,7 @@
 
     <div class="faq-item">
       <p class="faq-q">Does the file leave my machine?</p>
-      <p class="faq-a">No. The browser computes the file's SHA-256 and SHA-512 fingerprints locally; only those fingerprints are submitted to the calendars and ultimately committed to Bitcoin. The file itself is never transmitted.</p>
+      <p class="faq-a">No. The browser computes the file's SHA-256 and SHA-512 fingerprints locally and only those fingerprints are submitted. The SHA-256 is what the calendars commit to Bitcoin; the SHA-512 sibling is recorded in the receipt as cryptanalytic diversity and is not itself anchored. The file is never transmitted.</p>
     </div>
 
     <div class="faq-item">

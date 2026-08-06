@@ -119,7 +119,14 @@ def main(argv: list[str] | None = None) -> int:
           + (f"; {unanchored} pending/failed record(s) skipped "
              f"(never anchored — re-run the recorder)" if unanchored else ""))
     if not anchored:
-        print("note: nothing anchored on this drive yet")
+        # The index is UNAUTHENTICATED: flipping one word in it
+        # (anchored -> pending) emptied this list and turned exit 1 into
+        # exit 0. A bundle with nothing anchored verifies nothing, so it
+        # must not report success.
+        print("FAIL: no anchored records on this drive — nothing here was "
+              "verified. If records exist but read as pending, the index may "
+              "have been altered; it is not authenticated.")
+        return 1
     return 1 if failed else 0
 
 
