@@ -1,3 +1,8 @@
+/* The `hidden` attribute must always win. A class that sets `display`
+   outranks the UA sheet's [hidden]{display:none}, which silently
+   revealed elements the markup marked hidden (found 2026-08-05:
+   .pack-form showed an Enter-Pack-code form to every visitor). */
+[hidden]{display:none !important;}
 /* ── Self-hosted OFL type system (same-origin under CSP default-src 'self'; font-display:swap) ── */
 @font-face{font-family:"Fraunces";src:url("/fonts/Fraunces-300_900-i.woff2") format("woff2");font-weight:300 900;font-style:italic;font-display:swap;}
 @font-face{font-family:"Fraunces";src:url("/fonts/Fraunces-300_900.woff2") format("woff2");font-weight:300 900;font-style:normal;font-display:swap;}
@@ -474,6 +479,37 @@
     /* Wrap two stat tiles per row neatly */
     .ledger > div:nth-child(4) .n{font-size:13px;letter-spacing:0.04em;}
   }
+
+  /* ── Mobile sleekness pass (2026-08-05) ───────────────────────────────
+     Founder: the phone layout read "bulky / slammed up". Two causes, both
+     spacing, neither the logo: the masthead spent most of the first screen
+     on branding before the headline, and the action card stacked six
+     competing blocks at near-desktop spacing. Phones only. The medallion
+     and wordmark are UNCHANGED — asset, type, letterspacing and order are
+     untouched; only the whitespace around them moves. */
+  @media (max-width:560px){
+    .masthead{padding:18px 0 4px;}
+    .lockup{gap:8px;}
+    .lockup-rule{margin:10px auto 8px;max-width:220px;}
+    .hero{padding:12px 0 24px;}
+    .hero h1{font-size:29px;line-height:1.1;margin-bottom:12px;max-width:20ch;}
+    .hero p.lede{font-size:14.5px;line-height:1.5;}
+    .action{padding:8px 0 28px;}
+    .action-card{padding:18px 16px;gap:16px;border-radius:14px;}
+    .action h2{font-size:21px;}
+    .action p.sub{font-size:13.5px;margin-bottom:12px;}
+    .drop{min-height:168px;padding:22px 14px;}
+    .drop strong{font-size:18px;}
+    section.band{padding:40px 0;}
+    section.band > .wrap > .head{margin-bottom:22px;}
+    section.band h2{font-size:23px;}
+    section.band p.head-sub{font-size:14.5px;}
+    .feature, .tier, .level{padding:20px 16px;}
+    .ledger-section{padding:4px 0 18px;}
+    .ledger > div{padding:14px 8px;}
+    .wrap{padding:0 22px;}
+  }
+
   /* Respect motion preferences */
   @media (prefers-reduced-motion: reduce){
     *,*::before,*::after{

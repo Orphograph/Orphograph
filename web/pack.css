@@ -1,3 +1,8 @@
+/* The `hidden` attribute must always win. A class that sets `display`
+   outranks the UA sheet's [hidden]{display:none}, which silently
+   revealed elements the markup marked hidden (found 2026-08-05:
+   .pack-form showed an Enter-Pack-code form to every visitor). */
+[hidden]{display:none !important;}
 /* pack.css — /pack access surface. External per CSP (style-src 'self'). */
 .pk-wrap { max-width: 660px; margin: 0 auto; padding: 0 24px 72px; }
 .pk-eyebrow { font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); margin: 48px 0 8px; }
