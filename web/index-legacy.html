@@ -15,12 +15,13 @@
 <meta name="twitter:image" content="/og-image.png?v=8">
 <link rel="stylesheet" href="/style.css?v=6">
 <link rel="stylesheet" href="/index-legacy.css?v=1">
+<link rel="stylesheet" href="/u.css?v=1">
 <meta name="robots" content="noindex">
 </head>
 <body>
 
 <header>
-  <div class="brand"><a href="/" style="color:inherit;text-decoration:none;">orphograph</a></div>
+  <div class="brand"><a href="/" class="u-plainlink">orphograph</a></div>
   <nav>
     <a href="#how"     data-tab="how">how it works</a>
     <a href="#pricing" data-tab="pricing">pricing</a>
@@ -66,7 +67,7 @@
   </div>
 </section>
 
-<p style="text-align:center;margin:14px 0 8px;font-size:14px;color:var(--text-soft);">
+<p class="u-center-soft">
   Already have a receipt? <a href="#verify">Verify it →</a>
 </p>
 
@@ -358,10 +359,10 @@
       <p class="tier-cta">
         <a class="btn" id="buy-pack" data-stripe-placeholder="true">Reserve a Pack</a>
       </p>
-      <p class="tier-cta" style="margin-top:6px;">
-        <a class="btn" href="/pay/btc" style="background:#f7931a;color:#fff;">₿ Pay with Bitcoin</a>
+      <p class="tier-cta u-mt-6">
+        <a class="btn u-bg-btc" href="/pay/btc">₿ Pay with Bitcoin</a>
       </p>
-      <p class="tier-cta" style="margin-top:6px;" id="crypto-pay-link-wrap">
+      <p class="tier-cta u-mt-6" id="crypto-pay-link-wrap">
         <a class="btn" href="/pay/crypto" id="crypto-pay-link" hidden>Pay in crypto (8 coins)</a>
       </p>
       <p class="tier-note muted">Card checkout activating soon. Bitcoin pays now via any BTC wallet (Phantom, Electrum, hardware, exchange).</p>
@@ -496,10 +497,10 @@
     <a href="https://github.com/Orphograph/Orphograph" target="_blank" rel="noopener">GitHub</a> ·
     <a href="mailto:hello@orphograph.com">Contact</a>
   </small>
-  <p style="text-align:center;margin-top:8px;color:var(--muted);font-size:13px;">
+  <p class="u-center-note">
     We never see your file.
   </p>
-  <p style="text-align:right;margin-top:4px;color:var(--muted);font-size:12px;">
+  <p class="u-right-note">
     © Orphograph 2026
   </p>
 </footer>
