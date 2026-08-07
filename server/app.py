@@ -2199,7 +2199,22 @@ class Handler(BaseHTTPRequestHandler):
             if ln_payment_hash is None:
                 _json_response(self, 401, {"error": f"L402 rejected: {ln_err}"})
                 return
-            if lightning.is_spent(ln_payment_hash):
+            # Fast reject only. The BINDING single-use decision is the
+            # atomic lightning.claim() immediately before the anchor below;
+            # this check just saves obvious replays the work. It used to BE
+            # the decision, 176 lines and five calendar submissions before
+            # mark_spent, on a threading server — eight concurrent requests
+            # with one paid credential produced eight receipts.
+            try:
+                already_spent = lightning.is_spent(ln_payment_hash)
+            except lightning.SpentSetUnavailable as e:
+                _json_response(self, 503, {
+                    "error": "cannot verify L402 credential freshness",
+                    "detail": f"the spent-credential ledger is unreadable: {e}",
+                    "hint": "this is an office-side fault; nothing was "
+                            "charged and no anchor was made. Retry shortly."})
+                return
+            if already_spent:
                 _json_response(self, 401, {
                     "error": "L402 rejected: credential already spent",
                     "hint": "each payment buys exactly one anchor — request "
@@ -2332,6 +2347,26 @@ class Handler(BaseHTTPRequestHandler):
             source = "sub:" + auth.email_id(subscriber_email)
         else:
             source = "free"
+        # Atomic single-use claim, as late as possible but strictly BEFORE
+        # the anchor. Late so that every rejection above costs the customer
+        # nothing; before, so the credential can never buy two anchors. If
+        # anchoring then fails we release it, so a server-side error does not
+        # eat a payment.
+        if ln_payment_hash is not None:
+            try:
+                if not lightning.claim(ln_payment_hash):
+                    _json_response(self, 401, {
+                        "error": "L402 rejected: credential already spent",
+                        "hint": "each payment buys exactly one anchor — "
+                                "request a new quote at POST /api/ln/quote"})
+                    return
+            except lightning.SpentSetUnavailable as e:
+                _json_response(self, 503, {
+                    "error": "cannot claim L402 credential",
+                    "detail": f"the spent-credential ledger is unwritable: {e}",
+                    "hint": "office-side fault; nothing was charged and no "
+                            "anchor was made."})
+                return
         try:
             owner_id = auth.email_id(subscriber_email) if subscriber_email else None
             record = engine.anchor_hash(
@@ -2350,11 +2385,16 @@ class Handler(BaseHTTPRequestHandler):
         except ValueError as e:
             # Anchor definitively failed (bad hash, etc.); no receipt produced.
             # Refund the consumed pack credit so the buyer isn't charged for a
-            # request that yielded nothing.
+            # request that yielded nothing — and release the L402 claim for
+            # the same reason. A claim taken for an anchor that never existed
+            # would silently eat a Lightning payment.
             if pack_consumed:
                 credits.refund_credit(pack_token)
+            if ln_payment_hash is not None:
+                lightning.release(ln_payment_hash)
             _json_response(self, 400, {"error": str(e),
-                                       "credit_refunded": pack_consumed})
+                                       "credit_refunded": pack_consumed,
+                                       "ln_credential_released": ln_payment_hash is not None})
             return
         # homepage A/B: attribute the successful anchor to the visitor's arm
         _ab_arm = _ab_cookie_variant(self)
@@ -2370,12 +2410,20 @@ class Handler(BaseHTTPRequestHandler):
             credits.refund_credit(pack_token, reason="anchor-refund:no-calendars")
             credit_refunded = True
             pack_remaining += 1
-        # L402 spend is marked ONLY here — after a receipt exists AND at
-        # least one calendar accepted the hash. A worthless 0-calendar
-        # anchor leaves the credential unspent so the agent can retry, the
-        # same fairness the pack refund above gives card buyers.
-        if ln_payment_hash is not None and record["calendars_ok"] > 0:
-            lightning.mark_spent(ln_payment_hash, record["receipt_id"])
+        # L402 fairness, preserved through the move to an atomic claim: a
+        # worthless 0-calendar anchor has no Bitcoin commitment and can never
+        # upgrade, so the credential is RELEASED and the agent can retry —
+        # the same deal the pack refund above gives card buyers. The claim is
+        # now taken before the anchor (it has to be, to be atomic), so this
+        # is an explicit release rather than simply declining to mark.
+        if ln_payment_hash is not None:
+            if record["calendars_ok"] > 0:
+                # Annotate the existing claim row with the receipt it bought,
+                # so the audit trail links payment to artifact.
+                lightning.mark_spent(ln_payment_hash, record["receipt_id"])
+            else:
+                lightning.release(ln_payment_hash)
+                credit_refunded = True
         # Receipt email: fires for any paid path (Pack consumed, active
         # subscription, or active API key). Previously this was Pack-only,
         # which silently dropped receipts for subscribers — exact 2026-05-18

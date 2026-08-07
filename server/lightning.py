@@ -37,6 +37,8 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+import file_lock
+
 DATA_DIR = Path(os.environ.get("ORPHO_DATA_DIR", "."))
 USER_AGENT = "orphograph/0.1 (stdlib)"
 HTTP_TIMEOUT_SEC = 15
@@ -124,23 +126,110 @@ def parse_macaroon(token: str) -> dict | None:
 def _spent_path() -> Path:
     return _data_dir() / _SPENT_FILE
 
+
+def _last_state(fh, payment_hash: str) -> str:
+    """LAST state recorded for this hash: "claimed", "released", or "".
+
+    Order matters, not mere presence. The ledger is append-only, so a release
+    tombstone follows the claim it undoes; treating any mention as "spent"
+    would permanently burn a credential we had just refunded. A torn or
+    corrupt LINE is skipped — the FILE is still readable, so the verdict from
+    the other lines stands.
+    """
+    state = ""
+    for line in fh:
+        if not line.strip():
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if row.get("payment_hash") != payment_hash:
+            continue
+        state = "released" if row.get("released") else "claimed"
+    return state
+
+
+class SpentSetUnavailable(RuntimeError):
+    """The spent-set could not be read, so freshness is UNKNOWN.
+
+    Never downgrade this to "not spent". `is_spent` used to swallow OSError
+    and return False, i.e. "I could not check, so go ahead" — which on this
+    system is not hypothetical: root-owned files under /data have twice made
+    server-side reads fail (api_keys.jsonl 2026-07-27, webhooks.jsonl
+    2026-07-28). A credential replayed while the ledger is unreadable is
+    money lost with no record that it happened.
+    """
+
+
 def is_spent(payment_hash: str) -> bool:
+    """True iff this payment_hash has already bought an anchor.
+
+    Raises SpentSetUnavailable when the ledger exists but cannot be read.
+    The caller must fail the request — an unreadable spent-set means we
+    cannot prove freshness, and unprovable freshness is not freshness.
+    """
     path = _spent_path()
     if not path.exists():
         return False
     try:
         with path.open() as f:
-            for line in f:
-                if not line.strip():
-                    continue
-                try:
-                    if json.loads(line).get("payment_hash") == payment_hash:
-                        return True
-                except json.JSONDecodeError:
-                    continue
+            return _last_state(f, payment_hash) == "claimed"
+    except OSError as e:
+        raise SpentSetUnavailable(str(e)) from e
+
+
+def claim(payment_hash: str, receipt_id: str = "") -> bool:
+    """Atomically reserve this credential. True iff WE claimed it.
+
+    check-then-act was the whole bug: /api/anchor tested is_spent() 176 lines
+    before mark_spent(), with five OpenTimestamps calendar submissions in the
+    gap and a threading server underneath. Eight concurrent requests carrying
+    one paid credential produced eight receipts and zero rejections
+    (reproduced 2026-08-07). verify_l402's own docstring says the caller is
+    responsible for making "spend atomic with the anchor" — it never was.
+
+    Read and append happen under one exclusive fcntl lock, so the check and
+    the mark cannot be interleaved by another thread or another process.
+    """
+    path = _spent_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with file_lock.locked(path, mode="a+") as f:
+        f.seek(0)
+        try:
+            if _last_state(f, payment_hash) == "claimed":
+                return False
+        except OSError as e:
+            raise SpentSetUnavailable(str(e)) from e
+        f.write(json.dumps({
+            "payment_hash": payment_hash,
+            "receipt_id": receipt_id,
+            "claimed_at": int(time.time()),
+        }) + "\n")
+        f.flush()
+        os.fsync(f.fileno())
+    return True
+
+
+def release(payment_hash: str) -> None:
+    """Undo a claim that never produced an anchor.
+
+    Appends a tombstone rather than rewriting the ledger: the file is
+    append-only by design, and rewriting it under contention is how an
+    audit log loses rows.
+    """
+    path = _spent_path()
+    try:
+        with file_lock.locked(path, mode="a") as f:
+            f.write(json.dumps({
+                "payment_hash": payment_hash,
+                "released": True,
+                "released_at": int(time.time()),
+            }) + "\n")
     except OSError:
+        # Best effort. A stuck claim costs the customer one anchor; a lost
+        # claim costs us an unbounded number. Fail in the safe direction.
         pass
-    return False
 
 
 def mark_spent(payment_hash: str, receipt_id: str) -> None:
