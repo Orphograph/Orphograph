@@ -68,6 +68,9 @@ from pathlib import Path
 # insert keeps the import working regardless of the caller's cwd.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import merkle  # noqa: E402
+# Shared chain verdict — see otscheck.py's banner. This file previously
+# carried its own copy of the same inverted logic.
+import otscheck  # noqa: E402
 
 RESERVED_PARENT_PATH = ".orphograph/parent"
 OTS_HEADER_MAGIC = b"\x00OpenTimestamps\x00\x00Proof\x00\xbf\x89\xe2\xe8\x84\xe8\x92\x94"
@@ -190,37 +193,15 @@ def _ots_static_check(link_dir: Path, hash_hex: str) -> tuple[bool, list[str]]:
 
 
 def _ots_binary_check(link_dir: Path, hash_hex: str) -> tuple[bool, int | None, list[str]]:
-    """Run the local `ots` binary per .ots (shell=False, list argv). Returns
-    (ok, best-effort max Bitcoin block height parsed, messages)."""
-    msgs: list[str] = []
-    height: int | None = None
-    ok = True
-    for ots in sorted(link_dir.glob("*.ots")):
-        try:
-            proc = subprocess.run(
-                ["ots", "verify", str(ots)],
-                check=False,
-                capture_output=True,
-                text=True,
-                timeout=120,
-            )
-        except FileNotFoundError:
-            msgs.append("ots binary not found on PATH — install: pip install opentimestamps-client")
-            return False, None, msgs
-        except subprocess.TimeoutExpired:
-            msgs.append(f"{ots.name}: ots verify timed out after 120s")
-            ok = False
-            continue
-        combined = (proc.stdout or "") + (proc.stderr or "")
-        if hash_hex.lower() not in combined.lower():
-            msgs.append(f"{ots.name}: root_hex NOT found in ots output: FAIL")
-            ok = False
-        else:
-            msgs.append(f"{ots.name}: root_hex appears in ots output: OK")
-        for m in re.finditer(r"block\s+(\d+)", combined, re.IGNORECASE):
-            h = int(m.group(1))
-            height = h if height is None else max(height, h)
-    return ok, height, msgs
+    """Ask the OpenTimestamps client for a verdict on every .ots in this link.
+
+    Returns (ok, best-effort max Bitcoin block height, messages). Delegates to
+    otscheck so this file and verify.py cannot drift apart again: both used to
+    treat "the hash appears in the client's stdout" as confirmation, which
+    passed verifications the client had rejected. Zero .ots files is a
+    failure, not a vacuous pass.
+    """
+    return otscheck.check_dir(link_dir, hash_hex)
 
 
 def _check_link(rid: str, entry: dict) -> tuple[int, str | None, list[str]]:

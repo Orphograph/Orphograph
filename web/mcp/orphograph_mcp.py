@@ -742,10 +742,14 @@ TOOL_DEFINITIONS = [
     {
         "name": "orphograph_verify_receipt",
         "description": (
-            "Verify an existing Orphograph receipt against the calendars "
-            "and Bitcoin chain. Returns the anchored hashes, the calendar "
-            "attestation counts, and (when available) the Bitcoin block "
-            "commitment time. Does not require an API key."
+            "Look up an existing Orphograph receipt and return what the "
+            "office recorded for it: the anchored hashes, the calendar "
+            "attestation counts, and (when available) the time the pin to "
+            "Bitcoin was OBSERVED. This reads the office's record — it does "
+            "NOT independently verify the Bitcoin chain, and the observed "
+            "pin time is not the block's own timestamp. For an independent "
+            "chain check, run the OpenTimestamps client (`ots verify`) "
+            "against the receipt's .ots files. Does not require an API key."
         ),
         "inputSchema": {
             "type": "object",

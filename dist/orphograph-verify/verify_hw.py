@@ -20,7 +20,8 @@ the key's residence in a secure element is a client-side claim in v1.
 It does NOT establish scene/content authenticity, authorship, that the
 device was uncompromised, or true wall-clock time (`signed_at` and
 `key_created_at` are claimed clock readings; the only load-bearing time
-bound remains the OTS→Bitcoin path — verify that with verify.py).
+bound remains the OTS→Bitcoin path — establish that with the `ots`
+reference client, NOT with verify.py, which makes no network calls).
 
 The ECDSA verification below is pure-Python affine EC arithmetic — slow,
 fine for one signature, and it keeps the bundle's no-dependency rule.
@@ -63,7 +64,8 @@ _TOFU_SCOPE = (
     "under first-use pinning; the key's residence in a secure element is a "
     "client-side claim in v1. It does not establish scene/content "
     "authenticity, authorship, or true wall-clock time — the load-bearing "
-    "time bound remains the OTS→Bitcoin path (verify.py)."
+    "time bound remains the OTS→Bitcoin path, established with the `ots` "
+    "reference client (verify.py checks structure only, offline)."
 )
 
 
@@ -223,8 +225,9 @@ def verify_attestation(att: dict, anchored_hash_hex: str) -> dict:
 
 def check_ots_dir(ots_dir: Path, expected_hash_hex: str) -> list[dict]:
     """Local structural check of each .ots: header magic + embedded hash.
-    (Full Bitcoin-chain verification: run the `ots` reference client —
-    same delegation model as verify.py in this bundle.)"""
+    (This is a STRUCTURAL check and makes no network call.
+    Full Bitcoin-chain verification requires the `ots` reference
+    client; verify.py --ots delegates to it via otscheck.py.)"""
     expected = bytes.fromhex(expected_hash_hex)
     checks = []
     for ots in sorted(ots_dir.glob("*.ots")):

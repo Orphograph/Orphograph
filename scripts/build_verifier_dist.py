@@ -53,6 +53,9 @@ ZIP_MEMBERS: list[tuple[str, str]] = [
     ("QUICKSTART.txt", "QUICKSTART.txt"),
     ("README.md", "README.md"),
     ("merkle.py", "merkle.py"),
+    # verify.py imports otscheck at module scope, so omitting it would ship a
+    # bundle that dies on `import otscheck` before doing any work.
+    ("otscheck.py", "otscheck.py"),
     ("verify.py", "verify.py"),
 ]
 

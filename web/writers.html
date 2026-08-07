@@ -74,7 +74,7 @@
           <li>Press <em>Add this version to the chain</em>. The browser hashes it locally with <code>SHA-256</code> and <code>SHA-512</code>.</li>
           <li>The box clears. Continue writing; paste the next version when ready.</li>
           <li>When you're done, press <em>Anchor my chain</em>. A Merkle root is computed and submitted to five OpenTimestamps calendars.</li>
-          <li>You receive a receipt and a downloadable session manifest. Both verify offline against Bitcoin.</li>
+          <li>You receive a receipt and a downloadable session manifest. Both can be checked offline &mdash; the Merkle root re-derives from the manifest with no server involved &mdash; and the Bitcoin commitment itself is confirmed with an OpenTimestamps client.</li>
         </ol>
       </div>
 

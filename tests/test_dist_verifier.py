@@ -311,6 +311,9 @@ class TestShippedBundlesInSync(unittest.TestCase):
         expectations = {
             "verify.py": DIST_DIR / "verify.py",
             "merkle.py": DIST_DIR / "merkle.py",
+            # verify.py imports it at module scope — a zip without it is
+            # dead on arrival.
+            "otscheck.py": DIST_DIR / "otscheck.py",
             "README.md": DIST_DIR / "README.md",
             "LICENSE.txt": DIST_DIR / "LICENSE",
             "QUICKSTART.txt": DIST_DIR / "QUICKSTART.txt",

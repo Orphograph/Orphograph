@@ -100,10 +100,18 @@ Or edit `~/.claude/settings.json` and add the same `mcpServers` block.
 
 ## Verification
 
-The MCP server only issues calls. Every receipt it produces verifies against
-the Bitcoin chain independently via the open-source verifier at
-[github.com/Orphograph/Orphograph](https://github.com/Orphograph/Orphograph)
-or any OpenTimestamps client.
+The MCP server only issues calls. Every receipt it produces can be checked
+without this office, in two independent steps:
+
+1. **Structure** — the open-source verifier at
+   [github.com/Orphograph/Orphograph](https://github.com/Orphograph/Orphograph)
+   re-derives the hashes and checks the receipt offline. It makes no network
+   calls of its own.
+2. **Chain** — the [OpenTimestamps client](https://github.com/opentimestamps/opentimestamps-client)
+   (`ots verify`) confirms the commitment actually landed in a Bitcoin block.
+   The bundled verifier will invoke it for you when passed `--ots`.
+
+Only step 2 consults Bitcoin.
 
 ## Reporting issues
 

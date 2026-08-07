@@ -85,8 +85,8 @@
   <h2 class="v-h2">What this page does not do</h2>
   <div class="v-rule"></div>
   <p class="v-note">
-    The page verifies the file&rarr;receipt binding. It does not verify the Bitcoin-chain attestation that the receipt carries. For end-to-end verification against the chain, the receipt's <span class="mono">.ots</span> files are checked by the standalone verifier published at
-    <a href="https://github.com/Orphograph/Orphograph">github.com/Orphograph/Orphograph</a>, or by the OpenTimestamps command-line client. The two checks together constitute full independent verification.
+    The page verifies the file&rarr;receipt binding. It does not verify the Bitcoin-chain attestation that the receipt carries. Neither does the standalone verifier published at
+    <a href="https://github.com/Orphograph/Orphograph">github.com/Orphograph/Orphograph</a> &mdash; that tool checks structure offline and makes no network calls. For the chain step, run the <a href="https://github.com/opentimestamps/opentimestamps-client" rel="noopener">OpenTimestamps command-line client</a> over the receipt's <span class="mono">.ots</span> files. That check, together with this page's, constitutes full independent verification.
   </p>
   <p class="v-note">
     This page is intentionally minimal: this document and its verifier script, with no third-party code and no build step. Saved together, they remain a working verifier even if this office is offline or no longer reachable.

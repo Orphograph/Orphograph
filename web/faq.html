@@ -32,7 +32,7 @@
     {"@type":"Question","name":"Does Orphograph attest that a file is human-made or not AI-generated?","acceptedAnswer":{"@type":"Answer","text":"No. The receipt records that a file existed at a given moment. Whether the file was created by a person, a model, or any other process is outside the scope of what is attested."}},
     {"@type":"Question","name":"Can I anchor a Bitcoin transaction directly instead of using calendars?","acceptedAnswer":{"@type":"Answer","text":"A premium direct-transaction option is on the roadmap for cases where the standard one-block-window is unsuitable. For the common case, the OpenTimestamps aggregator path is more cost-efficient and equally final."}},
     {"@type":"Question","name":"Will quantum computers break this proof?","acceptedAnswer":{"@type":"Answer","text":"No, on current cryptographic understanding. Shor's algorithm threatens signatures, not hash structures — and an OpenTimestamps proof is a chain of hash commitments with no signature in the proof path. Grover's algorithm leaves SHA-256 preimage resistance at roughly 2^128 quantum operations, far beyond feasibility; NIST treats SHA-2 as secure for hashing in a post-quantum setting. A future quantum computer could disrupt Bitcoin's future operation — signature migration, mining economics — but it cannot silently falsify past commitments; rewriting history would mean publicly out-working the accumulated chain. Receipts anchored through this website also carry a SHA-512 sibling fingerprint for cryptanalytic diversity on a scale of decades; the sibling is optional on the API, so a receipt created by another client may record SHA-256 alone. The sibling is recorded in the receipt, not committed to Bitcoin — the anchored commitment is the SHA-256. The math your receipt rests on is the part quantum computers are worst at."}},
-    {"@type":"Question","name":"What happens to the receipt if Orphograph closes?","acceptedAnswer":{"@type":"Answer","text":"Every receipt remains verifiable against the Bitcoin chain using the published MIT verifier or any OpenTimestamps client. The receipt is the instrument; this office is the issuer, not the trust anchor."}}
+    {"@type":"Question","name":"What happens to the receipt if Orphograph closes?","acceptedAnswer":{"@type":"Answer","text":"Every receipt remains checkable without us: the published MIT verifier confirms the receipt's structure offline, and any OpenTimestamps client confirms the commitment against the Bitcoin chain itself. The receipt is the instrument; this office is the issuer, not the trust anchor."}}
   ]
 }
 </script>
@@ -144,7 +144,7 @@
 
     <div class="faq-item">
       <p class="faq-q">What happens to the receipt if Orphograph closes?</p>
-      <p class="faq-a">Every receipt remains verifiable against the Bitcoin chain using the published MIT verifier or any OpenTimestamps client. The receipt is the instrument; this office is the issuer, not the trust anchor.</p>
+      <p class="faq-a">Every receipt remains checkable without us: the published MIT verifier confirms the receipt's structure offline, and any OpenTimestamps client confirms the commitment against the Bitcoin chain itself. The receipt is the instrument; this office is the issuer, not the trust anchor.</p>
     </div>
   </section>
 

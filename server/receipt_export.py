@@ -95,5 +95,14 @@ def export_readable_json(receipt_id: str) -> tuple[dict | None, str | None]:
             "Is not court-admissible legal evidence",
             "Does not prevent others from copying the file",
         ],
-        "how_to_verify": "Use the open-source verifier at https://github.com/orphograph/verifier to check this receipt against Bitcoin's immutable ledger.",
+        "how_to_verify": (
+            "Two independent checks, in order. (1) STRUCTURE — the MIT-licensed "
+            "verifier at https://github.com/Orphograph/Orphograph checks this "
+            "receipt's internal consistency and the shape of its .ots files. It "
+            "makes no network calls and does NOT consult Bitcoin. (2) CHAIN — "
+            "run the OpenTimestamps client (`ots verify <file>.ots`) from "
+            "https://github.com/opentimestamps/opentimestamps-client to confirm "
+            "the commitment actually landed in a Bitcoin block. Only step 2 "
+            "checks the chain."
+        ),
     }, None

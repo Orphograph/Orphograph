@@ -16,11 +16,29 @@ If the folder was anchored with custom exclude patterns, pass the same
 repeatable --exclude GLOB flags here (any --exclude replaces the default
 deny-list); with different excludes the recomputed root cannot match.
 
-The optional --ots argument runs the public OpenTimestamps client to
-verify the Bitcoin commitment. If `ots` is not installed locally the
-verifier will still recompute the Merkle tree and compare to the
-recorded root; the OTS check can be re-run later from any machine
-that has the ots client installed.
+Everything above is STRUCTURAL: hashes are recomputed and compared
+locally, and no network call is made. It does not consult Bitcoin.
+
+The optional --ots argument is the chain step. It runs the public
+OpenTimestamps client, and reports THAT client's verdict — not ours.
+
+Two things to know before relying on it:
+
+  * `ots verify` needs a Bitcoin node it can reach. It does not fall
+    back to a block explorer. Without a node (tested against client
+    v0.7.2) it exits non-zero with "Could not connect to Bitcoin
+    node", and this verifier reports UNAVAILABLE — meaning the check
+    did not run. UNAVAILABLE is NOT a statement that your timestamp
+    is bad, and it is never treated as success.
+  * PENDING means the calendars hold the attestation but Bitcoin has
+    not confirmed it yet. Also not success.
+
+If `ots` is not installed the verifier still recomputes the Merkle
+tree and compares it to the recorded root; the chain check can be
+re-run later from any machine with the client and a node.
+
+    pip install opentimestamps-client
+    ots info  <file>.ots     # read the attestation offline, no node
 
 The script source is short enough to read in one sitting. It depends
 only on the Python standard library.
