@@ -144,6 +144,28 @@ class TestChainVerdict(unittest.TestCase):
         self.assertNotIn(status, otscheck.PASSING)
         self.assertIn("did NOT run", msg)
 
+    def test_a_rejection_outranks_infrastructure_noise(self):
+        """The mirror of the original bug, and it was live in the first cut of
+        this module: the client can reject a proof AND mention a calendar it
+        could not reach in the same run. Checking the infra pattern first
+        reported UNAVAILABLE — "this says NOTHING about whether the timestamp
+        is good" — for a proof the client had explicitly rejected.
+        """
+        mixed = (f"Failed! Attestation for {HASH} could not be verified\n"
+                 "calendar b.pool.opentimestamps.org: connection reset\n", 1)
+        with _FakeClient(*mixed):
+            status, _, _ = otscheck.chain_verdict(self.ots, HASH)
+        self.assertEqual(status, otscheck.FAILED,
+                         "an explicit rejection was masked by infra noise")
+
+    def test_failed_to_connect_is_not_read_as_a_rejection(self):
+        """The other side of that fix: 'failed to connect' is infrastructure.
+        A rejection marker broad enough to match it would flip every
+        unreachable-node run into a false 'your receipt is bad'."""
+        with _FakeClient("failed to connect to node\n", 1):
+            status, _, _ = otscheck.chain_verdict(self.ots, HASH)
+        self.assertEqual(status, otscheck.UNAVAILABLE)
+
     def test_the_client_is_asked_about_our_digest_explicitly(self):
         """Without -d the client infers a target filename by stripping .ots
         and errors when the original file is absent — the normal case for

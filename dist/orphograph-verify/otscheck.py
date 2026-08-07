@@ -63,7 +63,13 @@ PASSING = (VERIFIED,)
 # The real client says "Success! Bitcoin block N attests existence as of …".
 _SUCCESS = re.compile(r"success!|attests existence", re.I)
 _PENDING = re.compile(r"pending confirmation|pending attestation", re.I)
-_FAILED = re.compile(r"\bfailed\b|could not be verified|invalid", re.I)
+# Deliberately NOT a bare \bfailed\b: "failed to connect" is infrastructure,
+# not a verdict on the proof, and matching it here would flip every
+# unreachable-node run back into a false "your receipt is bad". These are the
+# client's actual rejection wordings.
+_FAILED = re.compile(
+    r"failed!|could not be verified|invalid timestamp|invalid attestation|"
+    r"bad attestation", re.I)
 
 # "The check could not run" must NEVER be reported as "your proof is bad".
 # Verified against opentimestamps-client v0.7.2, which needs a local Bitcoin
@@ -139,10 +145,18 @@ def chain_verdict(ots_path: Path, expected_hash_hex: str,
         h = int(m.group(1))
         height = h if height is None else max(height, h)
 
-    # Infrastructure first: a client that could not reach a Bitcoin node has
-    # not judged this attestation at all, and saying FAILED would be a lie
-    # about the customer's evidence.
-    if _INFRA.search(combined):
+    # An EXPLICIT rejection outranks any infrastructure noise. The client can
+    # reject a proof and, in the same run, mention a calendar it could not
+    # reach; classifying that as "the check did not run" would be this
+    # module's own bug in reverse — a real failure reported as a non-answer.
+    # Only when the client rendered no verdict at all do we call it
+    # UNAVAILABLE.
+    explicit_rejection = _FAILED.search(combined)
+
+    # A client that could not reach a Bitcoin node has not judged this
+    # attestation, and saying FAILED would be a lie about the customer's
+    # evidence.
+    if _INFRA.search(combined) and not explicit_rejection:
         return (UNAVAILABLE, height,
                 f"{ots_path.name}: the OpenTimestamps client could not reach a "
                 f"Bitcoin node, so the chain step did NOT run. This says "
@@ -160,7 +174,7 @@ def chain_verdict(ots_path: Path, expected_hash_hex: str,
         return (FAILED, height,
                 f"{ots_path.name}: ots verify exited {proc.returncode} — the "
                 f"client did NOT confirm this attestation")
-    if _FAILED.search(combined):
+    if explicit_rejection:
         return (FAILED, height,
                 f"{ots_path.name}: ots verify reported a failure despite exit "
                 f"0 — treating as NOT confirmed")
