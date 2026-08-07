@@ -174,6 +174,26 @@ def main(argv: list[str] | None = None) -> int:
             sys.stderr.write(f"[auto_anchor] manifest build failed: {e}\n")
         return 2
 
+    # Refuse BEFORE the network call. An empty ORPHO_AUTO_ANCHOR_KEY makes
+    # this script anonymous, and an anonymous caller cannot be granted a
+    # private anchor — so asking for one and proceeding would publish the
+    # manifest. That is exactly what happened for 78 days and 51 runs: the
+    # plist was installed straight from the template, whose key value is an
+    # empty placeholder, and nothing on any layer ever said so.
+    if not args.allow_public and not API_KEY:
+        sys.stderr.write(
+            "[auto_anchor] REFUSED: ORPHO_AUTO_ANCHOR_KEY is empty, so this "
+            "run would be anonymous, and an anonymous caller cannot be "
+            "granted a private anchor. NOTHING was anchored.\n"
+            "[auto_anchor] Set ORPHO_AUTO_ANCHOR_KEY (note the name — it is "
+            "NOT ORPHO_API_KEY) in\n"
+            "[auto_anchor]   ~/Library/LaunchAgents/"
+            "com.orphograph.auto_anchor.plist\n"
+            "[auto_anchor] then: launchctl unload/load that plist.\n"
+            "[auto_anchor] Or pass --allow-public to anchor publicly on "
+            "purpose.\n")
+        return 3
+
     try:
         status, payload = post_anchor(manifest, client_label, args.base_url,
                                       API_KEY, private=not args.allow_public)

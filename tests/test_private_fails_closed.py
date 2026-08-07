@@ -242,6 +242,20 @@ class TestAutoAnchorRefusesToPublishSilently(unittest.TestCase):
         again, the script should catch it rather than trust the endpoint."""
         self.assertIn('payload.get("private") is False', self.SRC)
 
+    def test_it_refuses_before_the_network_when_the_key_is_empty(self):
+        """The plist ships ORPHO_AUTO_ANCHOR_KEY as an EMPTY placeholder and it
+        was never filled, so the script ran anonymously for 78 days / 51 runs.
+        An empty key must be fatal at the source, not survive to the server."""
+        self.assertIn("ORPHO_AUTO_ANCHOR_KEY is empty", self.SRC)
+        self.assertIn("not args.allow_public and not API_KEY", self.SRC)
+
+    def test_the_remediation_names_the_correct_variable(self):
+        """The var is ORPHO_AUTO_ANCHOR_KEY. ORPHO_API_KEY is a different
+        thing and setting it fixes nothing — that wrong instruction was
+        given once and must not be re-enshrined here."""
+        self.assertIn("ORPHO_AUTO_ANCHOR_KEY", self.SRC)
+        self.assertIn('os.environ.get("ORPHO_AUTO_ANCHOR_KEY"', self.SRC)
+
     def test_the_docstring_no_longer_asserts_the_anchor_is_private(self):
         head = self.SRC.split('"""')[1]
         self.assertNotIn("The anchor is marked\n``private``", head,
@@ -251,3 +265,99 @@ class TestAutoAnchorRefusesToPublishSilently(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestFolderReceiptEmailOverTheWire(unittest.TestCase):
+    """The folder receipt email, driven through /api/anchor_folder.
+
+    The original regression test for this built a receipt dict with
+    kind="folder" and handed it straight to mailer.send_receipt_email. That
+    exercised the TEMPLATE and proved nothing about the request path — and the
+    request path was broken: _handle_anchor_folder wrote kind/leaf_count to the
+    receipt FILE but passed the un-updated in-memory record to the mailer, so
+    the email took the single-file branch and told dataset customers to retain
+    "the original file". Caught by the security review of this branch, not by
+    the test that was supposed to cover it.
+
+    This asserts on what the customer actually receives.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls._tmp = tempfile.TemporaryDirectory()
+        cls._old_modules = {m: sys.modules[m] for m in _POLLUTED if m in sys.modules}
+        cls._old_env = {k: os.environ.get(k) for k in
+                        ("ORPHO_DATA_DIR", "HOST", "PORT",
+                         "ORPHO_COOKIE_SECURE", "RATE_LIMIT_PER_DAY")}
+        cls._server, cls._base = _start_test_server(Path(cls._tmp.name))
+        import engine as engine_mod
+        import merkle as merkle_mod
+        import mailer as mailer_mod
+        cls._original_submit = engine_mod._submit
+        engine_mod._submit = lambda cal, h: (False, "stubbed: test mode")
+        cls.engine, cls.merkle, cls.mailer = engine_mod, merkle_mod, mailer_mod
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.engine._submit = cls._original_submit
+        cls._server.shutdown()
+        cls._server.server_close()
+        cls._tmp.cleanup()
+        for m in _POLLUTED:
+            sys.modules.pop(m, None)
+        for m, mod in cls._old_modules.items():
+            sys.modules[m] = mod
+        for k, v in cls._old_env.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
+    def setUp(self):
+        self.sent = []
+        self._real_send = self.mailer._send
+        self.mailer._send = lambda to, subject, text, html=None, **kw: (
+            self.sent.append({"to": to, "text": text}) or True)
+
+    def tearDown(self):
+        self.mailer._send = self._real_send
+
+    def _folder_manifest(self, names):
+        d = Path(self._tmp.name) / ("wire-" + "-".join(names))
+        d.mkdir(parents=True, exist_ok=True)
+        for n in names:
+            (d / n).write_text(n)
+        return self.merkle.MerkleTree.from_folder(d).manifest()
+
+    def test_a_paid_folder_anchor_emails_manifest_guidance(self):
+        import credits
+        code_ = credits.new_claim_code()
+        credits.add_credits(code_, "buyer@example.com", 3, "test")
+        status, body = _post(
+            f"{self._base}/api/anchor_folder",
+            {"manifest": self._folder_manifest(["a.txt", "b.txt", "c.txt"]),
+             "notify_email": "buyer@example.com"},
+            {"X-Pack-Token": code_})
+        self.assertEqual(status, 200, body)
+        self.assertTrue(self.sent, "a paid folder anchor sent no receipt email")
+        text = self.sent[-1]["text"]
+        self.assertIn("manifest", text.lower(),
+                      "the folder customer was not told to keep the manifest, "
+                      "without which the root cannot be re-derived. The "
+                      "in-memory record is missing kind='folder' again.")
+        self.assertNotIn("the original file together", text,
+                         "folder email took the single-file branch")
+        self.assertIn("Merkle root", text)
+        self.assertIn("3", text, "leaf count not reported")
+
+    def test_the_response_and_the_record_agree_on_kind(self):
+        status, body = _post(
+            f"{self._base}/api/anchor_folder",
+            {"manifest": self._folder_manifest(["x.txt"])})
+        self.assertEqual(status, 200, body)
+        self.assertEqual(body.get("kind"), "folder")
+        stored = json.loads(
+            (self.engine.RECEIPTS_DIR / body["receipt_id"] / "receipt.json"
+             ).read_text())
+        self.assertEqual(stored.get("kind"), "folder")
+        self.assertEqual(stored.get("leaf_count"), 1)

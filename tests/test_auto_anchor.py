@@ -119,6 +119,13 @@ def test_post_shape_includes_api_key_header_when_provided():
         assert captured["headers"].get("x-orpho-api-key") == "sk_test_xyz"
 
 
+# NOTE (2026-08-07): auto_anchor_repo now REFUSES before any network call when
+# ORPHO_AUTO_ANCHOR_KEY is empty, because an anonymous caller cannot be granted
+# the private anchor the script asks for — that silent downgrade published 51
+# daily anchors over 78 days. The four transport-behaviour tests below assert
+# on what happens AFTER the request goes out, so they patch API_KEY to get past
+# that guard. The guard itself is covered in test_private_fails_closed.py.
+
 def test_network_failure_exit_code_1():
     with tempfile.TemporaryDirectory() as td:
         root = Path(td)
@@ -127,7 +134,8 @@ def test_network_failure_exit_code_1():
             "auto_anchor_repo.urllib.request.urlopen",
             side_effect=urllib.error.URLError("connection refused"),
         ):
-            rc = auto_anchor_repo.main(["--root", str(root), "--quiet"])
+            with mock.patch.object(auto_anchor_repo, "API_KEY", "sk_test_xyz"):
+                rc = auto_anchor_repo.main(["--root", str(root), "--quiet"])
         assert rc == 1
 
 
@@ -145,7 +153,8 @@ def test_api_rejection_exit_code_2():
         with mock.patch(
             "auto_anchor_repo.urllib.request.urlopen", side_effect=err
         ):
-            rc = auto_anchor_repo.main(["--root", str(root), "--quiet"])
+            with mock.patch.object(auto_anchor_repo, "API_KEY", "sk_test_xyz"):
+                rc = auto_anchor_repo.main(["--root", str(root), "--quiet"])
         assert rc == 2
 
 
@@ -163,7 +172,8 @@ def test_5xx_exit_code_2():
         with mock.patch(
             "auto_anchor_repo.urllib.request.urlopen", side_effect=err
         ):
-            rc = auto_anchor_repo.main(["--root", str(root), "--quiet"])
+            with mock.patch.object(auto_anchor_repo, "API_KEY", "sk_test_xyz"):
+                rc = auto_anchor_repo.main(["--root", str(root), "--quiet"])
         assert rc == 2
 
 
@@ -175,5 +185,6 @@ def test_timeout_exit_code_1():
             "auto_anchor_repo.urllib.request.urlopen",
             side_effect=TimeoutError("timed out"),
         ):
-            rc = auto_anchor_repo.main(["--root", str(root), "--quiet"])
+            with mock.patch.object(auto_anchor_repo, "API_KEY", "sk_test_xyz"):
+                rc = auto_anchor_repo.main(["--root", str(root), "--quiet"])
         assert rc == 1

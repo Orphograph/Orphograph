@@ -3769,6 +3769,18 @@ class Handler(BaseHTTPRequestHandler):
             return
         # Mark the receipt itself as a folder anchor so verifiers know to
         # fetch the manifest in addition to the .ots files.
+        #
+        # The IN-MEMORY record must carry these too, not just the file. Every
+        # consumer downstream in this handler is handed `record`, not a
+        # re-read of the JSON: the receipt email branches on
+        # record["kind"] == "folder" to decide whether to tell the customer to
+        # keep a manifest or "the original file". Writing them only to disk
+        # meant the email silently took the single-file branch — the fix
+        # shipped in 82c0f94 never reached the wire, and the test missed it by
+        # calling the mailer directly instead of driving the endpoint.
+        record["kind"] = "folder"
+        record["leaf_count"] = len(leaves)
+        record["merkle_algorithm"] = merkle.ALGORITHM
         try:
             rfile = engine.RECEIPTS_DIR / rid / "receipt.json"
             on_disk = json.loads(rfile.read_text())
