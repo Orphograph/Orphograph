@@ -171,6 +171,30 @@ class TestPrivateFailsClosed(unittest.TestCase):
                          "a refused private anchor still submitted to the "
                          "OpenTimestamps calendars")
 
+    def test_refusal_refunds_the_pack_credit(self):
+        """Distinct from 'submits nothing': a caller must not PAY for an
+        anchor we declined to make. The two endpoints reach the refund by
+        different routes — the file path through _reject_private, the folder
+        path through the shared refunding responder — so both are asserted.
+        """
+        import credits
+        for label, url, body in (
+            ("file", "/api/anchor", {"hash_hex": "e" * 64, "private": True}),
+            ("folder", "/api/anchor_folder",
+             {"manifest": self._manifest("paid-secret.csv"), "private": True}),
+        ):
+            with self.subTest(endpoint=label):
+                code_ = credits.new_claim_code()
+                credits.add_credits(code_, "buyer@example.com", 3, "test")
+                before = credits.balance(code_)
+                status, payload = _post(f"{self._base}{url}", body,
+                                        {"X-Pack-Token": code_})
+                self.assertEqual(status, 402, payload)
+                self.assertEqual(
+                    credits.balance(code_), before,
+                    f"{label}: the caller was charged a credit for an anchor "
+                    f"that was refused and never created")
+
     # ── the silence, which was half the defect ───────────────────────────
     def test_folder_response_always_reports_the_privacy_state(self):
         """The folder response omitted `private` entirely, so a caller could
