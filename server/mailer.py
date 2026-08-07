@@ -564,18 +564,39 @@ def send_receipt_email(to: str, receipt: dict) -> bool:
     cal_total = receipt.get("calendars_total", 0)
     receipt_url = f"{SITE_URL}/r/{rid}"
     subject = f"Orphograph — Receipt {rid} issued"
+    # Folder anchors commit to a Merkle root over a manifest, not to one
+    # file. Telling that customer to retain "the original file" names
+    # something that does not exist and omits the manifest, which is the
+    # part they actually cannot re-derive the root without.
+    is_folder = receipt.get("kind") == "folder"
+    leaf_count = receipt.get("leaf_count")
+    if is_folder:
+        digest_label = "Merkle root    "
+        scope_line = (
+            f"  Files anchored   {leaf_count}\n" if leaf_count else "")
+        retain = (
+            "A second notice will be issued upon Bitcoin commitment. Until "
+            "then, this receipt, the folder's manifest, and the files "
+            "themselves together comprise the evidentiary set; please retain "
+            "all three. The manifest is required to re-derive the root.\n")
+    else:
+        digest_label = "SHA-256        "
+        scope_line = ""
+        retain = (
+            "A second notice will be issued upon Bitcoin commitment. Until "
+            "then, this receipt and the original file together comprise the "
+            "evidentiary set; please retain both.\n")
     text = (
         f"The instrument has been registered. Calendar attestations are "
         f"complete; commitment to Bitcoin typically confirms within a few "
         f"hours, once the calendars' aggregation batch is written on-chain.\n\n"
         f"  Receipt          {rid}\n"
-        f"  SHA-256          {hash_hex}\n"
+        f"  {digest_label}  {hash_hex}\n"
         f"  Registered (UTC) {created_at}\n"
+        f"{scope_line}"
         f"  Calendars        {cal_ok} of {cal_total} attesting\n\n"
         f"  Full receipt     {receipt_url}\n\n"
-        f"A second notice will be issued upon Bitcoin commitment. Until "
-        f"then, this receipt and the original file together comprise the "
-        f"evidentiary set; please retain both.\n"
+        + retain
     )
     html = (
         f"<h2 style=\"font-family:Georgia,'Times New Roman',serif;margin:0 0 14px;"

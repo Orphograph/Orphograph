@@ -2359,10 +2359,22 @@ class Handler(BaseHTTPRequestHandler):
                 "private": want_private,
                 "receipt_url": f"{os.environ.get('SITE_URL', 'https://orphograph.com').rstrip('/')}/r/{record['receipt_id']}",
             })
-            # Persist on the record so the upgrade worker can email the
-            # customer when the BTC pin actually lands (~1h later). Saved
-            # only AFTER format validation so the on-disk value is always
-            # a syntactically valid address.
+        # Persist notify_email so upgrade_worker can email the customer when
+        # the BTC pin actually lands (~1h later). This used to be nested
+        # inside the subscriber-only branch above, so a PACK buyer who passed
+        # notify_email — the exact audience docs/api.html documents the field
+        # for, "Pack only — emails the receipt" — got the immediate receipt
+        # and was then never told their anchor reached Bitcoin. They supplied
+        # an address for precisely that notification.
+        #
+        # Dispatch stays subscriber-gated: webhooks resolve by owner identity,
+        # which a Pack-only session does not have. webhooks.dispatch returns
+        # silently when an address has no registered endpoint, so persisting
+        # for Pack buyers adds no traffic and no log noise (verified).
+        #
+        # Saved only AFTER format validation, so the on-disk value is always a
+        # syntactically valid address.
+        if candidate and is_paid_anchor and EMAIL_RE.match(candidate):
             try:
                 receipt_path = engine.RECEIPTS_DIR / record["receipt_id"] / "receipt.json"
                 on_disk = json.loads(receipt_path.read_text())
@@ -3732,6 +3744,47 @@ class Handler(BaseHTTPRequestHandler):
             response_body["signer_kid"] = signer_kid
         if want_public_paths:
             response_body["paths_public"] = True
+
+        # Receipt email + webhook. The folder path had NEITHER: a subscriber
+        # anchoring a dataset got no anchor.created event, no receipt email,
+        # and — because notify_email was never persisted — no notice when the
+        # pin landed either. An integration watching the webhook stream saw
+        # folder anchors simply not happen. Mirrors the single-file path
+        # deliberately; the two diverging is what produced this gap.
+        notify_email = payload.get("notify_email")
+        candidate = ""
+        if isinstance(notify_email, str):
+            candidate = notify_email[:200].strip()
+        if not candidate and subscription_active and subscriber_email:
+            candidate = subscriber_email
+        is_paid_anchor = pack_consumed or subscription_active or api_key_active
+        if candidate and is_paid_anchor and EMAIL_RE.match(candidate):
+            mailer.send_receipt_email(candidate, record)
+            try:
+                rfile2 = engine.RECEIPTS_DIR / rid / "receipt.json"
+                on_disk2 = json.loads(rfile2.read_text())
+                on_disk2["notify_email"] = candidate
+                rfile2.write_text(json.dumps(on_disk2, indent=2))
+                record["notify_email"] = candidate
+            except (OSError, json.JSONDecodeError):
+                pass
+        if subscription_active and subscriber_email:
+            webhooks.dispatch("anchor.created", subscriber_email, {
+                "receipt_id": rid,
+                "hash_hex": record["hash_hex"],
+                "sha512_hex": record.get("sha512_hex"),
+                "created_at": record["created_at"],
+                "client_label": record.get("client_label"),
+                "calendars_ok": record["calendars_ok"],
+                "calendars_total": record["calendars_total"],
+                "private": want_private,
+                # Folder-specific, so a receiver can tell the two apart
+                # without a follow-up fetch.
+                "kind": "folder",
+                "leaf_count": len(leaves),
+                "root_hex": root_hex,
+                "receipt_url": f"{os.environ.get('SITE_URL', 'https://orphograph.com').rstrip('/')}/r/{rid}",
+            })
         _json_response(self, 200, response_body)
 
     def _handle_verify_folder(self, rid: str) -> None:

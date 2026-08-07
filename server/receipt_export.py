@@ -57,6 +57,16 @@ def export_zip(receipt_id: str) -> tuple[bytes | None, str | None]:
                 zf.write(manifest_json, arcname="manifest.json")
             for ots_file in sorted(receipt_dir.glob("*.ots")):
                 zf.write(ots_file, arcname=ots_file.name)
+            # Renewal records. Without these the bundle is NOT self-sufficient:
+            # verify_renewal.py ships in the same download and treats a
+            # missing batch block as a hard failure, so a customer who had
+            # renewed would export a bundle that our own verifier could not
+            # check the renewals from. The records are small JSON and each
+            # carries its own inclusion proof.
+            renewal_dir = receipt_dir / "renewal"
+            if renewal_dir.is_dir():
+                for rec in sorted(renewal_dir.glob("*.json")):
+                    zf.write(rec, arcname=f"renewal/{rec.name}")
     except (OSError, zipfile.BadZipFile) as e:
         sys.stderr.write(f"[receipt_export] could not build zip for {receipt_id}: {e}\n")
         return None, BROKEN
