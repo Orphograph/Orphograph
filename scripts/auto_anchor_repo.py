@@ -4,9 +4,18 @@
 Hashes the current state of all in-scope repo files into a single
 Merkle root via :mod:`server.merkle`, then submits that root as a
 folder anchor to the production endpoint at
-``https://orphograph.com/api/anchor_folder``. The anchor is marked
-``private`` so paths and metadata are owner-gated behind the founder's
+``https://orphograph.com/api/anchor_folder``. The anchor REQUESTS
+``private`` so paths and metadata stay owner-gated behind the founder's
 session / API key.
+
+That request is only granted to a subscription-authenticated caller. It
+was silently DROPPED for a long time: the launchd job passes ORPHO_BASE_URL
+but no ORPHO_API_KEY, so every anchor this script made was public despite
+asking for the opposite (leaf paths were still redacted from non-owners,
+but the digests were not). The server now refuses rather than downgrading,
+and this script refuses to fall back to a public anchor unless
+``--allow-public`` is passed explicitly. If it starts exiting 3, set
+ORPHO_API_KEY in the launchd plist — do not paper over it with the flag.
 
 Every successful anchor appends one JSON line to
 ``outbox/AUTO_ANCHOR_HISTORY.jsonl`` with just enough metadata
@@ -19,6 +28,8 @@ Exit codes:
     0  success
     1  network failure (cannot reach the server)
     2  API rejection / non-2xx from the server
+    3  a private anchor was requested and could not be granted; NOTHING was
+       anchored (pass --allow-public to anchor publicly on purpose)
 """
 from __future__ import annotations
 
@@ -91,7 +102,8 @@ def build_manifest(root: Path) -> dict:
     return tree.manifest()
 
 
-def post_anchor(manifest: dict, client_label: str, base_url: str, api_key: str) -> tuple[int, dict]:
+def post_anchor(manifest: dict, client_label: str, base_url: str, api_key: str,
+                private: bool = True) -> tuple[int, dict]:
     """POST the manifest to the folder-anchor endpoint.
 
     Returns ``(status_code, response_json_or_error_dict)``.
@@ -101,7 +113,7 @@ def post_anchor(manifest: dict, client_label: str, base_url: str, api_key: str) 
     body = json.dumps({
         "manifest": manifest,
         "client_label": client_label,
-        "private": True,
+        "private": private,
     }).encode("utf-8")
     headers = {
         "Content-Type": "application/json",
@@ -144,6 +156,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--root", default=str(ROOT), help="repo root to anchor")
     parser.add_argument("--base-url", default=BASE_URL, help="API base URL")
     parser.add_argument("--quiet", action="store_true", help="suppress stdout")
+    parser.add_argument(
+        "--allow-public", action="store_true",
+        help="anchor publicly if the private request cannot be granted. "
+             "Off by default: an anchor that silently went public is the "
+             "defect this flag exists to make deliberate.")
     args = parser.parse_args(argv)
 
     root = Path(args.root).resolve()
@@ -158,7 +175,8 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     try:
-        status, payload = post_anchor(manifest, client_label, args.base_url, API_KEY)
+        status, payload = post_anchor(manifest, client_label, args.base_url,
+                                      API_KEY, private=not args.allow_public)
     except urllib.error.URLError as e:
         if not args.quiet:
             sys.stderr.write(f"[auto_anchor] network error: {e}\n")
@@ -168,10 +186,30 @@ def main(argv: list[str] | None = None) -> int:
             sys.stderr.write(f"[auto_anchor] timeout: {e}\n")
         return 1
 
+    if status == 402 and payload.get("private_requested"):
+        # The server declined rather than publishing what we asked to keep
+        # private. That is the correct behaviour; surface it loudly.
+        sys.stderr.write(
+            "[auto_anchor] REFUSED: this run asked for a private anchor and "
+            "the server could not grant it, so NOTHING was anchored.\n"
+            "[auto_anchor] Cause is almost certainly a missing ORPHO_API_KEY "
+            "in the launchd environment.\n"
+            "[auto_anchor] Fix the key, or pass --allow-public to anchor "
+            "publicly on purpose.\n")
+        return 3
+
     if status < 200 or status >= 300:
         if not args.quiet:
             sys.stderr.write(f"[auto_anchor] API rejection: {status} {payload.get('error','?')}\n")
         return 2
+
+    # Belt and braces: if a future server build goes back to downgrading
+    # silently, catch it here rather than trusting the endpoint.
+    if not args.allow_public and payload.get("private") is False:
+        sys.stderr.write(
+            "[auto_anchor] WARNING: asked for a private anchor and the server "
+            f"returned private=false (receipt {payload.get('receipt_id','?')}). "
+            "The manifest is PUBLIC. Investigate before the next run.\n")
 
     receipt_id = payload.get("receipt_id", "")
     root_hex = payload.get("root_hex", "")

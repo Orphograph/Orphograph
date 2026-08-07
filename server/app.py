@@ -472,6 +472,43 @@ def _weak_etag(*, mtime: float, size: int) -> str:
     return f'W/"{h}"'
 
 
+def _reject_private(handler: BaseHTTPRequestHandler, pack_consumed: bool,
+                    pack_token: str | None) -> None:
+    """Decline an anchor that asked for `private` we cannot grant.
+
+    Both anchor endpoints used to compute `private and subscription_active`,
+    which SILENTLY PUBLISHED a receipt the caller had explicitly asked to keep
+    private. No error, no warning, and on the folder path the response did not
+    even report the resulting privacy state, so the caller could not tell.
+
+    Found live: the founder's own daily repo anchor sends `"private": True`
+    (scripts/auto_anchor_repo.py) and its launchd job passes no API key, so
+    every one of those anchors has been public.
+
+    Publishing is not undoable. Retrying without `private` costs the caller
+    one line. So this fails closed: no anchor is created, any pack credit is
+    refunded, and the response says exactly what happened and how to proceed.
+    """
+    if pack_consumed and pack_token:
+        credits.refund_credit(pack_token)
+    _json_response(handler, 402, {
+        "error": "private anchors require an active subscription",
+        "detail": (
+            "This request asked for private: true, and this caller is not "
+            "subscription-authenticated. Rather than publish a receipt you "
+            "asked to keep private, no anchor was created and nothing was "
+            "submitted to the calendars."
+        ),
+        "how_to_proceed": (
+            "Authenticate with an active subscription (session cookie or "
+            "X-Orpho-Api-Key), or resend without `private` to anchor publicly."
+        ),
+        "private_requested": True,
+        "private_granted": False,
+        "credit_refunded": bool(pack_consumed),
+    })
+
+
 def _json_response(handler: BaseHTTPRequestHandler, status: int, payload: dict) -> None:
     body = json.dumps(payload, indent=2).encode("utf-8")
     ctype = "application/json; charset=utf-8"
@@ -2244,7 +2281,17 @@ class Handler(BaseHTTPRequestHandler):
         notify_email = payload.get("notify_email")
         # Private receipts: subscriber-only feature. Anonymous and pack-only
         # anchors cannot be marked private (no owner_id to gate by).
-        want_private = bool(payload.get("private", False)) and subscription_active
+        #
+        # FAIL CLOSED. This used to be `bool(...) and subscription_active`,
+        # which silently PUBLISHED a receipt the caller had explicitly asked
+        # to keep private — no error, no warning, nothing in the response.
+        # Publishing is not undoable; retrying without `private` costs the
+        # caller one line. So when the request cannot be honoured we decline
+        # to anchor at all and say why.
+        if bool(payload.get("private", False)) and not subscription_active:
+            _reject_private(self, pack_consumed, pack_token)
+            return
+        want_private = bool(payload.get("private", False))
         # Attestation + metadata: any caller can submit these. The engine
         # sanitizes (allowlist + size caps); unknown fields are dropped.
         attestation = payload.get("attestation") if isinstance(payload.get("attestation"), dict) else None
@@ -3666,7 +3713,27 @@ class Handler(BaseHTTPRequestHandler):
             source = "sub:" + auth.email_id(subscriber_email)
         else:
             source = "free"
-        want_private = bool(payload.get("private", False)) and subscription_active
+        # Fail closed — see _reject_private. This path is where it bit us:
+        # the daily repo anchor asks for private and has been publishing.
+        # _reject refunds the pack credit and is the folder path's refunding
+        # responder, so the 402 does not cost the caller an anchor.
+        if bool(payload.get("private", False)) and not subscription_active:
+            _reject(402, {
+                "error": "private anchors require an active subscription",
+                "detail": (
+                    "This request asked for private: true, and this caller is "
+                    "not subscription-authenticated. Rather than publish a "
+                    "manifest you asked to keep private, no anchor was created."
+                ),
+                "how_to_proceed": (
+                    "Authenticate with an active subscription (session cookie "
+                    "or X-Orpho-Api-Key), or resend without `private`."
+                ),
+                "private_requested": True,
+                "private_granted": False,
+            })
+            return
+        want_private = bool(payload.get("private", False))
         # Opt-in: publish the manifest's file paths so a shared certificate
         # renders them to anyone (default keeps paths owner-only). Independent
         # of `private`, which gates the whole receipt to its owner.
@@ -3736,6 +3803,10 @@ class Handler(BaseHTTPRequestHandler):
             "calendars_ok": record["calendars_ok"],
             "calendars_total": record["calendars_total"],
             "created_at": record["created_at"],
+            # Always report the privacy state. The folder response omitted it
+            # entirely, so a caller who asked for private had no way to learn
+            # the request had been dropped — the silence was half the defect.
+            "private": want_private,
         }
         if lineage_out is not None:
             response_body["lineage"] = lineage_out
