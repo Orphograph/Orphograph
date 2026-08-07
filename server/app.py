@@ -388,6 +388,29 @@ def _subscription_active_for(email: str | None) -> bool:
     return False
 
 
+class _HeadBodySuppressor:
+    """Forward the header block to the real socket, swallow the body.
+
+    Used only by do_HEAD. `suppress` flips to True the moment end_headers()
+    has flushed, so status line and headers reach the client verbatim and
+    every subsequent write (the body GET would have sent) is dropped. The
+    reported byte count stays truthful to the caller so writers that check
+    it — shutil.copyfileobj and friends — behave normally.
+    """
+
+    def __init__(self, wfile) -> None:
+        self._wfile = wfile
+        self.suppress = False
+
+    def write(self, data):
+        if self.suppress:
+            return len(data) if data is not None else 0
+        return self._wfile.write(data)
+
+    def __getattr__(self, name):
+        return getattr(self._wfile, name)
+
+
 def _security_headers(handler: BaseHTTPRequestHandler) -> None:
     handler.send_header("X-Content-Type-Options", "nosniff")
     handler.send_header("X-Frame-Options", "DENY")
@@ -2633,19 +2656,56 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_HEAD(self):  # noqa: N802
+        """HEAD is GET without a body — RFC 9110 §9.3.2.
+
+        This used to answer 501 for every path but /api/event, which broke
+        every non-browser client: Cloudflare's security scanner, link
+        checkers, uptime monitors and CDN prefetch all probe with HEAD.
+        Because the 501 error page carried none of our response headers,
+        the scanner concluded the site had no HSTS and no security.txt when
+        in fact both are served correctly on GET.
+
+        Status and headers MUST match what GET would return, and the body
+        MUST be absent, so we run the ordinary GET routing and discard
+        everything written after the header block.
+        """
         path = self.path.split("?", 1)[0]
         if path == "/api/event":
             self._event_method_not_allowed()
             return
-        # Fall back to Python default for everything else.
-        self.send_error(501, "Unsupported method ('HEAD')")
+
+        real_wfile = self.wfile
+        shim = _HeadBodySuppressor(real_wfile)
+        inherited_end_headers = self.end_headers
+
+        def _end_headers_then_suppress() -> None:
+            inherited_end_headers()
+            shim.suppress = True
+
+        self.wfile = shim
+        self.end_headers = _end_headers_then_suppress  # type: ignore[method-assign]
+        try:
+            self.do_GET()
+        finally:
+            self.wfile = real_wfile
+            # Drop the instance attribute so the class method is visible again.
+            self.__dict__.pop("end_headers", None)
 
     def do_OPTIONS(self):  # noqa: N802
+        """Advertise the methods we implement rather than claiming none.
+
+        Same defect class as HEAD: a blanket 501 told every preflight and
+        capability probe that this server implements nothing.
+        """
         path = self.path.split("?", 1)[0]
         if path == "/api/event":
             self._event_method_not_allowed()
             return
-        self.send_error(501, "Unsupported method ('OPTIONS')")
+        self.send_response(204)
+        self.send_header("Allow", "GET, HEAD, POST, OPTIONS")
+        self.send_header("Content-Length", "0")
+        _security_headers(self)
+        self.end_headers()
 
     def do_PUT(self):  # noqa: N802
         path = self.path.split("?", 1)[0]
