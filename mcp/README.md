@@ -70,7 +70,10 @@ Or edit `~/.claude/settings.json` and add the same `mcpServers` block.
 | Tool | Purpose | Auth |
 |---|---|---|
 | `orphograph_anchor_file(path)` | Hash a local file and register the fingerprint on Bitcoin. | Optional API key |
-| `orphograph_verify_receipt(receipt_id)` | Verify an existing receipt against the calendars and chain. | None |
+| `orphograph_anchor_folder(path)` | Hash a whole folder into an RFC-6962 Merkle tree and anchor one root covering every file. | Optional API key |
+| `orphograph_anchor_output(text, …)` | Hash generated output (an agent result, a transcript) in-process and anchor it. Accepts an optional `zk_proof`. | Optional API key |
+| `orphograph_verify_receipt(receipt_id)` | Look up what the office recorded for a receipt. A lookup — it does NOT consult the chain; run `ots verify` for that. | None |
+| `orphograph_verify_lineage(receipt_id)` | Walk an edit-lineage chain back through its committed parents. | None |
 | `orphograph_list_vault(limit?)` | List the subscriber's receipts. | API key required |
 
 ## Privacy contract

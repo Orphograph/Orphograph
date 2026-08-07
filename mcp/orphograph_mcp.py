@@ -29,10 +29,25 @@ Tools exposed
     certificate URL. No file body leaves the device; each file stays
     independently verifiable via an inclusion proof.
 
+- orphograph_anchor_output(text, label?, c2pa_manifest_hash?, zk_proof?)
+    Hash a string of generated output (an agent result, a model
+    response, a transcript) in-process and POST only the digests to
+    /api/anchor. The text never leaves the device. An optional
+    zk_proof is forwarded and echoed back as zk_provenance; it proves
+    a fixed published hash-chain procedure ran, NOT that a particular
+    AI model ran.
+
 - orphograph_verify_receipt(receipt_id)
-    GET /api/verify/<id>. Return the verification result — including
-    calendar counts, btc_pinned_at if available, and the receipt URL
-    for human-readable view.
+    GET /api/verify/<id>. Returns what the OFFICE RECORDED: calendar
+    counts, btc_pinned_at when present, and the receipt URL. This is a
+    lookup, not an independent check — it does not consult the chain,
+    and btc_pinned_at is when the pin was OBSERVED, not the block's own
+    timestamp. For an independent chain check run `ots verify` against
+    the receipt's .ots files.
+
+- orphograph_verify_lineage(receipt_id)
+    Walk an edit-lineage chain from a receipt back through its
+    committed parents, reporting the ordering the anchors establish.
 
 - orphograph_list_vault(limit?)
     GET /api/me/anchors with X-Orpho-Api-Key header. Returns the
@@ -356,6 +371,14 @@ def tool_anchor_output(args: dict) -> dict:
     c2pa_hash = args.get("c2pa_manifest_hash")
     if isinstance(c2pa_hash, str) and c2pa_hash.strip():
         payload["c2pa_manifest_hash"] = c2pa_hash.strip().lower()
+    # llms.txt tells relaying agents an output receipt "may carry an optional
+    # zero-knowledge execution proof (zk_proof on the request)" and names the
+    # MCP tools as one of the two ways to anchor an output. The tool did not
+    # forward the field, so the one client population the feature was built
+    # for could not reach it. /api/anchor has accepted it since it shipped.
+    zk_proof = args.get("zk_proof")
+    if isinstance(zk_proof, dict) and zk_proof:
+        payload["zk_proof"] = zk_proof
     log(f"anchor_output: hashing {size} bytes of output, submitting hash …")
     result = _http("POST", "/api/anchor", payload)
     if result.get("error"):
@@ -378,6 +401,9 @@ def tool_anchor_output(args: dict) -> dict:
         "pack_remaining": result.get("pack_remaining", 0),
         "subscription_active": result.get("subscription_active", False),
         "size_bytes": size,
+        # Echo the server's view so a caller can confirm the proof was stored
+        # rather than silently dropped — the failure mode this fix addresses.
+        "zk_provenance": result.get("zk_provenance"),
         "note": (
             "The output text did not leave this device — only the SHA-256 and "
             "SHA-512 fingerprints were transmitted. To re-verify, hash the exact "
@@ -734,6 +760,17 @@ TOOL_DEFINITIONS = [
                 "c2pa_manifest_hash": {
                     "type": "string",
                     "description": "Optional SHA-256 hex of a C2PA manifest the receipt should reference (coexistence mode).",
+                },
+                "zk_proof": {
+                    "type": "object",
+                    "description": (
+                        "Optional zero-knowledge execution proof, echoed on the "
+                        "receipt as zk_provenance. SCOPE, which a relaying agent "
+                        "should repeat: it proves a fixed, published hash-chain "
+                        "procedure ran — NOT that a specific AI model ran. The "
+                        "proving-key ceremony is development-grade and this is "
+                        "not offered as a certified claim."
+                    ),
                 },
             },
             "required": ["text"],
