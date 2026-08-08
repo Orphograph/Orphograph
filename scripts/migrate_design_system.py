@@ -53,8 +53,13 @@ def discover() -> list[Path]:
 
 TOKENS = '<link rel="stylesheet" href="/css/orpho-tokens.css?v=1">'
 PRIMS = '<link rel="stylesheet" href="/css/orpho-primitives.css?v=1">'
-INDEX_CSS_RE = re.compile(r'<link rel="stylesheet" href="/index\.css\?v=\d+">')
+# The base sheet differs by family: most pages load /index.css, the blog and
+# transactional families load /style.css. Either is a valid insertion anchor.
+BASE_CSS_RE = re.compile(r'<link rel="stylesheet" href="/(?:index|style)\.css\?v=\d+">')
 HEADER_RE = re.compile(r'<header class="nav">\s*<div class="wrap row">(.*?)</div>\s*</header>', re.DOTALL)
+# Other header shapes carrying the same brand+nav content.
+ALT_HEADER_RE = re.compile(r'<header class="(?:topnav|post-header|mast)">(.*?)</header>', re.DOTALL)
+BODY_RE = re.compile(r'<body([^>]*)>')
 
 
 def build_header(inner: str) -> str:
@@ -93,22 +98,31 @@ def migrate(path: Path) -> tuple[bool, str]:
     if "orpho-tokens.css" in src:
         return False, "already migrated"
 
-    m = INDEX_CSS_RE.search(out)
+    m = BASE_CSS_RE.search(out)
     if not m:
-        return False, "no /index.css link — unexpected shape, skipped"
+        return False, "no /index.css or /style.css link — unexpected shape, skipped"
     out = out[:m.start()] + TOKENS + "\n" + PRIMS + "\n" + out[m.start():]
 
-    if "<body>" not in out:
-        return False, "no bare <body> — page has its own body class, skipped"
-    out = out.replace("<body>", '<body class="orpho">', 1)
+    # Body class — additive, so a page that already carries one keeps it.
+    bm = BODY_RE.search(out)
+    if not bm:
+        return False, "no <body> tag, skipped"
+    attrs = bm.group(1)
+    if 'class="' in attrs:
+        out = out[:bm.start()] + re.sub(r'class="', 'class="orpho ', attrs.join(("<body", ">")), count=1) + out[bm.end():]
+    else:
+        out = out[:bm.start()] + f'<body class="orpho"{attrs}>' + out[bm.end():]
 
-    hm = HEADER_RE.search(out)
-    if not hm:
-        return False, "header does not match the shared shape, skipped"
-    new_header = build_header(hm.group(1))
-    if not new_header:
-        return False, "header has no <nav>, skipped"
-    out = out[:hm.start()] + new_header + out[hm.end():]
+    # Header. Pages with NO header are headerless BY DESIGN — the lp/ landing
+    # pages and the pay/ flows deliberately omit nav so nothing competes with
+    # the single action. Adding one would change conversion and payment UX,
+    # which is a product decision, not a restyle. They get the shell only.
+    hm = HEADER_RE.search(out) or ALT_HEADER_RE.search(out)
+    if hm:
+        new_header = build_header(hm.group(1))
+        if new_header:
+            out = out[:hm.start()] + new_header + out[hm.end():]
+        # A header with no <nav> keeps its own markup; the shell still applies.
 
     if '<footer class="site">' in out:
         out = out.replace(
