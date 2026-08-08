@@ -63,13 +63,30 @@ def test_access_page_is_csp_clean():
     assert 'style="' not in html, "inline style attribute present"
 
 
-def test_access_page_header_is_wordmark_only_one_cta():
+def test_access_page_header_is_brand_lockup_one_cta():
+    """2026-08-08: the wordmark-only rule is SUPERSEDED.
+
+    It was introduced in b776d2b as "wordmark-only header and one CTA
+    preserved" — a convention carried forward while adding /access, not a
+    constraint with a technical reason. The archival design system puts the
+    canonical crest at top-left beside the wordmark, sitewide, so the header
+    now carries exactly one <img> and that image must be the shipped seal
+    artwork rather than a redrawn emblem.
+
+    The one-CTA rule is NOT superseded and is still asserted below: a header
+    with two primary buttons has no primary.
+    """
     header = _header_block(_read("access.html"))
-    # Wordmark brand, no seal <img> in the header.
-    assert '<a href="/" class="brand">Orphograph</a>' in header
-    assert "<img" not in header, "header must be wordmark-only (no seal image)"
-    # Exactly one primary CTA in the header.
-    assert header.count('class="cta cta-btn"') == 1
+    assert 'class="orpho-brand__name">Orphograph' in header, "wordmark missing"
+    assert 'class="orpho-brand__sub">Empirical Notary' in header, "subtitle missing"
+    assert header.count("<img") == 1, "header carries exactly one mark"
+    assert "seal-display.png" in header, (
+        "the header mark must be the canonical seal artwork, never a redraw")
+    # Exactly one primary CTA in the header. Matched on the cta-btn class
+    # token rather than an exact class string: the design system prepends
+    # orpho-btn utilities, so the attribute is no longer literally
+    # class="cta cta-btn".
+    assert header.count("cta-btn") == 1
 
 
 HOMEPAGES = ["index.html", "v2/index.html"]

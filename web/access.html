@@ -14,25 +14,31 @@
 <meta property="og:type" content="article">
 <meta property="og:image" content="https://orphograph.com/og-image.png?v=8">
 <meta name="copyright" content="© 2026 Orphograph. MIT — see /LICENSE">
+<link rel="stylesheet" href="/css/orpho-tokens.css?v=1">
+<link rel="stylesheet" href="/css/orpho-primitives.css?v=1">
 <link rel="stylesheet" href="/index.css?v=21">
 <link rel="stylesheet" href="/access.css?v=1">
 </head>
-<body>
+<body class="orpho">
 
 <!-- ─────────────────────── HEADER (wordmark only) ─────────────────────── -->
-<header class="nav">
-  <div class="wrap row">
-    <a href="/" class="brand">Orphograph</a>
-    <nav>
-      <a href="/learn">Why it matters</a>
+<header class="orpho-header nav">
+  <a href="/" class="orpho-brand brand">
+    <img class="orpho-brand__mark" src="/seal-display.png?v=8" alt="" width="62" height="62">
+    <span class="orpho-brand__text">
+      <span class="orpho-brand__name">Orphograph</span>
+      <span class="orpho-brand__sub">Empirical Notary</span>
+    </span>
+  </a>
+  <nav class="orpho-nav">
+    <a href="/learn">Why it matters</a>
       <a href="/method">Procedure</a>
       <a href="/pricing">Pricing</a>
       <a href="/about-the-office">Office</a>
       <a href="/verify/" class="nav-verify">Verify receipt</a>
       <a href="/access" class="nav-signin" aria-current="page">Sign in</a>
-      <a href="/#drop" class="cta cta-btn">Anchor a file</a>
-    </nav>
-  </div>
+      <a href="/#drop" class="orpho-btn orpho-btn--primary cta cta-btn">Anchor a file</a>
+  </nav>
 </header>
 
 <main class="ax-wrap">
