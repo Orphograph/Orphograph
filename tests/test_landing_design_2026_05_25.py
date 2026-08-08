@@ -62,7 +62,11 @@ class TestNavBadgeLabel(unittest.TestCase):
         (data-state='checking' is fine — that's a JS-internal attribute.)"""
         html = _html()
         # Pull only the <header class="nav"> block.
-        m = re.search(r'<header class="nav">(.*?)</header>', html, re.DOTALL)
+        # 2026-08-08 archival redesign: the header carries a class list
+        # ("orpho-header nav"), so an exact-match attribute regex no longer
+        # finds it. Match any <header> whose class list contains `nav`.
+        m = re.search(r'<header[^>]*class="[^"]*\bnav\b[^"]*"[^>]*>(.*?)</header>',
+                      html, re.DOTALL)
         self.assertIsNotNone(m, "header.nav block missing")
         nav = m.group(1)
         # Strip the data-state attribute before searching for visible text.
@@ -301,10 +305,17 @@ class TestCspInlineConsolidation(unittest.TestCase):
     markup invariants and the CSP hygiene (no inline CSS may creep back in)."""
 
     def test_lockup_wordmark_present(self):
-        self.assertIn('class="lockup-wordmark">Orphograph', _html())
+        """2026-08-08: the standalone masthead lockup was absorbed into the
+        header (reference design puts crest + wordmark + subtitle inline at
+        top-left). The wordmark must still exist and still be a single
+        CSP-safe element — only its class and position changed."""
+        self.assertIn('class="orpho-brand__name">Orphograph', _html())
 
     def test_lockup_tagline_present(self):
-        self.assertIn("Proof &middot; Permanence", _html())
+        """The tagline under the wordmark is now the institutional
+        descriptor rather than "Proof · Permanence"; the slot itself is
+        what this pins."""
+        self.assertIn('class="orpho-brand__sub">Empirical Notary', _html())
 
     def test_old_lockup_taglines_gone(self):
         html = _html()

@@ -1,0 +1,126 @@
+/* orpho-tokens.css — the archival design system's single source of truth.
+ *
+ * Every value here was tuned against the 2026-08-08 reference render. Nothing
+ * in this file is decorative on its own: primitives and pages consume these
+ * tokens and MUST NOT hardcode a colour, radius, or duration.
+ *
+ * CSP NOTE: the site runs `style-src 'self'` — there are no inline styles and
+ * no <style> blocks anywhere. 134 inline style attributes were silently dead
+ * on 20 live pages before that was found. Everything visual lives in a linked
+ * stylesheet, always.
+ */
+
+:root {
+  /* ── Paper ─────────────────────────────────────────────────────────────
+   * Sampled from the reference: the page is not flat cream. It carries a
+   * vertical gradient from a lighter head to a warmer, deeper foot, which is
+   * what makes it read as a sheet rather than a background colour.
+   */
+  --orpho-paper:        #f4efe4;
+  --orpho-paper-lit:    #faf6ee;   /* top of the sheet, where light falls */
+  --orpho-paper-deep:   #e7ddc9;   /* foot of the sheet, and card edges   */
+  --orpho-paper-sunk:   #ddd2ba;   /* debossed wells, input interiors     */
+
+  /* ── Ink ───────────────────────────────────────────────────────────── */
+  --orpho-ink:          #191715;   /* display serif, near-black warm      */
+  --orpho-ink-soft:     #3b352d;   /* body copy                            */
+  --orpho-ink-faint:    #6b6154;   /* labels, captions, receipt keys      */
+  --orpho-charcoal:     #11100f;   /* footer ground, primary button       */
+  --orpho-charcoal-lit: #1c1a18;   /* footer texture highlight            */
+
+  /* ── Metals ────────────────────────────────────────────────────────── */
+  --orpho-gold:         #9a7a43;   /* engraved rules, icon strokes        */
+  --orpho-gold-lit:     #c9a869;   /* specular edge on emboss             */
+  --orpho-gold-deep:    #6f5528;   /* the shadow side of the same stroke  */
+  --orpho-brass:        #b08d4f;   /* envelope closure buttons            */
+
+  /* ── Wax ───────────────────────────────────────────────────────────── */
+  --orpho-wax:          #6e2418;
+  --orpho-wax-lit:      #a2452c;   /* where the light catches the dome    */
+  --orpho-wax-deep:     #431109;   /* the impressed crest recesses        */
+
+  /* ── Lines & depth ─────────────────────────────────────────────────── */
+  --orpho-border:       rgba(76, 58, 34, 0.22);
+  --orpho-border-firm:  rgba(76, 58, 34, 0.38);
+  --orpho-hairline:     rgba(76, 58, 34, 0.13);
+  --orpho-shadow:       rgba(32, 24, 16, 0.14);
+  --orpho-shadow-deep:  rgba(32, 24, 16, 0.26);
+  --orpho-emboss-lit:   rgba(255, 252, 245, 0.85);
+  --orpho-emboss-dark:  rgba(90, 70, 44, 0.20);
+
+  /* Grain is applied as an overlay opacity, not a colour, so it can be
+   * dialled to zero on low-contrast displays without touching the palette. */
+  --orpho-grain:        0.055;
+  --orpho-grain-deep:   0.085;     /* footer, where the ground is dark    */
+
+  /* ── Type ──────────────────────────────────────────────────────────────
+   * Cormorant/EB Garamond are NOT used: CSP `default-src 'self'` forbids the
+   * Google Fonts CDN, and self-hosting a new family costs a request budget we
+   * already spent. Fraunces (variable, high-contrast didone-ish serif) is the
+   * closer match to the reference display type anyway, and it already ships.
+   */
+  --orpho-display: "Fraunces", "Spectral", Georgia, "Times New Roman", serif;
+  --orpho-body:    "Spectral", Georgia, "Times New Roman", serif;
+  --orpho-mono:    "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* Scale is a 1.25 minor-third off a 17px body, then hand-corrected at the
+   * display end to match the reference's very large headline. */
+  --orpho-t-hero:    clamp(2.6rem, 5.4vw, 4.15rem);
+  --orpho-t-h2:      clamp(1.6rem, 2.6vw, 2.1rem);
+  --orpho-t-h3:      1.32rem;
+  --orpho-t-body:    1.0625rem;
+  --orpho-t-small:   0.9375rem;
+  --orpho-t-label:   0.72rem;   /* letterspaced small caps */
+  --orpho-t-mono:    0.8125rem;
+
+  --orpho-lh-tight:  1.06;      /* the two-line hero */
+  --orpho-lh-body:   1.62;
+  --orpho-track-cap: 0.14em;    /* SMALL CAPS tracking */
+  --orpho-track-wide:0.22em;    /* nav + button lettering */
+
+  /* ── Space ─────────────────────────────────────────────────────────── */
+  --orpho-s-1:  0.25rem;
+  --orpho-s-2:  0.5rem;
+  --orpho-s-3:  0.75rem;
+  --orpho-s-4:  1rem;
+  --orpho-s-5:  1.5rem;
+  --orpho-s-6:  2rem;
+  --orpho-s-7:  3rem;
+  --orpho-s-8:  4.5rem;
+  --orpho-s-9:  7rem;
+  --orpho-measure: 1180px;      /* the reference's content column */
+
+  /* ── Radii ─────────────────────────────────────────────────────────────
+   * Archival paper is cut, not rounded. Radii stay near zero except on the
+   * wax seal, which is organic.
+   */
+  --orpho-r-none: 0;
+  --orpho-r-card: 2px;
+  --orpho-r-btn:  1px;
+  --orpho-r-seal: 48% 52% 46% 54% / 52% 46% 54% 48%;
+
+  /* ── Motion ────────────────────────────────────────────────────────────
+   * Long and slow on purpose. The brief is "light moving across physical
+   * paper" — anything under ~6s reads as a web animation, not a material.
+   */
+  --orpho-m-drift:   14s;   /* left-edge engraved ornament parallax */
+  --orpho-m-light:   11s;   /* paper-light wash                     */
+  --orpho-m-float:   10s;   /* receipt hover-float                  */
+  --orpho-m-shimmer: 9s;    /* gold points                          */
+  --orpho-m-hover:   220ms; /* button lift, seal specular           */
+  --orpho-ease:      cubic-bezier(0.4, 0.0, 0.2, 1);
+  --orpho-ease-soft: cubic-bezier(0.37, 0, 0.63, 1); /* sine-ish, for drift */
+}
+
+/* Motion is opt-out at the token level, so a component author cannot forget.
+ * Durations collapse to a value that is effectively static but still valid,
+ * and the drift/float transforms are neutralised in the primitives sheet. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --orpho-m-drift:   0.001ms;
+    --orpho-m-light:   0.001ms;
+    --orpho-m-float:   0.001ms;
+    --orpho-m-shimmer: 0.001ms;
+    --orpho-m-hover:   0.001ms;
+  }
+}

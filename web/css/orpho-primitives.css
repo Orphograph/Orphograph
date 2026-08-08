@@ -1,0 +1,471 @@
+/* orpho-primitives.css — shared surfaces for every Orphograph page.
+ *
+ * Consumes orpho-tokens.css. Load order matters:
+ *   <link rel="stylesheet" href="/css/orpho-tokens.css?v=1">
+ *   <link rel="stylesheet" href="/css/orpho-primitives.css?v=1">
+ *   <link rel="stylesheet" href="/<page>.css?v=N">     <- page overrides last
+ *
+ * CSP: style-src 'self'. No inline styles, no <style>. Textures are data: URIs
+ * (img-src allows data:), which keeps them in this file and off the network.
+ */
+
+/* ══ 1. Paper ════════════════════════════════════════════════════════════
+ * The grain is fractal noise rendered by the browser, not a bitmap: it costs
+ * ~400 bytes instead of a texture request, tiles without a seam, and stays
+ * crisp on any DPR.
+ */
+.orpho-paper,
+body.orpho {
+  background-color: var(--orpho-paper);
+  background-image:
+    linear-gradient(180deg, var(--orpho-paper-lit) 0%, var(--orpho-paper) 38%, var(--orpho-paper-deep) 100%);
+  color: var(--orpho-ink-soft);
+  font-family: var(--orpho-body);
+  font-size: var(--orpho-t-body);
+  line-height: var(--orpho-lh-body);
+  position: relative;
+}
+
+/* Grain overlay + the slow light wash, as one non-interactive layer. */
+body.orpho::before {
+  content: "";
+  position: fixed;
+  inset: -10% -10% -10% -10%;
+  pointer-events: none;
+  z-index: 0;
+  opacity: var(--orpho-grain);
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='260'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='260' height='260' filter='url(%23n)'/%3E%3C/svg%3E");
+  animation: orpho-paper-light var(--orpho-m-light) ease-in-out infinite alternate;
+}
+
+@keyframes orpho-paper-light {
+  from { transform: translate3d(0, 0, 0);        opacity: var(--orpho-grain); }
+  to   { transform: translate3d(-1.1%, 0.8%, 0); opacity: calc(var(--orpho-grain) * 1.35); }
+}
+
+/* ══ 2. Engraved ornament — the cropped crest bleeding off the left edge ══
+ * Reuses the CANONICAL seal artwork. The crest is never redrawn: it is scaled,
+ * desaturated and drifted, but it is the same file the wax seal and the header
+ * logo use.
+ */
+.orpho-ornament {
+  position: absolute;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.085;
+  filter: grayscale(1) contrast(1.15);
+  background: url("/seal-display.png?v=8") no-repeat center / contain;
+  animation: orpho-drift var(--orpho-m-drift) var(--orpho-ease-soft) infinite alternate;
+}
+
+.orpho-ornament--left {
+  left: -22vw;  top: 8vh;
+  width: 46vw;  height: 46vw;
+  max-width: 720px; max-height: 720px;
+}
+
+.orpho-ornament--footer {
+  right: -6vw; bottom: -14vh;
+  width: 30vw; height: 30vw;
+  opacity: 0.05;
+}
+
+@keyframes orpho-drift {
+  from { transform: translate3d(0, 0, 0) rotate(0deg); }
+  to   { transform: translate3d(2.2%, -1.6%, 0) rotate(1.1deg); }
+}
+
+/* ══ 3. Typography ══════════════════════════════════════════════════════ */
+.orpho-display {
+  font-family: var(--orpho-display);
+  font-weight: 400;
+  color: var(--orpho-ink);
+  letter-spacing: -0.012em;
+}
+
+.orpho-hero-title {
+  font-family: var(--orpho-display);
+  font-weight: 400;
+  font-size: var(--orpho-t-hero);
+  line-height: var(--orpho-lh-tight);
+  letter-spacing: -0.018em;
+  color: var(--orpho-ink);
+  margin: 0;
+}
+
+.orpho-label {
+  font-family: var(--orpho-body);
+  font-size: var(--orpho-t-label);
+  letter-spacing: var(--orpho-track-cap);
+  text-transform: uppercase;
+  color: var(--orpho-ink-faint);
+  font-weight: 500;
+}
+
+.orpho-mono {
+  font-family: var(--orpho-mono);
+  font-size: var(--orpho-t-mono);
+  color: var(--orpho-ink-soft);
+  font-variant-ligatures: none;
+}
+
+/* ══ 4. Engraved rule — thin gold line with a lozenge, as in the reference ══ */
+.orpho-rule {
+  display: flex;
+  align-items: center;
+  gap: var(--orpho-s-3);
+  margin: var(--orpho-s-5) 0;
+  border: 0;
+  padding: 0;
+}
+
+.orpho-rule::before {
+  content: "";
+  flex: 1 1 auto;
+  height: 1px;
+  background: linear-gradient(90deg,
+    var(--orpho-gold) 0%,
+    rgba(154, 122, 67, 0.55) 62%,
+    rgba(154, 122, 67, 0) 100%);
+}
+
+.orpho-rule::after {
+  content: "";
+  flex: 0 0 auto;
+  width: 7px; height: 7px;
+  transform: rotate(45deg);
+  background: var(--orpho-gold);
+  opacity: 0.75;
+}
+
+.orpho-rule--centered::after { margin-right: 0; }
+
+/* ══ 5. Buttons ═════════════════════════════════════════════════════════ */
+.orpho-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--orpho-s-3);
+  padding: 0.95rem 1.9rem;
+  font-family: var(--orpho-body);
+  font-size: var(--orpho-t-small);
+  letter-spacing: var(--orpho-track-wide);
+  text-transform: uppercase;
+  text-decoration: none;
+  border-radius: var(--orpho-r-btn);
+  cursor: pointer;
+  transition:
+    transform var(--orpho-m-hover) var(--orpho-ease),
+    box-shadow var(--orpho-m-hover) var(--orpho-ease),
+    background-color var(--orpho-m-hover) var(--orpho-ease);
+}
+
+.orpho-btn--primary {
+  background: var(--orpho-charcoal);
+  color: var(--orpho-paper-lit);
+  border: 1px solid var(--orpho-charcoal);
+  box-shadow: 0 2px 5px var(--orpho-shadow), inset 0 1px 0 rgba(255,255,255,0.07);
+}
+
+.orpho-btn--secondary {
+  background: transparent;
+  color: var(--orpho-ink);
+  border: 1px solid var(--orpho-border-firm);
+  box-shadow: inset 0 1px 0 var(--orpho-emboss-lit);
+}
+
+/* 1–2px lift, per the brief. No scale, no bounce. */
+.orpho-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 14px var(--orpho-shadow-deep);
+}
+.orpho-btn:active { transform: translateY(0); }
+.orpho-btn:focus-visible {
+  outline: 2px solid var(--orpho-gold);
+  outline-offset: 3px;
+}
+
+/* ══ 6. Paper card — embossed sheet on the parchment ════════════════════ */
+.orpho-card {
+  position: relative;
+  background: linear-gradient(174deg, var(--orpho-paper-lit) 0%, var(--orpho-paper) 72%, var(--orpho-paper-deep) 100%);
+  border: 1px solid var(--orpho-border);
+  border-radius: var(--orpho-r-card);
+  box-shadow:
+    0 1px 0 var(--orpho-emboss-lit) inset,
+    0 -1px 0 var(--orpho-emboss-dark) inset,
+    0 10px 26px -12px var(--orpho-shadow);
+  padding: var(--orpho-s-6);
+}
+
+.orpho-card--sunk {
+  background: var(--orpho-paper-sunk);
+  box-shadow:
+    0 2px 4px var(--orpho-emboss-dark) inset,
+    0 -1px 0 var(--orpho-emboss-lit) inset;
+}
+
+/* ══ 7. Receipt — deckle/torn edge, monospace ledger body ═══════════════
+ * The torn edge is a repeating conic mask, not an image: it survives any
+ * width and prints correctly.
+ */
+.orpho-receipt {
+  position: relative;
+  background: linear-gradient(178deg, #fbf7ef 0%, #f5efe2 60%, #ece2ce 100%);
+  border: 1px solid var(--orpho-hairline);
+  box-shadow: 0 14px 34px -16px var(--orpho-shadow-deep);
+  padding: var(--orpho-s-6) var(--orpho-s-6) var(--orpho-s-7);
+  --orpho-tear: 7px;
+  -webkit-mask:
+    radial-gradient(var(--orpho-tear) at 50% 0, #0000 98%, #000) repeat-x 0 0 / 17px var(--orpho-tear),
+    linear-gradient(#000 0 0) no-repeat 0 var(--orpho-tear) / 100% calc(100% - var(--orpho-tear) * 2),
+    radial-gradient(var(--orpho-tear) at 50% 100%, #0000 98%, #000) repeat-x 0 100% / 17px var(--orpho-tear);
+          mask:
+    radial-gradient(var(--orpho-tear) at 50% 0, #0000 98%, #000) repeat-x 0 0 / 17px var(--orpho-tear),
+    linear-gradient(#000 0 0) no-repeat 0 var(--orpho-tear) / 100% calc(100% - var(--orpho-tear) * 2),
+    radial-gradient(var(--orpho-tear) at 50% 100%, #0000 98%, #000) repeat-x 0 100% / 17px var(--orpho-tear);
+}
+
+.orpho-receipt--floating {
+  animation: orpho-float var(--orpho-m-float) var(--orpho-ease-soft) infinite alternate;
+}
+
+@keyframes orpho-float {
+  from { transform: translate3d(0, 0, 0); }
+  to   { transform: translate3d(0, -2px, 0); }
+}
+
+.orpho-receipt__title {
+  font-family: var(--orpho-display);
+  font-size: 1.28rem;
+  letter-spacing: var(--orpho-track-cap);
+  text-transform: uppercase;
+  text-align: center;
+  color: var(--orpho-ink);
+  margin: 0 0 var(--orpho-s-1);
+}
+
+/* Metadata is a definition list — semantic, and it makes the key/value
+ * alignment a grid concern rather than a table hack. */
+.orpho-receipt__meta {
+  display: grid;
+  grid-template-columns: minmax(9rem, auto) 1fr;
+  gap: 0.62rem var(--orpho-s-5);
+  margin: 0;
+}
+.orpho-receipt__meta dt {
+  font-size: var(--orpho-t-label);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--orpho-ink-faint);
+  align-self: start;
+  padding-top: 0.14em;
+}
+.orpho-receipt__meta dd {
+  margin: 0;
+  font-family: var(--orpho-mono);
+  font-size: var(--orpho-t-mono);
+  color: var(--orpho-ink);
+  word-break: break-all;
+}
+
+/* ══ 8. Wax seal ════════════════════════════════════════════════════════
+ * Built from gradients + the canonical crest as a mask, so the impression is
+ * genuinely the Orphograph emblem rather than a generic blob. Specular
+ * highlight shifts on hover — the only "shine" in the system.
+ */
+.orpho-wax {
+  position: relative;
+  width: 128px; height: 128px;
+  border-radius: var(--orpho-r-seal);
+  background:
+    radial-gradient(circle at 34% 28%, var(--orpho-wax-lit) 0%, var(--orpho-wax) 46%, var(--orpho-wax-deep) 100%);
+  box-shadow:
+    0 10px 22px -8px rgba(50, 12, 6, 0.55),
+    inset 0 2px 6px rgba(255, 180, 150, 0.22),
+    inset 0 -6px 14px rgba(40, 8, 4, 0.5);
+  display: grid;
+  place-items: center;
+  transition: box-shadow var(--orpho-m-hover) var(--orpho-ease);
+}
+
+/* The impressed crest: the seal artwork, debossed via mask + inner shadow. */
+.orpho-wax__crest {
+  width: 72%; height: 72%;
+  background: var(--orpho-wax-deep);
+  opacity: 0.72;
+  -webkit-mask: url("/seal-display.png?v=8") no-repeat center / contain;
+          mask: url("/seal-display.png?v=8") no-repeat center / contain;
+  filter: drop-shadow(0 1px 0 rgba(255, 170, 140, 0.28));
+}
+
+.orpho-wax:hover {
+  box-shadow:
+    0 12px 26px -8px rgba(50, 12, 6, 0.6),
+    inset 0 3px 10px rgba(255, 200, 170, 0.34),
+    inset 0 -6px 14px rgba(40, 8, 4, 0.5);
+}
+
+/* ══ 9. Emboss — for the envelope flap crest and paper marks ════════════ */
+.orpho-emboss {
+  -webkit-mask: url("/seal-display.png?v=8") no-repeat center / contain;
+          mask: url("/seal-display.png?v=8") no-repeat center / contain;
+  background: var(--orpho-paper);
+  box-shadow: none;
+  filter:
+    drop-shadow(0 1px 0 var(--orpho-emboss-lit))
+    drop-shadow(0 -1px 0 var(--orpho-emboss-dark));
+  opacity: 0.55;
+  transition: filter var(--orpho-m-hover) var(--orpho-ease);
+}
+
+/* ══ 10. Header ═════════════════════════════════════════════════════════ */
+.orpho-header {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: var(--orpho-s-6);
+  max-width: var(--orpho-measure);
+  margin: 0 auto;
+  padding: var(--orpho-s-5) var(--orpho-s-5);
+}
+
+.orpho-brand { display: flex; align-items: center; gap: var(--orpho-s-4); text-decoration: none; }
+.orpho-brand__mark { width: 62px; height: 62px; flex: 0 0 62px; }
+.orpho-brand__name {
+  font-family: var(--orpho-display);
+  font-size: 1.85rem;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+  color: var(--orpho-ink);
+  line-height: 1;
+}
+.orpho-brand__sub {
+  font-size: var(--orpho-t-label);
+  letter-spacing: var(--orpho-track-cap);
+  text-transform: uppercase;
+  color: var(--orpho-ink-faint);
+  margin-top: 0.3rem;
+}
+
+.orpho-nav { display: flex; align-items: center; gap: var(--orpho-s-6); margin-left: auto; }
+.orpho-nav a {
+  font-size: var(--orpho-t-small);
+  color: var(--orpho-ink-soft);
+  text-decoration: none;
+  padding-bottom: 2px;
+  border-bottom: 1px solid transparent;
+  transition: border-color var(--orpho-m-hover) var(--orpho-ease);
+}
+.orpho-nav a:hover { border-bottom-color: var(--orpho-gold); }
+
+/* ══ 11. Feature strip ══════════════════════════════════════════════════ */
+.orpho-features {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  max-width: var(--orpho-measure);
+  margin: var(--orpho-s-8) auto;
+}
+.orpho-features > * + * { border-left: 1px solid var(--orpho-hairline); }
+.orpho-feature { padding: var(--orpho-s-5) var(--orpho-s-4); text-align: center; }
+.orpho-feature__icon { width: 42px; height: 42px; margin: 0 auto var(--orpho-s-3); opacity: 0.8; }
+
+/* ══ 12. Footer ═════════════════════════════════════════════════════════ */
+.orpho-footer {
+  position: relative;
+  overflow: hidden;
+  background: var(--orpho-charcoal);
+  color: rgba(240, 234, 222, 0.78);
+  margin-top: var(--orpho-s-9);
+  padding: var(--orpho-s-8) var(--orpho-s-5) var(--orpho-s-5);
+}
+.orpho-footer::before {
+  content: "";
+  position: absolute; inset: 0;
+  pointer-events: none;
+  opacity: var(--orpho-grain-deep);
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='f'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23f)'/%3E%3C/svg%3E");
+}
+.orpho-footer a { color: rgba(240, 234, 222, 0.78); text-decoration: none; }
+.orpho-footer a:hover { color: var(--orpho-gold-lit); }
+.orpho-footer__grid {
+  position: relative; z-index: 1;
+  display: grid;
+  grid-template-columns: 1.35fr repeat(3, 0.85fr) 1.1fr auto;
+  gap: var(--orpho-s-6);
+  max-width: var(--orpho-measure);
+  margin: 0 auto;
+}
+.orpho-footer__heading {
+  font-size: var(--orpho-t-label);
+  letter-spacing: var(--orpho-track-cap);
+  text-transform: uppercase;
+  color: rgba(240, 234, 222, 0.55);
+  margin-bottom: var(--orpho-s-4);
+}
+
+/* Bronze medallion, far right — the canonical crest again. */
+.orpho-footer__medallion {
+  width: 150px; height: 150px;
+  align-self: center;
+  -webkit-mask: url("/seal-display.png?v=8") no-repeat center / contain;
+          mask: url("/seal-display.png?v=8") no-repeat center / contain;
+  background: radial-gradient(circle at 36% 30%, #7a6238 0%, #4a3a20 62%, #2a2114 100%);
+  opacity: 0.62;
+}
+
+/* ══ 13. Gold shimmer points ════════════════════════════════════════════ */
+.orpho-spark {
+  position: absolute;
+  width: 3px; height: 3px;
+  border-radius: 50%;
+  background: var(--orpho-gold-lit);
+  opacity: 0.3;
+  pointer-events: none;
+  animation: orpho-shimmer var(--orpho-m-shimmer) ease-in-out infinite alternate;
+}
+@keyframes orpho-shimmer {
+  from { opacity: 0.12; }
+  to   { opacity: 0.55; }
+}
+
+/* ══ 14. Status badges — semantics stay legible under the ornament ══════ */
+.orpho-status { display: inline-flex; align-items: center; gap: var(--orpho-s-2);
+  font-size: var(--orpho-t-label); letter-spacing: 0.1em; text-transform: uppercase;
+  padding: 0.3rem 0.7rem; border: 1px solid var(--orpho-border); border-radius: var(--orpho-r-card); }
+.orpho-status--verified { color: #2f5233; border-color: rgba(47, 82, 51, 0.4); background: rgba(47, 82, 51, 0.07); }
+.orpho-status--pending  { color: #6b5320; border-color: rgba(107, 83, 32, 0.4); background: rgba(154, 122, 67, 0.09); }
+.orpho-status--invalid  { color: #6e2418; border-color: rgba(110, 36, 24, 0.4); background: rgba(110, 36, 24, 0.07); }
+
+/* ══ 15. Reduced motion — belt and braces ═══════════════════════════════
+ * Tokens already collapse the durations; this also neutralises the transforms
+ * so nothing is left mid-drift at an offset position.
+ */
+@media (prefers-reduced-motion: reduce) {
+  body.orpho::before,
+  .orpho-ornament,
+  .orpho-receipt--floating,
+  .orpho-spark { animation: none !important; transform: none !important; }
+  .orpho-btn:hover { transform: none; }
+}
+
+/* ══ 16. Responsive — preserve hierarchy, don't just shrink ═════════════ */
+@media (max-width: 1040px) {
+  .orpho-features { grid-template-columns: repeat(2, 1fr); }
+  .orpho-features > * + * { border-left: 0; }
+  .orpho-features > * { border-top: 1px solid var(--orpho-hairline); }
+  .orpho-footer__grid { grid-template-columns: 1fr 1fr; }
+  .orpho-footer__medallion { width: 110px; height: 110px; }
+}
+
+@media (max-width: 680px) {
+  .orpho-header { flex-wrap: wrap; gap: var(--orpho-s-4); padding: var(--orpho-s-4); }
+  .orpho-nav { order: 3; width: 100%; overflow-x: auto; gap: var(--orpho-s-5); }
+  .orpho-features { grid-template-columns: 1fr; }
+  .orpho-footer__grid { grid-template-columns: 1fr; }
+  .orpho-ornament--left { left: -46vw; width: 92vw; height: 92vw; opacity: 0.06; }
+  .orpho-wax { width: 96px; height: 96px; }
+  .orpho-brand__mark { width: 48px; height: 48px; flex-basis: 48px; }
+  .orpho-brand__name { font-size: 1.45rem; }
+}
