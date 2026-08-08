@@ -432,3 +432,49 @@
   .orpho-hiw__steps { max-width: none; }
   .orpho-footer > .orpho-footer__medallion { display: none; }
 }
+
+/* ══ How It Works ⇄ Sample receipt, paired ══════════════════════════════
+ * The reference sets the five-step flow against the sample receipt on one
+ * baseline. They are separate <section>s (the receipt carries #proof and its
+ * own JS), so the pairing is done by a wrapper grid rather than by nesting
+ * one inside the other — no content moves, no hook is disturbed.
+ *
+ * Ratio is not 50/50: the steps column is narrower, matching the reference,
+ * and the receipt is the heavier object on the right.
+ */
+.orpho-pair {
+  display: grid;
+  grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr);
+  gap: var(--orpho-s-7);
+  align-items: start;
+  max-width: var(--orpho-measure);
+  margin: 0 auto var(--orpho-s-8);
+  padding: 0 var(--orpho-s-5);
+}
+
+/* Both children already carry their own max-width/margin for the standalone
+ * case; inside the pair they must fill their grid cell instead. */
+.orpho-pair > .orpho-hiw,
+.orpho-pair > .orpho-sample {
+  max-width: none;
+  margin: 0;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.orpho-pair > .orpho-sample { padding: var(--orpho-s-6); }
+.orpho-pair .orpho-hiw__inner { max-width: none; padding: 0; }
+.orpho-pair .orpho-hiw__steps { max-width: none; }
+
+/* Optical alignment: the steps' first line should sit level with the
+ * receipt card's first line, and the card has border + padding above it. */
+.orpho-pair > .orpho-hiw { padding-top: var(--orpho-s-6); }
+
+@media (max-width: 1040px) {
+  .orpho-pair {
+    grid-template-columns: 1fr;
+    gap: var(--orpho-s-6);
+    padding: 0 var(--orpho-s-4);
+  }
+  .orpho-pair > .orpho-hiw { padding-top: 0; }
+}

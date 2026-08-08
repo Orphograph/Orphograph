@@ -271,6 +271,10 @@
      sample receipt on the right. The receipt section below already exists
      and carries the live data, so this column sits beside it rather than
      duplicating it. An <ol> because the order is the meaning. -->
+<!-- How It Works + sample receipt, paired side by side per the reference.
+     A pure structural wrapper: neither section's content moves, so every
+     id and JS hook inside #proof is untouched. -->
+<div class="orpho-pair">
 <section class="orpho-hiw" aria-labelledby="orpho-hiw-title">
   <div class="orpho-hiw__inner">
     <div class="orpho-hiw__steps">
@@ -316,6 +320,7 @@
     <p class="fineprint">A real receipt. Open it, drop the original file, and watch it match — no account, no trust in us required.</p>
   </div>
 </section>
+</div>
 
 <!-- ─────────────────────── stats-row fix · trust strip ─────────────────────── -->
 <div class="trust-strip">
