@@ -141,7 +141,7 @@
         <hr class="orpho-rule orpho-rule--centered">
         <dl class="orpho-receipt__meta">
           <dt>File</dt>            <dd>whitepaper.pdf</dd>
-          <dt>Hash (SHA256)</dt>   <dd>2f7c4e0b8e3a3f6d9c0a1b2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2</dd>
+          <dt>Hash (SHA256)</dt>   <dd>2f7c4e0b8e3a3f6d9c0a1b2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a</dd>
           <dt>Size</dt>            <dd>1.42 MB</dd>
           <dt>Timestamp (UTC)</dt> <dd>2026-05-20 14:37:22</dd>
           <dt>Bitcoin block</dt>   <dd>897,736</dd>
@@ -266,8 +266,44 @@
   </div>
 </section>
 
+<!-- ─────────────────────── 4b · HOW IT WORKS ───────────────────────
+     The reference pairs a numbered five-step flow on the left with the
+     sample receipt on the right. The receipt section below already exists
+     and carries the live data, so this column sits beside it rather than
+     duplicating it. An <ol> because the order is the meaning. -->
+<section class="orpho-hiw" aria-labelledby="orpho-hiw-title">
+  <div class="orpho-hiw__inner">
+    <div class="orpho-hiw__steps">
+      <h2 class="orpho-label orpho-hiw__title" id="orpho-hiw-title">How it works</h2>
+      <hr class="orpho-rule">
+      <ol class="orpho-steps">
+        <li class="orpho-step">
+          <h3 class="orpho-step__title">You select a file</h3>
+          <p class="orpho-step__body">Your file never leaves your computer.</p>
+        </li>
+        <li class="orpho-step">
+          <h3 class="orpho-step__title">We create a cryptographic fingerprint</h3>
+          <p class="orpho-step__body">A SHA-256 hash is generated locally.</p>
+        </li>
+        <li class="orpho-step">
+          <h3 class="orpho-step__title">We timestamp it 5 times</h3>
+          <p class="orpho-step__body">Using 5 independent OpenTimestamps calendars.</p>
+        </li>
+        <li class="orpho-step">
+          <h3 class="orpho-step__title">We anchor it in Bitcoin</h3>
+          <p class="orpho-step__body">The combined proof is committed to the blockchain.</p>
+        </li>
+        <li class="orpho-step">
+          <h3 class="orpho-step__title">You receive a receipt</h3>
+          <p class="orpho-step__body">Keep it. Share it. Verify it. Forever.</p>
+        </li>
+      </ol>
+    </div>
+  </div>
+</section>
+
 <!-- ─────────────────────── 5 · LIVE RECEIPT CARD ─────────────────────── -->
-<section class="sample-receipt-section" id="proof" aria-labelledby="live-receipt-title">
+<section class="sample-receipt-section orpho-card orpho-sample" id="proof" aria-labelledby="live-receipt-title">
   <div class="sample-receipt-card">
     <img class="receipt-seal" src="/seal.png?v=8" alt="Orphograph seal">
     <div class="eyebrow">Live Orphograph receipt</div>
@@ -344,7 +380,8 @@
   </div>
 </section>
 
-<footer class="site">
+<footer class="site orpho-footer">
+  <span class="orpho-footer__medallion" aria-hidden="true"></span>
   <div class="wrap">
     <div class="made-for">
       <span class="made-for-label">Made for</span>

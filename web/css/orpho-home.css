@@ -325,3 +325,110 @@
   /* Below this the nowrap would overflow; allow the reflow. */
   .orpho-hero-title__line { white-space: normal; }
 }
+
+/* ══ How It Works ═══════════════════════════════════════════════════════
+ * Numbered vertical flow. The numerals are engraved discs joined by a
+ * hairline rule, drawn with counters + pseudo-elements so the markup stays a
+ * plain <ol> and the order remains semantic.
+ */
+.orpho-hiw { padding: 0 var(--orpho-s-5) var(--orpho-s-6); }
+.orpho-hiw__inner { max-width: var(--orpho-measure); margin: 0 auto; }
+.orpho-hiw__steps { max-width: 30rem; }
+.orpho-hiw__title { font-size: 0.82rem; letter-spacing: var(--orpho-track-wide); }
+
+.orpho-steps {
+  counter-reset: orpho-step;
+  list-style: none;
+  margin: var(--orpho-s-5) 0 0;
+  padding: 0;
+}
+
+.orpho-step {
+  counter-increment: orpho-step;
+  position: relative;
+  padding: 0 0 var(--orpho-s-5) 3.4rem;
+}
+
+/* The engraved numeral disc. */
+.orpho-step::before {
+  content: counter(orpho-step);
+  position: absolute;
+  left: 0; top: 0;
+  width: 2.1rem; height: 2.1rem;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--orpho-gold);
+  border-radius: 50%;
+  font-family: var(--orpho-body);
+  font-size: 0.85rem;
+  color: var(--orpho-gold-deep);
+  background: var(--orpho-paper-lit);
+  box-shadow: inset 0 1px 0 var(--orpho-emboss-lit);
+}
+
+/* Hairline connector between discs; suppressed on the last step. */
+.orpho-step::after {
+  content: "";
+  position: absolute;
+  left: 1.05rem; top: 2.35rem; bottom: 0.35rem;
+  width: 1px;
+  background: repeating-linear-gradient(180deg,
+    var(--orpho-border) 0 3px, transparent 3px 6px);
+}
+.orpho-step:last-child { padding-bottom: 0; }
+.orpho-step:last-child::after { content: none; }
+
+.orpho-step__title {
+  font-family: var(--orpho-body);
+  font-size: 1.02rem;
+  font-weight: 600;
+  color: var(--orpho-ink);
+  margin: 0.16rem 0 0.22rem;
+  line-height: 1.35;
+}
+.orpho-step__body {
+  font-size: var(--orpho-t-small);
+  color: var(--orpho-ink-faint);
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* ══ Sample receipt card ════════════════════════════════════════════════ */
+.orpho-sample {
+  max-width: var(--orpho-measure);
+  margin: 0 auto var(--orpho-s-8);
+}
+
+/* ══ Footer ═════════════════════════════════════════════════════════════
+ * The existing footer markup is untouched — it carries the link columns,
+ * the brand line and the legal disclaimer, which is a compliance
+ * requirement. Only the ground, the ink and the medallion are new.
+ */
+.orpho-footer .wrap { position: relative; z-index: 1; }
+.orpho-footer .brand-line,
+.orpho-footer .legal-disclaimer { color: rgba(240, 234, 222, 0.5); }
+.orpho-footer summary { color: rgba(240, 234, 222, 0.78); cursor: pointer; }
+.orpho-footer .legal-disclaimer {
+  border-top: 1px solid rgba(240, 234, 222, 0.12);
+  margin-top: var(--orpho-s-5);
+  padding-top: var(--orpho-s-4);
+  font-size: var(--orpho-t-small);
+  line-height: 1.55;
+}
+
+/* Bronze medallion, far right, behind the content. */
+.orpho-footer > .orpho-footer__medallion {
+  position: absolute;
+  right: 4%; top: 50%;
+  transform: translateY(-50%);
+  z-index: 0;
+  pointer-events: none;
+}
+
+@media (max-width: 1040px) {
+  .orpho-footer > .orpho-footer__medallion { opacity: 0.3; right: -4%; }
+}
+@media (max-width: 680px) {
+  .orpho-hiw__steps { max-width: none; }
+  .orpho-footer > .orpho-footer__medallion { display: none; }
+}

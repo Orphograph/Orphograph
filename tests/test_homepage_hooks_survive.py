@@ -118,6 +118,23 @@ class TestHomepageHooksSurvive(unittest.TestCase):
                 "XwTULwlh76PcCst9", self.html,
                 "The canonical sample receipt is XwTULwlh76PcCst9.")
 
+    def test_every_displayed_sha256_is_64_hex(self):
+        """A hash that is the wrong length is a credibility bug on a product
+        whose entire subject is hashes.
+
+        The 2026-08-08 reference mockup shipped a 63-character SHA-256 in the
+        hero receipt and it was copied in verbatim. Caught by a security
+        review, not by a human reading it — nobody counts 64 characters by
+        eye, which is exactly why this is a test and not a review checklist
+        item.
+        """
+        # Any long hex run rendered as receipt metadata. 40 is the floor so
+        # short ids and colour literals are not swept in.
+        for run in re.findall(r"\b[0-9a-f]{40,}\b", self.html):
+            self.assertEqual(
+                len(run), 64,
+                f"displayed hash is {len(run)} hex chars, not 64: {run}")
+
     def test_crest_asset_is_the_canonical_one(self):
         """The medallion is never redrawn. Any crest on the page must point
         at the shipped artwork, not an inline SVG reinvention."""
