@@ -31,12 +31,25 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 WEB = ROOT / "web"
 
-# The ten pages sharing the `nav` header + /index.css base.
-CORE_PAGES = [
-    "verify-js.html", "pricing.html", "faq.html", "mcp.html", "access.html",
-    "status.html", "security.html", "writers.html", "about-the-office.html",
-    "integrations.html",
-]
+# Pages are DISCOVERED by shape, not listed by hand. Anything carrying the
+# shared `<header class="nav">` and loading /index.css is migratable; every
+# other shape is skipped with a reason. Hand-maintaining a list across 106
+# pages guarantees an omission, and an omitted page is an invisible one.
+EXCLUDE_DIRS = {"_mockups", "dist", "construction"}
+# v2/index.html is the dormant dark A/B arm; founder/ is not customer-facing.
+EXCLUDE_FILES = {"v2/index.html", "index-legacy.html"}
+
+
+def discover() -> list[Path]:
+    out = []
+    for f in sorted(WEB.rglob("*.html")):
+        rel = f.relative_to(WEB).as_posix()
+        if any(part in EXCLUDE_DIRS for part in f.relative_to(WEB).parts):
+            continue
+        if rel in EXCLUDE_FILES or rel.startswith("founder/"):
+            continue
+        out.append(f)
+    return out
 
 TOKENS = '<link rel="stylesheet" href="/css/orpho-tokens.css?v=1">'
 PRIMS = '<link rel="stylesheet" href="/css/orpho-primitives.css?v=1">'
@@ -113,19 +126,25 @@ def main() -> int:
     args = ap.parse_args()
 
     done = skipped = 0
-    for name in CORE_PAGES:
-        p = WEB / name
-        if not p.exists():
-            print(f"  {name:26} MISSING"); skipped += 1; continue
+    reasons: dict[str, int] = {}
+    for p in discover():
+        name = p.relative_to(WEB).as_posix()
         if not args.apply:
-            state = "already migrated" if "orpho-tokens.css" in p.read_text() else "would migrate"
-            print(f"  {name:26} {state}"); continue
+            txt = p.read_text()
+            if "orpho-tokens.css" in txt: continue
+            state = "would migrate" if '<header class="nav">' in txt else "SKIP (shape)"
+            print(f"  {name:42} {state}"); continue
         ok, why = migrate(p)
-        print(f"  {name:26} {why}")
+        if ok:
+            print(f"  {name:42} migrated")
+        reasons[why] = reasons.get(why, 0) + 1
         done += ok; skipped += (not ok)
 
     if args.apply:
         print(f"\n{done} migrated, {skipped} skipped")
+        for why, n in sorted(reasons.items(), key=lambda kv: -kv[1]):
+            if why != "migrated":
+                print(f"    {n:3}  {why}")
     return 0
 
 

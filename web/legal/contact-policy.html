@@ -12,21 +12,27 @@
 <meta property="og:title" content="Orphograph — Contact and Persona Policy">
 <meta property="og:url" content="https://orphograph.com/legal/contact-policy">
 <meta property="og:image" content="https://orphograph.com/og-image.png?v=8">
+<link rel="stylesheet" href="/css/orpho-tokens.css?v=1">
+<link rel="stylesheet" href="/css/orpho-primitives.css?v=1">
 <link rel="stylesheet" href="/index.css?v=21">
 <link rel="stylesheet" href="/legal/contact-policy.css?v=1">
 </head>
-<body>
+<body class="orpho">
 
-<header class="nav">
-  <div class="wrap row">
-    <a href="/" class="brand">Orphograph</a>
-    <nav>
-      <a href="/legal/">Legal</a>
+<header class="orpho-header nav">
+  <a href="/" class="orpho-brand brand">
+    <img class="orpho-brand__mark" src="/seal-display.png?v=8" alt="" width="62" height="62">
+    <span class="orpho-brand__text">
+      <span class="orpho-brand__name">Orphograph</span>
+      <span class="orpho-brand__sub">Empirical Notary</span>
+    </span>
+  </a>
+  <nav class="orpho-nav">
+    <a href="/legal/">Legal</a>
       <a href="/faq">FAQ</a>
       <a href="/signin">Sign in</a>
       <a href="/#drop" class="cta">Anchor a file</a>
-    </nav>
-  </div>
+  </nav>
 </header>
 
 <main class="lgl-wrap">
@@ -69,6 +75,10 @@
       <a href="/terms" style="color:var(--muted);">Terms</a> ·
       <a href="/privacy" style="color:var(--muted);">Privacy</a>
     </p>
+  </div>
+  <!-- legal-disclaimer -->
+  <div class="wrap legal-disclaimer">
+    Orphograph is not a law firm, not a notary, and not a qualified electronic-trust-service provider — a receipt is cryptographic proof that a file existed before a point in time, not legal advice.
   </div>
 </footer>
 
