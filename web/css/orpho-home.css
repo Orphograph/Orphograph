@@ -1,0 +1,481 @@
+/* orpho-home.css — homepage composition only.
+ * Shared surfaces live in orpho-primitives.css; this file positions them into
+ * the asymmetric two-column hero from the reference. Loaded after primitives,
+ * before index.css (which still owns the anchoring instrument below the fold).
+ */
+
+/* ── Hero grid ──────────────────────────────────────────────────────────
+ * The reference is deliberately NOT 50/50: the lede column is narrower and
+ * the envelope plate overhangs the right edge. Preserving that asymmetry is
+ * most of what makes it read as editorial rather than SaaS.
+ */
+.orpho-hero {
+  position: relative;
+  overflow: hidden;
+  padding: var(--orpho-s-7) var(--orpho-s-5) var(--orpho-s-8);
+}
+
+.orpho-hero__inner {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 0.86fr) minmax(0, 1.04fr);
+  gap: var(--orpho-s-7);
+  align-items: start;
+  max-width: var(--orpho-measure);
+  margin: 0 auto;
+}
+
+.orpho-hero__lede { padding-top: var(--orpho-s-6); }
+
+.orpho-hero__copy {
+  font-size: 1.09rem;
+  line-height: 1.78;
+  color: var(--orpho-ink-soft);
+  margin: 0 0 var(--orpho-s-6);
+}
+
+.orpho-hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--orpho-s-4);
+  margin-bottom: var(--orpho-s-7);
+}
+
+.orpho-hero__trust {
+  font-size: var(--orpho-t-small);
+  line-height: 1.55;
+  color: var(--orpho-ink-faint);
+  padding-left: 2.6rem;
+  position: relative;
+}
+
+/* The small shield glyph before the trust line, drawn in CSS rather than
+ * shipped as another asset. */
+.orpho-hero__trust::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 0.15rem;
+  width: 1.7rem; height: 1.9rem;
+  border: 1px solid var(--orpho-border-firm);
+  border-radius: 3px 3px 46% 46% / 3px 3px 34% 34%;
+  box-shadow: inset 0 1px 0 var(--orpho-emboss-lit);
+}
+
+/* ── The plate: envelope, receipt, wax ──────────────────────────────────
+ * Three stacked layers. The receipt is the hero of the composition, so it
+ * sits highest in z and overhangs the envelope's left edge.
+ */
+.orpho-hero__plate {
+  position: relative;
+  min-height: 640px;
+}
+
+.orpho-envelope {
+  position: absolute;
+  inset: 0 -6% 12% 8%;
+  background: linear-gradient(168deg, #f7f2e7 0%, #efe7d6 54%, #e2d7c0 100%);
+  border: 1px solid var(--orpho-hairline);
+  border-radius: 3px;
+  box-shadow: 0 22px 50px -22px var(--orpho-shadow-deep),
+              inset 0 1px 0 var(--orpho-emboss-lit);
+}
+
+/* Upper flap — a folded triangle rendered with a clip-path so the crease
+ * catches light along its lower edge. */
+.orpho-envelope__flap {
+  position: absolute;
+  left: 0; right: 0; top: 0;
+  height: 27%;
+  background: linear-gradient(180deg, #f9f4ea 0%, #ece2cf 100%);
+  border-bottom: 1px solid var(--orpho-border);
+  clip-path: polygon(0 0, 100% 0, 100% 62%, 50% 100%, 0 62%);
+  box-shadow: 0 1px 0 var(--orpho-emboss-lit);
+}
+
+/* String-and-button closure: two brass discs. */
+.orpho-envelope__closure {
+  position: absolute;
+  left: 50%; top: 5%;
+  width: 26px; height: 26px;
+  margin-left: -13px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 36% 32%, #d8b878 0%, var(--orpho-brass) 52%, #7d6132 100%);
+  box-shadow: 0 2px 4px var(--orpho-shadow-deep), inset 0 1px 0 rgba(255,240,210,0.5);
+}
+.orpho-envelope__closure::after {
+  content: "";
+  position: absolute;
+  left: 0; top: 300%;
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 36% 32%, #d8b878 0%, var(--orpho-brass) 52%, #7d6132 100%);
+  box-shadow: 0 2px 4px var(--orpho-shadow-deep), inset 0 1px 0 rgba(255,240,210,0.5);
+}
+
+/* Embossed crest on the upper-right flap. Light shifts with the pointer via
+ * the :hover on the plate — the only pointer-reactive lighting in the hero. */
+.orpho-envelope__crest {
+  position: absolute;
+  right: 6%; top: 9%;
+  width: 92px; height: 92px;
+}
+.orpho-hero__plate:hover .orpho-envelope__crest {
+  filter: drop-shadow(0 -1px 0 var(--orpho-emboss-lit))
+          drop-shadow(0 1px 0 var(--orpho-emboss-dark));
+  opacity: 0.68;
+}
+
+/* Receipt sits over the envelope, overhanging its left edge. */
+.orpho-hero__receipt {
+  position: absolute;
+  left: 0; right: 22%; top: 17%;
+  z-index: 2;
+}
+
+.orpho-receipt__sub { text-align: center; display: block; margin: 0 0 var(--orpho-s-2); }
+
+.orpho-receipt__sig {
+  font-family: var(--orpho-display);
+  font-style: italic;
+  font-size: 1.6rem;
+  text-align: center;
+  color: var(--orpho-ink);
+  margin: var(--orpho-s-6) 0 0;
+  padding-bottom: var(--orpho-s-2);
+  border-bottom: 1px solid var(--orpho-hairline);
+}
+.orpho-receipt__sig-sub { display: block; text-align: center; margin-top: var(--orpho-s-2); }
+
+/* Wax seal, lower right, overlapping receipt and envelope. */
+.orpho-hero__wax {
+  position: absolute;
+  right: 2%; bottom: 14%;
+  z-index: 3;
+}
+
+/* ── Feature strip ──────────────────────────────────────────────────────
+ * One card, five cells, hairline separators — not five floating cards.
+ */
+.orpho-features-wrap {
+  max-width: var(--orpho-measure);
+  margin: 0 auto var(--orpho-s-8);
+  padding: var(--orpho-s-4) var(--orpho-s-2);
+}
+.orpho-features { list-style: none; margin: 0; padding: 0; }
+.orpho-feature__title {
+  font-family: var(--orpho-body);
+  font-size: 0.97rem;
+  font-weight: 600;
+  color: var(--orpho-ink);
+  margin: 0 0 var(--orpho-s-3);
+  line-height: 1.32;
+}
+.orpho-feature__body {
+  font-size: var(--orpho-t-small);
+  color: var(--orpho-ink-faint);
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* ── Responsive ─────────────────────────────────────────────────────────
+ * Mobile keeps the hierarchy: headline, copy, actions, then the plate as a
+ * shorter but still-layered composition. It does not become a flat list.
+ */
+@media (max-width: 1040px) {
+  .orpho-hero__inner { grid-template-columns: 1fr; gap: var(--orpho-s-6); }
+  .orpho-hero__plate { min-height: 560px; }
+  .orpho-envelope { inset: 0 0 10% 0; }
+  .orpho-hero__receipt { right: 14%; }
+}
+
+@media (max-width: 680px) {
+  .orpho-hero { padding: var(--orpho-s-5) var(--orpho-s-4) var(--orpho-s-7); }
+  .orpho-hero__copy br { display: none; }   /* let it reflow naturally */
+  .orpho-hero__plate { min-height: 470px; }
+  .orpho-hero__receipt { left: 0; right: 8%; top: 13%; }
+  .orpho-hero__wax { right: 0; bottom: 8%; }
+  .orpho-envelope__crest { width: 62px; height: 62px; }
+  .orpho-hero__actions .orpho-btn { flex: 1 1 100%; }
+}
+
+/* ══ Fidelity corrections, pass 1 (2026-08-08) ══════════════════════════
+ * Measured against the reference render at 1440px. Each block below fixes a
+ * specific deviation observed in the screenshot, not a guess.
+ */
+
+/* 1. The legacy .hero rule centres everything. The reference is left-aligned
+ *    editorial. Scope the override to the new hero so other pages that still
+ *    use .hero are untouched. */
+.orpho-hero.hero,
+.orpho-hero .orpho-hero__lede,
+.orpho-hero .orpho-hero__copy,
+.orpho-hero .orpho-hero__actions,
+.orpho-hero .orpho-hero__trust { text-align: left; }
+.orpho-hero .orpho-hero__actions { justify-content: flex-start; }
+
+/* 2. Headline wrapped to three lines because the lede column was too narrow.
+ *    The reference breaks exactly twice: "Proof that it existed." /
+ *    "For all time." Widen the column and let the <br> do the work. */
+.orpho-hero__inner { grid-template-columns: minmax(0, 1.02fr) minmax(0, 1.06fr); }
+.orpho-hero-title { font-size: clamp(2.5rem, 4.4vw, 3.75rem); max-width: 13ch; }
+.orpho-hero__copy { max-width: 46ch; }
+
+/* 3. The impressed crest was --orpho-wax-deep on wax red: dark on dark, so it
+ *    vanished. A real wax impression reads as a LIGHTER relief catching light
+ *    from the top-left plus a dark occlusion below it. */
+.orpho-wax__crest {
+  background: linear-gradient(155deg,
+    rgba(255, 196, 168, 0.55) 0%,
+    rgba(190, 96, 68, 0.42) 42%,
+    rgba(58, 14, 8, 0.62) 100%);
+  opacity: 0.95;
+  filter:
+    drop-shadow(0 1px 0 rgba(255, 190, 160, 0.30))
+    drop-shadow(0 -1px 1px rgba(45, 10, 5, 0.55));
+}
+
+/* 4. Envelope: the flap and emboss were too low-contrast to read at all. */
+.orpho-envelope { background: linear-gradient(168deg, #f6f0e3 0%, #ebe1cd 54%, #ddd0b6 100%); }
+.orpho-envelope__flap {
+  height: 30%;
+  background: linear-gradient(180deg, #fbf6ed 0%, #e9dfc9 100%);
+  border-bottom: 1px solid var(--orpho-border-firm);
+  filter: drop-shadow(0 2px 3px rgba(90, 70, 44, 0.16));
+}
+.orpho-envelope__crest {
+  opacity: 0.9;
+  background: linear-gradient(150deg, #cdbf9f 0%, #b9a883 55%, #8e7c58 100%);
+  filter:
+    drop-shadow(0 1px 0 rgba(255, 252, 245, 0.9))
+    drop-shadow(0 -1px 1px rgba(90, 70, 44, 0.45));
+}
+
+/* 5. The CSS shield glyph rendered as an empty box. The reference's mark is a
+ *    small outlined shield with a tick; until that asset exists, drop the
+ *    pseudo-element rather than ship a stray rectangle. */
+.orpho-hero__trust { padding-left: 0; }
+.orpho-hero__trust::before { content: none; }
+
+/* 6. Ornament sat too high and too pale to read as engraving. */
+.orpho-ornament--left { left: -26vw; top: 14vh; opacity: 0.12; }
+
+/* ══ Fidelity corrections, pass 2 ═══════════════════════════════════════
+ * The crest PNG's alpha is DISC-shaped, not line-art-shaped: transparent
+ * outside the medallion, fully opaque inside it. Using it as a CSS mask
+ * therefore paints a solid circle — which is exactly what pass 1 rendered.
+ * The artwork must be composited, not masked. mix-blend-mode lets the dark
+ * engraving show while the cream ground drops out, and it keeps the shipped
+ * artwork byte-identical (the medallion is never redrawn).
+ */
+.orpho-wax__crest,
+.orpho-envelope__crest {
+  -webkit-mask: none;
+  mask: none;
+  background: none;
+  object-fit: contain;
+}
+
+.orpho-wax__crest {
+  width: 78%; height: 78%;
+  mix-blend-mode: multiply;
+  opacity: 0.55;
+  filter: contrast(1.3) brightness(0.85);
+}
+
+.orpho-envelope__crest {
+  mix-blend-mode: multiply;
+  opacity: 0.3;
+  filter: grayscale(1) contrast(0.9);
+}
+.orpho-hero__plate:hover .orpho-envelope__crest { opacity: 0.42; }
+
+/* Headline: 13ch was too tight and forced a third line. The reference breaks
+ * only at the authored <br>. */
+.orpho-hero-title { max-width: none; }
+
+/* Copy: the authored <br>s plus a narrow measure produced a ragged four
+ * lines. Widen the measure so each authored line fits on one visual line. */
+.orpho-hero__copy { max-width: 60ch; }
+
+/* ══ Fidelity corrections, pass 3 ═══════════════════════════════════════
+ * "Proof that it existed." must sit on ONE line, breaking only at the
+ * authored <br>. At 3.75rem Fraunces that string needs ~640px but the lede
+ * column is ~570px, so it wrapped. Trade a little display size for the
+ * correct break — the reference's two-line lockup is the point, and a
+ * three-line headline changes the whole rhythm of the page.
+ */
+.orpho-hero-title {
+  font-size: clamp(2.1rem, 3.5vw, 3.15rem);
+  text-wrap: balance;
+}
+.orpho-hero__inner { grid-template-columns: minmax(0, 1.08fr) minmax(0, 1.0fr); }
+
+/* ══ Fidelity corrections, pass 4 ═══════════════════════════════════════
+ * `text-wrap: balance` distributed the headline evenly across three lines,
+ * which is worse than the raw wrap — it optimises for even ragging, not for
+ * the authored break. The break points are a design decision, so state them
+ * as structure (two block spans) instead of hoping a font-size lands right.
+ * Each line then shrinks to fit rather than wrapping.
+ */
+.orpho-hero-title { text-wrap: initial; font-size: clamp(2rem, 3.9vw, 3.4rem); }
+.orpho-hero-title__line { display: block; white-space: nowrap; }
+
+@media (max-width: 560px) {
+  /* Below this the nowrap would overflow; allow the reflow. */
+  .orpho-hero-title__line { white-space: normal; }
+}
+
+/* ══ How It Works ═══════════════════════════════════════════════════════
+ * Numbered vertical flow. The numerals are engraved discs joined by a
+ * hairline rule, drawn with counters + pseudo-elements so the markup stays a
+ * plain <ol> and the order remains semantic.
+ */
+.orpho-hiw { padding: 0 var(--orpho-s-5) var(--orpho-s-6); }
+.orpho-hiw__inner { max-width: var(--orpho-measure); margin: 0 auto; }
+.orpho-hiw__steps { max-width: 30rem; }
+.orpho-hiw__title { font-size: 0.82rem; letter-spacing: var(--orpho-track-wide); }
+
+.orpho-steps {
+  counter-reset: orpho-step;
+  list-style: none;
+  margin: var(--orpho-s-5) 0 0;
+  padding: 0;
+}
+
+.orpho-step {
+  counter-increment: orpho-step;
+  position: relative;
+  padding: 0 0 var(--orpho-s-5) 3.4rem;
+}
+
+/* The engraved numeral disc. */
+.orpho-step::before {
+  content: counter(orpho-step);
+  position: absolute;
+  left: 0; top: 0;
+  width: 2.1rem; height: 2.1rem;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--orpho-gold);
+  border-radius: 50%;
+  font-family: var(--orpho-body);
+  font-size: 0.85rem;
+  color: var(--orpho-gold-deep);
+  background: var(--orpho-paper-lit);
+  box-shadow: inset 0 1px 0 var(--orpho-emboss-lit);
+}
+
+/* Hairline connector between discs; suppressed on the last step. */
+.orpho-step::after {
+  content: "";
+  position: absolute;
+  left: 1.05rem; top: 2.35rem; bottom: 0.35rem;
+  width: 1px;
+  background: repeating-linear-gradient(180deg,
+    var(--orpho-border) 0 3px, transparent 3px 6px);
+}
+.orpho-step:last-child { padding-bottom: 0; }
+.orpho-step:last-child::after { content: none; }
+
+.orpho-step__title {
+  font-family: var(--orpho-body);
+  font-size: 1.02rem;
+  font-weight: 600;
+  color: var(--orpho-ink);
+  margin: 0.16rem 0 0.22rem;
+  line-height: 1.35;
+}
+.orpho-step__body {
+  font-size: var(--orpho-t-small);
+  color: var(--orpho-ink-faint);
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* ══ Sample receipt card ════════════════════════════════════════════════ */
+.orpho-sample {
+  max-width: var(--orpho-measure);
+  margin: 0 auto var(--orpho-s-8);
+}
+
+/* ══ Footer ═════════════════════════════════════════════════════════════
+ * The existing footer markup is untouched — it carries the link columns,
+ * the brand line and the legal disclaimer, which is a compliance
+ * requirement. Only the ground, the ink and the medallion are new.
+ */
+.orpho-footer .wrap { position: relative; z-index: 1; }
+.orpho-footer .brand-line,
+.orpho-footer .legal-disclaimer { color: rgba(240, 234, 222, 0.5); }
+.orpho-footer summary { color: rgba(240, 234, 222, 0.78); cursor: pointer; }
+.orpho-footer .legal-disclaimer {
+  border-top: 1px solid rgba(240, 234, 222, 0.12);
+  margin-top: var(--orpho-s-5);
+  padding-top: var(--orpho-s-4);
+  font-size: var(--orpho-t-small);
+  line-height: 1.55;
+}
+
+/* Bronze medallion, far right, behind the content. */
+.orpho-footer > .orpho-footer__medallion {
+  position: absolute;
+  right: 4%;
+  top: max(var(--orpho-s-5), calc(50% - 75px));   /* never above the box edge */
+  transform: none;
+  z-index: 0;
+  pointer-events: none;
+}
+
+@media (max-width: 1040px) {
+  .orpho-footer > .orpho-footer__medallion { opacity: 0.3; right: -4%; }
+}
+@media (max-width: 680px) {
+  .orpho-hiw__steps { max-width: none; }
+  .orpho-footer > .orpho-footer__medallion { display: none; }
+}
+
+/* ══ How It Works ⇄ Sample receipt, paired ══════════════════════════════
+ * The reference sets the five-step flow against the sample receipt on one
+ * baseline. They are separate <section>s (the receipt carries #proof and its
+ * own JS), so the pairing is done by a wrapper grid rather than by nesting
+ * one inside the other — no content moves, no hook is disturbed.
+ *
+ * Ratio is not 50/50: the steps column is narrower, matching the reference,
+ * and the receipt is the heavier object on the right.
+ */
+.orpho-pair {
+  display: grid;
+  grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr);
+  gap: var(--orpho-s-7);
+  align-items: start;
+  max-width: var(--orpho-measure);
+  margin: 0 auto var(--orpho-s-8);
+  padding: 0 var(--orpho-s-5);
+}
+
+/* Both children already carry their own max-width/margin for the standalone
+ * case; inside the pair they must fill their grid cell instead. */
+.orpho-pair > .orpho-hiw,
+.orpho-pair > .orpho-sample {
+  max-width: none;
+  margin: 0;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.orpho-pair > .orpho-sample { padding: var(--orpho-s-6); }
+.orpho-pair .orpho-hiw__inner { max-width: none; padding: 0; }
+.orpho-pair .orpho-hiw__steps { max-width: none; }
+
+/* Optical alignment: the steps' first line should sit level with the
+ * receipt card's first line, and the card has border + padding above it. */
+.orpho-pair > .orpho-hiw { padding-top: var(--orpho-s-6); }
+
+@media (max-width: 1040px) {
+  .orpho-pair {
+    grid-template-columns: 1fr;
+    gap: var(--orpho-s-6);
+    padding: 0 var(--orpho-s-4);
+  }
+  .orpho-pair > .orpho-hiw { padding-top: 0; }
+}

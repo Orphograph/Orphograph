@@ -11,18 +11,25 @@
 <meta property="og:description" content="Free tier, one-time Packs, or a Standing Order. Same Bitcoin attestation on every tier.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://orphograph.com/pricing">
+<link rel="stylesheet" href="/css/orpho-tokens.css?v=1">
+<link rel="stylesheet" href="/css/orpho-primitives.css?v=1">
 <link rel="stylesheet" href="/index.css?v=21">
 <meta name="copyright" content="© 2026 Orphograph. MIT — see /LICENSE">
 <link rel="canonical" href="https://orphograph.com/pricing">
 </head>
-<body>
+<body class="orpho">
 
 <!-- ─────────────────────── HEADER ─────────────────────── -->
-<header class="nav">
-  <div class="wrap row">
-    <a href="/" class="brand">Orphograph</a>
-    <nav>
-      <a href="/learn">Why it matters</a>
+<header class="orpho-header nav">
+  <a href="/" class="orpho-brand brand">
+    <img class="orpho-brand__mark" src="/seal-display.png?v=8" alt="" width="62" height="62">
+    <span class="orpho-brand__text">
+      <span class="orpho-brand__name">Orphograph</span>
+      <span class="orpho-brand__sub">Empirical Notary</span>
+    </span>
+  </a>
+  <nav class="orpho-nav">
+    <a href="/learn">Why it matters</a>
       <a href="/method">Procedure</a>
       <a href="/writers">Whom it serves</a>
       <a href="/pricing">Pricing</a>
@@ -30,9 +37,8 @@
       <a href="/verify/" class="nav-verify">Verify receipt</a>
       <a href="/access" class="nav-signin">Sign in</a>
       <a href="/status" id="live-status-badge" class="live-status-badge" data-state="checking" aria-label="Live service status"><span class="dot" aria-hidden="true"></span><span class="label">status</span></a>
-      <a href="/#drop" class="cta cta-btn">Anchor a file</a>
-    </nav>
-  </div>
+      <a href="/#drop" class="orpho-btn orpho-btn--primary cta cta-btn">Anchor a file</a>
+  </nav>
 </header>
 
 <!-- ─────────────────────── PRICE ANCHOR ─────────────────────── -->
@@ -166,7 +172,8 @@
   <p>Already used a Bitcoin-anchored receipt to settle a dispute? <a href="mailto:hello@orphograph.com">Write to the office</a>. The office keeps a public record of real-world uses where the customer consents to publication; the receipt itself is yours.</p>
 </section>
 
-<footer class="site">
+<footer class="site orpho-footer">
+  <span class="orpho-footer__medallion" aria-hidden="true"></span>
   <div class="wrap">
     <div class="cols">
       <div class="col">

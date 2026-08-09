@@ -13,25 +13,31 @@
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://orphograph.com/writers">
 <meta name="twitter:card" content="summary_large_image">
+<link rel="stylesheet" href="/css/orpho-tokens.css?v=1">
+<link rel="stylesheet" href="/css/orpho-primitives.css?v=1">
 <link rel="stylesheet" href="/index.css?v=21">
 <link rel="stylesheet" href="/writers.css?v=2">
 <meta name="copyright" content="© 2026 Orphograph. MIT — see /LICENSE">
 <link rel="canonical" href="https://orphograph.com/writers">
 </head>
-<body>
+<body class="orpho">
 
-<header class="nav">
-  <div class="wrap row">
-    <a href="/" class="brand">Orphograph</a>
-    <nav>
-      <a href="/learn">Method</a>
+<header class="orpho-header nav">
+  <a href="/" class="orpho-brand brand">
+    <img class="orpho-brand__mark" src="/seal-display.png?v=8" alt="" width="62" height="62">
+    <span class="orpho-brand__text">
+      <span class="orpho-brand__name">Orphograph</span>
+      <span class="orpho-brand__sub">Empirical Notary</span>
+    </span>
+  </a>
+  <nav class="orpho-nav">
+    <a href="/learn">Method</a>
       <a href="/writers">For Writers</a>
       <a href="/about">Office</a>
       <a href="/signin">Vault</a>
       <a href="/access" class="nav-signin">Sign in</a>
       <a href="#workbench" class="cta">Begin</a>
-    </nav>
-  </div>
+  </nav>
 </header>
 
 <!-- ────────────────────────────────── MASTHEAD ─────────────────────────── -->
@@ -265,7 +271,8 @@
 </section>
 
 <!-- ────────────────────────────────── FOOTER ────────────────────────────── -->
-<footer class="site">
+<footer class="site orpho-footer">
+  <span class="orpho-footer__medallion" aria-hidden="true"></span>
   <div class="wrap row">
     <div class="brand">Orphograph &nbsp;·&nbsp; For Writers</div>
     <nav>
