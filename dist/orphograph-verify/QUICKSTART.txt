@@ -4,6 +4,22 @@ Orphograph offline verifier kit
 Python 3.11 or later required. No installation, no internet, no
 account, no third-party packages.
 
+The evidence ZIP for an ordinary single-file receipt contains
+receipt.json plus one .ots per calendar — no inclusion proof, because
+there is no folder. Verify it in two steps, neither of which needs us:
+
+  1. The file is the file:
+       shasum -a 256 YOUR_FILE
+     must equal hash_hex inside receipt.json.
+
+  2. The proof commits to that hash, and Bitcoin agrees:
+       ots verify -f YOUR_FILE btc.ots
+     (or any of the .ots files; see the node note below).
+
+The `file` and `folder` modes of verify.py are for FOLDER receipts and
+their per-file inclusion proofs — feeding them receipt.json is rejected
+with exit 2 by design.
+
 To verify a single file against an inclusion proof:
 
   python3 verify.py file --file YOUR_FILE --proof PROOF.json --ots ROOT.ots
