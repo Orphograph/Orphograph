@@ -479,3 +479,140 @@
   }
   .orpho-pair > .orpho-hiw { padding-top: 0; }
 }
+
+/* ══ Letter composition, pass 5 (2026-08-08 mockup review) ══════════════
+ * Founder review: "missing key elements of the letter." Each block below is
+ * one named element from the reference. The reference ALSO swapped the crest
+ * for a feather quill and a letter-O wax impression — those are NOT adopted:
+ * the globe/serpent medallion is a hard rule and every emblem below still
+ * composites the canonical seal-display.png.
+ */
+
+/* 1. Criss-cross twine between the two closure buttons. Two thin rotated
+ *    strands + an anchor loop, all gradients — no asset, CSP-clean. */
+.orpho-envelope__string,
+.orpho-envelope__string::before {
+  content: "";
+  position: absolute;
+  left: 50%; top: calc(5% + 13px);
+  width: 3px; height: 86px;
+  margin-left: -1.5px;
+  background: linear-gradient(180deg, #efe6d2, #d9cbae 60%, #cbbb9a);
+  box-shadow: 0 1px 2px rgba(90, 70, 44, 0.35);
+  transform-origin: 50% 0;
+  transform: rotate(24deg);
+  border-radius: 2px;
+}
+.orpho-envelope__string::before {
+  left: 0; top: 0; margin-left: 0;
+  transform: rotate(-48deg);   /* relative to parent strand → the X wrap */
+}
+
+/* 2. Back-flap diagonal folds on the envelope's right side — the V-creases
+ *    of a real envelope, drawn as two hairline diagonals that catch light. */
+.orpho-envelope::before,
+.orpho-envelope::after {
+  content: "";
+  position: absolute;
+  top: 27%; bottom: 0;
+  width: 1px;
+  background: linear-gradient(180deg,
+    rgba(76, 58, 34, 0.0) 0%,
+    rgba(76, 58, 34, 0.16) 35%,
+    rgba(76, 58, 34, 0.06) 100%);
+  box-shadow: 1px 0 0 var(--orpho-emboss-lit);
+}
+.orpho-envelope::before { right: 18%; transform: skewX(-16deg); }
+.orpho-envelope::after  { right: 4%;  transform: skewX(14deg); }
+
+/* 3. Ring-style emboss around the flap crest — the crest sits inside an
+ *    embossed circular rim, per the reference. Canonical artwork inside. */
+.orpho-envelope__crest {
+  border-radius: 50%;
+  padding: 10px;
+  box-shadow:
+    inset 0 1px 0 var(--orpho-emboss-lit),
+    inset 0 -1px 0 var(--orpho-emboss-dark),
+    0 1px 0 var(--orpho-emboss-lit),
+    0 -1px 0 var(--orpho-emboss-dark);
+}
+
+/* 4. Rosette rim on the wax seal: an outer scalloped ring behind the dome so
+ *    the seal reads as pressed wax with squeeze-out, not a button. */
+.orpho-hero__wax::before {
+  content: "";
+  position: absolute;
+  inset: -9px;
+  z-index: -1;
+  border-radius: 46% 54% 52% 48% / 55% 47% 53% 45%;
+  background:
+    radial-gradient(circle at 40% 30%, var(--orpho-wax-lit) 0%, var(--orpho-wax) 55%, var(--orpho-wax-deep) 100%);
+  filter: blur(0.4px);
+  box-shadow:
+    0 12px 24px -10px rgba(50, 12, 6, 0.5),
+    inset 0 2px 4px rgba(255, 190, 160, 0.18);
+}
+
+/* 5. The receipt hangs FROM the string: raise the closure above the receipt
+ *    and tuck the receipt's top edge under it. */
+.orpho-envelope__closure, .orpho-envelope__string { z-index: 3; }
+.orpho-hero__receipt { top: 15%; }
+
+/* ══ Sample receipt card: calendar attestation row ══════════════════════
+ * The five REAL OpenTimestamps calendars this service submits to, named from
+ * server/engine.py CALENDARS — never the invented brands in the mockup. */
+.orpho-cal-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--orpho-s-4) var(--orpho-s-6);
+  justify-content: center;
+  margin-top: var(--orpho-s-5);
+  padding-top: var(--orpho-s-4);
+  border-top: 1px solid var(--orpho-hairline);
+}
+.orpho-cal {
+  text-align: center;
+  font-size: var(--orpho-t-label);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--orpho-ink-faint);
+}
+.orpho-cal::after {
+  content: "✓";
+  display: block;
+  margin-top: 0.3rem;
+  color: var(--orpho-gold-deep);
+  font-size: 0.9rem;
+}
+.orpho-cal-row__title {
+  flex-basis: 100%;
+  text-align: center;
+  margin: 0;
+}
+
+/* ══ Letter pass 6 — corrections from the render ════════════════════════
+ * The twine drew as a giant lambda: 86px strands at 24° overshoot the second
+ * button and meet below it. A figure-8 wrap is COMPACT — it lives between
+ * the two buttons. And the fold creases ran the full envelope height,
+ * reading as scratches across the wax; real creases live in the lower half
+ * and fade before any edge.
+ */
+.orpho-envelope__string,
+.orpho-envelope__string::before {
+  height: 46px;
+  top: calc(5% + 20px);
+  transform: rotate(30deg);
+}
+.orpho-envelope__string::before { transform: rotate(-60deg); top: 2px; }
+
+.orpho-envelope::before,
+.orpho-envelope::after {
+  top: 46%; bottom: 10%;
+  background: linear-gradient(180deg,
+    rgba(76, 58, 34, 0.0) 0%,
+    rgba(76, 58, 34, 0.10) 45%,
+    rgba(76, 58, 34, 0.0) 100%);
+  box-shadow: none;
+}
+.orpho-envelope::before { right: 20%; transform: skewX(-10deg); }
+.orpho-envelope::after  { right: 6%;  transform: skewX(9deg); }
