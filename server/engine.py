@@ -817,6 +817,14 @@ def verify_receipt(receipt_id: str) -> dict:
     # so single-file receipts remain shape-stable.
     # ZK provenance proof: surfaced only when present (same shape-stability
     # rule as the folder fields below).
+    # C2PA manifest binding: surfaced only when present (same rule). Stored
+    # since the field shipped and treated as CORE by renewal.py — but never
+    # surfaced, so the commitment was WRITE-ONLY on the wire: an integrator
+    # could anchor a manifest hash and no relying party could ever read it
+    # back to check the binding (found 2026-08-09 by the R16 execution
+    # re-proof; same class as the zk_proof drop, one field over).
+    if record.get("c2pa_manifest_hash"):
+        out["c2pa_manifest_hash"] = record["c2pa_manifest_hash"]
     if record.get("zk_provenance"):
         out["zk_provenance"] = record["zk_provenance"]
     # Hardware attestation: surfaced only when present (same shape-stability
