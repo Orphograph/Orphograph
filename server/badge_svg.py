@@ -123,9 +123,9 @@ def render(receipt: dict, *, base_url: str = "") -> str:
     safe_date = _xml_escape(date)
 
     if is_folder and isinstance(leaf_count, int) and leaf_count > 0:
-        subtitle = f"dataset &middot; {leaf_count} files &middot; anchored to Bitcoin"
+        subtitle = f"dataset &#183; {leaf_count} files &#183; anchored to Bitcoin"
     elif safe_date:
-        subtitle = f"anchored to Bitcoin &middot; {safe_date}"
+        subtitle = f"anchored to Bitcoin &#183; {safe_date}"
     else:
         subtitle = "anchored to Bitcoin"
 
@@ -187,7 +187,7 @@ def render(receipt: dict, *, base_url: str = "") -> str:
     if safe_id:
         parts.append(
             f'<text x="50" y="66" font-family="monospace" font-size="10" '
-            f'fill="{MUTED}">id &middot; {safe_id}</text>'
+            f'fill="{MUTED}">id &#183; {safe_id}</text>'
         )
 
     parts.append("</a>")
