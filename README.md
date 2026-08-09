@@ -77,7 +77,8 @@ Listed in the official MCP registry as `io.github.Orphograph/orphograph`.
 | `orphograph_anchor_file` | Hash a local file (SHA-256/SHA-512 computed in-process) and anchor the fingerprints to Bitcoin via OpenTimestamps. The file body never leaves the machine. |
 | `orphograph_anchor_folder` | Build an RFC-6962 Merkle manifest over a folder and anchor one root that covers every file. |
 | `orphograph_anchor_output` | Anchor an AI agent's generated output at creation time — provenance receipts for agent actions. |
-| `orphograph_verify_receipt` | Verify an existing receipt against the OpenTimestamps calendars and the Bitcoin chain. No API key required. |
+| `orphograph_verify_receipt` | Look up what this office recorded for a receipt: anchored hashes, calendar attestation counts, and when the Bitcoin pin was observed. A lookup, not an independent chain check — run `ots verify` for that. No API key required. |
+| `orphograph_verify_lineage` | Walk an edit-lineage chain back through its committed parents and report the ordering the anchors establish. |
 | `orphograph_list_vault` | List the authenticated subscriber's anchored receipts. |
 
 Quickstart (stdio transport):

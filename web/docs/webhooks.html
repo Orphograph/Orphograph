@@ -17,6 +17,7 @@
 <link rel="stylesheet" href="/css/orpho-primitives.css?v=1">
 <link rel="stylesheet" href="/index.css?v=21">
 <link rel="stylesheet" href="/docs/webhooks.css?v=1">
+<link rel="stylesheet" href="/u.css?v=1">
 <meta name="copyright" content="© 2026 Orphograph. MIT — see /LICENSE">
 </head>
 <body class="orpho">
@@ -41,7 +42,7 @@
 
 <main class="doc-wrap">
 
-  <p style="font-size:12px;letter-spacing:0.18em;text-transform:uppercase;color:var(--muted);margin:48px 0 8px;">Documentation</p>
+  <p class="u-eyebrow">Documentation</p>
   <h1 class="doc-h1">Webhooks.</h1>
   <p class="doc-lede">
     The office dispatches signed HTTP notifications to a destination of the account-holder's choosing when relevant events occur on the account. The mechanism is intended for integration with downstream systems of record; it does not replace the receipt, which remains the canonical instrument.
@@ -138,27 +139,27 @@ def verify(secret: str, body: bytes, signature_header: str) -&gt; bool:
     <h2>Registration</h2>
     <div class="doc-section-rule"></div>
     <p>
-      Destination URLs are nominated and revoked through the management interface at <a href="/account" style="color:var(--confirm);">/account.html</a>. Each registered destination is issued its own signing secret, which is displayed once at the moment of creation and is not retrievable thereafter. A new secret may be issued at any time; the prior secret is invalidated on issuance.
+      Destination URLs are nominated and revoked through the management interface at <a href="/account" class="u-confirm">/account.html</a>. Each registered destination is issued its own signing secret, which is displayed once at the moment of creation and is not retrievable thereafter. A new secret may be issued at any time; the prior secret is invalidated on issuance.
     </p>
     <p>
       Only account-holders with an active Standing Order subscription may register destinations. Suspension of the subscription suspends dispatch; reinstatement resumes it without further configuration.
     </p>
   </section>
 
-  <p style="color:var(--muted);font-size:13px;margin-top:48px;">
-    Questions on the dispatch protocol may be put to the office at <a href="mailto:hello@orphograph.com" style="color:var(--confirm);">hello@orphograph.com</a>. Revisions to this document are themselves anchored.
+  <p class="u-endnote">
+    Questions on the dispatch protocol may be put to the office at <a href="mailto:hello@orphograph.com" class="u-confirm">hello@orphograph.com</a>. Revisions to this document are themselves anchored.
   </p>
 
 </main>
 
 <footer>
-  <div class="wrap" style="text-align:center;color:var(--muted);font-size:13px;padding:32px 0;">
+  <div class="wrap u-sitefoot">
     <p>Orphograph · An empirical notary.</p>
-    <p style="margin-top:8px;">
-      <a href="/" style="color:var(--muted);">Home</a> ·
-      <a href="/method" style="color:var(--muted);">Method</a> ·
-      <a href="/terms" style="color:var(--muted);">Terms</a> ·
-      <a href="/privacy" style="color:var(--muted);">Privacy</a>
+    <p class="u-mt-8">
+      <a href="/" class="u-muted">Home</a> ·
+      <a href="/method" class="u-muted">Method</a> ·
+      <a href="/terms" class="u-muted">Terms</a> ·
+      <a href="/privacy" class="u-muted">Privacy</a>
     </p>
   </div>
   <!-- legal-disclaimer -->

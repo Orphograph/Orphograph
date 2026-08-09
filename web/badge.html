@@ -111,9 +111,9 @@
       <code class="inline">/r/&lt;id&gt;</code>, which presents the
       five OpenTimestamps attestations and the on-chain commitment.
       A reader who wishes to confirm a badge follows its link and
-      reads the receipt; an OpenTimestamps client or the MIT-licensed
-      verifier may be used to confirm the receipt against Bitcoin
-      directly, without contacting the office.
+      reads the receipt; the MIT-licensed verifier checks the receipt's
+      structure offline, and an OpenTimestamps client confirms the
+      commitment against Bitcoin itself. Neither step contacts the office.
     </p>
   </section>
 
@@ -157,7 +157,7 @@
     </div>
     <p>The same receipt rendered with the live-verifying widget:</p>
     <div class="demo-box">
-      <script src="/widget.js" data-receipt="ZlZXKD4CGxkOzx-T" async></script>
+      <script src="/widget.js?v=1" data-receipt="ZlZXKD4CGxkOzx-T" async></script>
     </div>
     <p>
       A full side-by-side gallery, with light and dark variants and

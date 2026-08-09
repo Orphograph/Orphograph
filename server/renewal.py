@@ -166,6 +166,27 @@ def build_record(record: dict, sequence: int, renewed_at: str,
     }
 
 
+def _manifest_digest(receipt_dir: Path) -> str | None:
+    """SHA-256 of a folder receipt's manifest.json, or None when absent.
+
+    Folder anchors carry a manifest listing every leaf; it is part of the
+    evidence and belongs in what a renewal re-attests. Single-file receipts
+    have no manifest and legitimately renew with None here — the field was
+    structurally ALWAYS None before this, which is worse than absent, because
+    a reader could not tell "no manifest" from "we never looked".
+
+    Committing to the file's raw bytes is safe because manifest.json is
+    write-once: the folder-anchor handler creates it and nothing else ever
+    rewrites it (unlike .ots bytes, which upgrade_worker rewrites in place —
+    see build_record). Verified across server/ before this was added.
+    """
+    p = receipt_dir / "manifest.json"
+    try:
+        return hashlib.sha256(p.read_bytes()).hexdigest()
+    except OSError:
+        return None
+
+
 def record_digest(rr: dict) -> str:
     """SHA-256 over the record EXCLUDING its batch block.
 
@@ -305,7 +326,9 @@ def renew_corpus(receipts_dir: Path, anchor_fn, renewed_at: str | None = None,
                     f"its directory ({rid!r}), or the id is not a safe path "
                     f"component — refusing to write")
             seq, prev = next_sequence(receipts_dir, rid)
-            records.append(build_record(record, seq, renewed_at, prev))
+            records.append(build_record(record, seq, renewed_at, prev,
+                                        manifest_sha256=_manifest_digest(
+                                            receipts_dir / rid)))
         except RenewalError as e:
             # A malformed receipt is skipped WITH A REASON, never silently
             # dropped and never renewed with substituted defaults.
@@ -341,14 +364,29 @@ def renew_corpus(receipts_dir: Path, anchor_fn, renewed_at: str | None = None,
             pass
         written += 1
 
+    # The batch manifest is the only artifact listing every leaf in the tree
+    # these records were folded into. Previously this write was skipped
+    # silently when the anchor receipt's directory did not exist yet, so a
+    # renewal run could report success having dropped the manifest on the
+    # floor — with no error, no log, and nobody looking. Create the directory
+    # and report whether the write landed.
     batch_dir = receipts_dir / batch_rid
-    if batch_dir.is_dir():
+    batch_manifest_written = False
+    try:
+        batch_dir.mkdir(parents=True, exist_ok=True)
         (batch_dir / "renewal_batch.json").write_text(
             json.dumps(manifest, indent=2))
+        batch_manifest_written = True
+    except OSError as e:
+        # Not fatal — every record already carries its own inclusion proof and
+        # verifies without the manifest — but it must never pass unremarked.
+        print(f"WARNING: could not write renewal_batch.json for {batch_rid}: {e}",
+              file=sys.stderr)
 
     return {"renewed": written, "skipped": skipped,
             "root_hex": manifest["root_hex"], "receipt_id": batch_rid,
-            "renewed_at": renewed_at}
+            "renewed_at": renewed_at,
+            "batch_manifest_written": batch_manifest_written}
 
 
 def _main() -> int:

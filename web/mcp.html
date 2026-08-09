@@ -122,7 +122,7 @@
         </tr>
         <tr>
           <td>orphograph.verify_receipt(receipt_id)</td>
-          <td>Retrieves the receipt by identifier and verifies it against the recorded Bitcoin commitment using the same procedure as the published MIT verifier. Returns the verification outcome and the block reference.</td>
+          <td>Retrieves the receipt by identifier and returns what this office recorded for it: the anchored hashes, the calendar attestation counts, and the time the Bitcoin pin was observed. This reads the office's record; it does not itself consult the chain. For an independent chain check, run an OpenTimestamps client over the receipt's <code>.ots</code> files.</td>
         </tr>
         <tr>
           <td>orphograph.list_vault()</td>
@@ -163,7 +163,7 @@
     <h2>Verification of this page</h2>
     <div class="mcp-rule"></div>
     <p>
-      This page is anchored at issuance, and the receipt may be verified against Bitcoin using the published MIT verifier or any OpenTimestamps client. Updates to this page are themselves anchored, and the receipt is replaced accordingly.
+      This page is anchored at issuance. The published MIT verifier checks the receipt's structure offline; any OpenTimestamps client confirms the commitment against Bitcoin itself. Updates to this page are themselves anchored, and the receipt is replaced accordingly.
     </p>
   </section>
 

@@ -495,6 +495,43 @@ def _weak_etag(*, mtime: float, size: int) -> str:
     return f'W/"{h}"'
 
 
+def _reject_private(handler: BaseHTTPRequestHandler, pack_consumed: bool,
+                    pack_token: str | None) -> None:
+    """Decline an anchor that asked for `private` we cannot grant.
+
+    Both anchor endpoints used to compute `private and subscription_active`,
+    which SILENTLY PUBLISHED a receipt the caller had explicitly asked to keep
+    private. No error, no warning, and on the folder path the response did not
+    even report the resulting privacy state, so the caller could not tell.
+
+    Found live: the founder's own daily repo anchor sends `"private": True`
+    (scripts/auto_anchor_repo.py) and its launchd job passes no API key, so
+    every one of those anchors has been public.
+
+    Publishing is not undoable. Retrying without `private` costs the caller
+    one line. So this fails closed: no anchor is created, any pack credit is
+    refunded, and the response says exactly what happened and how to proceed.
+    """
+    if pack_consumed and pack_token:
+        credits.refund_credit(pack_token)
+    _json_response(handler, 402, {
+        "error": "private anchors require an active subscription",
+        "detail": (
+            "This request asked for private: true, and this caller is not "
+            "subscription-authenticated. Rather than publish a receipt you "
+            "asked to keep private, no anchor was created and nothing was "
+            "submitted to the calendars."
+        ),
+        "how_to_proceed": (
+            "Authenticate with an active subscription (session cookie or "
+            "X-Orpho-Api-Key), or resend without `private` to anchor publicly."
+        ),
+        "private_requested": True,
+        "private_granted": False,
+        "credit_refunded": bool(pack_consumed),
+    })
+
+
 def _json_response(handler: BaseHTTPRequestHandler, status: int, payload: dict) -> None:
     body = json.dumps(payload, indent=2).encode("utf-8")
     ctype = "application/json; charset=utf-8"
@@ -2187,7 +2224,22 @@ class Handler(BaseHTTPRequestHandler):
             if ln_payment_hash is None:
                 _json_response(self, 401, {"error": f"L402 rejected: {ln_err}"})
                 return
-            if lightning.is_spent(ln_payment_hash):
+            # Fast reject only. The BINDING single-use decision is the
+            # atomic lightning.claim() immediately before the anchor below;
+            # this check just saves obvious replays the work. It used to BE
+            # the decision, 176 lines and five calendar submissions before
+            # mark_spent, on a threading server — eight concurrent requests
+            # with one paid credential produced eight receipts.
+            try:
+                already_spent = lightning.is_spent(ln_payment_hash)
+            except lightning.SpentSetUnavailable as e:
+                _json_response(self, 503, {
+                    "error": "cannot verify L402 credential freshness",
+                    "detail": f"the spent-credential ledger is unreadable: {e}",
+                    "hint": "this is an office-side fault; nothing was "
+                            "charged and no anchor was made. Retry shortly."})
+                return
+            if already_spent:
                 _json_response(self, 401, {
                     "error": "L402 rejected: credential already spent",
                     "hint": "each payment buys exactly one anchor — request "
@@ -2269,7 +2321,17 @@ class Handler(BaseHTTPRequestHandler):
         notify_email = payload.get("notify_email")
         # Private receipts: subscriber-only feature. Anonymous and pack-only
         # anchors cannot be marked private (no owner_id to gate by).
-        want_private = bool(payload.get("private", False)) and subscription_active
+        #
+        # FAIL CLOSED. This used to be `bool(...) and subscription_active`,
+        # which silently PUBLISHED a receipt the caller had explicitly asked
+        # to keep private — no error, no warning, nothing in the response.
+        # Publishing is not undoable; retrying without `private` costs the
+        # caller one line. So when the request cannot be honoured we decline
+        # to anchor at all and say why.
+        if bool(payload.get("private", False)) and not subscription_active:
+            _reject_private(self, pack_consumed, pack_token)
+            return
+        want_private = bool(payload.get("private", False))
         # Attestation + metadata: any caller can submit these. The engine
         # sanitizes (allowlist + size caps); unknown fields are dropped.
         attestation = payload.get("attestation") if isinstance(payload.get("attestation"), dict) else None
@@ -2310,6 +2372,26 @@ class Handler(BaseHTTPRequestHandler):
             source = "sub:" + auth.email_id(subscriber_email)
         else:
             source = "free"
+        # Atomic single-use claim, as late as possible but strictly BEFORE
+        # the anchor. Late so that every rejection above costs the customer
+        # nothing; before, so the credential can never buy two anchors. If
+        # anchoring then fails we release it, so a server-side error does not
+        # eat a payment.
+        if ln_payment_hash is not None:
+            try:
+                if not lightning.claim(ln_payment_hash):
+                    _json_response(self, 401, {
+                        "error": "L402 rejected: credential already spent",
+                        "hint": "each payment buys exactly one anchor — "
+                                "request a new quote at POST /api/ln/quote"})
+                    return
+            except lightning.SpentSetUnavailable as e:
+                _json_response(self, 503, {
+                    "error": "cannot claim L402 credential",
+                    "detail": f"the spent-credential ledger is unwritable: {e}",
+                    "hint": "office-side fault; nothing was charged and no "
+                            "anchor was made."})
+                return
         try:
             owner_id = auth.email_id(subscriber_email) if subscriber_email else None
             record = engine.anchor_hash(
@@ -2328,11 +2410,16 @@ class Handler(BaseHTTPRequestHandler):
         except ValueError as e:
             # Anchor definitively failed (bad hash, etc.); no receipt produced.
             # Refund the consumed pack credit so the buyer isn't charged for a
-            # request that yielded nothing.
+            # request that yielded nothing — and release the L402 claim for
+            # the same reason. A claim taken for an anchor that never existed
+            # would silently eat a Lightning payment.
             if pack_consumed:
                 credits.refund_credit(pack_token)
+            if ln_payment_hash is not None:
+                lightning.release(ln_payment_hash)
             _json_response(self, 400, {"error": str(e),
-                                       "credit_refunded": pack_consumed})
+                                       "credit_refunded": pack_consumed,
+                                       "ln_credential_released": ln_payment_hash is not None})
             return
         # homepage A/B: attribute the successful anchor to the visitor's arm
         _ab_arm = _ab_cookie_variant(self)
@@ -2348,12 +2435,20 @@ class Handler(BaseHTTPRequestHandler):
             credits.refund_credit(pack_token, reason="anchor-refund:no-calendars")
             credit_refunded = True
             pack_remaining += 1
-        # L402 spend is marked ONLY here — after a receipt exists AND at
-        # least one calendar accepted the hash. A worthless 0-calendar
-        # anchor leaves the credential unspent so the agent can retry, the
-        # same fairness the pack refund above gives card buyers.
-        if ln_payment_hash is not None and record["calendars_ok"] > 0:
-            lightning.mark_spent(ln_payment_hash, record["receipt_id"])
+        # L402 fairness, preserved through the move to an atomic claim: a
+        # worthless 0-calendar anchor has no Bitcoin commitment and can never
+        # upgrade, so the credential is RELEASED and the agent can retry —
+        # the same deal the pack refund above gives card buyers. The claim is
+        # now taken before the anchor (it has to be, to be atomic), so this
+        # is an explicit release rather than simply declining to mark.
+        if ln_payment_hash is not None:
+            if record["calendars_ok"] > 0:
+                # Annotate the existing claim row with the receipt it bought,
+                # so the audit trail links payment to artifact.
+                lightning.mark_spent(ln_payment_hash, record["receipt_id"])
+            else:
+                lightning.release(ln_payment_hash)
+                credit_refunded = True
         # Receipt email: fires for any paid path (Pack consumed, active
         # subscription, or active API key). Previously this was Pack-only,
         # which silently dropped receipts for subscribers — exact 2026-05-18
@@ -2384,10 +2479,22 @@ class Handler(BaseHTTPRequestHandler):
                 "private": want_private,
                 "receipt_url": f"{os.environ.get('SITE_URL', 'https://orphograph.com').rstrip('/')}/r/{record['receipt_id']}",
             })
-            # Persist on the record so the upgrade worker can email the
-            # customer when the BTC pin actually lands (~1h later). Saved
-            # only AFTER format validation so the on-disk value is always
-            # a syntactically valid address.
+        # Persist notify_email so upgrade_worker can email the customer when
+        # the BTC pin actually lands (~1h later). This used to be nested
+        # inside the subscriber-only branch above, so a PACK buyer who passed
+        # notify_email — the exact audience docs/api.html documents the field
+        # for, "Pack only — emails the receipt" — got the immediate receipt
+        # and was then never told their anchor reached Bitcoin. They supplied
+        # an address for precisely that notification.
+        #
+        # Dispatch stays subscriber-gated: webhooks resolve by owner identity,
+        # which a Pack-only session does not have. webhooks.dispatch returns
+        # silently when an address has no registered endpoint, so persisting
+        # for Pack buyers adds no traffic and no log noise (verified).
+        #
+        # Saved only AFTER format validation, so the on-disk value is always a
+        # syntactically valid address.
+        if candidate and is_paid_anchor and EMAIL_RE.match(candidate):
             try:
                 receipt_path = engine.RECEIPTS_DIR / record["receipt_id"] / "receipt.json"
                 on_disk = json.loads(receipt_path.read_text())
@@ -3716,7 +3823,27 @@ class Handler(BaseHTTPRequestHandler):
             source = "sub:" + auth.email_id(subscriber_email)
         else:
             source = "free"
-        want_private = bool(payload.get("private", False)) and subscription_active
+        # Fail closed — see _reject_private. This path is where it bit us:
+        # the daily repo anchor asks for private and has been publishing.
+        # _reject refunds the pack credit and is the folder path's refunding
+        # responder, so the 402 does not cost the caller an anchor.
+        if bool(payload.get("private", False)) and not subscription_active:
+            _reject(402, {
+                "error": "private anchors require an active subscription",
+                "detail": (
+                    "This request asked for private: true, and this caller is "
+                    "not subscription-authenticated. Rather than publish a "
+                    "manifest you asked to keep private, no anchor was created."
+                ),
+                "how_to_proceed": (
+                    "Authenticate with an active subscription (session cookie "
+                    "or X-Orpho-Api-Key), or resend without `private`."
+                ),
+                "private_requested": True,
+                "private_granted": False,
+            })
+            return
+        want_private = bool(payload.get("private", False))
         # Opt-in: publish the manifest's file paths so a shared certificate
         # renders them to anyone (default keeps paths owner-only). Independent
         # of `private`, which gates the whole receipt to its owner.
@@ -3752,6 +3879,18 @@ class Handler(BaseHTTPRequestHandler):
             return
         # Mark the receipt itself as a folder anchor so verifiers know to
         # fetch the manifest in addition to the .ots files.
+        #
+        # The IN-MEMORY record must carry these too, not just the file. Every
+        # consumer downstream in this handler is handed `record`, not a
+        # re-read of the JSON: the receipt email branches on
+        # record["kind"] == "folder" to decide whether to tell the customer to
+        # keep a manifest or "the original file". Writing them only to disk
+        # meant the email silently took the single-file branch — the fix
+        # shipped in 82c0f94 never reached the wire, and the test missed it by
+        # calling the mailer directly instead of driving the endpoint.
+        record["kind"] = "folder"
+        record["leaf_count"] = len(leaves)
+        record["merkle_algorithm"] = merkle.ALGORITHM
         try:
             rfile = engine.RECEIPTS_DIR / rid / "receipt.json"
             on_disk = json.loads(rfile.read_text())
@@ -3786,6 +3925,10 @@ class Handler(BaseHTTPRequestHandler):
             "calendars_ok": record["calendars_ok"],
             "calendars_total": record["calendars_total"],
             "created_at": record["created_at"],
+            # Always report the privacy state. The folder response omitted it
+            # entirely, so a caller who asked for private had no way to learn
+            # the request had been dropped — the silence was half the defect.
+            "private": want_private,
         }
         if lineage_out is not None:
             response_body["lineage"] = lineage_out
@@ -3794,6 +3937,47 @@ class Handler(BaseHTTPRequestHandler):
             response_body["signer_kid"] = signer_kid
         if want_public_paths:
             response_body["paths_public"] = True
+
+        # Receipt email + webhook. The folder path had NEITHER: a subscriber
+        # anchoring a dataset got no anchor.created event, no receipt email,
+        # and — because notify_email was never persisted — no notice when the
+        # pin landed either. An integration watching the webhook stream saw
+        # folder anchors simply not happen. Mirrors the single-file path
+        # deliberately; the two diverging is what produced this gap.
+        notify_email = payload.get("notify_email")
+        candidate = ""
+        if isinstance(notify_email, str):
+            candidate = notify_email[:200].strip()
+        if not candidate and subscription_active and subscriber_email:
+            candidate = subscriber_email
+        is_paid_anchor = pack_consumed or subscription_active or api_key_active
+        if candidate and is_paid_anchor and EMAIL_RE.match(candidate):
+            mailer.send_receipt_email(candidate, record)
+            try:
+                rfile2 = engine.RECEIPTS_DIR / rid / "receipt.json"
+                on_disk2 = json.loads(rfile2.read_text())
+                on_disk2["notify_email"] = candidate
+                rfile2.write_text(json.dumps(on_disk2, indent=2))
+                record["notify_email"] = candidate
+            except (OSError, json.JSONDecodeError):
+                pass
+        if subscription_active and subscriber_email:
+            webhooks.dispatch("anchor.created", subscriber_email, {
+                "receipt_id": rid,
+                "hash_hex": record["hash_hex"],
+                "sha512_hex": record.get("sha512_hex"),
+                "created_at": record["created_at"],
+                "client_label": record.get("client_label"),
+                "calendars_ok": record["calendars_ok"],
+                "calendars_total": record["calendars_total"],
+                "private": want_private,
+                # Folder-specific, so a receiver can tell the two apart
+                # without a follow-up fetch.
+                "kind": "folder",
+                "leaf_count": len(leaves),
+                "root_hex": root_hex,
+                "receipt_url": f"{os.environ.get('SITE_URL', 'https://orphograph.com').rstrip('/')}/r/{rid}",
+            })
         _json_response(self, 200, response_body)
 
     def _handle_verify_folder(self, rid: str) -> None:

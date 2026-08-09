@@ -47,6 +47,10 @@ from pathlib import Path
 
 # Vendored — see the banner at the top of merkle.py.
 import merkle  # noqa: E402
+# The single place this bundle decides whether `ots` confirmed a Bitcoin
+# attestation. Do NOT re-derive that verdict here — see otscheck.py's banner
+# for the inverted-verdict defect that made it necessary.
+import otscheck  # noqa: E402
 
 CHUNK = 1024 * 1024
 
@@ -63,36 +67,25 @@ def _sha256_file(path: Path) -> bytes:
 
 
 def _ots_subcheck(ots_path: Path, root_hex: str) -> int:
-    """Run `ots verify` and check that root_hex appears in its output.
+    """Ask the OpenTimestamps client whether this hash is confirmed on Bitcoin.
 
-    The OTS reference client is invoked with shell=False and list-form
-    argv — NEVER as a shell string. A missing `ots` binary is reported
-    as a 4 (sub-check failed) so the caller can decide whether to
-    treat it as fatal; the binary's absence does not break the core
-    Merkle/file verification.
+    Returns 0 only when the client CONFIRMED it; 4 otherwise. See
+    otscheck.py: the previous implementation decided by looking for the hash
+    in the client's stdout, which passed a verification the client had
+    explicitly rejected (the failure message contains the hash) and would
+    have failed a genuine success (the success message does not).
+
+    The client is invoked with shell=False, list-form argv — never a shell
+    string. A missing `ots` binary is a 4, not a pass: the chain step did not
+    run, and "did not run" must never read as "confirmed".
     """
-    try:
-        proc = subprocess.run(
-            ["ots", "verify", str(ots_path)],
-            check=False,
-            capture_output=True,
-            text=True,
-            timeout=120,
-        )
-    except FileNotFoundError:
-        print("  [OTS] ots binary not found on PATH — skipping chain sub-check.")
-        print("        install: pip install opentimestamps-client")
-        return 4
-    except subprocess.TimeoutExpired:
-        print("  [OTS] ots verify timed out after 120s.")
-        return 4
-
-    combined = (proc.stdout or "") + (proc.stderr or "")
-    print("  [OTS] ots verify exit code:", proc.returncode)
-    if root_hex.lower() in combined.lower():
-        print(f"  [OTS] root_hex {root_hex[:16]}... appears in ots output: OK")
+    status, height, msg = otscheck.chain_verdict(ots_path, root_hex)
+    print(f"  [OTS] {status}: {msg}")
+    if status in otscheck.PASSING:
         return 0
-    print(f"  [OTS] root_hex {root_hex[:16]}... NOT found in ots output: FAIL")
+    if status == otscheck.UNAVAILABLE:
+        print("        The chain check did NOT run. The Merkle/file "
+              "verification above still stands on its own.")
     return 4
 
 

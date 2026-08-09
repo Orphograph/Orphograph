@@ -19,6 +19,7 @@
 <link rel="stylesheet" href="/css/orpho-primitives.css?v=1">
 <link rel="stylesheet" href="/index.css?v=21">
 <link rel="stylesheet" href="/method/the-mit-verifier-annotated.css?v=1">
+<link rel="stylesheet" href="/u.css?v=1">
 <meta name="copyright" content="© 2026 Orphograph. Code under MIT (see /LICENSE). Brand, content, and design — all rights reserved.">
 <script type="application/ld+json">
 {
@@ -69,7 +70,7 @@
 
 <main class="arch-wrap">
 
-  <p style="font-size:12px;letter-spacing:0.18em;text-transform:uppercase;color:var(--muted);margin:48px 0 8px;">Method · The verifier</p>
+  <p class="u-eyebrow">Method · The verifier</p>
   <h1>The 100-line verifier, annotated.</h1>
   <p class="arch-lede">
     The receipt is the office's customer-facing instrument; the verifier is the office's most important durable artifact. The verifier is what makes the claim that a receipt "verifies without the office" operationally true rather than merely aspirational. The following walks through what the verifier reads, what it executes, what it concludes, and what — equally importantly — it does not undertake to do.
@@ -78,8 +79,8 @@
   <section>
     <h2>1 · The role of the verifier in the trust architecture</h2>
     <div class="arch-rule"></div>
-    <p>An attestation that requires the issuer to be present in order to be checked is an attestation whose evidentiary weight is bounded by the issuer's continued availability. Such an attestation collapses to nothing the moment the issuer becomes unreachable, unwilling, or insolvent. The protocol is designed to refuse this dependency. The receipt the office issues is checkable against the Bitcoin chain by any party in possession of the file, the receipt, and a program capable of executing the OpenTimestamps format. The verifier is that program in its minimal form.</p>
-    <p>The verifier is therefore the artifact that closes the trust architecture. The chain provides the ordering oracle; the OpenTimestamps protocol provides the aggregation; the receipt records the per-anchor proof path; the verifier executes the proof path and reports the result. The four together compose a path from the customer's bytes to a chain-attested time of existence, and the path traverses no party whose continued cooperation is required.</p>
+    <p>An attestation that requires the issuer to be present in order to be checked is an attestation whose evidentiary weight is bounded by the issuer's continued availability. Such an attestation collapses to nothing the moment the issuer becomes unreachable, unwilling, or insolvent. The protocol is designed to refuse this dependency. The receipt the office issues is checkable against the Bitcoin chain by any party holding the file, the receipt, and a program that executes the OpenTimestamps format — the reference client being the obvious one.</p>
+    <p>The office's verifier is the artifact that closes the remaining gap, which is a different gap: it establishes that a given proof and a given receipt are about a given file. The chain provides the ordering oracle; the OpenTimestamps protocol provides the aggregation and, through its client, the chain check; the receipt records the per-anchor proof path; the office's verifier binds the customer's bytes to that record. Together they compose a path from the bytes to a chain-attested time of existence, and the path traverses no party whose continued cooperation is required — least of all the office, which authored only the binding step.</p>
   </section>
 
   <section>
@@ -101,41 +102,49 @@
     </ul>
     <p>What the verifier executes:</p>
     <ul>
-      <li>It parses the binary proof into the sequence of operations it encodes.</li>
-      <li>It initialises a working value to the file's fingerprint.</li>
-      <li>It applies each operation in order, updating the working value. Each operation is one of the small, well-defined transformations the OpenTimestamps specification enumerates; the verifier implements each operation explicitly in standard-library code.</li>
-      <li>It terminates with a final hash value and a Bitcoin block height. The final value is the Merkle root the proof claims is committed in that block.</li>
+      <li>It re-derives the file's SHA-256 from the bytes on disk, when the file is supplied.</li>
+      <li>It confirms that each <code>.ots</code> file carries a well-formed OpenTimestamps header.</li>
+      <li>It confirms that the digest embedded in each <code>.ots</code> is the digest the receipt claims was anchored — binding proof to receipt.</li>
+      <li>For a folder anchor, it walks the local directory through the same RFC 6962 construction the office used and compares the recomputed Merkle root against the root the manifest records.</li>
     </ul>
     <p>What the verifier concludes:</p>
     <ul>
-      <li>If the final hash value matches the Merkle root the indicated Bitcoin block carries, the proof is sound: the file's fingerprint was incorporated into the aggregated tree, and the chain has committed the root. The verifier reports success and the block height.</li>
-      <li>If the final hash value does not match, the proof is unsound: either the file has been altered, the proof has been altered, or the wrong file has been paired with the proof. The verifier reports failure and reports which step diverged.</li>
+      <li>On a match, the bundle is internally consistent: this proof is about this file, and the recorded root is the root these bytes produce. The verifier reports OK.</li>
+      <li>On a mismatch, the bundle is unsound — the file was altered, the proof was altered, or the wrong file has been paired with the proof — and the verifier reports which comparison diverged.</li>
     </ul>
-    <p>The verifier is, in operational terms, an interpreter for the OpenTimestamps proof format augmented with a comparison step against a known chain commitment. No other behaviour is undertaken; no telemetry is collected; no network call is issued during the local verification stage beyond what is required, optionally, to fetch the Bitcoin block header against which the final comparison is made.</p>
+    <div class="arch-callout"><p><strong>What it deliberately does not do.</strong> The office's verifier does not interpret the proof's operation sequence and does not compare anything against a Bitcoin block. It issues no network call whatsoever. A well-formed <code>.ots</code> that no calendar ever attested passes every check it makes. A PASS therefore means <em>this bundle is internally consistent</em> — not <em>this was proven to exist at a date</em>. That second statement is the OpenTimestamps client's to make, and section 4 explains why the office does not duplicate it.</p></div>
   </section>
 
   <section>
     <h2>4 · Relation to upstream OpenTimestamps clients</h2>
     <div class="arch-rule"></div>
     <p>The verifier is functionally equivalent to any conforming OpenTimestamps client. A receipt issued by the office is checkable by the office's verifier, by the reference Python OpenTimestamps client, by any third-party implementation that adheres to the format, or by a fresh implementation written from the published specification. The office does not control the verification path; the office contributes one implementation among many, and adheres in that implementation to the public specification.</p>
-    <p>The line count of the office's verifier is small not because it omits anything, but because the format it interprets is small. The Bitcoin commitment mechanism is the heaviest cryptographic primitive in the chain; once one is willing to take that commitment as an input, the remaining work is a few-dozen-step interpreter for a deterministic sequence of standard-library hash calls. The economy of the verifier is the economy of the format the OpenTimestamps specification provides; the office did not invent it and does not claim credit for it.</p>
+    <p>The line count of the office's verifier is small because it omits, on purpose, the part someone else already does better. Interpreting the proof's operation sequence and testing the result against the chain is the reference client's function; it is maintained by the OpenTimestamps project, audited far more widely than anything this office publishes, and a reader who is checking whether they must trust the office should prefer it precisely because the office did not write it. Re-implementing it here would add a second thing to trust and subtract nothing from the first. The office's verifier covers the layer the reference client does not: that this proof and this receipt are about this file.</p>
+    <p>The consequence is that full verification composes two independent programs from two independent authors, and the office controls neither the harder one nor the path a reader takes through it.</p>
   </section>
 
   <section>
     <h2>5 · What the verifier does not do</h2>
     <div class="arch-rule"></div>
     <p>The verifier is honest about its scope, and the office is willing to enumerate the bounds.</p>
-    <p>The verifier does not, in its default configuration, call a Bitcoin full node. It accepts the proof's terminal reference to a block and compares the proof-derived Merkle root against a Merkle root the verifier is told corresponds to that block. The correctness of that final comparison depends on the correctness of the block-header value the verifier obtains. A reader who treats that obtained value as authoritative is implicitly trusting whatever source the verifier consulted — typically a public block explorer or a published header — to have reported the chain's actual contents.</p>
-    <p>For readers requiring stricter assurance, the verifier may be operated against a locally run Bitcoin full node. In that configuration, the verifier obtains the block header directly from a node the reader controls, validated by the reader's node against the proof-of-work chain end to end. The Merkle root the verifier compares against is then derived from a chain the reader has independently audited, and the trust assumption reduces to the reader's confidence in their own node's correctness — the strongest assurance available short of operating the network oneself.</p>
-    <p>The verifier does not, in either configuration, undertake to opine on the file's authorship, ownership, originality, or means of creation. It opines only on whether the chain attests the file's fingerprint as of the indicated block. The bounds of the underlying attestation are the bounds of the verifier's output; the verifier reports what is true and declines to extrapolate.</p>
+    <p>The verifier never calls a Bitcoin node, in any configuration, and reads no block header. It makes no network call at all. It cannot tell you that your file's fingerprint reached the chain, and it does not claim to: a proof that no calendar ever attested satisfies every comparison it performs.</p>
+    <p>The chain step belongs to the OpenTimestamps reference client, and that client requires a Bitcoin node it can reach — it does not fall back to a block explorer. Running <code>ots verify</code> without a node produces a connection error, not a verdict. The office's downloadable bundle will invoke the client for you when passed <code>--ots</code>, and reports the client's own answer: confirmed, pending, rejected, or — when no node was reachable — that the check did not run. That last outcome is reported as its own state and never as a failure of your receipt, because it says nothing about your receipt.</p>
+    <p>The practical reading: a reader who wants the strongest available assurance runs the reference client against a node they operate, so the Merkle root compared against comes from a chain they have themselves validated end to end. A reader who runs neither still has the binding check, which is a real and useful thing, and is not the same thing.</p>
+    <p>The verifier does not, in any configuration, undertake to opine on the file's authorship, ownership, originality, or means of creation. The bounds of the underlying attestation are the bounds of the verifier's output; the verifier reports what is true and declines to extrapolate.</p>
   </section>
 
   <section>
     <h2>6 · The browser verifier, complementary</h2>
     <div class="arch-rule"></div>
     <p>The office publishes a second verifier intended for the browser environment, at <a href="/verify-js">/verify-js.html</a>. It is an HTML document and its verifier script, with no third-party code and no build step; the pair may be saved to disk with the browser's complete-page option, run offline, opened in any modern browser, and used to check the file-to-receipt binding without an installed Python interpreter and without a network connection.</p>
-    <p>The browser verifier covers the file-to-receipt binding portion of the trust chain: given the file and the receipt, it derives the file's SHA-256, compares against the <code>hash_hex</code> recorded in the receipt, and confirms that the receipt is in fact about this file. The Python verifier covers the chain-attestation portion: given the receipt and the <code>.ots</code> proof, it executes the proof against a Bitcoin commitment and confirms that the chain attests the fingerprint.</p>
-    <p>The two together cover the complete trust chain. A reader in possession of both verifiers, the file, and the receipt may establish — without consulting the office and without trusting the office — that the bytes the file contains were attested by the chain at the moment the proof records. A reader in possession of only one of the two verifiers may still establish either the file-to-receipt binding or the chain attestation in isolation; the architecture is decomposable and each component is independently inspectable.</p>
+    <p>The browser verifier covers the file-to-receipt binding: given the file and the receipt, it derives the file's SHA-256, compares it against the <code>hash_hex</code> the receipt records, and confirms the receipt is in fact about this file. The Python verifier covers proof-to-receipt binding and folder-root re-derivation. Neither consults Bitcoin.</p>
+    <p>Full verification is therefore three parts, not two, and only the third touches the chain:</p>
+    <ul>
+      <li><strong>File → receipt.</strong> Browser verifier, or the Python verifier given the file.</li>
+      <li><strong>Receipt → proof.</strong> Python verifier: the <code>.ots</code> files are well-formed and embed this receipt's digest.</li>
+      <li><strong>Proof → Bitcoin.</strong> The OpenTimestamps reference client, against a node. Not the office's software.</li>
+    </ul>
+    <p>A reader holding all three establishes — without consulting the office and without trusting the office — that these bytes were attested by the chain at the moment the proof records. A reader holding fewer establishes correspondingly less, and the honest description of the first two steps alone is that the bundle is internally consistent. The architecture is decomposable, each component is independently inspectable, and the office authored only the two weakest links on purpose.</p>
   </section>
 
   <section>
@@ -148,7 +157,7 @@
   <section>
     <h2>8 · Publication date and prior-art status</h2>
     <div class="arch-rule"></div>
-    <p>The page is first published on 2026-05-19. It is anchored to the Bitcoin chain on publication using the protocol it describes; the receipt identifier for this revision is recorded in the footer below. The combination of detailed walk-through, MIT licensing of the verifier itself, and a chain-anchored publication date establishes this page as prior art for the decomposed-verifier architecture described.</p>
+    <p>The page is first published on 2026-05-19. The disclosure itself, and its publication date, are what establish prior art here. No public per-page receipt is published for this document — a receipt embedded in the page it attests would change that page and invalidate the attestation, so the office does not claim one it cannot honour. The combination of detailed walk-through, MIT licensing of the verifier itself, and a chain-anchored publication date establishes this page as prior art for the decomposed-verifier architecture described.</p>
   </section>
 
   <section>
@@ -162,19 +171,19 @@
     </ul>
   </section>
 
-  <p style="color:var(--muted);font-size:13px;margin-top:48px;border-top:1px solid var(--line-soft);padding-top:18px;">
+  <p class="u-endnote-ruled">
     Publication receipt for this revision: pending Bitcoin commitment (the receipt id is recorded once issuance completes).
   </p>
 </main>
 
 <footer>
-  <div class="wrap" style="text-align:center;color:var(--muted);font-size:13px;padding:32px 0;">
+  <div class="wrap u-sitefoot">
     <p>Orphograph · An empirical notary.</p>
-    <p style="margin-top:8px;">
-      <a href="/" style="color:var(--muted);">Home</a> ·
-      <a href="/method" style="color:var(--muted);">Method</a> ·
-      <a href="/faq" style="color:var(--muted);">FAQ</a> ·
-      <a href="/continuity" style="color:var(--muted);">Continuity</a>
+    <p class="u-mt-8">
+      <a href="/" class="u-muted">Home</a> ·
+      <a href="/method" class="u-muted">Method</a> ·
+      <a href="/faq" class="u-muted">FAQ</a> ·
+      <a href="/continuity" class="u-muted">Continuity</a>
     </p>
   </div>
   <!-- legal-disclaimer -->

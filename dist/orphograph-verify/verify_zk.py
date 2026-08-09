@@ -23,9 +23,10 @@ Usage:
     verify_zk.py --output-hash HEX --receipt receipt.json [--ots-dir DIR]
 
 Exit codes: 0 verified · 1 verification failed · 2 usage/input error.
-When --ots-dir is given, the Bitcoin-path check is delegated to verify.py
-(same bundle) semantics: each .ots file's header magic + embedded hash are
-checked locally; full chain verification uses the `ots` reference client.
+When --ots-dir is given, the .ots files are checked with verify.py (same
+bundle) semantics: header magic + embedded hash, locally. That is a
+STRUCTURAL check, not a chain check — no network call is made. Full
+chain verification requires the `ots` reference client.
 """
 from __future__ import annotations
 
@@ -103,8 +104,9 @@ def verify_schnorr(proof: dict) -> dict:
 
 def check_ots_dir(ots_dir: Path, expected_hash_hex: str) -> list[dict]:
     """Local structural check of each .ots: header magic + embedded hash.
-    (Full Bitcoin-chain verification: run the `ots` reference client —
-    same delegation model as verify.py in this bundle.)"""
+    (This is a STRUCTURAL check and makes no network call.
+    Full Bitcoin-chain verification requires the `ots` reference
+    client; verify.py --ots delegates to it via otscheck.py.)"""
     expected = bytes.fromhex(expected_hash_hex)
     checks = []
     for ots in sorted(ots_dir.glob("*.ots")):
