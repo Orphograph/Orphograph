@@ -469,3 +469,25 @@ body.orpho::before {
   .orpho-brand__mark { width: 48px; height: 48px; flex-basis: 48px; }
   .orpho-brand__name { font-size: 1.45rem; }
 }
+
+/* ══ 17. Print ══════════════════════════════════════════════════════════
+ * receipt.html and certificate.html are printed and archived by customers.
+ * The migration added body.orpho to them (additively — they keep their own
+ * classes), which without this block would print the fractal-noise grain
+ * overlay across a legal-adjacent document and waste toner on the parchment
+ * gradient. On paper, the paper is the texture.
+ */
+@media print {
+  body.orpho { background: #fff !important; }
+  body.orpho::before,
+  .orpho-ornament,
+  .orpho-spark,
+  .orpho-footer__medallion { display: none !important; }
+  .orpho-footer { background: #fff; color: #000; }
+}
+
+/* Footer medallion was clipping at the container's top edge: the footer is
+ * overflow:hidden (it must be — the grain layer covers inset:0) and the
+ * translateY(-50%) centring pushed the disc above the box on short footers.
+ * Containing it instead of letting it bleed. */
+.orpho-footer { overflow: hidden; }

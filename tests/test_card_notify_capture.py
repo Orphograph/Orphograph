@@ -142,6 +142,17 @@ class TestStaticMarkup(unittest.TestCase):
         v2 = (ROOT / "web" / "v2" / "index.html").read_text()
         self.assertIn("/checkout-cta.js?v=4", v2)
         self.assertIn("/v2/style.css?v=8", v2)
+        # The 404/error template lives INSIDE server/app.py, so the rglob over
+        # web/*.html above cannot see it. It sat on /index.css?v=16 for three
+        # version bumps (found 2026-08-08) — every 404 rendered with stale CSS
+        # and nothing failed. Pin it to the same version the homepage uses.
+        import re as _re
+        app_src = (ROOT / "server" / "app.py").read_text()
+        canon = _re.search(r"/index\.css\?v=(\d+)", index).group(1)
+        for hit in _re.findall(r"/index\.css\?v=(\d+)", app_src):
+            self.assertEqual(hit, canon,
+                             "server-side error template references /index.css?v="
+                             f"{hit} but the canonical version is v={canon}")
 
 
 class TestWaitlistCardTiers(unittest.TestCase):
