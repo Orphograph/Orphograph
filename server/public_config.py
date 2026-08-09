@@ -62,6 +62,14 @@ def snapshot() -> dict:
             # contradicted the live homepage CTA. See config_warnings().
             "pack_usd": _int_env("PACK_PRICE_USD", 19),
             "pack_credits": _int_env("PACK_CREDIT_COUNT", 10),
+            # Pack of Fifty — $29 — was sold via stripe.pack50_url but absent
+            # from this block, so the one machine-readable pricing surface
+            # omitted a live SKU and the docs example (which mirrors this
+            # block) looked self-contradictory next to the SKU table
+            # (found 2026-08-08). Additive fields; nothing consumes the block
+            # for charging — Stripe Payment Links carry the actual prices.
+            "pack50_usd": _int_env("PACK50_PRICE_USD", 29),
+            "pack50_credits": _int_env("PACK50_CREDIT_COUNT", 50),
             # Standing Order (unlimited monthly) — $9/mo canonical (blogs + mcp
             # README + records). Default was $5 (stale). Annual left at 60 pending
             # a founder decision — see config_warnings()/CHECKOUT_GO_LIVE.md.

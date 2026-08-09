@@ -616,3 +616,173 @@
 }
 .orpho-envelope::before { right: 20%; transform: skewX(-10deg); }
 .orpho-envelope::after  { right: 6%;  transform: skewX(9deg); }
+
+/* ══ Letter pass 7 — founder screenshot review (2026-08-08 late) ════════
+ * Three named defects: the left ornament reads as fragments, the envelope
+ * flaps are invisible behind the receipt, and the flap crest prints instead
+ * of sinking. Each fix below maps to one of those.
+ */
+
+/* 1. "logo on the left is not whole" — at -26vw the circle lost its top and
+ *    left simultaneously, so it read as stray arcs + a serpent, not a
+ *    medallion cropped by the edge. Show a clear majority of the circle,
+ *    cropped on ONE axis only. */
+.orpho-ornament--left {
+  left: -11vw; top: 22vh;
+  width: 38vw; height: 38vw;
+  max-width: 640px; max-height: 640px;
+  opacity: 0.10;
+}
+
+/* 2. "letter isn't with the flaps" — the receipt sat at 15% and buried the
+ *    flap V and the second button. Drop it below the closure, deepen the
+ *    flap crease, and let the flap's point reach further down so the fold
+ *    geometry is unmistakable. */
+.orpho-hero__receipt { top: 26%; }
+.orpho-envelope__flap {
+  height: 34%;
+  clip-path: polygon(0 0, 100% 0, 100% 55%, 50% 100%, 0 55%);
+  background: linear-gradient(180deg, #faf5ea 0%, #efe5d1 74%, #e2d5bc 100%);
+  border-bottom: 0;
+  filter: drop-shadow(0 3px 4px rgba(90, 70, 44, 0.22));
+}
+
+/* 3. "the crest isn't sunken in" — multiply-blending the dark engraving
+ *    reads as PRINTED. A blind emboss is paper-coloured: the artwork is
+ *    lifted almost to paper tone and the relief comes from a shadow pair —
+ *    dark caught on the top-left of the recess, light on the bottom-right. */
+.orpho-envelope__crest {
+  mix-blend-mode: normal;
+  opacity: 0.85;
+  filter:
+    grayscale(1) brightness(1.62) contrast(0.55)
+    drop-shadow(-1px -1px 1px rgba(90, 70, 44, 0.55))
+    drop-shadow(1px 1px 0 rgba(255, 252, 245, 0.95));
+  box-shadow:
+    inset 2px 2px 4px rgba(90, 70, 44, 0.28),
+    inset -1px -1px 2px rgba(255, 252, 245, 0.9);
+}
+.orpho-hero__plate:hover .orpho-envelope__crest { opacity: 1; filter:
+    grayscale(1) brightness(1.55) contrast(0.6)
+    drop-shadow(-1px -1px 1px rgba(90, 70, 44, 0.62))
+    drop-shadow(1px 1px 0 rgba(255, 252, 245, 1)); }
+
+/* String follows the receipt down: keep the X centered between the buttons,
+ * both of which are now fully visible above the receipt's top edge. */
+.orpho-envelope__string, .orpho-envelope__string::before { top: calc(5% + 22px); height: 52px; }
+
+/* Pass 7b — the twine needed weight to read against the parchment, and the
+ * flap's V-crease pops via its outline shadow (drop-shadow follows the
+ * clip-path, so darkening it draws the fold itself). */
+.orpho-envelope__string,
+.orpho-envelope__string::before {
+  width: 4px;
+  background: linear-gradient(180deg, #e6d9bf, #c9b892 55%, #b3a17f);
+  box-shadow: 0 1px 2px rgba(90, 70, 44, 0.45);
+}
+.orpho-envelope__flap { filter: drop-shadow(0 2px 2px rgba(90, 70, 44, 0.34)); }
+
+/* ══ Pass 8 — the two reference crops (letter detail + receipt card) ════ */
+
+/* Letter: the flap in the crop is a wide shallow curve, not a V. */
+.orpho-envelope__flap {
+  clip-path: none;
+  height: 30%;
+  border-radius: 0 0 44% 44% / 0 0 58% 58%;
+  border-bottom: 1px solid var(--orpho-border);
+  box-shadow: 0 4px 8px -3px rgba(90, 70, 44, 0.3);
+  filter: none;
+}
+
+/* Grommets: the receipt HANGS from the string through two punched eyelets. */
+.orpho-hero__receipt::before,
+.orpho-hero__receipt::after {
+  content: "";
+  position: absolute;
+  top: 14px;
+  width: 13px; height: 13px;
+  border-radius: 50%;
+  background: var(--orpho-paper-deep);
+  box-shadow:
+    inset 0 1px 2px rgba(90, 70, 44, 0.5),
+    0 1px 0 var(--orpho-emboss-lit);
+  border: 2px solid #cbbb9a;
+}
+.orpho-hero__receipt::before { left: 38%; }
+.orpho-hero__receipt::after  { right: 38%; }
+
+/* String ends splay outward from the lower button toward the two eyelets. */
+.orpho-envelope__string { height: 58px; transform: rotate(18deg); }
+.orpho-envelope__string::before { transform: rotate(-36deg); height: 58px; }
+
+/* Cord tail trailing from beneath the wax seal, per the crop. */
+.orpho-hero__wax::after {
+  content: "";
+  position: absolute;
+  right: -34px; bottom: -26px;
+  width: 74px; height: 46px;
+  border: 0;
+  border-bottom: 4px solid #c9b892;
+  border-radius: 0 0 70% 40% / 0 0 100% 55%;
+  transform: rotate(-14deg);
+  box-shadow: 0 2px 2px -1px rgba(90, 70, 44, 0.4);
+  z-index: -2;
+}
+
+/* Receipt: lozenge-centred divider + dotted row separators, as in the crop. */
+.orpho-hero__receipt .orpho-rule--centered::before {
+  background: linear-gradient(90deg,
+    rgba(154,122,67,0) 0%, var(--orpho-gold) 50%, rgba(154,122,67,0) 100%);
+}
+.orpho-receipt__meta dt, .orpho-receipt__meta dd {
+  border-bottom: 1px dotted var(--orpho-hairline);
+  padding-bottom: 0.45rem;
+}
+.orpho-receipt__meta dt:last-of-type, .orpho-receipt__meta dd:last-of-type { border-bottom: 0; }
+
+/* ══ Sample receipt card — reference layout ═════════════════════════════ */
+.orpho-sample__bar {
+  display: flex; justify-content: space-between; align-items: baseline;
+  margin-bottom: var(--orpho-s-5);
+}
+.orpho-sample__view {
+  font-size: var(--orpho-t-small); letter-spacing: 0.06em;
+  color: var(--orpho-gold-deep); text-decoration: none;
+  border-bottom: 1px solid var(--orpho-gold);
+}
+.orpho-sample__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.62fr) minmax(0, 1.38fr);
+  gap: var(--orpho-s-7);
+  align-items: center;
+}
+.orpho-sample__brand { text-align: center; }
+.orpho-sample__crest { width: 150px; height: 150px; margin: 0 auto var(--orpho-s-3); display: block; }
+.orpho-sample__word {
+  font-family: var(--orpho-display);
+  font-size: 1.6rem; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--orpho-ink); margin: 0 0 var(--orpho-s-1);
+}
+.orpho-sample__blurb {
+  font-size: var(--orpho-t-small); color: var(--orpho-ink-soft);
+  line-height: 1.55; margin: var(--orpho-s-4) auto 0; max-width: 24ch;
+}
+.orpho-sample__verify-line {
+  font-size: var(--orpho-t-small); color: var(--orpho-ink-faint);
+  margin-top: var(--orpho-s-4); line-height: 1.6;
+}
+.orpho-sample__foot {
+  display: flex; align-items: center; gap: var(--orpho-s-6);
+  border-top: 1px solid var(--orpho-hairline);
+  margin-top: var(--orpho-s-6); padding-top: var(--orpho-s-5);
+}
+.orpho-sample__foot .orpho-cal-row { flex: 1; border-top: 0; margin: 0; padding: 0; }
+.orpho-cal svg { display: block; margin: 0 auto 0.35rem; color: var(--orpho-gold-deep); opacity: 0.85; }
+.orpho-sample__qr { flex: 0 0 auto; padding: 6px; background: #fff;
+  border: 1px solid var(--orpho-hairline); border-radius: var(--orpho-r-card); }
+.orpho-sample__qr img { display: block; }
+
+@media (max-width: 900px) {
+  .orpho-sample__grid { grid-template-columns: 1fr; gap: var(--orpho-s-5); }
+  .orpho-sample__foot { flex-direction: column; }
+}

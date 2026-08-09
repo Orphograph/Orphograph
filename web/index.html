@@ -309,24 +309,44 @@
 
 <!-- ─────────────────────── 5 · LIVE RECEIPT CARD ─────────────────────── -->
 <section class="sample-receipt-section orpho-card orpho-sample" id="proof" aria-labelledby="live-receipt-title">
-  <div class="sample-receipt-card">
-    <img class="receipt-seal" src="/seal.png?v=8" alt="Orphograph seal">
-    <div class="eyebrow">Live Orphograph receipt</div>
-    <div class="receipt-id"><code>XwTULwlh76PcCst9</code></div>
-    <p class="receipt-status" id="live-receipt-title">Confirmed &middot; 5/5 calendars &middot; Bitcoin-attested</p>
-    <div class="cta-row">
-      <a href="/r/XwTULwlh76PcCst9" class="cta cta-primary cta-btn">Open the receipt</a>
-      <a href="/verify/" class="cta cta-secondary cta-btn">Verify it yourself</a>
+  <div class="orpho-sample__bar">
+    <p class="orpho-label">Live sample receipt</p>
+    <a class="orpho-sample__view" href="/r/XwTULwlh76PcCst9">View full receipt &rarr;</a>
+  </div>
+  <div class="orpho-sample__grid sample-receipt-card">
+    <!-- Left: the office identity column, per the reference crop. -->
+    <div class="orpho-sample__brand">
+      <img class="orpho-sample__crest" src="/seal-display.png?v=8" alt="Orphograph seal" width="150" height="150">
+      <p class="orpho-sample__word">Orphograph</p>
+      <p class="orpho-label">Empirical Notary</p>
+      <p class="orpho-sample__blurb">This receipt is your cryptographic proof that the file existed by the time stated.</p>
+      <p class="orpho-sample__verify-line">Verify anytime at<br><strong>orphograph.com/verify</strong></p>
     </div>
-    <p class="fineprint">A real receipt. Open it, drop the original file, and watch it match — no account, no trust in us required.</p>
-      <div class="orpho-cal-row" aria-label="OpenTimestamps calendars this receipt was submitted to">
-        <p class="orpho-label orpho-cal-row__title">Timestamp calendars</p>
-        <span class="orpho-cal">a·pool</span>
-        <span class="orpho-cal">b·pool</span>
-        <span class="orpho-cal">alice</span>
-        <span class="orpho-cal">finney</span>
-        <span class="orpho-cal">catallaxy</span>
+    <!-- Right: the LIVE record — canonical id, real status, real actions. -->
+    <div class="orpho-sample__record">
+      <div class="eyebrow">Live Orphograph receipt</div>
+      <div class="receipt-id"><code>XwTULwlh76PcCst9</code></div>
+      <p class="receipt-status" id="live-receipt-title">Confirmed &middot; 5/5 calendars &middot; Bitcoin-attested</p>
+      <div class="cta-row">
+        <a href="/r/XwTULwlh76PcCst9" class="cta cta-primary cta-btn">Open the receipt</a>
+        <a href="/verify/" class="cta cta-secondary cta-btn">Verify it yourself</a>
       </div>
+      <p class="fineprint">A real receipt. Open it, drop the original file, and watch it match — no account, no trust in us required.</p>
+    </div>
+  </div>
+  <!-- Bottom band: attestation row + scannable proof, per the reference. -->
+  <div class="orpho-sample__foot">
+    <div class="orpho-cal-row" aria-label="OpenTimestamps calendars this receipt was submitted to">
+      <p class="orpho-label orpho-cal-row__title">Timestamp calendars</p>
+      <span class="orpho-cal"><svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor"/><path d="M12 3v18M3 12h18" stroke="currentColor" fill="none"/></svg>a&middot;pool</span>
+      <span class="orpho-cal"><svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor"/><path d="M5 12h14M12 5c3 4 3 10 0 14M12 5c-3 4-3 10 0 14" stroke="currentColor" fill="none"/></svg>b&middot;pool</span>
+      <span class="orpho-cal"><svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2" fill="none" stroke="currentColor"/><path d="M4 10h16M9 3v4M15 3v4" stroke="currentColor" fill="none"/></svg>alice</span>
+      <span class="orpho-cal"><svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor"/><path d="M12 7v5l4 3" stroke="currentColor" fill="none"/></svg>finney</span>
+      <span class="orpho-cal"><svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path d="M12 3l2.4 6.6L21 12l-6.6 2.4L12 21l-2.4-6.6L3 12l6.6-2.4z" fill="none" stroke="currentColor"/></svg>catallaxy</span>
+    </div>
+    <a class="orpho-sample__qr" href="/r/XwTULwlh76PcCst9" aria-label="Scan to open the live receipt">
+      <img src="/qr-receipt.svg?v=1" alt="" width="112" height="112">
+    </a>
   </div>
 </section>
 </div>
