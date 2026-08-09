@@ -259,7 +259,7 @@ def _mask_bit(mask: int, r: int, c: int) -> int:
     if mask == 4:
         return ((r // 2) + (c // 3)) % 2 == 0
     if mask == 5:
-        return (r * c) % 2 + (r * c) % 3 == 0
+        return ((r * c) % 2 + (r * c) % 3) == 0
     if mask == 6:
         return ((r * c) % 2 + (r * c) % 3) % 2 == 0
     return ((r + c) % 2 + (r * c) % 3) % 2 == 0
@@ -339,10 +339,15 @@ def _mask_penalty(modules: list[list[int]]) -> int:
 def _place_format(modules: list[list[int]], mask: int) -> None:
     """Write the format-information bits (already masked with 0x5412)."""
     bits = _FORMAT_INFO_L[mask]
-    # Bits 0–7 go to the strip below+right of the top-left finder.
-    # Bits 7–14 go to the strips beside the other two finders.
+    # Positional index i runs 0..14 along the spec's placement path, and the
+    # cell at path position i holds bit (14 - i) — MSB first. This was
+    # `(bits >> i) & 1` (LSB first), which reversed all 15 bits in both
+    # copies; the format info was unreadable, so no scanner could recover
+    # the mask, and every QR this module ever produced failed to decode
+    # (found 2026-08-08, proven by matrix-diff against a reference encoder:
+    # data, ECC and placement were byte-identical — only these strips wrong).
     for i in range(15):
-        bit = (bits >> i) & 1
+        bit = (bits >> (14 - i)) & 1
         # First copy (around top-left finder).
         if i < 6:
             modules[8][i] = bit
@@ -355,7 +360,7 @@ def _place_format(modules: list[list[int]], mask: int) -> None:
         else:
             modules[14 - i][8] = bit
         # Second copy (split between top-right and bottom-left finders).
-        if i < 8:
+        if i < 7:
             modules[_SIZE - 1 - i][8] = bit
         else:
             modules[8][_SIZE - 15 + i] = bit
