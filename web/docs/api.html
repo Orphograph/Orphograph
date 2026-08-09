@@ -181,7 +181,7 @@
     <tr>
       <td><code>429</code></td>
       <td>Rate limit exceeded</td>
-      <td>Free tier exceeded 10 anchors/hour. Response body includes <code>retry_after_seconds</code>. Buying a Pack or subscribing removes the limit entirely.</td>
+      <td>Free tier exceeded (3 anchors per 24 hours). Response body includes <code>retry_after_seconds</code>. Buying a Pack or subscribing removes the limit entirely.</td>
     </tr>
     <tr>
       <td><code>500</code></td>
@@ -922,7 +922,7 @@ python3 verify_cli.py receipt.json</code></pre>
   </p>
   <pre><code>{
   "stripe": { "pack_url": "...", "personal_monthly_url": "...", "personal_annual_url": "...", "creator_monthly_url": "..." },
-  "pricing": { "pack_usd": 19, "pack_credits": 10, "personal_monthly_usd": 9, "personal_annual_usd": 60, "creator_monthly_usd": 19 },
+  "pricing": { "pack_usd": 19, "pack_credits": 10, "pack50_usd": 29, "pack50_credits": 50, "personal_monthly_usd": 9, "personal_annual_usd": 60, "creator_monthly_usd": 19 },
   "toggles": { "checkout_disabled": false, "anchoring_disabled": false, "maintenance_mode": false },
   "features": { "btc_payments": false, "creator_tier_live": false, "private_receipts": true, "receipt_vault": true }
 }</code></pre>

@@ -10,7 +10,7 @@
 <link rel="stylesheet" href="/style.css?v=6">
 <meta name="copyright" content="© 2026 Orphograph. MIT — see /LICENSE">
 <link rel="canonical" href="https://orphograph.com/privacy">
-<meta name="description" content="Orphograph's privacy policy: your files never leave your device — only a SHA-256 fingerprint is anchored to Bitcoin. What we collect, what we never see, and your rights.">
+<meta name="description" content="Orphograph's privacy policy: your files never leave your device — only cryptographic fingerprints (SHA-256, optional SHA-512 sibling) cross the wire, and only the SHA-256 is anchored to Bitcoin. What we collect, what we never see, and your rights.">
 </head>
 <body class="orpho">
 
@@ -28,17 +28,20 @@
   <h2>What we never see</h2>
   <p>
     <strong>Your files do not reach our server.</strong> Hashing happens in your
-    browser via <code>crypto.subtle</code>. Only the 32-byte SHA-256 digest is
-    sent to us. We cannot recover your file from the digest; nobody can. The
-    privacy claim is enforced by the structure of the protocol, not by our
+    browser via <code>crypto.subtle</code>. What crosses the network is the
+    32-byte SHA-256 digest and — when the anchoring page computes it — an
+    optional SHA-512 sibling digest, recorded on the receipt but never
+    anchored. A digest cannot be reversed into your file; nobody can do that.
+    The privacy claim is enforced by the structure of the protocol, not by our
     promise to behave.
   </p>
 
   <h2>What we collect</h2>
   <ul>
     <li>
-      <strong>SHA-256 hashes you submit</strong>, plus the optional client label
-      (filename, max 200 chars) you choose to attach.
+      <strong>The fingerprints you submit</strong> — the SHA-256 digest, the
+      optional SHA-512 sibling — plus the optional client label (filename,
+      max 200 chars) you choose to attach.
     </li>
     <li>
       <strong>Truncated IP prefixes</strong> for rate limiting (we keep the
@@ -52,9 +55,32 @@
     </li>
     <li>
       <strong>The anchored receipt itself</strong> — receipt ID, hash, timestamp,
-      OTS proof files. These are public-by-design: anyone with the receipt ID
-      can read them via <code>/api/receipt/&lt;id&gt;</code>. Don't anchor secrets
-      you wouldn't want a peer to verify.
+      OTS proof files.
+    </li>
+  </ul>
+
+  <h2>Who can read a receipt</h2>
+  <p>Receipts come in exactly three postures; know which one you hold.</p>
+  <ul>
+    <li>
+      <strong>Public receipt (the default).</strong> Readable by anyone who
+      holds the receipt ID, via <code>/api/receipt/&lt;id&gt;</code> and the
+      receipt page. The ID is unguessable, but it is a bearer credential:
+      whoever you give it to can read and share the receipt. Don't anchor
+      secrets you wouldn't want a peer to verify.
+    </li>
+    <li>
+      <strong>Private receipt (subscribers).</strong> Anchored with
+      <code>private: true</code>; readable only by the authenticated owner.
+      If a private anchor cannot be honored as private, the request fails
+      closed — the office will not quietly publish what you asked to keep
+      private.
+    </li>
+    <li>
+      <strong>Offline evidence.</strong> The downloaded receipt JSON and
+      <code>.ots</code> proof files live on your disk and verify with
+      open-source tools, with or without us. Nothing about that copy touches
+      our server again.
     </li>
   </ul>
 
