@@ -332,6 +332,11 @@ body.orpho::before {
 }
 
 .orpho-brand { display: flex; align-items: center; gap: var(--orpho-s-4); text-decoration: none; }
+/* Name and subtitle are spans; left inline they form one unwrappable
+ * "ORPHOGRAPH EMPIRICAL NOTARY" line (~480px) that set the DOCUMENT's
+ * min width and clipped every phone ~90px on the right (found 2026-08-10,
+ * founder's iPhone screenshots). Stack them explicitly. */
+.orpho-brand__text { display: flex; flex-direction: column; min-width: 0; }
 .orpho-brand__mark { width: 62px; height: 62px; flex: 0 0 62px; }
 .orpho-brand__name {
   font-family: var(--orpho-display);

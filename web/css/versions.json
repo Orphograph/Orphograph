@@ -4,11 +4,11 @@
     "sha256": "947fc9b896572920c5998a41e8acc19fa410c942b314c52567d93f0ea2cb2f34"
   },
   "orpho-primitives": {
-    "version": 2,
-    "sha256": "ce10413f1259c3233f28cd338ea072bd2b74438f6f7bc654056edd3bd071204e"
+    "version": 3,
+    "sha256": "ccec8fe3a81d04fba1593b67e20d993addf5f2b2d5fbe5df24be90fa65eb9b9b"
   },
   "orpho-home": {
-    "version": 2,
-    "sha256": "a4d80ebd1359a96ebf5bd18d7fec70b5471f63a50a65f1e0f03783c9208f7e3d"
+    "version": 3,
+    "sha256": "866a1dc0bef887e0ba0aec1ab41f057066e5749ae7ff344fe18798512649873c"
   }
 }

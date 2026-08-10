@@ -923,7 +923,7 @@ class Handler(BaseHTTPRequestHandler):
 <link rel="stylesheet" href="/style.css?v=5">
 <link rel="stylesheet" href="/blog.css">
 <link rel="stylesheet" href="/css/orpho-tokens.css?v=2">
-<link rel="stylesheet" href="/css/orpho-primitives.css?v=2">
+<link rel="stylesheet" href="/css/orpho-primitives.css?v=3">
 <link rel="stylesheet" href="/index.css?v=21">
 </head>
 <body class="orpho">
