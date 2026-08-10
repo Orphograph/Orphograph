@@ -787,6 +787,94 @@
   .orpho-sample__foot { flex-direction: column; }
 }
 
+/* ══ Pass 9 — founder screenshot review (2026-08-10): tie + deboss ══════
+ * Two named defects from the envelope-detail crop.
+ *
+ * 1. "the string do not match": pass 8 splayed the strands ±18°/36° at 58px
+ *    toward the receipt eyelets, but the two brass buttons sit 78px apart
+ *    (centers: 5%+13px and 5%+91px — the lower disc is the closure's
+ *    ::after at top:300% of a 26px button). 58·cos18° ≈ 55px of vertical
+ *    reach across a 78px gap: the twine could never touch either disc, and
+ *    the strands painted ABOVE the buttons, so both loose ends showed.
+ *    Rebuilt from the button geometry instead of eyeballing: each strand
+ *    runs top-button-center → bottom-button-center (height 80px ≈
+ *    78/cos13°), offset ∓9px and rotated ±13° so they CROSS mid-way as a
+ *    figure-8 wrap. The discs then layer over the strand ends, which is
+ *    what a wrapped tie looks like — the cord vanishes behind the button.
+ * 2. "placed, not impregnated": the crest was brightness-lifted to
+ *    near-white (a coin), and because inset box-shadows paint UNDER a
+ *    replaced element's content, the "recess" shading only ever showed in
+ *    the 10px padding ring — a white disc on a plate. A deboss needs a
+ *    dish: a dedicated recess element whose floor is DEEPER PAPER (never
+ *    white), dark inner lip on the upper-left, lit inner lip on the
+ *    lower-right (a recess shades opposite to a boss), and the artwork
+ *    sunk to paper tone inside it with carved-line lighting — bright edge
+ *    below each engraved line, shadow above. Canonical PNG untouched.
+ */
+.orpho-envelope__string {
+  top: calc(5% + 13px);           /* top button center */
+  height: 78px;                   /* exactly the center-to-center gap */
+  width: 28px;
+  margin-left: -14px;
+  transform: none;
+  border-radius: 0;
+  box-shadow: none;
+  /* Two 4px strands drawn corner-to-corner as gradient stripes: the box
+   * spans button-center to button-center, so the strand ends are AT the
+   * discs by construction. atan(28/78) ≈ 19.75° → stripe axes 90°±19.75°.
+   * Each stripe shades light→dark across its width: a round cord, not a
+   * flat band. drop-shadow follows the stripes' alpha for depth. */
+  background:
+    linear-gradient(109.75deg,
+      transparent calc(50% - 2px), #e2d5b8 calc(50% - 2px),
+      #b3a17f calc(50% + 2px), transparent calc(50% + 2px)),
+    linear-gradient(70.25deg,
+      transparent calc(50% - 2px), #e2d5b8 calc(50% - 2px),
+      #b3a17f calc(50% + 2px), transparent calc(50% + 2px));
+  filter: drop-shadow(1px 1px 1px rgba(90, 70, 44, 0.35));
+}
+.orpho-envelope__string::before { content: none; }
+.orpho-envelope__closure { z-index: 4; }   /* discs over the strand ends */
+
+.orpho-envelope__recess {
+  position: absolute;
+  right: calc(6% - 8px); top: calc(9% - 8px);
+  width: 108px; height: 108px;
+  border-radius: 50%;
+  /* The dish is DARKER than the flap it is pressed into — shadowed paper,
+   * deepest toward the upper-left where the light cannot reach. */
+  background: radial-gradient(circle at 36% 30%,
+    #cfc0a0 0%, #dccfb2 55%, #e6dabf 100%);
+  box-shadow:
+    inset 4px 6px 10px rgba(90, 70, 44, 0.5),
+    inset -2px -3px 5px rgba(255, 252, 245, 0.55),
+    0 1px 0 rgba(255, 252, 245, 0.9),
+    0 -1px 1px rgba(90, 70, 44, 0.12);
+}
+.orpho-envelope__crest {
+  padding: 0;
+  box-shadow: none;
+  mix-blend-mode: normal;
+  opacity: 0.95;
+  filter:
+    grayscale(1) brightness(1.02) contrast(0.62) sepia(0.5) saturate(1.1)
+    drop-shadow(0 1px 0 rgba(255, 252, 245, 0.85))
+    drop-shadow(0 -1px 1px rgba(90, 70, 44, 0.5));
+}
+.orpho-hero__plate:hover .orpho-envelope__crest {
+  opacity: 1;
+  filter:
+    grayscale(1) brightness(1.0) contrast(0.66) sepia(0.5) saturate(1.1)
+    drop-shadow(0 1px 0 rgba(255, 252, 245, 0.95))
+    drop-shadow(0 -1px 1px rgba(90, 70, 44, 0.58));
+}
+@media (max-width: 680px) {
+  .orpho-envelope__recess {
+    width: 72px; height: 72px;
+    right: calc(4% - 8px); top: calc(9% - 8px);
+  }
+}
+
 /* ══ TERMINAL BLOCK — mobile reassert (2026-08-10) ══════════════════════
  * Founder's phone screenshots: two squeezed columns at 390pt, receipt
  * clipped mid-word, wax adrift. Cause: correction passes 1–8 appended
