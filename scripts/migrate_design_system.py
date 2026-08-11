@@ -59,6 +59,13 @@ BASE_CSS_RE = re.compile(r'<link rel="stylesheet" href="/(?:index|style)\.css\?v
 HEADER_RE = re.compile(r'<header class="nav">\s*<div class="wrap row">(.*?)</div>\s*</header>', re.DOTALL)
 # Other header shapes carrying the same brand+nav content.
 ALT_HEADER_RE = re.compile(r'<header class="(?:topnav|post-header|mast)">(.*?)</header>', re.DOTALL)
+# The transactional/legal/lp family used a bare <header> with a lowercase
+# brand div — never matched by the shapes above, so those 24 pages kept
+# their pre-archival masthead through the 2026-08-08 migration (found by
+# the founder's coherence audit, 2026-08-10).
+BARE_HEADER_RE = re.compile(
+    r'<header>\s*<div class="brand"><a href="/">orphograph</a></div>\s*'
+    r'(<nav>.*?</nav>)\s*</header>', re.DOTALL)
 BODY_RE = re.compile(r'<body([^>]*)>')
 
 
@@ -134,6 +141,28 @@ def migrate(path: Path) -> tuple[bool, str]:
     return True, "migrated"
 
 
+def retrofit_headers() -> int:
+    """Second pass for pages that already carry the shell but kept the old
+    bare-<header> masthead. Replaces ONLY the header block; nav links are
+    lifted verbatim per page, same as the original migration."""
+    done = skipped = 0
+    for path in discover():
+        src = path.read_text(encoding="utf-8")
+        m = BARE_HEADER_RE.search(src)
+        if not m:
+            continue
+        new_header = build_header(m.group(1))
+        if not new_header:
+            print(f"SKIP {path}: bare header without a <nav>")
+            skipped += 1
+            continue
+        path.write_text(src[:m.start()] + new_header + src[m.end():], encoding="utf-8")
+        print(f"retrofit {path}")
+        done += 1
+    print(f"\n{done} headers retrofitted, {skipped} skipped")
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--apply", action="store_true")
@@ -163,4 +192,7 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    import sys as _sys
+    if "--retrofit-headers" in _sys.argv:
+        raise SystemExit(retrofit_headers())
     sys.exit(main())

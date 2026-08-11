@@ -11,9 +11,15 @@
 </head>
 <body class="orpho">
 
-<header>
-  <div class="brand"><a href="/">orphograph</a></div>
-  <nav>
+<header class="orpho-header nav">
+  <a href="/" class="orpho-brand brand">
+    <img class="orpho-brand__mark" src="/seal-display.png?v=8" alt="" width="62" height="62">
+    <span class="orpho-brand__text">
+      <span class="orpho-brand__name">Orphograph</span>
+      <span class="orpho-brand__sub">Empirical Notary</span>
+    </span>
+  </a>
+  <nav class="orpho-nav">
     <a href="/">home</a>
     <a href="/docs/api">api</a>
     <a href="/status">status</a>
@@ -96,6 +102,7 @@ python3 verify.py examples/sample/receipt.json --file examples/sample/sample.txt
     <a href="/privacy">Privacy</a> ·
     <a href="/status">Status</a>
   </small>
+  <div class="wrap legal-disclaimer">Orphograph is not a law firm, not a notary, and not a qualified electronic-trust-service provider &mdash; a receipt is cryptographic proof that a file existed before a point in time, not legal advice.</div>
 </footer>
 
 <script src="/assets/event.js?v=1" defer></script>
