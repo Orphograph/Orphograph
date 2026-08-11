@@ -1335,6 +1335,29 @@ class Handler(BaseHTTPRequestHandler):
                 return
             _json_response(self, 200, {"claim_code": code, "balance": credits.balance(code)})
             return
+        if path.startswith("/r/") and path.endswith("/qr.svg"):
+            # Scannable QR for a receipt's canonical URL. The QR is a pure
+            # function of the URL — it encodes nothing the URL holder does
+            # not already have, so no record lookup happens here (same
+            # no-oracle posture as /api/badge/<id>.svg: a QR for a dead or
+            # private id scans to a page that says so honestly). Camera
+            # scan and the on-page click land on the same permalink.
+            rid = path[len("/r/"):-len("/qr.svg")]
+            if not RECEIPT_ID_RE.match(rid):
+                self.send_error(400, "invalid receipt id")
+                return
+            site = os.environ.get("SITE_URL", "https://orphograph.com").rstrip("/")
+            svg = qrcode_svg.make_svg(f"{site}/r/{rid}",
+                                      label=f"QR code linking to receipt {rid}")
+            body = svg.encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "image/svg+xml")
+            # The receipt URL never changes, so neither does its QR.
+            self.send_header("Cache-Control", "public, max-age=31536000, immutable")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
         if path.startswith("/r/"):
             # Print-friendly receipt view. JS reads the ID from the URL
             # and fetches /api/verify/<id>; we additionally template the
