@@ -875,6 +875,55 @@
   }
 }
 
+/* ══ Pass 10 — founder review 2026-08-10: organize, de-wax, fix the desk ═
+ * Three directives from the annotated screenshot:
+ * 1. The red wax stamp is GONE (markup removed; .orpho-wax rules below are
+ *    inert on this page). The receipt itself now carries a working QR of
+ *    its permalink instead — an instrument, not a decoration.
+ * 2. The engraved medallion becomes the DESK: position fixed, so the
+ *    watermark stays put while the papers scroll over it. z-index -1
+ *    paints it above the body paper but beneath every card and text
+ *    block — engraving on the desk, documents on top.
+ * 3. Containment: the plate gets room for the full receipt, and the
+ *    feature strip stops colliding with the composition's tail.
+ */
+.orpho-ornament--left {
+  position: fixed;
+  z-index: -1;
+  left: -11vw; top: 18vh;
+}
+.orpho-hero__plate { min-height: 700px; }
+.orpho-features-wrap { margin-top: var(--orpho-s-7); }
+
+/* Working QRs. White quiet-zone panel behind each symbol: a scanner needs
+ * contrast and margin, and the parchment alone provides neither. */
+.orpho-receipt__qr {
+  display: block;
+  width: 96px;
+  margin: 12px auto 0;
+}
+.orpho-receipt__qr img,
+.orpho-sample__qr img {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: #fff;
+  padding: 6px;
+  border: 1px solid var(--orpho-border);
+  border-radius: 4px;
+}
+.orpho-sample__qr {
+  display: block;
+  width: 88px;
+  margin-left: auto;
+  margin-right: var(--orpho-s-5);
+}
+@media (max-width: 680px) {
+  .orpho-hero__plate { min-height: 560px; }
+  .orpho-receipt__qr { width: 80px; }
+  .orpho-sample__qr { width: 72px; margin-right: var(--orpho-s-4); }
+}
+
 /* ══ TERMINAL BLOCK — mobile reassert (2026-08-10) ══════════════════════
  * Founder's phone screenshots: two squeezed columns at 390pt, receipt
  * clipped mid-word, wax adrift. Cause: correction passes 1–8 appended

@@ -413,13 +413,18 @@ def encode_matrix(data: str) -> list[list[int]]:
     return best_matrix
 
 
-def make_svg(data: str, *, scale: int = 8, quiet: int = 4) -> str:
+def make_svg(data: str, *, scale: int = 8, quiet: int = 4,
+             label: str = "Bitcoin payment QR code") -> str:
     """Build a self-contained SVG document for `data`.
 
     Args:
         data: the payload string (e.g. a BIP-21 URI). UTF-8 is fine.
         scale: pixels per module. 8 → ~296 px square at Version 4 + 4-module quiet zone.
         quiet: width of the white quiet zone, in modules. 4 is the spec minimum.
+        label: the SVG's aria-label. The default keeps the historical BTC
+            wording so existing callers and the shipped homepage asset stay
+            byte-identical; non-payment callers (receipt QRs) pass their own.
+            Trusted call sites only — the label is interpolated into markup.
 
     Returns:
         An SVG document as a UTF-8 string. Safe to embed via innerHTML
@@ -436,7 +441,7 @@ def make_svg(data: str, *, scale: int = 8, quiet: int = 4) -> str:
         f'viewBox="0 0 {total} {total}" '
         f'width="{total}" height="{total}" '
         f'shape-rendering="crispEdges" '
-        f'role="img" aria-label="Bitcoin payment QR code">'
+        f'role="img" aria-label="{label}">'
     )
     # White background covers the quiet zone too.
     parts.append(f'<rect width="{total}" height="{total}" fill="#ffffff"/>')
