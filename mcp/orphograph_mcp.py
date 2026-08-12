@@ -104,7 +104,7 @@ COMMON_HEADERS = {
 }
 PROTOCOL_VERSION = "2024-11-05"
 SERVER_NAME = "orphograph"
-SERVER_VERSION = "0.1.0"
+SERVER_VERSION = "0.1.1"
 
 
 # ── stderr logger ──────────────────────────────────────────────────

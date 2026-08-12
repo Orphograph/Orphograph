@@ -2,7 +2,7 @@
   "manifest_version": "0.2",
   "name": "orphograph",
   "display_name": "Orphograph",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Anchor a file's fingerprint to the Bitcoin chain via Orphograph. The file never leaves the device \u2014 only the SHA-256 fingerprint crosses the wire.",
   "long_description": "A single-file, stdlib-only Model Context Protocol server that lets any MCP host anchor files to the Bitcoin chain via Orphograph (https://orphograph.com). The file body never leaves the user's machine: the server hashes locally and transmits only the SHA-256/SHA-512 fingerprints. Receipts are verifiable independently of Orphograph via OpenTimestamps. Tools: anchor a file, verify a receipt, list the subscriber vault. A receipt proves a file existed in exactly this form by a recorded date; it does not prove authorship, ownership, or that the file's contents are true.",
   "author": {
