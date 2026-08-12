@@ -17,7 +17,7 @@
 <link rel="preload" as="font" type="font/woff2" href="/fonts/Spectral-400.woff2" crossorigin>
 <link rel="stylesheet" href="/css/orpho-tokens.css?v=2">
 <link rel="stylesheet" href="/css/orpho-primitives.css?v=3">
-<link rel="stylesheet" href="/css/orpho-home.css?v=5">
+<link rel="stylesheet" href="/css/orpho-home.css?v=6">
 <link rel="stylesheet" href="/index.css?v=21">
 <link rel="preload" as="image" href="/seal-display.png?v=8" fetchpriority="high">
 <meta name="copyright" content="© 2026 Orphograph. MIT — see /LICENSE">
@@ -311,6 +311,7 @@
   </div>
 </section>
 
+
 <!-- ─────────────────────── 5 · LIVE RECEIPT CARD ─────────────────────── -->
 <section class="sample-receipt-section orpho-card orpho-sample" id="proof" aria-labelledby="live-receipt-title">
   <div class="orpho-sample__bar">
@@ -355,6 +356,35 @@
   </div>
 </section>
 </div>
+
+<!-- ─────────────────────── 4c · THE ARCHITECTURE OF TRUST ───────────────
+     Audit item 10 (2026-08-11): About's strongest material, promoted. Three
+     layers, each naming an actor and its role; every line restates copy the
+     site already asserts (About: "the chain is the trust anchor"; Terms §5:
+     receipts remain verifiable without us). No new claims. -->
+<section class="orpho-card orpho-arch" aria-labelledby="orpho-arch-title">
+  <h2 id="orpho-arch-title" class="orpho-arch__title">Where the trust actually lives</h2>
+  <ol class="orpho-arch__layers">
+    <li class="orpho-arch__layer">
+      <p class="orpho-label orpho-arch__actor">Orphograph</p>
+      <p class="orpho-arch__role">issues the instrument</p>
+      <p class="orpho-arch__note">The receipt, the proof files, and the office that prepares them.</p>
+    </li>
+    <li class="orpho-arch__layer">
+      <p class="orpho-label orpho-arch__actor">OpenTimestamps</p>
+      <p class="orpho-arch__role">constructs the proof</p>
+      <p class="orpho-arch__note">An open standard aggregates fingerprints into a Merkle tree (RFC&nbsp;6962).</p>
+    </li>
+    <li class="orpho-arch__layer">
+      <p class="orpho-label orpho-arch__actor">Bitcoin</p>
+      <p class="orpho-arch__role">provides permanence</p>
+      <p class="orpho-arch__note">The tree's root is committed to a public chain no company controls.</p>
+    </li>
+  </ol>
+  <p class="orpho-arch__kicker">The office may disappear.<br>The evidence does not.</p>
+  <p class="orpho-arch__foot">Receipts verify with open-source tools, offline, without our cooperation.</p>
+</section>
+
 
 <!-- ─────────────────────── stats-row fix · trust strip ─────────────────────── -->
 <div class="trust-strip">
