@@ -3364,9 +3364,12 @@ class Handler(BaseHTTPRequestHandler):
             _json_response(self, 500, {"error": "could not read receipt"})
             return
         viewer_id = auth.email_id(email)
-        expected_source = "sub:" + viewer_id
-        if rec.get("source") != expected_source:
-            # Don't reveal whether receipt exists for another owner
+        # Ownership covers API-key-anchored receipts too — they are the
+        # customer's own. This used to compare against sub:<id> alone, so a
+        # subscriber who anchored through the API was told their own receipt
+        # did not exist. 404 (not 403) is deliberate: it still refuses to
+        # reveal whether a receipt exists for a DIFFERENT owner.
+        if not _receipt_belongs_to(rec, email):
             _json_response(self, 404, {"error": "receipt not found"})
             return
         rec["private"] = want_private
@@ -4871,6 +4874,39 @@ class Handler(BaseHTTPRequestHandler):
         })
 
 
+def _owned_sources_for_email(email: str) -> set[str]:
+    """Every `source` tag that means "this receipt belongs to `email`".
+
+    SINGLE SOURCE OF TRUTH. A receipt is tagged by HOW it was paid for, not
+    by who owns it:
+
+        session-anchored   sub:<email_id>
+        API-key-anchored   api:<key[:10]>   (any key ever issued to them,
+                                             including since-rotated ones)
+
+    Three call sites each answered "is this receipt theirs?" independently
+    and two got it wrong (2026-08-07 drift sweep). Only the vault LIST knew
+    about api: tags, so for a customer who anchors through the API:
+
+      * the vault listed their receipt but the counter said 0 — the same
+        page showed both numbers, disagreeing;
+      * the privacy toggle replied "receipt not found" about a receipt they
+        own and were looking at.
+
+    Add a new payment path and it must be added HERE, once.
+    """
+    if not email:
+        return set()
+    owned = {"sub:" + auth.email_id(email)}
+    owned.update("api:" + p for p in api_keys.source_prefixes_for_email(email))
+    return owned
+
+
+def _receipt_belongs_to(rec: dict, email: str) -> bool:
+    """Ownership test for one receipt. Use this, never a bare source compare."""
+    return bool(email) and rec.get("source") in _owned_sources_for_email(email)
+
+
 def _count_anchors_for_email(email: str) -> int:
     """Fast O(receipts) count of anchors owned by this email.
 
@@ -4882,7 +4918,7 @@ def _count_anchors_for_email(email: str) -> int:
     """
     if not email:
         return 0
-    expected_source = "sub:" + auth.email_id(email)
+    owned_sources = _owned_sources_for_email(email)
     receipts_dir = engine.RECEIPTS_DIR
     if not receipts_dir.exists():
         return 0
@@ -4897,7 +4933,7 @@ def _count_anchors_for_email(email: str) -> int:
             rec = json.loads(rfile.read_text())
         except (OSError, json.JSONDecodeError):
             continue
-        if rec.get("source") == expected_source:
+        if rec.get("source") in owned_sources:
             count += 1
     return count
 
@@ -4968,12 +5004,11 @@ def _list_anchors_for_email(
     """
     if not email:
         return ([], False) if with_more_flag else []
-    # Session-anchored receipts are tagged sub:<email_id>; API-key-anchored
-    # receipts are tagged api:<key[:10]>. Both belong in the owner's vault,
-    # including receipts anchored under a since-rotated key.
-    expected_sources = {"sub:" + auth.email_id(email)}
-    expected_sources.update(
-        "api:" + p for p in api_keys.source_prefixes_for_email(email))
+    # See _owned_sources_for_email: session anchors are tagged sub:<email_id>,
+    # API-key anchors api:<key[:10]>, and both belong in the owner's vault.
+    # This call site had it right; two others did not, so the rule now lives
+    # in one place.
+    expected_sources = _owned_sources_for_email(email)
     receipts_dir = engine.RECEIPTS_DIR
     if not receipts_dir.exists():
         return ([], False) if with_more_flag else []
