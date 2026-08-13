@@ -1302,14 +1302,29 @@ class Handler(BaseHTTPRequestHandler):
         if path.startswith("/api/badge/") and path.endswith(".svg"):
             # Embeddable verification badge. Single GET, public, cacheable.
             # Privacy: badge_svg.render() reads only receipt_id + created_at
-            # — no filename, no email, no hash bytes — so the SVG output is
+            # — no filename, no email, no hash bytes — so the SVG CONTENT is
             # safe to expose without authentication.
+            #
+            # Content was not the whole question. The STATUS CODE was an
+            # existence oracle: a private receipt rendered 200 while an
+            # unknown id gave 404, so a stranger could confirm a private
+            # receipt exists by requesting its badge — the exact thing
+            # /api/verify returns 404 to prevent ("don't reveal whether a
+            # receipt exists for another owner").
+            #
+            # Private receipts 404 here for EVERYONE, including the owner.
+            # A badge exists to be embedded on the public web, which is
+            # precisely what "private" withdraws; and because this response
+            # is cached `public, max-age=3600`, an owner-specific 200 could
+            # be stored by a CDN and then served to strangers. One answer
+            # for all callers is both the correct policy and the only
+            # cache-safe one.
             rid = path[len("/api/badge/"):-len(".svg")]
             if not RECEIPT_ID_RE.match(rid):
                 self.send_error(400, "invalid receipt id")
                 return
             record = engine.verify_receipt(rid)
-            if not record.get("found"):
+            if not record.get("found") or record.get("private"):
                 self.send_error(404, "receipt not found")
                 return
             site = os.environ.get("SITE_URL", "").rstrip("/")
