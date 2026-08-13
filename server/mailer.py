@@ -178,8 +178,29 @@ def _send(to: str, subject: str, text: str, html: str,
                 f"subject={subject!r} (address on bounce/complaint suppression list)\n"
             )
             return False
-    except Exception:  # noqa: BLE001 — suppression check must never block sending
-        pass
+    except Exception as _e:  # noqa: BLE001
+        # An UNREADABLE ledger is not "not suppressed". This used to be a
+        # bare `pass`, so a permissions fault silently resumed mailing
+        # addresses that had hard-bounced or filed spam complaints — the
+        # exact outcome the comment above warns about.
+        #
+        # The right answer differs by message type, so it is not a blanket
+        # fail-closed: blocking a paying customer's receipt because OUR file
+        # permissions broke is its own harm. Consent-based mail is refused;
+        # transactional mail proceeds but is no longer silent about it.
+        _unavailable = _e.__class__.__name__ == "SuppressionUnavailable"
+        if _unavailable and not transactional:
+            sys.stderr.write(
+                f"[email:BLOCKED] refusing NON-transactional send to "
+                f"{_auth.mask_email(to)} subject={subject!r}: suppression "
+                f"ledger unreadable ({_e}). Consent cannot be confirmed.\n")
+            return False
+        if _unavailable:
+            sys.stderr.write(
+                f"[email:UNVERIFIED] suppression ledger unreadable ({_e}); "
+                f"sending TRANSACTIONAL {subject!r} to "
+                f"{_auth.mask_email(to)} anyway. This address may be on the "
+                f"bounce/complaint list — FIX THE LEDGER.\n")
 
     text_out = text + _footer_text(to, transactional)
     html_out = _wrap_html_body(html + _footer_html(to, transactional))

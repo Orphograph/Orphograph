@@ -40,6 +40,12 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+import unsubscribe as _unsub
+
+# Shared so callers can catch one exception type across both
+# consent ledgers.
+SuppressionUnavailable = _unsub.SuppressionUnavailable
+
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = Path(os.environ.get(
     "ORPHO_DATA_DIR", str(ROOT / "data") if (ROOT / "data").is_dir() else str(ROOT)))
@@ -104,7 +110,14 @@ def _has_processed(event_id: str) -> bool:
                         return True
                 except json.JSONDecodeError:
                     continue
-    except OSError:
+    except OSError as e:
+        # Fail-open is the SAFE direction here, unlike the suppression check
+        # below: re-processing a bounce event re-appends to an idempotent
+        # list, whereas treating it as already-processed would silently DROP
+        # a suppression. Log it so a broken ledger is still visible.
+        sys.stderr.write(
+            f"[resend_webhook] processed-events ledger unreadable ({e}); "
+            f"event will be re-processed\n")
         return False
     return False
 
@@ -151,8 +164,13 @@ def is_suppressed(email: str) -> bool:
                         return True
                 except json.JSONDecodeError:
                     continue
-    except OSError:
-        return False
+    except OSError as e:
+        # NOT "return False". An unreadable suppression ledger means consent
+        # is UNKNOWN; saying "not suppressed" resumes mailing addresses that
+        # hard-bounced or filed a spam complaint. mailer._send decides what
+        # to do with this by message type.
+        raise SuppressionUnavailable(
+            f"bounce/complaint suppression ledger unreadable: {e}") from e
     return False
 
 
