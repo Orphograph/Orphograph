@@ -33,6 +33,7 @@ Public API:
 from __future__ import annotations
 
 import json
+import sys
 import os
 import threading
 from datetime import datetime, timedelta, timezone
@@ -182,7 +183,17 @@ def due_emails(now: datetime | None = None) -> list[tuple[str, int]]:
     for email, st in agg.items():
         if not st["started_at"]:
             continue
-        if unsubscribe.is_unsubscribed(email):
+        try:
+            if unsubscribe.is_unsubscribed(email):
+                continue
+        except unsubscribe.SuppressionUnavailable as e:
+            # Fail CLOSED: this is a consent-based drip, so an unreadable
+            # unsubscribe ledger means we cannot show consent, and mailing
+            # someone who opted out is the one outcome to avoid. Skipping
+            # costs a delayed nudge; sending costs a compliance breach.
+            sys.stderr.write(
+                f"[onboarding] skipping {email[:3]}***: cannot confirm "
+                f"unsubscribe status ({e})\n")
             continue
         step = _due_step(st["started_at"], st["sent_steps"], now)
         if step is not None:
@@ -247,7 +258,14 @@ def stats() -> dict:
         for s in st["sent_steps"]:
             if s in by_step:
                 by_step[s] += 1
-        unsub = unsubscribe.is_unsubscribed(email)
+        try:
+            unsub = unsubscribe.is_unsubscribed(email)
+        except unsubscribe.SuppressionUnavailable:
+            # Reporting path, not a send. An unreadable ledger must not crash
+            # the stats view; it is counted as not-unsubscribed for the tally
+            # only. The SEND path above fails closed, which is where it
+            # matters.
+            unsub = False
         if unsub:
             unsub_count += 1
         all_sent = all(s in st["sent_steps"] for s in SEQUENCE_STEPS)
