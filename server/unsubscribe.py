@@ -23,6 +23,18 @@ from pathlib import Path
 
 from file_lock import locked
 
+
+class SuppressionUnavailable(RuntimeError):
+    """The consent ledger could not be read, so consent is UNKNOWN.
+
+    Never collapse this to "not suppressed". A read failure used to return
+    False, i.e. "go ahead and email them" — and on this system unreadable
+    /data files are not hypothetical (root-owned api_keys.jsonl 2026-07-27,
+    webhooks.jsonl 2026-07-28). The consequence of getting this wrong is
+    mailing people who unsubscribed or who filed a spam complaint.
+    """
+
+
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = Path(os.environ.get("ORPHO_DATA_DIR", str(ROOT / "data") if (ROOT / "data").is_dir() else str(ROOT)))
 SUPPRESS_PATH = Path(os.environ.get("ORPHO_SUPPRESSIONS", str(DATA_DIR / "suppressions.jsonl")))
@@ -63,6 +75,8 @@ def is_unsubscribed(email: str) -> bool:
                     continue
                 if _norm(row.get("email", "")) == email:
                     return True
-    except OSError:
-        return False
+    except OSError as e:
+        # Fail LOUD, not open. The caller decides — consent-based mail must
+        # skip the recipient; a transactional receipt may still go out.
+        raise SuppressionUnavailable(f"unsubscribe ledger unreadable: {e}") from e
     return False
