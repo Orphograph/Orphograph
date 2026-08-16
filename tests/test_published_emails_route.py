@@ -121,6 +121,37 @@ class TestPublishedAddressesAreProvisioned(unittest.TestCase):
                 f"which the provisioner does not route. A disclosure would "
                 f"bounce.")
 
+    def test_security_txt_links_are_canonical_not_redirects(self):
+        """security.txt named /security.html, which 301s to /security.
+
+        It works in a browser — clients follow redirects — but RFC 9116 asks
+        for canonical URIs, and scanners that do NOT follow redirects see a
+        broken Policy link on the one file whose whole job is telling a
+        researcher where to go. Checked statically (no network in CI): the
+        site canonicalises .html -> extensionless everywhere, so a .html URI
+        here is a redirect by construction.
+        """
+        st = (ROOT / "web" / ".well-known" / "security.txt").read_text()
+        stale = [ln.strip() for ln in st.splitlines()
+                 if re.search(r"https://[^\s]*\.html", ln)]
+        self.assertEqual(
+            stale, [],
+            "security.txt points at .html URLs, which this site 301s to their "
+            f"extensionless form — name the destination instead: {stale}")
+
+    def test_security_txt_has_the_fields_a_researcher_needs(self):
+        """A Contact that routes is necessary but not sufficient: an expired
+        or absent Expires makes the whole file advisory per RFC 9116."""
+        st = (ROOT / "web" / ".well-known" / "security.txt").read_text()
+        for field in ("Contact:", "Expires:", "Canonical:", "Policy:"):
+            self.assertIn(field, st, f"security.txt lacks {field}")
+        m = re.search(r"Expires:\s*(\d{4})-", st)
+        self.assertIsNotNone(m, "Expires: is not an ISO date")
+        self.assertGreaterEqual(
+            int(m.group(1)), 2026,
+            "security.txt Expires is in the past — RFC 9116 says the file "
+            "should then be considered stale and may be ignored entirely")
+
     def test_the_provisioner_declares_no_unused_aliases(self):
         """The reverse drift: an alias nobody publishes is a rule nobody
         needs. Not a failure on its own — `billing` is deliberately kept for
