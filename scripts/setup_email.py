@@ -260,6 +260,20 @@ def cf_get_zone(token: str, domain: str) -> dict[str, str] | None:
     return None
 
 
+# Every local-part that must receive mail, because the site publishes it.
+# Keep in sync with what web/ and server/ actually reference — the test
+# tests/test_published_emails_route.py enforces exactly that.
+ALIAS_ADDRESSES = (
+    "security",   # .well-known/security.txt — the disclosure channel
+    "legal",
+    "privacy",
+    "press",
+    "abuse",      # RFC 2142; providers and reporters check it
+    "support",
+    "billing",    # not currently published; kept for checkout correspondence
+)
+
+
 def cf_enable_email_routing(token: str, zone_id: str) -> bool:
     code, _ = http("POST", f"{CF_API}/zones/{zone_id}/email/routing/enable", token=token)
     return code in (200, 409)  # 409 = already enabled
@@ -455,8 +469,16 @@ def step5_routing_and_records(token: str, zone: dict[str, str], dest: str,
     else:
         warn(f"rule create returned: {res.get('errors', res)} (might already exist)")
 
-    # 5c. Useful aliases
-    for alias in ("support", "billing", "abuse", "legal", "privacy"):
+    # 5c. Useful aliases.
+    #
+    # THIS LIST MUST COVER EVERY @DOMAIN ADDRESS THE SITE PUBLISHES.
+    # 2026-08-15: it did not. web/ and server/ published security@ (16
+    # occurrences, including .well-known/security.txt) and press@ (4) while
+    # this script provisioned neither — so even a clean re-run left the
+    # documented vulnerability-disclosure channel unrouted, bouncing any
+    # researcher who followed security.txt. tests/test_published_emails_route.py
+    # fails the suite if a published address is missing from this tuple.
+    for alias in ALIAS_ADDRESSES:
         r = cf_add_rule(token, zone["id"], f"{alias}@{DOMAIN}", dest)
         if r.get("success"):
             ok(f"rule {alias}@{DOMAIN} → {dest}")
