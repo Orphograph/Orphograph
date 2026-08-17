@@ -118,6 +118,13 @@ def test_landing_has_security_headers(live_server):
     assert headers.get("x-frame-options") == "DENY"
     assert "default-src 'self'" in headers.get("content-security-policy", "")
     assert "max-age" in headers.get("strict-transport-security", "")
+    # Permissions-Policy denies unused powerful features; clipboard stays allowed
+    # (copy buttons depend on navigator.clipboard).
+    pp = headers.get("permissions-policy", "")
+    assert "camera=()" in pp, "Permissions-Policy must deny camera"
+    assert "geolocation=()" in pp, "Permissions-Policy must deny geolocation"
+    assert "microphone=()" in pp, "Permissions-Policy must deny microphone"
+    assert "clipboard" not in pp, "clipboard must NOT be denied (copy buttons use it)"
 
 
 def test_landing_does_not_load_third_party_scripts(live_server):
