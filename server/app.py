@@ -416,6 +416,16 @@ def _security_headers(handler: BaseHTTPRequestHandler) -> None:
     handler.send_header("X-Frame-Options", "DENY")
     handler.send_header("Referrer-Policy", "strict-origin-when-cross-origin")
     handler.send_header("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+    # Deny powerful browser features the site never uses. clipboard-write is
+    # deliberately NOT in this deny list: the copy-to-clipboard buttons on the
+    # receipt/account/pay pages depend on navigator.clipboard (defaults to
+    # self-allowed). camera/microphone/geolocation/usb/payment are unused by any
+    # page (verified: no getUserMedia / BarcodeDetector / geolocation in web/).
+    handler.send_header(
+        "Permissions-Policy",
+        "camera=(), microphone=(), geolocation=(), usb=(), payment=(), "
+        "accelerometer=(), gyroscope=(), magnetometer=()",
+    )
     handler.send_header(
         "Content-Security-Policy",
         "default-src 'self'; script-src 'self'; style-src 'self'; "
