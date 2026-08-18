@@ -108,12 +108,30 @@ class TestQrIsOnTheTemplates(unittest.TestCase):
     def test_homepage_sample_qr_is_clickable_and_canonical(self):
         html = (ROOT / "web" / "index.html").read_text()
         self.assertIn('class="orpho-sample__qr" href="/r/%s"' % SAMPLE_ID, html)
-        # The hero plate is aria-hidden: its QR link must be clickable but
-        # NOT focusable, or the page fails accessibility audits.
-        i = html.find('class="orpho-receipt__qr"')
-        self.assertGreater(i, -1, "hero receipt lost its QR")
-        self.assertIn('tabindex="-1"', html[i:i + 200],
-                      "focusable link inside the aria-hidden hero plate")
+
+    def test_the_hero_plate_carries_no_qr(self):
+        """Removed 2026-08-17, and pinned so it does not come back.
+
+        The hero plate is `aria-hidden` — a picture of the product — and
+        `.orpho-hero { overflow: hidden }` cut the receipt card off at the
+        plate's bottom edge. Measured on master at three viewport widths:
+        122px / 101px / 517px of the card were clipped away, which left the
+        QR that used to sit there showing about 24px of itself on desktop and
+        nothing at all on narrower screens. It could never have been scanned,
+        while the markup comment beside it claimed a camera pointed at the
+        hero would land on the live receipt.
+
+        Fitting a 160px symbol there would mean growing the plate to ~860px
+        desktop and ~1124px mobile — a hero redesign smuggled in to house a
+        decorative QR. The scannable symbols live in the sample-receipt
+        section and on the receipt page, where they are measured by
+        tests/test_qr_scannable.py.
+        """
+        html = (ROOT / "web" / "index.html").read_text()
+        self.assertNotIn(
+            'class="orpho-receipt__qr"', html,
+            "a QR is back inside the aria-hidden hero plate, which clips it "
+            "— see this test's docstring for the measurements")
 
     def test_homepage_wax_stamp_is_gone(self):
         html = (ROOT / "web" / "index.html").read_text()
