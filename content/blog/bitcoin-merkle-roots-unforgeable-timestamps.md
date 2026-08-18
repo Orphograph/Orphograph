@@ -269,7 +269,8 @@ no public SHA-256 collision has ever been found, despite ~$100M+
 in academic and adversarial research. Best known attacks require
 roughly 2^126 operations, which exceeds the lifetime computational
 budget of the entire planet. **Note:** if SHA-256 is ever broken,
-your Orphograph receipts also include a SHA-512 sibling witness —
+your Orphograph receipts can also include an optional SHA-512
+sibling witness —
 the file would need to produce a collision in BOTH hashes
 simultaneously, which is structurally harder.
 

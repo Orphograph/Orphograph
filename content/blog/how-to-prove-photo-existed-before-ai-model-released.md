@@ -65,8 +65,9 @@ users' fingerprints into one Bitcoin transaction.
 Open Orphograph in a browser. Drag the file onto the drop zone.
 The hash is computed locally — the file's bytes never leave your
 machine. The page shows two hashes: SHA-256 and SHA-512. Both are
-included in the receipt so that if SHA-256 is ever broken, the
-SHA-512 sibling still verifies independently.
+recorded in the receipt, when the client includes it, so that if
+SHA-256 is ever broken, the SHA-512 sibling still verifies
+independently.
 
 If you want to do this without any service, the command-line path
 is `shasum -a 256 my_photo.jpg`. You will see the same 64-character

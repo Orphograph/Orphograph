@@ -67,7 +67,7 @@ When you anchor a file with Orphograph, you get back:
 2. **Five `.ots` proof files** (~200–500 bytes each) — one per
    OpenTimestamps calendar. Each contains the cryptographic path
    from your hash up to a Bitcoin transaction.
-3. **A SHA-512 sibling witness** in the receipt (quantum hedge —
+3. **An optional SHA-512 sibling witness** in the receipt (quantum hedge —
    we wrote about that in [the quantum-protection blog post]).
 
 Total bundle: ~3KB. Save it next to your photo. That's it.

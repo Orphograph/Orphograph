@@ -145,8 +145,8 @@ A SHA-256 collision is found. No public SHA-256 collision has
 ever been found. Best known academic attacks require roughly
 2^126 operations. If SHA-256 is ever broken, the impact would be
 a once-in-a-generation cryptographic event affecting essentially
-the entire internet. Orphograph receipts include a SHA-512
-sibling hash that would still verify in that scenario.
+the entire internet. Orphograph receipts can include an optional
+SHA-512 sibling hash that would still verify in that scenario.
 
 The entire Bitcoin network agrees to a coordinated rollback. The
 closest historical precedent is the March 2013 rollback, caused
