@@ -530,7 +530,16 @@ a.lineage-id {
 .receipt-qr img {
   display: block;
   background: #fff;
-  padding: 8px;
+  /* The size lives here, in content-box, so 160 is 160 of SYMBOL. style.css
+   * sets `* { box-sizing: border-box }` site-wide, which is what silently
+   * ate the homepage QRs (declared 160, drawn 146). padding 0, not 8: the
+   * SVG carries its own 4-module quiet zone, and the inner pad shrank the
+   * symbol to 148px — under the measured 160px camera threshold
+   * (see orpho-home.css for the decode table). */
+  box-sizing: content-box;
+  width: 160px;
+  height: 160px;
+  padding: 0;
   border: 1px solid rgba(58, 47, 36, 0.18);
   border-radius: 6px;
 }
