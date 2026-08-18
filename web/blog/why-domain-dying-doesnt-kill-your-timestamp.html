@@ -111,7 +111,7 @@
   <p>When a file is anchored with Orphograph, the holder receives:</p>
   <p><strong>1.</strong> <strong>A receipt JSON file</strong> (~1KB) — contains the SHA-256 hash of the file, the timestamp, and pointers to the OpenTimestamps calendar servers that received it.</p>
   <p><strong>2.</strong> <strong>Five <code>.ots</code> proof files</strong> (~200–500 bytes each) — one per OpenTimestamps calendar. Each contains the cryptographic path from the hash up to a Bitcoin transaction.</p>
-  <p><strong>3.</strong> <strong>A SHA-512 sibling witness</strong> in the receipt — a hedge against any future weakness in SHA-256.</p>
+  <p><strong>3.</strong> <strong>An optional SHA-512 sibling witness</strong> in the receipt — a hedge against any future weakness in SHA-256.</p>
   <p>Total bundle: about 3KB. Save it next to the photo.</p>
   <p>To verify five years from now, three things are required — none of which depend on Orphograph still existing:</p>
   <p><strong>1.</strong> <strong>The original file</strong> (the holder has it).</p>

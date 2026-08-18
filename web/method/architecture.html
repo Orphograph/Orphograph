@@ -101,8 +101,8 @@ const sha512_hex = hex(s512);
   <section>
     <h2>3 · The SHA-512 sibling — a quantum hedge</h2>
     <div class="arch-rule"></div>
-    <p>OpenTimestamps commits a SHA-256 digest to the Bitcoin chain. The Orphograph receipt records the SHA-256 alongside a sibling SHA-512 of the same file. To forge a file-to-receipt binding, an attacker must produce a second file whose SHA-256 AND SHA-512 collide with the original — a much harder problem than producing either collision alone.</p>
-    <p>The argument matters because Grover's algorithm halves the effective bits of preimage resistance under a hypothetical large-scale quantum computer. SHA-256 falls from approximately 2^256 to 2^128 effective work; SHA-512 falls from 2^512 to 2^256. The dual-hash receipt preserves attack cost in the post-quantum range for the foreseeable future. The sibling witness is the protocol's hedge against an advance that current research does not anticipate within decades, but the cost of preparing for it is zero.</p>
+    <p>OpenTimestamps commits a SHA-256 digest to the Bitcoin chain. The Orphograph receipt records the SHA-256 and, when the client supplies one, a sibling SHA-512 of the same file. Where the sibling is present, forging a file-to-receipt binding requires a second file whose SHA-256 AND SHA-512 collide with the original — a much harder problem than producing either collision alone.</p>
+    <p>The argument matters because Grover's algorithm halves the effective bits of preimage resistance under a hypothetical large-scale quantum computer. SHA-256 falls from approximately 2^256 to 2^128 effective work; SHA-512 falls from 2^512 to 2^256. Where the sibling is recorded, the dual-hash receipt preserves attack cost in the post-quantum range for the foreseeable future. The sibling witness is the protocol's hedge against an advance that current research does not anticipate within decades, but the cost of preparing for it is zero.</p>
   </section>
 
   <section>

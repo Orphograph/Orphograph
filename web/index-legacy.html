@@ -248,7 +248,7 @@
       <li>Each calendar aggregates many hashes into a single Merkle root and writes it to a Bitcoin transaction (~hourly).</li>
       <li>You receive a receipt with the hash, timestamp, and five independently-verifiable OTS proofs.</li>
       <li>To prove existence later, anyone can re-hash the original file and check the receipt — no trust in us required.</li>
-      <li>We also embed a SHA-512 sibling witness in every receipt as a quantum-era hedge.</li>
+      <li>We also embed an optional SHA-512 sibling witness in receipts as a quantum-era hedge.</li>
     </ol>
   </details>
 </section>
@@ -460,8 +460,8 @@
     <h3>Is this quantum-safe?</h3>
     <p>
       The proof binding is hash-based, which resists quantum attacks far
-      better than signature schemes. We also embed a SHA-512 sibling witness
-      in every receipt as an extra hedge.
+      better than signature schemes. We also embed an optional SHA-512 sibling witness
+      in receipts as an extra hedge.
       Technical detail at <a href="/security">/security</a>.
     </p>
 
