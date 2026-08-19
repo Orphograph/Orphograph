@@ -56,14 +56,26 @@
   }
 
   function renderWalletLink() {
-    if (!currentSats) return;
-    const btc = (currentSats / 1e8).toFixed(8);
     const link = document.getElementById("wallet-link");
     if (!link) return;
-    // BIP-21 URI built client-side from the server-pinned address. Nothing
-    // leaves the page: the wallet app reads the href, no request is made.
+    // BIP-21 URI built client-side from the address pinned in this file.
+    // Nothing leaves the page: the wallet app reads the href, no request
+    // is made.
+    //
+    // The amount is OPTIONAL in BIP-21 on purpose. /api/btc/price can be
+    // down (it answers 503, and that path is pinned by a test), and the
+    // amountless URI still hands the wallet the right destination. Wiring
+    // this only on the success path would leave a button-styled link
+    // pointing at "#" exactly when the price feed fails, which is the one
+    // state where a stranded visitor cannot recover.
+    if (!currentSats) {
+      link.href = "bitcoin:" + ADDR;
+      link.textContent = "Open in your Bitcoin wallet";
+      return;
+    }
+    const btc = (currentSats / 1e8).toFixed(8);
     link.href = "bitcoin:" + ADDR + "?amount=" + btc + "&label=Orphograph%20Pack";
-    link.textContent = "Open in your Bitcoin wallet — " + btc + " BTC";
+    link.textContent = "Open in your Bitcoin wallet, " + btc + " BTC";
   }
 
   function setMsg(text) {
@@ -131,6 +143,12 @@
   }
 
   (async () => {
+    // Wire the wallet hand-off BEFORE the price request. updateBtcAmount()
+    // early-returns while btcUsd is null, so leaving this to that path would
+    // strand the link on its placeholder href for as long as the price feed
+    // is down. The amountless BIP-21 URI is correct on its own; the amount
+    // is an upgrade, not a precondition.
+    renderWalletLink();
     btcUsd = await fetchBtcUsd();
     updateBtcAmount();
     setInterval(async () => {

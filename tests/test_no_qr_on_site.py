@@ -31,15 +31,29 @@ ROOT = Path(__file__).resolve().parent.parent
 WEB = ROOT / "web"
 
 # Directories that are not the surface we serve to visitors.
-EXCLUDE_DIRS = ("vendor/", "_mockups/", "dist/", "construction/", "node_modules/")
+# NOTE: `construction/` is deliberately NOT excluded -- server/app.py:652
+# publishes /construction/ in the sitemap at priority 0.4, so it is a
+# visitor-facing surface and belongs inside the sweep.
+EXCLUDE_DIRS = ("vendor/", "_mockups/", "dist/", "node_modules/")
 
 # The one intentional, documented exception.
 DOCUMENTED_API_PAGE = "docs/api.html"
 
-# Catches `qr-container`, `.receipt-qr`, `qr.svg`, `renderQR`, `QR code`.
-# The trailing guard (not followed by an alphanumeric) is what stops it
-# matching the inside of unrelated words.
-QR_TOKEN = re.compile(r"qr(?![a-z0-9])|qrcode|qr[-_.]", re.I)
+# Catches `qr-container`, `.receipt-qr`, `qr.svg`, `QR code`, AND camelCase
+# reintroductions like `qrCanvas` / `renderQrBadge`.
+#
+# Written case-SENSITIVELY on purpose. The obvious spelling,
+# `re.compile(r"qr(?![a-z0-9])", re.I)`, silently misses every camelCase form:
+# under IGNORECASE the class [a-z0-9] also matches uppercase, so the negative
+# lookahead rejects `qrCanvas` at the `C`. Spelling the lookahead
+# `(?![A-Za-z0-9])` does not fix it either, for the same reason. Matching
+# [Qq][Rr] explicitly and keeping the lookahead lowercase-only is what makes
+# a following capital letter a hit rather than a miss.
+#
+# Verified against: qrCanvas, qrImg, renderQrBadge, qr-container, QR code,
+# receipt-qr, qr.svg, qrcode_svg, QRCode, .orpho-sample__qr (all match) and
+# square, acquire, qualify, requirement, torque, Qatar, sqrt (none match).
+QR_TOKEN = re.compile(r"[Qq][Rr](?![a-z0-9])|(?i:qrcode)")
 
 
 def _visitor_sources():
@@ -89,10 +103,20 @@ class TestNoQrOnVisitorSurface(unittest.TestCase):
             '<img src="/r/{{RECEIPT_ID}}/qr.svg">',
             '  .qr-wrap { margin: 18px auto; }',
             '    qr.src = "/api/btc/qr.svg?sats=" + currentSats;',
+            'const qrCanvas = document.createElement("canvas");',
+            'function renderQrBadge(el) {}',
         ]
         for markup in removed_for_real:
             self.assertRegex(markup, QR_TOKEN,
                              f"pattern would NOT catch a reintroduction of: {markup}")
+
+    def test_pattern_does_not_fire_on_innocent_words(self):
+        """The other half of the control. A guard that matches everything
+        gets disabled by the next person who trips it."""
+        for word in ("square", "acquire", "qualify", "requirement",
+                     "torque", "Qatar", "sqrt", "conquer"):
+            self.assertNotRegex(word, QR_TOKEN,
+                                f"false positive on innocent word: {word}")
 
     def test_deleted_static_asset_is_gone(self):
         self.assertFalse((WEB / "qr-receipt.svg").exists(),
