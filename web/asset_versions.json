@@ -220,12 +220,12 @@
     "sha256": "0521584fb78f61a432d0c09e16b7f8174a621623d251f8647d598017498c58da"
   },
   "/founder/metrics.css": {
-    "version": "2",
-    "sha256": "1789d29fbd1d4e3792be943c0792f4a3eb28db6403b378968168bc8ec95309a7"
+    "version": "3",
+    "sha256": "e854adcef4ec552d3fa1b2ef2b719689e613fffdff29771758ef9c0ab6520962"
   },
   "/founder/metrics.js": {
-    "version": "1",
-    "sha256": "e7cd25d982316da901f6917b4f01b05f753912b60fc13e1a59a7c20dcdf8a202"
+    "version": "2",
+    "sha256": "9e3d6f46a12910e12fb981a07e6b17cd1cb655376e933217277d4aab460b3ae4"
   },
   "/founder/support.css": {
     "version": "2",
@@ -292,12 +292,12 @@
     "sha256": "9c2f71e3ab73f70f454ce30acf8ef5400c1991341522782e4fac2cdc86c36e03"
   },
   "/lp/agent-receipts.css": {
-    "version": "3",
-    "sha256": "e35a52074f93298eb38e3f48e9f4693b46ca2645240f7b456ca01efd0380bd37"
+    "version": "4",
+    "sha256": "b44e89c64aeb6b4648b1c2d7166d8da2a3c2c4272735dece4fec506cb46a0364"
   },
   "/lp/agent-receipts.js": {
-    "version": "1",
-    "sha256": "82345da4eb31497ac1c3866c334949bbd95fad46b378acf21d877fd6d803bd32"
+    "version": "2",
+    "sha256": "6a62c3340d7ae62202a9449b2c3c92776138310ead62415adc6a848e8984a6ce"
   },
   "/lp/eu-ai-act-training-data.css": {
     "version": "1",

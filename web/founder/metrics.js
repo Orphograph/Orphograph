@@ -43,10 +43,46 @@ function displayMetrics(data) {
   document.getElementById('active-count').textContent = data.customers.active;
   document.getElementById('churned-count').textContent = data.customers.churned_this_month;
 
+  renderWaitlist(data.waitlist);
+
   const timestamp = new Date(data.timestamp);
   document.getElementById('timestamp').textContent = timestamp.toLocaleString();
 
   document.getElementById('metrics-content').style.display = 'block';
+}
+
+// Demand readout. Revenue answers "did anyone pay"; this answers "did anyone
+// ASK", which is the prior question while the answer to the first is zero.
+// An UNAVAILABLE read is rendered as such and never as 0 -- a failed read
+// must not be mistaken for a measured absence of demand.
+function renderWaitlist(w) {
+  const el = document.getElementById('waitlist-readout');
+  if (!el) return;
+  el.textContent = '';
+  if (!w) {
+    el.textContent = 'not reported by this build';
+    return;
+  }
+  if (w.error) {
+    el.textContent = 'UNAVAILABLE — ' + w.error + ' (this is NOT zero)';
+    return;
+  }
+  const byInterest = w.by_interest || {};
+  const rows = [
+    ['unique people', w.unique_signups],
+    ['confirmed', w.confirmed],
+    ['pending', w.pending],
+    ['agent-receipts LP', byInterest.agent_receipts || 0],
+    ['ledger rows (not people)', w.ledger_rows]
+  ];
+  rows.forEach(function (r) {
+    const dt = document.createElement('dt');
+    dt.textContent = r[0];
+    const dd = document.createElement('dd');
+    dd.textContent = String(r[1] === undefined ? '—' : r[1]);
+    el.appendChild(dt);
+    el.appendChild(dd);
+  });
 }
 
 function showError(msg) {

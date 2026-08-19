@@ -105,3 +105,9 @@
   .lp-notify-row input[type="email"],
   .lp-notify-row button { flex: 1 1 100%; }
 }
+
+.lp-notify-noscript {
+  margin: 14px 0 0; padding: 12px 14px; font-size: 14px;
+  border-left: 3px solid var(--accent, #b8860b);
+  background: rgba(184, 134, 11, 0.06);
+}

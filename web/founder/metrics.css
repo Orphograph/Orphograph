@@ -201,3 +201,12 @@
   #loading { display: none; }
   #metrics-content { display: none; }
   .status-box h3 { margin: 0 0 1rem 0; }
+
+/* Demand readout (2026-08-19) — who ASKED, as distinct from who paid. */
+.waitlist-note { margin: 0 0 10px; font-size: 13px; opacity: 0.75; }
+.waitlist-readout {
+  display: grid; grid-template-columns: 1fr auto; gap: 4px 16px;
+  margin: 0 0 18px; font-size: 14px;
+}
+.waitlist-readout dt { opacity: 0.8; }
+.waitlist-readout dd { margin: 0; font-variant-numeric: tabular-nums; text-align: right; }

@@ -21,7 +21,7 @@
 <link rel="stylesheet" href="/style.css?v=6">
 <link rel="stylesheet" href="/blog.css?v=1">
 <link rel="stylesheet" href="/index.css?v=21">
-<link rel="stylesheet" href="/lp/agent-receipts.css?v=3">
+<link rel="stylesheet" href="/lp/agent-receipts.css?v=4">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -161,18 +161,36 @@ python3 orpho_agent_anchor.py anchor-memory ./workspace --label "memory"</code><
         Leave an address and we will write once, when agent receipts change in a
         way that matters. No newsletter, no drip, no sharing the address.
       </p>
-      <form class="lp-notify-form" id="lp-notify-form" novalidate>
+      <!-- HIDDEN until the script reveals it. Without this the form renders
+           for a browser whose JS never runs, preventDefault() never fires, and
+           a submit becomes GET /lp/agent-receipts?email=you%40example.com --
+           which puts a visitor's address in the URL and in the server log,
+           on a page that promises not to share it. The card-notify forms in
+           pricing.html use the same hidden-then-reveal pattern for the same
+           reason. -->
+      <form class="lp-notify-form" id="lp-notify-form" novalidate hidden>
         <label class="lp-notify-label" for="lp-notify-email">Email</label>
         <span class="lp-notify-row">
           <input type="email" id="lp-notify-email" name="email" required
                  autocomplete="email" placeholder="you@example.com">
           <button type="submit" id="lp-notify-submit">Keep me posted</button>
         </span>
-        <p class="lp-notify-msg" id="lp-notify-msg" role="status" aria-live="polite"></p>
       </form>
+      <!-- Live region OUTSIDE the form: the form is hidden on success, so a
+           status region inside it would leave a screen reader on "Adding
+           you…" forever and invite a reload-and-resubmit. -->
+      <p class="lp-notify-msg" id="lp-notify-msg" role="status" aria-live="polite"></p>
       <p class="lp-notify-done" id="lp-notify-done" hidden>
         On the list. Nothing else happens until there is something worth saying.
       </p>
+      <noscript>
+        <p class="lp-notify-noscript">
+          This form needs JavaScript, and deliberately so: without it a submit
+          would put your address in the page URL and our logs. Write to
+          <a href="mailto:hello@orphograph.com">hello@orphograph.com</a>
+          instead and we will add you by hand.
+        </p>
+      </noscript>
     </div>
 
   </section>
@@ -197,6 +215,6 @@ python3 orpho_agent_anchor.py anchor-memory ./workspace --label "memory"</code><
 <script src="/assets/event.js?v=1" defer></script>
 <script src="/assets/scroll-depth.js?v=1" defer></script>
 <script src="/assets/lp-cta.js?v=2" defer></script>
-<script src="/lp/agent-receipts.js?v=1" defer></script>
+<script src="/lp/agent-receipts.js?v=2" defer></script>
 </body>
 </html>
