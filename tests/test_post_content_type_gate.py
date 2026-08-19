@@ -93,8 +93,12 @@ class TestPostContentTypeGate(unittest.TestCase):
     def setUpClass(cls):
         cls._tmp = tempfile.TemporaryDirectory()
         cls._saved = _evict()
+        # STRIPE_WEBHOOK_SECRET is popped below; save it too or the deletion
+        # outlives this class and a later stripe test silently takes the
+        # "not configured" branch.
         cls._old = {k: os.environ.get(k) for k in
-                    ("ORPHO_DATA_DIR", "HOST", "PORT", "ORPHO_COOKIE_SECURE")}
+                    ("ORPHO_DATA_DIR", "HOST", "PORT", "ORPHO_COOKIE_SECURE",
+                     "STRIPE_WEBHOOK_SECRET")}
         os.environ["ORPHO_DATA_DIR"] = cls._tmp.name
         os.environ["HOST"] = "127.0.0.1"
         os.environ["PORT"] = "0"
@@ -175,6 +179,33 @@ class TestPostContentTypeGate(unittest.TestCase):
         self.assertIn("legit@example.com", self._waitlist.read_text(),
                       "the gate is rejecting legitimate traffic too")
 
+    def test_rfc8058_one_click_unsubscribe_still_works(self):
+        """Gmail / Yahoo / Microsoft POST here with
+        `Content-Type: application/x-www-form-urlencoded` and a body of
+        `List-Unsubscribe=One-Click`. That is the SPEC -- not a client we can
+        change -- and mailer.py advertises it via List-Unsubscribe-Post on
+        every non-transactional send.
+
+        The first version of this gate answered 415, so the opt-out vanished
+        and the mail kept going: a deliverability and bulk-sender-compliance
+        failure that no existing test covered, which is why the suite stayed
+        green through it.
+        """
+        status = _post(self._base, "/api/unsubscribe?e=optout%40example.com",
+                       b"List-Unsubscribe=One-Click",
+                       "application/x-www-form-urlencoded")
+        self.assertNotEqual(status, 415,
+                            "one-click unsubscribe is form-encoded BY SPEC; "
+                            "gating it silently loses the opt-out")
+        # The status is not the claim. The failure mode being guarded is a
+        # LOST opt-out, so read the suppression ledger back.
+        suppressions = Path(self._tmp.name) / "suppressions.jsonl"
+        self.assertTrue(suppressions.exists(),
+                        "no suppression ledger written -- the opt-out was lost")
+        self.assertIn("optout@example.com", suppressions.read_text(),
+                      "the request succeeded but the address was never "
+                      "suppressed; the mail would keep going")
+
     def test_signature_verified_webhooks_are_exempt(self):
         """Third-party callers we do not control. Both verify a provider
         signature over the raw body, which is stronger than a content-type
@@ -223,11 +254,39 @@ class TestPostContentTypeGate(unittest.TestCase):
                 self.assertNotEqual(_post(self._base, path, b"", None), 415,
                                     f"{path} is called bodyless by shipped clients")
 
-    def test_a_body_without_a_declared_length_cannot_smuggle(self):
-        """The exemption is scoped to genuinely empty requests: a declared
-        body still has to be JSON."""
+    def test_a_declared_body_still_has_to_be_json(self):
+        """The bodyless exemption is scoped to genuinely empty requests."""
         self.assertEqual(
             _post(self._base, "/api/waitlist", b'{"email":"x@y.z"}', "text/plain"), 415)
+
+    def test_chunked_body_skips_the_gate_but_still_cannot_smuggle(self):
+        """The genuinely undeclared case is Transfer-Encoding: chunked, which
+        has no Content-Length and therefore takes the bodyless branch.
+
+        It is NOT rejected by the gate, and that is safe only because of an
+        invariant: every handler sizes its body via _read_content_length and
+        reads nothing it did not size, so a chunked POST is answered 400 and
+        writes nothing. This test pins the consequence with a real chunked
+        request, so if a handler ever learns to stream one, the safety this
+        rests on stops being silent.
+        """
+        import http.client
+        host, port = self._base.rsplit(":", 1)
+        conn = http.client.HTTPConnection("127.0.0.1", int(port), timeout=5)
+        body = json.dumps({"email": "chunked@evil.com",
+                           "interest": "agent_receipts"}).encode()
+        conn.putrequest("POST", "/api/waitlist")
+        conn.putheader("Content-Type", "text/plain")
+        conn.putheader("Transfer-Encoding", "chunked")
+        conn.endheaders()
+        conn.send(b"%x\r\n" % len(body) + body + b"\r\n0\r\n\r\n")
+        status = conn.getresponse().status
+        conn.close()
+        self.assertNotEqual(status, 200, "a chunked forgery must not succeed")
+        stored = self._waitlist.read_text() if self._waitlist.exists() else ""
+        self.assertNotIn("chunked@evil.com", stored,
+                         "a chunked body reached storage -- the invariant that "
+                         "handlers only read what Content-Length sized is broken")
 
 
 if __name__ == "__main__":

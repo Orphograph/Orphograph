@@ -2089,7 +2089,24 @@ class Handler(BaseHTTPRequestHandler):
     # Third-party callers we do not control. Both verify a provider signature
     # over the raw body, which is a stronger check than content-type, so they
     # are exempt from the gate below rather than being made to conform.
-    _CT_EXEMPT_POST_PATHS = ("/api/stripe/webhook", "/api/nowpayments/webhook")
+    _CT_EXEMPT_POST_PATHS = (
+        # Signature-verified third-party callers. Both fail closed with 503
+        # when their secret is unset and reject on signature mismatch, which
+        # is a stronger check than a content type.
+        "/api/stripe/webhook",
+        "/api/nowpayments/webhook",
+        # RFC 8058 one-click unsubscribe. Gmail / Yahoo / Microsoft POST here
+        # with `Content-Type: application/x-www-form-urlencoded` and a body of
+        # `List-Unsubscribe=One-Click` -- that is the SPEC, not a client we can
+        # change, and mailer.py advertises it on every non-transactional send.
+        # Gating it answered 415, so the opt-out silently vanished and the mail
+        # kept going: a deliverability and bulk-sender-compliance failure, not
+        # a cosmetic one. Safe to exempt because the handler takes the address
+        # from the QUERY STRING and ignores the body entirely, so there is
+        # nothing in the body to forge; the worst a forged call achieves is
+        # unsubscribing an address the attacker already knows.
+        "/api/unsubscribe",
+    )
 
     # The three content types a cross-origin HTML form can produce, plus an
     # absent header, are CORS "simple requests": they reach the server with NO
@@ -2131,10 +2148,14 @@ class Handler(BaseHTTPRequestHandler):
         # Those endpoints are session-authenticated anyway, so SameSite=Lax
         # already keeps a cross-site POST from carrying the cookie they act on.
         #
-        # An unparseable Content-Length also falls through here on purpose:
-        # the server cannot size such a body and the existing handler answers
-        # 400, which is the behaviour test_attacks pins. A body the server
-        # will not read is not a delivery mechanism.
+        # An unparseable or absent Content-Length also falls through here on
+        # purpose -- which includes `Transfer-Encoding: chunked`. That is safe
+        # only because of a real invariant, stated so it is not rediscovered:
+        # EVERY handler sizes its body via _read_content_length and reads
+        # nothing it did not size, so a chunked POST is answered 400 and writes
+        # nothing. A body the server will not read is not a delivery mechanism.
+        # If a handler ever learns to stream a chunked body, this branch stops
+        # being safe and the gate must size such requests instead.
         try:
             declared = int(self.headers.get("Content-Length") or 0)
         except (TypeError, ValueError):
@@ -2144,6 +2165,17 @@ class Handler(BaseHTTPRequestHandler):
         ctype = (self.headers.get("Content-Type") or "").split(";", 1)[0].strip().lower()
         if ctype == "application/json":
             return False
+        # Drain a bounded amount before answering. This is HTTP/1.0, so the
+        # socket closes after the response; replying while the client is still
+        # uploading gives it a broken pipe instead of the 415, which turns an
+        # actionable "you forgot the header" into an opaque network error.
+        # Bounded by MAX_BODY_BYTES so a large body is not read on our dime.
+        try:
+            to_drain = min(declared, MAX_BODY_BYTES)
+            if to_drain > 0:
+                self.rfile.read(to_drain)
+        except (OSError, ValueError):
+            pass
         _json_response(self, 415, {
             "error": "unsupported media type",
             "detail": "POST bodies must be sent as Content-Type: application/json",
