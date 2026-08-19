@@ -9,15 +9,22 @@ address. These tests pin the replacement:
 
   1. GET /api/btc/price     — same-origin proxy of the server-side
                               multi-oracle cache (btc_price).
-  2. GET /api/btc/qr.svg    — server-rendered BIP-21 QR; the address is the
-                              server-side PAY_BTC_ADDRESS constant, only a
-                              bounded `sats` amount comes from the request.
-  3. web/pay-btc.js         — regression guard: no third-party hosts remain.
+  2. web/pay-btc.js         — regression guard: no third-party hosts remain.
+
+REMOVED 2026-08-18: `GET /api/btc/qr.svg` served a server-rendered BIP-21 QR
+built from a server-side `PAY_BTC_ADDRESS` constant. The QR went with every
+other QR on the site; the route and the constant went with it, and the page
+now hands off to a wallet through a `bitcoin:` deep link instead. Both
+absences are pinned by `test_removed_qr_route_stays_removed` below, because
+reintroducing that constant would recreate a silent address-drift hazard
+against the copy hard-coded in pay-btc.js.
 
 Test classes mirror tests/test_founder_funnel_endpoint.py: evict app+sibling
 modules so the next `import app` re-reads os.environ.
 """
 from __future__ import annotations
+
+import re
 
 import os
 import sys
@@ -147,46 +154,6 @@ class TestBtcPriceEndpoint(unittest.TestCase):
             self._clear_price()
         self.assertEqual(status, 503)
 
-    # ── /api/btc/qr.svg ────────────────────────────────────────────────
-
-    def test_qr_svg_valid_amount(self):
-        status, body, headers = _get(self._base, "/api/btc/qr.svg?sats=40000")
-        self.assertEqual(status, 200)
-        self.assertIn("image/svg+xml", headers.get("Content-Type", ""))
-        svg = body.decode("utf-8")
-        self.assertIn("<svg", svg)
-        # The SVG must be byte-identical to encoding the server-side
-        # constant address with the requested amount — proving the QR
-        # payload cannot contain any request-controlled address.
-        import qrcode_svg
-        expected = qrcode_svg.make_svg(
-            f"bitcoin:{self._app.PAY_BTC_ADDRESS}?amount=0.00040000"
-        )
-        self.assertEqual(svg, expected)
-
-    def test_qr_svg_rejects_non_integer(self):
-        status, _, _ = _get(self._base, "/api/btc/qr.svg?sats=abc")
-        self.assertEqual(status, 400)
-        status, _, _ = _get(self._base, "/api/btc/qr.svg")
-        self.assertEqual(status, 400)
-
-    def test_qr_svg_rejects_out_of_range(self):
-        # Below dust threshold.
-        status, _, _ = _get(self._base, "/api/btc/qr.svg?sats=1")
-        self.assertEqual(status, 400)
-        # Above the max cap (0.05 BTC).
-        status, _, _ = _get(self._base, "/api/btc/qr.svg?sats=999999999")
-        self.assertEqual(status, 400)
-        # Negative.
-        status, _, _ = _get(self._base, "/api/btc/qr.svg?sats=-5")
-        self.assertEqual(status, 400)
-
-    def test_qr_svg_boundaries_accepted(self):
-        for sats in (self._app.PAY_BTC_MIN_SATS, self._app.PAY_BTC_MAX_SATS):
-            status, _, _ = _get(self._base, f"/api/btc/qr.svg?sats={sats}")
-            self.assertEqual(status, 200, f"sats={sats} should be accepted")
-
-
 class TestPayBtcJsHasNoThirdPartyHosts(unittest.TestCase):
     """Regression guard: the pay page must stay same-origin-only.
 
@@ -204,6 +171,59 @@ class TestPayBtcJsHasNoThirdPartyHosts(unittest.TestCase):
         html = (ROOT / "web" / "pay" / "btc.html").read_text(encoding="utf-8")
         for needle in ('src="http', "src='http", 'href="http://'):
             self.assertNotIn(needle, html, f"external resource '{needle}' in pay/btc.html")
+
+    def test_removed_qr_route_stays_removed(self):
+        """/api/btc/qr.svg was deleted 2026-08-18 with the page's QR.
+
+        It is asserted here rather than merely deleted because the route
+        carried the only server-side copy of the payment address; a
+        reintroduction would recreate the drift hazard against the address
+        hard-coded in pay-btc.js.
+        """
+        app_src = (ROOT / "server" / "app.py").read_text(encoding="utf-8")
+        self.assertNotIn("/api/btc/qr.svg", app_src)
+        self.assertNotIn("PAY_BTC_ADDRESS", app_src)
+
+    def test_displayed_address_matches_the_paid_address(self):
+        """The address a visitor READS and the address their wallet is HANDED
+        must be the same string.
+
+        They live in two hard-coded places: pay/btc.html (#btc-addr, what the
+        page shows) and pay-btc.js (ADDR, what the Copy button copies and what
+        the BIP-21 deep link now encodes). Until 2026-08-18 the QR came from a
+        third copy, the server-side PAY_BTC_ADDRESS. That constant was
+        env-overridable, so it could silently disagree with the markup; it was
+        removed with the QR.
+
+        No test has ever pinned the surviving pair. Edit one and not the other
+        and a visitor verifies the right address on screen while their wallet
+        is prefilled with a different one: silent, unrecoverable fund loss,
+        with a green suite.
+        """
+        html = (ROOT / "web" / "pay" / "btc.html").read_text(encoding="utf-8")
+        js = (ROOT / "web" / "pay-btc.js").read_text(encoding="utf-8")
+        m = re.search(r'id="btc-addr">\s*([a-zA-Z0-9]+)\s*<', html)
+        self.assertIsNotNone(m, "could not find the displayed address in btc.html")
+        shown = m.group(1)
+        m2 = re.search(r'const ADDR = "([a-zA-Z0-9]+)"', js)
+        self.assertIsNotNone(m2, "could not find ADDR in pay-btc.js")
+        paid = m2.group(1)
+        self.assertEqual(
+            shown, paid,
+            f"DISPLAYED address ({shown}) != PAID address ({paid}). A visitor "
+            f"would verify one address and pay another.")
+
+    def test_wallet_deep_link_replaces_the_qr(self):
+        """Removing the QR must not strand a phone with a bech32 address.
+
+        Before 2026-08-18 this page had a Copy button and nothing else --
+        buy.html had a bitcoin: deep link, this page did not. The QR was
+        the only hand-off to a wallet app, so its removal ships the link.
+        """
+        html = (ROOT / "web" / "pay" / "btc.html").read_text(encoding="utf-8")
+        js = (ROOT / "web" / "pay-btc.js").read_text(encoding="utf-8")
+        self.assertIn('id="wallet-link"', html)
+        self.assertIn('"bitcoin:"', js)
 
 
 if __name__ == "__main__":

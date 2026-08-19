@@ -30,18 +30,24 @@
     cursor: pointer;
     flex: 0 0 auto;
   }
-  .qr-wrap {
-    margin: 18px auto;
-    width: 220px;
-    height: 220px;
-    background: #fff;
-    border-radius: 8px;
-    padding: 12px;
+  .wallet-open {
+    margin: 18px 0;
     display: flex;
-    align-items: center;
-    justify-content: center;
+    flex-direction: column;
+    gap: 6px;
+    align-items: flex-start;
   }
-  .qr-wrap img { width: 100%; height: auto; display: block; }
+  .wallet-link {
+    display: inline-block;
+    background: var(--accent, #f0b429);
+    color: #0c0e10;
+    border-radius: 6px;
+    padding: 10px 16px;
+    font-size: 14px;
+    font-weight: 600;
+    text-decoration: none;
+  }
+  .wallet-note { font-size: 12px; opacity: 0.75; }
   .price-row {
     display: flex;
     gap: 18px;

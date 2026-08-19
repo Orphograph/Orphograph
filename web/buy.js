@@ -41,21 +41,6 @@ function renderOrder(order) {
   $("#expires").textContent = order.expires_at;
   const uri = `bitcoin:${order.address}?amount=${btc}&label=Orphograph+Pack`;
   $("#wallet-link").href = uri;
-  // Render the BIP-21 payment QR. The SVG is server-rendered (stdlib
-  // qrcode_svg.py) and contains ONLY `bitcoin:<addr>?amount=<btc>` —
-  // no email, no order id, no label. Loaded via <img> so the browser
-  // sandboxes the SVG (no script execution from the response).
-  const qr = $("#qr-container");
-  if (qr) {
-    while (qr.firstChild) qr.removeChild(qr.firstChild);
-    const img = document.createElement("img");
-    img.alt = "Bitcoin payment QR code";
-    img.width = 240;
-    img.height = 240;
-    img.src = `/api/btc-order/${encodeURIComponent(order.order_id || orderIdFromUrl())}/qr.svg`;
-    img.decoding = "async";
-    qr.appendChild(img);
-  }
   $("#copy-address").addEventListener("click", async () => {
     try {
       await navigator.clipboard.writeText(order.address);

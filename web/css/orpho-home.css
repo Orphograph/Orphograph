@@ -778,9 +778,6 @@
 }
 .orpho-sample__foot .orpho-cal-row { flex: 1; border-top: 0; margin: 0; padding: 0; }
 .orpho-cal svg { display: block; margin: 0 auto 0.35rem; color: var(--orpho-gold-deep); opacity: 0.85; }
-.orpho-sample__qr { flex: 0 0 auto; padding: 6px; background: #fff;
-  border: 1px solid var(--orpho-hairline); border-radius: var(--orpho-r-card); }
-.orpho-sample__qr img { display: block; }
 
 @media (max-width: 900px) {
   .orpho-sample__grid { grid-template-columns: 1fr; gap: var(--orpho-s-5); }
@@ -878,8 +875,9 @@
 /* ══ Pass 10 — founder review 2026-08-10: organize, de-wax, fix the desk ═
  * Three directives from the annotated screenshot:
  * 1. The red wax stamp is GONE (markup removed; .orpho-wax rules below are
- *    inert on this page). The receipt itself now carries a working QR of
- *    its permalink instead — an instrument, not a decoration.
+ *    inert on this page). The receipt links to its own permalink instead —
+ *    an instrument, not a decoration. (The scannable code that briefly
+ *    stood here was removed 2026-08-18; the permalink link does that job.)
  * 2. The engraved medallion becomes the DESK: position fixed, so the
  *    watermark stays put while the papers scroll over it. z-index -1
  *    paints it above the body paper but beneath every card and text
@@ -894,58 +892,6 @@
 }
 .orpho-hero__plate { min-height: 700px; }
 .orpho-features-wrap { margin-top: var(--orpho-s-7); }
-
-/* Working QRs — and "working" is MEASURED, not asserted (2026-08-17).
- * The founder pointed a real camera at these and they did not scan. Two
- * independent measurements, not one:
- *
- * 1. THRESHOLD — rasterise the real /qr-receipt.svg at candidate sizes and
- *    machine-decode each (OpenCV):
- *      76px fails · 96 fails · 112 fails · 128 fails · 144 fails
- *      160px DECODES · 176px DECODES
- *    The symbol is 33 modules + a 4-module quiet zone each side (41 total),
- *    so at 96px a module is ~2.3px — under what a camera resolves at arm's
- *    length.
- *
- * 2. RENDERED SIZE — headless render of this page, bounding box read from
- *    the DOM. This is where the first attempt at the fix quietly failed:
- *    `width: 160px` on the WRAPPER, which still carried `padding: 6px` and
- *    a 1px border under border-box, left the symbol at 160-12-2 = 146px.
- *    Production was worse: 74px. The stylesheet said 160 and the browser
- *    drew 146 — which is why the size now lives on the <img> itself as
- *    content-box, where 160 means 160 of symbol and nothing else.
- *
- * tests/test_qr_scannable.py asserts the rendered geometry, not the source
- * text, precisely because the source text was already right when the pixels
- * were wrong. A QR too small to decode is a decorative lie on a trust
- * product. */
-.orpho-receipt__qr,
-.orpho-sample__qr {
-  display: block;
-  width: auto;
-  padding: 0;
-  border: 0;
-  background: none;
-}
-.orpho-receipt__qr { margin: 12px auto 0; }
-.orpho-sample__qr  { margin-left: auto; margin-right: var(--orpho-s-5); }
-
-/* content-box: the 160 is the symbol. The border sits outside it, so it
- * cannot eat modules the way the old padding did. */
-.orpho-receipt__qr img,
-.orpho-sample__qr img {
-  display: block;
-  box-sizing: content-box;
-  width: 160px;
-  height: 160px;
-  background: #fff;
-  padding: 0;
-  border: 1px solid var(--orpho-border);
-  border-radius: 4px;
-}
-@media (max-width: 680px) {
-  .orpho-sample__qr { margin-right: var(--orpho-s-4); }
-}
 
 /* ══ Pass 11 — the architecture of trust (audit item 10, 2026-08-12) ════
  * Three engraved layers, connected by a falling gold thread: who provides

@@ -1,10 +1,10 @@
 // pay-btc.js — Bitcoin payment page logic.
 // - Fetches live BTC/USD from the same-origin /api/btc/price proxy
 //   (server-side multi-oracle cache; no third-party hosts in the browser).
-// - Shows a server-rendered same-origin QR SVG for the BIP-21 URI —
-//   the server pins the address, so the QR cannot encode any other
-//   destination, and the strict CSP (img-src 'self', connect-src 'self')
-//   holds with zero exceptions.
+// - Builds a BIP-21 `bitcoin:` deep link from the address pinned in this
+//   file, so the wallet app receives the destination and amount without a
+//   request leaving the page. The strict CSP (img-src 'self', connect-src
+//   'self') holds with zero exceptions.
 // - Routes "I paid" submissions to /api/btc/claim.
 
 (function () {
@@ -52,17 +52,30 @@
     const btc = currentUsd / btcUsd;
     currentSats = Math.round(btc * 1e8);
     document.getElementById("pay-btc").textContent = btc.toFixed(8);
-    renderQR();
+    renderWalletLink();
   }
 
-  function renderQR() {
-    if (!currentSats) return;
+  function renderWalletLink() {
+    const link = document.getElementById("wallet-link");
+    if (!link) return;
+    // BIP-21 URI built client-side from the address pinned in this file.
+    // Nothing leaves the page: the wallet app reads the href, no request
+    // is made.
+    //
+    // The amount is OPTIONAL in BIP-21 on purpose. /api/btc/price can be
+    // down (it answers 503, and that path is pinned by a test), and the
+    // amountless URI still hands the wallet the right destination. Wiring
+    // this only on the success path would leave a button-styled link
+    // pointing at "#" exactly when the price feed fails, which is the one
+    // state where a stranded visitor cannot recover.
+    if (!currentSats) {
+      link.href = "bitcoin:" + ADDR;
+      link.textContent = "Open in your Bitcoin wallet";
+      return;
+    }
     const btc = (currentSats / 1e8).toFixed(8);
-    const qr = document.getElementById("qr");
-    // Same-origin server-rendered SVG. The address is pinned server-side;
-    // only the (bounded) amount travels in the query string.
-    qr.src = "/api/btc/qr.svg?sats=" + currentSats;
-    qr.alt = "Send " + btc + " BTC to " + ADDR;
+    link.href = "bitcoin:" + ADDR + "?amount=" + btc + "&label=Orphograph%20Pack";
+    link.textContent = "Open in your Bitcoin wallet, " + btc + " BTC";
   }
 
   function setMsg(text) {
@@ -130,6 +143,12 @@
   }
 
   (async () => {
+    // Wire the wallet hand-off BEFORE the price request. updateBtcAmount()
+    // early-returns while btcUsd is null, so leaving this to that path would
+    // strand the link on its placeholder href for as long as the price feed
+    // is down. The amountless BIP-21 URI is correct on its own; the amount
+    // is an upgrade, not a precondition.
+    renderWalletLink();
     btcUsd = await fetchBtcUsd();
     updateBtcAmount();
     setInterval(async () => {

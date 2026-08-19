@@ -307,16 +307,6 @@ FOUNDER_GLOBAL_FAIL_REFILL = 100 / 3600.0  # full recovery in 1 hour
 _founder_fail_global_limiter = TokenBucket(FOUNDER_GLOBAL_FAIL_CAPACITY, FOUNDER_GLOBAL_FAIL_REFILL)
 _FOUNDER_GLOBAL_FAIL_KEY = "founder-fail:GLOBAL"
 
-# Fixed pack-payment address for the static /pay/btc.html page. The QR
-# endpoint (/api/btc/qr.svg) builds its BIP-21 URI from THIS server-side
-# constant — never from anything in the request — so a crafted URL cannot
-# redirect payments to a different address.
-PAY_BTC_ADDRESS = os.environ.get(
-    "ORPHO_PACK_BTC_ADDRESS", "bc1qclvjjmwmr294rydv4x0dc787nx9jd8j4ny4jaz"
-)
-PAY_BTC_MIN_SATS = 546          # standard dust threshold
-PAY_BTC_MAX_SATS = 5_000_000    # 0.05 BTC — far above any pack price
-
 # Allowlist for the funnel events the client actually emits. Any value outside
 # this set is rejected with 400. This set MUST stay in sync with every
 # track()/orphoEvent() call in web/**/*.js — tests/test_funnel_event_whitelist.py
@@ -1360,29 +1350,6 @@ class Handler(BaseHTTPRequestHandler):
                 return
             _json_response(self, 200, {"claim_code": code, "balance": credits.balance(code)})
             return
-        if path.startswith("/r/") and path.endswith("/qr.svg"):
-            # Scannable QR for a receipt's canonical URL. The QR is a pure
-            # function of the URL — it encodes nothing the URL holder does
-            # not already have, so no record lookup happens here (same
-            # no-oracle posture as /api/badge/<id>.svg: a QR for a dead or
-            # private id scans to a page that says so honestly). Camera
-            # scan and the on-page click land on the same permalink.
-            rid = path[len("/r/"):-len("/qr.svg")]
-            if not RECEIPT_ID_RE.match(rid):
-                self.send_error(400, "invalid receipt id")
-                return
-            site = os.environ.get("SITE_URL", "https://orphograph.com").rstrip("/")
-            svg = qrcode_svg.make_svg(f"{site}/r/{rid}",
-                                      label=f"QR code linking to receipt {rid}")
-            body = svg.encode()
-            self.send_response(200)
-            self.send_header("Content-Type", "image/svg+xml")
-            # The receipt URL never changes, so neither does its QR.
-            self.send_header("Cache-Control", "public, max-age=31536000, immutable")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
-            return
         if path.startswith("/r/"):
             # Print-friendly receipt view. JS reads the ID from the URL
             # and fetches /api/verify/<id>; we additionally template the
@@ -1594,34 +1561,6 @@ class Handler(BaseHTTPRequestHandler):
                 _json_response(self, 503, {"error": "BTC price feed unavailable; try again in a minute"})
                 return
             _json_response(self, 200, {"usd": usd})
-            return
-        if path == "/api/btc/qr.svg":
-            # Server-rendered BIP-21 QR for the static /pay/btc.html page.
-            # The URI is built from the server-side PAY_BTC_ADDRESS constant
-            # — only the amount comes from the request, and it is bounded —
-            # so neither a crafted URL nor a compromised third-party QR host
-            # can redirect a payment. Replaces the former external QR-image
-            # service, which the CSP (img-src 'self' data:) blocked anyway.
-            from urllib.parse import urlparse, parse_qs
-            qs = parse_qs(urlparse(self.path).query)
-            raw_sats = (qs.get("sats", [""])[0] or "").strip()
-            try:
-                sats = int(raw_sats)
-            except ValueError:
-                _json_response(self, 400, {"error": "sats must be an integer"})
-                return
-            if not (PAY_BTC_MIN_SATS <= sats <= PAY_BTC_MAX_SATS):
-                _json_response(self, 400, {"error": "sats out of range"})
-                return
-            # NO label, NO email, NO order id in the QR payload — same
-            # privacy contract as /api/btc-order/<id>/qr.svg below.
-            bip21 = f"bitcoin:{PAY_BTC_ADDRESS}?amount={sats / 100_000_000:.8f}"
-            try:
-                svg = qrcode_svg.make_svg(bip21)
-            except ValueError as e:
-                self.send_error(500, f"qr encode failed: {e}")
-                return
-            _send_xml(self, 200, svg, content_type="image/svg+xml; charset=utf-8")
             return
         if path.startswith("/api/btc-order/"):
             # Status lookup for the buy page to poll. Sub-path /qr.svg

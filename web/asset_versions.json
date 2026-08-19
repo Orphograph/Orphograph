@@ -1,0 +1,530 @@
+{
+  "/about-the-office.css": {
+    "version": "1",
+    "sha256": "5650d6b7a84f1e3f843c6ccf506842cefef806bc15cd326313dbed1019e7b55f"
+  },
+  "/accept.css": {
+    "version": "1",
+    "sha256": "bfd920b187c7ecdf1549c1ce0ef6269aa86e0615bc2a57e8dbafaf7b96d484ad"
+  },
+  "/access.css": {
+    "version": "1",
+    "sha256": "596815eb4740ca8c627a47536b830b43f0bdcae3a9c3a7b90e6b780a46c9d709"
+  },
+  "/account.css": {
+    "version": "1",
+    "sha256": "4ae1f0690c6111fd2c4d1c8d8893a8a08b1cc3c08121351fe8c23da5831034ad"
+  },
+  "/account.js": {
+    "version": "2",
+    "sha256": "abb19968838a1800c21986726a6b1db97021515ad143596858170d07fc22ce5f"
+  },
+  "/anchor-output.css": {
+    "version": "1",
+    "sha256": "13bdb7007bc0be9a3cce036a2673579794dab9517be4047e0365685358576c00"
+  },
+  "/anchor-output.js": {
+    "version": "1",
+    "sha256": "20b741a9c98ea14402ad72e5543c920ab73d598caa7eac71e39a247067babdda"
+  },
+  "/app.js": {
+    "version": "1",
+    "sha256": "fbfcf4246a94035d39f12d173e9640a81c86beac066452d5cd13b25a3563f49c"
+  },
+  "/assets/drop-observer.js": {
+    "version": "1",
+    "sha256": "a41a21e52a008e743bbe8ac84260fdd40fadbafdcb43fbd4915547d49ca91b3e"
+  },
+  "/assets/event.js": {
+    "version": "1",
+    "sha256": "74619ec8a6615330844f168d1742358fc6c57fbffd09578dae8ef094af6d5e58"
+  },
+  "/assets/lp-cta.js": {
+    "version": "2",
+    "sha256": "51ea5eed0bddc55c03623ae21d8141406f48c9add4eedfd92a62f2a2240fa428"
+  },
+  "/assets/pack.js": {
+    "version": "1",
+    "sha256": "fe223558192111b35275e21fdd20e8e4b0ce7cbead313a2f8707fb0e2d376aed"
+  },
+  "/assets/scroll-depth.js": {
+    "version": "1",
+    "sha256": "773ab871c8a63ccc3efa927b41f267862090762772541609dc727f5c5c5feda3"
+  },
+  "/badge-demo.css": {
+    "version": "1",
+    "sha256": "4df52a555549f72c67cda1dc6326560589d9fe9423b38c3845cce3e37b9191de"
+  },
+  "/badge.css": {
+    "version": "1",
+    "sha256": "6dd05c1a931634c7f864ad4bbbc7ab1f2cdcfe776c937b3cde0aa6d79dba9dfc"
+  },
+  "/blog.css": {
+    "version": "1",
+    "sha256": "18c7000577cf25cb843c219531d82d1ba74570c48545ee442f0e73f8fa14b62f"
+  },
+  "/blog/bitcoin-block-height-as-source-of-truth.css": {
+    "version": "2",
+    "sha256": "ea0a4b1fc9265af177cef437439aa95b30ac91bd88f9c703c82d8aec83425e67"
+  },
+  "/blog/bitcoin-merkle-roots-unforgeable-timestamps.css": {
+    "version": "2",
+    "sha256": "cf6133e8eb648774976753209ab90a302c2de24fe0d9cf55ca93abdb2e8149ef"
+  },
+  "/blog/date-stamp-a-document-permanently.css": {
+    "version": "2",
+    "sha256": "8a3610000d1ef552e75a81ab635a4a97bf99445af8679d0c2631d54c31ac0a6c"
+  },
+  "/blog/digital-notary-vs-cryptographic-timestamp.css": {
+    "version": "2",
+    "sha256": "c4b6b1eefcbb32a722a4bcac52f93780391ab58bbec330054d889930e09ad0d3"
+  },
+  "/blog/how-to-prove-photo-existed-before-ai-model-released.css": {
+    "version": "2",
+    "sha256": "30f8bc505dfb41b79a2c70d42df3fc0dafae726286640589586eca71ad37b113"
+  },
+  "/blog/index.css": {
+    "version": "2",
+    "sha256": "baf368fe10b4e89040d4e3c1b54d490d37a0f332be97b0e4ae04a5299b122f9b"
+  },
+  "/blog/opentimestamps-for-non-developers.css": {
+    "version": "2",
+    "sha256": "5a9a2a5e6ae6c5244cb53a33c50004b2c480f5b7284308b70ab4c182cd47a8a1"
+  },
+  "/blog/prove-a-contract-existed-before-a-date.css": {
+    "version": "2",
+    "sha256": "908b24ef18ffd414b2d88518991435a3ecb3dffed4d1acce8e2843fe9e2d548c"
+  },
+  "/blog/prove-a-photo-was-not-edited.css": {
+    "version": "2",
+    "sha256": "dc7801d8d881c4a72530dd1386712bab7935bee97182a2fa20560cd72b1c02b1"
+  },
+  "/blog/prove-code-existed-before-a-competitors-commit.css": {
+    "version": "2",
+    "sha256": "72b6c7e9a57167ec18ae1a60f7b5c451a7bdb9a51c211fdc2c2677ca5de6c8b0"
+  },
+  "/blog/prove-i-created-something-before-someone-else.css": {
+    "version": "2",
+    "sha256": "5f9553e253f3e14bc4c36bde9d82ac2433365dbbde7bb163f0a2bfc022d8527a"
+  },
+  "/blog/prove-photo-existed-before-ai.css": {
+    "version": "2",
+    "sha256": "40c5e123cd2f14be55831c1792395088667ff2c16a912065ec4a2dbb252f2110"
+  },
+  "/blog/prove-you-wrote-it-not-ai.css": {
+    "version": "2",
+    "sha256": "61cbe184aae3583f5b81569a6e4a7d9ab99c4385d54546a08224c81fe9c7ab69"
+  },
+  "/blog/reading-ots-file-by-hand.css": {
+    "version": "2",
+    "sha256": "f44cff7cfad476584624dc1530727f7823cb57d61dbb0a08231654fe44f9f25c"
+  },
+  "/blog/what-makes-a-digital-timestamp-legally-defensible.css": {
+    "version": "2",
+    "sha256": "362c224579aa7c7027a5764efb38ca271b497177c5bf1eda58af75f9f50a155f"
+  },
+  "/blog/why-5-opentimestamps-calendars-not-1.css": {
+    "version": "2",
+    "sha256": "dec5aed5f86dce582f83f779e17b0a189c41cfcf4d1948cca141633eb8e77860"
+  },
+  "/blog/why-domain-dying-doesnt-kill-your-timestamp.css": {
+    "version": "2",
+    "sha256": "be462434c8396a4c07d3a70ae4106a35f45cab6ae3f202e9ad3418a2de436176"
+  },
+  "/buy.css": {
+    "version": "2",
+    "sha256": "0b2468b27d1abed24027e5da6794fddbf59681d03c0b0baaec8df530d8da0032"
+  },
+  "/buy.js": {
+    "version": "2",
+    "sha256": "52894b6097f38c2b738863f7c6917386739a80aaa4eb6addabd04572d06aded4"
+  },
+  "/certificate.css": {
+    "version": "5",
+    "sha256": "a831d5740e2c9286873e933dbe85d90756350282fa2a2a670f6a284e2ef3f8df"
+  },
+  "/certificate.js": {
+    "version": "5",
+    "sha256": "e8b40cc10c0905a9fd3409b2590b5b75a94ccf01762e377e951f51edcccf2271"
+  },
+  "/changelog.css": {
+    "version": "1",
+    "sha256": "afa891972814f3f9f6e44f8a0da22dacac4f11546013b25276f524559dc63605"
+  },
+  "/checkout-cta.js": {
+    "version": "4",
+    "sha256": "b263745d59177915b4c511080dcf888fa7b4606bee175064daa1924e3ec3dbb4"
+  },
+  "/continuity.css": {
+    "version": "1",
+    "sha256": "bcb6a63263005dbc4a5fa4f987c0e1d211df5b706e0c32aedacfb7d423c40f8c"
+  },
+  "/dataset-provenance.css": {
+    "version": "1",
+    "sha256": "803c7488fe983accf4dde09dcec834457ca5917c382ad58304584bec0ee0d0b0"
+  },
+  "/docs/api.css": {
+    "version": "1",
+    "sha256": "5a4e8ee5fef79fa29245138deace870b3b9b1a1a9aef52201407b28dda5e95e7"
+  },
+  "/docs/install.css": {
+    "version": "1",
+    "sha256": "5e7640c1dde10e648d0e67aa6170c1ca42ea95fa58e90c2fdc4e0e7e5eb5c71c"
+  },
+  "/docs/quickstart.css": {
+    "version": "1",
+    "sha256": "e3e75a2eca7f63c8d175c3d991c754f6aac448c70ae433d26e699aed01c51ce1"
+  },
+  "/docs/verify.css": {
+    "version": "1",
+    "sha256": "93cb5a419fe83021bc485703d8ba3bc6e109dcbb80ee3f1a4a4fbbe9385ebfa8"
+  },
+  "/docs/webhooks.css": {
+    "version": "1",
+    "sha256": "6eb90914f3aec3daed12c050e71c4ad501b8b61ddd1ae31b75617b43928ca40d"
+  },
+  "/exif.js": {
+    "version": "1",
+    "sha256": "41102d84abc2e47933c239acce6516152fd03b68e33a2d4041b1c9e16419062c"
+  },
+  "/experience.css": {
+    "version": "1",
+    "sha256": "938244ba8367fbb7fb09f8dd7b1d02c0311e9a5bca10befa7472c7a06f8f8039"
+  },
+  "/experience.js": {
+    "version": "2",
+    "sha256": "203ff12c551b681bf025e49750471b22ae6e3baddbc180b826d654cdb8274599"
+  },
+  "/faq.css": {
+    "version": "1",
+    "sha256": "682a8060a13f55f1fd4f736ba024b84d4163bf912f9765687bcf272e66eb1b2c"
+  },
+  "/folder.js": {
+    "version": "2",
+    "sha256": "e13066c4284f453f2f17b3c56e0d1a7ff389d40119668ee784900eb157a76979"
+  },
+  "/founder/admin.css": {
+    "version": "2",
+    "sha256": "1f58f0bfc011b0276c387b7a0b689fbeade60b5293cfe62971d3b1a1e9896817"
+  },
+  "/founder/admin.js": {
+    "version": "1",
+    "sha256": "fae92227f1b0a6ac5f4c0f8d81ee6d08348f93c016c4a8391548377a6955ea0c"
+  },
+  "/founder/funnel.css": {
+    "version": "2",
+    "sha256": "e90cac3192a895190364624ae157aa2def61e93d3e0f980a7d8db19a89508797"
+  },
+  "/founder/funnel.js": {
+    "version": "1",
+    "sha256": "0521584fb78f61a432d0c09e16b7f8174a621623d251f8647d598017498c58da"
+  },
+  "/founder/metrics.css": {
+    "version": "2",
+    "sha256": "1789d29fbd1d4e3792be943c0792f4a3eb28db6403b378968168bc8ec95309a7"
+  },
+  "/founder/metrics.js": {
+    "version": "1",
+    "sha256": "e7cd25d982316da901f6917b4f01b05f753912b60fc13e1a59a7c20dcdf8a202"
+  },
+  "/founder/support.css": {
+    "version": "2",
+    "sha256": "7ddbb0037f1198c068509dc256e3112956ff5a9ca4b92f1ed30b0dbf5cb4e975"
+  },
+  "/founder/support.js": {
+    "version": "1",
+    "sha256": "7e7df09e96af49ea01ba76e01441a13a32265793a1673d80ada4a2643f09c209"
+  },
+  "/gift.css": {
+    "version": "1",
+    "sha256": "67973b9aa3ffd448aec6b3acec936e4dc2b5d053d308bfa40dc4bb0963df9cb9"
+  },
+  "/index-legacy.css": {
+    "version": "1",
+    "sha256": "d102b17a7d4b9f5458ec4bb7a9b2cee1414d2edb3e4e4079c8bcbc2debb89f46"
+  },
+  "/index.css": {
+    "version": "21",
+    "sha256": "90a786e5a24fceb013a194d74dde7e5658326ce53e808d9fd6960bcddc2a97df"
+  },
+  "/inspection/index.css": {
+    "version": "1",
+    "sha256": "9c2f71e3ab73f70f454ce30acf8ef5400c1991341522782e4fac2cdc86c36e03"
+  },
+  "/integrations.css": {
+    "version": "1",
+    "sha256": "b723e018e3094df1a76f199f3a53e869e8b2cc8732d2d3c590a7d3835b837931"
+  },
+  "/ios.css": {
+    "version": "1",
+    "sha256": "3c878bc5386074ae3938459c86d0fd666c69d9081fd546f3aa1f45523eca501d"
+  },
+  "/landing.js": {
+    "version": "1",
+    "sha256": "45ba32afdd6ad4fce9f86fa79f1b0881099fa132fd13eea8216c5c3c370be899"
+  },
+  "/learn.css": {
+    "version": "1",
+    "sha256": "e379f8bcd9d6500e599b1c96ae9357941d9c1f5c358a1081129f06788ff24e22"
+  },
+  "/legal/aup.css": {
+    "version": "1",
+    "sha256": "b42604062c5145d922daad2eeca72377e274a62a980fd73cfb607f2444de37ec"
+  },
+  "/legal/contact-policy.css": {
+    "version": "1",
+    "sha256": "8efa62c33a351469e2a9abd9d0ce5464e1e0baf15e551203ed129e08fa5ec143"
+  },
+  "/legal/dmca.css": {
+    "version": "1",
+    "sha256": "84dede323ae87ad539e9d8535cf9941ed56af2b5c5fce52803a266498711ebf9"
+  },
+  "/legal/index.css": {
+    "version": "1",
+    "sha256": "f4bd8c78e4d65d559063fdea10184d58ec30fab18147ea4e13a43b1a2e6509dd"
+  },
+  "/legal/trademark.css": {
+    "version": "1",
+    "sha256": "46483d901564c4af5f19a4b15d82368768a6ae533e58459786eb0e212a3a1209"
+  },
+  "/listings/index.css": {
+    "version": "1",
+    "sha256": "9c2f71e3ab73f70f454ce30acf8ef5400c1991341522782e4fac2cdc86c36e03"
+  },
+  "/lp/agent-receipts.css": {
+    "version": "2",
+    "sha256": "72723c9cc288a3c6b21f69fc0a713b110cd1f8105d269abacc2da782a3b16488"
+  },
+  "/lp/eu-ai-act-training-data.css": {
+    "version": "1",
+    "sha256": "9ce75f3d313af0fe35b49f946f88495cd35cda0d1883a964bae7efb778c0cee5"
+  },
+  "/lp/index.css": {
+    "version": "2",
+    "sha256": "81b32cf83b6921e84c4d9b0cbf166981156937bd1e5ec8092ef3e9982fd91b88"
+  },
+  "/lp/lp.css": {
+    "version": "1",
+    "sha256": "30b4eee1754334a109947041cd471c7e7905cba3838d00bc39e6773f6121eb77"
+  },
+  "/lp/start.css": {
+    "version": "2",
+    "sha256": "2b133bfbadf4286403bfa75d2f95cd4b6b82f0ab9f6f37693b05dd406a15264c"
+  },
+  "/lp/start.js": {
+    "version": "1",
+    "sha256": "e6edb4beffe0b4c055ffc058476c86b204424d1bc42c3dae31259351b31db27c"
+  },
+  "/matters/index.css": {
+    "version": "1",
+    "sha256": "9c2f71e3ab73f70f454ce30acf8ef5400c1991341522782e4fac2cdc86c36e03"
+  },
+  "/mcp.css": {
+    "version": "1",
+    "sha256": "3107d3f4ffb504c1bed774b8a7fd872c9fa66e7457878f6f22f2fd2ee105d4af"
+  },
+  "/method/architecture.css": {
+    "version": "1",
+    "sha256": "e9021280249b5b71abdb4248ca1ec177244b343492bad85cfda7dd29aba71744"
+  },
+  "/method/bitcoin-attestation.css": {
+    "version": "1",
+    "sha256": "0b5ffbc48c8f493a5a85b35436c271556f663afe71e049ae5b11ea8f2ac5cea6"
+  },
+  "/method/evidence-law.css": {
+    "version": "1",
+    "sha256": "7b329fa1e13b31a96e03289290a69887ff5c0d3d9a88eec4fa6dd066ae3abe6a"
+  },
+  "/method/folder-merkle.css": {
+    "version": "1",
+    "sha256": "f286fb00c7f11aca809f2c4668fdaf9cd752b81fbb546f81be824336784e03ba"
+  },
+  "/method/index.css": {
+    "version": "1",
+    "sha256": "a8bd465a6077e76c66dae890b2b541f8a54af7aa0140ddd94048616af83edbde"
+  },
+  "/method/legal-recognition.css": {
+    "version": "1",
+    "sha256": "072c9d696213a1deeb76ce24150b8da84143c811c15630f2a17a1942c98d30e5"
+  },
+  "/method/the-mit-verifier-annotated.css": {
+    "version": "1",
+    "sha256": "f39d8199cfbcd1e62b2563a4bbe7dfe707f4aad97024460dbd5946d91638d33a"
+  },
+  "/method/whitepaper.css": {
+    "version": "1",
+    "sha256": "47ad15ec96c791174c45037f85b52fd8fde6a8d49d762e81888988fe3426c7cf"
+  },
+  "/method/why-filenames-are-not-stored.css": {
+    "version": "1",
+    "sha256": "4990e7b4506b4bcfb68739d9056f157dc81a1666091a2481fc6899ee03cd3c4e"
+  },
+  "/one-pager.css": {
+    "version": "1",
+    "sha256": "5aee07cb5bbda3cf4c6f447c8e2ec5702c2934248fdf63f44f09212b8d2f73b9"
+  },
+  "/pack.css": {
+    "version": "2",
+    "sha256": "ee32756351838f550483722ec2c1c974f096aa7a6209df3247849d8a6200b1c7"
+  },
+  "/pay-btc.js": {
+    "version": "2",
+    "sha256": "b7daff662f669fb020fe957bcda498bb340c004d3f657dee10fbfc9e8afef5cc"
+  },
+  "/pay/btc.css": {
+    "version": "3",
+    "sha256": "a4ad898fad18d14476405be1c4359e1150121eb12a907c4481879a861a686dcb"
+  },
+  "/pay/crypto.css": {
+    "version": "2",
+    "sha256": "5c0ea20f7a3c4c686bcb4a67428f8ea4e42403f7a7c572e63f4c3fc52c03e2b5"
+  },
+  "/pay/crypto.js": {
+    "version": "1",
+    "sha256": "f94d10824b45c47d6459942606e55ee03a17c4d8aff67dca3a11d758a5311a27"
+  },
+  "/pay/success.css": {
+    "version": "1",
+    "sha256": "7863cb0392c48f025d63340a4935c419578161cede2e47db6ade3d1c8334c7b3"
+  },
+  "/pay/success.js": {
+    "version": "1",
+    "sha256": "9be7897bcf58354de68a70b12e8adc84b505cc333126ba63a63cfc6d63db5bdc"
+  },
+  "/practice/index.css": {
+    "version": "1",
+    "sha256": "9c2f71e3ab73f70f454ce30acf8ef5400c1991341522782e4fac2cdc86c36e03"
+  },
+  "/press-kit.css": {
+    "version": "1",
+    "sha256": "cd1ec800113b9cbb3d038e6323985a375c4b0681f543fddc32b0e93c996fcea3"
+  },
+  "/press-kit/orphograph-brand-guide.css": {
+    "version": "1",
+    "sha256": "8ae2fd8ef3caf3650f5dba88f66e192e186ced75eed15dc66182822eb6b69cc5"
+  },
+  "/press.css": {
+    "version": "1",
+    "sha256": "ba68b8aaafc351d2f4651dc16fd9f7b06241e35565175adb298f61a1682c4086"
+  },
+  "/receipt.css": {
+    "version": "11",
+    "sha256": "b4ec3bb15e88b287a225d760a08f594c81fcb58bdacee4317bfd1419000f2094"
+  },
+  "/receipt.js": {
+    "version": "6",
+    "sha256": "3d3c667485475bdf4ddf066676294e10b28a5a40494481bf2222b2e6b180bcd9"
+  },
+  "/recover.css": {
+    "version": "2",
+    "sha256": "3e0ac5f2abd7a3937554d73ebc06936ac4eb2e314b9f45aaa7d6dffa4e23834e"
+  },
+  "/recover.js": {
+    "version": "1",
+    "sha256": "c8b659e9c02af87f26acd1f102d443746ee3216b6b4490f6214fc9fb16f8acde"
+  },
+  "/roadmap.css": {
+    "version": "1",
+    "sha256": "36e250c71d7076fbcee19d2a671d0ecc2004e353b86a5bb821c13fa5bd1f92a8"
+  },
+  "/security.css": {
+    "version": "1",
+    "sha256": "a4890a9f4fffec77736a25c2f35b457c440b82db9c7733a66365fca11e1224e9"
+  },
+  "/signin.js": {
+    "version": "1",
+    "sha256": "e43a7d1a8284d4227ae3e424efaf05f5fcfc44cd4c822b6d9b8bcce333ad001c"
+  },
+  "/standing-record.css": {
+    "version": "1",
+    "sha256": "a7c629547a0757f8f7c2c2ada93c98b0b9649d1e387acad8b9ab816139fd3e40"
+  },
+  "/standing-record.js": {
+    "version": "1",
+    "sha256": "ca66f2324ae552bcb8c1847c5c694ff8aaf70627ff77a2277f07fad0d436e535"
+  },
+  "/stats.css": {
+    "version": "1",
+    "sha256": "9401d20d9d7e78b479a64fe695d03fc771c49b015f5194538fc8dea10aae1ca7"
+  },
+  "/stats.js": {
+    "version": "1",
+    "sha256": "1e70a2b11c2672c878d358184c9b1e62a15fd90042cb5576a2c5ddb6a15742fa"
+  },
+  "/status-badge.js": {
+    "version": "2",
+    "sha256": "06a6d95395f56f3aa6e1ea4e536187eb6fa2393089f07b1f1b0cc502874f730b"
+  },
+  "/status-page.js": {
+    "version": "1",
+    "sha256": "42a1611dbbe5f75be3a5f9ae17f9fac68a9710f7229f4448fedd9364d8c5fbff"
+  },
+  "/status.css": {
+    "version": "1",
+    "sha256": "832bc6c73c80098620f150c51b1f327459258db614984c4bd5fdfa4c8c7228a3"
+  },
+  "/statusbar.js": {
+    "version": "2",
+    "sha256": "7185835c3b9b828ec8f30ff54f325ce210d3cbaf0dac52af32c3f7763d2788ac"
+  },
+  "/style.css": {
+    "version": "6",
+    "sha256": "085e3617fdd243a29adc0890770ec33db868261b5d936aae218243bc4668cf91"
+  },
+  "/team/join.css": {
+    "version": "1",
+    "sha256": "df33bf24b56059cb1ce2cc5071e62473d6a8e843d21563521b5f50cf4d8f5abc"
+  },
+  "/team/join.js": {
+    "version": "1",
+    "sha256": "ff7095e688f168b6a08fa8b6dc0c2c8ca59eb303cc4a991b1844479e943cba57"
+  },
+  "/u.css": {
+    "version": "1",
+    "sha256": "6bd02ba7636f2e03d7a82299097d0be93dd9937f5c5cc5242628c34d48820801"
+  },
+  "/v2.js": {
+    "version": "5",
+    "sha256": "28e29b0144c3d2985ab07c2b7f48ec5f406f30b5e20b9445510ff12bacd95780"
+  },
+  "/v2/app.js": {
+    "version": "4",
+    "sha256": "838d2ecd117eb888ef5b2fdd2e3b9526c81c2235301dfbe51980b5571196d5b5"
+  },
+  "/v2/style.css": {
+    "version": "8",
+    "sha256": "13c3822e80cac7b333b545771c3c2382437fcb578154b8b482dc9895f5f3c7c8"
+  },
+  "/verify-js.css": {
+    "version": "1",
+    "sha256": "77b9b76e59b3d7e650789c6daca96a540880d7e29929046f97cbed904130b708"
+  },
+  "/verify-js.js": {
+    "version": "2",
+    "sha256": "fbcebcdc48c2aa09cc9bdd4dcfae6c6ab0f96143ad0a5b86ad7854281c8b92d1"
+  },
+  "/vs/c2pa.css": {
+    "version": "1",
+    "sha256": "b65fbcc1b7e02a8dcb91333be0aafcc6bd8e7a6b4c381bbd1c82050ec11b5312"
+  },
+  "/what-is-this.css": {
+    "version": "1",
+    "sha256": "76b2d92951c97222e542510cc33335ea2de486e0771aa4e1fb9e5d16a2ab1995"
+  },
+  "/widget.js": {
+    "version": "1",
+    "sha256": "dc1d647b7c26078bd0e52e733ff98499c59a52b1203ed9d12d7609c64df39b14"
+  },
+  "/workpapers/index.css": {
+    "version": "1",
+    "sha256": "9c2f71e3ab73f70f454ce30acf8ef5400c1991341522782e4fac2cdc86c36e03"
+  },
+  "/writers.css": {
+    "version": "2",
+    "sha256": "12cf4c84d5f01b8f3c053ef879f53064e6bc6dbabbc47a66df73a5c1cf333a74"
+  },
+  "/writers.js": {
+    "version": "1",
+    "sha256": "37d2f3ce505882e7ef2595573428c9c7c22a687c9b510f5fda6726f8090333c9"
+  }
+}
