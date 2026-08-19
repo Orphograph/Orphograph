@@ -327,6 +327,11 @@ FUNNEL_EVENTS = frozenset({
     "buy_personal_click",  # clicked buy-personal CTA
     "billing_toggle",      # toggled monthly/annual pricing
     "pack_waitlist_join",  # joined a pack waitlist
+    # /lp/agent-receipts demand instrument (2026-08-19). BOTH outcomes are
+    # listed: a submit that never lands is the one event a demand meter must
+    # not silently drop, because a missing failure reads as absent interest.
+    "lp_notify_submit",    # waitlist capture accepted on the agent-receipts LP
+    "lp_notify_error",     # waitlist capture attempted and failed
     "checkout_clicked",    # checkout initiated (v2)
     "checkout_error",      # checkout attempt errored (v2) — funnel-loss signal
     "checkout_returned_success",  # returned from Stripe success
@@ -3137,6 +3142,16 @@ class Handler(BaseHTTPRequestHandler):
         # Import here to avoid circular dependency
         import analytics
         metrics = analytics.metrics(days_back=90)
+        # Demand readout (2026-08-19). Revenue metrics answer "did anyone
+        # pay"; this answers "did anyone ASK", which is the prior question
+        # while external revenue is zero. An unreadable waitlist reports
+        # UNAVAILABLE rather than zero -- a failed read must never render as
+        # a measured absence of demand.
+        try:
+            import newsletter
+            metrics["waitlist"] = newsletter.audience_snapshot()
+        except Exception as e:  # noqa: BLE001 - readout must not 500 the page
+            metrics["waitlist"] = {"error": f"unavailable: {e}"}
         _json_response(self, 200, metrics)
 
     def _handle_founder_customer_lookup(self) -> None:

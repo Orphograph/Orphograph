@@ -24,7 +24,14 @@ ALLOWED_INTERESTS = {"personal", "creator", "capture", "b2b", "other",
                      # Card-checkout notify list: buyers who arrived while
                      # card_charges_enabled was false and asked to be told
                      # when card checkout returns. Value encodes the tier.
-                     "card_pack", "card_pack50", "card_personal"}
+                     "card_pack", "card_pack50", "card_personal",
+                     # Demand instrument for /lp/agent-receipts (2026-08-19).
+                     # MUST be listed here: an interest outside this set is
+                     # silently rewritten to "other" below, which would make
+                     # the landing page's leads indistinguishable from every
+                     # other source -- a capture that cannot attribute is not
+                     # a measurement.
+                     "agent_receipts"}
 
 
 def add(email: str, interest: str) -> bool:
@@ -40,3 +47,4 @@ def add(email: str, interest: str) -> bool:
             "interest": interest,
         }, separators=(",", ":")) + "\n")
     return True
+

@@ -95,6 +95,11 @@ def test_inventory_matches_expected_set():
         "checkout_returned_success",
         "try_sample_click", "verify_sample_click", "share_link_click",
         "lp_cta_clicked",
+        # /lp/agent-receipts demand instrument (2026-08-19). Both outcomes are
+        # emitted on purpose: lp-cta.js only fires for `a.cta-btn`, so a form
+        # <button> was invisible to the funnel, and a submit that FAILS is the
+        # one event a demand meter must not silently drop.
+        "lp_notify_submit", "lp_notify_error",
         "scroll_25", "scroll_50", "scroll_75", "scroll_100",
     }
     assert set(_client_emitted_events()) == expected

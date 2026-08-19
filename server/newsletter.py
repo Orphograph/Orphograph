@@ -351,6 +351,12 @@ def audience_snapshot() -> dict:
                     row = json.loads(line)
                 except json.JSONDecodeError:
                     continue
+                # A syntactically valid but non-object line ("null", "[]", a
+                # bare number) would sail past the decode guard and then blow
+                # up on .get(). Skip it like any other unusable row rather
+                # than taking down the whole readout.
+                if not isinstance(row, dict):
+                    continue
                 total_rows += 1
                 email = (row.get("email") or "").strip().lower()
                 interest = row.get("interest") or "other"
