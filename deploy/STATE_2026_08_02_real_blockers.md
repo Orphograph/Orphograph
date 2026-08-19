@@ -1,5 +1,9 @@
 # Orphograph — Real Blockers (2026-08-02)
 
+> **SUPERSEDED 2026-08-18.** Its live blockers were folded into the
+> maintained list in the (gitignored) `outreach/` tree. Resolved items
+> below are kept for the record.
+
 **This file supersedes** `LAUNCH_BLOCKER_STATUS.md` (2026-05-14),
 `LAUNCH_READINESS_MEGA_TODO.md` (2026-05-14), and `../outreach/TODO.md`
 (2026-06-06) as the current blocker list. Those are historical snapshots —
