@@ -108,7 +108,7 @@
   <p><strong>3.</strong> A place to save the receipt. Anywhere the normal photo backup lives is fine — any cloud-sync service or an external drive.</p>
   <p>You do not need a Bitcoin wallet. You do not need to pay a miner. You are not putting money on chain. You are submitting a 32-byte fingerprint of your file to a calendar server that batches many users&#x27; fingerprints into one Bitcoin transaction.</p>
   <h2>Step 1: hash the file</h2>
-  <p>Open Orphograph in a browser. Drag the file onto the drop zone. The hash is computed locally — the file&#x27;s bytes never leave your machine. The page shows two hashes: SHA-256 and SHA-512. Both are included in the receipt so that if SHA-256 is ever broken, the SHA-512 sibling still verifies independently.</p>
+  <p>Open Orphograph in a browser. Drag the file onto the drop zone. The hash is computed locally — the file&#x27;s bytes never leave your machine. The page shows two hashes: SHA-256 and SHA-512. When the client includes it, both are recorded in the receipt, so that if SHA-256 is ever broken, the SHA-512 sibling still verifies independently.</p>
   <p>If you want to do this without any service, the command-line path is <code>shasum -a 256 my_photo.jpg</code>. You will see the same 64-character hex string the browser produced. Save that string somewhere. The hash itself reveals nothing about the file — it is a one-way fingerprint.</p>
   <h2>Step 2: submit to a calendar</h2>
   <p>The browser sends the hash (not the file) to five OpenTimestamps calendar servers. Each calendar is run by a different operator. They each batch your hash with other users&#x27; hashes into a Merkle tree and write the tree&#x27;s root into a Bitcoin transaction within the next hour.</p>
