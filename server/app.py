@@ -3137,6 +3137,15 @@ class Handler(BaseHTTPRequestHandler):
         # Import here to avoid circular dependency
         import analytics
         metrics = analytics.metrics(days_back=90)
+        # Demand readout (2026-08-19). Revenue metrics answer "did anyone
+        # pay"; this answers "did anyone ASK", which is the prior question
+        # while external revenue is zero. An unreadable waitlist reports
+        # UNAVAILABLE rather than zero -- a failed read must never render as
+        # a measured absence of demand.
+        try:
+            metrics["waitlist"] = waitlist.counts()
+        except Exception as e:  # noqa: BLE001 - readout must not 500 the page
+            metrics["waitlist"] = {"error": f"unavailable: {e}"}
         _json_response(self, 200, metrics)
 
     def _handle_founder_customer_lookup(self) -> None:

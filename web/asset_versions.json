@@ -292,8 +292,12 @@
     "sha256": "9c2f71e3ab73f70f454ce30acf8ef5400c1991341522782e4fac2cdc86c36e03"
   },
   "/lp/agent-receipts.css": {
-    "version": "2",
-    "sha256": "72723c9cc288a3c6b21f69fc0a713b110cd1f8105d269abacc2da782a3b16488"
+    "version": "3",
+    "sha256": "e35a52074f93298eb38e3f48e9f4693b46ca2645240f7b456ca01efd0380bd37"
+  },
+  "/lp/agent-receipts.js": {
+    "version": "1",
+    "sha256": "82345da4eb31497ac1c3866c334949bbd95fad46b378acf21d877fd6d803bd32"
   },
   "/lp/eu-ai-act-training-data.css": {
     "version": "1",

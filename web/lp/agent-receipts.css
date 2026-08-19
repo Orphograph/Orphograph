@@ -75,3 +75,33 @@
   /* Keep the fixed bar from obscuring the footer / last content. */
   body { padding-bottom: 76px; }
 }
+
+
+/* ── Demand instrument (2026-08-19) ────────────────────────────────────────
+ * The page had no way to record interest for 33 days. These styles carry the
+ * capture form; they intentionally reuse .cta-box so it reads as part of the
+ * page rather than as an advertisement bolted to the end. */
+.lp-notify-lede { margin: 0 0 14px; }
+.lp-notify-label {
+  display: block; font-size: 13px; letter-spacing: 0.04em;
+  text-transform: uppercase; opacity: 0.75; margin-bottom: 6px;
+}
+.lp-notify-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.lp-notify-row input[type="email"] {
+  flex: 1 1 260px; min-width: 0; padding: 11px 13px; font-size: 15px;
+  border: 1px solid var(--panel-stroke, rgba(58, 47, 36, 0.28));
+  border-radius: 8px; background: #fff; color: inherit;
+}
+.lp-notify-row button {
+  flex: 0 0 auto; padding: 11px 18px; font-size: 15px; font-weight: 600;
+  border: 0; border-radius: 8px; cursor: pointer;
+  background: var(--accent, #b8860b); color: #14100a;
+}
+.lp-notify-row button:disabled { opacity: 0.6; cursor: default; }
+.lp-notify-msg { margin: 10px 0 0; font-size: 14px; min-height: 1.2em; }
+.lp-notify-done { margin: 0; font-size: 15px; }
+
+@media (max-width: 560px) {
+  .lp-notify-row input[type="email"],
+  .lp-notify-row button { flex: 1 1 100%; }
+}

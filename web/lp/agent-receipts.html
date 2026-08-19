@@ -21,7 +21,7 @@
 <link rel="stylesheet" href="/style.css?v=6">
 <link rel="stylesheet" href="/blog.css?v=1">
 <link rel="stylesheet" href="/index.css?v=21">
-<link rel="stylesheet" href="/lp/agent-receipts.css?v=2">
+<link rel="stylesheet" href="/lp/agent-receipts.css?v=3">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -152,7 +152,27 @@ python3 orpho_agent_anchor.py anchor-memory ./workspace --label "memory"</code><
 
     <div class="cta-box cta-box-close">
       <p>Setup for the CLI, the drop-in skill, and the MCP server lives on the integrations page.</p>
-      <p><a class="cta-btn" href="/integrations">Set up agent anchoring →</a></p>
+      <p><a class="cta-btn" href="/integrations">Set up agent anchoring &rarr;</a></p>
+    </div>
+
+    <div class="cta-box lp-notify" id="lp-notify">
+      <h2>Not ready to wire it up yet?</h2>
+      <p class="lp-notify-lede">
+        Leave an address and we will write once, when agent receipts change in a
+        way that matters. No newsletter, no drip, no sharing the address.
+      </p>
+      <form class="lp-notify-form" id="lp-notify-form" novalidate>
+        <label class="lp-notify-label" for="lp-notify-email">Email</label>
+        <span class="lp-notify-row">
+          <input type="email" id="lp-notify-email" name="email" required
+                 autocomplete="email" placeholder="you@example.com">
+          <button type="submit" id="lp-notify-submit">Keep me posted</button>
+        </span>
+        <p class="lp-notify-msg" id="lp-notify-msg" role="status" aria-live="polite"></p>
+      </form>
+      <p class="lp-notify-done" id="lp-notify-done" hidden>
+        On the list. Nothing else happens until there is something worth saying.
+      </p>
     </div>
 
   </section>
@@ -177,5 +197,6 @@ python3 orpho_agent_anchor.py anchor-memory ./workspace --label "memory"</code><
 <script src="/assets/event.js?v=1" defer></script>
 <script src="/assets/scroll-depth.js?v=1" defer></script>
 <script src="/assets/lp-cta.js?v=2" defer></script>
+<script src="/lp/agent-receipts.js?v=1" defer></script>
 </body>
 </html>
