@@ -2086,7 +2086,70 @@ class Handler(BaseHTTPRequestHandler):
             return
         _serve_static(self, path)
 
+    # Third-party callers we do not control. Both verify a provider signature
+    # over the raw body, which is a stronger check than content-type, so they
+    # are exempt from the gate below rather than being made to conform.
+    _CT_EXEMPT_POST_PATHS = ("/api/stripe/webhook", "/api/nowpayments/webhook")
+
+    # The three content types a cross-origin HTML form can produce, plus an
+    # absent header, are CORS "simple requests": they reach the server with NO
+    # preflight. Every POST body here is JSON (nothing parses form encoding),
+    # and `application/json` is NOT simple, so requiring it forces a preflight
+    # that no CORS policy on this origin answers. That is what makes a forged
+    # cross-origin POST fail at the door.
+    def _reject_non_json_post(self) -> bool:
+        """True if the request was rejected. Blocks cross-origin form forgery.
+
+        Session-authenticated endpoints were already covered by the session
+        cookie's SameSite=Lax. This closes the UNAUTHENTICATED ones, where
+        SameSite has nothing to act on: /api/waitlist and /api/event feed the
+        demand and funnel numbers this project makes decisions from, and
+        /api/auth/email-link sends mail. Forging those from visitors' browsers
+        also borrows their IPs, which is precisely how the per-IP rate limits
+        get walked around.
+
+        Note the trailing case: a MISSING Content-Type is also a simple
+        request (a cross-origin fetch with an untyped Blob sends none), so
+        rejecting only the three form enctypes would leave the hole open.
+        Every documented example, the MCP server and both SDKs already send
+        `application/json`, so requiring it breaks no published contract.
+        """
+        path = self.path.split("?", 1)[0]
+        if any(path == p or path.startswith(p) for p in self._CT_EXEMPT_POST_PATHS):
+            return False
+        if not path.startswith("/api/"):
+            return False
+        # BODYLESS POSTS ARE EXEMPT, and this is load-bearing rather than a
+        # convenience. The forgery vector needs a BODY to smuggle -- an empty
+        # request has nothing to parse. Meanwhile three shipped clients post
+        # with no body and no header at all: account.js sign-out and
+        # logout-all, and statusbar.js sign-out. Requiring the header
+        # unconditionally would have 415'd every sign-out in production.
+        # Those endpoints are session-authenticated anyway, so SameSite=Lax
+        # already keeps a cross-site POST from carrying the cookie they act on.
+        #
+        # An unparseable Content-Length also falls through here on purpose:
+        # the server cannot size such a body and the existing handler answers
+        # 400, which is the behaviour test_attacks pins. A body the server
+        # will not read is not a delivery mechanism.
+        try:
+            declared = int(self.headers.get("Content-Length") or 0)
+        except (TypeError, ValueError):
+            return False
+        if declared <= 0:
+            return False
+        ctype = (self.headers.get("Content-Type") or "").split(";", 1)[0].strip().lower()
+        if ctype == "application/json":
+            return False
+        _json_response(self, 415, {
+            "error": "unsupported media type",
+            "detail": "POST bodies must be sent as Content-Type: application/json",
+        })
+        return True
+
     def do_POST(self):  # noqa: N802
+        if self._reject_non_json_post():
+            return
         if self.path == "/api/stripe/webhook":
             self._handle_stripe_webhook()
             return
