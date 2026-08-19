@@ -68,6 +68,42 @@ class TestCaptureExists(unittest.TestCase):
             self.assertNotIn(bad, html, f"inline handler {bad} would be CSP-blocked")
 
 
+class TestDisclosure(unittest.TestCase):
+    """A capture form implies a privacy disclosure.
+
+    The privacy page enumerates what we collect, and its own framing is that
+    "the privacy claim is enforced by the structure of the protocol, not by
+    our promise to behave". Before 2026-08-19 that list named exactly one
+    source of email addresses -- Pack purchases through Stripe Checkout --
+    while the card-notify forms in checkout-cta.js were already posting
+    addresses to /api/waitlist. This page adds a third, more prominent one.
+
+    On a product that sells privacy, collecting an address the policy does not
+    mention is a product defect, not a paperwork nit. This test fails the
+    moment a capture exists without the disclosure, so the pair cannot drift.
+    """
+
+    def test_privacy_page_discloses_optional_email_capture(self):
+        privacy = (ROOT / "web" / "privacy.html").read_text(encoding="utf-8")
+        pages_with_capture = [
+            p for p in (ROOT / "web").rglob("*.html")
+            if 'type="email"' in p.read_text(encoding="utf-8")
+            and "_mockups/" not in p.as_posix()
+            and "/dist/" not in p.as_posix()
+        ]
+        self.assertTrue(pages_with_capture,
+                        "no capture form found anywhere -- this test would "
+                        "pass vacuously; the scan is not reading pages")
+        self.assertIn("keep me posted", privacy.lower(),
+                      f"{len(pages_with_capture)} page(s) collect an email "
+                      f"address but the privacy page does not disclose "
+                      f"optional email capture")
+
+    def test_disclosure_states_the_deletion_route(self):
+        privacy = (ROOT / "web" / "privacy.html").read_text(encoding="utf-8")
+        self.assertRegex(privacy.lower(), r"delete it at any time")
+
+
 class TestReadout(unittest.TestCase):
     """counts() is the half that turns a capture into a measurement."""
 
