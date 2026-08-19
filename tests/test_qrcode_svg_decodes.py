@@ -95,11 +95,11 @@ class TestQrEncoder(unittest.TestCase):
             self.assertEqual(bool(q._mask_bit(5, r, c)), want,
                              f"mask 5 wrong at ({r},{c})")
 
-    def test_shipped_asset_matches_encoder(self):
-        """web/qr-receipt.svg must be exactly what the fixed encoder emits."""
-        shipped = (Path(__file__).resolve().parent.parent / "web" / "qr-receipt.svg").read_text()
-        self.assertEqual(shipped, q.make_svg("https://orphograph.com/r/XwTULwlh76PcCst9"),
-                         "shipped QR asset drifted from the encoder output — regenerate it")
+    # test_shipped_asset_matches_encoder removed 2026-08-18 with
+    # web/qr-receipt.svg. The encoder itself is still live -- it serves the
+    # documented /api/btc-order/<order_id>/qr.svg route -- so every other
+    # test in this file stays. There is no longer a shipped static asset to
+    # drift from it.
 
 
 if __name__ == "__main__":

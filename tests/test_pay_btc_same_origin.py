@@ -147,46 +147,6 @@ class TestBtcPriceEndpoint(unittest.TestCase):
             self._clear_price()
         self.assertEqual(status, 503)
 
-    # ── /api/btc/qr.svg ────────────────────────────────────────────────
-
-    def test_qr_svg_valid_amount(self):
-        status, body, headers = _get(self._base, "/api/btc/qr.svg?sats=40000")
-        self.assertEqual(status, 200)
-        self.assertIn("image/svg+xml", headers.get("Content-Type", ""))
-        svg = body.decode("utf-8")
-        self.assertIn("<svg", svg)
-        # The SVG must be byte-identical to encoding the server-side
-        # constant address with the requested amount — proving the QR
-        # payload cannot contain any request-controlled address.
-        import qrcode_svg
-        expected = qrcode_svg.make_svg(
-            f"bitcoin:{self._app.PAY_BTC_ADDRESS}?amount=0.00040000"
-        )
-        self.assertEqual(svg, expected)
-
-    def test_qr_svg_rejects_non_integer(self):
-        status, _, _ = _get(self._base, "/api/btc/qr.svg?sats=abc")
-        self.assertEqual(status, 400)
-        status, _, _ = _get(self._base, "/api/btc/qr.svg")
-        self.assertEqual(status, 400)
-
-    def test_qr_svg_rejects_out_of_range(self):
-        # Below dust threshold.
-        status, _, _ = _get(self._base, "/api/btc/qr.svg?sats=1")
-        self.assertEqual(status, 400)
-        # Above the max cap (0.05 BTC).
-        status, _, _ = _get(self._base, "/api/btc/qr.svg?sats=999999999")
-        self.assertEqual(status, 400)
-        # Negative.
-        status, _, _ = _get(self._base, "/api/btc/qr.svg?sats=-5")
-        self.assertEqual(status, 400)
-
-    def test_qr_svg_boundaries_accepted(self):
-        for sats in (self._app.PAY_BTC_MIN_SATS, self._app.PAY_BTC_MAX_SATS):
-            status, _, _ = _get(self._base, f"/api/btc/qr.svg?sats={sats}")
-            self.assertEqual(status, 200, f"sats={sats} should be accepted")
-
-
 class TestPayBtcJsHasNoThirdPartyHosts(unittest.TestCase):
     """Regression guard: the pay page must stay same-origin-only.
 
@@ -204,6 +164,30 @@ class TestPayBtcJsHasNoThirdPartyHosts(unittest.TestCase):
         html = (ROOT / "web" / "pay" / "btc.html").read_text(encoding="utf-8")
         for needle in ('src="http', "src='http", 'href="http://'):
             self.assertNotIn(needle, html, f"external resource '{needle}' in pay/btc.html")
+
+    def test_removed_qr_route_stays_removed(self):
+        """/api/btc/qr.svg was deleted 2026-08-18 with the page's QR.
+
+        It is asserted here rather than merely deleted because the route
+        carried the only server-side copy of the payment address; a
+        reintroduction would recreate the drift hazard against the address
+        hard-coded in pay-btc.js.
+        """
+        app_src = (ROOT / "server" / "app.py").read_text(encoding="utf-8")
+        self.assertNotIn("/api/btc/qr.svg", app_src)
+        self.assertNotIn("PAY_BTC_ADDRESS", app_src)
+
+    def test_wallet_deep_link_replaces_the_qr(self):
+        """Removing the QR must not strand a phone with a bech32 address.
+
+        Before 2026-08-18 this page had a Copy button and nothing else --
+        buy.html had a bitcoin: deep link, this page did not. The QR was
+        the only hand-off to a wallet app, so its removal ships the link.
+        """
+        html = (ROOT / "web" / "pay" / "btc.html").read_text(encoding="utf-8")
+        js = (ROOT / "web" / "pay-btc.js").read_text(encoding="utf-8")
+        self.assertIn('id="wallet-link"', html)
+        self.assertIn('"bitcoin:"', js)
 
 
 if __name__ == "__main__":

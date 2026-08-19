@@ -22,7 +22,7 @@
 <link rel="stylesheet" href="/css/orpho-primitives.css?v=3">
 <link rel="stylesheet" href="/style.css?v=6">
 <link rel="stylesheet" href="/index.css?v=21">
-<link rel="stylesheet" href="/receipt.css?v=9">
+<link rel="stylesheet" href="/receipt.css?v=10">
 <meta name="copyright" content="© 2026 Orphograph. MIT — see /LICENSE">
 </head>
 <body class="orpho receipt-page">
@@ -95,13 +95,6 @@
       <a class="check-btn" href="/verify-js">Verify in your browser</a>
       <a class="check-btn" href="/learn">Verify with open-source tools</a>
     </div>
-    <!-- Working QR of this receipt's permanent URL: point any phone camera
-         at the screen (or at a printout of this page) and it opens this
-         receipt; clicking it goes to the same permalink. -->
-    <a class="receipt-qr" href="/r/{{RECEIPT_ID}}" aria-label="QR code — scan or click to open this receipt's permanent URL">
-      <img src="/r/{{RECEIPT_ID}}/qr.svg" alt="QR code for receipt {{RECEIPT_ID}}" width="160" height="160">
-      <span class="receipt-qr__caption">Scan to open this receipt &mdash; works from print.</span>
-    </a>
   </section>
 
   <!-- 5 · TECHNICAL DETAILS — collapsed by default; for experts. -->

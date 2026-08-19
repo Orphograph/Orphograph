@@ -65,10 +65,6 @@ class TestGeneratedArtifactsParse(unittest.TestCase):
     def test_qr_svg_is_wellformed_xml(self):
         ET.fromstring(qrcode_svg.make_svg("https://orphograph.com/r/XwTULwlh76PcCst9"))
 
-    def test_shipped_qr_asset_is_wellformed(self):
-        shipped = (Path(__file__).resolve().parent.parent / "web" / "qr-receipt.svg")
-        ET.fromstring(shipped.read_text())
-
 
 if __name__ == "__main__":
     unittest.main()

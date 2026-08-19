@@ -518,37 +518,6 @@ a.lineage-id {
 .lineage-scope { margin: 0; line-height: 1.5; }
 @media print { .version-history { break-inside: avoid; } }
 
-/* ── Receipt QR (2026-08-10): scannable permalink, incl. from print ───── */
-.receipt-qr {
-  display: inline-flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 7px;
-  margin-top: 16px;
-  border-bottom: 0;
-}
-.receipt-qr img {
-  display: block;
-  background: #fff;
-  /* The size lives here, in content-box, so 160 is 160 of SYMBOL. style.css
-   * sets `* { box-sizing: border-box }` site-wide, which is what silently
-   * ate the homepage QRs (declared 160, drawn 146). padding 0, not 8: the
-   * SVG carries its own 4-module quiet zone, and the inner pad shrank the
-   * symbol to 148px — under the measured 160px camera threshold
-   * (see orpho-home.css for the decode table). */
-  box-sizing: content-box;
-  width: 160px;
-  height: 160px;
-  padding: 0;
-  border: 1px solid rgba(58, 47, 36, 0.18);
-  border-radius: 6px;
-}
-.receipt-qr__caption {
-  font-size: 12.5px;
-  letter-spacing: 0.02em;
-  color: var(--muted, #6b5f4e);
-}
-
 /* ── Certificate presentation (2026-08-12, audit P3) ──────────────────────
  * The receipt is the product's most shareable artifact; it should read as
  * an archival certificate the moment it opens. Frame = a double rule (gold
