@@ -2115,7 +2115,10 @@ class Handler(BaseHTTPRequestHandler):
         `application/json`, so requiring it breaks no published contract.
         """
         path = self.path.split("?", 1)[0]
-        if any(path == p or path.startswith(p) for p in self._CT_EXEMPT_POST_PATHS):
+        # Exact match only. A `startswith` here would exempt
+        # /api/stripe/webhookANYTHING as well; nothing routes such a path
+        # today, but an exemption list should not widen on its own.
+        if path in self._CT_EXEMPT_POST_PATHS:
             return False
         if not path.startswith("/api/"):
             return False

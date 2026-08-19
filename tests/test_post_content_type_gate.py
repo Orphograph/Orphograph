@@ -185,6 +185,31 @@ class TestPostContentTypeGate(unittest.TestCase):
                     _post(self._base, path, b"{}", "text/plain"), 415,
                     f"{path} is third-party and must stay exempt")
 
+    def test_no_cors_policy_grants_a_cross_origin_post(self):
+        """The gate's whole premise. application/json is not a CORS simple
+        content type, so a forged cross-origin POST needs a preflight -- and
+        this asserts nothing here answers one for POST.
+
+        CORS IS granted on four paths (/api/verify/*, /api/verify_folder/*,
+        /api/badge/*, /api/inclusion_proof) because the embeddable badge needs
+        it, but only for `GET, OPTIONS` and with no Access-Control-Allow-Headers.
+        If any of that ever widens to POST, this gate stops protecting anything
+        and this test is the thing that says so.
+        """
+        src = (ROOT / "server" / "app.py").read_text(encoding="utf-8")
+        self.assertIn('"Access-Control-Allow-Methods", "GET, OPTIONS"', src,
+                      "CORS methods changed -- if POST was added, the "
+                      "content-type gate no longer blocks cross-origin forgery")
+        self.assertNotIn("Access-Control-Allow-Headers", src,
+                         "allowing request headers cross-origin would let a "
+                         "content-type preflight succeed")
+
+    def test_exempt_list_does_not_match_by_prefix(self):
+        """An exemption list must not widen on its own."""
+        self.assertEqual(
+            _post(self._base, "/api/stripe/webhookEVIL", b'{"x":1}', "text/plain"),
+            415, "a prefix of an exempt path must not inherit its exemption")
+
     def test_non_api_posts_are_untouched(self):
         self.assertNotEqual(_post(self._base, "/nope", b"x", "text/plain"), 415)
 
