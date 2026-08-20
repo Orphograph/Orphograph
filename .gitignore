@@ -146,3 +146,18 @@ research_*/
 # Founder-internal runbooks — keep local, never publish (public repo)
 /DEPLOY_RUNBOOK_STANDALONE.md
 /MERGE_RUNBOOK_PACED_2026_06_08.md
+
+# Internal outreach/scouting drafts. Same content class as outreach/ above --
+# unposted drafts naming third-party threads and people -- and this repo is
+# PUBLIC. scouting-drafts/ was created 2026-08-08 and sat untracked-but-not-
+# ignored until 2026-08-20, one `git add -A` from being published. The list
+# above is a hand-maintained per-directory enumeration, which fails exactly
+# this way; tests/test_repo_hygiene.py is the guard that does not forget.
+scouting-drafts/
+
+# Local agent/editor config (machine-specific, not project scaffold).
+.codex/
+
+# Launch-listing image assets staged for a directory submission. Outreach
+# material, not product source.
+devhunt-assets/
