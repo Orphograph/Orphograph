@@ -66,7 +66,11 @@ fi
 
 # verify the cache actually flipped (give the edge a moment)
 echo "verifying (waiting 5s for edge propagation)…"; sleep 5
-UA="Brave/1.68.137 (Macintosh; Apple Silicon Mac OS X 14_5)"
+# Honest UA. NEVER a browser-spoofing string here: this loop exists to find out
+# whether the edge is still serving the old bytes, and a spoofed UA hides the
+# exact blocking the check is for. If Cloudflare ever treats this agent
+# differently, that IS the finding.
+UA="Orphograph-cache-purge/1.0 (+https://orphograph.com)"
 for u in "${URLS[@]}"; do
   hdr=$(curl -s -A "$UA" -D - -o /dev/null "$u" || true)
   code=$(printf '%s' "$hdr" | awk 'NR==1{print $2}')

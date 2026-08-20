@@ -143,5 +143,102 @@ class TestInternalDraftsNotCommitted(unittest.TestCase):
             + ", ".join(offenders))
 
 
+
+# Outbound scripts that still carry a browser-spoofing User-Agent as of
+# 2026-08-20. This is a FROZEN debt list, not an approval: the rule
+# ("never a browser-spoofing UA") is a hard rule, and every entry here
+# violates it. They are listed rather than fixed because each one is a LIVE
+# job talking to a third party, and changing an outbound UA can get a job
+# blocked -- a behaviour change on working production jobs is the founder's
+# call, not an in-loop fix. The list may only ever SHRINK.
+_SPOOFED_UA_DEBT = {
+    "dataset-provenance/provenance.py",
+    "scripts/auto_anchor_repo.py",
+    "scripts/canary_scan.py",
+    "scripts/morning_check.py",
+    "scripts/orphograph_watchdog.py",
+    "scripts/publish_watcher.py",
+    "scripts/slo_monitor.py",
+    "scripts/usb_offline_anchor_submit.py",
+    "sdk-python/orphograph/_client.py",
+}
+# Related, tracked separately because it is a different shape:
+# tests/test_usb_airgap.py:231 ASSERTS a spoofed UA is present
+# (`"Mozilla/5.0" in ua and "Chrome/" in ua`), i.e. a test that pins the
+# violation of a hard rule. It carries no spoof string of its own, so it does
+# not belong in the list above; it belongs in the same founder decision.
+
+# A string is IMPERSONATION when it claims a real browser PRODUCT or engine.
+# A bare "Mozilla/5.0" is NOT enough on its own: the conventional honest bot
+# form is `Mozilla/5.0 (compatible; <YourName>/1.0; +https://your.site)` --
+# the same shape Googlebot uses -- where "Mozilla/5.0" is a vestigial
+# compatibility token and the agent still says who it really is. Four files in
+# server/ and scripts/ use exactly that form and are correctly NOT flagged; a
+# detector that failed to tell them apart from a fake Chrome would be noise,
+# and noise gets an allowlist bolted on until it means nothing.
+_SPOOF_TOKENS = re.compile(
+    r"Chrome/[0-9]|Safari/[0-9]|Brave/[0-9]|Firefox/[0-9]|Edg/[0-9]|AppleWebKit/[0-9]")
+
+# Files whose browser strings are INBOUND fixtures -- they simulate a visitor
+# arriving at our server, which is the opposite of impersonating a client.
+_INBOUND_FIXTURES = {"tests/test_ab_home.py"}
+
+
+class TestNoNewSpoofedUserAgents(unittest.TestCase):
+    """The "never a browser-spoofing UA" rule, enforced instead of remembered.
+
+    Rationale, from the rule itself: spoofing hides the exact blocking the
+    check exists to find. A self-check that pretends to be Brave cannot tell
+    you that Cloudflare is blocking your real agent.
+
+    Found 2026-08-20 by the Stage 3f review gate, which caught a fresh
+    violation in scripts/cf_purge.sh on its way into a commit -- and then, on
+    hunting the class, found six more already tracked and NO guard anywhere.
+    """
+
+    def test_negative_control_the_token_set_can_hit(self):
+        self.assertTrue(_SPOOF_TOKENS.search(
+            "Mozilla/5.0 (Macintosh) AppleWebKit/605.1.15 Chrome/124.0.0.0"))
+        self.assertIsNone(_SPOOF_TOKENS.search(
+            "Orphograph-selfcheck/1.0 (+https://orphograph.com)"))
+
+    def test_no_new_file_spoofs_a_browser(self):
+        found = set()
+        for path in _tracked_files():
+            if path.suffix not in (".py", ".sh") or not path.is_file():
+                continue
+            rel = str(path.relative_to(ROOT))
+            if rel in _INBOUND_FIXTURES or rel == str(
+                    Path(__file__).resolve().relative_to(ROOT)):
+                continue
+            try:
+                if _SPOOF_TOKENS.search(path.read_text(errors="ignore")):
+                    found.add(rel)
+            except OSError:
+                continue
+        new = sorted(found - _SPOOFED_UA_DEBT)
+        self.assertEqual(
+            new, [],
+            "new browser-spoofing User-Agent(s) introduced -- this is a hard "
+            "rule, and a spoofed agent hides the blocking the check exists to "
+            "find: " + ", ".join(new))
+
+    def test_the_debt_list_only_shrinks(self):
+        """A fixed file must be REMOVED from the debt list, so the list stays
+        an honest count of what is still wrong rather than decoration."""
+        stale = set()
+        for rel in _SPOOFED_UA_DEBT:
+            f = ROOT / rel
+            if not f.exists():
+                continue
+            if not _SPOOF_TOKENS.search(f.read_text(errors="ignore")):
+                stale.add(rel)
+        self.assertEqual(
+            sorted(stale), [],
+            "these files no longer spoof a UA but are still on the debt list; "
+            "remove them so the list keeps meaning something: "
+            + ", ".join(sorted(stale)))
+
+
 if __name__ == "__main__":
     unittest.main()
