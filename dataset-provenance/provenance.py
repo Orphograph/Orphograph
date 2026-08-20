@@ -61,11 +61,20 @@ sys.path.insert(0, str(_REPO / "server"))
 import merkle  # noqa: E402  (path set above)
 
 DEFAULT_API = "https://orphograph.com"
-# Cloudflare (Error 1010) blocks the bare Python-urllib User-Agent; present the
-# same client signature the browser uses.
-_BROWSER_UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-               "AppleWebKit/537.36 (KHTML, like Gecko) "
-               "Chrome/124.0.0.0 Safari/537.36")
+# Honest, self-identifying User-Agent. NEVER a browser-spoofing string.
+#
+# MEASURED 2026-08-20 against https://orphograph.com/api/health:
+#   Python-urllib/3.11 ............ 403   (a standard CDN managed rule)
+#   no User-Agent header at all ... 200
+#   curl/8.7.1 .................... 200
+#   a named agent like this one ... 200
+# So the gateway blocks exactly one literal token and nothing else. The
+# previous comment here claimed the CDN has a "default-deny posture" against
+# scripted clients and that "only the leading Mozilla/5.0 appeases the
+# gateway" -- the premise was right and the conclusion was wrong. The spoof
+# was never load-bearing. All that matters is that a UA is SET, so nothing
+# falls back to urllib's default.
+_UA = "Orphograph-dataset-provenance/1.0 (+https://orphograph.com)"
 
 
 # --------------------------------------------------------------------------- categorise
@@ -113,17 +122,20 @@ def _post_manifest(api: str, manifest: dict, label: str | None,
     if public_paths:
         body["paths_public"] = True
     data = json.dumps(body).encode("utf-8")
-    # Cloudflare (Error 1010) blocks the default Python-urllib User-Agent. Present
-    # the same client signature the browser frontend uses to reach this endpoint.
+    # Cloudflare rejects the default `Python-urllib` User-Agent (Error 1010),
+    # which is why one is set at all. It does NOT require a browser signature:
+    # measured 2026-08-20, a named agent and even a request with no UA header
+    # both return 200. `_UA` is the single definition; do not inline a copy.
     req = urllib.request.Request(
         f"{api.rstrip('/')}/api/anchor_folder",
         data=data,
         headers={
             "Content-Type": "application/json",
             "Accept": "application/json",
-            "User-Agent": ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                           "AppleWebKit/537.36 (KHTML, like Gecko) "
-                           "Chrome/124.0.0.0 Safari/537.36"),
+            # Reference the constant. This used to be a second, independently
+            # maintained copy of the same string -- two spellings of one
+            # value is how they drift apart.
+            "User-Agent": _UA,
             "Origin": api.rstrip("/"),
             "Referer": f"{api.rstrip('/')}/",
         },
@@ -412,7 +424,7 @@ def _fetch_receipt_root(api: str, rid: str) -> "tuple[str | None, str | None]":
     """
     url = f"{api.rstrip('/')}/api/receipt/{rid}"
     req = urllib.request.Request(
-        url, headers={"User-Agent": _BROWSER_UA, "Accept": "application/json"})
+        url, headers={"User-Agent": _UA, "Accept": "application/json"})
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
             rec = json.loads(resp.read().decode("utf-8"))
@@ -438,7 +450,7 @@ def _fetch_receipt_leaves(api: str, rid: str) -> "list | None":
     receipt is unavailable or its paths are redacted (owner-only)."""
     url = f"{api.rstrip('/')}/api/verify_folder/{rid}"
     req = urllib.request.Request(
-        url, headers={"User-Agent": _BROWSER_UA, "Accept": "application/json"})
+        url, headers={"User-Agent": _UA, "Accept": "application/json"})
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
             data = json.loads(resp.read().decode("utf-8"))

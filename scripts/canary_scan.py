@@ -35,8 +35,7 @@ from pathlib import Path
 
 CANARY_FILE = Path.home() / ".orphograph_canary.txt"
 LOG_PATH = Path.home() / "Library" / "Logs" / "orphograph_canary.jsonl"
-UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-      "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15")
+UA = "Orphograph-canary-scan/1.0 (+https://orphograph.com)"
 TIMEOUT = 12.0
 
 

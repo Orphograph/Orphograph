@@ -39,15 +39,22 @@ PROD_BASE = "https://orphograph.com"
 SECRETS_PATH = Path.home() / ".orphograph_secrets.env"
 LOG_PATH = Path.home() / "Library" / "Logs" / "orphograph_morning_check.jsonl"
 TIMEOUT_S = 8.0
-# Cloudflare's Bot Fight Mode rejects bot-shaped User-Agents (curl/, python-,
-# anything advertising itself as automation) at the TLS handshake on the
-# orange-cloud proxy. A real-browser UA gets through reliably; a "compatible;
-# bot" UA was passing then started failing intermittently with SSL handshake
-# timeouts. Settled on a stable Safari/macOS UA that matches the actual host
-# the script runs on.
+# HISTORICAL NOTE, kept rather than deleted because it is counter-evidence:
+# this comment previously recorded that Cloudflare's Bot Fight Mode rejected
+# bot-shaped agents at the TLS handshake, and that a `compatible; bot` UA
+# "was passing then started failing INTERMITTENTLY with SSL handshake
+# timeouts". A point-in-time probe cannot refute an intermittent failure, so
+# that claim is not called wrong here -- it is dated. What was measured on
+# 2026-08-20: 20 sequential requests with the agent below returned 20x200
+# with curl exit 0 every time (no transport or TLS error), and separately
+# `curl/8.7.1` and a request with NO User-Agent header both returned 200,
+# which is inconsistent with Bot Fight Mode being on today. Memory also
+# records that CF bot-blocking must never be enabled on this zone.
+# If this script starts failing at the handshake, THIS is the note that
+# predicted it -- and the response is to investigate the zone setting, never
+# to reintroduce a browser-spoofing agent.
 USER_AGENT = (
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-    "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
+    "Orphograph-morning-check/1.0 (+https://orphograph.com)"
 )
 RETRIES = 3
 
@@ -74,10 +81,16 @@ def _read_founder_token() -> str:
 def _fetch(path: str, token: str = "") -> tuple[int, dict | None, float]:
     """GET <prod>/<path> with retries; return (status, parsed_json_or_None, rtt_ms).
 
-    Cloudflare Bot Fight Mode causes intermittent SSL handshake timeouts even
-    with a browser-shaped UA — first request after an idle period often gets
-    challenged. Three attempts is enough to ride through that without making
-    the check feel slow on the happy path.
+    Retries exist because of intermittent SSL handshake timeouts — the first
+    request after an idle period sometimes gets challenged. Note what the
+    original version of this docstring said: it happened "even with a
+    browser-shaped UA". So the spoof was never the mitigation for this;
+    RETRIES is, and RETRIES is unchanged. That is a small piece of evidence
+    that the browser-shaped agent removed on 2026-08-20 was not buying
+    anything here.
+
+    Three attempts is enough to ride through it without making the check feel
+    slow on the happy path.
     """
     import time
     last_err = ""

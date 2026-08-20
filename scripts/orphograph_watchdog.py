@@ -46,11 +46,20 @@ PROBE_URLS = (
 PROBE_TIMEOUT_S = 15
 TOTAL_DEADLINE_S = 30
 
-USER_AGENT = (
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) "
-    "Chrome/124.0.0.0 Safari/537.36"
-)
+# Honest, self-identifying User-Agent. NEVER a browser-spoofing string.
+#
+# MEASURED 2026-08-20 against https://orphograph.com/api/health:
+#   Python-urllib/3.11 ............ 403   (a standard CDN managed rule)
+#   no User-Agent header at all ... 200
+#   curl/8.7.1 .................... 200
+#   a named agent like this one ... 200
+# So the gateway blocks exactly one literal token and nothing else. The
+# previous comment here claimed the CDN has a "default-deny posture" against
+# scripted clients and that "only the leading Mozilla/5.0 appeases the
+# gateway" -- the premise was right and the conclusion was wrong. The spoof
+# was never load-bearing. All that matters is that a UA is SET, so nothing
+# falls back to urllib's default.
+USER_AGENT = "Orphograph-watchdog/1.0 (+https://orphograph.com)"
 
 LOG_DIR = os.environ.get("ORPHOGRAPH_WATCHDOG_LOG_DIR") or os.path.expanduser("~/.orphograph/logs")
 LOG_PATH = os.path.join(LOG_DIR, "orphograph_watchdog.jsonl")

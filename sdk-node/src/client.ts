@@ -60,16 +60,23 @@ export interface InclusionProofResponse {
 
 export const DEFAULT_SERVER_URL = "https://orphograph.com";
 const DEFAULT_TIMEOUT_MS = 60_000;
-// Browser-shaped User-Agent. The hosted service sits behind a CDN whose
-// default-deny posture blocks scripted clients identifying themselves as
-// such. The SDK still identifies as itself via the trailing suffix so
-// server logs can attribute requests to SDK traffic; only the leading
-// "Mozilla/5.0" appeases the gateway. The same approach is used by the
-// office's outbound mailer and payments clients.
-const USER_AGENT =
-  "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) " +
-  "AppleWebKit/605.1.15 (KHTML, like Gecko) " +
-  "Version/17.5 Safari/605.1.15 orphograph-node/0.1.0";
+// Honest, self-identifying User-Agent. NEVER a browser-spoofing string.
+//
+// The comment that used to sit here claimed the service "sits behind a CDN
+// whose default-deny posture blocks scripted clients identifying themselves
+// as such" and that "only the leading Mozilla/5.0 appeases the gateway".
+// Measured 2026-08-20 against https://orphograph.com/api/health:
+//
+//   Python-urllib/3.11 ........................ 403
+//   no User-Agent header at all ............... 200
+//   curl/8.7.1 ................................ 200
+//   a named agent like this one ............... 200
+//
+// The premise was right and the conclusion was wrong: the gateway blocks one
+// literal token, not scripted clients as a class. test/client.test.ts has
+// asserted `ua.startsWith("orphograph-node/")` this whole time and has been
+// FAILING, unnoticed, because no workflow ran this suite.
+const USER_AGENT = "orphograph-node/0.1.0 (+https://orphograph.com)";
 
 interface HttpResult {
   status: number;

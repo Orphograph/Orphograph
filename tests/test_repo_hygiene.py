@@ -46,6 +46,13 @@ _INTERNAL_MARKERS = [
 
 _TEXT_SUFFIXES = {".md", ".txt", ".py", ".html", ".json", ".yml", ".yaml", ".sh"}
 
+# Every language that can carry an outbound User-Agent. The first version of
+# this guard scanned only .py and .sh, which made sdk-node/src/client.ts --
+# holding the byte-identical spoof under the same disproven comment --
+# STRUCTURALLY INVISIBLE, and the debt list was declared empty while it sat
+# there. A deny list that cannot reach the violation reports CLEAN.
+_CODE_SUFFIXES = {".py", ".sh", ".ts", ".js", ".mjs", ".cjs", ".bash", ".zsh"}
+
 
 def _tracked_files() -> list[Path]:
     out = subprocess.run(["git", "ls-files", "-z"], cwd=ROOT,
@@ -71,11 +78,16 @@ def _all_test_files() -> list[Path]:
     `outreach/test_discovery_log.py` (gitignored) still killed collection.
     """
     out = []
-    for path in ROOT.rglob("test_*.py"):
-        if any(part in _SKIP_DIRS for part in path.parts):
-            continue
-        out.append(path)
-    return out
+    # pytest's default `python_files` is `test_*.py` AND `*_test.py`, and this
+    # repo has no pytest.ini/pyproject section narrowing it -- so globbing only
+    # the first pattern would let a `foo_test.py` collision through, which is
+    # the same defect wearing a different filename.
+    for pattern in ("test_*.py", "*_test.py"):
+        for path in ROOT.rglob(pattern):
+            if any(part in _SKIP_DIRS for part in path.parts):
+                continue
+            out.append(path)
+    return sorted(set(out))
 
 
 class TestNoModuleScopeExitInTestFiles(unittest.TestCase):
@@ -233,21 +245,20 @@ class TestInternalDraftsNotCommitted(unittest.TestCase):
 # job talking to a third party, and changing an outbound UA can get a job
 # blocked -- a behaviour change on working production jobs is the founder's
 # call, not an in-loop fix. The list may only ever SHRINK.
-_SPOOFED_UA_DEBT = {
-    "dataset-provenance/provenance.py",
-    "scripts/auto_anchor_repo.py",
-    "scripts/canary_scan.py",
-    "scripts/morning_check.py",
-    "scripts/orphograph_watchdog.py",
-    "scripts/publish_watcher.py",
-    "scripts/slo_monitor.py",
-    "scripts/usb_offline_anchor_submit.py",
-    "sdk-python/orphograph/_client.py",
-    # :231 ASSERTS a spoofed UA is present (`"Mozilla/5.0" in ua and
-    # "Chrome/" in ua`) -- a test that PINS the violation of a hard rule.
-    # Reversing it is part of the same founder decision as the nine above.
-    "tests/test_usb_airgap.py",
-}
+# Files still carrying a browser-spoofing User-Agent. EMPTY as of 2026-08-20.
+#
+# It held ten entries this morning, frozen on the assumption that changing an
+# outbound UA might get a live job blocked. That assumption was never tested.
+# Testing it took four minutes: every host these scripts talk to --
+# orphograph.com, pypi.org, registry.npmjs.org, api.github.com and
+# html.duckduckgo.com -- returns 200 to an honest self-identifying agent, and
+# the CDN rule that started all of this blocks exactly one literal token,
+# `Python-urllib`. A "founder decision" that dissolves under four minutes of
+# measurement was never a decision; it was an unexamined premise.
+#
+# Keep it empty. The shrink-only test below makes a stale entry fail, and the
+# growth test makes a new violation fail.
+_SPOOFED_UA_DEBT: set[str] = set()
 
 # --- Is a User-Agent string impersonating a browser? --------------------
 #
@@ -275,7 +286,12 @@ _SELF_ID_WINDOW = 220
 
 
 def _spoof_reason(text: str) -> str | None:
-    """Return why `text` impersonates a browser, or None if it does not."""
+    """Return why this string impersonates a browser, or None if it does not.
+
+    Applied to ONE string literal at a time (see `_string_groups`), so the
+    self-identification window below can only be satisfied by the agent's own
+    text -- nothing elsewhere in the file can vouch for it.
+    """
     m = _BROWSER_PRODUCT.search(text)
     if m:
         return f"claims a browser product: {m.group(0)}"
@@ -286,6 +302,95 @@ def _spoof_reason(text: str) -> str | None:
         return ("bare Mozilla/ with no `(compatible; <name>; +https://…)` "
                 "self-identification")
     return None
+
+
+def _string_groups(text: str, suffix: str) -> list[str]:
+    """Every STRING LITERAL in the file, with adjacent literals concatenated.
+
+    Replaces an earlier `_strip_comments` + whole-file scan, which had two
+    defects found by review:
+
+      * Prose about a past spoof re-tripped the guard, so documenting a fix
+        looked like committing one -- the shape that teaches people to mute a
+        guard forever.
+      * Worse, the comment-stripped reconstruction could LAUNDER a real spoof.
+        `_spoof_reason` forgives a bare `Mozilla/` when `compatible;` and
+        `+http` appear within the next 220 characters. Removing comments (and
+        the original spacing) could drag an unrelated honest UA -- there are
+        three in server/ -- into that window, so a spoof added just above one
+        of them scanned clean. Reproduced before fixing.
+
+    Checking each literal on its own removes the window entirely: a UA is one
+    string, and nothing outside it can vouch for it. Adjacent literals are
+    joined first, because both Python implicit concatenation and `+` joining
+    split one UA across several tokens, and checking the halves separately
+    would flag an honest `"Mozilla/5.0 (compatible; " "Name/1.0; +https://x)"`.
+    """
+    groups: list[str] = []
+    if suffix == ".py":
+        import io, tokenize
+        try:
+            toks = list(tokenize.generate_tokens(io.StringIO(text).readline))
+        except (tokenize.TokenError, IndentationError, SyntaxError):
+            return [text]        # unparseable -> scan everything, fail loud
+        cur: list[str] = []
+        JOINABLE = {tokenize.NL, tokenize.NEWLINE, tokenize.COMMENT,
+                    tokenize.INDENT, tokenize.DEDENT}
+        for t in toks:
+            if t.type == tokenize.STRING:
+                try:
+                    import ast as _ast
+                    cur.append(str(_ast.literal_eval(t.string)))
+                except Exception:
+                    cur.append(t.string)
+            elif t.type in JOINABLE or (t.type == tokenize.OP and t.string in "+("):
+                continue                      # keeps a concatenation together
+            else:
+                if cur:
+                    groups.append("".join(cur)); cur = []
+        if cur:
+            groups.append("".join(cur))
+        return groups
+
+    # .ts/.js/.mjs/.cjs/.sh: no tokenizer available, so walk the text once,
+    # tracking whether we are inside a string or a comment. A regex over
+    # quoted spans is NOT enough: a quoted PHRASE inside a `//` comment looks
+    # exactly like a string literal, and this file's own fix comment -- which
+    # quotes the disproven claim "only the leading Mozilla/5.0 appeases the
+    # gateway" -- tripped the guard that way.
+    out, buf, i, n = [], [], 0, len(text)
+    line_comment = "//" if suffix != ".sh" else "#"
+    while i < n:
+        c = text[i]
+        if c in "'\"`":
+            quote, i, lit = c, i + 1, []
+            while i < n and text[i] != quote:
+                if text[i] == "\\" and i + 1 < n:
+                    lit.append(text[i + 1]); i += 2; continue
+                lit.append(text[i]); i += 1
+            i += 1
+            val = "".join(lit)
+            # Join runs of literals separated only by whitespace or `+`, so a
+            # UA split across concatenated pieces is judged whole.
+            j = i
+            while j < n and text[j] in " \t\r\n+":
+                j += 1
+            if j < n and text[j] in "'\"`":
+                buf.append(val); i = j; continue
+            buf.append(val); out.append("".join(buf)); buf = []
+            continue
+        if text.startswith(line_comment, i):
+            while i < n and text[i] != "\n":
+                i += 1
+            continue
+        if suffix != ".sh" and text.startswith("/*", i):
+            end = text.find("*/", i + 2)
+            i = n if end == -1 else end + 2
+            continue
+        i += 1
+    if buf:
+        out.append("".join(buf))
+    return out
 
 
 # Files whose browser strings are INBOUND fixtures -- they simulate a visitor
@@ -321,17 +426,64 @@ class TestNoNewSpoofedUserAgents(unittest.TestCase):
         for ua in honest:
             self.assertIsNone(_spoof_reason(ua), f"false positive on: {ua}")
 
+    def _file_flags(self, text: str, suffix: str = ".py") -> bool:
+        return any(_spoof_reason(g) for g in _string_groups(text, suffix))
+
+    def test_negative_control_prose_is_not_a_spoof_but_a_literal_is(self):
+        commented = '# we used to send Mozilla/5.0 ... Chrome/124.0.0.0\nUA = "x/1.0"\n'
+        live = 'UA = "Mozilla/5.0 (Macintosh) Chrome/124.0.0.0"\n'
+        self.assertFalse(self._file_flags(commented),
+                         "a comment explaining a past spoof was flagged as one")
+        self.assertTrue(self._file_flags(live),
+                        "a live spoof in a string literal was missed")
+
+    def test_negative_control_an_honest_ua_cannot_launder_a_spoof(self):
+        """The defect this replaced: `_spoof_reason` forgives a bare Mozilla/
+        when `compatible;` and `+http` appear within 220 chars, and a
+        whole-file scan let an UNRELATED honest UA further down the file
+        supply them. server/ has three such honest agents, so the laundering
+        path was reachable in real code."""
+        laundered = (
+            'SPOOF = "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"\n'
+            'HONEST = "Mozilla/5.0 (compatible; Mailer/0.1; +https://orphograph.com)"\n')
+        self.assertTrue(
+            self._file_flags(laundered),
+            "an honest UA elsewhere in the file laundered a real spoof")
+        # ...and the honest one alone still must not be flagged.
+        self.assertFalse(self._file_flags(
+            'HONEST = "Mozilla/5.0 (compatible; Mailer/0.1; +https://orphograph.com)"\n'))
+
+    def test_negative_control_split_literals_are_judged_as_one_string(self):
+        """A UA split across concatenated literals must be judged whole:
+        the halves of an honest agent look bare on their own."""
+        self.assertFalse(self._file_flags(
+            'UA = ("Mozilla/5.0 (compatible; " "Name/1.0; +https://x.example)")\n'),
+            "an honest UA split across literals was flagged")
+        self.assertTrue(self._file_flags(
+            'UA = ("Mozilla/5.0 (Macintosh) " "AppleWebKit/605.1.15")\n'),
+            "a spoof split across literals was missed")
+
+    def test_negative_control_typescript_is_scanned(self):
+        """.ts was unscanned, which is how sdk-node/src/client.ts held the
+        byte-identical spoof while the debt list was declared empty."""
+        ts = ('const USER_AGENT =\n  "Mozilla/5.0 (Macintosh) " +\n'
+              '  "AppleWebKit/605.1.15 Safari/605.1.15 orphograph-node/0.1.0";\n')
+        self.assertTrue(self._file_flags(ts, ".ts"),
+                        "a TypeScript spoof was not detected")
+        self.assertIn(".ts", _CODE_SUFFIXES)
+
     def test_no_new_file_spoofs_a_browser(self):
         found = set()
         for path in _tracked_files():
-            if path.suffix not in (".py", ".sh") or not path.is_file():
+            if path.suffix not in _CODE_SUFFIXES or not path.is_file():
                 continue
             rel = str(path.relative_to(ROOT))
             if rel in _INBOUND_FIXTURES or rel == str(
                     Path(__file__).resolve().relative_to(ROOT)):
                 continue
             try:
-                if _spoof_reason(path.read_text(errors="ignore")):
+                if any(_spoof_reason(g) for g in _string_groups(
+                        path.read_text(errors="ignore"), path.suffix)):
                     found.add(rel)
             except OSError:
                 continue
@@ -344,19 +496,65 @@ class TestNoNewSpoofedUserAgents(unittest.TestCase):
 
     def test_the_debt_list_only_shrinks(self):
         """A fixed file must be REMOVED from the debt list, so the list stays
-        an honest count of what is still wrong rather than decoration."""
+        an honest count of what is still wrong rather than decoration.
+
+        NOTE, so nobody mistakes this for active protection: with
+        `_SPOOFED_UA_DEBT` now EMPTY this loop has nothing to iterate and
+        cannot fail. It is a latent guard that only becomes live if somebody
+        re-adds an entry. The check that actually protects the rule today is
+        `test_no_new_file_spoofs_a_browser` above, which fails on ANY spoof in
+        any scanned language. Saying so beats letting a green tick imply a
+        check that is not running.
+        """
         stale = set()
         for rel in _SPOOFED_UA_DEBT:
             f = ROOT / rel
             if not f.exists():
                 continue
-            if not _spoof_reason(f.read_text(errors="ignore")):
+            if not any(_spoof_reason(g) for g in _string_groups(
+                    f.read_text(errors="ignore"), f.suffix)):
                 stale.add(rel)
         self.assertEqual(
             sorted(stale), [],
             "these files no longer spoof a UA but are still on the debt list; "
             "remove them so the list keeps meaning something: "
             + ", ".join(sorted(stale)))
+
+
+class TestNoDuplicateTestBasenames(unittest.TestCase):
+    """Two test files with the same basename and no __init__.py collide.
+
+    pytest's default import mode derives the module name from the basename
+    when the directory is not a package, so the second import of `test_sdk`
+    fails and takes the WHOLE collection down -- 1681 tests do not run because
+    of two filenames. Found 2026-08-20: tests/test_sdk.py and
+    sdk-python/tests/test_sdk.py had been colliding, invisible to CI because
+    CI scopes itself to `pytest tests/`.
+    """
+
+    def test_negative_control_the_scan_finds_test_files(self):
+        """A duplicate check over an empty list passes vacuously forever."""
+        files = _all_test_files()
+        self.assertGreater(len(files), 50,
+                           "the test-file walk found almost nothing; the "
+                           "duplicate check below would pass vacuously")
+
+    def test_no_two_test_files_share_a_basename(self):
+        from collections import defaultdict
+        by_name = defaultdict(list)
+        for path in _all_test_files():
+            # A directory that IS a package gets a unique module path, so a
+            # shared basename there is legitimate -- the guard's own docstring
+            # names packages as the fix, and flagging them would punish it.
+            if (path.parent / "__init__.py").exists():
+                continue
+            by_name[path.name].append(str(path.relative_to(ROOT)))
+        dupes = {n: sorted(v) for n, v in by_name.items() if len(v) > 1}
+        self.assertEqual(
+            dupes, {},
+            "these test files share a basename and will collide during "
+            "collection unless their directories are packages, taking the "
+            f"entire run down with them: {dupes}")
 
 
 if __name__ == "__main__":

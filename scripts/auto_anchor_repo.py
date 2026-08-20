@@ -54,12 +54,20 @@ BASE_URL = os.environ.get("ORPHO_BASE_URL", "https://orphograph.com").rstrip("/"
 API_KEY = os.environ.get("ORPHO_AUTO_ANCHOR_KEY", "").strip()
 HISTORY_PATH = ROOT / "outbox" / "AUTO_ANCHOR_HISTORY.jsonl"
 
-# Browser-shaped UA so the production CDN doesn't classify the daemon as
-# a bot. The label tag identifies the source for log analysis.
-USER_AGENT = (
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/605.1.15 "
-    "(KHTML, like Gecko) Version/17.0 Safari/605.1.15 OrphographAutoAnchor/1.0"
-)
+# Honest, self-identifying User-Agent. NEVER a browser-spoofing string.
+#
+# MEASURED 2026-08-20 against https://orphograph.com/api/health:
+#   Python-urllib/3.11 ............ 403   (a standard CDN managed rule)
+#   no User-Agent header at all ... 200
+#   curl/8.7.1 .................... 200
+#   a named agent like this one ... 200
+# So the gateway blocks exactly one literal token and nothing else. The
+# previous comment here claimed the CDN has a "default-deny posture" against
+# scripted clients and that "only the leading Mozilla/5.0 appeases the
+# gateway" -- the premise was right and the conclusion was wrong. The spoof
+# was never load-bearing. All that matters is that a UA is SET, so nothing
+# falls back to urllib's default.
+USER_AGENT = "OrphographAutoAnchor/1.0 (+https://orphograph.com)"
 
 # Folder-walk exclusion list — same shape as compliance_scan, but with
 # outbox/ also excluded because that directory is the founder's private

@@ -42,13 +42,11 @@ EXIT_HTTP_NON_2XX = 4
 EXIT_NETWORK_FAILURE = 5
 
 
-# Replicates the User-Agent used by scripts/orphograph_watchdog.py so the
-# CDN does not treat the request as a default urllib client.
-USER_AGENT = (
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) "
-    "Chrome/124.0.0.0 Safari/537.36"
-)
+# Honest, self-identifying User-Agent. NEVER a browser-spoofing string.
+# The point is only that a UA is SET: measured 2026-08-20, the CDN 403s the
+# literal `Python-urllib` token and returns 200 for every self-identifying
+# agent tested, so nothing here needs to look like a browser.
+USER_AGENT = "Orphograph-usb-offline-submit/1.0 (+https://orphograph.com)"
 
 HTTP_TIMEOUT_S = 60
 
