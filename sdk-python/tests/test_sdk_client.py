@@ -358,3 +358,22 @@ class TestCli(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_user_agent_identifies_itself_and_impersonates_nothing():
+    """The SDK ships to third parties, so a spoofed agent propagated the lie
+    to every user of it -- and to our own server logs, which could no longer
+    tell SDK traffic from a browser. Nothing asserted this until 2026-08-20,
+    which is how a browser-shaped UA survived in a published package.
+
+    A UA must be SET: the CDN 403s urllib's default `Python-urllib/3.x`, and
+    that is the ONLY agent it rejects.
+    """
+    ua = _client.USER_AGENT
+    assert ua, "USER_AGENT must be set or urllib falls back to a 403'd default"
+    assert "Python-urllib" not in ua
+    for product in ("Mozilla/", "Chrome/", "Safari/", "AppleWebKit/", "Gecko/"):
+        assert product not in ua, (
+            f"SDK User-Agent impersonates a browser ({product!r}): {ua!r}")
+    assert "orphograph" in ua.lower(), (
+        f"SDK User-Agent must identify itself, got {ua!r}")

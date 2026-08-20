@@ -35,6 +35,16 @@ jobs:
           PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
         run: python3 -m pytest tests/ -q --ignore=tests/test_biweekly_safety_audit.py
 
+      # sdk-python/ ships its own package ALSO named `orphograph`, distinct from
+      # sdk/orphograph, so the two cannot share one pytest process -- they fight
+      # over sys.modules["orphograph"] and whichever sys.path entry lands first
+      # wins. That is why these 18 tests had never run in CI at all. A separate
+      # interpreter is the fix; combining the paths is not.
+      - name: Run the sdk-python test suite (separate interpreter, see above)
+        env:
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+        run: python3 -m pytest sdk-python/tests/ -q
+
   jslint:
     runs-on: ubuntu-latest
     permissions:

@@ -392,5 +392,36 @@ class TestNoNewSpoofedUserAgents(unittest.TestCase):
             + ", ".join(sorted(stale)))
 
 
+class TestNoDuplicateTestBasenames(unittest.TestCase):
+    """Two test files with the same basename and no __init__.py collide.
+
+    pytest's default import mode derives the module name from the basename
+    when the directory is not a package, so the second import of `test_sdk`
+    fails and takes the WHOLE collection down -- 1681 tests do not run because
+    of two filenames. Found 2026-08-20: tests/test_sdk.py and
+    sdk-python/tests/test_sdk.py had been colliding, invisible to CI because
+    CI scopes itself to `pytest tests/`.
+    """
+
+    def test_negative_control_the_scan_finds_test_files(self):
+        """A duplicate check over an empty list passes vacuously forever."""
+        files = _all_test_files()
+        self.assertGreater(len(files), 50,
+                           "the test-file walk found almost nothing; the "
+                           "duplicate check below would pass vacuously")
+
+    def test_no_two_test_files_share_a_basename(self):
+        from collections import defaultdict
+        by_name = defaultdict(list)
+        for path in _all_test_files():
+            by_name[path.name].append(str(path.relative_to(ROOT)))
+        dupes = {n: sorted(v) for n, v in by_name.items() if len(v) > 1}
+        self.assertEqual(
+            dupes, {},
+            "these test files share a basename and will collide during "
+            "collection unless their directories are packages, taking the "
+            f"entire run down with them: {dupes}")
+
+
 if __name__ == "__main__":
     unittest.main()
