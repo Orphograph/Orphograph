@@ -56,8 +56,11 @@ HEALTH_LATENCY_BUDGET_MS = float(os.environ.get("ORPHO_SLO_HEALTH_LATENCY_MS", "
 PENDING_SLA_HOURS = float(os.environ.get("ORPHO_SLO_PENDING_HOURS", "36"))
 UPGRADE_STALE_HOURS = float(os.environ.get("ORPHO_SLO_UPGRADE_STALE_HOURS", "6"))
 
-# Same practical Cloudflare workaround used by morning_check.py: bot-shaped
-# user agents are sometimes challenged before they reach the app.
+# Honest, self-identifying User-Agent. NEVER a browser-spoofing string.
+# The "bot-shaped agents are sometimes challenged" workaround this comment
+# used to describe was measured false on 2026-08-20: the CDN rejects the
+# literal `Python-urllib` token and returns 200 for every self-identifying
+# agent tested. See scripts/morning_check.py for the dated historical note.
 USER_AGENT = (
     "Orphograph-slo-monitor/1.0 (+https://orphograph.com)"
 )

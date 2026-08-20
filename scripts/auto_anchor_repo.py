@@ -54,8 +54,6 @@ BASE_URL = os.environ.get("ORPHO_BASE_URL", "https://orphograph.com").rstrip("/"
 API_KEY = os.environ.get("ORPHO_AUTO_ANCHOR_KEY", "").strip()
 HISTORY_PATH = ROOT / "outbox" / "AUTO_ANCHOR_HISTORY.jsonl"
 
-# Browser-shaped UA so the production CDN doesn't classify the daemon as
-# a bot. The label tag identifies the source for log analysis.
 # Honest, self-identifying User-Agent. NEVER a browser-spoofing string.
 #
 # MEASURED 2026-08-20 against https://orphograph.com/api/health:

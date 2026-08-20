@@ -239,7 +239,16 @@ def test_submit_posts_correct_shape():
         # the token list here would have put the same rule in two files that can
         # disagree -- and would have made this file itself look like a spoof to
         # the very guard that owns the rule.
-        from test_repo_hygiene import _spoof_reason
+        # Import by PATH, not by relying on pytest putting tests/ on sys.path.
+        # The sibling guard added in this same PR names packages as the
+        # legitimate fix for basename collisions -- and adding tests/__init__.py
+        # would break a bare `import test_repo_hygiene` with ModuleNotFoundError.
+        import importlib.util
+        _spec = importlib.util.spec_from_file_location(
+            "_hygiene_guard", Path(__file__).resolve().parent / "test_repo_hygiene.py")
+        _mod = importlib.util.module_from_spec(_spec)
+        _spec.loader.exec_module(_mod)
+        _spoof_reason = _mod._spoof_reason
         why = _spoof_reason(ua)
         assert why is None, f"User-Agent impersonates a browser ({why}): {ua!r}"
         assert "orphograph" in ua.lower(), (

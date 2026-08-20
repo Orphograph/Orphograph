@@ -122,8 +122,10 @@ def _post_manifest(api: str, manifest: dict, label: str | None,
     if public_paths:
         body["paths_public"] = True
     data = json.dumps(body).encode("utf-8")
-    # Cloudflare (Error 1010) blocks the default Python-urllib User-Agent. Present
-    # the same client signature the browser frontend uses to reach this endpoint.
+    # Cloudflare rejects the default `Python-urllib` User-Agent (Error 1010),
+    # which is why one is set at all. It does NOT require a browser signature:
+    # measured 2026-08-20, a named agent and even a request with no UA header
+    # both return 200. `_UA` is the single definition; do not inline a copy.
     req = urllib.request.Request(
         f"{api.rstrip('/')}/api/anchor_folder",
         data=data,

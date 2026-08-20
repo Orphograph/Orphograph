@@ -53,9 +53,6 @@ STATE_PYPI = OUTBOX / "PUBLISH_STATE_PYPI.json"
 STATE_NPM = OUTBOX / "PUBLISH_STATE_NPM.json"
 BADGES = OUTBOX / "HOMEPAGE_BADGES.json"
 
-# Browser-shaped UA — reused from orphograph_watchdog.py. The CDN in
-# front of orphograph.com blocks the default urllib UA, so the same
-# string is used here for the anchor POST. PyPI and the npm registry
 # Honest, self-identifying User-Agent. NEVER a browser-spoofing string.
 #
 # MEASURED 2026-08-20 against https://orphograph.com/api/health:
