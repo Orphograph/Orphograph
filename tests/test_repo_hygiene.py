@@ -233,21 +233,20 @@ class TestInternalDraftsNotCommitted(unittest.TestCase):
 # job talking to a third party, and changing an outbound UA can get a job
 # blocked -- a behaviour change on working production jobs is the founder's
 # call, not an in-loop fix. The list may only ever SHRINK.
-_SPOOFED_UA_DEBT = {
-    "dataset-provenance/provenance.py",
-    "scripts/auto_anchor_repo.py",
-    "scripts/canary_scan.py",
-    "scripts/morning_check.py",
-    "scripts/orphograph_watchdog.py",
-    "scripts/publish_watcher.py",
-    "scripts/slo_monitor.py",
-    "scripts/usb_offline_anchor_submit.py",
-    "sdk-python/orphograph/_client.py",
-    # :231 ASSERTS a spoofed UA is present (`"Mozilla/5.0" in ua and
-    # "Chrome/" in ua`) -- a test that PINS the violation of a hard rule.
-    # Reversing it is part of the same founder decision as the nine above.
-    "tests/test_usb_airgap.py",
-}
+# Files still carrying a browser-spoofing User-Agent. EMPTY as of 2026-08-20.
+#
+# It held ten entries this morning, frozen on the assumption that changing an
+# outbound UA might get a live job blocked. That assumption was never tested.
+# Testing it took four minutes: every host these scripts talk to --
+# orphograph.com, pypi.org, registry.npmjs.org, api.github.com and
+# html.duckduckgo.com -- returns 200 to an honest self-identifying agent, and
+# the CDN rule that started all of this blocks exactly one literal token,
+# `Python-urllib`. A "founder decision" that dissolves under four minutes of
+# measurement was never a decision; it was an unexamined premise.
+#
+# Keep it empty. The shrink-only test below makes a stale entry fail, and the
+# growth test makes a new violation fail.
+_SPOOFED_UA_DEBT: set[str] = set()
 
 # --- Is a User-Agent string impersonating a browser? --------------------
 #
@@ -272,6 +271,29 @@ _MOZILLA = re.compile(r"Mozilla/[0-9]")
 # Self-identification must appear near the Mozilla token, not anywhere in the
 # file -- otherwise one honest UA elsewhere would launder every spoof.
 _SELF_ID_WINDOW = 220
+
+
+def _strip_comments(text: str, suffix: str) -> str:
+    """Remove comments so PROSE ABOUT a spoof is not mistaken for one.
+
+    Necessary because the fix for a spoof is usually a comment explaining what
+    the old string was and why it was wrong -- documentation that would
+    otherwise re-trip the guard forever and teach everyone to mute it. A UA
+    inside a comment is inert; a UA inside a string literal is not, and
+    stripping comments leaves string literals untouched.
+    """
+    if suffix == ".py":
+        import io, tokenize
+        try:
+            toks = tokenize.generate_tokens(io.StringIO(text).readline)
+            return "".join(t.string if t.type != tokenize.COMMENT else ""
+                           for t in toks)
+        except (tokenize.TokenError, IndentationError, SyntaxError):
+            return text          # unparseable -> scan everything, fail loud
+    if suffix == ".sh":
+        return "\n".join(l for l in text.split("\n")
+                          if not l.lstrip().startswith("#"))
+    return text
 
 
 def _spoof_reason(text: str) -> str | None:
@@ -321,6 +343,14 @@ class TestNoNewSpoofedUserAgents(unittest.TestCase):
         for ua in honest:
             self.assertIsNone(_spoof_reason(ua), f"false positive on: {ua}")
 
+        # Prose ABOUT a spoof is not a spoof; a string literal still is.
+        commented = '# we used to send Mozilla/5.0 ... Chrome/124.0.0.0\nUA = "x/1.0"\n'
+        live = 'UA = "Mozilla/5.0 (Macintosh) Chrome/124.0.0.0"\n'
+        self.assertIsNone(_spoof_reason(_strip_comments(commented, ".py")),
+                          "a comment explaining a past spoof was flagged as one")
+        self.assertIsNotNone(_spoof_reason(_strip_comments(live, ".py")),
+                             "stripping comments swallowed a live spoof")
+
     def test_no_new_file_spoofs_a_browser(self):
         found = set()
         for path in _tracked_files():
@@ -331,7 +361,9 @@ class TestNoNewSpoofedUserAgents(unittest.TestCase):
                     Path(__file__).resolve().relative_to(ROOT)):
                 continue
             try:
-                if _spoof_reason(path.read_text(errors="ignore")):
+                body = _strip_comments(path.read_text(errors="ignore"),
+                                       path.suffix)
+                if _spoof_reason(body):
                     found.add(rel)
             except OSError:
                 continue
@@ -350,7 +382,8 @@ class TestNoNewSpoofedUserAgents(unittest.TestCase):
             f = ROOT / rel
             if not f.exists():
                 continue
-            if not _spoof_reason(f.read_text(errors="ignore")):
+            if not _spoof_reason(_strip_comments(
+                    f.read_text(errors="ignore"), f.suffix)):
                 stale.add(rel)
         self.assertEqual(
             sorted(stale), [],

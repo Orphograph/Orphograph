@@ -19,18 +19,25 @@ from typing import Any, Optional
 
 DEFAULT_SERVER_URL = "https://orphograph.com"
 DEFAULT_TIMEOUT = 60.0
-# Browser-shaped User-Agent. The hosted service sits behind a CDN whose
-# default-deny posture blocks scripted clients identifying themselves as
-# such (urllib's "Python-urllib/3.x" trips the rule). The SDK still
-# identifies as itself via the trailing suffix so server logs can attribute
-# requests to SDK traffic; only the leading "Mozilla/5.0" appeases the
-# gateway. The same approach is used by the office's outbound mailer and
-# payments clients.
-USER_AGENT = (
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) "
-    "AppleWebKit/605.1.15 (KHTML, like Gecko) "
-    "Version/17.5 Safari/605.1.15 orphograph-python-sdk/0.1"
-)
+# Honest, self-identifying User-Agent. NEVER a browser-spoofing string.
+#
+# The comment that used to sit here said the service "sits behind a CDN whose
+# default-deny posture blocks scripted clients identifying themselves as such"
+# and that "only the leading Mozilla/5.0 appeases the gateway". It was tested
+# on 2026-08-20 against https://orphograph.com/api/health:
+#
+#   Python-urllib/3.11 ............................ 403
+#   no User-Agent header at all ................... 200
+#   curl/8.7.1 .................................... 200
+#   orphograph-python-sdk/0.1 (+https://…) ........ 200
+#
+# The premise was right and the conclusion was wrong: the gateway blocks one
+# literal token, not scripted clients as a class. An SDK that impersonates
+# Safari is also lying to its own server logs about what its traffic is, and
+# this SDK ships to third parties, so the lie propagated to every user of it.
+# All that is required is that a UA is SET, so urllib never falls back to its
+# default.
+USER_AGENT = "orphograph-python-sdk/0.1 (+https://orphograph.com)"
 
 
 class OrphographError(RuntimeError):

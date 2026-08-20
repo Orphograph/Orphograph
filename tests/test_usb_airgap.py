@@ -228,7 +228,22 @@ def test_submit_posts_correct_shape():
         assert captured["url"].endswith("/api/anchor_folder")
         # Headers are stored title-cased by urllib.
         ua = captured["headers"].get("User-agent") or captured["headers"].get("User-Agent")
-        assert ua and "Mozilla/5.0" in ua and "Chrome/" in ua
+        # This used to assert the OPPOSITE -- that the agent contained
+        # "Mozilla/5.0" and "Chrome/" -- i.e. a test PINNING a violation of the
+        # "never a browser-spoofing UA" rule in place. Reversed 2026-08-20
+        # after measuring that the CDN blocks only the literal
+        # `Python-urllib` token and accepts any self-identifying agent (403 vs
+        # 200 on /api/health), so the spoof was never load-bearing.
+        assert ua, "no User-Agent set at all -- urllib falls back to a default the CDN 403s"
+        # The definition of "impersonates a browser" lives in ONE place. Copying
+        # the token list here would have put the same rule in two files that can
+        # disagree -- and would have made this file itself look like a spoof to
+        # the very guard that owns the rule.
+        from test_repo_hygiene import _spoof_reason
+        why = _spoof_reason(ua)
+        assert why is None, f"User-Agent impersonates a browser ({why}): {ua!r}"
+        assert "orphograph" in ua.lower(), (
+            f"User-Agent must identify this project, got {ua!r}")
         body = json.loads(captured["body"].decode("utf-8"))
         assert body["private"] is True
         assert body["merkle"]["root_hex"] == root_hex

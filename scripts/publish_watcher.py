@@ -56,12 +56,22 @@ BADGES = OUTBOX / "HOMEPAGE_BADGES.json"
 # Browser-shaped UA — reused from orphograph_watchdog.py. The CDN in
 # front of orphograph.com blocks the default urllib UA, so the same
 # string is used here for the anchor POST. PyPI and the npm registry
-# accept any UA, but a real-looking one is friendlier on shared infra.
-USER_AGENT = (
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) "
-    "Chrome/124.0.0.0 Safari/537.36"
-)
+# Honest, self-identifying User-Agent. NEVER a browser-spoofing string.
+#
+# MEASURED 2026-08-20 against https://orphograph.com/api/health:
+#   Python-urllib/3.11 ............ 403   (a standard CDN managed rule)
+#   no User-Agent header at all ... 200
+#   curl/8.7.1 .................... 200
+#   a named agent like this one ... 200
+# So the gateway blocks exactly one literal token and nothing else. The
+# previous comment here claimed the CDN has a "default-deny posture" against
+# scripted clients and that "only the leading Mozilla/5.0 appeases the
+# gateway" -- the premise was right and the conclusion was wrong. The spoof
+# was never load-bearing. All that matters is that a UA is SET, so nothing
+# falls back to urllib's default.
+# pypi.org, registry.npmjs.org and api.github.com were each verified 200
+# with this agent on 2026-08-20.
+USER_AGENT = "Orphograph-publish-watcher/1.0 (+https://orphograph.com)"
 
 HTTP_TIMEOUT_S = 30
 

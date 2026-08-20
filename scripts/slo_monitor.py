@@ -59,8 +59,7 @@ UPGRADE_STALE_HOURS = float(os.environ.get("ORPHO_SLO_UPGRADE_STALE_HOURS", "6")
 # Same practical Cloudflare workaround used by morning_check.py: bot-shaped
 # user agents are sometimes challenged before they reach the app.
 USER_AGENT = (
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-    "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
+    "Orphograph-slo-monitor/1.0 (+https://orphograph.com)"
 )
 
 

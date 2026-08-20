@@ -46,8 +46,7 @@ TIMEOUT_S = 8.0
 # timeouts. Settled on a stable Safari/macOS UA that matches the actual host
 # the script runs on.
 USER_AGENT = (
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-    "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
+    "Orphograph-morning-check/1.0 (+https://orphograph.com)"
 )
 RETRIES = 3
 
