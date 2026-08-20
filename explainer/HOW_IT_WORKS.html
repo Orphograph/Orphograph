@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Orphograph — How it works</title>
+<style>
+  @page { size: letter; margin: 15mm 15mm 13mm 15mm; }
+  * { box-sizing: border-box; }
+  body { font-family: "Georgia","Times New Roman",serif; color:#1c2431; font-size:11pt; line-height:1.5; margin:0; }
+  .sans { font-family:-apple-system,"Helvetica Neue",Arial,sans-serif; }
+  h1 { font-family:-apple-system,"Helvetica Neue",Arial,sans-serif; font-size:26pt; margin:0 0 2px; letter-spacing:-0.5px; }
+  .tag { font-family:-apple-system,Arial,sans-serif; color:#8a5a1a; font-size:11pt; margin:0 0 4px; letter-spacing:2px; text-transform:uppercase; }
+  .lede { color:#3a4350; font-size:11.5pt; margin:8px 0 6px; }
+  .cover { border-bottom:3px solid #b5852a; padding-bottom:14px; margin-bottom:8px; }
+  .concept { page-break-inside:auto; margin:0 0 10px; }
+  .kt { page-break-inside:avoid; break-inside:avoid; }
+  .step {
+    font-family:-apple-system,Arial,sans-serif; display:inline-block;
+    background:#1c2431; color:#f6f1e3; font-size:10pt; font-weight:700;
+    border-radius:20px; padding:3px 12px; margin-bottom:4px; letter-spacing:0.5px;
+  }
+  h2 { font-family:-apple-system,Arial,sans-serif; font-size:17pt; margin:4px 0 2px; }
+  .fig { background:#faf7ef; border:1px solid #e4dcc4; border-radius:10px; padding:12px 14px 8px; margin:8px 0 10px; text-align:center; }
+  .fig svg { width:100%; height:auto; }
+  .fig .cap { font-family:-apple-system,Arial,sans-serif; font-size:8.8pt; color:#7a6a45; margin-top:4px; }
+  .def { background:#eef2f7; border-left:4px solid #3a5a8a; padding:8px 12px; margin:6px 0 8px; font-size:10.5pt; }
+  .def b { color:#243b5e; }
+  .levels { margin:4px 0 6px; }
+  .lvl { display:flex; gap:10px; padding:5px 0; border-bottom:1px dotted #d8d2c0; page-break-inside:avoid; }
+  .lvl:last-child { border-bottom:0; }
+  .who {
+    font-family:-apple-system,Arial,sans-serif; font-size:9pt; font-weight:700;
+    color:#8a5a1a; min-width:78px; text-align:right; padding-top:1px;
+  }
+  .say { flex:1; font-size:10.5pt; }
+  table.cmp { border-collapse:collapse; width:100%; font-family:-apple-system,Arial,sans-serif; font-size:8.8pt; margin:6px 0; }
+  table.cmp th, table.cmp td { border:1px solid #cdbf9c; padding:5px 6px; text-align:center; vertical-align:middle; }
+  table.cmp th { background:#1c2431; color:#f6f1e3; font-weight:700; }
+  table.cmp td.m { text-align:left; font-weight:700; }
+  table.cmp tr.orpho td { background:#fbf1d8; }
+  table.cmp tr.orpho td.m { color:#8a5a1a; }
+  .yes { color:#1f7a34; font-weight:700; }
+  .no { color:#b23; font-weight:700; }
+  .mid { color:#9a7a1a; font-weight:700; }
+  table.ind { border-collapse:collapse; width:100%; font-family:-apple-system,Arial,sans-serif; font-size:9.3pt; }
+  table.ind td { border-bottom:1px solid #e0d8c2; padding:5px 8px; vertical-align:top; }
+  table.ind td.k { font-weight:700; color:#243b5e; width:210px; }
+  .disc { background:#f5efe1; border:1px solid #d8cfb4; border-radius:8px; padding:10px 14px; font-size:9.6pt; color:#4a4128; margin-top:14px; }
+  .pgbreak { page-break-before:always; }
+  .sec { font-family:-apple-system,Arial,sans-serif; font-size:20pt; margin:0 0 2px; border-bottom:3px solid #b5852a; padding-bottom:8px; }
+</style>
+</head>
+<body>
+
+<!-- ================= COVER ================= -->
+<div class="cover">
+  <p class="tag">Orphograph</p>
+  <h1>How it works</h1>
+  <p class="lede sans">A picture-first walk from Bitcoin down to your own receipt — each idea drawn, defined, and said four ways: for a child, a teen, an adult, and a senior.</p>
+  <p class="sans" style="font-size:9.5pt;color:#6a7280;margin:2px 0 0;">Orphograph turns a file into a checkable timestamp anchored to Bitcoin. Your file never leaves your device — only its fingerprint travels.</p>
+</div>
+
+<!-- ================= STEP 1 — BITCOIN ================= -->
+<div class="concept">
+  <div class="kt">
+    <span class="step">STEP 1</span>
+    <h2>What is Bitcoin?</h2>
+    <div class="fig">
+      <svg viewBox="0 0 760 210" xmlns="http://www.w3.org/2000/svg" font-family="Helvetica,Arial,sans-serif">
+        <!-- connecting mesh -->
+        <g stroke="#b9c2d0" stroke-width="1.5">
+          <line x1="150" y1="70" x2="380" y2="45"/><line x1="150" y1="70" x2="380" y2="160"/>
+          <line x1="380" y1="45" x2="610" y2="70"/><line x1="380" y1="160" x2="610" y2="70"/>
+          <line x1="150" y1="70" x2="610" y2="70"/><line x1="380" y1="45" x2="380" y2="160"/>
+          <line x1="150" y1="70" x2="265" y2="175"/><line x1="610" y1="70" x2="495" y2="175"/>
+          <line x1="265" y1="175" x2="495" y2="175"/><line x1="380" y1="45" x2="265" y2="175"/>
+          <line x1="380" y1="45" x2="495" y2="175"/>
+        </g>
+        <!-- nodes -->
+        <g>
+          <g transform="translate(110,45)"><rect width="80" height="52" rx="7" fill="#1c2431"/><text x="40" y="20" fill="#f6f1e3" font-size="10" text-anchor="middle">computer</text><text x="40" y="38" fill="#e9c877" font-size="14" text-anchor="middle">≡ ≡ ≡</text></g>
+          <g transform="translate(340,20)"><rect width="80" height="52" rx="7" fill="#1c2431"/><text x="40" y="20" fill="#f6f1e3" font-size="10" text-anchor="middle">computer</text><text x="40" y="38" fill="#e9c877" font-size="14" text-anchor="middle">≡ ≡ ≡</text></g>
+          <g transform="translate(570,45)"><rect width="80" height="52" rx="7" fill="#1c2431"/><text x="40" y="20" fill="#f6f1e3" font-size="10" text-anchor="middle">computer</text><text x="40" y="38" fill="#e9c877" font-size="14" text-anchor="middle">≡ ≡ ≡</text></g>
+          <g transform="translate(225,150)"><rect width="80" height="52" rx="7" fill="#1c2431"/><text x="40" y="20" fill="#f6f1e3" font-size="10" text-anchor="middle">computer</text><text x="40" y="38" fill="#e9c877" font-size="14" text-anchor="middle">≡ ≡ ≡</text></g>
+          <g transform="translate(455,150)"><rect width="80" height="52" rx="7" fill="#1c2431"/><text x="40" y="20" fill="#f6f1e3" font-size="10" text-anchor="middle">computer</text><text x="40" y="38" fill="#e9c877" font-size="14" text-anchor="middle">≡ ≡ ≡</text></g>
+        </g>
+        <text x="380" y="205" fill="#7a6a45" font-size="11" text-anchor="middle" font-style="italic">The same record ( ≡ ) is copied on thousands of computers at once — no single owner.</text>
+      </svg>
+      <div class="cap">Figure 1 — Bitcoin is one shared record, held identically by computers all over the world.</div>
+    </div>
+  </div>
+  <div class="def"><b>Definition.</b> Bitcoin is a public network of thousands of independent computers that all keep the exact same list of records. No person or company owns it, and because everyone holds a copy that the others constantly check, rewriting the past is practically impossible.</div>
+  <div class="levels">
+    <div class="lvl"><div class="who">For a child</div><div class="say">Imagine the whole class keeps the same notebook at the same time. If one kid erases a page, everyone else's notebook still shows the truth. Bitcoin is a giant shared notebook.</div></div>
+    <div class="lvl"><div class="who">For a teen</div><div class="say">It's one record kept on thousands of computers at once. They keep checking each other, so you can't secretly rewrite something that already happened.</div></div>
+    <div class="lvl"><div class="who">For an adult</div><div class="say">A decentralized ledger replicated across independent nodes worldwide; consensus among them makes recorded history extremely costly to alter.</div></div>
+    <div class="lvl"><div class="who">For a senior</div><div class="say">Picture a public register kept in thousands of town halls simultaneously. To forge an entry you'd have to change every copy at the same moment — which no one can do.</div></div>
+  </div>
+</div>
+
+<!-- ================= STEP 2 — BLOCK ================= -->
+<div class="concept">
+  <div class="kt">
+    <span class="step">STEP 2</span>
+    <h2>What is a block?</h2>
+    <div class="fig">
+      <svg viewBox="0 0 760 175" xmlns="http://www.w3.org/2000/svg" font-family="Helvetica,Arial,sans-serif">
+        <g>
+          <!-- block template x3 -->
+          <g transform="translate(30,25)">
+            <rect width="200" height="118" rx="8" fill="#fff" stroke="#1c2431" stroke-width="2"/>
+            <rect width="200" height="26" rx="8" fill="#1c2431"/><text x="100" y="18" fill="#f6f1e3" font-size="12" text-anchor="middle">Block  N-1</text>
+            <text x="12" y="48" font-size="9.5" fill="#3a4350">↑ points to older block</text>
+            <text x="12" y="72" font-size="10" fill="#1c2431">records + timestamp</text>
+            <rect x="10" y="84" width="180" height="24" rx="4" fill="#fbf1d8" stroke="#c9a94e"/>
+            <text x="100" y="100" font-size="9.5" fill="#8a5a1a" text-anchor="middle">fingerprint: 0a9f…</text>
+          </g>
+          <g transform="translate(280,25)">
+            <rect width="200" height="118" rx="8" fill="#fff" stroke="#1c2431" stroke-width="2"/>
+            <rect width="200" height="26" rx="8" fill="#1c2431"/><text x="100" y="18" fill="#f6f1e3" font-size="12" text-anchor="middle">Block  N</text>
+            <text x="12" y="48" font-size="9.5" fill="#8a5a1a">prev: 0a9f…</text>
+            <text x="12" y="72" font-size="10" fill="#1c2431">records + timestamp</text>
+            <rect x="10" y="84" width="180" height="24" rx="4" fill="#fbf1d8" stroke="#c9a94e"/>
+            <text x="100" y="100" font-size="9.5" fill="#8a5a1a" text-anchor="middle">fingerprint: 7c31…</text>
+          </g>
+          <g transform="translate(530,25)">
+            <rect width="200" height="118" rx="8" fill="#fff" stroke="#1c2431" stroke-width="2"/>
+            <rect width="200" height="26" rx="8" fill="#1c2431"/><text x="100" y="18" fill="#f6f1e3" font-size="12" text-anchor="middle">Block  N+1</text>
+            <text x="12" y="48" font-size="9.5" fill="#8a5a1a">prev: 7c31…</text>
+            <text x="12" y="72" font-size="10" fill="#1c2431">records + timestamp</text>
+            <rect x="10" y="84" width="180" height="24" rx="4" fill="#fbf1d8" stroke="#c9a94e"/>
+            <text x="100" y="100" font-size="9.5" fill="#8a5a1a" text-anchor="middle">fingerprint: e5b2…</text>
+          </g>
+          <!-- link arrows -->
+          <g stroke="#b5852a" stroke-width="2.5" fill="#b5852a">
+            <line x1="230" y1="70" x2="278" y2="70"/><polygon points="278,70 270,66 270,74"/>
+            <line x1="480" y1="70" x2="528" y2="70"/><polygon points="528,70 520,66 520,74"/>
+          </g>
+        </g>
+        <text x="380" y="168" fill="#7a6a45" font-size="11" text-anchor="middle" font-style="italic">Each block carries the fingerprint of the one before it — the "chain" in blockchain.</text>
+      </svg>
+      <div class="cap">Figure 2 — Blocks are locked together; change an old one and every fingerprint after it stops matching.</div>
+    </div>
+  </div>
+  <div class="def"><b>Definition.</b> Records are bundled into <b>blocks</b>. Each block is time-stamped and carries the fingerprint of the block before it, linking them into a chain — the "blockchain." Alter an old block and its fingerprint changes, breaking every link after it, so tampering is instantly visible.</div>
+  <div class="levels">
+    <div class="lvl"><div class="who">For a child</div><div class="say">Blocks are like train cars hooked together. Each car is locked to the one in front. Swap a car and the hooks don't match — everyone notices.</div></div>
+    <div class="lvl"><div class="who">For a teen</div><div class="say">Every block points back to the one before it with its fingerprint. Edit an old block and all the following fingerprints stop matching — it shows immediately.</div></div>
+    <div class="lvl"><div class="who">For an adult</div><div class="say">Blocks batch transactions with a timestamp plus the prior block's hash; that hash-linkage makes the ledger append-only and tamper-evident.</div></div>
+    <div class="lvl"><div class="who">For a senior</div><div class="say">Each page of the ledger is sealed and references the seal of the page before. Alter an old page and every later seal no longer fits.</div></div>
+  </div>
+</div>
+
+<!-- ================= STEP 3 — HASH ================= -->
+<div class="concept pgbreak">
+  <div class="kt">
+    <span class="step">STEP 3</span>
+    <h2>What is a hash?</h2>
+    <div class="fig">
+      <svg viewBox="0 0 760 210" xmlns="http://www.w3.org/2000/svg" font-family="Helvetica,Arial,sans-serif">
+        <!-- row 1 -->
+        <g transform="translate(0,10)">
+          <rect x="20" y="10" width="150" height="46" rx="6" fill="#fff" stroke="#3a5a8a" stroke-width="2"/>
+          <text x="95" y="30" font-size="11" fill="#1c2431" text-anchor="middle">the word</text>
+          <text x="95" y="47" font-size="13" fill="#243b5e" text-anchor="middle" font-weight="bold">hello</text>
+          <rect x="300" y="6" width="120" height="54" rx="27" fill="#1c2431"/>
+          <text x="360" y="30" font-size="11" fill="#f6f1e3" text-anchor="middle">SHA-256</text>
+          <text x="360" y="46" font-size="9" fill="#e9c877" text-anchor="middle">(the blender)</text>
+          <rect x="470" y="10" width="270" height="46" rx="6" fill="#fbf1d8" stroke="#c9a94e" stroke-width="2"/>
+          <text x="605" y="28" font-size="9.5" fill="#8a5a1a" text-anchor="middle" font-family="monospace">2cf24dba5fb0a30e…</text>
+          <text x="605" y="46" font-size="9.5" fill="#8a5a1a" text-anchor="middle" font-family="monospace">…3043362938b9824</text>
+          <g stroke="#b5852a" stroke-width="2.5" fill="#b5852a">
+            <line x1="170" y1="33" x2="298" y2="33"/><polygon points="298,33 290,29 290,37"/>
+            <line x1="420" y1="33" x2="468" y2="33"/><polygon points="468,33 460,29 460,37"/>
+          </g>
+        </g>
+        <!-- row 2 -->
+        <g transform="translate(0,90)">
+          <rect x="20" y="10" width="150" height="46" rx="6" fill="#fff" stroke="#3a5a8a" stroke-width="2"/>
+          <text x="95" y="30" font-size="11" fill="#1c2431" text-anchor="middle">one letter bigger</text>
+          <text x="95" y="47" font-size="13" fill="#243b5e" text-anchor="middle" font-weight="bold">Hello</text>
+          <rect x="300" y="6" width="120" height="54" rx="27" fill="#1c2431"/>
+          <text x="360" y="30" font-size="11" fill="#f6f1e3" text-anchor="middle">SHA-256</text>
+          <text x="360" y="46" font-size="9" fill="#e9c877" text-anchor="middle">(the blender)</text>
+          <rect x="470" y="10" width="270" height="46" rx="6" fill="#fbf1d8" stroke="#c9a94e" stroke-width="2"/>
+          <text x="605" y="28" font-size="9.5" fill="#8a5a1a" text-anchor="middle" font-family="monospace">185f8db32271fe25…</text>
+          <text x="605" y="46" font-size="9.5" fill="#8a5a1a" text-anchor="middle" font-family="monospace">…07d1764826381969</text>
+          <g stroke="#b5852a" stroke-width="2.5" fill="#b5852a">
+            <line x1="170" y1="33" x2="298" y2="33"/><polygon points="298,33 290,29 290,37"/>
+            <line x1="420" y1="33" x2="468" y2="33"/><polygon points="468,33 460,29 460,37"/>
+          </g>
+        </g>
+        <text x="380" y="196" fill="#b23" font-size="11" text-anchor="middle" font-style="italic">One capital letter changed → a completely different fingerprint. And you can never run the blender backwards.</text>
+      </svg>
+      <div class="cap">Figure 3 — A hash turns any input into a fixed 64-character fingerprint. Same in → same out; tiny change → total change; one-way only.</div>
+    </div>
+  </div>
+  <div class="def"><b>Definition.</b> A <b>hash function</b> (Bitcoin and Orphograph use SHA-256) takes any data — a word or a huge file — and produces a fixed 64-character fingerprint. The same input always yields the same fingerprint; change a single character and it changes completely; and you cannot work backward from the fingerprint to the data.</div>
+  <div class="levels">
+    <div class="lvl"><div class="who">For a child</div><div class="say">A magic blender: put anything in, out comes a special code. The same thing always makes the same code — but you can never un-blend the code back into the thing.</div></div>
+    <div class="lvl"><div class="who">For a teen</div><div class="say">It squashes any file into a short code. Same file = same code every time; change one letter and the code looks totally different. You can check a match, but never reverse it.</div></div>
+    <div class="lvl"><div class="who">For an adult</div><div class="say">A one-way cryptographic digest: deterministic, fixed-length, collision-resistant, with an avalanche effect — flipping one input bit flips about half the output.</div></div>
+    <div class="lvl"><div class="who">For a senior</div><div class="say">Like a unique wax seal for a document. The same document always makes the same seal; the slightest edit makes a different seal; and you can't recreate the document from the seal.</div></div>
+  </div>
+</div>
+
+<!-- ================= STEP 4 — MERKLE TREE ================= -->
+<div class="concept">
+  <div class="kt">
+    <span class="step">STEP 4</span>
+    <h2>What is a Merkle tree?</h2>
+    <div class="fig">
+      <svg viewBox="0 0 760 235" xmlns="http://www.w3.org/2000/svg" font-family="Helvetica,Arial,sans-serif">
+        <!-- leaves -->
+        <g font-size="10" text-anchor="middle">
+          <g transform="translate(40,180)"><rect width="120" height="34" rx="5" fill="#fff" stroke="#3a5a8a" stroke-width="1.5"/><text x="60" y="22" fill="#1c2431">File A</text></g>
+          <g transform="translate(220,180)"><rect width="120" height="34" rx="5" fill="#fff" stroke="#3a5a8a" stroke-width="1.5"/><text x="60" y="22" fill="#1c2431">File B</text></g>
+          <g transform="translate(400,180)"><rect width="120" height="34" rx="5" fill="#fff" stroke="#3a5a8a" stroke-width="1.5"/><text x="60" y="22" fill="#1c2431">File C</text></g>
+          <g transform="translate(580,180)"><rect width="120" height="34" rx="5" fill="#fff" stroke="#3a5a8a" stroke-width="1.5"/><text x="60" y="22" fill="#1c2431">File D</text></g>
+        </g>
+        <!-- leaf hashes -->
+        <g font-size="9.5" text-anchor="middle" font-family="monospace">
+          <g transform="translate(55,120)"><rect width="90" height="30" rx="5" fill="#fbf1d8" stroke="#c9a94e"/><text x="45" y="20" fill="#8a5a1a">H(A)</text></g>
+          <g transform="translate(235,120)"><rect width="90" height="30" rx="5" fill="#fbf1d8" stroke="#c9a94e"/><text x="45" y="20" fill="#8a5a1a">H(B)</text></g>
+          <g transform="translate(415,120)"><rect width="90" height="30" rx="5" fill="#fbf1d8" stroke="#c9a94e"/><text x="45" y="20" fill="#8a5a1a">H(C)</text></g>
+          <g transform="translate(595,120)"><rect width="90" height="30" rx="5" fill="#fbf1d8" stroke="#c9a94e"/><text x="45" y="20" fill="#8a5a1a">H(D)</text></g>
+        </g>
+        <!-- pair hashes -->
+        <g font-size="9.5" text-anchor="middle" font-family="monospace">
+          <g transform="translate(145,64)"><rect width="110" height="30" rx="5" fill="#eadfbe" stroke="#b5852a"/><text x="55" y="20" fill="#8a5a1a">H(AB)</text></g>
+          <g transform="translate(505,64)"><rect width="110" height="30" rx="5" fill="#eadfbe" stroke="#b5852a"/><text x="55" y="20" fill="#8a5a1a">H(CD)</text></g>
+        </g>
+        <!-- root -->
+        <g transform="translate(320,12)"><rect width="120" height="34" rx="6" fill="#1c2431"/><text x="60" y="22" fill="#e9c877" font-size="11" text-anchor="middle" font-weight="bold">ROOT</text></g>
+        <!-- lines -->
+        <g stroke="#9aa4b2" stroke-width="1.5">
+          <line x1="100" y1="180" x2="100" y2="150"/><line x1="280" y1="180" x2="280" y2="150"/>
+          <line x1="460" y1="180" x2="460" y2="150"/><line x1="640" y1="180" x2="640" y2="150"/>
+          <line x1="100" y1="120" x2="200" y2="94"/><line x1="280" y1="120" x2="200" y2="94"/>
+          <line x1="460" y1="120" x2="560" y2="94"/><line x1="640" y1="120" x2="560" y2="94"/>
+          <line x1="200" y1="64" x2="380" y2="46"/><line x1="560" y1="64" x2="380" y2="46"/>
+        </g>
+        <text x="380" y="228" fill="#7a6a45" font-size="11" text-anchor="middle" font-style="italic">Hash each file, combine in pairs, keep going up — one ROOT stands for them all.</text>
+      </svg>
+      <div class="cap">Figure 4 — A Merkle tree folds many files into one root fingerprint; change any file and the root changes.</div>
+    </div>
+  </div>
+  <div class="def"><b>Definition.</b> To fingerprint many files at once, you hash each file (the <b>leaves</b>), then hash them together in pairs, and keep combining upward until a single fingerprint — the <b>root</b> — represents them all. Change any one file and the root changes. It also lets you prove one file belongs to the set using just a few fingerprints, without revealing the others.</div>
+  <div class="levels">
+    <div class="lvl"><div class="who">For a child</div><div class="say">A family tree of codes. Each toy gets a code, the codes hold hands two by two, all the way up to one big code at the top that stands for every toy.</div></div>
+    <div class="lvl"><div class="who">For a teen</div><div class="say">Hash each file, pair them up, hash again, repeat until one "root" code is left. That root sums up everything; touch any file and the root won't match.</div></div>
+    <div class="lvl"><div class="who">For an adult</div><div class="say">A binary hash tree whose root commits to every leaf. Inclusion proofs are logarithmic — prove membership with a handful of sibling hashes, no need to reveal the whole set.</div></div>
+    <div class="lvl"><div class="who">For a senior</div><div class="say">Like folding many signed pages into one master seal. That single seal stands for all the pages, and you can show one page belongs under it without opening the rest.</div></div>
+  </div>
+</div>
+
+<!-- ================= STEP 5 — RECEIPT ================= -->
+<div class="concept pgbreak">
+  <div class="kt">
+    <span class="step">STEP 5</span>
+    <h2>How your file becomes a receipt</h2>
+    <div class="fig">
+      <svg viewBox="0 0 760 210" xmlns="http://www.w3.org/2000/svg" font-family="Helvetica,Arial,sans-serif">
+        <!-- device boundary -->
+        <rect x="15" y="20" width="250" height="120" rx="10" fill="none" stroke="#3a5a8a" stroke-width="1.5" stroke-dasharray="6 5"/>
+        <text x="140" y="15" font-size="9.5" fill="#3a5a8a" text-anchor="middle">YOUR DEVICE (stays here)</text>
+        <g text-anchor="middle" font-size="10">
+          <g transform="translate(35,50)"><rect width="95" height="60" rx="6" fill="#fff" stroke="#1c2431" stroke-width="2"/><text x="47" y="26" fill="#1c2431">your file</text><text x="47" y="46" font-size="16">🔒</text></g>
+          <g transform="translate(160,58)"><rect width="90" height="44" rx="6" fill="#fbf1d8" stroke="#c9a94e"/><text x="45" y="20" fill="#8a5a1a" font-size="9">fingerprint</text><text x="45" y="35" fill="#8a5a1a" font-size="9" font-family="monospace">a3f9…</text></g>
+        </g>
+        <!-- outside -->
+        <g text-anchor="middle" font-size="9.5">
+          <g transform="translate(300,58)"><rect width="90" height="44" rx="6" fill="#eadfbe" stroke="#b5852a"/><text x="45" y="20" fill="#8a5a1a">Merkle</text><text x="45" y="35" fill="#8a5a1a">root</text></g>
+          <g transform="translate(430,52)"><rect width="110" height="56" rx="6" fill="#fff" stroke="#1c2431" stroke-width="1.5"/><text x="55" y="24" fill="#1c2431">Open-</text><text x="55" y="40" fill="#1c2431">Timestamps</text></g>
+          <g transform="translate(580,50)"><rect width="90" height="60" rx="6" fill="#1c2431"/><text x="45" y="24" fill="#f6f1e3">Bitcoin</text><text x="45" y="40" fill="#e9c877">block ⛓</text><text x="45" y="54" fill="#e9c877" font-size="8">+ date</text></g>
+        </g>
+        <!-- receipt -->
+        <g transform="translate(610,135)"><rect width="120" height="44" rx="6" fill="#fbf1d8" stroke="#8a5a1a" stroke-width="2"/><text x="60" y="20" fill="#8a5a1a" font-size="10" text-anchor="middle">Receipt ✓</text><text x="60" y="35" fill="#8a5a1a" font-size="8" text-anchor="middle">+ .ots proof</text></g>
+        <!-- arrows -->
+        <g stroke="#b5852a" stroke-width="2.5" fill="#b5852a">
+          <line x1="130" y1="80" x2="158" y2="80"/><polygon points="158,80 150,76 150,84"/>
+          <line x1="250" y1="80" x2="298" y2="80"/><polygon points="298,80 290,76 290,84"/>
+          <line x1="390" y1="80" x2="428" y2="80"/><polygon points="428,80 420,76 420,84"/>
+          <line x1="540" y1="80" x2="578" y2="80"/><polygon points="578,80 570,76 570,84"/>
+          <line x1="625" y1="112" x2="660" y2="133"/><polygon points="660,133 650,130 656,124"/>
+        </g>
+        <text x="255" y="165" fill="#b23" font-size="10.5" text-anchor="middle" font-style="italic">Only the fingerprint ever leaves — never your file.</text>
+        <text x="380" y="200" fill="#7a6a45" font-size="11" text-anchor="middle" font-style="italic">Later, anyone can re-hash your file and check it against the receipt + Bitcoin — no Orphograph needed.</text>
+      </svg>
+      <div class="cap">Figure 5 — File → local hash → Merkle root → OpenTimestamps → Bitcoin block → your receipt.</div>
+    </div>
+  </div>
+  <div class="def"><b>Definition.</b> Orphograph hashes your file <b>on your own device</b> — the file itself never leaves. That fingerprint (with others) forms a Merkle root, which is submitted to OpenTimestamps and committed into a Bitcoin block. Your receipt plus its <b>.ots</b> proof lets anyone later confirm this exact file existed, unchanged, by that block's time.</div>
+  <div class="levels">
+    <div class="lvl"><div class="who">For a child</div><div class="say">The computer takes a secret code of your drawing — not the drawing — and pins it to the world's giant notebook with today's date. Later you can show your drawing is the very same one from that day.</div></div>
+    <div class="lvl"><div class="who">For a teen</div><div class="say">Your file's fingerprint gets locked into Bitcoin's timeline. Anyone can check that fingerprint later to prove the file existed then and hasn't been changed.</div></div>
+    <div class="lvl"><div class="who">For an adult</div><div class="say">Local hash → Merkle root → OpenTimestamps → Bitcoin. The .ots proof anchors existence-and-integrity to a block height; it attests time and immutability, not authorship or ownership.</div></div>
+    <div class="lvl"><div class="who">For a senior</div><div class="say">We take the seal of your document and record that seal in a permanent public register, with the date. Anyone can later confirm your document matches that dated seal — proof it existed then and hasn't changed.</div></div>
+  </div>
+</div>
+
+<!-- ================= POSITIONING ================= -->
+<div class="concept pgbreak">
+  <h2 class="sec">Where Orphograph fits among the ways people prove things</h2>
+  <p class="lede sans" style="font-size:10.5pt;">People already have ways to say "this existed, and it's mine, and it hasn't changed." Each asks you to <b>trust</b> something different, and each treats your <b>file</b> and your <b>privacy</b> differently. Here's the honest comparison — by category, not by brand.</p>
+
+  <div class="kt">
+    <div class="fig">
+      <svg viewBox="0 0 760 300" xmlns="http://www.w3.org/2000/svg" font-family="Helvetica,Arial,sans-serif">
+        <!-- axes -->
+        <line x1="70" y1="255" x2="720" y2="255" stroke="#1c2431" stroke-width="2"/>
+        <line x1="70" y1="255" x2="70" y2="30" stroke="#1c2431" stroke-width="2"/>
+        <text x="395" y="288" font-size="11" fill="#1c2431" text-anchor="middle">Less you must trust a middleman  →</text>
+        <text x="20" y="145" font-size="11" fill="#1c2431" text-anchor="middle" transform="rotate(-90 20 145)">Your file stays private  →</text>
+        <!-- quadrant hint -->
+        <text x="690" y="52" font-size="9" fill="#1f7a34" text-anchor="end" font-style="italic">best corner</text>
+        <!-- points -->
+        <g font-size="9.5" fill="#1c2431">
+          <circle cx="150" cy="215" r="6" fill="#b23"/><text x="162" y="219">notary / lawyer's office</text>
+          <circle cx="140" cy="185" r="6" fill="#b23"/><text x="152" y="189">a registry filing</text>
+          <circle cx="200" cy="235" r="6" fill="#b23"/><text x="212" y="239">a screenshot / dated photo</text>
+          <circle cx="250" cy="150" r="6" fill="#9a7a1a"/><text x="262" y="154">email or cloud-file date</text>
+          <circle cx="300" cy="110" r="6" fill="#9a7a1a"/><text x="312" y="114">a storage platform's history</text>
+          <circle cx="470" cy="95" r="6" fill="#9a7a1a"/><text x="482" y="99">other chain-timestamp tools (some upload your file)</text>
+          <circle cx="660" cy="55" r="9" fill="#1f7a34"/><text x="648" y="45" text-anchor="end" font-weight="bold" fill="#1f7a34">Orphograph</text>
+        </g>
+      </svg>
+      <div class="cap">Figure 6 — Two things that matter: how little you must trust a middleman, and whether your file stays with you. Orphograph aims for the top-right.</div>
+    </div>
+  </div>
+
+  <table class="cmp">
+    <tr><th style="text-align:left;">Way of proving it</th><th>Who you must trust</th><th>Does your file leave you?</th><th>Can the record be changed or lost later?</th><th>Can anyone verify it, forever?</th></tr>
+    <tr><td class="m">A notary / lawyer's office</td><td>a person &amp; their office</td><td><span class="no">often (they keep a copy)</span></td><td><span class="mid">records can be lost/destroyed</span></td><td><span class="no">no — you go back to them</span></td></tr>
+    <tr><td class="m">A registry filing</td><td>a government office</td><td><span class="no">yes</span></td><td><span class="mid">slow, jurisdiction-bound</span></td><td><span class="mid">only through that office</span></td></tr>
+    <tr><td class="m">A screenshot / dated photo</td><td>a device clock</td><td><span class="yes">no</span></td><td><span class="no">trivially faked</span></td><td><span class="no">no</span></td></tr>
+    <tr><td class="m">Email or cloud-file date</td><td>the provider</td><td><span class="no">yes</span></td><td><span class="no">provider controls the clock</span></td><td><span class="no">no</span></td></tr>
+    <tr><td class="m">A storage platform's history</td><td>the platform</td><td><span class="no">yes (they hold it)</span></td><td><span class="no">they can edit / lose / close</span></td><td><span class="no">only while they exist</span></td></tr>
+    <tr><td class="m">Other chain-timestamp tools</td><td>varies (some upload files)</td><td><span class="mid">sometimes</span></td><td><span class="mid">depends on the chain</span></td><td><span class="mid">depends on the tool</span></td></tr>
+    <tr class="orpho"><td class="m">Orphograph</td><td>math + Bitcoin (no single owner)</td><td><span class="yes">no — only a fingerprint</span></td><td><span class="yes">no — anchored &amp; append-only</span></td><td><span class="yes">yes — even if Orphograph is gone</span></td></tr>
+  </table>
+
+  <div class="def"><b>Definition.</b> Most ways of proving something existed rely on a <b>custodian</b> you must trust — a person, an office, or a company that could change the record, lose it, or shut down. Orphograph's difference is <b>minimized trust</b>: your file is hashed locally (privacy), the proof is anchored to Bitcoin (no single controller), and it can be checked by anyone, independently, even if Orphograph itself disappears. What it does <b>not</b> do is claim who made the file, who owns it, or that its contents are true.</div>
+  <div class="levels">
+    <div class="lvl"><div class="who">For a child</div><div class="say">There are lots of ways to say "I made this first" — tell the teacher, take a photo, mail yourself a letter. Orphograph pins your secret code to a giant notebook the whole world keeps, so nobody — not even us — can move it later.</div></div>
+    <div class="lvl"><div class="who">For a teen</div><div class="say">Other ways make you trust a person, an app, or a company that could change or lose your proof, or just shut down. Orphograph puts the proof on Bitcoin, which no one company controls — and only your fingerprint travels, never your file.</div></div>
+    <div class="lvl"><div class="who">For an adult</div><div class="say">Where alternatives trust a custodian (notary, platform, provider clock), Orphograph minimizes trust: local hashing for privacy, OpenTimestamps anchoring to Bitcoin so there's no single point of control, and vendor-independent verification. It attests time + integrity, not authorship.</div></div>
+    <div class="lvl"><div class="who">For a senior</div><div class="say">Instead of trusting one office or company to keep your proof safe, Orphograph records it in a permanent public register that no one owns and anyone can check — and it only ever sends a seal, never your document.</div></div>
+  </div>
+</div>
+
+<!-- ================= INDUSTRY HOOKS ================= -->
+<div class="concept">
+  <h2 class="sec">The same idea, per industry</h2>
+  <p class="lede sans" style="font-size:10.5pt;">One mechanism, many uses. Where a checkable "this existed, unchanged, by this date" is worth having:</p>
+  <table class="ind">
+    <tr><td class="k">Writers &amp; authors</td><td>Pin a manuscript's fingerprint the day it's finished — evidence of who held it first.</td></tr>
+    <tr><td class="k">Photographers</td><td>Timestamp a shot at capture, before it's reposted, scraped, or fed to a model.</td></tr>
+    <tr><td class="k">Designers &amp; artists</td><td>Prove a design existed before a look-alike appeared.</td></tr>
+    <tr><td class="k">Musicians</td><td>Date a demo or a lyric sheet the moment it's written.</td></tr>
+    <tr><td class="k">Lawyers &amp; notaries</td><td>Seal a signed agreement or an evidence file to a fixed date — capture and timestamp only, never legal advice.</td></tr>
+    <tr><td class="k">Plumbers &amp; electricians</td><td>Timestamp before/after job photos to settle "it was never done like that" disputes.</td></tr>
+    <tr><td class="k">Auto body shops</td><td>Lock damage photos to a date for cleaner, less-disputed insurance claims.</td></tr>
+    <tr><td class="k">Researchers &amp; AI teams</td><td>Anchor a dataset's provenance and license bundle so auditors can verify it later.</td></tr>
+    <tr><td class="k">Software teams</td><td>Prove a release or build existed at a given moment.</td></tr>
+    <tr><td class="k">Consultants &amp; agencies</td><td>Stamp a deliverable at handoff so scope can't be quietly rewritten afterward.</td></tr>
+  </table>
+</div>
+
+<div class="disc">
+  <b>What a receipt does and doesn't say.</b> An Orphograph receipt proves that a file existed in exactly this form by a recorded date, and that it has not changed since. It does <b>not</b> prove who created the file, who owns it, or that its contents are true — and it is not, on its own, a legal determination. The Bitcoin-chain half of verification is carried by the receipt's <b>.ots</b> proof and can be checked with any OpenTimestamps client, independently of Orphograph.
+</div>
+
+</body>
+</html>
