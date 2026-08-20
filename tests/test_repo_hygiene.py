@@ -53,42 +53,124 @@ def _tracked_files() -> list[Path]:
     return [ROOT / p for p in out.split("\0") if p]
 
 
+# Directories that are copies, caches, or vendored trees. Walking them would
+# flag the same file many times over and report worktree copies as new.
+_SKIP_DIRS = {".git", "__pycache__", ".venv", "venv", "node_modules",
+              ".pytest_cache", ".mypy_cache", ".ruff_cache", "worktrees",
+              "site-packages"}
+
+
+def _all_test_files() -> list[Path]:
+    """Every test_*.py pytest could COLLECT, found the way pytest finds them.
+
+    Deliberately NOT `git ls-files`. pytest walks the filesystem and does not
+    consult .gitignore, so an index-based scan is blind to exactly the files
+    most likely to carry this defect -- untracked scratch scripts and
+    gitignored working directories. The first version of this guard made that
+    mistake and reported the class closed while
+    `outreach/test_discovery_log.py` (gitignored) still killed collection.
+    """
+    out = []
+    for path in ROOT.rglob("test_*.py"):
+        if any(part in _SKIP_DIRS for part in path.parts):
+            continue
+        out.append(path)
+    return out
+
+
 class TestNoModuleScopeExitInTestFiles(unittest.TestCase):
     """A test file that exits at import kills the collector, not just itself."""
 
     @staticmethod
-    def _module_scope_exits(source: str) -> list[int]:
-        """Line numbers of top-level sys.exit()/exit() calls that are NOT
-        inside a function, a class, or an `if __name__ == ...` guard."""
-        tree = ast.parse(source)
-        hits = []
-        for node in tree.body:
-            if isinstance(node, ast.If):
-                continue  # `if __name__ == "__main__":` and friends are fine
-            for sub in ast.walk(node):
-                if not isinstance(sub, ast.Call):
-                    continue
-                f = sub.func
-                name = (f.attr if isinstance(f, ast.Attribute)
-                        else f.id if isinstance(f, ast.Name) else None)
-                if name in ("exit", "_exit"):
-                    hits.append(sub.lineno)
-        return hits
+    def _is_exit_call(node: ast.AST) -> bool:
+        """True only for a real interpreter exit.
+
+        `ast.Attribute` with attr == "exit" is NOT enough: `stack.exit()`,
+        `ctx.exit()` and any other object method named exit would match, and a
+        guard that fires on those gets muted within a week. Require the actual
+        exit builtins and the sys/os spellings.
+        """
+        if not isinstance(node, ast.Call):
+            return False
+        f = node.func
+        if isinstance(f, ast.Name):
+            return f.id in ("exit", "quit")
+        if isinstance(f, ast.Attribute) and isinstance(f.value, ast.Name):
+            return (f.value.id, f.attr) in {("sys", "exit"), ("os", "_exit"),
+                                            ("os", "abort")}
+        return False
+
+    @classmethod
+    def _is_main_guard(cls, node: ast.AST) -> bool:
+        """`if __name__ == "__main__":` and its `!=`/tuple variants."""
+        if not isinstance(node, ast.If):
+            return False
+        return any(isinstance(n, ast.Name) and n.id == "__name__"
+                   for n in ast.walk(node.test))
+
+    @classmethod
+    def _module_scope_exits(cls, source: str) -> list[int]:
+        """Line numbers of exits that fire when the module is merely IMPORTED.
+
+        Two bugs the first version had, both caught by review:
+          * it used ast.walk, which descends INTO FunctionDef/ClassDef, so a
+            perfectly fine `def main(): sys.exit(2)` inside a test file was
+            flagged;
+          * it skipped every top-level `ast.If`, so the commoner form --
+            `if not os.environ.get("X"): sys.exit(0)` -- passed silently.
+        This walks statements, refuses to enter function and class bodies, and
+        skips only genuine __name__ guards.
+        """
+        hits: list[int] = []
+
+        def visit(node: ast.AST) -> None:
+            for child in ast.iter_child_nodes(node):
+                if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef,
+                                      ast.ClassDef, ast.Lambda)):
+                    continue          # runs on call, not on import
+                if cls._is_main_guard(child):
+                    continue          # runs on execution, not on import
+                if cls._is_exit_call(child):
+                    hits.append(child.lineno)
+                visit(child)
+
+        visit(ast.parse(source))
+        return sorted(set(hits))
 
     def test_negative_control_the_detector_can_hit(self):
-        """A scan that has never been shown to fire is not a passing scan."""
-        bad = "import sys\nprint('x')\nsys.exit(1)\n"
-        good = "import sys\nif __name__ == '__main__':\n    sys.exit(0)\n"
-        self.assertTrue(self._module_scope_exits(bad),
-                        "detector failed to flag a module-scope sys.exit")
-        self.assertFalse(self._module_scope_exits(good),
-                         "detector flagged a properly guarded exit")
+        """A scan that has never been shown to fire is not a passing scan.
+
+        Each case below corresponds to a way this detector has actually been
+        wrong, so the control fails if any of them regresses.
+        """
+        must_flag = {
+            "bare call": "import sys\nprint('x')\nsys.exit(1)\n",
+            # The commoner landmine; the first version MISSED this entirely.
+            "conditional skip": ("import os, sys\n"
+                                 "if not os.environ.get('X'):\n"
+                                 "    sys.exit(0)\n"),
+            "try/except tail": ("import sys\ntry:\n    pass\n"
+                                "except Exception:\n    sys.exit(3)\n"),
+        }
+        must_not_flag = {
+            "__name__ guard": ("import sys\nif __name__ == '__main__':\n"
+                               "    sys.exit(0)\n"),
+            # The first version FALSE-POSITIVED on both of these.
+            "inside a function": "import sys\ndef main():\n    sys.exit(3)\n",
+            "method named exit": "def f(stack):\n    stack.exit()\n",
+            "inside a class": ("import sys\nclass C:\n    def go(self):\n"
+                               "        sys.exit(1)\n"),
+        }
+        for label, src in must_flag.items():
+            self.assertTrue(self._module_scope_exits(src),
+                            f"detector failed to flag: {label}")
+        for label, src in must_not_flag.items():
+            self.assertFalse(self._module_scope_exits(src),
+                             f"detector false-positived on: {label}")
 
     def test_no_test_file_exits_during_collection(self):
         offenders = []
-        for path in _tracked_files():
-            if path.suffix != ".py" or not path.name.startswith("test_"):
-                continue
+        for path in _all_test_files():
             try:
                 lines = self._module_scope_exits(path.read_text())
             except (SyntaxError, UnicodeDecodeError):
@@ -161,23 +243,50 @@ _SPOOFED_UA_DEBT = {
     "scripts/slo_monitor.py",
     "scripts/usb_offline_anchor_submit.py",
     "sdk-python/orphograph/_client.py",
+    # :231 ASSERTS a spoofed UA is present (`"Mozilla/5.0" in ua and
+    # "Chrome/" in ua`) -- a test that PINS the violation of a hard rule.
+    # Reversing it is part of the same founder decision as the nine above.
+    "tests/test_usb_airgap.py",
 }
-# Related, tracked separately because it is a different shape:
-# tests/test_usb_airgap.py:231 ASSERTS a spoofed UA is present
-# (`"Mozilla/5.0" in ua and "Chrome/" in ua`), i.e. a test that pins the
-# violation of a hard rule. It carries no spoof string of its own, so it does
-# not belong in the list above; it belongs in the same founder decision.
 
-# A string is IMPERSONATION when it claims a real browser PRODUCT or engine.
-# A bare "Mozilla/5.0" is NOT enough on its own: the conventional honest bot
-# form is `Mozilla/5.0 (compatible; <YourName>/1.0; +https://your.site)` --
-# the same shape Googlebot uses -- where "Mozilla/5.0" is a vestigial
-# compatibility token and the agent still says who it really is. Four files in
-# server/ and scripts/ use exactly that form and are correctly NOT flagged; a
-# detector that failed to tell them apart from a fake Chrome would be noise,
-# and noise gets an allowlist bolted on until it means nothing.
-_SPOOF_TOKENS = re.compile(
-    r"Chrome/[0-9]|Safari/[0-9]|Brave/[0-9]|Firefox/[0-9]|Edg/[0-9]|AppleWebKit/[0-9]")
+# --- Is a User-Agent string impersonating a browser? --------------------
+#
+# Two shapes must be told apart, and a detector that cannot do it is useless
+# in both directions:
+#
+#   IMPERSONATION   claims a real browser product/engine ("Chrome/124.0.0.0",
+#                   "AppleWebKit/605.1.15"), OR is a bare "Mozilla/5.0 (OS
+#                   platform string)" that identifies nothing at all.
+#   HONEST BOT      "Mozilla/5.0 (compatible; OrphographMailer/0.1;
+#                   +https://orphograph.com)" -- the shape Googlebot uses,
+#                   where Mozilla/5.0 is a vestigial compatibility token and
+#                   the agent still says who it is and how to reach it.
+#
+# The first version of this guard enumerated product tokens only, which let a
+# bare `Mozilla/5.0 (Windows NT 10.0; Win64; x64)` -- a browser identity with
+# no self-identification anywhere in it -- pass clean. Caught by review.
+_BROWSER_PRODUCT = re.compile(
+    r"Chrome/[0-9]|Safari/[0-9]|Brave/[0-9]|Firefox/[0-9]|Edg/[0-9]"
+    r"|AppleWebKit/[0-9]|Trident/[0-9]|OPR/[0-9]")
+_MOZILLA = re.compile(r"Mozilla/[0-9]")
+# Self-identification must appear near the Mozilla token, not anywhere in the
+# file -- otherwise one honest UA elsewhere would launder every spoof.
+_SELF_ID_WINDOW = 220
+
+
+def _spoof_reason(text: str) -> str | None:
+    """Return why `text` impersonates a browser, or None if it does not."""
+    m = _BROWSER_PRODUCT.search(text)
+    if m:
+        return f"claims a browser product: {m.group(0)}"
+    for m in _MOZILLA.finditer(text):
+        window = text[m.start():m.start() + _SELF_ID_WINDOW]
+        if "compatible;" in window and "+http" in window:
+            continue          # honest bot convention
+        return ("bare Mozilla/ with no `(compatible; <name>; +https://…)` "
+                "self-identification")
+    return None
+
 
 # Files whose browser strings are INBOUND fixtures -- they simulate a visitor
 # arriving at our server, which is the opposite of impersonating a client.
@@ -196,11 +305,21 @@ class TestNoNewSpoofedUserAgents(unittest.TestCase):
     hunting the class, found six more already tracked and NO guard anywhere.
     """
 
-    def test_negative_control_the_token_set_can_hit(self):
-        self.assertTrue(_SPOOF_TOKENS.search(
-            "Mozilla/5.0 (Macintosh) AppleWebKit/605.1.15 Chrome/124.0.0.0"))
-        self.assertIsNone(_SPOOF_TOKENS.search(
-            "Orphograph-selfcheck/1.0 (+https://orphograph.com)"))
+    def test_negative_control_the_detector_separates_the_two_shapes(self):
+        spoofs = [
+            "Mozilla/5.0 (Macintosh) AppleWebKit/605.1.15 Chrome/124.0.0.0",
+            # Bare browser identity, no self-ID. The first version MISSED this.
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+        ]
+        honest = [
+            "Orphograph-selfcheck/1.0 (+https://orphograph.com)",
+            "Mozilla/5.0 (compatible; OrphographMailer/0.1; +https://orphograph.com)",
+            "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
+        ]
+        for ua in spoofs:
+            self.assertIsNotNone(_spoof_reason(ua), f"missed a spoof: {ua}")
+        for ua in honest:
+            self.assertIsNone(_spoof_reason(ua), f"false positive on: {ua}")
 
     def test_no_new_file_spoofs_a_browser(self):
         found = set()
@@ -212,7 +331,7 @@ class TestNoNewSpoofedUserAgents(unittest.TestCase):
                     Path(__file__).resolve().relative_to(ROOT)):
                 continue
             try:
-                if _SPOOF_TOKENS.search(path.read_text(errors="ignore")):
+                if _spoof_reason(path.read_text(errors="ignore")):
                     found.add(rel)
             except OSError:
                 continue
@@ -231,7 +350,7 @@ class TestNoNewSpoofedUserAgents(unittest.TestCase):
             f = ROOT / rel
             if not f.exists():
                 continue
-            if not _SPOOF_TOKENS.search(f.read_text(errors="ignore")):
+            if not _spoof_reason(f.read_text(errors="ignore")):
                 stale.add(rel)
         self.assertEqual(
             sorted(stale), [],

@@ -66,6 +66,7 @@ fi
 
 # verify the cache actually flipped (give the edge a moment)
 echo "verifying (waiting 5s for edge propagation)…"; sleep 5
+stale=0; unknown=0
 # Honest UA. NEVER a browser-spoofing string here: this loop exists to find out
 # whether the edge is still serving the old bytes, and a spoofed UA hides the
 # exact blocking the check is for. If Cloudflare ever treats this agent
@@ -75,6 +76,33 @@ for u in "${URLS[@]}"; do
   hdr=$(curl -s -A "$UA" -D - -o /dev/null "$u" || true)
   code=$(printf '%s' "$hdr" | awk 'NR==1{print $2}')
   ccs=$(printf '%s' "$hdr" | tr -d '\r' | awk -F': ' 'tolower($1)=="cf-cache-status"{print $2}')
-  echo "  $u -> HTTP ${code:-?} cf-cache-status=${ccs:-none}  ($( [ "$code" = "404" ] && echo "GONE (origin 404)" || echo "cache no longer HIT of the old file" ))"
+  # Branch on cf-cache-status, not on the HTTP code. The previous version
+  # printed "cache no longer HIT of the old file" for any non-404 -- which is
+  # the exact claim this check exists to verify, printed regardless of the
+  # evidence. A purge that silently did nothing, or an edge that re-populated
+  # from origin inside the 5s sleep, both return 200/HIT and both used to be
+  # reported as success.
+  case "${ccs:-}" in
+    HIT)
+      echo "  $u -> HTTP ${code:-?} cf-cache-status=HIT  STILL CACHED — purge did not take"
+      stale=$((stale + 1)) ;;
+    "")
+      echo "  $u -> HTTP ${code:-?} cf-cache-status=none  UNKNOWN — no cache header to read"
+      unknown=$((unknown + 1)) ;;
+    *)
+      if [ "$code" = "404" ]; then
+        echo "  $u -> HTTP 404 cf-cache-status=${ccs}  GONE (origin 404)"
+      else
+        echo "  $u -> HTTP ${code:-?} cf-cache-status=${ccs}  served fresh from origin"
+      fi ;;
+  esac
 done
+
+if [ "$stale" -gt 0 ]; then
+  echo "FAILED: $stale url(s) still served from the edge cache." >&2; exit 6
+fi
+if [ "$unknown" -gt 0 ]; then
+  # Not a pass. A check that could not read its evidence has not run.
+  echo "UNVERIFIED: $unknown url(s) returned no cf-cache-status header." >&2; exit 7
+fi
 echo "done."

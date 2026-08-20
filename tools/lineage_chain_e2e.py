@@ -181,14 +181,20 @@ def _post_folder(base: str, manifest: dict, timeout: int):
         return e.code, json.loads(e.read())
 
 
-def _run_verifier(chain_dir: Path, ots_check: bool) -> tuple[int, str]:
+def _run_verifier(chain_dir: Path, ots_check: bool,
+                  timeout: int = 1800) -> tuple[int, str]:
     """Invoke the standalone verifier as a SUBPROCESS -- the way a third party
     runs it -- and return (exit_code, combined_output). The exit code is the
     verdict; the text is for the human reading the log."""
     argv = [sys.executable, str(VERIFIER), "--chain", str(chain_dir)]
     if ots_check:
         argv.append("--ots-check")
-    p = subprocess.run(argv, capture_output=True, text=True, timeout=300)
+    # The binary sub-check calls otscheck.chain_verdict per .ots file at 120s
+    # each; 5 calendars x 2 links can exceed a 300s ceiling on a slow calendar.
+    # A TimeoutExpired escaping here would exit 1, which this file's own
+    # docstring defines as "a branch misbehaved -- a real finding". A slow
+    # network is not a verifier defect.
+    p = subprocess.run(argv, capture_output=True, text=True, timeout=timeout)
     return p.returncode, (p.stdout or "") + (p.stderr or "")
 
 
@@ -273,13 +279,13 @@ def main(argv=None) -> int:
         results: list[tuple[str, int, int, bool]] = []
 
         broken = chain_root / "broken_missing_parent"
-        shutil.copytree(good, broken)
+        shutil.copytree(good, broken, dirs_exist_ok=True)
         shutil.rmtree(broken / parent_rid)
         rc, _ = _run_verifier(broken, ots_check=False)
         results.append(("missing parent", V_CHAIN, rc, rc == V_CHAIN))
 
         tampered = chain_root / "tampered_leaf"
-        shutil.copytree(good, tampered)
+        shutil.copytree(good, tampered, dirs_exist_ok=True)
         mpath = tampered / child_rid / "manifest.json"
         man = json.loads(mpath.read_text())
         for leaf in man["leaves"]:
@@ -291,7 +297,7 @@ def main(argv=None) -> int:
         results.append(("tampered leaf", V_LINK, rc, rc == V_LINK))
 
         stripped = chain_root / "no_attestation"
-        shutil.copytree(good, stripped)
+        shutil.copytree(good, stripped, dirs_exist_ok=True)
         for f in (stripped / child_rid).glob("*.ots"):
             f.unlink()
         rc, _ = _run_verifier(stripped, ots_check=False)
@@ -300,7 +306,7 @@ def main(argv=None) -> int:
         results.append(("no attestation", -1, rc, rc != V_OK))
 
         corrupt = chain_root / "corrupt_ots"
-        shutil.copytree(good, corrupt)
+        shutil.copytree(good, corrupt, dirs_exist_ok=True)
         target = sorted((corrupt / child_rid).glob("*.ots"))[0]
         raw = bytearray(target.read_bytes())
         # Flip one byte inside the embedded digest, leaving the magic intact,
@@ -374,4 +380,16 @@ def main(argv=None) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except KeyboardInterrupt:
+        raise
+    except Exception as e:                      # noqa: BLE001
+        # EXIT_FINDING means "the verifier misbehaved". An OSError, a
+        # TimeoutExpired or a FileExistsError from re-running with the same
+        # --keep directory means the HARNESS could not complete -- which is
+        # UNAVAILABLE. Letting the traceback exit 1 would report an
+        # environment problem as a defect in the thing under test.
+        print(f"UNAVAILABLE: harness could not complete: "
+              f"{type(e).__name__}: {e}", file=sys.stderr)
+        sys.exit(EXIT_UNAVAILABLE)

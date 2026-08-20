@@ -157,24 +157,71 @@ def leg_unique(usable, pre_fix, relay, excluded):
     }
 
 
-def leg_cta(rows, excluded):
-    """CTA leg. Countable from any row -- unaffected by the IP defect."""
-    kept = [r for r in rows if r.get("ip_trunc") not in excluded]
-    dropped = len(rows) - len(kept)
-    n = sum(1 for r in kept if r.get("event") == CTA_EVENT)
+def leg_cta(usable, pre_fix, relay, excluded):
+    """CTA leg.
+
+    COUNTING a click needs no trustworthy IP -- the event is the event. But
+    EXCLUDING THE FOUNDER does, and that is where the first version of this
+    function was wrong. It received every row and filtered the founder by
+    `ip_trunc`, which on pre-fix rows is a rotating Cloudflare EGRESS prefix
+    (G1) and therefore can never equal the founder's. The result was a leg
+    that counted the founder's own clicks as demand while reporting
+    `founder_rows_dropped: 0` -- and, because verdict() promotes any single
+    MET leg, a whole-gate PASS off rows this same tool labels unusable.
+
+    On a product whose usage number has already been found majority
+    self-generated, a false PASS is the worst output this instrument can
+    produce. So the leg now separates the two populations:
+
+      attributable    rows where ip_src=="cf", so exclusion actually works.
+                      Only these can make the leg MET.
+      unattributable  pre-fix and relay-addressed rows. Their clicks are real
+                      events but cannot be cleared of the founder, so they
+                      are counted, reported, and never used to clear the bar.
+
+    If the bar would only be cleared by unattributable clicks, the honest
+    answer is UNKNOWN -- "the meter cannot tell whose clicks these are" --
+    never MET and never a silent 0. Same rule as leg_unique.
+    """
+    kept = [r for r in usable if r.get("ip_trunc") not in excluded]
+    dropped = len(usable) - len(kept)
+    attributable = sum(1 for r in kept if r.get("event") == CTA_EVENT)
+    unattributable = sum(1 for r in (pre_fix + relay)
+                         if r.get("event") == CTA_EVENT)
     adjacent = Counter(r.get("event") for r in kept
                        if r.get("event") in ADJACENT_CTA_EVENTS)
-    return {
-        "status": "MET" if n >= CTA_LEG_TARGET else "NOT_MET",
-        "count": n,
+
+    if attributable >= CTA_LEG_TARGET:
+        status = "MET"
+        reason = None
+    elif attributable + unattributable >= CTA_LEG_TARGET:
+        status = UNKNOWN
+        reason = (f"{attributable} of {CTA_LEG_TARGET} needed clicks are "
+                  f"attributable; {unattributable} more exist on rows whose "
+                  "recorded address is a CDN egress node or a relay, so the "
+                  "founder cannot be excluded from them. The bar is only "
+                  "cleared by clicks we cannot attribute, which is not "
+                  "evidence of demand.")
+    else:
+        status = "NOT_MET"
+        reason = None
+
+    out = {
+        "status": status,
+        "count": attributable,
+        "unattributable_clicks_not_counted": unattributable,
         "target": CTA_LEG_TARGET,
         "event": CTA_EVENT,
         "founder_rows_dropped": dropped,
         "adjacent_not_counted": dict(adjacent),
-        "caveat": ("Only the gate's own CTA event is counted. Adjacent "
+        "caveat": ("Only the gate's own CTA event is counted, and only from "
+                   "rows where the founder can actually be excluded. Adjacent "
                    "clicks are listed but NOT summed -- widening the "
                    "definition to clear the bar would be moving the goal."),
     }
+    if reason:
+        out["reason"] = reason
+    return out
 
 
 def leg_inbound(supplied):
@@ -219,6 +266,21 @@ def contamination_warning(pre_fix):
             "recorded CDN topology rather than visitors.")
 
 
+# Exit codes. A caller reading only the status -- a cron wrapper, a gate
+# script, demand_instrument_check.py -- must be able to tell the three
+# verdicts apart. Returning 0 for all of them made "no working instrument"
+# indistinguishable from "demand proven", which is the same
+# read-the-text-not-the-exit-code mistake this project has been burned by
+# twice. 7 (not 2) for INCONCLUSIVE, matching tools/lineage_chain_e2e.py.
+EXIT_PASS, EXIT_NOT_MET, EXIT_INCONCLUSIVE = 0, 1, 7
+
+
+def _exit_code(v):
+    return {"PASS": EXIT_PASS,
+            "NOT_MET": EXIT_NOT_MET,
+            "INCONCLUSIVE": EXIT_INCONCLUSIVE}[v]
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -241,7 +303,7 @@ def main():
 
     legs = {
         "unique_prefixes": leg_unique(usable, pre_fix, relay, excluded),
-        "cta_clicks": leg_cta(rows, excluded),
+        "cta_clicks": leg_cta(usable, pre_fix, relay, excluded),
         "inbound_email": leg_inbound(a.inbound),
     }
     out = {
@@ -263,7 +325,7 @@ def main():
 
     if a.json:
         print(json.dumps(out, indent=2))
-        return 0
+        return _exit_code(out["verdict"])
 
     print(f"GATE: {out['gate']}")
     print(f"VERDICT: {out['verdict']}   ({len(rows)} rows, {bad} malformed)")
@@ -280,7 +342,7 @@ def main():
     if out["verdict"] == "INCONCLUSIVE":
         print("\nINCONCLUSIVE means at least one leg has no working instrument.")
         print("Do not read it as absence of demand. Fix the instrument, re-read.")
-    return 0
+    return _exit_code(out["verdict"])
 
 
 if __name__ == "__main__":

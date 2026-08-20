@@ -3777,7 +3777,16 @@ class Handler(BaseHTTPRequestHandler):
         served later without rebuilding from the original folder.
         """
         if ORPHO_DISABLE_ANCHORING:
-            _reject(503, {
+            # _json_response, NOT _reject: `_reject` is defined as a LOCAL
+            # function further down this same body, so Python binds the name
+            # local for the whole function and calling it here raised
+            # UnboundLocalError -- the operator got a 500 with no detail
+            # instead of the 503 with retry guidance, precisely when the
+            # service was deliberately paused. This also matches the sibling
+            # branch in /api/anchor (see the same toggle above). No credit has
+            # been consumed at this point, so _reject's refund path is not
+            # needed here anyway.
+            _json_response(self, 503, {
                 "error": "anchoring temporarily unavailable",
                 "detail": "Calendar service unavailable. Anchoring is temporarily disabled.",
             })
