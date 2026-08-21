@@ -20,6 +20,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import socket
 import sys
 import time
 from datetime import datetime, timezone
@@ -38,16 +39,45 @@ def _log_event(event: dict) -> None:
         f.write(json.dumps(event, separators=(",", ":")) + "\n")
 
 
+def _age_basis(record: dict, receipt_file: Path) -> tuple[float, str]:
+    """Return (epoch_seconds, basis) for the receipt's age.
+
+    The ToS promises pruning "30 days after creation", so `created_at` is the
+    only field that means what the policy says. mtime is NOT creation time:
+    upgrade_worker.py rewrites receipt.json on every OTS upgrade, which resets
+    it and postpones expiry indefinitely. mtime survives only as a fallback for
+    records predating the field, and the basis is recorded per run so a reader
+    can tell which clock produced a given result.
+    """
+    created = record.get("created_at")
+    if isinstance(created, str) and created:
+        try:
+            dt = datetime.fromisoformat(created)
+        except ValueError:
+            dt = None
+        if dt is not None:
+            # A naive legacy value is read as UTC, not as machine-local:
+            # the server writes UTC, and guessing local would shift the
+            # cutoff by the host's offset.
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt.timestamp(), "created_at"
+    return receipt_file.stat().st_mtime, "mtime"
+
+
 def expire_old_free(days: int = EXPIRY_DAYS, dry_run: bool = False) -> dict:
     cutoff = time.time() - days * 86400
     scanned = 0
     expired = 0
     skipped_paid = 0
     skipped_fresh = 0
+    errors = 0
+    bases: dict[str, int] = {}
     expired_ids: list[str] = []
 
     if not RECEIPTS_DIR.exists():
-        return {"scanned": 0, "expired": 0, "skipped_paid": 0, "skipped_fresh": 0, "expired_ids": []}
+        return {"scanned": 0, "expired": 0, "skipped_paid": 0, "skipped_fresh": 0,
+                "errors": 0, "clock_basis": {}, "expired_ids": []}
 
     for receipt_dir in sorted(RECEIPTS_DIR.iterdir()):
         if not receipt_dir.is_dir():
@@ -58,7 +88,8 @@ def expire_old_free(days: int = EXPIRY_DAYS, dry_run: bool = False) -> dict:
         scanned += 1
         try:
             record = json.loads(receipt_file.read_text())
-        except json.JSONDecodeError:
+        except (json.JSONDecodeError, OSError):
+            errors += 1
             continue
         source = record.get("source", "unknown")
         # Conservative: only prune things explicitly marked "free". Anything
@@ -67,8 +98,13 @@ def expire_old_free(days: int = EXPIRY_DAYS, dry_run: bool = False) -> dict:
         if not source.startswith("free"):
             skipped_paid += 1
             continue
-        mtime = receipt_file.stat().st_mtime
-        if mtime > cutoff:
+        try:
+            age_ts, basis = _age_basis(record, receipt_file)
+        except OSError:
+            errors += 1
+            continue
+        bases[basis] = bases.get(basis, 0) + 1
+        if age_ts > cutoff:
             skipped_fresh += 1
             continue
         if dry_run:
@@ -77,7 +113,14 @@ def expire_old_free(days: int = EXPIRY_DAYS, dry_run: bool = False) -> dict:
             continue
         # Actually delete.
         rid = record.get("receipt_id", receipt_dir.name)
-        shutil.rmtree(receipt_dir, ignore_errors=False)
+        try:
+            shutil.rmtree(receipt_dir, ignore_errors=False)
+        except OSError:
+            # One unremovable receipt must not abort the scan and lose the
+            # whole run's log line — that is how a crashed run and a run
+            # that never happened become indistinguishable.
+            errors += 1
+            continue
         expired += 1
         expired_ids.append(rid)
 
@@ -89,6 +132,13 @@ def expire_old_free(days: int = EXPIRY_DAYS, dry_run: bool = False) -> dict:
         "expired": expired,
         "skipped_paid": skipped_paid,
         "skipped_fresh": skipped_fresh,
+        "errors": errors,
+        "clock_basis": bases,
+        # Run provenance. Without it a laptop's healthy expiry_log reads as
+        # evidence that production prunes, which is exactly how this stayed
+        # unnoticed for 99 runs.
+        "host": socket.gethostname(),
+        "receipts_dir": str(RECEIPTS_DIR),
         "expired_ids": expired_ids,
     }
     _log_event(summary)
