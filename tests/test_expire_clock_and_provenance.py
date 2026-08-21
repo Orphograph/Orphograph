@@ -3,7 +3,6 @@
 This is the only code path in the product that permanently destroys customer
 data, and it had no test file at all before 2026-08-21.
 """
-import importlib
 import json
 import os
 import socket
@@ -14,11 +13,10 @@ import pytest
 
 @pytest.fixture()
 def worker(tmp_path, monkeypatch):
-    monkeypatch.setenv("ORPHO_DATA_DIR", str(tmp_path))
-    monkeypatch.setenv("ORPHO_RECEIPTS_DIR", str(tmp_path / "receipts"))
-    monkeypatch.setenv("ORPHO_EXPIRY_LOG", str(tmp_path / "expiry_log.jsonl"))
-    import server.expire_worker as ew
-    importlib.reload(ew)
+    import expire_worker as ew  # server/ is on sys.path via conftest, like sibling tests
+    monkeypatch.setattr(ew, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(ew, "RECEIPTS_DIR", tmp_path / "receipts")
+    monkeypatch.setattr(ew, "EXPIRY_LOG", tmp_path / "expiry_log.jsonl")
     return ew
 
 
@@ -64,27 +62,42 @@ def test_mtime_is_the_fallback_when_created_at_absent(worker, tmp_path):
 
 
 def test_naive_created_at_is_read_as_utc(worker, tmp_path):
+    """Pin the instant itself, so a regression to local-time parsing fails on
+    any host whose offset is not zero (a 90-day-old stamp would pass both)."""
     d = tmp_path / "receipts" / "naive"
     d.mkdir(parents=True)
-    naive = (datetime.now(timezone.utc) - timedelta(days=90)).replace(
-        tzinfo=None).isoformat(timespec="seconds")
-    (d / "receipt.json").write_text(
-        json.dumps({"receipt_id": "naive", "source": "free", "created_at": naive}))
-    s = worker.expire_old_free(days=30, dry_run=True)
-    assert s["expired"] == 1
-    assert s["clock_basis"] == {"created_at": 1}
+    f = d / "receipt.json"
+    f.write_text(json.dumps({"receipt_id": "naive", "source": "free",
+                             "created_at": "2026-01-01T00:00:00"}))
+    ts_, basis = worker._age_basis(json.loads(f.read_text()), f)
+    assert basis == "created_at"
+    assert ts_ == datetime(2026, 1, 1, tzinfo=timezone.utc).timestamp()
 
 
-def test_unparseable_created_at_falls_back_and_does_not_crash(worker, tmp_path):
+def test_zulu_suffix_is_accepted(worker, tmp_path):
+    d = tmp_path / "receipts" / "zulu"
+    d.mkdir(parents=True)
+    f = d / "receipt.json"
+    f.write_text(json.dumps({"receipt_id": "zulu", "source": "free",
+                             "created_at": "2026-01-01T00:00:00Z"}))
+    ts_, basis = worker._age_basis(json.loads(f.read_text()), f)
+    assert basis == "created_at"
+    assert ts_ == datetime(2026, 1, 1, tzinfo=timezone.utc).timestamp()
+
+
+def test_unparseable_created_at_is_an_error_never_a_deletion(worker, tmp_path):
+    """created_at present but mangled: an unknown age never licenses deletion,
+    even with an ancient mtime. mtime is only for an ABSENT field."""
     d = tmp_path / "receipts" / "bad-date"
     d.mkdir(parents=True)
     (d / "receipt.json").write_text(
         json.dumps({"receipt_id": "bad-date", "source": "free",
-                    "created_at": "not-a-date"}))
+                    "created_at": "2026-0"}))
     os.utime(d / "receipt.json", (0, 0))
-    s = worker.expire_old_free(days=30, dry_run=True)
-    assert s["expired"] == 1
-    assert s["clock_basis"] == {"mtime": 1}
+    s = worker.expire_old_free(days=30)
+    assert s["expired"] == 0 and s["errors"] == 1
+    assert d.exists()
+    assert s["clock_basis"] == {}
 
 
 # --- paid receipts are never touched -------------------------------------
@@ -148,9 +161,14 @@ def test_logged_line_carries_provenance(worker, tmp_path):
         "a log without provenance lets a laptop run read as production evidence")
 
 
-def test_missing_receipts_dir_returns_typed_empty_summary(worker, tmp_path):
+def test_missing_receipts_dir_is_still_logged_with_provenance(worker, tmp_path):
+    """The likeliest prod misconfiguration (wrong ORPHO_RECEIPTS_DIR) must
+    leave a line behind, not a 0-byte log and expiry_run_at: null."""
     s = worker.expire_old_free(days=30, dry_run=True)
     assert s["errors"] == 0 and s["clock_basis"] == {}
+    assert s["receipts_dir_exists"] is False and "host" in s
+    line = json.loads((tmp_path / "expiry_log.jsonl").read_text().splitlines()[-1])
+    assert line["receipts_dir_exists"] is False
 
 
 # --- dry run really is dry ----------------------------------------------
@@ -179,7 +197,7 @@ def test_stray_file_in_receipts_dir_is_ignored(worker, tmp_path):
 def test_receipt_dir_without_receipt_json_is_not_scanned(worker, tmp_path):
     (tmp_path / "receipts" / "empty-dir").mkdir(parents=True)
     s = worker.expire_old_free(days=30, dry_run=True)
-    assert s["scanned"] == 0 and s["expired"] == 0
+    assert s["scanned"] == 0 and s["expired"] == 0 and s["orphans"] == 1
 
 
 def test_unreadable_age_counts_as_error_never_a_deletion(worker, tmp_path, monkeypatch):
@@ -229,3 +247,27 @@ def test_null_source_is_retained_and_does_not_abort_the_run(worker, tmp_path):
     s = worker.expire_old_free(days=30, dry_run=True)
     assert s["skipped_paid"] == 1, "null source is retained, never pruned"
     assert s["expired"] == 1, "the scan continued past the bad receipt"
+
+
+def test_receipt_dir_without_receipt_json_is_counted_as_orphan(worker, tmp_path):
+    (tmp_path / "receipts" / "half-deleted").mkdir(parents=True)
+    s = worker.expire_old_free(days=30, dry_run=True)
+    assert s["orphans"] == 1 and s["scanned"] == 0
+
+
+def test_non_object_json_and_non_utf8_are_errors_not_aborts(worker, tmp_path):
+    a = tmp_path / "receipts" / "a-list"; a.mkdir(parents=True)
+    (a / "receipt.json").write_text("[]")
+    b = tmp_path / "receipts" / "b-bytes"; b.mkdir(parents=True)
+    (b / "receipt.json").write_bytes(b'{"x":"\xff"}')
+    _mk(tmp_path, "c-free-old", created_days_ago=90)
+    s = worker.expire_old_free(days=30, dry_run=True)
+    assert s["errors"] == 2 and s["expired"] == 1
+
+
+def test_non_string_created_at_is_an_error(worker, tmp_path):
+    d = tmp_path / "receipts" / "int-date"; d.mkdir(parents=True)
+    (d / "receipt.json").write_text(json.dumps({"receipt_id": "int-date",
+                                                "source": "free", "created_at": 12345}))
+    s = worker.expire_old_free(days=30)
+    assert s["errors"] == 1 and s["expired"] == 0 and d.exists()
