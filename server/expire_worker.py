@@ -93,9 +93,10 @@ def expire_old_free(days: int = EXPIRY_DAYS, dry_run: bool = False) -> dict:
             continue
         source = record.get("source", "unknown")
         # Conservative: only prune things explicitly marked "free". Anything
-        # else (paid, unknown legacy receipts) we keep — safer to err on
-        # retention than on deletion.
-        if not source.startswith("free"):
+        # else (paid, unknown legacy receipts, or a malformed/null source) we
+        # keep — safer to err on retention than on deletion. A non-string
+        # source must not raise and abort the whole scan.
+        if not isinstance(source, str) or not source.startswith("free"):
             skipped_paid += 1
             continue
         try:

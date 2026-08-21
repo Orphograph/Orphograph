@@ -215,3 +215,17 @@ def test_main_default_invocation_is_wet(worker, tmp_path, monkeypatch, capsys):
     assert worker.main() == 0
     assert not d.exists()
     assert json.loads(capsys.readouterr().out)["expired"] == 1
+
+
+def test_null_source_is_retained_and_does_not_abort_the_run(worker, tmp_path):
+    """A receipt with "source": null used to raise AttributeError on
+    .startswith and kill the scan. It must be kept (not free) and the run
+    must continue to the next receipt."""
+    d = tmp_path / "receipts" / "null-source"
+    d.mkdir(parents=True)
+    (d / "receipt.json").write_text(json.dumps({"receipt_id": "null-source",
+                                                "source": None}))
+    _mk(tmp_path, "zz-free-old", created_days_ago=90)
+    s = worker.expire_old_free(days=30, dry_run=True)
+    assert s["skipped_paid"] == 1, "null source is retained, never pruned"
+    assert s["expired"] == 1, "the scan continued past the bad receipt"
