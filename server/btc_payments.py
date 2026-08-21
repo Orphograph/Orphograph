@@ -250,6 +250,23 @@ def create_order(email: str, usd_amount: float, sats_amount: int) -> dict:
     addr = address_for_order(order_id)
     if not addr:
         raise RuntimeError("could not resolve a receive address for this order")
+
+    # Settlement matches an inbound payment to an order by EXACT sat amount
+    # (scripts/btc_settle.py). The per-order tag added by
+    # btc_price.sats_for_usd makes equal amounts unlikely, but it is a
+    # best-effort tag drawn from a bounded space — it cannot guarantee
+    # uniqueness. If two live orders at the same address ever carried the same
+    # amount, one payment would be ambiguous between them.
+    #
+    # Refuse to create the collision in the first place. The caller surfaces
+    # this as a retryable error and a fresh tag resolves it.
+    for existing in pending_orders(include_expired=False):
+        if (existing.get("address") == addr
+                and int(existing.get("amount_sats", 0)) == int(sats_amount)):
+            raise ValueError(
+                "an identical pending order already exists; retry to get a new amount"
+            )
+
     now = _now_unix()
     row = {
         "ts": _iso(now),

@@ -36,6 +36,29 @@ import time
 import urllib.error
 import urllib.request
 
+# ── per-order disambiguation tag ───────────────────────────────────
+# A few sats are added to each order so the settle worker has a unique exact
+# amount to match on. The tag is denominated in SATS but its cost to the
+# customer is in USD, so a fixed sat width silently gets more expensive as BTC
+# appreciates: 999 sats is $0.60 at $60k/BTC but $1.50 at $150k. The width is
+# therefore derived from the live price to hold the tag under a fixed USD
+# ceiling.
+#
+# The tag is only a FALLBACK discriminator — the primary one is the per-order
+# receive address (BIP-32 xpub or the address pool, see
+# btc_payments.address_for_order). That is why a narrow tag is safe.
+TAG_MAX_USD = 0.25      # never charge more than this for the tag itself
+TAG_MIN_SLOTS = 64      # keep some disambiguation even at extreme prices
+TAG_MAX_SLOTS = 1000    # no benefit past this
+
+
+def suffix_modulus_for_price(price_usd: float) -> int:
+    """How many distinct tag values fit under TAG_MAX_USD at this price."""
+    if price_usd <= 0:
+        return TAG_MAX_SLOTS
+    slots = int((TAG_MAX_USD / price_usd) * 100_000_000)
+    return max(TAG_MIN_SLOTS, min(TAG_MAX_SLOTS, slots))
+
 MEMPOOL_URL = "https://mempool.space/api/v1/prices"
 COINBASE_URL = "https://api.coinbase.com/v2/prices/spot?currency=USD"
 KRAKEN_URL = "https://api.kraken.com/0/public/Ticker?pair=XBTUSD"
@@ -174,10 +197,13 @@ def sats_for_usd(usd_amount: float, suffix: int | None = None) -> int:
     Returns 0 if the price feed is unreachable (caller should reject
     the order and ask the user to try again in a minute).
 
-    If `suffix` is provided (0–9999), it replaces the last 4 sat digits
-    so each order has a unique exact amount. Without a suffix, two
-    concurrent orders for the same USD value would be indistinguishable
-    on-chain.
+    If `suffix` is provided it is ADDED to the true amount as a small
+    per-order tag, so each order has a unique exact amount for the settle
+    worker to match on. Without a suffix, two concurrent orders for the
+    same USD value would be indistinguishable on-chain.
+
+    The tag is only ever added, never subtracted: the customer can never
+    be asked for less than the true price.
     """
     if usd_amount <= 0:
         return 0
@@ -186,14 +212,25 @@ def sats_for_usd(usd_amount: float, suffix: int | None = None) -> int:
         return 0
     # 1 BTC = 100_000_000 sats
     sats = int(round((usd_amount / price) * 100_000_000))
-    # Floor: 1000 sats minimum (~$0.50 at $50k/BTC) to keep above dust.
+    # Floor: 1000 sats minimum (~$0.60 at $60k/BTC) to keep above dust.
     if sats < 1000:
         sats = 1000
     if suffix is not None:
-        suffix = int(suffix) % 10000
-        # Strip the last 4 digits and replace.
-        base = (sats // 10000) * 10000
-        sats = base + suffix
+        # FIXED 2026-07-26 — this previously floored to the nearest 10,000
+        # sats and REPLACED the last four digits:
+        #
+        #     base = (sats // 10000) * 10000
+        #     sats = base + suffix
+        #
+        # That discarded up to 9,999 sats before re-adding an arbitrary
+        # suffix, so the charge landed at random inside a 10,000-sat band
+        # straddling the true price. At $60k/BTC a $19 order (31,667 sats)
+        # could be billed anywhere from 30,000 to 39,999 sats — undercharging
+        # by up to $1.00 or overcharging by up to $5.00, at random.
+        #
+        # The tag is now additive and price-aware, which makes undercharging
+        # arithmetically impossible and holds the tag under TAG_MAX_USD.
+        sats = sats + (int(suffix) % suffix_modulus_for_price(price))
     return sats
 
 

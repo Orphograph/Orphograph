@@ -100,72 +100,113 @@ def _sats_to_address(tx: dict, address: str) -> int:
 
 def settle_all() -> dict:
     if not btc_payments.is_configured():
-        return {"ok": False, "error": "BTC_RECEIVE_ADDRESS not configured"}
-    addr = btc_payments.address()
+        return {"ok": False, "error": "no BTC receive address configured"}
+    default_addr = btc_payments.address()
     pending = btc_payments.pending_orders(include_expired=False)
     if not pending:
-        return {"ok": True, "scanned": 0, "settled": 0, "address": addr}
+        return {"ok": True, "scanned": 0, "settled": 0, "address": default_addr}
 
-    txs = _address_txs(addr)
-    if not txs:
-        sys.stderr.write(f"[btc_settle] no txs for {addr} or mempool API down\n")
-        return {"ok": True, "scanned": 0, "settled": 0, "note": "no chain data"}
+    # FIX [A] 2026-07-26 — scan the address each order was actually issued at.
+    #
+    # is_configured() is true when an xpub OR the address pool OR the single
+    # address is present, but address() returns ONLY BTC_RECEIVE_ADDRESS. With
+    # HD/pool addressing and no single-address fallback, this worker used to
+    # scan "" — so every order sat at a per-order address that was never
+    # examined and could never settle. The customer pays and gets nothing.
+    #
+    # Orders are now grouped by their own recorded address, with the global
+    # address used only as a fallback for rows that predate per-order
+    # addressing. Each distinct address is fetched once.
+    by_address: dict[str, list[dict]] = {}
+    for order in pending:
+        oaddr = (order.get("address") or default_addr or "").strip()
+        if not oaddr:
+            sys.stderr.write(
+                f"[btc_settle] order {order.get('order_id')} has no address and "
+                f"no fallback is configured; skipping\n"
+            )
+            continue
+        by_address.setdefault(oaddr, []).append(order)
+
+    if not by_address:
+        return {"ok": True, "scanned": 0, "settled": 0, "note": "no addressable orders"}
 
     tip = _current_block_height()
     if tip == 0:
         sys.stderr.write("[btc_settle] could not get current tip height; aborting\n")
         return {"ok": False, "error": "no block tip"}
 
-    # Index txs by amount paid TO our address (after confirmations).
     settled_count = 0
     summary: list[dict] = []
-    for order in pending:
-        order_id = order["order_id"]
-        expected = int(order["amount_sats"])
-        match_tx = None
-        match_confs = 0
-        for tx in txs:
-            paid = _sats_to_address(tx, addr)
-            if paid != expected:
-                continue
-            confs = _confirmations_for(tx, tip)
-            if confs < MIN_CONFIRMATIONS:
-                continue
-            # Found a matching confirmed tx.
-            match_tx = tx
-            match_confs = confs
-            break
+    # FIX [B] 2026-07-26 — a transaction may settle AT MOST ONE order.
+    #
+    # The previous loop re-scanned the same tx list for every pending order and
+    # never marked a tx as used, so two orders with an identical amount_sats
+    # were both settled by the SAME payment: one inbound transaction minted two
+    # claim codes, to two different emails. Amount is the only discriminator
+    # here, so equal amounts are not exotic — they are exactly what the
+    # per-order tag exists to prevent, and the tag is best-effort.
+    #
+    # Consuming the txid closes that hole regardless of tag collisions.
+    consumed_txids: set[str] = set()
 
-        if not match_tx:
+    for addr, orders in by_address.items():
+        txs = _address_txs(addr)
+        if not txs:
+            sys.stderr.write(f"[btc_settle] no txs for {addr} or mempool API down\n")
             continue
 
-        tx_hash = match_tx.get("txid", "")
-        if not tx_hash:
-            continue
+        for order in orders:
+            order_id = order["order_id"]
+            expected = int(order["amount_sats"])
+            match_tx = None
+            match_confs = 0
+            for tx in txs:
+                txid = tx.get("txid", "")
+                if not txid or txid in consumed_txids:
+                    continue
+                paid = _sats_to_address(tx, addr)
+                if paid != expected:
+                    continue
+                confs = _confirmations_for(tx, tip)
+                if confs < MIN_CONFIRMATIONS:
+                    continue
+                match_tx = tx
+                match_confs = confs
+                break
 
-        # Mint the claim code + email the buyer.
-        claim = credits.new_claim_code()
-        credits.add_credits(claim, order.get("email", ""), 10, f"btc:{order_id}")
-        try:
-            mailer.send_pack_claim_email(order.get("email", ""), claim, 10)
-        except Exception as e:
-            sys.stderr.write(f"[btc_settle] mail failed for {order_id}: {e}\n")
+            if not match_tx:
+                continue
 
-        btc_payments.mark_settled(order_id, tx_hash, sats_received=expected)
-        settled_count += 1
-        summary.append({
-            "order_id": order_id,
-            "tx_hash": tx_hash,
-            "confs": match_confs,
-            "sats": expected,
-        })
+            tx_hash = match_tx.get("txid", "")
+            if not tx_hash:
+                continue
+            consumed_txids.add(tx_hash)
+
+            # Mint the claim code + email the buyer.
+            claim = credits.new_claim_code()
+            credits.add_credits(claim, order.get("email", ""), 10, f"btc:{order_id}")
+            try:
+                mailer.send_pack_claim_email(order.get("email", ""), claim, 10)
+            except Exception as e:
+                sys.stderr.write(f"[btc_settle] mail failed for {order_id}: {e}\n")
+
+            btc_payments.mark_settled(order_id, tx_hash, sats_received=expected)
+            settled_count += 1
+            summary.append({
+                "order_id": order_id,
+                "address": addr,
+                "tx_hash": tx_hash,
+                "confs": match_confs,
+                "sats": expected,
+            })
 
     out = {
         "ok": True,
         "ts": _now(),
         "scanned": len(pending),
         "settled": settled_count,
-        "address": addr,
+        "addresses_scanned": sorted(by_address),
         "results": summary,
     }
     sys.stdout.write(json.dumps(out, indent=2) + "\n")
