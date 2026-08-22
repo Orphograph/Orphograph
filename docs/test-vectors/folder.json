@@ -37,7 +37,12 @@
         "leaf_hex": "d682bd3887079cedcf8e933f0ae277b345eaa4819ac8603656bab0b28c42647f",
         "size_bytes": 4
       }
-    ]
+    ],
+    "scope": {
+      "exclude": [],
+      "exclude_source": "custom",
+      "scope_hex": "fe399cfca2c9b0492701a52f843abe2c2ba83d23ccac16bb5da8ce421b32b060"
+    }
   },
   "root_hex": "d5d5db7bc05c905ed75c910c4873a745990b66025dfa94c5455ee51dfd88b613",
   "vector_count": 4,
