@@ -44,6 +44,14 @@ jobs:
         env:
           PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
         run: python3 -m pytest sdk-python/tests/ -q
+      # Out-of-tree suites that existed for months but were run by NO workflow
+      # (found 2026-08-22): the capture daemon/USB/attest tools, the gate reader,
+      # and the zk-provenance layer. They pass locally (86 + 12) with the same
+      # deps as above; the snark-specific cases skip when snarkjs is absent.
+      - name: Run the capture / tools / zk-provenance suites
+        env:
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+        run: python3 -m pytest capture/ tools/test_gate_read.py zk-provenance/test_zk_provenance.py -q
 
 
   sdk-node:

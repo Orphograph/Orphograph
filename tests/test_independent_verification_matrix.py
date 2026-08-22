@@ -400,5 +400,60 @@ class TestIndependentVerificationMatrix(unittest.TestCase):
             self.assertNotIn(otscheck.FAILED, not_run.stdout)
 
 
+    # ---- scope block: the manifest's own excludes are applied (LIFECYCLE §6.4) ----
+
+    def test_custom_exclude_folder_verifies_with_no_flags_via_manifest_scope(self):
+        """Anchored with custom excludes → the manifest records them in `scope`
+        → a relying party with no flags still reproduces the root."""
+        with tempfile.TemporaryDirectory() as td:
+            fx = _Fixture(Path(td))
+            (fx.folder / "ignore-me.tmp").write_text("scratch")
+            tree = merkle.MerkleTree.from_folder(fx.folder, exclude=["*.tmp"])
+            mpath = fx.td / "scoped-manifest.json"
+            mpath.write_text(json.dumps(tree.manifest()))
+            self.assertEqual(tree.manifest()["scope"]["exclude"], ["*.tmp"])
+            out = self._run("folder", "--dir", str(fx.folder), "--manifest", str(mpath), ots_mode=None)
+            self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
+            self.assertIn("from the manifest's scope block", out.stdout)
+            self.assertNotIn("[WARN]", out.stdout)
+
+    def test_explicit_exclude_overrides_manifest_scope(self):
+        with tempfile.TemporaryDirectory() as td:
+            fx = _Fixture(Path(td))
+            (fx.folder / "ignore-me.tmp").write_text("scratch")
+            tree = merkle.MerkleTree.from_folder(fx.folder, exclude=["*.tmp"])
+            mpath = fx.td / "scoped-manifest.json"
+            mpath.write_text(json.dumps(tree.manifest()))
+            # Wrong explicit excludes: the .tmp file is now walked → root differs → 3.
+            out = self._run("folder", "--dir", str(fx.folder), "--manifest", str(mpath),
+                            "--exclude", "*.nothing", ots_mode=None)
+            self.assertEqual(out.returncode, 3, out.stdout + out.stderr)
+            self.assertIn("from --exclude (overrides manifest scope)", out.stdout)
+
+    def test_edited_scope_block_warns_but_root_decides(self):
+        with tempfile.TemporaryDirectory() as td:
+            fx = _Fixture(Path(td))
+            (fx.folder / "ignore-me.tmp").write_text("scratch")
+            tree = merkle.MerkleTree.from_folder(fx.folder, exclude=["*.tmp"])
+            m = tree.manifest()
+            m["scope"]["instruction"] = "edited after anchoring"  # scope_hex now stale
+            mpath = fx.td / "edited-scope.json"
+            mpath.write_text(json.dumps(m))
+            out = self._run("folder", "--dir", str(fx.folder), "--manifest", str(mpath), ots_mode=None)
+            self.assertEqual(out.returncode, 0, out.stdout + out.stderr)  # excludes still right → root matches
+            self.assertIn("[WARN] scope_hex does not match", out.stdout)
+
+    def test_manifest_without_scope_uses_standard_denylist(self):
+        with tempfile.TemporaryDirectory() as td:
+            fx = _Fixture(Path(td))
+            m = fx.tree.manifest()
+            m.pop("scope", None)
+            mpath = fx.td / "no-scope.json"
+            mpath.write_text(json.dumps(m))
+            out = self._run("folder", "--dir", str(fx.folder), "--manifest", str(mpath), ots_mode=None)
+            self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
+            self.assertIn("standard deny-list", out.stdout)
+
+
 if __name__ == "__main__":
     unittest.main()

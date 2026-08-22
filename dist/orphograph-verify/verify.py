@@ -18,9 +18,12 @@ in the proof JSON.
 algorithm `server/merkle.py` uses on the server, compares the
 recomputed root against the supplied manifest's `root_hex`, and prints
 OK/FAIL. A folder anchored with custom excludes can only re-derive the
-same root when verified with the SAME excludes — pass the identical
-repeatable `--exclude GLOB` flags the anchor used (supplying any
---exclude replaces the default deny-list, matching the SDK CLI).
+same root when verified with the SAME excludes. Precedence: explicit
+`--exclude GLOB` flags (repeatable; supplying any replaces the default
+deny-list, matching the SDK CLI) → else the manifest's own `scope.exclude`
+list, which the office records at anchor time (printed, with a WARN if the
+scope block's self-checksum no longer matches) → else the standard
+deny-list.
 
 When `--ots` is supplied, the script additionally asks otscheck.py for a
 chain verdict: first it checks LOCALLY that the .ots file's embedded digest
@@ -60,6 +63,19 @@ import merkle  # noqa: E402
 import otscheck  # noqa: E402
 
 CHUNK = 1024 * 1024
+
+# Mirror of server/merkle.py SCOPE_FIELDS / _canonical_scope_bytes / scope_hex.
+# Kept here (not in the vendored merkle.py) so the vendored file's banner
+# sha stays what it is; if the server's canonical form changes, change BOTH.
+_SCOPE_FIELDS = ("exclude", "exclude_source", "captured_at", "captured_by",
+                 "instruction", "omitted_note")
+
+
+def _scope_hex(scope: dict) -> str:
+    payload = {k: scope[k] for k in _SCOPE_FIELDS if scope.get(k) not in (None, "")}
+    raw = json.dumps(payload, sort_keys=True, separators=(",", ":"),
+                     ensure_ascii=False).encode("utf-8")
+    return hashlib.sha256(raw).hexdigest()
 
 
 def _sha256_file(path: Path) -> bytes:
@@ -202,8 +218,33 @@ def _verify_folder(args: argparse.Namespace) -> int:
     print(f"  manifest:      {manifest_path.name}")
     print(f"  expected root: {expected_root}")
 
+    # Which excludes to walk with. Precedence: explicit --exclude flags; else the
+    # manifest's own `scope.exclude` (Wedge 01 — the office records the excludes
+    # the anchor used); else the standard deny-list. Before this, a folder
+    # anchored with custom excludes could only verify if the holder retyped the
+    # exact flags — a trap for a relying party who was just handed the bundle.
+    excludes = args.exclude
+    scope = manifest.get("scope")
+    if excludes is None and isinstance(scope, dict) and isinstance(scope.get("exclude"), list) \
+            and all(isinstance(x, str) for x in scope["exclude"]):
+        excludes = list(scope["exclude"])
+        src = scope.get("exclude_source", "?")
+        print(f"  excludes:      {len(excludes)} pattern(s) from the manifest's scope block (source={src})")
+        # The scope block is self-checksummed (scope_hex). A mismatch means the
+        # block was edited after anchoring. It is a WARNING, not a verdict: the
+        # anchored value is root_hex alone, and the root decides below
+        # (server/merkle.py, "LIMIT, stated plainly").
+        recorded = scope.get("scope_hex")
+        if isinstance(recorded, str) and recorded != _scope_hex(scope):
+            print("  [WARN] scope_hex does not match the scope block — the scope was "
+                  "edited after anchoring; the root comparison below still decides")
+    elif excludes is None:
+        print("  excludes:      standard deny-list (manifest carries no scope block)")
+    else:
+        print(f"  excludes:      {len(excludes)} pattern(s) from --exclude (overrides manifest scope)")
+
     try:
-        tree = merkle.MerkleTree.from_folder(folder, exclude=args.exclude)
+        tree = merkle.MerkleTree.from_folder(folder, exclude=excludes)
     except ValueError as e:
         print(f"  [FAIL] could not build tree from folder: {e}")
         return 3

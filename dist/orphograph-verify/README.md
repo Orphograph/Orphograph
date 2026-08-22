@@ -82,6 +82,12 @@ replaces the default deny-list rather than extending it (identical
 semantics to the Orphograph SDK CLI); with different excludes the
 recomputed root cannot match the manifest.
 
+You usually do not need the flags: manifests carry a `scope` block that
+records the excludes the anchor used, and `verify.py folder` applies it
+automatically when no `--exclude` is given (it prints which excludes it
+used, and a `[WARN]` if the scope block's self-checksum no longer matches —
+the root comparison still decides). Explicit `--exclude` always wins.
+
 ### Optional OpenTimestamps sub-check
 
 When `--ots` is supplied, the verifier first checks, offline, that the
@@ -113,6 +119,13 @@ returns exit code 4 — the core Merkle check is unaffected.
   Bitcoin node) · `UNBOUND` (the `.ots` commits to a different hash) ·
   `INDETERMINATE`. Only `FAILED` means the proof is bad; the others mean the
   chain step rendered no verdict. The Merkle/file result is unaffected either way.
+
+## Measured performance (one data point, not a guarantee)
+
+Folder mode over 10,000 files in 50 directories (~15 MB of random bytes):
+anchor-side tree build 0.85 s, `verify.py folder` 0.87 s wall, Python 3.11 on
+an Apple-silicon laptop, 2026-08-22. Hashing is the cost; it scales with total
+bytes, not file count.
 
 ## License
 
