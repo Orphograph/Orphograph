@@ -88,3 +88,17 @@ def test_canonical_homepage_still_serves():
     """The obvious catastrophic over-block."""
     assert _is_private_path("index.html") is False
     assert _is_private_path("") is False
+
+
+@pytest.mark.parametrize("path", [
+    "./_mockups/A_pure.html",
+    "x/../_mockups/A_pure.html",
+    "//_mockups/A_pure.html",
+    "_mockups/./A_pure",
+    "/./index-legacy.html",
+    "a/b/../../index-legacy",
+])
+def test_private_paths_cannot_be_reached_by_dot_segments(path):
+    """_serve_static resolves the path on disk AFTER the private check, so the
+    check must see the normalised path or dot-segments walk around it."""
+    assert _is_private_path(path), path

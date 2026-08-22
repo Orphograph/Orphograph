@@ -20,6 +20,7 @@ import json
 import mimetypes
 mimetypes.add_type("font/woff2", ".woff2")  # serve self-hosted fonts with correct type (X-Content-Type-Options: nosniff is set)
 import os
+import posixpath
 import re
 import secrets
 import sys
@@ -788,7 +789,13 @@ _PRIVATE_PATH_EXACT = frozenset({"index-legacy"})
 
 def _is_private_path(rel_path: str) -> bool:
     """True if this static path is internal-only and must 404 publicly."""
-    p = rel_path.lstrip("/")
+    # Normalise FIRST: _serve_static resolves the path on disk AFTER this
+    # check, so "./_mockups/x" or "a/../_mockups/x" would pass a raw string
+    # match and still resolve to the private file. posixpath.normpath collapses
+    # both; anything that escapes upward is private by definition.
+    p = posixpath.normpath("/" + rel_path.lstrip("/")).lstrip("/")
+    if p.startswith(".."):
+        return True
     if p.endswith(".html"):
         p = p[: -len(".html")]
     p = p.rstrip("/")
