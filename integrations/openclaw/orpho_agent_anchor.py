@@ -140,9 +140,18 @@ def main() -> int:
     p.add_argument("--label", default=None, help="client_label on the receipt (200 chars)")
     p.add_argument("--dry-run", action="store_true", help="hash only, no network")
     sub = p.add_subparsers(dest="cmd", required=True)
+    # Also accept anchor options after the subcommand, as shown in the usage
+    # examples.  SUPPRESS preserves a value supplied before the subcommand.
+    anchor_option_kwargs = {"default": argparse.SUPPRESS}
     sp = sub.add_parser("anchor-file"); sp.add_argument("path")
+    sp.add_argument("--label", **anchor_option_kwargs)
+    sp.add_argument("--dry-run", action="store_true", **anchor_option_kwargs)
     sp = sub.add_parser("anchor-memory"); sp.add_argument("workspace")
-    sub.add_parser("anchor-text")
+    sp.add_argument("--label", **anchor_option_kwargs)
+    sp.add_argument("--dry-run", action="store_true", **anchor_option_kwargs)
+    sp = sub.add_parser("anchor-text")
+    sp.add_argument("--label", **anchor_option_kwargs)
+    sp.add_argument("--dry-run", action="store_true", **anchor_option_kwargs)
     sp = sub.add_parser("verify"); sp.add_argument("receipt_id")
     sp.add_argument("--file", default=None)
     args = p.parse_args()
@@ -157,7 +166,7 @@ def main() -> int:
             result["local_match"] = (local256 == result.get("hash_hex")
                                      or local256 == result.get("sha256"))
         print(json.dumps(result, indent=2, sort_keys=True))
-        return 0 if "error" not in result else 1
+        return 0 if "error" not in result and result.get("local_match") is not False else 1
 
     if args.cmd == "anchor-file":
         sha256, sha512 = hash_file(args.path)

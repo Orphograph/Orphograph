@@ -5,9 +5,9 @@
 <title>Orphograph — One receipt per closed period. Show one schedule later.</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#f6f1e3">
-<meta name="description" content="A closed workpaper set for a single period is sealed together as one receipt. Any single schedule can be proven part of that set on any future date, without disclosing the rest.">
+<meta name="description" content="Commit a closed-workpaper folder manifest to one receipt. Verify later that a disclosed schedule matches a leaf without supplying the other workpaper files.">
 <meta property="og:title" content="Orphograph — One receipt per closed period">
-<meta property="og:description" content="Seal the closed workpaper set at partner sign-off. Show one schedule later without showing the rest.">
+<meta property="og:description" content="Commit a closed-workpaper folder manifest to one receipt and verify a disclosed schedule against that set later.">
 <meta property="og:url" content="https://orphograph.com/workpapers/">
 <meta property="og:type" content="article">
 <meta property="og:image" content="https://orphograph.com/og-image.png?v=8">
@@ -50,9 +50,9 @@
     <h2>What this means for you</h2>
     <div class="arch-rule"></div>
     <ul class="means">
-      <li>Your workpapers never leave your device.</li>
-      <li>One receipt covers the closed workpaper set for the period.</li>
-      <li>Show one schedule later without showing the rest.</li>
+      <li>Workpaper bytes are hashed on your device rather than uploaded; folder manifest metadata includes relative paths, digests, sizes, and the root.</li>
+      <li>One successful receipt commits to the submitted folder manifest.</li>
+      <li>Verify one disclosed schedule without supplying the other workpaper files.</li>
     </ul>
   </section>
 
@@ -60,8 +60,8 @@
     <h2>How it works</h2>
     <div class="arch-rule"></div>
     <p>Each workpaper gets a fingerprint — a 64-character code that changes if a single byte of the file changes. The fingerprints are computed on your own machine, not uploaded.</p>
-    <p>The fingerprints for the period are combined into one fingerprint for the whole folder. That combined fingerprint is the only thing the office sees.</p>
-    <p>The combined fingerprint is anchored to the Bitcoin chain. Anyone, on any future date, can confirm the folder existed by the moment of that block — and that a single schedule was part of it — without ever seeing the other workpapers.</p>
+    <p>The fingerprints and relative paths are combined into one fingerprint for the whole folder. The anchoring request includes manifest metadata and the root, but not the workpaper bytes.</p>
+    <p>Once an OpenTimestamps proof is confirmed against Bitcoin, a verifier can test a disclosed schedule and its recorded path against the receipt. The proof supports the Bitcoin block-time bound, not an independently verified close or partner-sign-off date.</p>
   </section>
 
   <section>
@@ -70,12 +70,12 @@
     <details>
       <summary>Show the cryptographic detail</summary>
       <div class="sub">The workpaper folder, as an anchored unit</div>
-      <p>The natural unit is one folder per closed period, anchored at the moment of partner sign-off. The folder contains the trial balance, the supporting reconciliations, the bank statements, the schedules, the analytical procedures, and the signed engagement materials. The period may be a month, a quarter, or a year, as the firm's close cycle dictates.</p>
-      <p>The desktop or browser tool computes a SHA-256 fingerprint of each workpaper, binds the relative path into a leaf hash, and assembles the leaves into a Merkle tree whose root is submitted to the OpenTimestamps calendars. The workpapers themselves never leave the firm's device. A firm with multiple clients anchored on the same date produces one folder receipt per client, per period; each receipt is independent and binds only the workpapers in its own folder.</p>
+      <p>The suggested workflow is one folder submission per closed period. The folder can contain the trial balance, supporting reconciliations, bank statements, schedules, analytical procedures, and signed engagement materials. The receipt does not independently establish that a close or partner sign-off occurred.</p>
+      <p>The desktop or browser tool computes a SHA-256 fingerprint of each workpaper, binds the literal relative path into a leaf hash, and assembles the leaves into a Merkle tree whose root is submitted to the OpenTimestamps calendars. Workpaper bytes are not uploaded, but relative paths, digests, sizes, and the root are submitted as manifest metadata. Separate client/period submissions produce separate receipts when each request succeeds.</p>
       <div class="sub">Selective disclosure under partner-level review</div>
       <p>Two years after a return is filed, a partner-level review questions one schedule. The firm produces an inclusion proof for that schedule in the anchored closed-workpaper folder for the relevant period. The unrelated reconciliations, the client's other accounts, and the firm's other clients' workpapers from the same period are not exposed by the proof. The receipt does not establish that the schedule was correctly prepared; it establishes that the schedule, under the recorded relative path, existed by the time of the recorded Bitcoin block.</p>
       <div class="sub">What the office records</div>
-      <p>The office persists, per anchored closed-workpaper folder, the Merkle root, the canonical ordering rule applied, the per-leaf relative paths, the per-file SHA-256 digests, the per-file byte sizes, the Bitcoin attestation for the root, and, when supplied, an optional partner signature under a did:key identifier or a capture-credential issued under a published trust list. CPA-license-number metadata, where supplied, is recorded as an attribute on the signature, not as a claim of accreditation by the office.</p>
+      <p>The folder receipt records the Merkle root, ordering rule, per-leaf relative paths, SHA-256 digests, byte sizes, and available OpenTimestamps attestations. An optional valid <code>did:key</code> signature can show that the corresponding private key signed the manifest. Orphograph does not establish who controls that key, validate a CPA license, or certify partner authority.</p>
     </details>
   </section>
 
@@ -83,13 +83,13 @@
     <h2>Questions</h2>
     <div class="arch-rule"></div>
     <h3>Where do my workpapers go?</h3>
-    <p>Nowhere. The fingerprints are computed on your own machine. The office only ever sees the combined fingerprint for the folder.</p>
+    <p>The workpaper bytes remain on your machine. The service receives the folder manifest metadata and root, including literal relative paths, so use non-sensitive filenames or renamed copies where path disclosure matters.</p>
     <h3>Is this a substitute for workpaper-retention obligations?</h3>
     <p>No. The retention obligations imposed by professional standards, by the state board of accountancy, and by the applicable tax authority remain the responsibility of the firm.</p>
     <h3>Does the receipt say the return was correctly prepared?</h3>
     <p>No. The receipt records that the workpaper set existed by the recorded Bitcoin block. The professional judgement applied to the engagement remains the responsibility of the firm and its licensed partners.</p>
     <h3>Can the firm anchor multiple clients' folders on the same date?</h3>
-    <p>Yes. Each client's workpaper folder is anchored separately and receives its own receipt. A proof drawn from one folder does not disclose anything about another.</p>
+    <p>Yes, by submitting each client folder separately. Each successful request receives its own receipt. A single-folder inclusion proof does not require another folder's files, although operational logs and account records are outside that cryptographic claim.</p>
   </section>
 
   <p class="arch-disclaimer">
