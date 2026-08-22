@@ -34,7 +34,12 @@ Exit codes:
     0  OK
     2  invalid arguments / missing files
     3  hash recomputation failed (file or folder did not match)
-    4  OTS sub-check failed (root_hex absent from ots output)
+    4  OTS chain step did not PASS. stdout carries which non-pass state:
+       FAILED (client rejected it) · PENDING (not yet on Bitcoin) ·
+       UNAVAILABLE (check could not run: no `ots` / no node) ·
+       UNBOUND (.ots is about a different hash) · INDETERMINATE.
+       Only FAILED means the proof is bad; the others mean "no verdict".
+       The Merkle/file result above it stands on its own either way.
 """
 from __future__ import annotations
 
