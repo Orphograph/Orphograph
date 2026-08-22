@@ -809,6 +809,25 @@ def verify_receipt(receipt_id: str) -> dict:
         "calendars_ok": sum(1 for c in checks if c["ok"]),
         "calendars_total": len(checks),
         "status": record.get("status", "pending"),
+        # `status` answers "are ALL calendars Bitcoin-pinned?" — which for every
+        # receipt issued so far is permanently "partial", because
+        # a.pool/b.pool.opentimestamps.org return 404 for their commitments and
+        # never upgrade (measured 2026-07-26: pending on 214/214, while alice,
+        # btc and finney upgraded on every receipt). The upgrade worker
+        # correctly freezes after repeated no-progress runs.
+        #
+        # That leaves the API saying "partial" about a receipt that IS anchored,
+        # to consumers — SDKs, third-party verifiers — who reasonably read it as
+        # incomplete. The question they actually need answered is the one below,
+        # and it is answered factually: at least one calendar carries a Bitcoin
+        # attestation, which is what makes the timestamp checkable against the
+        # chain. Additive; `status` semantics are unchanged.
+        "bitcoin_attested": int(record.get("pinned_count", 0) or 0) > 0,
+        "pinned_count": int(record.get("pinned_count", 0) or 0),
+        "pinned_total": int(record.get("pinned_total", 0) or 0),
+        # Surfaced so a stalled receipt is diagnosable rather than mysterious:
+        # frozen means polling has stopped, not that anything is wrong.
+        "upgrade_frozen": bool(record.get("upgrade_frozen", False)),
         "btc_pinned_at": record.get("btc_pinned_at"),
         "checks": checks,
     }
@@ -872,6 +891,22 @@ def verify_hash_against_receipt(receipt_id: str, hash_hex: str) -> dict:
     result = verify_receipt(receipt_id)
     if not result.get("found"):
         return result
-    result["supplied_hash"] = hash_hex.strip().lower()
-    result["supplied_matches_receipt"] = result["supplied_hash"] == result["hash_hex"]
+    supplied = hash_hex.strip().lower() if isinstance(hash_hex, str) else ""
+    result["supplied_hash"] = supplied
+    result["supplied_matches_receipt"] = supplied == result["hash_hex"]
+    # A malformed digest currently lands as "does not match", which is
+    # indistinguishable from a genuine mismatch: the caller cannot tell "you
+    # pasted something that is not a SHA-256" from "this is the wrong file".
+    # Surfaced separately so the two can be reported differently.
+    #
+    # SCOPE NOTE: full Field Kit semantics would RAISE on malformed input and
+    # strip a leading "0x" before comparing. Both are deliberately not done
+    # here. `verify_hash_against_receipt` is pinned by tests/vectors/
+    # verifier_vectors.json — v05 expects malformed input to return a result,
+    # not an exception — and those vectors are the conformance target for
+    # verifier-js and both SDKs. Changing the comparison contract is a spec
+    # change that has to move the spec, the vectors and all four
+    # implementations together, not a one-file edit. This field is additive and
+    # creates no drift.
+    result["supplied_hash_valid"] = _is_hex(supplied, 64)
     return result

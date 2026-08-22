@@ -42,7 +42,7 @@ class TestMerkleReexport(unittest.TestCase):
     def test_sha256_banner_present_in_module(self):
         src = Path(_merkle.__file__).read_text()
         self.assertIn("AUTO-COPIED from server/merkle.py", src)
-        self.assertIn("564dd480a4e793867c20c6fe22d265a3382674250023e8095b48b951db2d352d", src)
+        self.assertIn("e68c897382a41e5cb479d00af5fb31e8cb50a45490702ead82d03a25948a87f5", src)
 
 
 class TestAnchorFolder(unittest.TestCase):
@@ -153,23 +153,42 @@ class TestVerifyFolder(unittest.TestCase):
                 ok = orphograph.verify_folder(str(folder), "rid-test", exclude=custom)
             self.assertTrue(ok)
 
-    def test_verify_folder_custom_exclude_anchor_needs_matching_excludes(self):
-        # The D2 failure case, pinned: verifying a custom-exclude anchor
-        # WITHOUT the matching excludes recomputes a different root and
-        # returns False. Before the fix this was permanent (no way to pass
-        # excludes at all); now it is simply the documented contract.
+    def test_verify_folder_reads_excludes_from_manifest_scope(self):
+        # D2, CLOSED: a manifest built with custom excludes now carries a
+        # `scope` block, and verify_folder reads the excludes FROM it, so a
+        # caller need not know them. (Old contract asserted False here; that
+        # was the pre-scope behaviour this feature deliberately replaced.)
         with tempfile.TemporaryDirectory() as td:
             folder = Path(td)
             (folder / "a.txt").write_bytes(b"alpha")
             (folder / "scratch.log").write_bytes(b"working notes, not evidence")
             manifest = _merkle.MerkleTree.from_folder(folder, exclude=["*.log"]).manifest()
+            self.assertIn("scope", manifest)  # the feature under test
 
             def fake_get(receipt_id, **kwargs):
                 return {"receipt": {"receipt_id": receipt_id}, "manifest": manifest}
 
             with mock.patch.object(orphograph._client, "get_verify_folder", side_effect=fake_get):
-                ok = orphograph.verify_folder(str(folder), "rid-test")
-            self.assertFalse(ok)
+                self.assertTrue(orphograph.verify_folder(str(folder), "rid-test"))
+
+    def test_verify_folder_pre_scope_manifest_still_needs_matching_excludes(self):
+        # The fallback path: a manifest with NO scope block (pre-feature
+        # receipts) cannot self-describe its excludes, so verifying a folder
+        # that has extra files without passing them recomputes a different
+        # root and returns False; passing them makes it match.
+        with tempfile.TemporaryDirectory() as td:
+            folder = Path(td)
+            (folder / "a.txt").write_bytes(b"alpha")
+            (folder / "scratch.log").write_bytes(b"working notes, not evidence")
+            manifest = _merkle.MerkleTree.from_folder(folder, exclude=["*.log"]).manifest()
+            manifest.pop("scope", None)  # simulate a pre-scope receipt
+
+            def fake_get(receipt_id, **kwargs):
+                return {"receipt": {"receipt_id": receipt_id}, "manifest": manifest}
+
+            with mock.patch.object(orphograph._client, "get_verify_folder", side_effect=fake_get):
+                self.assertFalse(orphograph.verify_folder(str(folder), "rid-test"))
+                self.assertTrue(orphograph.verify_folder(str(folder), "rid-test", exclude=["*.log"]))
 
 
 class TestInclusionProof(unittest.TestCase):
@@ -343,16 +362,28 @@ class TestCli(unittest.TestCase):
                 return {"receipt": {"receipt_id": receipt_id}, "manifest": manifest}
 
             with mock.patch.object(orphograph._client, "get_verify_folder", side_effect=fake_get):
-                # The failure case: no excludes -> wrong root -> exit 1.
-                with mock.patch("sys.stdout", new_callable=io.StringIO) as out_bad:
-                    rc_bad = _cli.main(["verify", str(folder), "rid-x"])
-                # The fix: same excludes as at anchor time -> exit 0.
+                # D2 CLOSED: the manifest carries scope, so `verify` with no
+                # --exclude reads the excludes from it -> match -> exit 0.
+                with mock.patch("sys.stdout", new_callable=io.StringIO) as out_scope:
+                    rc_scope = _cli.main(["verify", str(folder), "rid-x"])
+                # Passing the same excludes explicitly is still correct.
                 with mock.patch("sys.stdout", new_callable=io.StringIO) as out_ok:
                     rc_ok = _cli.main(["verify", str(folder), "rid-x", "--exclude", "*.log"])
-            self.assertEqual(rc_bad, 1)
-            self.assertEqual(json.loads(out_bad.getvalue())["match"], False)
+                # The genuine failure: verify a folder whose CONTENT differs
+                # from the manifest -> root cannot match on any excludes -> 1.
+                # (Wrong --exclude alone does NOT fail: a scope-carrying
+                # manifest's own excludes win over the caller's, by design.)
+                other = Path(td) / "other"
+                other.mkdir()
+                (other / "a.txt").write_bytes(b"DIFFERENT bytes")
+                with mock.patch("sys.stdout", new_callable=io.StringIO) as out_bad:
+                    rc_bad = _cli.main(["verify", str(other), "rid-x"])
+            self.assertEqual(rc_scope, 0)
+            self.assertEqual(json.loads(out_scope.getvalue())["match"], True)
             self.assertEqual(rc_ok, 0)
             self.assertEqual(json.loads(out_ok.getvalue())["match"], True)
+            self.assertEqual(rc_bad, 1)
+            self.assertEqual(json.loads(out_bad.getvalue())["match"], False)
 
     def test_cli_anchor_passes_excludes_through(self):
         from orphograph import _cli

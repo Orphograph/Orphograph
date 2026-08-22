@@ -189,6 +189,17 @@ export async function verifyReceiptAgainstFile(fileBytes, receipt) {
 
   if (sha256_match) {
     notes.push("SHA-256 of the file matches the receipt.");
+  } else if (!/^[0-9a-f]{64}$/.test(receiptSha256)) {
+    // AUDIT D6. A receipt whose stored hash is not 64 lowercase hex characters
+    // is MALFORMED — the engine calls that "corrupt receipt". Reporting it as
+    // "the file is not the one attested" blames the file, which may be
+    // perfectly intact, and sends the reader looking in the wrong place. The
+    // verdict is unchanged (still not a match); only the diagnosis is honest.
+    notes.push(
+      "The receipt's hash_hex is not a valid SHA-256 digest (64 lowercase hex " +
+      "characters), so the file cannot be checked against it. The receipt is " +
+      "malformed; this says nothing about the file."
+    );
   } else {
     notes.push("SHA-256 of the file does NOT match the receipt; the file is not the one attested.");
   }
