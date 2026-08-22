@@ -1,0 +1,14 @@
+# AGENT_COORDINATION.md — multi-agent ledger (Orphograph repo)
+
+Append-only. Record observable state only; never infer the other agent's intent.
+States: UNCLAIMED · CODEX_ACTIVE · CLAUDE_OBSERVED · USER_OWNED · SHARED_READ_ONLY · STAGED_FOR_REVIEW · MERGED_VERIFIED.
+Cross-venture content is kept out of this file; the founder's combined run report lives outside the repo.
+
+## 2026-08-22T07:07Z — agent: claude — branch `claude/full-cycle-2026-08-22` (worktree `~/orphograph-worktrees/claude-fc-2026-08-22`, from master b54e01b)
+- Observed: main tree on `codex/full-cycle-2026-08-22` @ d40496f ("feat: harden provenance workflows", one commit ahead of master, 19 files) → **CODEX_ACTIVE**; live `codex` process since 02:25 local. Untracked `.coverage` (theirs). 36 pre-existing worktrees left alone.
+- Files explicitly avoided (Codex's d40496f set): `docs/recipient-evidence-tests/**`, `integrations/github-action/{README.md,action.yml,anchor_artifacts.py,test_anchor_artifacts.py}`, `integrations/openclaw/orpho_agent_anchor.py`, `sdk-python/orphograph/{__init__.py,_client.py,_timestamp.py}`, `tests/{test_openclaw_agent_anchor.py,test_sdk.py,test_sdk_packaging.py}`, `web/{dataset-provenance.html,integrations.html,matters/index.html,workpapers/index.html}`.
+- Files owned (this branch): `docs/LIFECYCLE.md`, `docs/AGENT_COORDINATION.md`, `tests/test_independent_verification_matrix.py`, `tests/test_lifecycle_contract.py`, `dist/orphograph-verify/{README.md,verify.py}` (docstring/prose only), rebuilt `dist/orphograph-verify.zip` + `web/dist/orphograph-verify.zip`, `web/docs/verify.html` (developer-detail text only).
+- Baseline (untouched master b54e01b, `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest tests/ -q`): 1775 passed / 29 skipped / 71 subtests / 0 failed, 198.5 s. Codex branch d40496f, same command: 1790 passed / 29 skipped (its "1934/15" includes out-of-tree suites and untracked local fixtures).
+- Workstream: canonical lifecycle + state vocabulary doc; 23-row independent-verification matrix through the shipped verifier; docs↔code contract test; Stage 3e fix of stale exit-4 wording in the shipped README/docstring/public page (live zip confirmed stale).
+- Review of d40496f (read-only, adversarial): HIGH — Action `fail_on_error` default flip is silent for `@master` consumers; HIGH — `software-release/SPECIMEN.md:18-19,26,45` contradicts the same commit; MED — legacy `sdk/` duplicate untested; MED — SDK contract changes undocumented (`sdk-python/README.md` unchanged); MED — `test_sdk_packaging.py` hard-depends on setuptools (CI 3.12 risk); LOW — openclaw exit-code change; LOW — manifest self-inclusion on re-run. Security clean. Merge recommendation: not as-is. → **STAGED_FOR_REVIEW** for Codex/founder; nothing of theirs edited.
+- Status: commits dd175e7, 12cfae8, c983adf (+ this file). Suite on branch recorded in the PR description.

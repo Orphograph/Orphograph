@@ -84,11 +84,14 @@ recomputed root cannot match the manifest.
 
 ### Optional OpenTimestamps sub-check
 
-When `--ots` is supplied, the verifier invokes `ots verify <file>`
-via subprocess (list-form, never via a shell) and inspects the
-output for the manifest's `root_hex`. A present root indicates the
-chain witness references the same anchor the verifier just
-reproduced.
+When `--ots` is supplied, the verifier first checks, offline, that the
+`.ots` file's embedded digest is the `root_hex` it just reproduced
+(otherwise the state is `UNBOUND` — the proof is about a different
+hash). It then runs `ots verify -d <root_hex> <file.ots>` via subprocess
+(list-form, never via a shell) and classifies the client's exit code and
+wording into `VERIFIED` / `PENDING` / `FAILED` / `UNAVAILABLE` /
+`INDETERMINATE`. Only `VERIFIED` is a pass. The client's output is never
+searched for the hash as evidence of anything.
 
 Install the OpenTimestamps reference client when needed:
 
@@ -104,7 +107,12 @@ returns exit code 4 — the core Merkle check is unaffected.
 - `0` — verification succeeded
 - `2` — invalid arguments or missing input files
 - `3` — file or folder did not reproduce the recorded root
-- `4` — OpenTimestamps sub-check failed (root not present in `ots verify` output)
+- `4` — the OpenTimestamps chain step did not pass. The line `[OTS] <STATE>:` on
+  stdout says which: `FAILED` (the client rejected the proof) · `PENDING` (not yet
+  on Bitcoin) · `UNAVAILABLE` (the check could not run — no `ots` binary or no
+  Bitcoin node) · `UNBOUND` (the `.ots` commits to a different hash) ·
+  `INDETERMINATE`. Only `FAILED` means the proof is bad; the others mean the
+  chain step rendered no verdict. The Merkle/file result is unaffected either way.
 
 ## License
 

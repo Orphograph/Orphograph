@@ -22,19 +22,26 @@ same root when verified with the SAME excludes — pass the identical
 repeatable `--exclude GLOB` flags the anchor used (supplying any
 --exclude replaces the default deny-list, matching the SDK CLI).
 
-When `--ots` is supplied, the script additionally invokes the local
-`ots` binary (the OpenTimestamps reference client) via subprocess with
-shell=False, list-form argv. Its stdout/stderr is inspected for the
-root_hex the user is verifying — if the verifier finds the expected
-hash anywhere in the ots output, the chain check is considered to
-have at least touched the right hash. (Full chain verification still
-requires a Bitcoin node; that is the ots client's job, not ours.)
+When `--ots` is supplied, the script additionally asks otscheck.py for a
+chain verdict: first it checks LOCALLY that the .ots file's embedded digest
+is the root_hex being verified (otherwise UNBOUND), then it runs the local
+`ots` binary (the OpenTimestamps reference client) as
+`ots verify -d <root_hex> <file.ots>` via subprocess with shell=False,
+list-form argv, and classifies the client's exit code + wording into
+VERIFIED / PENDING / FAILED / UNAVAILABLE / INDETERMINATE. Only VERIFIED is
+a pass. The output is never scanned for the hash as evidence. (Full chain
+verification needs a Bitcoin node; that is the ots client's job, not ours.)
 
 Exit codes:
     0  OK
     2  invalid arguments / missing files
     3  hash recomputation failed (file or folder did not match)
-    4  OTS sub-check failed (root_hex absent from ots output)
+    4  OTS chain step did not PASS. stdout carries which non-pass state:
+       FAILED (client rejected it) · PENDING (not yet on Bitcoin) ·
+       UNAVAILABLE (check could not run: no `ots` / no node) ·
+       UNBOUND (.ots is about a different hash) · INDETERMINATE.
+       Only FAILED means the proof is bad; the others mean "no verdict".
+       The Merkle/file result above it stands on its own either way.
 """
 from __future__ import annotations
 
