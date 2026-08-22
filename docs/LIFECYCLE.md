@@ -18,7 +18,7 @@ that is spread across `server/engine.py`, `server/merkle.py`,
 | # | Stage | What exists after it | Where it is produced | Where it is read |
 |---|---|---|---|---|
 | 1 | **Capture** | bytes of an artifact (file, folder, text, agent output) and its SHA-256 (and, for files, SHA-512 sibling) | browser (`web/`), capture daemon (`capture/`), watch folder (`integrations/watch-folder/`), SDKs, MCP `orphograph_anchor_*`, GitHub Action | — |
-| 2 | **Manifest** | for folders: RFC 6962 Merkle tree; `manifest.json` with `root_hex`, `leaves[]` (`path`, `file_sha256_hex`), and the `scope` block recording what was excluded (Wedge 01, `tests/test_manifest_scope.py`) | `server/merkle.py` (server) and the vendored copies in `dist/orphograph-verify/merkle.py`, SDKs | every folder verifier |
+| 2 | **Manifest** | for folders: RFC 6962 Merkle tree; `manifest.json` with `root_hex`, `leaves[]` (`path`, `file_sha256_hex`), and the `scope` block recording what was excluded (Wedge 01, `tests/test_manifest_scope.py`; the scope block sits beside the root and does not change it) | `server/merkle.py` (server) and the SDKs' Merkle modules write the scope block; the vendored `dist/orphograph-verify/merkle.py` recomputes roots only and does **not** read `scope` — the user passes the same `--exclude` flags the anchor used (see `verify.py --help`). Auto-applying `scope.excludes` in the dist verifier is a staged additive item (§6) | every folder verifier |
 | 3 | **Receipt** | `receipt.json` (`receipt_id`, `hash_hex`, timestamps, optional `lineage`, optional `zk_provenance`, optional C2PA preservation) + one `.ots` per calendar | `server/engine.py` `anchor_*` | `/r/<id>`, `/api/receipt/<id>`, SDK `verify()`, MCP `verify_receipt` |
 | 4 | **Verification (structural)** | per-`.ots` checks `{magic_ok, hash_match, ok}`; `found`; `supplied_matches_receipt` | `server/engine.py:verify_receipt`, `verify_hash_against_receipt` | web/SDK/MCP |
 | 5 | **Preservation** | the receipt directory is immutable ("the books", `docs/LOG_RETENTION_POLICY.md` §2.1); `.ots` proofs are **upgraded** in place as calendars confirm (`ots upgrade`); C2PA manifests carried alongside, never rewritten | `server/`, renewal path `docs/DESIGN_RENEWAL_PATH.md` | — |
@@ -52,8 +52,18 @@ reported as "the proof is bad".
 4 chain step did not pass (stdout names FAILED / PENDING / UNAVAILABLE / UNBOUND / INDETERMINATE)
 ```
 
-`dist/orphograph-verify/verify_lineage.py`: `0` chain intact, `5` chain broken
-(`EXIT_BROKEN`); a fork is reported informationally, not as broken.
+`dist/orphograph-verify/verify_lineage.py` exit codes (normative; constants in the file):
+
+```lineage_exits
+0 EXIT_OK chain intact
+2 EXIT_ARGS invalid arguments / unreadable inputs
+3 EXIT_LINK a link does not commit to its parent (manifest root ≠ receipt hash) — the tamper case
+4 EXIT_OTS the chain step for a link did not pass (only with --ots-check; PENDING on a fresh chain is expected)
+5 EXIT_BROKEN chain broken (missing receipt / unreachable parent)
+```
+
+A relying party must treat **2, 3, 4, 5** as "not intact"; `3` is the forged-link
+case and is not `5`. A fork is reported informationally, not as broken.
 
 Exit `4` is shared by "rejected" and "no verdict" on purpose (changing it
 would break every script that already branches on `4`); the discriminator is
@@ -66,9 +76,9 @@ cannot tell invalid from indeterminate and must read that line.
 |---|---|---|---|
 | Web service | `server/engine.py` `verify_receipt(receipt_id)` | `{receipt_id, found, checks:[{file, magic_ok, hash_match, ok}]}`; `found:false` + `error` for missing/corrupt (`docs/VERIFIER_SPEC.md` §5) | no — booleans + `found` |
 | Web service | `verify_hash_against_receipt` | `supplied_matches_receipt: bool` (never raises) | no |
-| Python SDK | `orphograph.verify_folder(...)` → `bool`; `verify_inclusion(...)` → `bool`; `_timestamp.verify()` → server dict | booleans; CLI exit 1 on mismatch | no |
+| Python SDK (master) | `orphograph.verify_folder(...)` → `bool`; `verify_inclusion(...)` → `bool`; `_client.get_verify_folder(...)` → server dict (`sdk-python/orphograph/{__init__,_client}.py`) | booleans; CLI exit 1 on mismatch. (A hash-only `verify()`/`get_receipt()` surface is pending on another branch and is not described here until it merges.) | no |
 | Node SDK | `verifyFolder`, `verifyInclusion` | booleans | no |
-| MCP | `orphograph_verify_receipt` → `{ok, receipt_id, anchored_hash_sha256/512, calendars_ok/total, ...}`; `orphograph_verify_lineage` → `{all_ok, broken_at, depth_capped, ...}` | `ok`/`all_ok` booleans with counts | no |
+| MCP | `orphograph_verify_receipt` → `{ok, receipt_id, anchored_hash_sha256, anchored_hash_sha512, calendars_ok, calendars_total, note, …}` (`mcp/orphograph_mcp.py:415-440`); `orphograph_verify_lineage` → `{ok, tip, chain, depth, broken_at, forks_seen, note}` plus `depth_capped: true` **only when** the walk was capped (`:626-635`) | `ok` booleans with counts; `ok` for lineage is false when any link fails, the chain is broken, or the depth was capped | no |
 | Independent verifier | `dist/orphograph-verify/verify.py` | exit code + `[OK]`/`[FAIL]` + `[OTS] <STATE>:` | **yes** (the only tri-state surface) |
 | Structural receipt checker | `web/verify/verify.py` | exit codes documented in `web/verify/README.md`; explicitly no chain check | no (structural only) |
 
@@ -77,8 +87,7 @@ chain question into booleans/counts (`calendars_ok/total`); only the
 independent verifier distinguishes "rejected" from "could not run". Callers
 that need that distinction must use the independent verifier or the
 `[OTS]` line. Promoting the tri-state vocabulary into the MCP/SDK responses
-is an additive change (new optional field) and is tracked in
-`ORPHOGRAPH_PRODUCTIZATION.md` as DOCUMENTED_AND_STAGED.
+is an additive change (new optional field) — staged follow-up §6.1.
 
 ## 4. What independent verification covers (each row = one test)
 
@@ -104,11 +113,14 @@ is an additive change (new optional field) and is tracked in
 | Confirmed | client confirmed a Bitcoin block | exit 0, `VERIFIED` | `test_client_confirmation_is_verified_exit_0` |
 | Invalid vs indeterminate | the two above, side by side | same exit 4; stdout tokens never co-occur | `test_invalid_and_indeterminate_share_exit_4_but_differ_on_stdout` |
 
-Expired or revoked key: **not applicable** — the independent verifier checks
-no signature and no key. The server's Ed25519 manifest signature
-(`server/manifest_signature.py`) is verified server-side and in
-`verifier-js/orphograph_signature.js`; the dist bundle does not check it
-(documented gap, DOCUMENTED_AND_STAGED).
+Expired or revoked key: **not applicable to `verify.py`** — it checks no
+signature and no key. Two neighbours in the same bundle do touch keys:
+`verify_hw.py` verifies an ECDSA P-256 signature against the device public
+key embedded in a hardware receipt and performs **no revocation or expiry
+check** (a revoked device key still verifies — stated limitation), and the
+server's Ed25519 manifest signature (`server/manifest_signature.py`) is
+verified server-side and in `verifier-js/orphograph_signature.js` but not by
+the dist bundle. Both are staged follow-ups (§6.2, §6.3).
 
 ## 5. What verification proves — and does not (restates `docs/VERIFIER_SPEC.md` §0)
 
@@ -127,3 +139,21 @@ court will accept it (no legal admissibility). Technical integrity, identity
 assurance, custody history, process compliance, and legal admissibility are
 five different claims; this product supplies the first, can carry evidence
 toward the third, and makes no claim on the other three.
+
+## 6. Staged follow-ups named by this document (additive; none built yet)
+
+1. **Tri-state in MCP/SDK responses** — add an optional `chain_state` field
+   carrying the §2 vocabulary next to the existing `ok`/`calendars_ok` counts.
+2. **`verify_hw.py` key status** — document/implement a device-key revocation
+   or expiry input; until then the limitation in §4 stands.
+3. **Manifest-signature check in the dist bundle** — optional Ed25519 check
+   mirroring `verifier-js/orphograph_signature.js`.
+4. **Dist verifier reads `scope.excludes`** — so a folder anchored with
+   custom excludes verifies without retyping the flags (§1 row 2).
+5. **Lineage + hw + zk + renewal verifiers in the §4 matrix** — today the
+   matrix drives `verify.py` only; their exit codes are pinned by their own
+   tests (`tests/test_edit_lineage.py`, `tests/test_verify_hw.py`, …).
+
+The external run report that tracks these across cycles lives outside the
+repo (`~/full-cycle-reports/2026-08-22_claude_codex_coexistence/ORPHOGRAPH_PRODUCTIZATION.md`);
+this section is the in-repo source of truth.

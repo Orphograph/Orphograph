@@ -89,22 +89,24 @@ python3 verify.py file --file path/to/original.jpg \
     <details class="legal">
       <summary>Developer detail · proof file structure, exit codes</summary>
       <div class="body">
-        <p>The proof JSON returned by the office (and accepted by the verifier) carries the relative path, the expected root, the file's SHA-256, and the sibling hashes that walk the leaf up to the root. A worked example with placeholder values:</p>
+        <p>The proof JSON returned by the office (and accepted by the verifier) carries the relative path, the expected root, the file's SHA-256, and the sibling hashes that walk the leaf up to the root. The verifier reads the fields below and ignores any others it does not know. A worked example with placeholder values:</p>
 <pre><code>{
   "receipt_id": "ChvTMbYLIACHEHJT",
+  "path":       "2026-05-20/IMG_0042.cr3",
   "root_hex":   "a1b2c3d4e5f6…32 bytes hex…",
-  "rel_path":   "2026-05-20/IMG_0042.cr3",
   "file_sha256_hex": "f3a9d2…32 bytes hex…",
   "proof": [
-    { "side": "right", "hash_hex": "1111…" },
-    { "side": "left",  "hash_hex": "2222…" },
-    { "side": "right", "hash_hex": "3333…" }
-  ],
-  "algorithm": "orphograph-merkle-v1-rfc6962"
+    ["R", "1111…"],
+    ["L", "2222…"],
+    ["R", "3333…"]
+  ]
 }</code></pre>
-        <p>The verifier exits with status <code>0</code> on a match and <code>1</code> on a mismatch. Output is one line of JSON to standard output:</p>
-<pre><code>{"ok": true,  "root_hex": "a1b2c3d4e5f6…", "ots": "OK"}
-{"ok": false, "reason": "leaf hash mismatch"}</code></pre>
+        <p>Exit codes: <code>0</code> verified; <code>2</code> invalid arguments or a missing/unreadable input; <code>3</code> the file, proof, or folder did not reproduce the recorded root; <code>4</code> the OpenTimestamps chain step did not pass. Output is plain text, one check per line:</p>
+<pre><code>  [OK]   inclusion proof verifies against root
+  [OTS] VERIFIED: root.ots: Bitcoin block 800000 attests existence …
+  [FAIL] local file SHA-256 does not match proof's file_sha256_hex
+  [OTS] UNAVAILABLE: ots binary not found on PATH — the chain step did NOT run.</code></pre>
+        <p>On exit <code>4</code> the <code>[OTS]</code> line names the state: <code>FAILED</code> means the client rejected the proof; <code>PENDING</code>, <code>UNAVAILABLE</code>, <code>UNBOUND</code>, and <code>INDETERMINATE</code> mean the chain step rendered no verdict, and the file or folder result above it still stands on its own.</p>
         <p>The vendored <code>merkle.py</code> module carries a SHA-256 banner in its header; the banner is compared, on each invocation, against the SHA-256 of the file as loaded from disk, so silent drift from the canonical algorithm is detectable.</p>
       </div>
     </details>

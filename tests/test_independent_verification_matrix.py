@@ -22,6 +22,7 @@ look like "your proof is bad" (or the reverse), a row here turns red.
 """
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import shutil
@@ -35,17 +36,30 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 DIST_DIR = ROOT / "dist" / "orphograph-verify"
 sys.path.insert(0, str(ROOT / "server"))
-sys.path.insert(0, str(DIST_DIR))
 
-import merkle  # noqa: E402  (server copy — used only to BUILD fixtures)
-import otscheck  # noqa: E402  (dist copy — used only for its header constant)
+import merkle  # noqa: E402  (the SERVER copy builds the fixtures; the dist copy is the thing under test)
 
-# Real opentimestamps-client wordings, one per state otscheck recognises.
+
+def _load(name: str, path: Path):
+    spec = importlib.util.spec_from_file_location(name, path)
+    mod = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(mod)
+    return mod
+
+
+# Loaded by path, NOT via sys.path, so `merkle` above cannot silently resolve
+# to the dist copy (that would let the module under test build its own fixtures).
+otscheck = _load("_matrix_otscheck", DIST_DIR / "otscheck.py")
+# The canonical "what the real client prints" wordings live in ONE place —
+# tests/test_ots_chain_verdict.py — and are reused here so a client-wording
+# retune cannot leave this file drifting.
+_chain = _load("_matrix_chain_wordings", ROOT / "tests" / "test_ots_chain_verdict.py")
 _OTS_SCRIPTS = {
-    "verified": ("Success! Bitcoin block 800000 attests existence as of 2024-01-01 UTC", 0),
-    "pending": ("Pending confirmation in Bitcoin blockchain", 0),
-    "failed": ("Failed! Timestamp could not be verified", 1),
-    "infra": ("Could not connect to Bitcoin node: Cookie file unusable", 1),
+    "verified": _chain.CLIENT_SUCCEEDS,
+    "pending": _chain.CLIENT_PENDING,
+    "failed": _chain.CLIENT_FAILS,
+    "infra": _chain.CLIENT_NO_NODE,
 }
 
 
@@ -104,6 +118,28 @@ class _Fixture:
 
 class TestIndependentVerificationMatrix(unittest.TestCase):
 
+    @classmethod
+    def setUpClass(cls):
+        # One fake-`ots` directory per chain state, built ONCE (first-exec of a
+        # fresh script is the expensive part on macOS), plus one empty dir for
+        # "no ots binary at all".
+        cls._bins = Path(tempfile.mkdtemp(prefix="fake-ots-"))
+        (cls._bins / "absent").mkdir()
+        for mode, (msg, rc) in _OTS_SCRIPTS.items():
+            d = cls._bins / mode
+            d.mkdir()
+            (d / "ots.msg").write_text(msg)
+            script = d / "ots"
+            # The wording is read from a file, so quotes/newlines in the real
+            # client output never have to be shell-escaped.
+            # $0 is just 'ots' under PATH lookup, so the message path must be absolute.
+            script.write_text(f'#!/bin/sh\n/bin/cat "{(d / "ots.msg")}"\nexit {rc}\n')
+            script.chmod(script.stat().st_mode | stat.S_IXUSR)
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls._bins, ignore_errors=True)
+
     def _run(self, *args: str, ots_mode: str | None = "absent") -> subprocess.CompletedProcess:
         """Run verify.py as a relying party would.
 
@@ -113,14 +149,7 @@ class TestIndependentVerificationMatrix(unittest.TestCase):
         """
         env = dict(os.environ)
         if ots_mode is not None:
-            bindir = Path(tempfile.mkdtemp(prefix="fake-ots-"))
-            self.addCleanup(shutil.rmtree, bindir, ignore_errors=True)
-            if ots_mode != "absent":
-                msg, rc = _OTS_SCRIPTS[ots_mode]
-                script = bindir / "ots"
-                script.write_text(f"#!/bin/sh\necho '{msg}'\nexit {rc}\n")
-                script.chmod(script.stat().st_mode | stat.S_IXUSR)
-            env["PATH"] = str(bindir)  # ONLY the fake dir — nothing else resolves
+            env["PATH"] = str(self._bins / ots_mode)  # ONLY the fake dir — nothing else resolves
         return subprocess.run(
             [sys.executable, str(DIST_DIR / "verify.py"), *args],
             check=False, capture_output=True, text=True,

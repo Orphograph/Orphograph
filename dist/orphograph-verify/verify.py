@@ -22,13 +22,15 @@ same root when verified with the SAME excludes — pass the identical
 repeatable `--exclude GLOB` flags the anchor used (supplying any
 --exclude replaces the default deny-list, matching the SDK CLI).
 
-When `--ots` is supplied, the script additionally invokes the local
-`ots` binary (the OpenTimestamps reference client) via subprocess with
-shell=False, list-form argv. Its stdout/stderr is inspected for the
-root_hex the user is verifying — if the verifier finds the expected
-hash anywhere in the ots output, the chain check is considered to
-have at least touched the right hash. (Full chain verification still
-requires a Bitcoin node; that is the ots client's job, not ours.)
+When `--ots` is supplied, the script additionally asks otscheck.py for a
+chain verdict: first it checks LOCALLY that the .ots file's embedded digest
+is the root_hex being verified (otherwise UNBOUND), then it runs the local
+`ots` binary (the OpenTimestamps reference client) as
+`ots verify -d <root_hex> <file.ots>` via subprocess with shell=False,
+list-form argv, and classifies the client's exit code + wording into
+VERIFIED / PENDING / FAILED / UNAVAILABLE / INDETERMINATE. Only VERIFIED is
+a pass. The output is never scanned for the hash as evidence. (Full chain
+verification needs a Bitcoin node; that is the ots client's job, not ours.)
 
 Exit codes:
     0  OK
