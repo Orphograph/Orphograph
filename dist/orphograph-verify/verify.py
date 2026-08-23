@@ -18,12 +18,14 @@ in the proof JSON.
 algorithm `server/merkle.py` uses on the server, compares the
 recomputed root against the supplied manifest's `root_hex`, and prints
 OK/FAIL. A folder anchored with custom excludes can only re-derive the
-same root when verified with the SAME excludes. Precedence: explicit
-`--exclude GLOB` flags (repeatable; supplying any replaces the default
-deny-list, matching the SDK CLI) → else the manifest's own `scope.exclude`
-list, which the office records at anchor time (printed, with a WARN if the
-scope block's self-checksum no longer matches) → else the standard
-deny-list.
+same root when verified with the SAME excludes. Rule (VERIFIER_SPEC §4.2,
+shared with the Python SDK): the manifest's own `scope.exclude` — recorded
+by the office at anchor time — is authoritative when present (the patterns
+are printed, with a WARN if the block's self-checksum no longer matches);
+`--exclude GLOB` flags (repeatable; any replaces the default deny-list)
+apply to manifests without a scope block, and are ignored with a warning
+when one is present unless `--ignore-manifest-scope` is given; otherwise
+the standard deny-list.
 
 When `--ots` is supplied, the script additionally asks otscheck.py for a
 chain verdict: first it checks LOCALLY that the .ots file's embedded digest
@@ -51,6 +53,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -64,18 +67,34 @@ import otscheck  # noqa: E402
 
 CHUNK = 1024 * 1024
 
-# Mirror of server/merkle.py SCOPE_FIELDS / _canonical_scope_bytes / scope_hex.
-# Kept here (not in the vendored merkle.py) so the vendored file's banner
-# sha stays what it is; if the server's canonical form changes, change BOTH.
-_SCOPE_FIELDS = ("exclude", "exclude_source", "captured_at", "captured_by",
-                 "instruction", "omitted_note")
+def _printable(value, limit: int = 200) -> str:
+    """Render an UNTRUSTED manifest/proof string for stdout.
+
+    Control characters (newline, CR, ESC, …) are replaced so a hostile field
+    cannot forge a verdict line ("\\n  [OK]   …") or an ANSI overwrite in the
+    verifier's own output; long values are truncated. The exit code never
+    depended on this — only what a human or a log-scraper READS did.
+    """
+    s = str(value)
+    s = "".join(ch if ch.isprintable() else "?" for ch in s)
+    # Square brackets are how this tool marks verdicts ([OK] [FAIL] [OTS] [WARN]);
+    # untrusted text must not be able to imitate one, even inline, for readers
+    # or log-scrapers — render them as visibly different glyphs.
+    s = s.replace("[", "⟦").replace("]", "⟧")
+    return s if len(s) <= limit else s[:limit] + "…"
 
 
-def _scope_hex(scope: dict) -> str:
-    payload = {k: scope[k] for k in _SCOPE_FIELDS if scope.get(k) not in (None, "")}
-    raw = json.dumps(payload, sort_keys=True, separators=(",", ":"),
-                     ensure_ascii=False).encode("utf-8")
-    return hashlib.sha256(raw).hexdigest()
+_HEX = re.compile(r"^[0-9A-Fa-f]{64}$")
+
+
+def _hex_or_note(value) -> str:
+    """Echo a hash field only if it LOOKS like one; anything else is described,
+    not printed, so a hostile manifest cannot forge verdict lines in stdout.
+    (Case is still compared verbatim below — D1 — this only guards the echo.)"""
+    if isinstance(value, str) and _HEX.match(value):
+        return value
+    n = len(value) if isinstance(value, str) else 0
+    return f"<not a 64-hex string ({type(value).__name__}, {n} chars) — content not echoed>"
 
 
 def _sha256_file(path: Path) -> bytes:
@@ -136,8 +155,8 @@ def _verify_file(args: argparse.Namespace) -> int:
         return 2
 
     print(f"  file:        {file_path.name}")
-    print(f"  proof path:  {rel_path}")
-    print(f"  expected root: {root_hex}")
+    print(f"  proof path:  {_printable(rel_path)}")
+    print(f"  expected root: {_hex_or_note(root_hex)}")
 
     file_digest = _sha256_file(file_path)
     print(f"  file sha256: {file_digest.hex()}")
@@ -155,7 +174,7 @@ def _verify_file(args: argparse.Namespace) -> int:
             print("         (matches only after lowercasing — the proof was edited)")
         else:
             print("  [FAIL] local file SHA-256 does not match proof's file_sha256_hex")
-            print(f"         expected: {expected_file_hex}")
+            print(f"         expected: {_printable(expected_file_hex)}")
         return 3
 
     # Normalise proof step shape — accept both [dir, hex] lists and tuples.
@@ -216,32 +235,48 @@ def _verify_folder(args: argparse.Namespace) -> int:
 
     print(f"  folder:        {folder}")
     print(f"  manifest:      {manifest_path.name}")
-    print(f"  expected root: {expected_root}")
+    print(f"  expected root: {_hex_or_note(expected_root)}")
 
-    # Which excludes to walk with. Precedence: explicit --exclude flags; else the
-    # manifest's own `scope.exclude` (Wedge 01 — the office records the excludes
-    # the anchor used); else the standard deny-list. Before this, a folder
-    # anchored with custom excludes could only verify if the holder retyped the
-    # exact flags — a trap for a relying party who was just handed the bundle.
-    excludes = args.exclude
+    # Which excludes to walk with. Rule (docs/VERIFIER_SPEC.md §4.2, shared
+    # with the Python SDK): the manifest's own `scope.exclude` is AUTHORITATIVE
+    # when present — the office recorded what the anchor used, so a holder who
+    # was just handed the bundle needs no flags. `--exclude` applies to
+    # manifests WITHOUT a scope block (issued before scope existed, or by a
+    # producer that does not write one); with a scope present it is ignored
+    # with a warning unless --ignore-manifest-scope says the operator means it.
     scope = manifest.get("scope")
-    if excludes is None and isinstance(scope, dict) and isinstance(scope.get("exclude"), list) \
-            and all(isinstance(x, str) for x in scope["exclude"]):
-        excludes = list(scope["exclude"])
-        src = scope.get("exclude_source", "?")
+    scope_list = (list(scope["exclude"]) if isinstance(scope, dict)
+                  and isinstance(scope.get("exclude"), list)
+                  and all(isinstance(x, str) for x in scope["exclude"]) else None)
+    if scope_list is not None and not args.ignore_manifest_scope:
+        excludes = scope_list
+        src = scope.get("exclude_source")
+        src = src if src in ("default", "custom") else "unrecognised"
         print(f"  excludes:      {len(excludes)} pattern(s) from the manifest's scope block (source={src})")
+        for pat in excludes[:50]:
+            print(f"                 - {_printable(pat, 120)}")
+        if len(excludes) > 50:
+            print(f"                 … and {len(excludes) - 50} more")
+        if args.exclude:
+            print("  [WARN] --exclude given but the manifest carries a scope block, which is "
+                  "authoritative — flags ignored (pass --ignore-manifest-scope to override)")
         # The scope block is self-checksummed (scope_hex). A mismatch means the
         # block was edited after anchoring. It is a WARNING, not a verdict: the
         # anchored value is root_hex alone, and the root decides below
         # (server/merkle.py, "LIMIT, stated plainly").
         recorded = scope.get("scope_hex")
-        if isinstance(recorded, str) and recorded != _scope_hex(scope):
+        if isinstance(recorded, str) and recorded != merkle.scope_hex(scope):
             print("  [WARN] scope_hex does not match the scope block — the scope was "
                   "edited after anchoring; the root comparison below still decides")
-    elif excludes is None:
-        print("  excludes:      standard deny-list (manifest carries no scope block)")
+    elif args.exclude:
+        excludes = args.exclude
+        why = "manifest scope ignored on request" if scope_list is not None else "manifest carries no scope block"
+        print(f"  excludes:      {len(excludes)} pattern(s) from --exclude ({why})")
+        for pat in excludes[:50]:
+            print(f"                 - {_printable(pat, 120)}")
     else:
-        print(f"  excludes:      {len(excludes)} pattern(s) from --exclude (overrides manifest scope)")
+        excludes = None
+        print("  excludes:      standard deny-list (manifest carries no scope block)")
 
     try:
         tree = merkle.MerkleTree.from_folder(folder, exclude=excludes)
@@ -297,11 +332,16 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         metavar="GLOB",
         help=(
-            "glob pattern to exclude (repeatable). Supplying any --exclude "
-            "REPLACES the default deny-list rather than extending it. "
-            "Verification must use the same excludes the folder was "
-            "anchored with, or the recomputed root cannot match."
+            "glob pattern to exclude (repeatable; any --exclude REPLACES the "
+            "default deny-list). Used for manifests WITHOUT a scope block; a "
+            "manifest's own scope.exclude is authoritative and wins unless "
+            "--ignore-manifest-scope is given."
         ),
+    )
+    pd.add_argument(
+        "--ignore-manifest-scope",
+        action="store_true",
+        help="walk with --exclude (or the default deny-list) even if the manifest records a scope block",
     )
 
     args = p.parse_args(argv)

@@ -559,3 +559,85 @@ class TestNoDuplicateTestBasenames(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# ---------------------------------------------------------------------------
+# Every collectible test file must be named by some CI workflow (2026-08-22).
+# The class this closes: capture/, tools/test_gate_read.py, zk-provenance/ and
+# marketplace/…/test_anchor.py existed for months and were run by NO workflow.
+# ---------------------------------------------------------------------------
+_WORKFLOWS = sorted((ROOT / ".github" / "workflows").glob("*.yml"))
+
+
+def _ci_pytest_paths() -> list[Path]:
+    """Every path token that follows `pytest` in a workflow `run:` line."""
+    import re as _re
+    out: list[Path] = []
+    for wf in _WORKFLOWS:
+        for line in wf.read_text().splitlines():
+            if "pytest" not in line or "run:" not in line and not line.strip().startswith("python3 -m pytest"):
+                continue
+            # tokens after "pytest" that look like paths (not flags)
+            tail = line.split("pytest", 1)[1]
+            for tok in tail.split():
+                if tok.startswith("-") or tok.startswith("$") or tok in ("&&", "||", "|"):
+                    continue
+                out.append(ROOT / tok)
+    return out
+
+
+def _covered_by_ci(test_file: Path, ci_paths: list[Path]) -> bool:
+    for p in ci_paths:
+        try:
+            test_file.resolve().relative_to(p.resolve())
+            return True
+        except ValueError:
+            continue
+    return False
+
+
+# Suites that are deliberately NOT in CI, each with the reason on record.
+_CI_EXEMPT = {
+    "tests/test_biweekly_safety_audit.py": "ignored explicitly in both workflows (--ignore)",
+    "sdk-node/test": "node suite, run by the sdk-node job via npm test",
+    "marketplace/orphograph-plugin/skills/orphograph-anchor/test_anchor.py":
+        "script-style self-runner (pytest collects 0 tests from it); run as "
+        "`python3 <path>`; converting it to pytest functions is a staged item",
+}
+
+
+class TestEveryTestFileIsRunByCI(unittest.TestCase):
+
+    def _orphans(self) -> list[str]:
+        ci_paths = _ci_pytest_paths()
+        orphans = []
+        for f in _all_test_files():
+            rel = str(f.relative_to(ROOT))
+            if any(rel.startswith(k) for k in _CI_EXEMPT):
+                continue
+            if f.suffix != ".py":
+                continue
+            if not _covered_by_ci(f, ci_paths):
+                orphans.append(rel)
+        return orphans
+
+    def test_negative_control_the_detector_can_hit(self):
+        """A path no workflow names must be reported as an orphan."""
+        fake = ROOT / "definitely-not-in-ci" / "test_ghost.py"
+        self.assertFalse(_covered_by_ci(fake, _ci_pytest_paths()))
+
+    def test_no_orphan_test_files(self):
+        orphans = self._orphans()
+        self.assertEqual(orphans, [],
+                         "test files run by NO workflow (add the path to the pytest line in "
+                         ".github/workflows/test.yml AND deploy.yml, or record an exemption "
+                         f"with its reason in _CI_EXEMPT): {orphans}")
+
+    def test_deploy_gate_is_not_weaker_than_ci(self):
+        """deploy.yml must name every pytest path test.yml names."""
+        t = (ROOT / ".github" / "workflows" / "test.yml").read_text()
+        d = (ROOT / ".github" / "workflows" / "deploy.yml").read_text()
+        for tok in ("tests/", "capture/", "tools/test_gate_read.py",
+                    "zk-provenance/test_zk_provenance.py", "sdk-python/tests/"):
+            self.assertIn(tok, t, f"test.yml lacks {tok}")
+            self.assertIn(tok, d, f"deploy.yml lacks {tok}")

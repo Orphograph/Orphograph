@@ -245,10 +245,13 @@ class TestDistVerifier(unittest.TestCase):
             self.assertEqual(scoped.returncode, 0, msg=scoped.stdout + scoped.stderr)
             self.assertIn("from the manifest's scope block", scoped.stdout)
 
-            # DIFFERENT explicit excludes: scratch.log is walked, root differs.
+            # DIFFERENT explicit excludes + the operator override: scratch.log is
+            # walked, root differs. (Without --ignore-manifest-scope the recorded
+            # scope is authoritative and the flag is ignored with a warning —
+            # VERIFIER_SPEC §4.2; pinned in the verification matrix.)
             bad = self._run_cli(
                 "folder", "--dir", str(folder), "--manifest", str(manifest_path),
-                "--exclude", "*.nothing",
+                "--ignore-manifest-scope", "--exclude", "*.nothing",
             )
             self.assertEqual(bad.returncode, 3, msg=bad.stdout + bad.stderr)
 

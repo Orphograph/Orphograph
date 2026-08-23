@@ -245,6 +245,19 @@ by `/api/verify_folder/<rid>`:
 - MUST rebuild with the same exclusion list used at anchor time. SDKs
   SHOULD accept a caller-supplied `exclude` for parity with anchoring
   (audit D2).
+- **Scope precedence (normative, 2026-08-22).** When the manifest carries a
+  `scope` block with an `exclude` list (Wedge 01), that list is
+  **authoritative**: verifiers that rebuild from disk MUST walk with it and
+  MUST NOT silently substitute a caller-supplied list. A caller-supplied
+  `exclude` applies only to manifests without a scope block. A verifier MAY
+  offer an explicit operator override (the offline kit: `--ignore-manifest-scope`)
+  and MUST say so in its output when it is used. When `scope.scope_hex` does
+  not match the block, the verifier SHOULD report it as a warning; the
+  verdict remains the `root_hex` comparison (the scope block is
+  self-checksummed, not anchored). Conformance: the Python SDK
+  (`verify_folder`), the offline kit (`verify.py folder`, `verify_lineage.py`)
+  follow this rule; the Node SDK and the MCP `anchor_folder` producer do not
+  yet write/read a scope block and are tracked as gaps in `docs/LIFECYCLE.md` §6.
 - The comparison is an exact match of lowercase hex strings.
 
 ---

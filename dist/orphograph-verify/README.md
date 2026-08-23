@@ -82,11 +82,16 @@ replaces the default deny-list rather than extending it (identical
 semantics to the Orphograph SDK CLI); with different excludes the
 recomputed root cannot match the manifest.
 
-You usually do not need the flags: manifests carry a `scope` block that
-records the excludes the anchor used, and `verify.py folder` applies it
-automatically when no `--exclude` is given (it prints which excludes it
-used, and a `[WARN]` if the scope block's self-checksum no longer matches —
-the root comparison still decides). Explicit `--exclude` always wins.
+You usually do not need the flags: manifests produced by the office or the
+Python SDK carry a `scope` block that records the excludes the anchor used,
+and `verify.py folder` walks with it (printing the patterns, and a `[WARN]`
+if the block's self-checksum no longer matches — the root comparison still
+decides). The recorded scope is authoritative (VERIFIER_SPEC §4.2, the same
+rule the Python SDK follows): `--exclude` flags apply to manifests without
+a scope block and are ignored with a warning otherwise, unless you pass
+`--ignore-manifest-scope` to say you mean it. Manifests from producers that
+do not yet write a scope block (e.g. the Node SDK) fall back to the flags or
+the default deny-list.
 
 ### Optional OpenTimestamps sub-check
 
@@ -125,7 +130,9 @@ returns exit code 4 — the core Merkle check is unaffected.
 Folder mode over 10,000 files in 50 directories (~15 MB of random bytes):
 anchor-side tree build 0.85 s, `verify.py folder` 0.87 s wall, Python 3.11 on
 an Apple-silicon laptop, 2026-08-22. Hashing is the cost; it scales with total
-bytes, not file count.
+bytes, not file count. Re-measure on your machine with
+`python3 tools/bench_verify_folder.py --files 10000 --dirs 50` from a repo
+checkout (the script prints both numbers).
 
 ## License
 

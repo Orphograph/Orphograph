@@ -8,8 +8,11 @@ Subcommands:
 
 Both ``anchor`` and ``verify`` accept repeatable ``--exclude GLOB`` flags.
 A folder anchored with custom excludes can only re-derive the same Merkle
-root when verified with the SAME excludes (AUDIT_VERIFIER_DRIFT D2) — the
-flag exists on both subcommands for exactly that reason.
+root when verified with the SAME excludes (AUDIT_VERIFIER_DRIFT D2). Since
+Wedge 01 the manifest records them in its ``scope`` block and ``verify``
+reads them from there (the manifest is authoritative — VERIFIER_SPEC §4.2);
+the ``--exclude`` flag on ``verify`` only applies to manifests that carry no
+scope block (issued before scope existed).
 """
 from __future__ import annotations
 
@@ -52,7 +55,8 @@ def _build_parser() -> argparse.ArgumentParser:
     exclude_help = (
         "Glob pattern to exclude (repeatable). Supplying any --exclude "
         "REPLACES the default deny-list rather than extending it. "
-        "Verification must use the same excludes the folder was anchored with."
+        "On verify: applies only to manifests without a scope block — a "
+        "manifest's recorded scope.exclude is authoritative (VERIFIER_SPEC §4.2)."
     )
 
     p_anchor = sub.add_parser("anchor", help="Anchor a folder.")

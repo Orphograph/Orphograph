@@ -26,7 +26,11 @@ jobs:
       # — server/app.py wraps these imports in try/except so prod stays up
       # without them, but CI exercises the full code path.
       - run: pip install --upgrade pip && pip install pytest cryptography PyYAML
-      - run: PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest tests/ -q --ignore=tests/test_biweekly_safety_audit.py
+      # Same line as test.yml (the deploy gate must not be weaker than CI):
+      # tests/ + the out-of-tree suites; zk-provenance last (see test.yml).
+      - run: PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest tests/ capture/ tools/test_gate_read.py zk-provenance/test_zk_provenance.py -q --ignore=tests/test_biweekly_safety_audit.py
+      # sdk-python needs its own interpreter (module-name clash with sdk/), same as test.yml.
+      - run: PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest sdk-python/tests/ -q
 
   deploy:
     needs: test
