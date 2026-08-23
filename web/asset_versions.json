@@ -203,6 +203,10 @@
     "version": "2",
     "sha256": "e13066c4284f453f2f17b3c56e0d1a7ff389d40119668ee784900eb157a76979"
   },
+  "/hero-envelope.js": {
+    "version": "1",
+    "sha256": "88182d60210b13de8c06102ee431f12aa5585c77c60ad330ff20aa0f8ea5ac50"
+  },
   "/founder/admin.css": {
     "version": "2",
     "sha256": "1f58f0bfc011b0276c387b7a0b689fbeade60b5293cfe62971d3b1a1e9896817"

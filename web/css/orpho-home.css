@@ -976,6 +976,222 @@
   margin: 0;
 }
 
+/* ══ Interactive envelope reveal (2026-08-23) ══════════════════════════
+ * Progressive enhancement: the unmodified plate remains the fully visible
+ * sample. hero-envelope.js adds .is-interactive only after all hooks exist,
+ * then the receipt becomes a letter peeking from the envelope pocket.
+ */
+.orpho-hero__plate.is-interactive {
+  perspective: 1200px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.orpho-envelope__pocket {
+  display: none;
+}
+
+.orpho-hero__plate.is-interactive .orpho-envelope__pocket {
+  display: block;
+  position: absolute;
+  z-index: 3;
+  left: 0;
+  right: 0;
+  top: 43%;
+  bottom: 0;
+  background:
+    linear-gradient(150deg, transparent 49.7%, rgba(118, 92, 55, 0.10) 50%, transparent 50.4%) left / 52% 100% no-repeat,
+    linear-gradient(210deg, transparent 49.7%, rgba(118, 92, 55, 0.10) 50%, transparent 50.4%) right / 52% 100% no-repeat,
+    linear-gradient(168deg, #f2eadb 0%, #e2d6bf 100%);
+  border-top: 1px solid rgba(118, 92, 55, 0.13);
+  box-shadow: inset 0 1px 0 rgba(255, 252, 245, 0.72);
+  pointer-events: none;
+}
+
+.orpho-hero__plate.is-interactive .orpho-envelope__flap {
+  z-index: 4;
+  transform-origin: 50% 0;
+  backface-visibility: hidden;
+}
+
+.orpho-hero__plate.is-ready .orpho-envelope__flap {
+  transition: transform 620ms cubic-bezier(.2, .72, .2, 1),
+              opacity 300ms ease, box-shadow 420ms ease;
+  transition-delay: 360ms, 360ms, 360ms;
+}
+
+.orpho-hero__plate.is-ready .orpho-envelope {
+  transition: transform 620ms cubic-bezier(.2, .72, .2, 1),
+              box-shadow 500ms ease;
+}
+
+.orpho-hero__plate.is-open .orpho-envelope {
+  transform: translateY(3px) scale(.997);
+  box-shadow: 0 28px 58px -25px var(--orpho-shadow-deep),
+              inset 0 1px 0 var(--orpho-emboss-lit);
+}
+
+.orpho-hero__plate.is-interactive .orpho-hero__receipt {
+  z-index: 2;
+  transform: translate3d(14%, 4%, 0) scale(.965) rotate(.2deg);
+  transform-origin: 50% 10%;
+  clip-path: inset(0 0 72% 0);
+  will-change: transform;
+}
+
+.orpho-hero__plate.is-ready .orpho-hero__receipt {
+  transition: transform 760ms cubic-bezier(.16, 1, .3, 1),
+              clip-path 260ms ease,
+              box-shadow 500ms ease;
+}
+
+.orpho-hero__plate.is-open .orpho-envelope__flap {
+  transform: rotateX(112deg) translateY(-5%);
+  opacity: .42;
+  box-shadow: 0 2px 3px -2px rgba(90, 70, 44, 0.18);
+  transition-delay: 0ms, 0ms, 0ms;
+}
+
+.orpho-hero__plate.is-open .orpho-hero__receipt,
+.orpho-hero__plate.is-closing .orpho-hero__receipt {
+  z-index: 6;
+  clip-path: inset(0);
+}
+
+.orpho-hero__plate.is-open .orpho-hero__receipt {
+  transform: translate3d(-4%, -13%, 34px) scale(1.035) rotate(-.35deg);
+  box-shadow: 0 32px 62px -24px rgba(59, 42, 21, .38),
+              0 8px 18px -12px rgba(59, 42, 21, .25);
+  transition-delay: 180ms, 120ms, 180ms;
+}
+
+.orpho-envelope__toggle {
+  display: none;
+}
+
+.orpho-hero__plate.is-interactive .orpho-envelope__toggle {
+  position: absolute;
+  z-index: 9;
+  right: .5%;
+  top: 54%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  min-width: 144px;
+  padding: 10px 14px 9px;
+  color: var(--orpho-ink);
+  background: rgba(248, 242, 228, .9);
+  border: 1px solid rgba(139, 108, 57, .42);
+  border-radius: 2px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .66),
+              0 5px 14px -9px rgba(57, 40, 21, .5);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.orpho-envelope__toggle-action {
+  font-family: var(--orpho-display);
+  font-size: .95rem;
+  line-height: 1.15;
+}
+
+.orpho-envelope__toggle-hint {
+  color: var(--orpho-ink-faint);
+  font-size: .62rem;
+  letter-spacing: .16em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+.orpho-envelope__toggle::after {
+  content: "\2197";
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  color: var(--orpho-gold-deep);
+  transform: translateY(-50%);
+  transition: transform 300ms ease;
+}
+
+.orpho-hero__plate.is-open .orpho-envelope__toggle::after {
+  transform: translateY(-50%) rotate(180deg);
+}
+
+/* Once open, the large instruction collapses to a quiet return control so
+ * the proof itself remains unobstructed. Its text stays as the accessible
+ * name and is only visually clipped. */
+.orpho-hero__plate.is-open .orpho-envelope__toggle,
+.orpho-hero__plate.is-closing .orpho-envelope__toggle {
+  width: 42px;
+  height: 42px;
+  min-width: 0;
+  padding: 0;
+  border-radius: 50%;
+}
+.orpho-hero__plate.is-open .orpho-envelope__toggle-action,
+.orpho-hero__plate.is-open .orpho-envelope__toggle-hint,
+.orpho-hero__plate.is-closing .orpho-envelope__toggle-action,
+.orpho-hero__plate.is-closing .orpho-envelope__toggle-hint {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.orpho-hero__plate.is-open .orpho-envelope__toggle::after,
+.orpho-hero__plate.is-closing .orpho-envelope__toggle::after {
+  right: 50%;
+  transform: translate(50%, -50%) rotate(180deg);
+}
+
+.orpho-envelope__toggle:hover {
+  border-color: var(--orpho-gold-deep);
+  background: rgba(252, 247, 236, .96);
+}
+
+.orpho-envelope__toggle:focus-visible {
+  outline: 2px solid var(--orpho-gold-deep);
+  outline-offset: 4px;
+}
+
+@media (max-width: 680px) {
+  .orpho-hero__plate.is-open,
+  .orpho-hero__plate.is-closing {
+    min-height: 780px;
+  }
+  .orpho-hero__plate.is-open .orpho-hero__receipt {
+    transform: translate3d(0, -8%, 24px) scale(.98) rotate(-.2deg);
+  }
+  .orpho-hero__plate.is-interactive .orpho-envelope__toggle {
+    right: 3%;
+    top: auto;
+    bottom: 2%;
+    min-width: 142px;
+    padding: 8px 12px;
+  }
+  .orpho-hero__plate.is-open .orpho-envelope__toggle,
+  .orpho-hero__plate.is-closing .orpho-envelope__toggle {
+    width: 42px;
+    min-width: 0;
+    padding: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .orpho-hero__plate.is-ready .orpho-envelope__flap,
+  .orpho-hero__plate.is-ready .orpho-envelope,
+  .orpho-hero__plate.is-ready .orpho-hero__receipt,
+  .orpho-envelope__toggle::after {
+    transition: none;
+  }
+}
+
 /* ══ TERMINAL BLOCK — mobile reassert (2026-08-10) ══════════════════════
  * Founder's phone screenshots: two squeezed columns at 390pt, receipt
  * clipped mid-word, wax adrift. Cause: correction passes 1–8 appended
