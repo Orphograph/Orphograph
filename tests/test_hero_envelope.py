@@ -59,7 +59,15 @@ def test_reveal_covers_keyboard_and_motion_preferences():
     assert 'setAttribute("aria-expanded"' in script
     assert 'requestAnimationFrame' in script
     assert "prefers-reduced-motion: reduce" in script
+    assert "CLOSE_SETTLE_MS" in script
+    assert "window.clearTimeout(settleTimer)" in script
     assert "prefers-reduced-motion: reduce" in styles
+
+
+def test_reveal_stages_flap_and_receipt_motion():
+    styles = STYLES.read_text(encoding="utf-8")
+    assert "transition-delay: 360ms, 360ms, 360ms" in styles
+    assert "transition-delay: 180ms, 120ms, 180ms" in styles
 
 
 def test_reveal_javascript_parses():

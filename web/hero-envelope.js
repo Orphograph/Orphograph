@@ -12,10 +12,13 @@
   if (!plate || !toggle || !receipt || !action) return;
 
   let open = false;
+  let settleTimer = 0;
+  const CLOSE_SETTLE_MS = 1050;
   const reducedMotion = window.matchMedia &&
     window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   function setOpen(next) {
+    window.clearTimeout(settleTimer);
     open = Boolean(next);
     plate.classList.toggle("is-open", open);
     plate.classList.toggle("is-closing", !open);
@@ -28,6 +31,12 @@
       // With transitions disabled there is no transitionend event to perform
       // the final tuck-behind-the-pocket layer change.
       plate.classList.remove("is-closing");
+    } else {
+      // transitionend is the fast path below. This deadline is the durable
+      // fallback for engines that omit it when transform layers are retimed.
+      settleTimer = window.setTimeout(() => {
+        if (!open) plate.classList.remove("is-closing");
+      }, CLOSE_SETTLE_MS);
     }
   }
 
@@ -57,6 +66,7 @@
 
   receipt.addEventListener("transitionend", (event) => {
     if (event.propertyName === "transform" && !open) {
+      window.clearTimeout(settleTimer);
       plate.classList.remove("is-closing");
     }
   });
