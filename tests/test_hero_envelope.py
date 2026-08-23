@@ -88,6 +88,11 @@ def test_tucked_receipt_geometry_is_envelope_bound():
     tucked = tucked.split("}", 1)[0]
     assert "left:" in tucked, "tucked receipt must set an explicit left bound"
     assert "right:" in tucked, "tucked receipt must set an explicit right bound"
+    assert "animation: none" in tucked, (
+        "interactive mode must disable the ambient orpho-float animation; "
+        "otherwise it masks every author transform and the open/close "
+        "motion never renders"
+    )
     assert "translate3d(0, 0, 0)" in tucked, (
         "tucked transform must be identity; lateral drift re-opens the escape"
     )
