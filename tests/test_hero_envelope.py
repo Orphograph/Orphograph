@@ -75,3 +75,26 @@ def test_reveal_javascript_parses():
     if not node:
         pytest.skip("node is not installed")
     subprocess.run([node, "--check", str(SCRIPT)], check=True)
+
+
+def test_tucked_receipt_geometry_is_envelope_bound():
+    """Regression for the 2026-08-23 misalignment: the tucked receipt escaped
+    the envelope at mid viewport widths because its position was a
+    receipt-relative translate on top of breakpoint-dependent plate geometry.
+    The interactive state must pin the receipt with explicit horizontal bounds
+    and reserve transform for motion only."""
+    styles = STYLES.read_text(encoding="utf-8")
+    tucked = styles.split(".orpho-hero__plate.is-interactive .orpho-hero__receipt", 1)[1]
+    tucked = tucked.split("}", 1)[0]
+    assert "left:" in tucked, "tucked receipt must set an explicit left bound"
+    assert "right:" in tucked, "tucked receipt must set an explicit right bound"
+    assert "translate3d(0, 0, 0)" in tucked, (
+        "tucked transform must be identity; lateral drift re-opens the escape"
+    )
+    # The old runaway nudge must not come back anywhere in the file.
+    assert "translate3d(14%" not in styles
+    # The open lift is vertical-only: no lateral component.
+    open_rule = styles.split(
+        ".orpho-hero__plate.is-open .orpho-hero__receipt {", 1
+    )[1].split("}", 1)[0]
+    assert "translate3d(0, -" in open_rule
