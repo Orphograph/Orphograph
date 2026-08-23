@@ -17,7 +17,7 @@
 <link rel="preload" as="font" type="font/woff2" href="/fonts/Spectral-400.woff2" crossorigin>
 <link rel="stylesheet" href="/css/orpho-tokens.css?v=2">
 <link rel="stylesheet" href="/css/orpho-primitives.css?v=3">
-<link rel="stylesheet" href="/css/orpho-home.css?v=8">
+<link rel="stylesheet" href="/css/orpho-home.css?v=9">
 <link rel="stylesheet" href="/index.css?v=21">
 <link rel="preload" as="image" href="/seal-display.png?v=8" fetchpriority="high">
 <meta name="copyright" content="© 2026 Orphograph. MIT — see /LICENSE">
@@ -125,21 +125,22 @@
       </p>
     </div>
 
-    <!-- Envelope → receipt → wax seal, stacked back-to-front.
-         aria-hidden: this is a picture of the product, not the product. The
-         real sample receipt lives further down with its canonical id. -->
-    <div class="orpho-hero__plate" aria-hidden="true">
+    <!-- Interactive product reveal. Without JavaScript this remains the same
+         fully visible sample receipt; hero-envelope.js progressively tucks it
+         into the envelope and enables the open/close controls. -->
+    <div class="orpho-hero__plate" id="hero-envelope">
       <div class="orpho-envelope">
         <span class="orpho-envelope__flap"></span>
         <span class="orpho-envelope__closure"></span>
         <span class="orpho-envelope__string" aria-hidden="true"></span>
+        <span class="orpho-envelope__pocket" aria-hidden="true"></span>
         <!-- Flap crest removed 2026-08-10 (founder): the debossed medallion
              on the flap never read right. The envelope carries the emblem
              once, where the reference puts it — the red wax seal below. -->
 
       </div>
 
-      <article class="orpho-receipt orpho-receipt--floating orpho-hero__receipt">
+      <article class="orpho-receipt orpho-receipt--floating orpho-hero__receipt" id="hero-sample-receipt">
         <p class="orpho-receipt__title">Orphograph Receipt</p>
         <p class="orpho-receipt__sub orpho-label">Empirical Notary</p>
         <hr class="orpho-rule orpho-rule--centered">
@@ -155,6 +156,13 @@
         <p class="orpho-receipt__sig">Orphograph</p>
         <p class="orpho-receipt__sig-sub orpho-label">Empirical Notary</p>
       </article>
+
+      <button class="orpho-envelope__toggle" id="hero-envelope-toggle" type="button"
+              aria-expanded="false" aria-controls="hero-sample-receipt"
+              aria-describedby="hero-envelope-hint">
+        <span class="orpho-envelope__toggle-action">Open the receipt</span>
+        <span class="orpho-envelope__toggle-hint" id="hero-envelope-hint">Click the envelope</span>
+      </button>
     </div>
   </div>
 </section>
@@ -513,5 +521,6 @@
 <script src="/assets/event.js?v=1" defer></script>
 <script src="/assets/scroll-depth.js?v=1" defer></script>
 <script src="/assets/drop-observer.js?v=1" defer></script>
+<script src="/hero-envelope.js?v=1" defer></script>
 </body>
 </html>
