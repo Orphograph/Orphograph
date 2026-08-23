@@ -245,9 +245,23 @@ def _verify_folder(args: argparse.Namespace) -> int:
     # producer that does not write one); with a scope present it is ignored
     # with a warning unless --ignore-manifest-scope says the operator means it.
     scope = manifest.get("scope")
-    scope_list = (list(scope["exclude"]) if isinstance(scope, dict)
-                  and isinstance(scope.get("exclude"), list)
-                  and all(isinstance(x, str) for x in scope["exclude"]) else None)
+    scope_list = None
+    scope_malformed = None
+    if scope is not None:
+        if not isinstance(scope, dict):
+            scope_malformed = f"scope is a {type(scope).__name__}, not an object"
+        elif not isinstance(scope.get("exclude"), list):
+            scope_malformed = "scope.exclude is not a list"
+        elif not all(isinstance(x, str) for x in scope["exclude"]):
+            scope_malformed = "scope.exclude has non-string entries"
+        else:
+            scope_list = list(scope["exclude"])
+    if scope_malformed:
+        # server/merkle.py from_manifest REJECTS such a manifest; here the root
+        # still decides, but the reader must be told the block is broken, not
+        # absent — "no scope block" would send them hunting for the wrong thing.
+        print(f"  [WARN] manifest scope block is malformed ({scope_malformed}) — "
+              f"ignoring it; walking with --exclude or the standard deny-list")
     if scope_list is not None and not args.ignore_manifest_scope:
         excludes = scope_list
         src = scope.get("exclude_source")
@@ -265,22 +279,34 @@ def _verify_folder(args: argparse.Namespace) -> int:
         # anchored value is root_hex alone, and the root decides below
         # (server/merkle.py, "LIMIT, stated plainly").
         recorded = scope.get("scope_hex")
-        if isinstance(recorded, str) and recorded != merkle.scope_hex(scope):
+        if recorded is None:
+            print("  [WARN] scope block carries no scope_hex — edits to the scope cannot "
+                  "be detected; the root comparison below still decides")
+        elif not isinstance(recorded, str) or recorded != merkle.scope_hex(scope):
             print("  [WARN] scope_hex does not match the scope block — the scope was "
                   "edited after anchoring; the root comparison below still decides")
     elif args.exclude:
         excludes = args.exclude
-        why = "manifest scope ignored on request" if scope_list is not None else "manifest carries no scope block"
+        why = ("manifest scope ignored on request" if scope_list is not None
+               else "manifest scope block ignored as malformed" if scope_malformed
+               else "manifest carries no scope block")
         print(f"  excludes:      {len(excludes)} pattern(s) from --exclude ({why})")
         for pat in excludes[:50]:
             print(f"                 - {_printable(pat, 120)}")
     else:
         excludes = None
-        print("  excludes:      standard deny-list (manifest carries no scope block)")
+        why = "manifest scope block ignored as malformed" if scope_malformed else "manifest carries no scope block"
+        print(f"  excludes:      standard deny-list ({why})")
 
     try:
         tree = merkle.MerkleTree.from_folder(folder, exclude=excludes)
     except ValueError as e:
+        if excludes is not None and scope_list is not None and excludes == scope_list \
+                and any(p.is_file() for p in folder.rglob("*")):
+            print("  [FAIL] the manifest's scope.exclude matches EVERY file in this folder — "
+                  "the recorded scope, not the folder, is the cause (pass "
+                  "--ignore-manifest-scope to walk with your own excludes)")
+            return 3
         print(f"  [FAIL] could not build tree from folder: {e}")
         return 3
     actual_root = tree.root_hex()

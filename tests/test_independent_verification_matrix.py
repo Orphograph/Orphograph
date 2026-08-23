@@ -408,9 +408,11 @@ class TestIndependentVerificationMatrix(unittest.TestCase):
     def _scoped(self, td: str):
         """One folder with a stray *.tmp, anchored with exclude=['*.tmp']; returns
         (fixture, scoped manifest path, manifest dict). Shared by the scope rows."""
-        fx = _Fixture(Path(td), extra_files={"ignore-me.tmp": b"scratch"}, exclude=["*.tmp"])
+        # *.log is NOT in the standard deny-list (unlike *.tmp), so a walk that
+        # ignores the recorded scope really does include the stray file.
+        fx = _Fixture(Path(td), extra_files={"ignore-me.log": b"scratch"}, exclude=["*.log"])
         m = fx.tree.manifest()
-        self.assertEqual(m["scope"]["exclude"], ["*.tmp"])
+        self.assertEqual(m["scope"]["exclude"], ["*.log"])
         return fx, fx.manifest_path, m
 
     def test_custom_exclude_folder_verifies_with_no_flags_via_manifest_scope(self):
@@ -422,7 +424,7 @@ class TestIndependentVerificationMatrix(unittest.TestCase):
             out = self._run("folder", "--dir", str(fx.folder), "--manifest", str(mpath), ots_mode=None)
             self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
             self.assertIn("from the manifest's scope block", out.stdout)
-            self.assertIn("- *.tmp", out.stdout)
+            self.assertIn("- *.log", out.stdout)
             self.assertNotIn("[WARN]", out.stdout)
 
     def test_flags_are_ignored_with_a_warning_when_the_manifest_has_a_scope(self):
@@ -472,6 +474,51 @@ class TestIndependentVerificationMatrix(unittest.TestCase):
                             "--exclude", "*.nothing", ots_mode=None)
             self.assertEqual(out.returncode, 3, out.stdout + out.stderr)
             self.assertIn("manifest carries no scope block", out.stdout)
+
+    def test_no_scope_custom_anchor_no_flags_is_the_documented_false_negative(self):
+        """Producers that write no scope block (Node SDK, browser) + a custom
+        exclude at anchor + no flags → exit 3. Pinned so a future 'infer the
+        excludes' change cannot flip FAIL→PASS silently (LIFECYCLE §6.6)."""
+        with tempfile.TemporaryDirectory() as td:
+            fx, _, m = self._scoped(td)
+            m.pop("scope")
+            mpath = fx.td / "no-scope-custom.json"
+            mpath.write_text(json.dumps(m))
+            out = self._run("folder", "--dir", str(fx.folder), "--manifest", str(mpath), ots_mode=None)
+            self.assertEqual(out.returncode, 3, out.stdout + out.stderr)
+            self.assertIn("standard deny-list", out.stdout)
+
+    def test_scope_without_scope_hex_warns_that_edits_are_undetectable(self):
+        with tempfile.TemporaryDirectory() as td:
+            fx, _, m = self._scoped(td)
+            m["scope"].pop("scope_hex")
+            mpath = fx.td / "no-hash.json"
+            mpath.write_text(json.dumps(m))
+            out = self._run("folder", "--dir", str(fx.folder), "--manifest", str(mpath), ots_mode=None)
+            self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
+            self.assertIn("[WARN] scope block carries no scope_hex", out.stdout)
+
+    def test_malformed_scope_is_reported_as_malformed_not_absent(self):
+        with tempfile.TemporaryDirectory() as td:
+            fx, _, m = self._scoped(td)
+            m["scope"]["exclude"] = "*.tmp"  # a string, not a list
+            mpath = fx.td / "malformed-scope.json"
+            mpath.write_text(json.dumps(m))
+            out = self._run("folder", "--dir", str(fx.folder), "--manifest", str(mpath), ots_mode=None)
+            self.assertIn("[WARN] manifest scope block is malformed (scope.exclude is not a list)", out.stdout)
+            self.assertNotIn("manifest carries no scope block", out.stdout)
+
+    def test_scope_that_excludes_everything_is_blamed_on_the_scope(self):
+        with tempfile.TemporaryDirectory() as td:
+            fx, _, m = self._scoped(td)
+            m["scope"]["exclude"] = ["*"]
+            m["scope"]["scope_hex"] = merkle.scope_hex(m["scope"])
+            mpath = fx.td / "exclude-all.json"
+            mpath.write_text(json.dumps(m))
+            out = self._run("folder", "--dir", str(fx.folder), "--manifest", str(mpath), ots_mode=None)
+            self.assertEqual(out.returncode, 3, out.stdout + out.stderr)
+            self.assertIn("matches EVERY file in this folder", out.stdout)
+            self.assertNotIn("Empty folders are not supported", out.stdout)
 
     # ---- hostile manifest strings cannot forge verdict lines in stdout ----
 

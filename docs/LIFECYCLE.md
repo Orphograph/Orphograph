@@ -117,6 +117,10 @@ is an additive change (new optional field) — staged follow-up §6.1.
 | Scope — operator override | `--ignore-manifest-scope --exclude *.nothing` | exit 3; "manifest scope ignored on request" | `test_ignore_manifest_scope_makes_flags_apply` |
 | Scope — edited block | `scope.instruction` changed after anchoring | exit 0 + `[WARN] scope_hex does not match` (root decides) | `test_edited_scope_block_warns_but_root_decides` |
 | Scope — absent | manifest without `scope` | exit 0 "standard deny-list"; flags DO apply (wrong flags → exit 3, "manifest carries no scope block") | `test_manifest_without_scope_uses_flags_then_standard_denylist` |
+| Scope — producer wrote none, custom anchor | no `scope`, anchored with `*.tmp` excluded, no flags | exit 3 (the documented false negative for scope-less producers — §6.6/§6.7) | `test_no_scope_custom_anchor_no_flags_is_the_documented_false_negative` |
+| Scope — no `scope_hex` | block without its checksum | exit 0 + `[WARN] scope block carries no scope_hex` | `test_scope_without_scope_hex_warns_that_edits_are_undetectable` |
+| Scope — malformed | `scope.exclude` is a string | `[WARN] manifest scope block is malformed (…)`, never "no scope block" | `test_malformed_scope_is_reported_as_malformed_not_absent` |
+| Scope — excludes everything | `scope.exclude = ["*"]` | exit 3; "matches EVERY file in this folder" (the scope is blamed, not the folder) | `test_scope_that_excludes_everything_is_blamed_on_the_scope` |
 | Hostile strings — root | `root_hex` = `"zz\n  [OK] …"` | exit 3; no forged `[OK]` line; `<not a 64-hex string …>` | `test_hostile_root_hex_is_not_echoed_raw` |
 | Hostile strings — scope | `exclude_source` / a pattern carrying a newline + `[OK]` | no forged line; `source=unrecognised` | `test_hostile_exclude_source_and_pattern_are_sanitised` |
 
