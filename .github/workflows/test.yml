@@ -33,7 +33,15 @@ jobs:
       - name: Run pytest (same command as the deploy gate)
         env:
           PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
-        run: python3 -m pytest tests/ -q --ignore=tests/test_biweekly_safety_audit.py
+        # One pytest process covers tests/ PLUS the out-of-tree suites that were
+        # run by NO workflow until 2026-08-22 (capture daemon/USB/attest, gate
+        # reader, marketplace plugin skill, zk-provenance engine). They share no
+        # module names with tests/ (verified), so one interpreter is fine — unlike
+        # sdk-python below. zk-provenance stays LAST: its final test mutates
+        # ORPHO_DATA_DIR/sys.modules for the process. deploy.yml runs the SAME line;
+        # tests/test_repo_hygiene.py asserts every collectible test file is named
+        # by some workflow, so the next orphan suite fails CI instead of rotting.
+        run: python3 -m pytest tests/ capture/ tools/test_gate_read.py zk-provenance/test_zk_provenance.py -q --ignore=tests/test_biweekly_safety_audit.py
 
       # sdk-python/ ships its own package ALSO named `orphograph`, distinct from
       # sdk/orphograph, so the two cannot share one pytest process -- they fight

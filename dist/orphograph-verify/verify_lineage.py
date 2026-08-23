@@ -229,7 +229,20 @@ def _check_link(rid: str, entry: dict) -> tuple[int, str | None, list[str]]:
     # at anchor time. Also enforces the supported algorithm/version tags.
     try:
         merkle.MerkleTree.from_manifest(manifest)
-    except (KeyError, TypeError, ValueError) as e:
+    except ValueError as e:
+        if "scope_hex" in str(e):
+            # Same policy as verify.py folder: an edited scope block is a
+            # WARNING, not a verdict — the anchored value is root_hex alone.
+            # Re-derive the leaves without the scope so the root still decides.
+            msgs.append("[WARN] manifest scope_hex does not match its scope block "
+                        "(edited after anchoring); root comparison still decides")
+            try:
+                merkle.MerkleTree.from_manifest({k: v for k, v in manifest.items() if k != "scope"})
+            except (KeyError, TypeError, ValueError) as e2:
+                return EXIT_LINK, None, [f"manifest recomputation failed: {e2}"]
+        else:
+            return EXIT_LINK, None, [f"manifest recomputation failed: {e}"]
+    except (KeyError, TypeError) as e:
         return EXIT_LINK, None, [f"manifest recomputation failed: {e}"]
     msgs.append("manifest leaves re-derive and fold to root_hex: OK")
 
@@ -303,6 +316,12 @@ def _check_content(entry: dict, draft_dir: Path, parent_root: str | None,
     reserved leaf when the link commits a parent. Pure re-use of the vendored
     merkle primitives; no sidecar file on disk is needed."""
     receipt = entry["receipt"]
+    # VERIFIER_SPEC §4.2: the link's own manifest scope is authoritative when
+    # present; the caller's --exclude applies only to scope-less manifests.
+    scope = (entry.get("manifest") or {}).get("scope") if isinstance(entry.get("manifest"), dict) else None
+    if isinstance(scope, dict) and isinstance(scope.get("exclude"), list) \
+            and all(isinstance(x, str) for x in scope["exclude"]):
+        exclude = list(scope["exclude"])
     try:
         disk_leaves = merkle.MerkleTree.from_folder(draft_dir, exclude=exclude).manifest()["leaves"]
     except ValueError as e:

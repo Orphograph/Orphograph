@@ -211,12 +211,15 @@ class TestDistVerifier(unittest.TestCase):
     # ---- AUDIT D2 (custom excludes) — folder mode accepts --exclude ----
 
     def test_folder_mode_custom_exclude_roundtrip(self):
-        """A folder anchored with custom excludes verifies only with the
-        SAME --exclude flags; without them the root mismatch is a FAIL.
+        """A folder anchored with custom excludes verifies with the SAME
+        excludes — supplied explicitly, or (since 2026-08-22) read from the
+        manifest's own `scope` block when no flag is given; DIFFERENT
+        explicit excludes are a root mismatch, exit 3.
 
         Pre-fix, verify.py had no --exclude at all: custom-exclude
         manifests could NEVER verify (permanent false negative, exit 3,
-        and --exclude was an argparse error).
+        and --exclude was an argparse error). Before the scope read, a
+        holder who did not retype the flags got the same false negative.
         """
         with tempfile.TemporaryDirectory() as td:
             folder = Path(td) / "evidence"
@@ -235,9 +238,20 @@ class TestDistVerifier(unittest.TestCase):
             self.assertEqual(ok.returncode, 0, msg=ok.stdout + ok.stderr)
             self.assertIn("[OK]", ok.stdout)
 
-            # Default excludes: scratch.log is included, root differs.
-            bad = self._run_cli(
+            # No flags: the manifest's scope block supplies `*.log` → verifies.
+            scoped = self._run_cli(
                 "folder", "--dir", str(folder), "--manifest", str(manifest_path)
+            )
+            self.assertEqual(scoped.returncode, 0, msg=scoped.stdout + scoped.stderr)
+            self.assertIn("from the manifest's scope block", scoped.stdout)
+
+            # DIFFERENT explicit excludes + the operator override: scratch.log is
+            # walked, root differs. (Without --ignore-manifest-scope the recorded
+            # scope is authoritative and the flag is ignored with a warning —
+            # VERIFIER_SPEC §4.2; pinned in the verification matrix.)
+            bad = self._run_cli(
+                "folder", "--dir", str(folder), "--manifest", str(manifest_path),
+                "--ignore-manifest-scope", "--exclude", "*.nothing",
             )
             self.assertEqual(bad.returncode, 3, msg=bad.stdout + bad.stderr)
 

@@ -18,7 +18,7 @@ that is spread across `server/engine.py`, `server/merkle.py`,
 | # | Stage | What exists after it | Where it is produced | Where it is read |
 |---|---|---|---|---|
 | 1 | **Capture** | bytes of an artifact (file, folder, text, agent output) and its SHA-256 (and, for files, SHA-512 sibling) | browser (`web/`), capture daemon (`capture/`), watch folder (`integrations/watch-folder/`), SDKs, MCP `orphograph_anchor_*`, GitHub Action | — |
-| 2 | **Manifest** | for folders: RFC 6962 Merkle tree; `manifest.json` with `root_hex`, `leaves[]` (`path`, `file_sha256_hex`), and the `scope` block recording what was excluded (Wedge 01, `tests/test_manifest_scope.py`; the scope block sits beside the root and does not change it) | `server/merkle.py` (server) and the SDKs' Merkle modules write the scope block; the vendored `dist/orphograph-verify/merkle.py` recomputes roots only and does **not** read `scope` — the user passes the same `--exclude` flags the anchor used (see `verify.py --help`). Auto-applying `scope.excludes` in the dist verifier is a staged additive item (§6) | every folder verifier |
+| 2 | **Manifest** | for folders: RFC 6962 Merkle tree; `manifest.json` with `root_hex`, `leaves[]` (`path`, `file_sha256_hex`), and the `scope` block recording what was excluded (Wedge 01, `tests/test_manifest_scope.py`; the scope block sits beside the root and does not change it) | `server/merkle.py` (server) and the Python SDK's `_merkle.py` write the scope block; the Node SDK and the MCP `anchor_folder` producer do **not** yet (§6.6, §6.7). The vendored `dist/orphograph-verify/merkle.py` is a byte-refreshed copy of the server module (one `scope_hex`). Rule (VERIFIER_SPEC §4.2): a recorded scope is authoritative — `verify.py folder` and `verify_lineage.py --dir` walk with it, print the patterns, warn (not fail) if `scope_hex` no longer matches (root decides), ignore `--exclude` with a warning when a scope exists unless `--ignore-manifest-scope`; flags apply to scope-less manifests (tests in §4) | every folder verifier |
 | 3 | **Receipt** | `receipt.json` (`receipt_id`, `hash_hex`, timestamps, optional `lineage`, optional `zk_provenance`, optional C2PA preservation) + one `.ots` per calendar | `server/engine.py` `anchor_*` | `/r/<id>`, `/api/receipt/<id>`, SDK `verify()`, MCP `verify_receipt` |
 | 4 | **Verification (structural)** | per-`.ots` checks `{magic_ok, hash_match, ok}`; `found`; `supplied_matches_receipt` | `server/engine.py:verify_receipt`, `verify_hash_against_receipt` | web/SDK/MCP |
 | 5 | **Preservation** | the receipt directory is immutable ("the books", `docs/LOG_RETENTION_POLICY.md` §2.1); `.ots` proofs are **upgraded** in place as calendars confirm (`ots upgrade`); C2PA manifests carried alongside, never rewritten | `server/`, renewal path `docs/DESIGN_RENEWAL_PATH.md` | — |
@@ -112,6 +112,17 @@ is an additive change (new optional field) — staged follow-up §6.1.
 | Invalid chain | client rejected it | exit 4, `FAILED`, no `UNAVAILABLE` | `test_client_rejection_is_failed_not_unavailable` |
 | Confirmed | client confirmed a Bitcoin block | exit 0, `VERIFIED` | `test_client_confirmation_is_verified_exit_0` |
 | Invalid vs indeterminate | the two above, side by side | same exit 4; stdout tokens never co-occur | `test_invalid_and_indeterminate_share_exit_4_but_differ_on_stdout` |
+| Scope — custom excludes, no flags | folder anchored with `--exclude *.tmp`; verifier given no flags | exit 0; "from the manifest's scope block"; patterns printed | `test_custom_exclude_folder_verifies_with_no_flags_via_manifest_scope` |
+| Scope — flags vs recorded scope | wrong `--exclude` passed, manifest has a scope | exit 0 + `[WARN] --exclude given but the manifest carries a scope block` (scope is authoritative — VERIFIER_SPEC §4.2) | `test_flags_are_ignored_with_a_warning_when_the_manifest_has_a_scope` |
+| Scope — operator override | `--ignore-manifest-scope --exclude *.nothing` | exit 3; "manifest scope ignored on request" | `test_ignore_manifest_scope_makes_flags_apply` |
+| Scope — edited block | `scope.instruction` changed after anchoring | exit 0 + `[WARN] scope_hex does not match` (root decides) | `test_edited_scope_block_warns_but_root_decides` |
+| Scope — absent | manifest without `scope` | exit 0 "standard deny-list"; flags DO apply (wrong flags → exit 3, "manifest carries no scope block") | `test_manifest_without_scope_uses_flags_then_standard_denylist` |
+| Scope — producer wrote none, custom anchor | no `scope`, anchored with `*.tmp` excluded, no flags | exit 3 (the documented false negative for scope-less producers — §6.6/§6.7) | `test_no_scope_custom_anchor_no_flags_is_the_documented_false_negative` |
+| Scope — no `scope_hex` | block without its checksum | exit 0 + `[WARN] scope block carries no scope_hex` | `test_scope_without_scope_hex_warns_that_edits_are_undetectable` |
+| Scope — malformed | `scope.exclude` is a string | `[WARN] manifest scope block is malformed (…)`, never "no scope block" | `test_malformed_scope_is_reported_as_malformed_not_absent` |
+| Scope — excludes everything | `scope.exclude = ["*"]` | exit 3; "matches EVERY file in this folder" (the scope is blamed, not the folder) | `test_scope_that_excludes_everything_is_blamed_on_the_scope` |
+| Hostile strings — root | `root_hex` = `"zz\n  [OK] …"` | exit 3; no forged `[OK]` line; `<not a 64-hex string …>` | `test_hostile_root_hex_is_not_echoed_raw` |
+| Hostile strings — scope | `exclude_source` / a pattern carrying a newline + `[OK]` | no forged line; `source=unrecognised` | `test_hostile_exclude_source_and_pattern_are_sanitised` |
 
 Expired or revoked key: **not applicable to `verify.py`** — it checks no
 signature and no key. Two neighbours in the same bundle do touch keys:
@@ -148,11 +159,20 @@ toward the third, and makes no claim on the other three.
    or expiry input; until then the limitation in §4 stands.
 3. **Manifest-signature check in the dist bundle** — optional Ed25519 check
    mirroring `verifier-js/orphograph_signature.js`.
-4. **Dist verifier reads `scope.excludes`** — so a folder anchored with
-   custom excludes verifies without retyping the flags (§1 row 2).
+4. ~~**Dist verifier reads `scope.excludes`**~~ — DONE (2026-08-22, second
+   cycle): `verify.py folder` applies `scope.exclude` when no `--exclude` is
+   given; four matrix rows pin it (§4).
 5. **Lineage + hw + zk + renewal verifiers in the §4 matrix** — today the
    matrix drives `verify.py` only; their exit codes are pinned by their own
    tests (`tests/test_edit_lineage.py`, `tests/test_verify_hw.py`, …).
+6. **Node SDK scope block** — `sdk-node/src/merkle.ts` writes no `scope`
+   and `verifyFolder` reads none; a folder anchored via sdk-node with custom
+   excludes still has the retype-the-flags trap. Additive: port `build_scope`
+   and read `scope.exclude` per VERIFIER_SPEC §4.2.
+7. **MCP `anchor_folder` scope block** — `mcp/orphograph_mcp.py` builds
+   manifests with its own `_FOLDER_EXCLUDE` copy and no scope; its manifests
+   verify only while that copy equals the server default list. Additive:
+   emit `build_scope(exclude=…, exclude_source="default")`.
 
 The external run report that tracks these across cycles lives outside the
 repo (`~/full-cycle-reports/2026-08-22_claude_codex_coexistence/ORPHOGRAPH_PRODUCTIZATION.md`);

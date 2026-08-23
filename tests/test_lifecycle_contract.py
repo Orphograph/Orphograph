@@ -190,6 +190,50 @@ class TestLifecycleContract(unittest.TestCase):
         self.assertNotIn("tracked in\n`ORPHOGRAPH_PRODUCTIZATION.md`", self.doc)
         self.assertIn("## 6. Staged follow-ups", self.doc)
 
+    # ---- scope-precedence contract: every shipped copy says the same thing ----
+
+    _OLD_SCOPE_PHRASES = (
+        "the office does not record it",
+        "must supply the same exclude patterns",
+        "pass the same repeatable --exclude",
+        "verification must use the same excludes",
+        "explicit `--exclude` always wins",
+        "overrides manifest scope)",
+    )
+
+    def test_scope_precedence_is_stated_once_and_copies_agree(self):
+        """VERIFIER_SPEC §4.2 is the one normative statement (manifest scope is
+        authoritative). No shipped copy may still carry the pre-scope contract
+        ('the office does not record it', 'must supply the same excludes') or
+        the briefly-shipped opposite rule ('explicit --exclude always wins')."""
+        spec = (ROOT / "docs" / "VERIFIER_SPEC.md").read_text()
+        self.assertIn("Scope precedence (normative", spec)
+        copies = {
+            "dist README.md": self.readme,
+            "verify.py docstring": self.verify_docstring,
+            "dist QUICKSTART.txt": (DIST / "QUICKSTART.txt").read_text(),
+            "web/method/folder-merkle.html": (ROOT / "web" / "method" / "folder-merkle.html").read_text(),
+            "sdk-python _cli.py": (ROOT / "sdk-python" / "orphograph" / "_cli.py").read_text(),
+            "docs/LIFECYCLE.md": self.doc,
+        }
+        for label, text in copies.items():
+            low = " ".join(text.lower().split())
+            for phrase in self._OLD_SCOPE_PHRASES:
+                self.assertNotIn(phrase, low, f"{label} still carries old scope wording: {phrase!r}")
+        # and the copies that describe the walk name the authority explicitly
+        for label in ("dist README.md", "dist QUICKSTART.txt", "verify.py docstring", "docs/LIFECYCLE.md"):
+            self.assertIn("authoritative", copies[label].lower(), f"{label} does not say the recorded scope is authoritative")
+
+    def test_vendored_merkle_is_byte_fresh_vs_server(self):
+        """One definition of scope_hex: the dist copy must be the server module
+        (after its banner), and the banner's sha must be the server file's."""
+        import hashlib
+        server = (ROOT / "server" / "merkle.py").read_bytes()
+        vendored = (DIST / "merkle.py").read_text()
+        body = vendored[vendored.index('"""merkle.py'):]
+        self.assertEqual(body.encode(), server[len(b"#!/usr/bin/env python3\n"):].lstrip(b"\n"))
+        self.assertIn(hashlib.sha256(server).hexdigest(), vendored)
+
     def test_doc_states_what_is_not_proven(self):
         for phrase in ("no identity assurance", "no legal admissibility", "no AI-detection", "no authorship"):
             self.assertIn(phrase, self.doc)

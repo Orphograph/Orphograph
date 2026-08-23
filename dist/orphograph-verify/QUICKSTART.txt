@@ -28,9 +28,14 @@ To re-hash a whole folder and check it matches a folder receipt:
 
   python3 verify.py folder --dir YOUR_FOLDER --manifest MANIFEST.json --ots ROOT.ots
 
-If the folder was anchored with custom exclude patterns, pass the same
-repeatable --exclude GLOB flags here (any --exclude replaces the default
-deny-list); with different excludes the recomputed root cannot match.
+If the folder was anchored with custom exclude patterns you usually need
+no flags: manifests written by the office or the Python SDK carry a `scope`
+block with the excludes used, and folder mode walks with it (and prints the
+patterns). That recorded scope is authoritative; --exclude GLOB flags apply
+to manifests WITHOUT a scope block (any --exclude replaces the default
+deny-list) and are ignored with a warning otherwise, unless you pass
+--ignore-manifest-scope. With different excludes the recomputed root cannot
+match. Manifests without a scope block fall back to the default deny-list.
 
 Everything above is STRUCTURAL: hashes are recomputed and compared
 locally, and no network call is made. It does not consult Bitcoin.
