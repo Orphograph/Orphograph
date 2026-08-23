@@ -1079,10 +1079,10 @@
 }
 
 @media (max-width: 680px) {
+  /* top inherits the base 26% — only the horizontal bounds tighten. */
   .orpho-hero__plate.is-interactive .orpho-hero__receipt {
     left: 5%;
     right: 5%;
-    top: 26%;
   }
 }
 
