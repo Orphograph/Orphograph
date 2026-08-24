@@ -115,8 +115,10 @@ def test_envelope_reads_as_a_mailing_letter():
     interactive = styles.split("Interactive envelope reveal", 1)[1]
     assert ".orpho-envelope__string { z-index: 5; }" in interactive
     assert ".orpho-envelope__closure { z-index: 6; }" in interactive
-    assert "polygon(0 100%, 50% 7%, 100% 100%)" in interactive, (
-        "bottom fold triangle must run corner-to-apex"
+    assert "polygon(6% 100%, 16% 5%, 84% 5%, 94% 100%)" in interactive, (
+        "the bottom flap is a TRAPEZOID: its slanted edges are the corner "
+        "creases and must run out to the side seams, not meet at a floating "
+        "apex (pass 12, real-envelope fidelity)"
     )
     assert 'class="orpho-receipt__crest"' in html
     assert "orpho-receipt__crest" in styles
@@ -183,3 +185,47 @@ def test_genie_emerges_from_inside_and_clicks_are_guarded():
         "consult the same in-flight guard"
     )
     assert "setOpen(false);" in script and "requestClose()" in script
+
+
+
+def test_envelope_paper_is_real_and_never_a_stacking_context():
+    """Pass 12. Paper needs grain, thickness and seams; and the grain must
+    ride as a BACKGROUND layer, because any overlay element or any
+    transform/filter/opacity on .orpho-envelope turns it into a stacking
+    context, flattens the pocket/receipt z-order and silently kills the
+    emerge-from-inside animation (the #185 defect)."""
+    styles = STYLES.read_text(encoding="utf-8")
+    assert "--orpho-grain" in styles and "feTurbulence" in styles, (
+        "paper needs grain, not just gradients"
+    )
+    assert "background-blend-mode" in styles, "grain must blend, not overlay"
+
+    # Every .orpho-envelope rule block: no stacking-context trigger.
+    banned = ("transform:", "filter:", "will-change:", "opacity:")
+    for chunk in styles.split(".orpho-envelope {")[1:]:
+        body = chunk.split("}", 1)[0]
+        for prop in banned:
+            assert prop not in body, (
+                f".orpho-envelope must never declare {prop} — it becomes a "
+                "stacking context and flattens the reveal's z-order"
+            )
+
+
+def test_hero_receipt_title_cannot_wrap():
+    """Regression for a defect shipped live in #185: symmetric 62px crest
+    clearance took 124px off a ~435px title box and wrapped "Orphograph
+    Receipt" onto two lines. The guarantee is structural, not a magic
+    padding number."""
+    styles = STYLES.read_text(encoding="utf-8")
+    blocks = [c.split("}", 1)[0] for c in
+              styles.split(".orpho-hero__receipt .orpho-receipt__title {")[1:]]
+    assert blocks, "the hero strip title needs its own rule"
+    assert any("white-space: nowrap" in b for b in blocks), (
+        "the strip title must never wrap"
+    )
+    assert all("white-space: normal" not in b for b in blocks), (
+        "no later rule may undo the nowrap guarantee"
+    )
+    assert any("font-size" in b for b in blocks), (
+        "it must be sized to fit the reduced box"
+    )
