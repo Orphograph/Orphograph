@@ -1093,8 +1093,10 @@
 }
 
 .orpho-hero__plate.is-ready .orpho-envelope {
-  transition: transform 620ms cubic-bezier(.2, .72, .2, 1),
-              box-shadow 500ms ease;
+  /* Only box-shadow changes on this element now — the open press-down is
+   * shadow-only, deliberately, so the envelope never becomes a stacking
+   * context and never flattens the pocket/receipt z-order. */
+  transition: box-shadow 500ms ease;
 }
 
 .orpho-hero__plate.is-open .orpho-envelope {
@@ -1120,6 +1122,12 @@
    * killing the open/close motion. Interactive mode owns the transform
    * channel; the non-JS page keeps its float. */
   animation: none;
+  /* Closed shows ONLY the envelope. A percentage clip is relative to the
+   * receipt, which is much taller than the envelope on narrow viewports —
+   * at 560px a 55% clip still spilled the hash rows past the envelope's
+   * bottom edge. visibility is exact at every width and every text wrap;
+   * the open/closing states below turn it back on. */
+  visibility: hidden;
   transform: translate3d(0, 0, 0);
   transform-origin: 50% 0;
   clip-path: inset(0 0 55% 0);
@@ -1157,6 +1165,7 @@
 
 .orpho-hero__plate.is-open .orpho-hero__receipt,
 .orpho-hero__plate.is-closing .orpho-hero__receipt {
+  visibility: visible;
   z-index: 6;
   clip-path: inset(0);
 }
@@ -1182,15 +1191,21 @@
    * from the settled tucked state — re-opening mid-close stays on the
    * transition path and reverses smoothly instead of teleporting. */
   @keyframes orpho-genie {
-    0%   { z-index: 2; clip-path: inset(0 0 55% 0); transform: translate3d(0, 0, 0) scale(1, .5); }
-    18%  { clip-path: inset(0 0 44% 0); transform: translate3d(0, -8%, 0) scale(1, .74) skewY(-1deg); }
-    52%  { z-index: 2; clip-path: inset(0 0 6% 0); transform: translate3d(0, -34%, 0) scale(1, 1.02) skewY(.8deg); }
+    0%   { z-index: 2; clip-path: inset(0 0 72% 0); transform: translate3d(0, 0, 0) scale(1, .3); }
+    20%  { clip-path: inset(0 0 52% 0); transform: translate3d(0, -10%, 0) scale(1, .6) skewY(-1deg); }
+    52%  { z-index: 2; clip-path: inset(0 0 8% 0); transform: translate3d(0, -34%, 0) scale(1, 1.02) skewY(.8deg); }
     56%  { z-index: 6; clip-path: inset(0); }
     76%  { transform: translate3d(0, -46%, 34px) scale(1.05, 1.04) skewY(-.4deg); }
     100% { z-index: 6; clip-path: inset(0); transform: translate3d(0, -40%, 34px) scale(1.02) rotate(-.35deg); }
   }
   .orpho-hero__plate.is-ready.is-open.is-genie .orpho-hero__receipt {
     animation: orpho-genie 820ms cubic-bezier(.3, .7, .3, 1) 120ms both;
+  }
+  /* Going back in is the same motion reversed: the receipt descends, slips
+   * behind the pocket, and tucks away. Duration stays under the JS settle
+   * deadline (1050ms) because an animated property emits no transitionend. */
+  .orpho-hero__plate.is-ready.is-closing.is-genie .orpho-hero__receipt {
+    animation: orpho-genie 700ms cubic-bezier(.3, .7, .3, 1) reverse both;
   }
 }
 

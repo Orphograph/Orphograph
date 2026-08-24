@@ -165,6 +165,21 @@ def test_genie_emerges_from_inside_and_clicks_are_guarded():
     assert ".orpho-hero__receipt .orpho-receipt__title" in styles, (
         "strip title needs crest clearance"
     )
+    tucked = styles.split(
+        ".orpho-hero__plate.is-interactive .orpho-hero__receipt {", 1
+    )[1].split("}", 1)[0]
+    assert "visibility: hidden" in tucked, (
+        "closed must show ONLY the envelope; a percentage clip is "
+        "receipt-relative and spilled past the envelope at 560px"
+    )
+    assert "is-closing.is-genie" in styles, (
+        "going back in must mirror the emergence"
+    )
     assert "busyUntil" in script and "MOTION_MS" in script, (
         "clicks must be swallowed while a motion is in flight"
     )
+    assert script.count("motionInFlight()") >= 3, (
+        "every path that changes state — click, Escape, click-away — must "
+        "consult the same in-flight guard"
+    )
+    assert "setOpen(false);" in script and "requestClose()" in script
