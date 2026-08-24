@@ -149,6 +149,12 @@
 @media (max-width: 680px) {
   .orpho-receipt__crest { width: 34px; height: 34px; left: 12px; top: 12px; }
 }
+/* The centered strip title must clear the corner crest at every width —
+ * symmetric padding keeps it optically centered. */
+.orpho-hero__receipt .orpho-receipt__title { padding: 0 62px; }
+@media (max-width: 680px) {
+  .orpho-hero__receipt .orpho-receipt__title { padding: 0 48px; }
+}
 
 .orpho-receipt__sig {
   font-family: var(--orpho-display);
@@ -1092,23 +1098,23 @@
 }
 
 .orpho-hero__plate.is-open .orpho-envelope {
-  transform: translateY(3px) scale(.997);
+  /* No transform here: a transformed envelope becomes a stacking context,
+   * which flattens the pocket/flap z-order and paints the rising receipt
+   * IN FRONT of the pocket — killing the emerge-from-inside illusion.
+   * The open press-down is expressed with shadow only. */
   box-shadow: 0 28px 58px -25px var(--orpho-shadow-deep),
               inset 0 1px 0 var(--orpho-emboss-lit);
 }
 
-/* Tucked geometry is ENVELOPE-BOUND, not viewport-relative: the static
- * composition deliberately overhangs the envelope's left edge, so the
- * interactive state pins the receipt inside the pocket with explicit
- * left/right/top per breakpoint. Transform is reserved for the open/close
- * motion only — a receipt-relative translate on top of breakpoint-dependent
- * plate geometry is what let the tucked strip escape the envelope at mid
- * widths (root cause of the 2026-08-23 misalignment). */
+/* Tucked = INVISIBLE (founder 2026-08-23 night): closed shows only the
+ * envelope — no peek strip. The receipt rests below the pocket mouth,
+ * behind the pocket (z 2), with its tail clipped so nothing pokes past the
+ * envelope's bottom edge. Opening is the only time the receipt shows. */
 .orpho-hero__plate.is-interactive .orpho-hero__receipt {
   z-index: 2;
   left: 16%;
   right: 2%;
-  top: 26%;
+  top: 40%;
   /* The ambient orpho-float animation would mask every author transform
    * here (animations outrank normal declarations for animated properties),
    * killing the open/close motion. Interactive mode owns the transform
@@ -1116,25 +1122,23 @@
   animation: none;
   transform: translate3d(0, 0, 0);
   transform-origin: 50% 0;
-  clip-path: inset(0 0 72% 0);
+  clip-path: inset(0 0 55% 0);
   will-change: transform;
 }
 
 @media (max-width: 1040px) {
-  /* Envelope spans the full plate here (inset 0 0 10% 0); the flap sits
-   * proportionally lower, so the peek band starts a step further down. */
   .orpho-hero__plate.is-interactive .orpho-hero__receipt {
     left: 7%;
     right: 7%;
-    top: 27%;
+    top: 41%;
   }
 }
 
 @media (max-width: 680px) {
-  /* top inherits the base 26% — only the horizontal bounds tighten. */
   .orpho-hero__plate.is-interactive .orpho-hero__receipt {
     left: 5%;
     right: 5%;
+    top: 42%;
   }
 }
 
@@ -1161,34 +1165,32 @@
   /* Final open pose — also the instant fallback when the genie animation
    * is unavailable (reduced motion, or animations disabled). Vertical lift
    * only, so the receipt stays inside the envelope at every width. */
-  transform: translate3d(0, -26%, 34px) scale(1.02) rotate(-.35deg);
+  transform: translate3d(0, -40%, 34px) scale(1.02) rotate(-.35deg);
   box-shadow: 0 32px 62px -24px rgba(59, 42, 21, .38),
               0 8px 18px -12px rgba(59, 42, 21, .25);
   transition-delay: 180ms, 120ms, 180ms;
 }
 
-/* Genie emergence: the tucked strip inflates out of the pocket mouth —
- * compressed at its top edge (which is exactly what the peek shows), a
- * wobble mid-flight, an overshoot, then the settled pose. The 100% frame
- * equals the is-open transform, and `both` holds it, so animation and
- * fallback agree on the final geometry. Closing stays a transition (the
- * receipt slides back in), so nothing masks the return motion. Gated to
- * no-preference: reduced-motion users get the instant fallback above. */
 @media (prefers-reduced-motion: no-preference) {
-  /* 0% matches the resting peek (full width, top ~28% visible about origin
-   * 50% 0), so the strip inflates without a discontinuity at t=0. The
-   * .is-genie gate comes from hero-envelope.js: it is only set when opening
+  /* Genie, from inside the letter: the receipt starts invisible below the
+   * mouth, rises while held BEHIND the pocket (z 2 in the keyframes masks
+   * the is-open z 6) with its tail clip released only as it clears the
+   * envelope, then comes forward and settles. The 100% frame equals the
+   * is-open pose, so the reduced-motion/no-animation fallback lands on
+   * identical geometry. Closing stays a transition (slides back inside).
+   * .is-genie comes from hero-envelope.js and is only set when opening
    * from the settled tucked state — re-opening mid-close stays on the
-   * transition path and reverses smoothly instead of teleporting to 0%. */
+   * transition path and reverses smoothly instead of teleporting. */
   @keyframes orpho-genie {
-    0%   { transform: translate3d(0, 0, 0) scale(1, .28) skewY(0deg); }
-    38%  { transform: translate3d(0, -12%, 10px) scale(.99, .72) skewY(-1.4deg); }
-    64%  { transform: translate3d(0, -30%, 34px) scale(1.04, 1.04) skewY(.7deg); }
-    84%  { transform: translate3d(0, -24%, 34px) scale(1.01, .99) rotate(-.35deg); }
-    100% { transform: translate3d(0, -26%, 34px) scale(1.02) rotate(-.35deg); }
+    0%   { z-index: 2; clip-path: inset(0 0 55% 0); transform: translate3d(0, 0, 0) scale(1, .5); }
+    18%  { clip-path: inset(0 0 44% 0); transform: translate3d(0, -8%, 0) scale(1, .74) skewY(-1deg); }
+    52%  { z-index: 2; clip-path: inset(0 0 6% 0); transform: translate3d(0, -34%, 0) scale(1, 1.02) skewY(.8deg); }
+    56%  { z-index: 6; clip-path: inset(0); }
+    76%  { transform: translate3d(0, -46%, 34px) scale(1.05, 1.04) skewY(-.4deg); }
+    100% { z-index: 6; clip-path: inset(0); transform: translate3d(0, -40%, 34px) scale(1.02) rotate(-.35deg); }
   }
   .orpho-hero__plate.is-ready.is-open.is-genie .orpho-hero__receipt {
-    animation: orpho-genie 640ms cubic-bezier(.3, .7, .3, 1) 150ms both;
+    animation: orpho-genie 820ms cubic-bezier(.3, .7, .3, 1) 120ms both;
   }
 }
 

@@ -46,7 +46,17 @@
     }
   }
 
+  // One click = one motion. While a pop-out or return is in flight, extra
+  // clicks are swallowed instead of toggling the state back mid-animation —
+  // the founder-reported "takes four clicks to close" was mid-close clicks
+  // re-opening the envelope.
+  let busyUntil = 0;
+  const MOTION_MS = 820;
+
   function toggleOpen() {
+    const now = performance.now();
+    if (now < busyUntil) return;
+    busyUntil = now + MOTION_MS;
     setOpen(!open);
   }
 

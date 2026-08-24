@@ -49,7 +49,7 @@ def test_reveal_keeps_static_receipt_available_without_javascript():
     assert 'class="orpho-hero__plate"' in html
     assert 'aria-hidden="true"' not in html.split('id="hero-envelope"', 1)[0][-120:]
     assert ".is-interactive" in STYLES.read_text(encoding="utf-8")
-    assert 'src="/hero-envelope.js?v=2"' in html
+    assert 'src="/hero-envelope.js?v=3"' in html
 
 
 def test_reveal_covers_keyboard_and_motion_preferences():
@@ -141,9 +141,30 @@ def test_genie_animation_is_gated_and_agrees_with_fallback():
         "genie runs only when JS marks a settled-state open (is-genie)"
     )
     genie = styles.split("@keyframes orpho-genie", 1)[1].split("}\n  .", 1)[0]
-    final = "translate3d(0, -26%, 34px) scale(1.02) rotate(-.35deg)"
+    final = "translate3d(0, -40%, 34px) scale(1.02) rotate(-.35deg)"
     assert final in genie, "genie 100% frame must equal the fallback pose"
     open_rule = styles.split(
         ".orpho-hero__plate.is-open .orpho-hero__receipt {", 1
     )[1].split("}", 1)[0]
     assert final in open_rule
+
+
+def test_genie_emerges_from_inside_and_clicks_are_guarded():
+    """Founder pass 2 (2026-08-23 night): the receipt must rise from INSIDE
+    the envelope (held behind the pocket during the rise), the strip title
+    must clear the crest, and one click = one motion (mid-flight clicks were
+    toggling the state back, reading as 'four clicks to close')."""
+    styles = STYLES.read_text(encoding="utf-8")
+    script = SCRIPT.read_text(encoding="utf-8")
+    genie = styles.split("@keyframes orpho-genie", 1)[1].split("  .orpho", 1)[0]
+    assert "z-index: 2;" in genie, (
+        "the rise must hold the receipt behind the pocket (z 2) so it "
+        "visibly comes out of the mouth"
+    )
+    assert "z-index: 6;" in genie, "the pop-forward must end above the envelope"
+    assert ".orpho-hero__receipt .orpho-receipt__title" in styles, (
+        "strip title needs crest clearance"
+    )
+    assert "busyUntil" in script and "MOTION_MS" in script, (
+        "clicks must be swallowed while a motion is in flight"
+    )
