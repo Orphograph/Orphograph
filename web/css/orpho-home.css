@@ -1034,16 +1034,23 @@
 
 /* Bottom fold of the envelope back: base = the two bottom corners, apex just
  * under the pocket mouth. clip-path keeps the two crease edges geometrically
- * exact at any aspect ratio; the drop-shadows draw the crease (dark) and its
- * light catch along the clipped edge itself. */
-.orpho-hero__plate.is-interactive .orpho-envelope__pocket::before {
+ * exact at any aspect ratio. Filter is applied BEFORE clip-path on the same
+ * element (Filter Effects order), which would clip the crease shadows away —
+ * so the drop-shadows live on a transparent wrapper (.orpho-envelope__fold)
+ * and the clipped triangle is its ::before child; the shadows then follow
+ * the triangle's alpha edges and actually draw the crease. */
+.orpho-hero__plate.is-interactive .orpho-envelope__fold {
+  position: absolute;
+  inset: 0;
+  filter: drop-shadow(0 -1px 0 rgba(118, 92, 55, 0.30))
+          drop-shadow(0 1px 0 rgba(255, 252, 245, 0.65));
+}
+.orpho-hero__plate.is-interactive .orpho-envelope__fold::before {
   content: "";
   position: absolute;
   inset: 0;
   clip-path: polygon(0 100%, 50% 7%, 100% 100%);
   background: linear-gradient(180deg, #efe6d4 0%, #e2d5bb 68%, #d9c9ab 100%);
-  filter: drop-shadow(0 -1px 0 rgba(118, 92, 55, 0.30))
-          drop-shadow(0 1px 0 rgba(255, 252, 245, 0.65));
 }
 
 /* The static composition's right-side crease scratches belong to the flat
@@ -1168,16 +1175,20 @@
  * receipt slides back in), so nothing masks the return motion. Gated to
  * no-preference: reduced-motion users get the instant fallback above. */
 @media (prefers-reduced-motion: no-preference) {
+  /* 0% matches the resting peek (full width, top ~28% visible about origin
+   * 50% 0), so the strip inflates without a discontinuity at t=0. The
+   * .is-genie gate comes from hero-envelope.js: it is only set when opening
+   * from the settled tucked state — re-opening mid-close stays on the
+   * transition path and reverses smoothly instead of teleporting to 0%. */
   @keyframes orpho-genie {
-    0%   { transform: translate3d(0, 0, 0) scale(.72, .12) skewY(0deg); }
-    34%  { transform: translate3d(0, -14%, 12px) scale(.94, .78) skewY(-1.6deg); }
-    62%  { transform: translate3d(0, -30%, 34px) scale(1.05, 1.03) skewY(.8deg); }
-    82%  { transform: translate3d(0, -24%, 34px) scale(1.01, .99) skewY(-.2deg) rotate(-.35deg); }
+    0%   { transform: translate3d(0, 0, 0) scale(1, .28) skewY(0deg); }
+    38%  { transform: translate3d(0, -12%, 10px) scale(.99, .72) skewY(-1.4deg); }
+    64%  { transform: translate3d(0, -30%, 34px) scale(1.04, 1.04) skewY(.7deg); }
+    84%  { transform: translate3d(0, -24%, 34px) scale(1.01, .99) rotate(-.35deg); }
     100% { transform: translate3d(0, -26%, 34px) scale(1.02) rotate(-.35deg); }
   }
-  .orpho-hero__plate.is-ready.is-open .orpho-hero__receipt {
+  .orpho-hero__plate.is-ready.is-open.is-genie .orpho-hero__receipt {
     animation: orpho-genie 640ms cubic-bezier(.3, .7, .3, 1) 150ms both;
-    transform-origin: 50% 0;
   }
 }
 
@@ -1327,6 +1338,7 @@
   .orpho-hero__plate.is-ready .orpho-envelope__flap,
   .orpho-hero__plate.is-ready .orpho-envelope,
   .orpho-hero__plate.is-ready .orpho-hero__receipt,
+  .orpho-hero__plate.is-ready .orpho-envelope__string,
   .orpho-envelope__toggle::after {
     transition: none;
   }

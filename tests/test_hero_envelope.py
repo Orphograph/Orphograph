@@ -49,7 +49,7 @@ def test_reveal_keeps_static_receipt_available_without_javascript():
     assert 'class="orpho-hero__plate"' in html
     assert 'aria-hidden="true"' not in html.split('id="hero-envelope"', 1)[0][-120:]
     assert ".is-interactive" in STYLES.read_text(encoding="utf-8")
-    assert 'src="/hero-envelope.js?v=1"' in html
+    assert 'src="/hero-envelope.js?v=2"' in html
 
 
 def test_reveal_covers_keyboard_and_motion_preferences():
@@ -128,7 +128,18 @@ def test_genie_animation_is_gated_and_agrees_with_fallback():
     identical geometry (an animation that disagrees would mask the
     transition and freeze the receipt elsewhere)."""
     styles = STYLES.read_text(encoding="utf-8")
-    assert "prefers-reduced-motion: no-preference" in styles
+    idx = styles.find("@keyframes orpho-genie")
+    assert idx > 0
+    assert "prefers-reduced-motion: no-preference" in styles[max(0, idx - 700):idx], (
+        "genie keyframes must sit inside the no-preference media block"
+    )
+    gate_slice = styles[idx:idx + 2200]
+    assert "animation: orpho-genie" in gate_slice, (
+        "the animation rule must live in the same gated block as its keyframes"
+    )
+    assert ".is-genie" in gate_slice, (
+        "genie runs only when JS marks a settled-state open (is-genie)"
+    )
     genie = styles.split("@keyframes orpho-genie", 1)[1].split("}\n  .", 1)[0]
     final = "translate3d(0, -26%, 34px) scale(1.02) rotate(-.35deg)"
     assert final in genie, "genie 100% frame must equal the fallback pose"

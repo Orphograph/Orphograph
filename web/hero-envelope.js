@@ -19,7 +19,13 @@
 
   function setOpen(next) {
     window.clearTimeout(settleTimer);
+    // Genie emergence only runs when opening from the settled tucked state;
+    // re-opening while the close transition is mid-flight would restart the
+    // animation at its 0% frame and teleport the receipt back into the
+    // pocket, so that path stays on the (smoothly reversing) transition.
+    const wasClosing = plate.classList.contains("is-closing");
     open = Boolean(next);
+    plate.classList.toggle("is-genie", open && !wasClosing);
     plate.classList.toggle("is-open", open);
     plate.classList.toggle("is-closing", !open);
     toggle.setAttribute("aria-expanded", open ? "true" : "false");
