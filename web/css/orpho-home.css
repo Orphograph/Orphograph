@@ -149,12 +149,6 @@
 @media (max-width: 680px) {
   .orpho-receipt__crest { width: 34px; height: 34px; left: 12px; top: 12px; }
 }
-/* The centered strip title must clear the corner crest at every width —
- * symmetric padding keeps it optically centered. */
-.orpho-hero__receipt .orpho-receipt__title { padding: 0 62px; }
-@media (max-width: 680px) {
-  .orpho-hero__receipt .orpho-receipt__title { padding: 0 48px; }
-}
 
 .orpho-receipt__sig {
   font-family: var(--orpho-display);
@@ -1359,6 +1353,130 @@
   .orpho-envelope__toggle::after {
     transition: none;
   }
+}
+
+/* ══ Pass 12 — real-envelope fidelity (founder 2026-08-24) ══════════════
+ * Reference: a kraft string-and-button mailer seen from the back. Six
+ * things separated the painted object from the real one, and none of them
+ * needs a new element or a new asset:
+ *   1. the paper had grain nowhere — only smooth gradients
+ *   2. the edge had no thickness and cast no contact shadow
+ *   3. the side flaps left no seams, so nothing tucked into anything
+ *   4. the bottom flap was one floating triangle rather than a trapezoid
+ *      whose corner creases run out to those seams
+ *   5. the tie was a single 4px X; a real one is wound several times
+ *   6. the discs had no rim, so they read as printed dots
+ *
+ * HARD CONSTRAINT: .orpho-envelope must never take a transform, filter,
+ * opacity < 1 or will-change. Any of them makes it a stacking context,
+ * which flattens the pocket/receipt z-order the reveal depends on and
+ * silently kills the emerge-from-inside animation (the #185 defect).
+ * Grain therefore rides as a BACKGROUND LAYER, never an overlay element.
+ */
+.orpho-hero__plate {
+  --orpho-grain: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='g'><feTurbulence type='fractalNoise' baseFrequency='1.6' numOctaves='3' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='140' height='140' filter='url(%23g)' opacity='0.32'/></svg>");
+  --orpho-fibre: repeating-linear-gradient(93deg, rgba(120, 96, 58, .05) 0 1px, transparent 1px 4px);
+}
+
+/* Body: grain, fibre, and the two side seams painted straight into the
+ * background so no element competes with the receipt for z-order. */
+.orpho-envelope {
+  background-image:
+    linear-gradient(90deg, transparent 0 5.6%, rgba(96, 74, 44, .17) 5.6% 6%,
+                    rgba(255, 252, 245, .55) 6% 6.4%, transparent 6.4%),
+    linear-gradient(90deg, transparent 0 93.6%, rgba(255, 252, 245, .55) 93.6% 94%,
+                    rgba(96, 74, 44, .17) 94% 94.4%, transparent 94.4%),
+    var(--orpho-grain),
+    var(--orpho-fibre),
+    linear-gradient(168deg, #f7f2e7 0%, #efe7d6 54%, #e2d7c0 100%);
+  background-size: 100% 64%, 100% 64%, 140px 140px, auto, auto;
+  background-position: 0 36%, 0 36%, 0 0, 0 0, 0 0;
+  background-repeat: no-repeat, no-repeat, repeat, repeat, no-repeat;
+  background-blend-mode: normal, normal, multiply, multiply, normal;
+  box-shadow:
+    inset 0 1px 0 var(--orpho-emboss-lit),
+    0 1px 0 1px rgba(150, 124, 84, .20),
+    0 3px 5px -2px rgba(32, 24, 16, .14),
+    0 26px 44px -26px var(--orpho-shadow-deep);
+}
+
+/* Flap: shallower arc (a real one is not a lens), lit fold edge, grain. */
+.orpho-envelope__flap {
+  border-radius: 0 0 36% 36% / 0 0 46% 46%;
+  background-image: var(--orpho-grain), var(--orpho-fibre),
+    linear-gradient(180deg, #fbf7ee 0%, #f2e9d7 70%, #e8dcc4 100%);
+  background-size: 140px 140px, auto, auto;
+  background-blend-mode: multiply, multiply, normal;
+  box-shadow: inset 0 1px 0 rgba(255, 253, 248, .9),
+              0 1px 0 rgba(150, 124, 84, .38),
+              0 8px 13px -6px rgba(90, 70, 44, .40);
+}
+
+/* Discs: a rim and a bevel, so brass reads as metal pressed into paper. */
+.orpho-envelope__closure,
+.orpho-envelope__closure::after {
+  background: radial-gradient(circle at 34% 30%, #eed6a4 0%, #cfa963 38%,
+                              var(--orpho-brass) 60%, #6d5429 100%);
+  box-shadow: 0 3px 5px -1px var(--orpho-shadow-deep),
+              inset 0 1px 0 rgba(255, 244, 219, .8),
+              inset 0 -2px 3px rgba(70, 52, 24, .45),
+              0 0 0 1px rgba(90, 68, 30, .30);
+}
+
+/* Tie: the stripe axes stay button-center to button-center (pass 9 maths),
+ * but the cord is now wound TWICE — an outer wrap offset off-centre and the
+ * inner pair thickened. Four strands cross, which is what a wound tie is. */
+.orpho-envelope__string {
+  background:
+    linear-gradient(109.75deg, transparent calc(50% - 8px), #dccfae calc(50% - 8px),
+                    #a89670 calc(50% - 3.5px), transparent calc(50% - 3.5px)),
+    linear-gradient(70.25deg, transparent calc(50% - 8px), #dccfae calc(50% - 8px),
+                    #a89670 calc(50% - 3.5px), transparent calc(50% - 3.5px)),
+    linear-gradient(109.75deg, transparent calc(50% - 2.5px), #e8dcbb calc(50% - 2.5px),
+                    #ab9873 calc(50% + 2.5px), transparent calc(50% + 2.5px)),
+    linear-gradient(70.25deg, transparent calc(50% - 2.5px), #e8dcbb calc(50% - 2.5px),
+                    #ab9873 calc(50% + 2.5px), transparent calc(50% + 2.5px));
+  filter: drop-shadow(1px 1px 1px rgba(90, 70, 44, .40));
+}
+
+/* Pocket: grain, plus a shadow at the mouth so the paper overlaps rather
+ * than meeting in a hairline. Contained by the pocket's own stacking
+ * context (z-index 3), so nothing here can disturb the reveal. */
+.orpho-hero__plate.is-interactive .orpho-envelope__pocket {
+  background-image: var(--orpho-grain), var(--orpho-fibre),
+    linear-gradient(168deg, #f2eadb 0%, #e6dac3 62%, #decfb4 100%);
+  background-size: 140px 140px, auto, auto;
+  background-blend-mode: multiply, multiply, normal;
+  box-shadow: inset 0 1px 0 rgba(255, 252, 245, .72),
+              inset 0 4px 8px -6px rgba(90, 70, 44, .5),
+              inset 0 -14px 22px -18px rgba(90, 70, 44, .35);
+}
+
+/* Bottom flap: a TRAPEZOID. Its slanted edges are the corner creases, and
+ * they run out to the side seams instead of meeting at a floating apex. */
+.orpho-hero__plate.is-interactive .orpho-envelope__fold::before {
+  clip-path: polygon(6% 100%, 16% 5%, 84% 5%, 94% 100%);
+  background: linear-gradient(172deg, #eee5d2 0%, #e4d8bd 60%, #d9caa9 100%);
+}
+/* The fold is read from its crease, not from a tone jump — a panel-shaped
+ * lightness difference is what made the first cut look pasted on. */
+.orpho-hero__plate.is-interactive .orpho-envelope__fold {
+  filter: drop-shadow(0 -1.5px 0 rgba(96, 74, 44, .38))
+          drop-shadow(0 -3px 4px rgba(96, 74, 44, .13))
+          drop-shadow(0 1px 0 rgba(255, 252, 245, .7));
+}
+
+/* Regression fix (shipped live in #185): clearing the corner crest with
+ * symmetric 62px padding took 124px off a ~435px title box, so the centred
+ * "Orphograph Receipt" wrapped onto two lines. Padding is not the lever —
+ * the title must simply never wrap, at a size that fits the reduced box. */
+.orpho-hero__receipt .orpho-receipt__title {
+  padding: 0 48px;
+  font-size: 1.12rem;
+  white-space: nowrap;
+}
+@media (max-width: 680px) {
+  .orpho-hero__receipt .orpho-receipt__title { padding: 0 36px; font-size: 1rem; }
 }
 
 /* ══ TERMINAL BLOCK — mobile reassert (2026-08-10) ══════════════════════
