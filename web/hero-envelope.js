@@ -23,9 +23,12 @@
     // re-opening while the close transition is mid-flight would restart the
     // animation at its 0% frame and teleport the receipt back into the
     // pocket, so that path stays on the (smoothly reversing) transition.
-    const wasClosing = plate.classList.contains("is-closing");
+    const settled = !plate.classList.contains("is-closing");
     open = Boolean(next);
-    plate.classList.toggle("is-genie", open && !wasClosing);
+    // Both directions get the genie motion when starting from a settled
+    // state; a direction change mid-flight stays on the transition path,
+    // which reverses smoothly instead of restarting at a keyframe.
+    plate.classList.toggle("is-genie", settled);
     plate.classList.toggle("is-open", open);
     plate.classList.toggle("is-closing", !open);
     toggle.setAttribute("aria-expanded", open ? "true" : "false");
@@ -46,8 +49,32 @@
     }
   }
 
+  // One click = one motion. While a pop-out or return is in flight, extra
+  // clicks are swallowed instead of toggling the state back mid-animation —
+  // the founder-reported "takes four clicks to close" was mid-close clicks
+  // re-opening the envelope.
+  let busyUntil = 0;
+  // Covers the longest motion: the emergence is a 120ms delay plus a 820ms
+  // animation. A guard shorter than that leaves a window where a click can
+  // land mid-flight and reverse the state.
+  const MOTION_MS = 960;
+
+  function motionInFlight() {
+    return performance.now() < busyUntil;
+  }
+
   function toggleOpen() {
+    if (motionInFlight()) return;
+    busyUntil = performance.now() + MOTION_MS;
     setOpen(!open);
+  }
+
+  // Escape and click-away close through the same guard as a click; otherwise
+  // they can start a return while the emergence is still playing.
+  function requestClose() {
+    if (motionInFlight()) return;
+    busyUntil = performance.now() + MOTION_MS;
+    setOpen(false);
   }
 
   toggle.addEventListener("click", toggleOpen);
@@ -61,13 +88,13 @@
 
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && open) {
-      setOpen(false);
+      requestClose();
       toggle.focus({ preventScroll: true });
     }
   });
 
   document.addEventListener("click", (event) => {
-    if (open && !plate.contains(event.target)) setOpen(false);
+    if (open && !plate.contains(event.target)) requestClose();
   });
 
   receipt.addEventListener("transitionend", (event) => {
