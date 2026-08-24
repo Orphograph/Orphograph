@@ -49,7 +49,7 @@ def test_reveal_keeps_static_receipt_available_without_javascript():
     assert 'class="orpho-hero__plate"' in html
     assert 'aria-hidden="true"' not in html.split('id="hero-envelope"', 1)[0][-120:]
     assert ".is-interactive" in STYLES.read_text(encoding="utf-8")
-    assert 'src="/hero-envelope.js?v=1"' in html
+    assert 'src="/hero-envelope.js?v=2"' in html
 
 
 def test_reveal_covers_keyboard_and_motion_preferences():
@@ -103,3 +103,47 @@ def test_tucked_receipt_geometry_is_envelope_bound():
         ".orpho-hero__plate.is-open .orpho-hero__receipt {", 1
     )[1].split("}", 1)[0]
     assert "translate3d(0, -" in open_rule
+
+
+def test_envelope_reads_as_a_mailing_letter():
+    """2026-08-23 founder pass: the twine must stay visible while closed
+    (interactive flap z-order buried it), the pocket folds must close
+    corner-to-apex instead of ending mid-air, and the receipt carries the
+    letterhead crest."""
+    styles = STYLES.read_text(encoding="utf-8")
+    html = INDEX.read_text(encoding="utf-8")
+    interactive = styles.split("Interactive envelope reveal", 1)[1]
+    assert ".orpho-envelope__string { z-index: 5; }" in interactive
+    assert ".orpho-envelope__closure { z-index: 6; }" in interactive
+    assert "polygon(0 100%, 50% 7%, 100% 100%)" in interactive, (
+        "bottom fold triangle must run corner-to-apex"
+    )
+    assert 'class="orpho-receipt__crest"' in html
+    assert "orpho-receipt__crest" in styles
+
+
+def test_genie_animation_is_gated_and_agrees_with_fallback():
+    """The genie keyframes only run under no-preference, and their 100%
+    frame must equal the is-open fallback transform so both paths settle on
+    identical geometry (an animation that disagrees would mask the
+    transition and freeze the receipt elsewhere)."""
+    styles = STYLES.read_text(encoding="utf-8")
+    idx = styles.find("@keyframes orpho-genie")
+    assert idx > 0
+    assert "prefers-reduced-motion: no-preference" in styles[max(0, idx - 700):idx], (
+        "genie keyframes must sit inside the no-preference media block"
+    )
+    gate_slice = styles[idx:idx + 2200]
+    assert "animation: orpho-genie" in gate_slice, (
+        "the animation rule must live in the same gated block as its keyframes"
+    )
+    assert ".is-genie" in gate_slice, (
+        "genie runs only when JS marks a settled-state open (is-genie)"
+    )
+    genie = styles.split("@keyframes orpho-genie", 1)[1].split("}\n  .", 1)[0]
+    final = "translate3d(0, -26%, 34px) scale(1.02) rotate(-.35deg)"
+    assert final in genie, "genie 100% frame must equal the fallback pose"
+    open_rule = styles.split(
+        ".orpho-hero__plate.is-open .orpho-hero__receipt {", 1
+    )[1].split("}", 1)[0]
+    assert final in open_rule
