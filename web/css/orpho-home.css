@@ -1456,14 +1456,25 @@
  * they run out to the side seams instead of meeting at a floating apex. */
 .orpho-hero__plate.is-interactive .orpho-envelope__fold::before {
   clip-path: polygon(6% 100%, 16% 5%, 84% 5%, 94% 100%);
-  background: linear-gradient(172deg, #eee5d2 0%, #e4d8bd 60%, #d9caa9 100%);
+  /* Same paper as the pocket, within a couple of units. A tone JUMP is what
+   * made this read as a panel pasted on the envelope; a real fold is the
+   * same sheet, and the eye reads it from the crease alone. */
+  /* SAME PAPER as the pocket: identical grain + fibre layers and blend mode.
+   * Collapsing the base tone alone was not enough — a smooth fill surrounded
+   * by grained paper reads as a different material whatever its colour. */
+  background-image: var(--orpho-grain), var(--orpho-fibre),
+    linear-gradient(168deg, #f1e9d9 0%, #e5d9c1 62%, #ddcdb1 100%);
+  background-size: 140px 140px, auto, auto;
+  background-blend-mode: multiply, multiply, normal;
 }
 /* The fold is read from its crease, not from a tone jump — a panel-shaped
  * lightness difference is what made the first cut look pasted on. */
 .orpho-hero__plate.is-interactive .orpho-envelope__fold {
-  filter: drop-shadow(0 -1.5px 0 rgba(96, 74, 44, .38))
-          drop-shadow(0 -3px 4px rgba(96, 74, 44, .13))
-          drop-shadow(0 1px 0 rgba(255, 252, 245, .7));
+  /* With the tone jump gone the crease carries the whole fold, so it gets
+   * a firmer dark line, a deeper falloff, and a brighter lit lip. */
+  filter: drop-shadow(0 -1px 0 rgba(88, 67, 38, .55))
+          drop-shadow(0 -4px 6px rgba(96, 74, 44, .20))
+          drop-shadow(0 1.5px 0 rgba(255, 253, 247, .85));
 }
 
 /* Regression fix (shipped live in #185): clearing the corner crest with
