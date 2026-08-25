@@ -125,7 +125,7 @@ const ok = await verifyFolder("/path/to/folder", receipt_id, {
   serverUrl: "https://orphograph.com",
 });
 </code></pre>
-    <p>The TypeScript implementation is bit-for-bit compatible with the Python module and the browser implementation. Full reference is in the <a href="https://github.com/Orphograph/Orphograph/tree/master/sdk-node">Node SDK README</a>.</p>
+    <p>The TypeScript implementation is bit-for-bit compatible with the Python module — both are checked against the same published conformance vectors in continuous integration. The browser implements the same algorithm, <code>orphograph-merkle-v1-rfc6962</code>. Full reference is in the <a href="https://github.com/Orphograph/Orphograph/tree/master/sdk-node">Node SDK README</a>.</p>
 
     <details class="legal">
       <summary>Developer detail · CLI binary, inclusion proofs</summary>
