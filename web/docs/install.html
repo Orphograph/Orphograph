@@ -107,9 +107,9 @@ ok = verify_inclusion(
     <p>The same surface, in TypeScript, for Node 20 or later. Zero runtime dependencies; the standard library modules <code>node:crypto</code>, <code>node:fs</code>, <code>node:http</code>, <code>node:https</code>, and <code>node:path</code> are the only requirements.</p>
 <pre><code>git clone https://github.com/Orphograph/Orphograph.git
 cd Orphograph/sdk-node
-npm install &amp;&amp; npm run build
+npm install
 npm install /path/to/Orphograph/sdk-node   # from your project</code></pre>
-    <div class="arch-callout"><p>The Node package is not on npm yet, and the compiled <code>dist/</code> is not committed, so the build step above is required — <code>npm install</code> straight from the git URL would install a package whose entry point does not exist yet.</p></div>
+    <div class="arch-callout"><p>The Node package is not on npm yet and the compiled <code>dist/</code> is not committed, so the <code>npm install</code> inside <code>sdk-node</code> is what builds it. Run it before installing the package into your project; a path install against a never-built directory fails with <code>tsc: command not found</code>.</p></div>
 <pre><code>import { anchorFolder, verifyFolder } from "orphograph";
 
 const result = await anchorFolder("/path/to/folder", {
