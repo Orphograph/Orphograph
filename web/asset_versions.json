@@ -167,6 +167,10 @@
     "version": "1",
     "sha256": "5a4e8ee5fef79fa29245138deace870b3b9b1a1a9aef52201407b28dda5e95e7"
   },
+  "/docs/hub.css": {
+    "version": "1",
+    "sha256": "0ea608293953f647743352b6b231e55bb3615338951309aae9aaf8033af70ea4"
+  },
   "/docs/install.css": {
     "version": "1",
     "sha256": "5e7640c1dde10e648d0e67aa6170c1ca42ea95fa58e90c2fdc4e0e7e5eb5c71c"

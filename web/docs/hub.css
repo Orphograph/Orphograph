@@ -1,0 +1,90 @@
+/* hub.css — shared by /docs, /docs/cli, /docs/sdk.
+   The three pages are indexes and references rather than walkthroughs, so they
+   need a card grid and a definition-style command list that the per-page
+   walkthrough stylesheets (quickstart.css, install.css) do not carry. */
+
+.hub-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 1.1rem;
+  margin: 1.6rem 0 2.2rem;
+  padding: 0;
+  list-style: none;
+}
+
+.hub-card {
+  display: block;
+  padding: 1.1rem 1.2rem 1.2rem;
+  border: 1px solid rgba(60, 46, 26, 0.18);
+  border-radius: 3px;
+  background: rgba(255, 253, 247, 0.55);
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+
+.hub-card:hover,
+.hub-card:focus-visible {
+  border-color: rgba(60, 46, 26, 0.45);
+  background: rgba(255, 253, 247, 0.9);
+}
+
+.hub-card h3 {
+  margin: 0 0 0.35rem;
+  font-size: 1.02rem;
+  letter-spacing: 0.01em;
+}
+
+.hub-card p {
+  margin: 0;
+  font-size: 0.92rem;
+  line-height: 1.5;
+  opacity: 0.82;
+}
+
+.hub-card__meta {
+  display: block;
+  margin-top: 0.6rem;
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.6;
+}
+
+/* Command reference: term on its own line, prose beneath. */
+.hub-cmds { margin: 1.4rem 0; }
+
+.hub-cmd { margin: 0 0 1.4rem; }
+
+.hub-cmd h3 {
+  margin: 0 0 0.4rem;
+  font-size: 0.98rem;
+}
+
+.hub-cmd p { margin: 0.45rem 0 0; }
+
+/* A short, non-alarming note that a package is not on a public registry yet. */
+.hub-note {
+  margin: 1.2rem 0;
+  padding: 0.85rem 1rem;
+  border-left: 3px solid rgba(60, 46, 26, 0.35);
+  background: rgba(60, 46, 26, 0.05);
+  font-size: 0.93rem;
+  line-height: 1.55;
+}
+
+@media (prefers-color-scheme: dark) {
+  .hub-card {
+    border-color: rgba(226, 214, 190, 0.16);
+    background: rgba(226, 214, 190, 0.04);
+  }
+  .hub-card:hover,
+  .hub-card:focus-visible {
+    border-color: rgba(226, 214, 190, 0.4);
+    background: rgba(226, 214, 190, 0.08);
+  }
+  .hub-note {
+    border-left-color: rgba(226, 214, 190, 0.4);
+    background: rgba(226, 214, 190, 0.06);
+  }
+}

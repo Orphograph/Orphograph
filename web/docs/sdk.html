@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Orphograph — SDKs</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#f6f1e3">
+<meta name="description" content="Python and TypeScript bindings for anchoring and verifying folders. Install, the four operations, and the guarantee that file bytes never leave the machine.">
+<meta property="og:title" content="Orphograph — SDKs">
+<meta property="og:description" content="Python and TypeScript bindings over the same API. File bytes never leave the machine.">
+<meta property="og:url" content="https://orphograph.com/docs/sdk">
+<meta property="og:type" content="article">
+<meta property="og:image" content="https://orphograph.com/og-image.png?v=8">
+<link rel="canonical" href="https://orphograph.com/docs/sdk">
+<link rel="icon" type="image/png" href="/favicon.png?v=8">
+<link rel="stylesheet" href="/css/orpho-tokens.css?v=2">
+<link rel="stylesheet" href="/css/orpho-primitives.css?v=3">
+<link rel="stylesheet" href="/index.css?v=21">
+<link rel="stylesheet" href="/docs/hub.css?v=1">
+<link rel="stylesheet" href="/u.css?v=1">
+<meta name="copyright" content="© 2026 Orphograph. Code under MIT (see /LICENSE). Brand, content, and design — all rights reserved.">
+</head>
+<body class="orpho">
+
+<header class="orpho-header nav">
+  <a href="/" class="orpho-brand brand">
+    <img class="orpho-brand__mark" src="/seal-display.png?v=8" alt="" width="62" height="62">
+    <span class="orpho-brand__text">
+      <span class="orpho-brand__name">Orphograph</span>
+      <span class="orpho-brand__sub">Empirical Notary</span>
+    </span>
+  </a>
+  <nav class="orpho-nav">
+    <a href="/learn">Method</a>
+      <a href="/faq">FAQ</a>
+      <a href="/continuity">Continuity</a>
+      <a href="/pricing">Pricing</a>
+      <a href="/signin">Sign in</a>
+      <a href="/#drop" class="cta">Anchor a file</a>
+  </nav>
+</header>
+
+<main class="arch-wrap">
+
+  <p class="u-eyebrow">Docs · SDKs</p>
+  <h1>The same four operations, in two languages.</h1>
+  <p class="arch-lede">
+    Both libraries are thin. They walk a folder, hash each file in place, build a Merkle tree, and send the root — nothing else. The implementations are bit-for-bit compatible with each other and with the browser: a folder anchored from Python verifies from Node, and a receipt issued through either verifies with this service gone.
+  </p>
+
+  <div class="arch-callout">
+    <p>Neither package is on a public registry yet, so both install from source. If you would rather not take a dependency at all, <a href="/docs/api">the HTTP API</a> is plain JSON over HTTPS and the libraries add nothing you cannot do with a request client.</p>
+  </div>
+
+  <section>
+    <h2>Python</h2>
+    <div class="arch-rule"></div>
+    <p>Python 3.9 or newer. Standard library only — no third-party dependencies at runtime.</p>
+<pre><code>pip install "git+https://github.com/Orphograph/Orphograph#subdirectory=sdk-python"</code></pre>
+<pre><code>from orphograph import anchor_folder, verify_folder
+
+result = anchor_folder("/path/to/folder", label="Case file 2026-05-20")
+receipt_id = result["receipt_id"]
+root_hex   = result["root_hex"]
+
+# Later, from a clean machine, given only the folder and the id:
+assert verify_folder("/path/to/folder", receipt_id) is True
+</code></pre>
+    <p>The package also installs the <code>orphograph</code> command described in <a href="/docs/cli">the command-line reference</a>. Full source and README: <a href="https://github.com/Orphograph/Orphograph/tree/master/sdk-python">sdk-python</a>.</p>
+  </section>
+
+  <section>
+    <h2>Node and TypeScript</h2>
+    <div class="arch-rule"></div>
+    <p>Node 20 or later. Zero runtime dependencies — <code>node:crypto</code>, <code>node:fs</code>, <code>node:http</code>, <code>node:https</code>, and <code>node:path</code> only.</p>
+<pre><code>git clone https://github.com/Orphograph/Orphograph.git
+cd Orphograph/sdk-node
+npm install &amp;&amp; npm run build
+npm install /path/to/Orphograph/sdk-node   # from your project</code></pre>
+    <div class="arch-callout">
+      <p>The build step is not optional. The compiled <code>dist/</code> is not committed, and the package's entry point points into it, so installing straight from the git URL would give you a package that cannot be imported.</p>
+    </div>
+<pre><code>import { anchorFolder, verifyFolder } from "orphograph";
+
+const result = await anchorFolder("/path/to/folder", {
+  serverUrl: "https://orphograph.com",
+  apiKey: process.env.ORPHO_API_KEY, // optional
+  clientLabel: "Case file 2026-05-20",
+});
+
+const { receipt_id, root_hex } = result;
+
+const ok = await verifyFolder("/path/to/folder", receipt_id);
+</code></pre>
+    <p>Full source and README: <a href="https://github.com/Orphograph/Orphograph/tree/master/sdk-node">sdk-node</a>.</p>
+  </section>
+
+  <section>
+    <h2>The four operations</h2>
+    <div class="arch-rule"></div>
+    <p>Named differently by each language's convention, identical in behaviour.</p>
+    <div class="hub-cmds">
+      <div class="hub-cmd">
+        <h3><code>anchor_folder</code> · <code>anchorFolder</code></h3>
+        <p>Hash a folder and commit its Merkle root. Returns the receipt id and the root. Optional label and exclude-glob arguments; supplying any exclude <em>replaces</em> the default deny-list rather than extending it.</p>
+      </div>
+      <div class="hub-cmd">
+        <h3><code>verify_folder</code> · <code>verifyFolder</code></h3>
+        <p>Re-walk a folder and compare its recomputed root against a receipt. Returns a boolean.</p>
+      </div>
+      <div class="hub-cmd">
+        <h3><code>inclusion_proof</code> · <code>inclusionProof</code></h3>
+        <p>Fetch the Merkle path proving one named file was part of an anchored set — without disclosing the rest of the folder.</p>
+      </div>
+      <div class="hub-cmd">
+        <h3><code>verify_inclusion</code> · <code>verifyInclusion</code></h3>
+        <p>Check such a proof locally against a file and a root. No network call, which is the point: the recipient of a proof need not trust, or reach, this service.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>What crosses the network</h2>
+    <div class="arch-rule"></div>
+    <p>The manifest, and nothing else: relative paths, per-file SHA-256 digests, leaf hashes, and the thirty-two-byte root. File contents are streamed through SHA-256 locally in one-megabyte chunks and never transmitted. This is a property of the libraries, not a promise about our servers — you can confirm it by reading either implementation, both of which are short and MIT-licensed.</p>
+    <p>Paths <em>are</em> transmitted. If a filename is itself sensitive, <a href="/method/why-filenames-are-not-stored">why filenames are not stored</a> covers what the service retains and what it discards.</p>
+  </section>
+
+  <section>
+    <h2>Further reading</h2>
+    <div class="arch-rule"></div>
+    <p><a href="/docs/api">The HTTP API</a> is the layer both libraries sit on. <a href="/docs/webhooks">Webhooks</a> replace polling for confirmation. <a href="/method/folder-merkle">Folder anchoring by Merkle root</a> explains what a root commits to — and what it does not.</p>
+  </section>
+
+  <aside class="next-step-card" aria-label="Next step">
+    <p class="ns-label">Next step</p>
+    <h2>Begin.</h2>
+    <div class="ns-row">
+      <a href="/docs/api" class="ns-btn ns-primary">Read the API reference →</a>
+      <a href="/docs/cli" class="ns-btn ns-secondary">Use the command line →</a>
+    </div>
+  </aside>
+
+</main>
+
+<footer>
+  <div class="wrap u-sitefoot">
+    <p>Orphograph · An empirical notary.</p>
+    <p class="u-mt-8">
+      <a href="/" class="u-muted">Home</a> ·
+      <a href="/method" class="u-muted">Method</a> ·
+      <a href="/faq" class="u-muted">FAQ</a> ·
+      <a href="/continuity" class="u-muted">Continuity</a>
+    </p>
+  </div>
+  <!-- legal-disclaimer -->
+  <div class="wrap legal-disclaimer">
+    Orphograph is not a law firm, not a notary, and not a qualified electronic-trust-service provider — a receipt is cryptographic proof that a file existed before a point in time, not legal advice.
+  </div>
+  <div class="wrap legal-links"><a href="/terms">Terms</a> &#183; <a href="/privacy">Privacy</a></div>
+</footer>
+
+<script src="/statusbar.js?v=2" defer></script>
+<script src="/assets/event.js?v=1" defer></script>
+</body>
+</html>
