@@ -25,9 +25,9 @@
   ],
   "scripts": {
     "build": "tsc",
+    "prepare": "tsc",
     "pretest": "tsc",
-    "test": "node --experimental-strip-types --test test/*.test.ts",
-    "prepublishOnly": "tsc"
+    "test": "node --experimental-strip-types --test test/*.test.ts"
   },
   "keywords": [
     "bitcoin",

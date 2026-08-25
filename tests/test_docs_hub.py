@@ -61,9 +61,16 @@ PUBLISHED_PACKAGES = frozenset({
 # `pip install "git+https://..."` and `npm install /local/path` are source
 # installs, not registry lookups — they are exempt because they do not depend
 # on a registry entry existing.
+# SAME-LINE whitespace only. `\s` would span the newline in
+#     npm install
+#     npm install /path/to/pkg
+# and capture "npm" from the next line as the package name — which is exactly
+# what happened on 2026-08-25 when the docs gained a bare `npm install`.
+# A command with no package on its own line installs from package.json and
+# names nothing, so it must match nothing.
 _REGISTRY_INSTALL = re.compile(
-    r"(?:pip|pipx|npm)\s+install\s+(?!['\"]?(?:git\+|https?://|file:|\.|/))"
-    r"(?:-[\w-]+\s+)*['\"]?([A-Za-z][\w.@/-]*)"
+    r"(?:pip|pipx|npm)[ \t]+install[ \t]+(?!['\"]?(?:git\+|https?://|file:|\.|/))"
+    r"(?:-[\w-]+[ \t]+)*['\"]?([A-Za-z][\w.@/-]*)"
 )
 
 
@@ -134,6 +141,11 @@ def test_guard_would_catch_the_original_defect() -> None:
         "npm install /path/to/Orphograph/sdk-node",
     ):
         assert _REGISTRY_INSTALL.findall(ok) == [], ok
+    # A bare `npm install` names no package. It must not swallow the newline
+    # and capture the next line's command — the false positive this guard
+    # produced on 2026-08-25 against its own docs.
+    multiline = "cd Orphograph/sdk-node\nnpm install\nnpm install /path/to/Orphograph/sdk-node\n"
+    assert _REGISTRY_INSTALL.findall(multiline) == [], multiline
 
 
 # ─────────────────────────────── static checks ────────────────────────────

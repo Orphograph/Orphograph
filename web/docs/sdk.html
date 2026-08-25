@@ -75,10 +75,10 @@ assert verify_folder("/path/to/folder", receipt_id) is True
     <p>Node 20 or later. Zero runtime dependencies — <code>node:crypto</code>, <code>node:fs</code>, <code>node:http</code>, <code>node:https</code>, and <code>node:path</code> only.</p>
 <pre><code>git clone https://github.com/Orphograph/Orphograph.git
 cd Orphograph/sdk-node
-npm install &amp;&amp; npm run build
+npm install
 npm install /path/to/Orphograph/sdk-node   # from your project</code></pre>
     <div class="arch-callout">
-      <p>The build step is not optional. The compiled <code>dist/</code> is not committed, and the package's entry point points into it, so installing straight from the git URL would give you a package that cannot be imported.</p>
+      <p>Run <code>npm install</code> inside <code>sdk-node</code> before installing it into your project. The compiled <code>dist/</code> is not committed and the package's entry point points into it, so that first install is what builds it — a path install against a directory where it has never been run fails with <code>tsc: command not found</code>.</p>
     </div>
 <pre><code>import { anchorFolder, verifyFolder } from "orphograph";
 
