@@ -45,7 +45,7 @@
   <p class="u-eyebrow">Docs · SDKs</p>
   <h1>The same four operations, in two languages.</h1>
   <p class="arch-lede">
-    Both libraries are thin. They walk a folder, hash each file in place, build a Merkle tree, and send the root — nothing else. The implementations are bit-for-bit compatible with each other and with the browser: a folder anchored from Python verifies from Node, and a receipt issued through either verifies with this service gone.
+    Both libraries are thin. They walk a folder, hash each file in place, build a Merkle tree, and send the root — nothing else. The two are bit-for-bit compatible: both are held in continuous integration to the same <a href="https://github.com/Orphograph/Orphograph/tree/master/docs/test-vectors">published conformance vectors</a>, so a folder anchored from Python verifies from Node. The browser implements the same algorithm — <code>orphograph-merkle-v1-rfc6962</code> — and a receipt issued through any of them verifies with this service gone.
   </p>
 
   <div class="arch-callout">
