@@ -156,6 +156,11 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://orphograph.com/docs</loc>
+    <lastmod>2026-08-25</lastmod>
+    <priority>0.7</priority>
+  </url>
+  <url>
     <loc>https://orphograph.com/docs/api</loc>
     <lastmod>2026-07-07</lastmod>
     <priority>0.6</priority>
@@ -163,6 +168,16 @@
   <url>
     <loc>https://orphograph.com/docs/webhooks</loc>
     <lastmod>2026-07-06</lastmod>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://orphograph.com/docs/cli</loc>
+    <lastmod>2026-08-25</lastmod>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://orphograph.com/docs/sdk</loc>
+    <lastmod>2026-08-25</lastmod>
     <priority>0.6</priority>
   </url>
   <url>

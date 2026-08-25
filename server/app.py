@@ -637,8 +637,11 @@ def _build_sitemap() -> str:
         ("/method/the-mit-verifier-annotated", "0.6"),
         ("/method/whitepaper", "0.6"),
         ("/method/why-filenames-are-not-stored", "0.6"),
+        ("/docs", "0.7"),
         ("/docs/api", "0.6"),
         ("/docs/webhooks", "0.6"),
+        ("/docs/cli", "0.6"),
+        ("/docs/sdk", "0.6"),
         ("/stats", "0.6"),
         ("/gift", "0.6"),
         ("/status", "0.5"),
@@ -2044,6 +2047,18 @@ class Handler(BaseHTTPRequestHandler):
                     return
                 self.send_error(404, "Vertical not found")
                 return
+        # /docs/mcp is the URL developers reach for when they are already in
+        # the docs, but the canonical MCP page is /mcp and has been since it
+        # shipped. Two pages describing one product drift apart, so this is a
+        # redirect rather than a second page — same reasoning as the private-
+        # path rule below: one canonical set of claim wording, never two.
+        if path in ("/docs/mcp", "/docs/mcp.html"):
+            self.send_response(301)
+            self.send_header("Location", "/mcp")
+            self.send_header("Content-Length", "0")
+            _security_headers(self)
+            self.end_headers()
+            return
         # RFC 9116 — security.txt. Served explicitly so the Content-Type
         # is unambiguous (text/plain; charset=utf-8) and so the path is
         # never refused by the static-handler's suffix allowlist. The
