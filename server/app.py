@@ -1674,7 +1674,23 @@ class Handler(BaseHTTPRequestHandler):
             qs = parse_qs(urlparse(self.path).query)
             next_raw = (qs.get("next", [""])[0] or "").strip()
             location = "/account"
-            if next_raw.startswith("/") and not next_raw.startswith("//") and "\n" not in next_raw and "\r" not in next_raw and len(next_raw) < 200:
+            # 2026-08-25 audit: a literal `//` test is NOT sufficient. Browsers
+            # normalise "\\" to "/" and STRIP control characters before resolving a
+            # Location, so all three of these bypassed the previous check and
+            # produced a cross-origin redirect (verified against a live server):
+            #     ?next=/%5Cevil.example    -> Location: /\evil.example  -> //evil.example
+            #     ?next=/%09//evil.example  -> Location: /<TAB>//evil...  -> //evil.example
+            #     ?next=/./%5C/evil.example -> Location: /\/evil.example -> //evil.example
+            # Rather than trying to out-guess every normalisation a browser
+            # performs, this allows only the conservative shape a real landing
+            # path has: no backslash, no control characters or space, one
+            # leading slash. Anything else falls back to /account.
+            if (next_raw
+                    and len(next_raw) < 200
+                    and "\\" not in next_raw
+                    and not any(ord(c) < 0x21 or ord(c) == 0x7F for c in next_raw)
+                    and next_raw.startswith("/")
+                    and not next_raw.startswith("//")):
                 location = next_raw
             self.send_response(303)
             self.send_header("Location", location)
