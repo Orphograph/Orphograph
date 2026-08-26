@@ -232,8 +232,8 @@
     "sha256": "e854adcef4ec552d3fa1b2ef2b719689e613fffdff29771758ef9c0ab6520962"
   },
   "/founder/metrics.js": {
-    "version": "2",
-    "sha256": "9e3d6f46a12910e12fb981a07e6b17cd1cb655376e933217277d4aab460b3ae4"
+    "version": "3",
+    "sha256": "7df8417f0e71c9ebde76fbded7f3dea388a25d5b57a508ef8f22a02e2d6c56e9"
   },
   "/founder/support.css": {
     "version": "2",
@@ -480,8 +480,8 @@
     "sha256": "7185835c3b9b828ec8f30ff54f325ce210d3cbaf0dac52af32c3f7763d2788ac"
   },
   "/style.css": {
-    "version": "7",
-    "sha256": "b1f6ea18700cace72b0cd26bf1301665f47c1893bf06f06831937f41f4571424"
+    "version": "8",
+    "sha256": "9838279489f8cb677a0f26126b13218915ea82d90a2cb6a62c7abed33dff681e"
   },
   "/team/join.css": {
     "version": "1",
@@ -496,8 +496,8 @@
     "sha256": "6bd02ba7636f2e03d7a82299097d0be93dd9937f5c5cc5242628c34d48820801"
   },
   "/v2.js": {
-    "version": "5",
-    "sha256": "28e29b0144c3d2985ab07c2b7f48ec5f406f30b5e20b9445510ff12bacd95780"
+    "version": "6",
+    "sha256": "2f5ee1ea56d348b80a54b086d39d986990a49fa45c46f028b5ef6d0138e93458"
   },
   "/v2/app.js": {
     "version": "4",
