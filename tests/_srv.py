@@ -62,7 +62,16 @@ def base_env(data_dir: str | os.PathLike, port: int, **extra: str) -> dict:
         "HOST": "127.0.0.1",
         "ORPHO_DATA_DIR": str(data_dir),
         "ORPHO_COOKIE_SECURE": "0",
-        "ORPHO_OFFLINE_CALENDARS": "1",
+        # NO OFFLINE-CALENDAR KNOB EXISTS. This fixture used to set
+        # ORPHO_OFFLINE_CALENDARS=1, which NOTHING in the product reads
+        # (verified 2026-08-26 across 161 shipped files). engine.CALENDARS is
+        # a hardcoded list of five real OpenTimestamps URLs with no env
+        # override, so any test that anchors through this fixture SUBMITS
+        # OVER THE NETWORK to third-party public calendars: about 3s per
+        # anchor, and flaky whenever they are slow. That is a live
+        # constraint on the suite, not a setting. Adding an override touches
+        # DOCTRINE.md's five-calendar code invariant, so it is a founder
+        # decision, not a test-side fix.
         # Default generous: a rate-limited response is the LIMITER's verdict,
         # not the handler's, and a test that cannot tell them apart is vacuous.
         "RATE_LIMIT_PER_DAY": "100000",
