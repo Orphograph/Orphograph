@@ -50,6 +50,8 @@ from pathlib import Path
 
 import pytest
 
+import _srv
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CONCURRENCY = 12
 
@@ -64,31 +66,11 @@ def _free_port() -> int:
 
 @pytest.fixture(scope="module")
 def server(tmp_path_factory):
+    """One server, via the shared helper (tests/_srv.py)."""
     data_dir = tmp_path_factory.mktemp("pack_race_data")
-    port = _free_port()
-    env = {**os.environ, "PORT": str(port), "HOST": "127.0.0.1",
-           "ORPHO_DATA_DIR": str(data_dir), "ORPHO_COOKIE_SECURE": "0",
-           "RATE_LIMIT_PER_DAY": "100000", "ORPHO_OFFLINE_CALENDARS": "1"}
-    env.pop("RESEND_API_KEY", None)
-    proc = subprocess.Popen([sys.executable, str(REPO_ROOT / "server" / "app.py")],
-                            env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    base = f"http://127.0.0.1:{port}"
-    deadline = time.time() + 45
-    while time.time() < deadline:
-        try:
-            urllib.request.urlopen(base + "/api/health", timeout=1).read()
-            break
-        except Exception:
-            time.sleep(0.2)
-    else:
-        proc.kill()
-        pytest.fail("server did not start")
-    yield base, str(data_dir)
-    proc.terminate()
-    try:
-        proc.wait(timeout=5)
-    except subprocess.TimeoutExpired:
-        proc.kill()
+    for base in _srv.server_processes(data_dir):
+        yield base, str(data_dir)
+
 
 
 def _credits_call(data_dir: str, snippet: str) -> str:
@@ -175,52 +157,13 @@ def test_the_harness_can_observe_a_consume(server):
 
 @pytest.fixture(scope="module")
 def two_servers(tmp_path_factory):
-    """TWO server processes over ONE shared ORPHO_DATA_DIR.
-
-    This is what actually exercises the fcntl lock. With a single process the
-    in-process threading lock alone serialises everything, which is why the
-    single-server tests above still pass when the fcntl lock is removed.
-    """
+    """TWO server processes over ONE shared ORPHO_DATA_DIR — what actually
+    exercises the fcntl lock, and what found the _seed_sample_receipt
+    crash-on-boot race. Port reservation and stderr capture live in _srv.py."""
     data_dir = tmp_path_factory.mktemp("pack_race_2p")
-    # _free_port() binds :0 and closes, so calling it twice can hand back the
-    # SAME port and the second server then fails to bind. Hold both sockets
-    # open until both ports are reserved, then release them together.
-    holders = [socket.socket(), socket.socket()]
-    for h in holders:
-        h.bind(("127.0.0.1", 0))
-    ports = [h.getsockname()[1] for h in holders]
-    for h in holders:
-        h.close()
-    assert len(set(ports)) == 2, ports
-    procs, bases = [], []
-    for port in ports:
-        env = {**os.environ, "PORT": str(port), "HOST": "127.0.0.1",
-               "ORPHO_DATA_DIR": str(data_dir), "ORPHO_COOKIE_SECURE": "0",
-               "RATE_LIMIT_PER_DAY": "100000", "ORPHO_OFFLINE_CALENDARS": "1"}
-        env.pop("RESEND_API_KEY", None)
-        procs.append(subprocess.Popen(
-            [sys.executable, str(REPO_ROOT / "server" / "app.py")],
-            env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL))
-        bases.append(f"http://127.0.0.1:{port}")
-    for base in bases:
-        deadline = time.time() + 45      # per-server budget, not shared
-        while time.time() < deadline:
-            try:
-                urllib.request.urlopen(base + "/api/health", timeout=1).read()
-                break
-            except Exception:
-                time.sleep(0.2)
-        else:
-            for p in procs:
-                p.kill()
-            pytest.fail(f"{base} did not start")
-    yield bases, str(data_dir)
-    for p in procs:
-        p.terminate()
-        try:
-            p.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            p.kill()
+    for bases in _srv.server_processes(data_dir, n=2):
+        yield bases, str(data_dir)
+
 
 
 def test_one_credit_survives_anchors_across_TWO_processes(two_servers):

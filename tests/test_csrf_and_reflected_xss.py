@@ -37,6 +37,8 @@ from pathlib import Path
 
 import pytest
 
+import _srv
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 # The only content types a cross-origin <form> can send without a preflight.
@@ -70,31 +72,11 @@ def _free_port() -> int:
 
 @pytest.fixture(scope="module")
 def server(tmp_path_factory):
+    """One server, via the shared helper. See tests/_srv.py for why
+    the hand-copied version of this was replaced."""
     data_dir = tmp_path_factory.mktemp("xss_csrf_data")
-    port = _free_port()
-    env = {**os.environ, "PORT": str(port), "HOST": "127.0.0.1",
-           "ORPHO_DATA_DIR": str(data_dir), "ORPHO_COOKIE_SECURE": "0",
-           "RATE_LIMIT_PER_DAY": "100000", "ORPHO_OFFLINE_CALENDARS": "1"}
-    env.pop("RESEND_API_KEY", None)
-    proc = subprocess.Popen([sys.executable, str(REPO_ROOT / "server" / "app.py")],
-                            env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    base = f"http://127.0.0.1:{port}"
-    deadline = time.time() + 45
-    while time.time() < deadline:
-        try:
-            urllib.request.urlopen(base + "/api/health", timeout=1).read()
-            break
-        except Exception:
-            time.sleep(0.2)
-    else:
-        proc.kill()
-        pytest.fail("server did not start")
-    yield base
-    proc.terminate()
-    try:
-        proc.wait(timeout=5)
-    except subprocess.TimeoutExpired:
-        proc.kill()
+    yield from _srv.server_processes(data_dir)
+
 
 
 def _post(base: str, path: str, ctype: str) -> int:
