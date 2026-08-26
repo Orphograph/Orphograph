@@ -164,8 +164,8 @@
     "sha256": "803c7488fe983accf4dde09dcec834457ca5917c382ad58304584bec0ee0d0b0"
   },
   "/docs/api.css": {
-    "version": "1",
-    "sha256": "5a4e8ee5fef79fa29245138deace870b3b9b1a1a9aef52201407b28dda5e95e7"
+    "version": "2",
+    "sha256": "17ab47602f316324223d65ea303c4f1f553d99cd36b231d73eba7d9f4a8e4a67"
   },
   "/docs/hub.css": {
     "version": "1",
@@ -480,8 +480,8 @@
     "sha256": "7185835c3b9b828ec8f30ff54f325ce210d3cbaf0dac52af32c3f7763d2788ac"
   },
   "/style.css": {
-    "version": "6",
-    "sha256": "085e3617fdd243a29adc0890770ec33db868261b5d936aae218243bc4668cf91"
+    "version": "7",
+    "sha256": "b1f6ea18700cace72b0cd26bf1301665f47c1893bf06f06831937f41f4571424"
   },
   "/team/join.css": {
     "version": "1",
