@@ -50,3 +50,13 @@ def test_ip_prefix_field_is_truncated_input():
     analytics.record("page_view", "landing", long)
     row = json.loads(analytics.EVENTS_PATH.read_text().strip())
     assert len(row["ip_prefix"]) == 64
+
+
+def test_metrics_does_not_invent_mrr_from_subscriber_count(tmp_path, monkeypatch):
+    monkeypatch.setattr(analytics, "SUBSCRIPTIONS_PATH", tmp_path / "subscriptions.jsonl")
+    monkeypatch.setattr(analytics, "STRIPE_EVENTS_PATH", tmp_path / "stripe_processed_events.jsonl")
+    result = analytics.metrics()
+    assert result["mrr"] is None
+    assert result["arr"] is None
+    assert result["ltv"] is None
+    assert result["revenue_data_quality"] == "unavailable"

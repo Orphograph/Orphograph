@@ -34,10 +34,10 @@ async function loadMetrics() {
 }
 
 function displayMetrics(data) {
-  document.getElementById('mrr').textContent = data.mrr.toFixed(2);
-  document.getElementById('arr').textContent = data.arr.toFixed(2);
+  document.getElementById('mrr').textContent = Number.isFinite(data.mrr) ? data.mrr.toFixed(2) : '—';
+  document.getElementById('arr').textContent = Number.isFinite(data.arr) ? data.arr.toFixed(2) : '—';
   document.getElementById('churn-rate').textContent = (data.churn_rate * 100).toFixed(1);
-  document.getElementById('ltv').textContent = data.ltv.toFixed(2);
+  document.getElementById('ltv').textContent = Number.isFinite(data.ltv) ? data.ltv.toFixed(2) : '—';
   document.getElementById('active-customers').textContent = data.customers.active;
   document.getElementById('total-customers').textContent = data.customers.total;
   document.getElementById('active-count').textContent = data.customers.active;

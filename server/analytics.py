@@ -24,7 +24,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = Path(os.environ.get("ORPHO_DATA_DIR", str(ROOT / "data") if (ROOT / "data").is_dir() else str(ROOT)))
 STRIPE_EVENTS_PATH = DATA_DIR / "stripe_processed_events.jsonl"
-SUBSCRIPTIONS_PATH = DATA_DIR / "subscriptions.json"
+SUBSCRIPTIONS_PATH = Path(os.environ.get(
+    "ORPHO_SUB_LEDGER", str(DATA_DIR / "subscriptions.jsonl")
+))
 CREDITS_LEDGER = DATA_DIR / "credits.ledger" if (DATA_DIR / "credits.ledger").is_file() else DATA_DIR / "ledger.jsonl"
 
 # Event tracking (page views, conversions). Privacy-safe: no email,
@@ -73,18 +75,20 @@ def _parse_iso_date(s: str) -> datetime:
         return datetime.now(timezone.utc)
 
 
-def _current_subscriptions() -> dict[str, dict]:
-    """Load active subscription state from subscriptions.json.
+def _current_subscriptions() -> list[dict]:
+    """Load the append-only subscription ledger.
 
-    Returns: { email -> { 'status': 'active|canceled', 'current_period_end': '2026-...' } }
+    The live subscription module writes JSONL. Keep this reader aligned with
+    that contract; silently falling back to an obsolete JSON snapshot makes
+    the founder dashboard look healthy while ignoring current events.
     """
     if not SUBSCRIPTIONS_PATH.exists():
-        return {}
+        return []
     try:
         with SUBSCRIPTIONS_PATH.open() as f:
-            return json.load(f)
+            return [json.loads(line) for line in f if line.strip()]
     except (json.JSONDecodeError, IOError):
-        return {}
+        return []
 
 
 def _stripe_events() -> list[dict]:
@@ -163,24 +167,26 @@ def metrics(days_back: int = 90) -> dict:
             if cancel_date and cancel_date > cutoff:
                 churned_count += 1
 
-    # MRR: assume $9/mo per active subscription (placeholder; use actual plan amounts in production)
-    monthly_revenue = active_count * 9.0
-    arr = monthly_revenue * 12
+    # Revenue cannot be inferred from a subscriber count. Stripe event
+    # payloads in older ledgers do not consistently contain a normalized
+    # recurring unit amount, so report revenue as unavailable until the
+    # payment ledger provides one. Never manufacture MRR from a plan default.
+    monthly_revenue = None
     churn_rate = churned_count / max(active_count + churned_count, 1)
-    ltv = (monthly_revenue / max(churn_rate, 0.01)) if churn_rate > 0 else (monthly_revenue * 12)
 
     return {
         "timestamp": now.isoformat(),
         "period_days": days_back,
-        "mrr": round(monthly_revenue, 2),
-        "arr": round(arr, 2),
+        "mrr": monthly_revenue,
+        "arr": None,
+        "revenue_data_quality": "unavailable",
         "churn_rate": round(churn_rate, 4),
         "customers": {
             "active": active_count,
             "churned_this_month": churned_count,
             "total": active_count + churned_count,
         },
-        "ltv": round(ltv, 2),
+        "ltv": None,
     }
 
 
