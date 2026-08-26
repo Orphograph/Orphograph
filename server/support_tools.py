@@ -20,6 +20,8 @@ from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import subscriptions
+
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = Path(os.environ.get("ORPHO_DATA_DIR", str(ROOT / "data") if (ROOT / "data").is_dir() else str(ROOT)))
 
@@ -58,16 +60,27 @@ def lookup_customer(email: str) -> dict | None:
     if not email or "@" not in email:
         return None
 
-    # Load subscription state
-    subs_path = DATA_DIR / "subscriptions.json"
+    # Load subscription state from the canonical ledger.
+    #
+    # This used to read a `subscriptions.json` snapshot. server/subscriptions.py
+    # moved to an append-only `subscriptions.jsonl` event ledger and nothing
+    # writes the old snapshot any more, so `subs_path.exists()` was always
+    # False and every paying customer read back as `subscription: None` in the
+    # founder support lookup -- silently, with no error, because a missing file
+    # is indistinguishable from "no subscription" at that call site.
+    #
+    # Ask the module that owns the data instead of re-deriving its storage
+    # layout here, so a future format change cannot desynchronise the two again.
     subscription = None
-    if subs_path.exists():
-        try:
-            with subs_path.open() as f:
-                all_subs = json.load(f)
-                subscription = all_subs.get(email)
-        except (json.JSONDecodeError, IOError):
-            pass
+    latest = subscriptions.status_for(email)
+    if latest:
+        subscription = {
+            "status": latest.get("status", ""),
+            "created": latest.get("ts", ""),
+            "current_period_end": latest.get("current_period_end"),
+            "cancel_at_period_end": latest.get("cancel_at_period_end", False),
+            "stripe_sub": latest.get("stripe_sub", ""),
+        }
 
     # Load anchors (from ledger.jsonl or custom anchors ledger)
     anchors_path = DATA_DIR / "anchors.jsonl"
