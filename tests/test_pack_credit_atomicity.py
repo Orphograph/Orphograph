@@ -73,7 +73,7 @@ def server(tmp_path_factory):
     proc = subprocess.Popen([sys.executable, str(REPO_ROOT / "server" / "app.py")],
                             env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     base = f"http://127.0.0.1:{port}"
-    deadline = time.time() + 15
+    deadline = time.time() + 45
     while time.time() < deadline:
         try:
             urllib.request.urlopen(base + "/api/health", timeout=1).read()
@@ -169,3 +169,96 @@ def test_the_harness_can_observe_a_consume(server):
         "a lone anchor with a funded pack token did not report pack_consumed=True; "
         "the concurrency assertions cannot detect a double-spend"
     )
+
+
+# ─────────────── cross-process half (the gap this file documented) ───────────
+
+@pytest.fixture(scope="module")
+def two_servers(tmp_path_factory):
+    """TWO server processes over ONE shared ORPHO_DATA_DIR.
+
+    This is what actually exercises the fcntl lock. With a single process the
+    in-process threading lock alone serialises everything, which is why the
+    single-server tests above still pass when the fcntl lock is removed.
+    """
+    data_dir = tmp_path_factory.mktemp("pack_race_2p")
+    # _free_port() binds :0 and closes, so calling it twice can hand back the
+    # SAME port and the second server then fails to bind. Hold both sockets
+    # open until both ports are reserved, then release them together.
+    holders = [socket.socket(), socket.socket()]
+    for h in holders:
+        h.bind(("127.0.0.1", 0))
+    ports = [h.getsockname()[1] for h in holders]
+    for h in holders:
+        h.close()
+    assert len(set(ports)) == 2, ports
+    procs, bases = [], []
+    for port in ports:
+        env = {**os.environ, "PORT": str(port), "HOST": "127.0.0.1",
+               "ORPHO_DATA_DIR": str(data_dir), "ORPHO_COOKIE_SECURE": "0",
+               "RATE_LIMIT_PER_DAY": "100000", "ORPHO_OFFLINE_CALENDARS": "1"}
+        env.pop("RESEND_API_KEY", None)
+        procs.append(subprocess.Popen(
+            [sys.executable, str(REPO_ROOT / "server" / "app.py")],
+            env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL))
+        bases.append(f"http://127.0.0.1:{port}")
+    for base in bases:
+        deadline = time.time() + 45      # per-server budget, not shared
+        while time.time() < deadline:
+            try:
+                urllib.request.urlopen(base + "/api/health", timeout=1).read()
+                break
+            except Exception:
+                time.sleep(0.2)
+        else:
+            for p in procs:
+                p.kill()
+            pytest.fail(f"{base} did not start")
+    yield bases, str(data_dir)
+    for p in procs:
+        p.terminate()
+        try:
+            p.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            p.kill()
+
+
+def test_one_credit_survives_anchors_across_TWO_processes(two_servers):
+    """THE CROSS-PROCESS GUARD — the half the single-server tests cannot see.
+
+    Two independent server processes share one ledger, exactly as two Fly
+    machines would. Only the fcntl lock stands between them and both observing
+    balance>0. Verified 2026-08-25 that removing that lock makes this fail
+    while every single-process test stays green.
+    """
+    bases, data_dir = two_servers
+    code = _mint(data_dir, 1)
+    assert _balance(data_dir, code) == 1
+
+    # Alternate across both processes so the requests genuinely interleave.
+    def fire(i):
+        return _anchor(bases[i % 2], code, i)
+
+    with ThreadPoolExecutor(max_workers=CONCURRENCY) as ex:
+        results = list(ex.map(fire, range(CONCURRENCY)))
+
+    consumed = [r for r in results if r is True]
+    assert len(consumed) == 1, (
+        f"CROSS-PROCESS DOUBLE-SPEND: {len(consumed)} of {CONCURRENCY} anchors "
+        f"across 2 processes consumed the same single credit. results={results}"
+    )
+    assert _balance(data_dir, code) == 0
+
+
+def test_both_processes_can_actually_consume(two_servers):
+    """NEGATIVE CONTROL for the cross-process test. If one server were dead or
+    ignoring the header, the test above would pass with a single consumer by
+    accident. Give each process its own funded token and require both to work.
+    """
+    bases, data_dir = two_servers
+    for i, base in enumerate(bases):
+        code = _mint(data_dir, 1)
+        assert _anchor(base, code, 900 + i) is True, (
+            f"server {i} ({base}) did not consume a funded credit — the "
+            "cross-process assertion cannot detect a double-spend"
+        )

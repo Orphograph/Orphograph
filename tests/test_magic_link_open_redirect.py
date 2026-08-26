@@ -82,7 +82,7 @@ def server(tmp_path_factory):
     proc = subprocess.Popen([sys.executable, str(REPO_ROOT / "server" / "app.py")],
                             env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     base = f"http://127.0.0.1:{port}"
-    deadline = time.time() + 10
+    deadline = time.time() + 45
     while time.time() < deadline:
         try:
             urllib.request.urlopen(base + "/api/health", timeout=1).read()
