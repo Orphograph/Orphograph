@@ -2251,6 +2251,33 @@ class Handler(BaseHTTPRequestHandler):
         })
         return True
 
+    def _optional_typed(self, payload: dict, field: str, want: type, label: str):
+        """Read an OPTIONAL structured field, or 400 if it is present with the
+        wrong type. Returns (value_or_None, handled) — `handled` True means a
+        response has already been sent and the caller must return.
+
+        2026-08-25 audit: these three fields used to be read as
+        `payload.get(f) if isinstance(payload.get(f), T) else None`, which
+        SILENTLY dropped a wrong-typed value. A client sending
+        `c2pa_manifest_hash: 12345` got a 200 and a receipt with no binding and
+        never learned that the binding it asked for does not exist — while the
+        same field sent as a malformed STRING was correctly rejected with 400.
+        Silent data loss on a trust product is worse than a loud refusal, and
+        the inconsistency was the tell. JSON null and an absent key both still
+        mean "not supplied" and are accepted.
+        """
+        if field not in payload or payload[field] is None:
+            return None, False
+        value = payload[field]
+        # bool is a subclass of int; it is never a valid value for these.
+        if isinstance(value, want) and not isinstance(value, bool):
+            return value, False
+        _json_response(self, 400, {
+            "error": f"{field} must be {label} when supplied",
+            "detail": "omit the field, or send null, if you have no value for it",
+        })
+        return None, True
+
     def do_POST(self):  # noqa: N802
         if self._reject_non_json_post():
             return
@@ -2499,17 +2526,25 @@ class Handler(BaseHTTPRequestHandler):
         # anchored hash (docs/HARDWARE_ATTESTATION_SPIKE.md). The engine
         # strictly validates shape + hash binding and rejects the whole
         # record on any violation; absent field changes nothing.
-        hardware_attestation = payload.get("hardware_attestation") if isinstance(payload.get("hardware_attestation"), dict) else None
+        hardware_attestation, _handled = self._optional_typed(
+            payload, "hardware_attestation", dict, "an object")
+        if _handled:
+            return
         # ZK provenance proof (schnorr-zk-pok-v1 / snark-exec-v1): the engine
         # sanitizer recomputes every hash binding and rejects the whole
         # record on any violation. This passthrough was MISSING from the
         # HTTP surface until 2026-08-04 — engine-level tests all passed
         # while the field silently vanished on the wire.
-        zk_proof = payload.get("zk_proof") if isinstance(payload.get("zk_proof"), dict) else None
+        zk_proof, _handled = self._optional_typed(payload, "zk_proof", dict, "an object")
+        if _handled:
+            return
         # Optional C2PA manifest hash — the engine validates shape before
         # accepting. Coexistence-first: an Orphograph receipt can reference
         # a C2PA manifest hash so verifiers see both attestations.
-        c2pa_manifest_hash = payload.get("c2pa_manifest_hash") if isinstance(payload.get("c2pa_manifest_hash"), str) else None
+        c2pa_manifest_hash, _handled = self._optional_typed(
+            payload, "c2pa_manifest_hash", str, "a string")
+        if _handled:
+            return
         if isinstance(client_label, str):
             client_label = client_label[:200]
         else:
@@ -5276,7 +5311,16 @@ def _seed_sample_receipt() -> None:
         return
     target.parent.mkdir(parents=True, exist_ok=True)
     sample_dir = WEB_DIR / "sample"
-    target.mkdir()
+    # `target.exists()` above is a fast path, NOT the decision. Two server
+    # processes booting against one ORPHO_DATA_DIR (an overlapping deploy, or a
+    # second machine on a shared volume) both pass that check and then race
+    # here — the loser used to die with FileExistsError BEFORE binding its
+    # port, i.e. a crash-on-boot, not a warning. mkdir is atomic, so let it BE
+    # the claim: whoever creates the directory seeds it, everyone else returns.
+    try:
+        target.mkdir()
+    except FileExistsError:
+        return
     for item in sample_dir.iterdir():
         if item.name in ("index.json",):
             continue
@@ -5308,7 +5352,11 @@ def _seed_sample_folder_receipt() -> None:
         return
     target.parent.mkdir(parents=True, exist_ok=True)
     sample_dir = WEB_DIR / "sample-folder"
-    target.mkdir()
+    # Same boot race as _seed_sample_receipt — mkdir is the atomic claim.
+    try:
+        target.mkdir()
+    except FileExistsError:
+        return
     for item in sample_dir.iterdir():
         if item.name in ("index.json",):
             continue

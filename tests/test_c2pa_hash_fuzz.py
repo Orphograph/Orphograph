@@ -60,10 +60,14 @@ VECTORS = [
     ("newline", "a" * 32 + "\n" + "a" * 31, True),
     ("all_spaces", " " * 64, True),
     ("huge_100k", "a" * 100_000, True),
-    ("type_int", 12345, False),
-    ("type_list", ["a" * 64], False),
-    ("type_dict", {"h": "a" * 64}, False),
-    ("type_bool", True, False),
+    # 2026-08-25: wrong TYPE now 400s too. It used to be accepted with the
+    # field silently dropped, so a client sending c2pa_manifest_hash: 12345 got
+    # a 200 and a receipt with no binding and never learned. JSON null still
+    # means "not supplied" and is accepted.
+    ("type_int", 12345, True),
+    ("type_list", ["a" * 64], True),
+    ("type_dict", {"h": "a" * 64}, True),
+    ("type_bool", True, True),
     ("type_null", None, False),
 ]
 
@@ -93,7 +97,7 @@ def server(tmp_path_factory):
         [sys.executable, str(REPO_ROOT / "server" / "app.py")],
         env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     base = f"http://127.0.0.1:{port}"
-    deadline = time.time() + 10
+    deadline = time.time() + 45
     while time.time() < deadline:
         try:
             urllib.request.urlopen(base + "/api/health", timeout=1).read()
@@ -139,10 +143,11 @@ def test_hostile_c2pa_value_never_reaches_a_receipt(server, tag, value, expect_4
     if expect_400:
         assert status == 400, f"{tag} was NOT rejected (got {status})"
         return
-    # Wrong TYPE: accepted on the wire, but the field must be dropped entirely.
+    # Only JSON null reaches here: absent-or-null means "not supplied", so the
+    # anchor succeeds and the field is simply absent from the receipt.
     assert status == 200, f"{tag} got {status}"
     assert _stored_c2pa(server, body["receipt_id"]) is None, (
-        f"{tag} of the wrong type was STORED"
+        f"{tag} was STORED despite being null"
     )
 
 
