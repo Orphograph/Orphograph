@@ -1029,6 +1029,32 @@ class Handler(BaseHTTPRequestHandler):
         )
         return truncate_ip(chosen)
 
+    def _record_demand(self, event: str, *, auth_path: str, surface: str,
+                       outcome: str, api_key: str = "",
+                       authenticated: bool = False, paid: bool = False) -> None:
+        """Best-effort server-side demand event with no receipt mutation.
+
+        Classification uses only server-verified auth facts. A caller cannot
+        label itself human or office through a request field/header, and an
+        analytics failure never changes the customer-facing operation.
+        """
+        try:
+            origin = analytics.classify_origin(
+                api_key=api_key if authenticated else "",
+                authenticated=authenticated,
+                paid=paid,
+            )
+            analytics.record_demand(
+                event,
+                origin_class=origin,
+                auth_path=auth_path,
+                surface=surface,
+                outcome=outcome,
+                client_key=self._client_key(),
+            )
+        except Exception as exc:  # noqa: BLE001 - telemetry must never break product
+            sys.stderr.write(f"[demand] instrumentation unavailable: {type(exc).__name__}\n")
+
     def _analytics_ip(self) -> tuple[str, str]:
         """(/24-or-/48 truncated visitor IP, source label) for funnel rows.
 
@@ -2470,6 +2496,9 @@ class Handler(BaseHTTPRequestHandler):
                     self.wfile.write(body)
                     return
             if not allowed:
+                Handler._record_demand(self,
+                    "free_limit_reached", auth_path="free", surface="single",
+                    outcome="limited")
                 self.send_response(429)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
                 self.send_header("Retry-After", str(int(retry_after) + 1))
@@ -2699,6 +2728,25 @@ class Handler(BaseHTTPRequestHandler):
                 pass
         site = os.environ.get("SITE_URL", "https://orphograph.com").rstrip("/")
         rid = record["receipt_id"]
+        if pack_consumed:
+            demand_auth_path = "pack"
+        elif ln_payment_hash is not None:
+            demand_auth_path = "l402"
+        elif api_key_active:
+            demand_auth_path = "api_key"
+        elif subscription_active:
+            demand_auth_path = "subscription"
+        else:
+            demand_auth_path = "free"
+        Handler._record_demand(self,
+            "anchor_succeeded",
+            auth_path=demand_auth_path,
+            surface="single",
+            outcome="success" if record["calendars_ok"] > 0 else "uncommitted",
+            api_key=api_key if api_key_active else "",
+            authenticated=api_key_active or subscription_active,
+            paid=demand_auth_path != "free",
+        )
         _json_response(self, 200, {
             "receipt_id": rid,
             "created_at": record["created_at"],
@@ -2841,6 +2889,9 @@ class Handler(BaseHTTPRequestHandler):
         if not pack_token and not api_key_active and not sub_active:
             allowed, retry_after = _anchor_limiter.check(self._client_key())
             if not allowed:
+                Handler._record_demand(self,
+                    "free_limit_reached", auth_path="free", surface="batch",
+                    outcome="limited")
                 _json_response(self, 429, {
                     "error": "rate limit exceeded",
                     "retry_after_seconds": int(retry_after) + 1,
@@ -2923,6 +2974,23 @@ class Handler(BaseHTTPRequestHandler):
                 continue
             site = os.environ.get("SITE_URL", "https://orphograph.com").rstrip("/")
             rid = record["receipt_id"]
+            if pack_consumed_here:
+                demand_auth_path = "pack"
+            elif api_key_active:
+                demand_auth_path = "api_key"
+            elif sub_active:
+                demand_auth_path = "subscription"
+            else:
+                demand_auth_path = "free"
+            Handler._record_demand(self,
+                "anchor_succeeded",
+                auth_path=demand_auth_path,
+                surface="batch",
+                outcome="success" if record["calendars_ok"] > 0 else "uncommitted",
+                api_key=api_key if api_key_active else "",
+                authenticated=api_key_active or sub_active,
+                paid=demand_auth_path != "free",
+            )
             results.append({
                 "index": idx,
                 "ok": True,
@@ -3923,6 +3991,9 @@ class Handler(BaseHTTPRequestHandler):
         if not pack_consumed and not subscription_active:
             allowed, retry_after = _anchor_limiter.check(self._client_key())
             if not allowed:
+                Handler._record_demand(self,
+                    "free_limit_reached", auth_path="free", surface="folder",
+                    outcome="limited")
                 self.send_response(429)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
                 self.send_header("Retry-After", str(int(retry_after) + 1))
@@ -4194,6 +4265,23 @@ class Handler(BaseHTTPRequestHandler):
                 "root_hex": root_hex,
                 "receipt_url": f"{os.environ.get('SITE_URL', 'https://orphograph.com').rstrip('/')}/r/{rid}",
             })
+        if pack_consumed:
+            demand_auth_path = "pack"
+        elif api_key_active:
+            demand_auth_path = "api_key"
+        elif subscription_active:
+            demand_auth_path = "subscription"
+        else:
+            demand_auth_path = "free"
+        Handler._record_demand(self,
+            "anchor_succeeded",
+            auth_path=demand_auth_path,
+            surface="folder",
+            outcome="success" if record["calendars_ok"] > 0 else "uncommitted",
+            api_key=api_key if api_key_active else "",
+            authenticated=api_key_active or subscription_active,
+            paid=demand_auth_path != "free",
+        )
         _json_response(self, 200, response_body)
 
     def _handle_verify_folder(self, rid: str) -> None:
@@ -4893,6 +4981,9 @@ class Handler(BaseHTTPRequestHandler):
             _json_response(self, 503, {"error": result.get("error", "stripe error")})
             return
         data = result.get("data") or {}
+        Handler._record_demand(self,
+            "checkout_created", auth_path="none", surface="stripe",
+            outcome="success")
         _json_response(self, 200, {
             "url": data.get("url"),
             "session_id": data.get("id"),
@@ -4922,6 +5013,20 @@ class Handler(BaseHTTPRequestHandler):
             _json_response(self, 400, {"error": "invalid signature"})
             return
         result = stripe_webhook.handle_event(payload)
+        if (result.get("ok") and not result.get("duplicate")
+                and (result.get("claim_code_minted")
+                     or result.get("subscription_checkout"))):
+            demand_auth_path = (
+                "subscription" if result.get("subscription_checkout") else "pack"
+            )
+            Handler._record_demand(self,
+                "payment_confirmed", auth_path=demand_auth_path,
+                surface="stripe", outcome="success", authenticated=True,
+                paid=True)
+            Handler._record_demand(self,
+                "entitlement_activated", auth_path=demand_auth_path,
+                surface="stripe", outcome="success", authenticated=True,
+                paid=True)
         _json_response(self, 200, result)
 
     # ---------- NOWPayments (non-custodial crypto checkout) ----------
@@ -4953,6 +5058,13 @@ class Handler(BaseHTTPRequestHandler):
             _json_response(self, 400, {"error": "invalid signature"})
             return
         result = nowpayments_webhook.handle_event(payload)
+        if result.get("ok") and result.get("claim_code_minted"):
+            Handler._record_demand(self,
+                "payment_confirmed", auth_path="pack", surface="nowpayments",
+                outcome="success", authenticated=True, paid=True)
+            Handler._record_demand(self,
+                "entitlement_activated", auth_path="pack", surface="nowpayments",
+                outcome="success", authenticated=True, paid=True)
         _json_response(self, 200, result)
 
     def _handle_nowpayments_create(self) -> None:
@@ -5055,6 +5167,9 @@ class Handler(BaseHTTPRequestHandler):
                 "error": "Payment provider returned no invoice URL.",
             })
             return
+        Handler._record_demand(self,
+            "checkout_created", auth_path="none", surface="nowpayments",
+            outcome="success")
         _json_response(self, 200, {
             "ok": True,
             "url": invoice_url,

@@ -44,11 +44,41 @@ function displayMetrics(data) {
   document.getElementById('churned-count').textContent = data.customers.churned_this_month;
 
   renderWaitlist(data.waitlist);
+  renderDemand(data.demand);
 
   const timestamp = new Date(data.timestamp);
   document.getElementById('timestamp').textContent = timestamp.toLocaleString();
 
   document.getElementById('metrics-content').style.display = 'block';
+}
+
+function renderDemand(d) {
+  const el = document.getElementById('anchor-demand-readout');
+  if (!el) return;
+  el.textContent = '';
+  if (!d || d.error) {
+    el.textContent = 'UNAVAILABLE — ' + ((d && d.error) || 'not reported by this build');
+    return;
+  }
+  const origins = d.origins || {};
+  const events = d.events || {};
+  const rows = [
+    ['data quality', d.data_quality],
+    ['external events', origins.external || 0],
+    ['office automation', origins.office_automation || 0],
+    ['unknown origin', origins.unknown || 0],
+    ['anchors succeeded', events.anchor_succeeded || 0],
+    ['free limits reached', events.free_limit_reached || 0],
+    ['payments confirmed', events.payment_confirmed || 0]
+  ];
+  rows.forEach(function (r) {
+    const dt = document.createElement('dt');
+    dt.textContent = r[0];
+    const dd = document.createElement('dd');
+    dd.textContent = String(r[1]);
+    el.appendChild(dt);
+    el.appendChild(dd);
+  });
 }
 
 // Demand readout. Revenue answers "did anyone pay"; this answers "did anyone

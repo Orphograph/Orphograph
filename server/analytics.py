@@ -16,10 +16,15 @@ Exported for founder-only endpoints:
 from __future__ import annotations
 
 import json
+import hashlib
+import hmac
 import os
-from collections import defaultdict
+import re
+from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+
+from file_lock import locked
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = Path(os.environ.get("ORPHO_DATA_DIR", str(ROOT / "data") if (ROOT / "data").is_dir() else str(ROOT)))
@@ -33,9 +38,32 @@ CREDITS_LEDGER = DATA_DIR / "credits.ledger" if (DATA_DIR / "credits.ledger").is
 # no full IP, no full URL — only event name, coerced page name, truncated
 # IP prefix, and referer hostname.
 EVENTS_PATH = DATA_DIR / "events.jsonl"
+DEMAND_EVENTS_PATH = Path(os.environ.get(
+    "ORPHO_DEMAND_EVENTS", str(DATA_DIR / "demand_events.jsonl")
+))
 ALLOWED_EVENTS = ("page_view", "anchor_click", "buy_pack_click", "verify_click")
 ALLOWED_PAGES = ("landing", "verify", "account", "pricing", "docs", "blog",
                  "status", "stats", "about", "press", "compare", "affiliate")
+
+DEMAND_EVENT_VERSION = 1
+DEMAND_EVENTS = frozenset({
+    "anchor_succeeded",
+    "free_limit_reached",
+    "checkout_created",
+    "payment_confirmed",
+    "entitlement_activated",
+})
+ORIGIN_CLASSES = frozenset({
+    "office_automation",
+    "external_authenticated",
+    "external_anonymous",
+    "unknown",
+})
+AUTH_PATHS = frozenset({"free", "pack", "subscription", "api_key", "l402", "none"})
+SURFACES = frozenset({"single", "batch", "folder", "stripe", "nowpayments"})
+OUTCOMES = frozenset({"success", "limited", "uncommitted", "failed"})
+_OFFER_VERSION_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,31}$")
+_HEX64_RE = re.compile(r"^[0-9a-f]{64}$")
 
 
 def record(
@@ -67,12 +95,159 @@ def record(
     return True
 
 
+def _internal_key_hashes() -> tuple[str, ...]:
+    """Validated SHA-256 digests of office-only API credentials.
+
+    Production receives these through ORPHO_INTERNAL_API_KEY_HASHES as a
+    comma-separated list. Raw credentials are never written to analytics.
+    """
+    raw = os.environ.get("ORPHO_INTERNAL_API_KEY_HASHES", "")
+    return tuple(
+        item for item in (part.strip().lower() for part in raw.split(","))
+        if _HEX64_RE.fullmatch(item)
+    )
+
+
+def classify_origin(*, api_key: str = "", authenticated: bool = False,
+                    paid: bool = False) -> str:
+    """Classify demand from server-known authentication facts only."""
+    if api_key:
+        digest = hashlib.sha256(api_key.encode("utf-8")).hexdigest()
+        if any(hmac.compare_digest(digest, known) for known in _internal_key_hashes()):
+            return "office_automation"
+    if authenticated or paid:
+        return "external_authenticated"
+    return "external_anonymous"
+
+
+def privacy_safe_cohort(client_key: str, *, now: datetime | None = None) -> str:
+    """Monthly rotating, non-reversible cohort id; empty when unconfigured."""
+    secret = os.environ.get("ORPHO_ANALYTICS_HMAC_SECRET", "")
+    if not secret or not client_key:
+        return ""
+    stamp = (now or datetime.now(timezone.utc)).strftime("%Y-%m")
+    payload = f"{stamp}:{client_key}".encode("utf-8")
+    return hmac.new(secret.encode("utf-8"), payload, hashlib.sha256).hexdigest()[:20]
+
+
+def _offer_version() -> str:
+    value = os.environ.get("ORPHO_OFFER_VERSION", "control-v1").strip().lower()
+    return value if _OFFER_VERSION_RE.fullmatch(value) else "invalid"
+
+
+def record_demand(
+    event: str,
+    *,
+    origin_class: str,
+    auth_path: str,
+    surface: str,
+    outcome: str,
+    client_key: str = "",
+) -> bool:
+    """Append one closed-schema, privacy-safe server-side demand event.
+
+    Best effort by design: an analytics disk error must never make anchoring
+    or checkout fail. False is returned so health/readout callers can expose
+    degraded instrumentation rather than mistaking it for zero demand.
+    """
+    if (event not in DEMAND_EVENTS or origin_class not in ORIGIN_CLASSES
+            or auth_path not in AUTH_PATHS or surface not in SURFACES
+            or outcome not in OUTCOMES):
+        return False
+    cohort = privacy_safe_cohort(client_key)
+    # Do not create an attribution ledger until its privacy secret exists.
+    # A row with a raw client bucket is forbidden, and a row with no cohort
+    # cannot support the conversion/repeat-use question this ledger exists to
+    # answer. The founder readout reports a missing ledger as UNAVAILABLE.
+    if not cohort:
+        return False
+    row = {
+        "ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "event_version": DEMAND_EVENT_VERSION,
+        "event": event,
+        "origin_class": origin_class,
+        "auth_path": auth_path,
+        "surface": surface,
+        "offer_version": _offer_version(),
+        "outcome": outcome,
+        "privacy_safe_cohort": cohort,
+        "data_quality": "complete",
+    }
+    try:
+        with locked(DEMAND_EVENTS_PATH, mode="a", exclusive=True) as f:
+            f.write(json.dumps(row, separators=(",", ":")) + "\n")
+    except OSError:
+        return False
+    return True
+
+
+def demand_summary(days_back: int = 90) -> dict:
+    """Aggregate the internal demand ledger without counting office as demand."""
+    if not DEMAND_EVENTS_PATH.exists():
+        return {
+            "data_quality": "unavailable",
+            "error": "demand ledger missing (this is not zero)",
+        }
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days_back)
+    events: Counter[str] = Counter()
+    origins: Counter[str] = Counter()
+    surfaces: Counter[str] = Counter()
+    auth_paths: Counter[str] = Counter()
+    malformed = 0
+    incomplete_cohorts = 0
+    try:
+        with DEMAND_EVENTS_PATH.open() as f:
+            for line in f:
+                try:
+                    row = json.loads(line)
+                    when = datetime.fromisoformat(
+                        str(row.get("ts", "")).replace("Z", "+00:00")
+                    )
+                    if when.tzinfo is None:
+                        raise ValueError("timestamp must carry a timezone")
+                except (json.JSONDecodeError, AttributeError, TypeError, ValueError):
+                    malformed += 1
+                    continue
+                if when < cutoff or row.get("event") not in DEMAND_EVENTS:
+                    continue
+                origin = row.get("origin_class", "unknown")
+                surface = row.get("surface", "")
+                auth_path = row.get("auth_path", "")
+                events[row["event"]] += 1
+                origins[origin if origin in ORIGIN_CLASSES else "unknown"] += 1
+                if surface in SURFACES:
+                    surfaces[surface] += 1
+                if auth_path in AUTH_PATHS:
+                    auth_paths[auth_path] += 1
+                if row.get("data_quality") != "complete":
+                    incomplete_cohorts += 1
+    except OSError as exc:
+        return {"data_quality": "unavailable", "error": f"demand ledger unreadable: {exc}"}
+    external = origins["external_authenticated"] + origins["external_anonymous"]
+    return {
+        "data_quality": "degraded" if (malformed or incomplete_cohorts) else "complete",
+        "period_days": days_back,
+        "total_events": sum(events.values()),
+        "events": dict(events),
+        "origins": {
+            "external": external,
+            "office_automation": origins["office_automation"],
+            "unknown": origins["unknown"],
+        },
+        "surfaces": dict(surfaces),
+        "auth_paths": dict(auth_paths),
+        "malformed_rows": malformed,
+        "incomplete_cohorts": incomplete_cohorts,
+        "office_excluded_from_external": True,
+    }
+
+
 def _parse_iso_date(s: str) -> datetime:
-    """Parse ISO 8601 timestamp."""
+    """Parse ISO 8601 timestamp; malformed ledger dates sort oldest."""
     try:
         return datetime.fromisoformat(s.replace("Z", "+00:00"))
     except (ValueError, AttributeError):
-        return datetime.now(timezone.utc)
+        return datetime.min.replace(tzinfo=timezone.utc)
 
 
 def _current_subscriptions() -> list[dict]:
@@ -139,15 +314,9 @@ def _subscription_events() -> dict[str, list[dict]]:
 def metrics(days_back: int = 90) -> dict:
     """Calculate founder metrics for the last N days.
 
-    Returns: {
-      "timestamp": "2026-05-14T20:45:00Z",
-      "period_days": 90,
-      "mrr": 1234.56,  # current month subscription revenue
-      "arr": 14814.72,  # annualized run rate
-      "churn_rate": 0.05,  # % of subscribers churned this month
-      "customers": { "active": 12, "churned_this_month": 3, "total": 15 },
-      "ltv": 1500.00,  # estimated lifetime value
-    }
+    Revenue fields remain null until a normalized payment ledger can support
+    them. Demand includes an explicit data-quality state and office/external
+    split.
     """
     now = datetime.now(timezone.utc)
     cutoff = now - timedelta(days=days_back)
@@ -159,7 +328,14 @@ def metrics(days_back: int = 90) -> dict:
     churned_count = 0
 
     for email, events in sub_events.items():
-        latest = max(events, key=lambda e: e.get("created"), default={})
+        latest = max(
+            events,
+            key=lambda e: (
+                e.get("created") or e.get("canceled_at")
+                or datetime.min.replace(tzinfo=timezone.utc)
+            ),
+            default={},
+        )
         if latest.get("type") == "created":
             active_count += 1
         elif latest.get("type") == "canceled":
@@ -187,6 +363,7 @@ def metrics(days_back: int = 90) -> dict:
             "total": active_count + churned_count,
         },
         "ltv": None,
+        "demand": demand_summary(days_back=days_back),
     }
 
 
