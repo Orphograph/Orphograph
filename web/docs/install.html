@@ -63,8 +63,8 @@
     <h2>2 · Python SDK</h2>
     <div class="arch-rule"></div>
     <p>For pipelines written in Python — backup scripts, evidence-intake jobs, batch processing of working sets. The package targets Python 3.9 or newer and depends on the standard library only.</p>
-<pre><code>pip install "git+https://github.com/Orphograph/Orphograph#subdirectory=sdk-python"</code></pre>
-    <div class="arch-callout"><p>The Python package is not on PyPI yet, so it installs from source. The command above is the whole of it — it needs only git and pip, pulls no third-party dependencies, and registers the <code>orphograph</code> command described in <a href="/docs/cli">the command-line reference</a>.</p></div>
+<pre><code>pip install orphograph</code></pre>
+    <div class="arch-callout"><p>The command above is the whole of it — the package pulls no third-party dependencies and registers the <code>orphograph</code> command described in <a href="/docs/cli">the command-line reference</a>.</p></div>
 <pre><code>from orphograph import anchor_folder, verify_folder
 
 result = anchor_folder("/path/to/folder")
