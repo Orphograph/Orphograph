@@ -67,9 +67,11 @@ def _free_port() -> int:
 @pytest.fixture(scope="module")
 def server(tmp_path_factory):
     """One server, via the shared helper. See tests/_srv.py for why
-    the hand-copied version of this was replaced."""
+    the hand-copied version of this was replaced. Calendar HTTP is the only
+    stub: this test pins the Orphograph wire/persistence seam, not third-party
+    uptime, and must finish inside its own 15-second request deadline."""
     data_dir = tmp_path_factory.mktemp("zk_wire_data")
-    yield from _srv.server_processes(data_dir)
+    yield from _srv.server_processes(data_dir, stub_calendars=True)
 
 
 

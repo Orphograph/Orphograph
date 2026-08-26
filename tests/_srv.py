@@ -36,6 +36,7 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 APP = REPO_ROOT / "server" / "app.py"
+TEST_SERVER = REPO_ROOT / "tests" / "_run_server.py"
 
 STARTUP_TIMEOUT_SEC = 45
 _TAIL_CHARS = 1500
@@ -81,7 +82,8 @@ def base_env(data_dir: str | os.PathLike, port: int, **extra: str) -> dict:
     return env
 
 
-def spin(data_dir: str | os.PathLike, n: int = 1, **env_extra: str):
+def spin(data_dir: str | os.PathLike, n: int = 1, *,
+         stub_calendars: bool = False, **env_extra: str):
     """Start n server processes on one data dir. Yields (bases, procs, logs).
 
     Caller is responsible for stopping them; `server_processes` below does it.
@@ -92,8 +94,15 @@ def spin(data_dir: str | os.PathLike, n: int = 1, **env_extra: str):
         log_path = Path(data_dir) / f"server-{port}.log"
         lf = open(log_path, "w")
         logs.append((log_path, lf))
+        command = [sys.executable, str(APP)]
+        if stub_calendars:
+            # A test-harness process patch, not a product environment knob.
+            # The handler, request parsing, engine persistence and response
+            # serialization remain real; only third-party calendar I/O is
+            # replaced with a valid deterministic acceptance body.
+            command = [sys.executable, str(TEST_SERVER), "--stub-calendars"]
         procs.append(subprocess.Popen(
-            [sys.executable, str(APP)],
+            command,
             env=base_env(data_dir, port, **env_extra),
             stdout=lf, stderr=subprocess.STDOUT,   # never DEVNULL — see docstring
         ))
@@ -144,14 +153,16 @@ def _kill_all(procs, logs) -> None:
             pass
 
 
-def server_processes(data_dir, n: int = 1, **env_extra: str):
+def server_processes(data_dir, n: int = 1, *,
+                     stub_calendars: bool = False, **env_extra: str):
     """Context-manager-ish generator for a pytest fixture:
 
         @pytest.fixture(scope="module")
         def server(tmp_path_factory):
             yield from _srv.server_processes(tmp_path_factory.mktemp("x"))
     """
-    bases, procs, logs = spin(data_dir, n=n, **env_extra)
+    bases, procs, logs = spin(
+        data_dir, n=n, stub_calendars=stub_calendars, **env_extra)
     wait_ready(bases, procs, logs)
     try:
         yield bases[0] if n == 1 else bases
