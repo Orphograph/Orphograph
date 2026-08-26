@@ -27,6 +27,7 @@ class TestPublicConfig(unittest.TestCase):
             "PERSONAL_MONTHLY_USD", "PERSONAL_ANNUAL_USD", "CREATOR_MONTHLY_USD",
             "ORPHO_MAINTENANCE_MODE", "ORPHO_DISABLE_CHECKOUT",
             "ORPHO_DISABLE_ANCHORING",
+            "ORPHO_DEMAND_PACK_V1",
             "BTC_PAYMENTS_ENABLED", "CREATOR_TIER_LIVE",
             # Things that must NEVER appear in the snapshot:
             "STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET",
@@ -49,7 +50,7 @@ class TestPublicConfig(unittest.TestCase):
 
     def test_snapshot_returns_required_top_level_keys(self):
         snap = self._snapshot()
-        for key in ("stripe", "pricing", "toggles", "features"):
+        for key in ("stripe", "pricing", "toggles", "features", "experiments"):
             self.assertIn(key, snap)
 
     def test_snapshot_never_returns_stripe_secret(self):
@@ -114,6 +115,23 @@ class TestPublicConfig(unittest.TestCase):
         for f in ("btc_payments", "creator_tier_live",
                   "private_receipts", "receipt_vault"):
             self.assertIn(f, snap["features"])
+
+    def test_demand_experiment_is_non_transactional_and_default_off(self):
+        os.environ.pop("ORPHO_DEMAND_PACK_V1", None)
+        offer = self._snapshot()["experiments"]["demand_pack_v1"]
+        self.assertEqual(offer, {
+            "enabled": False,
+            "offer_version": "demand-pack-v1",
+            "price_usd": 5,
+            "credits": 10,
+            "transactional": False,
+        })
+
+    def test_demand_experiment_requires_exact_enable_value(self):
+        os.environ["ORPHO_DEMAND_PACK_V1"] = "true"
+        self.assertFalse(self._snapshot()["experiments"]["demand_pack_v1"]["enabled"])
+        os.environ["ORPHO_DEMAND_PACK_V1"] = "1"
+        self.assertTrue(self._snapshot()["experiments"]["demand_pack_v1"]["enabled"])
 
 
 if __name__ == "__main__":

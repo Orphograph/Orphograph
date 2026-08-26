@@ -90,6 +90,14 @@ header {
 nav a { color: var(--muted); margin-left: 18px; text-decoration: none; }
 nav a:hover { color: var(--text); }
 
+.demand-experiment {
+  margin: 18px 0;
+  padding: 16px;
+  border: 1px solid var(--panel-stroke);
+  background: var(--panel);
+}
+.demand-experiment p { margin: 0 0 10px; }
+
 main { max-width: 880px; margin: 0 auto; padding: 48px 24px 96px; }
 
 section { margin: 56px 0; }

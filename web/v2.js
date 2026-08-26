@@ -197,6 +197,7 @@
       const r = await fetch("/api/config", { credentials: "same-origin" });
       if (!r.ok) return;
       const cfg = await r.json();
+      renderDemandExperiment(cfg);
       const t = (cfg && cfg.toggles) || {};
       if (t.maintenance_mode) {
         banner.hidden = false;
@@ -226,6 +227,42 @@
     } catch (e) {
       // Network failure on /api/config is not user-facing.
     }
+  }
+
+  function renderDemandExperiment(cfg) {
+    const form = document.getElementById("demand-pack-v1");
+    if (!form) return;
+    const experiment = cfg && cfg.experiments && cfg.experiments.demand_pack_v1;
+    form.hidden = !(experiment && experiment.enabled === true && experiment.transactional === false);
+  }
+
+  function wireDemandExperiment() {
+    const form = document.getElementById("demand-pack-v1");
+    if (!form) return;
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const input = document.getElementById("demand-pack-email");
+      const msg = document.getElementById("demand-pack-msg");
+      const button = form.querySelector("button[type=submit]");
+      if (!input || !input.value) return;
+      button.disabled = true;
+      try {
+        const response = await fetch("/api/waitlist", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({email: input.value, interest: "demand_pack_v1"}),
+        });
+        if (!response.ok) throw new Error("request failed");
+        input.value = "";
+        msg.textContent = "Recorded. You were not charged.";
+        msg.hidden = false;
+        if (typeof window.orphoEvent === "function") window.orphoEvent("pack_waitlist_join");
+      } catch (error) {
+        msg.textContent = "Could not record that yet. Please try again.";
+        msg.hidden = false;
+        button.disabled = false;
+      }
+    });
   }
 
   // ── Hydrate in-flight anchor state on page load ───────────────────
@@ -869,6 +906,7 @@
 
   // ── Recent receipts, ops banner, anchor-state hydration ─────────
   renderRecentReceipts();
+  wireDemandExperiment();
   renderOpsBanner();
   hydrateAnchorStateOnLoad();
 
