@@ -27,8 +27,12 @@ SHA-256 and Bitcoin's consensus — both publicly auditable, both checkable
 without us.
 
 > **Code invariant.** `CLAUDE.md` principle 5: "Honest copy only." The
-> regulatory self-audit (`tools/regulatory_self_audit.py`) blocks any
-> deploy whose marketing copy contains the deny-phrases above.
+> regulated-term scanner (`scripts/regulated_term_scan.py`, baseline
+> `scripts/regulated_term_baseline.json`) fails on any NEW regulated-status
+> claim on the public web surface, and the daily compliance audit
+> (`scripts/compliance_scan.py`) gates competitor names and valuation
+> figures. The claim ceiling itself is pinned in CI by
+> `tests/test_attestation_and_claims.py` and `tests/test_compliance.py`.
 
 ### 2. Purposeful for humanity and all alike
 
