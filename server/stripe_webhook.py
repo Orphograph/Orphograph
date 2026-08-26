@@ -162,12 +162,15 @@ def handle_event(payload: bytes) -> dict:
     event_id = event.get("id", "")
     event_type = event.get("type", "")
 
-    # In-process lock keeps two webhook threads from racing.
-    # Cross-process race for the rare two-fly-machines case is bounded by
-    # _mark_processed taking an fcntl lock; an interleave could still mint
-    # twice in a tiny window, but each subsequent call sees the marker and
-    # short-circuits. Acceptable for a single-product MVP.
-    with _dedupe_lock:
+    # The economic effect and its processed marker are one cross-process
+    # critical section. Locking only _mark_processed is too late: two server
+    # processes can both observe "not processed", both mint credits, and then
+    # each append a marker. The threading lock handles sibling request threads;
+    # the separate sentinel handles independent processes sharing the ledger.
+    processing_lock = PROCESSED_EVENTS_PATH.with_suffix(
+        PROCESSED_EVENTS_PATH.suffix + ".processing.lock"
+    )
+    with _dedupe_lock, locked(processing_lock, mode="a", exclusive=True):
         if event_id and _has_been_processed(event_id):
             return {"ok": True, "duplicate": event_id}
 
