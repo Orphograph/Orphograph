@@ -1,5 +1,23 @@
 /* api.css — externalized from api.html (strict CSP: no inline styles). */
 
+/* /docs/api is the only page under /docs that loads the legacy style.css
+   palette; its seven siblings load index.css. The legacy --accent (#4a9a73,
+   3.27:1 on --bg) and --muted (#837e75, 3.87:1) both fail WCAG AA 1.4.3 for
+   the small text this page paints with them: 11px method badges, 12px
+   anchor links, 12.5px table code, and the bold callout lead-ins.
+
+   Adopt the current-palette values here, page-scoped, exactly the way
+   receipt.css and learn.css already re-theme their own pages. This aligns
+   /docs/api with the rest of /docs; it does not touch the 15 other pages
+   still on the legacy palette (that migration is a separate decision).
+     --accent #3a2f24 -> 12.50:1     --muted #6b6354 -> 5.69:1 */
+:root {
+  --accent: #3a2f24;
+  --accent-soft: rgba(58,47,36,0.06);
+  --accent-stroke: rgba(58,47,36,0.18);
+  --muted: #6b6354;
+}
+
 /* Page-local refinements — keep the prose-like blog density and add
      a compact endpoint catalog table on top of the cream-warm palette. */
   .api-toc {

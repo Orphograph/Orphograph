@@ -37,7 +37,11 @@
   --accent: #4a9a73;
   --accent-soft: rgba(74,154,115,0.10);
   --accent-stroke: rgba(74,154,115,0.30);
-  --warn: #c08a3e;
+  /* Unified 2026-08-26 with the value index.css already ships (#a65a30).
+     The old #c08a3e was 2.90:1 on --bg, failing WCAG AA at every text
+     size; pages loading index.css after this file already overrode it,
+     which hid the failure everywhere it was being looked at. */
+  --warn: #a65a30;
   --bad: #b25050;
   --mono: "IBM Plex Mono", "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 }
