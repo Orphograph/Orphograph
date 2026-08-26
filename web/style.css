@@ -33,8 +33,11 @@
   --panel-stroke-soft: #f4efe2;
   --text: #1f1d1a;
   --text-soft: #3a3631;
-  --muted: #837e75;
-  --accent: #4a9a73;
+  /* WCAG AA on --bg. These now match the accessible editorial palette used
+     by index.css; the previous values rendered normal text at 3.87:1 and
+     3.27:1 respectively. */
+  --muted: #6b6354;
+  --accent: #3a2f24;
   --accent-soft: rgba(74,154,115,0.10);
   --accent-stroke: rgba(74,154,115,0.30);
   /* Unified 2026-08-26 with the value index.css already ships (#a65a30).
