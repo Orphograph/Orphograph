@@ -50,7 +50,7 @@
 
   <h2>What the office records when a C2PA manifest is present</h2>
   <p>
-    Orphograph anchors the SHA-256 and SHA-512 fingerprints of the file as it stands at the moment of submission. When a C2PA manifest is embedded in the file, the manifest is part of the bytes being fingerprinted, and the receipt therefore attests to the existence of that exact file — manifest included — by the recorded Bitcoin block.
+    Orphograph anchors the SHA-256 fingerprint of the file as it stands at the moment of submission. When the client supplies one, a SHA-512 sibling is recorded on the receipt beside it &mdash; but only the SHA-256 is committed to Bitcoin. When a C2PA manifest is embedded in the file, the manifest is part of the bytes being fingerprinted, and the receipt therefore attests to the existence of that exact file — manifest included — by the recorded Bitcoin block.
   </p>
   <p>
     No element of the manifest is inspected, transcribed, or retained by the office. The manifest is not opened. The file does not leave the browser. The receipt records that the file with this fingerprint existed; it does not interpret the manifest's contents.

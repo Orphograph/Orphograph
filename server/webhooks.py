@@ -46,17 +46,17 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import http.client
 import ipaddress
 import json
 import os
 import secrets
 import socket
+import ssl
 import sys
 import threading
 import time
-import urllib.error
 import urllib.parse
-import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -205,6 +205,39 @@ def _is_public_address(host: str) -> tuple[bool, str | None]:
     return True, None
 
 
+def _public_addresses(host: str) -> tuple[list[str], str | None]:
+    """Resolve ``host`` once and return only validated public addresses.
+
+    Delivery pins its socket to one address from this result while TLS still
+    authenticates the original hostname. This closes the DNS-rebinding gap
+    created by validating one resolution and letting the HTTP client perform a
+    second, potentially different resolution at connect time.
+    """
+    if not host:
+        return [], "missing_host"
+    try:
+        ipaddress.ip_address(host)
+        disallowed, reason = _ip_is_disallowed(host)
+        return ([], reason) if disallowed else ([host], None)
+    except ValueError:
+        pass
+    try:
+        infos = socket.getaddrinfo(host, None, type=socket.SOCK_STREAM)
+    except (socket.gaierror, OSError) as e:
+        return [], f"dns_error: {e}"
+    if not infos:
+        return [], "dns_no_records"
+    addresses: list[str] = []
+    for _fam, _typ, _proto, _canon, sockaddr in infos:
+        address = sockaddr[0]
+        disallowed, reason = _ip_is_disallowed(address)
+        if disallowed:
+            return [], reason
+        if address not in addresses:
+            addresses.append(address)
+    return addresses, None
+
+
 def _validate_webhook_url(url: str) -> tuple[bool, str | None]:
     """Single source of truth for whether a webhook URL is acceptable.
 
@@ -215,12 +248,20 @@ def _validate_webhook_url(url: str) -> tuple[bool, str | None]:
         return False, "bad_url"
     if len(url) > MAX_URL_LEN:
         return False, "url_too_long"
+    if any(ord(char) <= 32 or ord(char) == 127 for char in url) or "\\" in url:
+        return False, "bad_url"
     parsed = urllib.parse.urlparse(url)
     if parsed.scheme != "https":
         return False, "url_must_be_https"
     host = (parsed.hostname or "").strip()
     if not host:
         return False, "missing_host"
+    if parsed.username is not None or parsed.password is not None:
+        return False, "userinfo_not_allowed"
+    try:
+        parsed.port
+    except ValueError:
+        return False, "bad_port"
     # Reject literal "localhost" / RFC1918 hostnames before any DNS
     # roundtrip — even if some resolver returned a public IP for these,
     # the intent of pointing a webhook at "localhost" is never legitimate.
@@ -295,25 +336,19 @@ def _sign(secret: str, body: bytes, ts: int) -> str:
     return f"t={ts},v1={digest}"
 
 
-class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
-    """Refuse to follow redirects on webhook delivery.
+class _PinnedHTTPSConnection(http.client.HTTPSConnection):
+    """Connect to a validated IP while authenticating the URL hostname."""
 
-    A redirect handler that follows 30x responses is a classic SSRF
-    sidestep: a paying subscriber registers https://attacker.com which
-    returns 302 Location: http://localhost:8080/admin (or a metadata
-    address). With this handler installed, urllib raises HTTPError on
-    any 30x, which we surface as a delivery failure to the receiver's
-    log.
-    """
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
-        raise urllib.error.HTTPError(
-            req.full_url, code,
-            f"redirect-not-followed (to {newurl})",
-            headers, fp,
+    def __init__(self, hostname: str, port: int, pinned_ip: str, timeout: float):
+        super().__init__(hostname, port=port, timeout=timeout,
+                         context=ssl.create_default_context())
+        self._pinned_ip = pinned_ip
+
+    def connect(self) -> None:
+        self.sock = self._create_connection(
+            (self._pinned_ip, self.port), self.timeout, self.source_address,
         )
-
-
-_no_redirect_opener = urllib.request.build_opener(_NoRedirectHandler())
+        self.sock = self._context.wrap_socket(self.sock, server_hostname=self.host)
 
 
 def _deliver_one(url: str, secret: str, body: bytes, event_id: str) -> None:
@@ -326,38 +361,41 @@ def _deliver_one(url: str, secret: str, body: bytes, event_id: str) -> None:
             f"[webhooks] delivery refused url={url} event={event_id} reason={reason}\n"
         )
         return
+    parsed = urllib.parse.urlparse(url)
+    addresses, reason = _public_addresses(parsed.hostname or "")
+    if not addresses:
+        sys.stderr.write(
+            f"[webhooks] delivery refused url={url} event={event_id} reason={reason}\n"
+        )
+        return
     ts = int(time.time())
     sig = _sign(secret, body, ts)
-    req = urllib.request.Request(
-        url,
-        data=body,
-        method="POST",
-        headers={
+    target = urllib.parse.urlunsplit(("", "", parsed.path or "/", parsed.query, ""))
+    conn = _PinnedHTTPSConnection(
+        parsed.hostname or "", parsed.port or 443, addresses[0], HTTP_TIMEOUT_SEC,
+    )
+    try:
+        conn.request("POST", target, body=body, headers={
             "Content-Type": "application/json",
             "X-Orpho-Signature": sig,
             "X-Orpho-Event-Id": event_id,
             "User-Agent": "Mozilla/5.0 (compatible; OrphographWebhook/0.1; +https://orphograph.com)",
-        },
-    )
-    try:
-        with _no_redirect_opener.open(req, timeout=HTTP_TIMEOUT_SEC) as resp:
-            resp.read()
+        })
+        resp = conn.getresponse()
+        body_snip = resp.read(200).decode("utf-8", errors="replace")
+        if not 200 <= resp.status < 300:
+            sys.stderr.write(
+                f"[webhooks] HTTP {resp.status} url={url} event={event_id} body={body_snip}\n"
+            )
         # No structured logging here on success — receivers' own logs are
         # the source of truth. We only log failures to make debugging
         # easier for the founder when a customer reports a missing event.
-    except urllib.error.HTTPError as e:
-        body_snip = ""
-        try:
-            body_snip = (e.read() or b"").decode("utf-8", errors="replace")[:200]
-        except Exception:
-            pass
-        sys.stderr.write(
-            f"[webhooks] HTTP {e.code} url={url} event={event_id} body={body_snip}\n"
-        )
-    except (urllib.error.URLError, OSError) as e:
-        sys.stderr.write(f"[webhooks] {type(e).__name__} url={url} event={event_id}: {e}\n")
     except TimeoutError:
         sys.stderr.write(f"[webhooks] timeout url={url} event={event_id}\n")
+    except (http.client.HTTPException, OSError) as e:
+        sys.stderr.write(f"[webhooks] {type(e).__name__} url={url} event={event_id}: {e}\n")
+    finally:
+        conn.close()
 
 
 def dispatch(event_type: str, email: str, payload: dict) -> None:

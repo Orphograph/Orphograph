@@ -64,6 +64,7 @@
     <div class="arch-rule"></div>
     <p>For pipelines written in Python — backup scripts, evidence-intake jobs, batch processing of working sets. The package targets Python 3.9 or newer and depends on the standard library only.</p>
 <pre><code>pip install orphograph</code></pre>
+    <div class="arch-callout"><p>The command above is the whole of it — the package pulls no third-party dependencies and registers the <code>orphograph</code> command described in <a href="/docs/cli">the command-line reference</a>.</p></div>
 <pre><code>from orphograph import anchor_folder, verify_folder
 
 result = anchor_folder("/path/to/folder")
@@ -104,7 +105,11 @@ ok = verify_inclusion(
     <h2>3 · Node SDK</h2>
     <div class="arch-rule"></div>
     <p>The same surface, in TypeScript, for Node 20 or later. Zero runtime dependencies; the standard library modules <code>node:crypto</code>, <code>node:fs</code>, <code>node:http</code>, <code>node:https</code>, and <code>node:path</code> are the only requirements.</p>
-<pre><code>npm install orphograph</code></pre>
+<pre><code>git clone https://github.com/Orphograph/Orphograph.git
+cd Orphograph/sdk-node
+npm install
+npm install /path/to/Orphograph/sdk-node   # from your project</code></pre>
+    <div class="arch-callout"><p>The Node package is not on npm yet and the compiled <code>dist/</code> is not committed, so the <code>npm install</code> inside <code>sdk-node</code> is what builds it. Run it before installing the package into your project; a path install against a never-built directory fails with <code>tsc: command not found</code>.</p></div>
 <pre><code>import { anchorFolder, verifyFolder } from "orphograph";
 
 const result = await anchorFolder("/path/to/folder", {
@@ -120,15 +125,17 @@ const ok = await verifyFolder("/path/to/folder", receipt_id, {
   serverUrl: "https://orphograph.com",
 });
 </code></pre>
-    <p>The TypeScript implementation is bit-for-bit compatible with the Python module and the browser implementation. Full reference is in the <a href="https://github.com/Orphograph/Orphograph/tree/master/sdk-node">Node SDK README</a>.</p>
+    <p>The TypeScript implementation is bit-for-bit compatible with the Python module — both are checked against the same published conformance vectors in continuous integration. The browser implements the same algorithm, <code>orphograph-merkle-v1-rfc6962</code>. Full reference is in the <a href="https://github.com/Orphograph/Orphograph/tree/master/sdk-node">Node SDK README</a>.</p>
 
     <details class="legal">
       <summary>Developer detail · CLI binary, inclusion proofs</summary>
       <div class="body">
-        <p>The package registers an <code>orphograph</code> binary executable via <code>npx</code>:</p>
+        <p>The package registers an <code>orphograph</code> binary executable:</p>
 <pre><code>npx orphograph anchor /path/to/folder
 npx orphograph verify /path/to/folder &lt;receipt_id&gt;
-npx orphograph proof  &lt;receipt_id&gt; &lt;posix/rel/path&gt;</code></pre>
+npx orphograph proof  &lt;receipt_id&gt; &lt;posix/rel/path&gt;
+npx orphograph verify-inclusion &lt;local_file&gt; &lt;rel_path&gt; &lt;proof.json&gt; &lt;root_hex&gt;</code></pre>
+        <p>Until the package is on npm, <code>npx</code> resolves it only after the local install above has linked the binary into <code>node_modules/.bin</code>; from a clone you can also run it directly as <code>node dist/cli.js</code>.</p>
         <p>Each subcommand writes one line of JSON to standard output. Exit code zero on a match, one on a mismatch.</p>
 <pre><code>import { inclusionProof, verifyInclusion } from "orphograph";
 

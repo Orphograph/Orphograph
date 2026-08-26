@@ -3,7 +3,15 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "orphograph"
+# 2026-08-25: renamed off "orphograph". This tree and sdk-python/ both
+# declared that distribution name at 0.1.0 with non-overlapping APIs
+# (anchor_file/anchor_bytes/anchor_text here; anchor_folder/verify_folder
+# + the CLI there). The public docs on orphograph.com instruct
+# `pip install "git+...#subdirectory=sdk-python"`, so sdk-python owns the
+# published name. Nothing installs THIS tree by name (it has never been
+# published), and tests import it by path, so the rename changes no
+# public API. Enforced by tests/test_distribution_names.py.
+name = "orphograph-sdk-legacy"
 version = "0.1.0"
 description = "Bitcoin-anchored file timestamping — hash locally, anchor only the fingerprint."
 readme = "README.md"

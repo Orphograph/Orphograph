@@ -18,6 +18,8 @@ import unittest
 import urllib.request
 from pathlib import Path
 
+import _srv
+
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "server"))
 
@@ -32,29 +34,33 @@ _POLLUTED = (
 
 
 def _start(data_dir):
-    os.environ.update(ORPHO_DATA_DIR=str(data_dir), HOST="127.0.0.1", PORT="0",
-                      ORPHO_COOKIE_SECURE="0", RATE_LIMIT_PER_DAY="100000",
-                      ORPHO_OFFLINE_CALENDARS="1")
-    for m in _POLLUTED: sys.modules.pop(m, None)
-    import app
-    from http.server import ThreadingHTTPServer
-    srv = ThreadingHTTPServer(("127.0.0.1", 0), app.Handler)
-    threading.Thread(target=srv.serve_forever, daemon=True).start()
-    return srv, f"http://127.0.0.1:{srv.server_address[1]}"
+    """Run the server in a SUBPROCESS, not in this interpreter.
+
+    2026-08-25: this used to pop 32 modules out of sys.modules, re-import
+    `app`, and serve from a thread inside the test process. It passed alone and
+    FAILED under full-suite load with a socket TimeoutError — three times —
+    because a re-imported `app` inherits and adds to whatever global state and
+    background threads the rest of the suite has accumulated, and the
+    in-process server thread then does not answer in time. Raising the request
+    timeout would have hidden that; subprocess isolation removes the coupling.
+    Port reservation, startup deadline and server-log capture live in _srv.py.
+    """
+    bases, procs, logs = _srv.spin(data_dir)
+    _srv.wait_ready(bases, procs, logs)
+    return (procs, logs), bases[0]
 
 
 class TestC2paRoundtrip(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls._tmp = tempfile.TemporaryDirectory()
-        cls._old = {m: sys.modules[m] for m in _POLLUTED if m in sys.modules}
-        cls._srv, cls._base = _start(Path(cls._tmp.name))
+        cls._handle, cls._base = _start(Path(cls._tmp.name))
 
     @classmethod
     def tearDownClass(cls):
-        cls._srv.shutdown(); cls._srv.server_close(); cls._tmp.cleanup()
-        for m in _POLLUTED: sys.modules.pop(m, None)
-        sys.modules.update(cls._old)
+        procs, logs = cls._handle
+        _srv._kill_all(procs, logs)
+        cls._tmp.cleanup()
 
     def _post(self, path, body):
         req = urllib.request.Request(self._base + path,

@@ -17,7 +17,7 @@
 <link rel="preload" as="font" type="font/woff2" href="/fonts/Spectral-400.woff2" crossorigin>
 <link rel="stylesheet" href="/css/orpho-tokens.css?v=2">
 <link rel="stylesheet" href="/css/orpho-primitives.css?v=3">
-<link rel="stylesheet" href="/css/orpho-home.css?v=8">
+<link rel="stylesheet" href="/css/orpho-home.css?v=14">
 <link rel="stylesheet" href="/index.css?v=21">
 <link rel="preload" as="image" href="/seal-display.png?v=8" fetchpriority="high">
 <meta name="copyright" content="© 2026 Orphograph. MIT — see /LICENSE">
@@ -125,36 +125,53 @@
       </p>
     </div>
 
-    <!-- Envelope → receipt → wax seal, stacked back-to-front.
-         aria-hidden: this is a picture of the product, not the product. The
-         real sample receipt lives further down with its canonical id. -->
-    <div class="orpho-hero__plate" aria-hidden="true">
+    <!-- Interactive product reveal. Without JavaScript this remains the same
+         fully visible sample receipt; hero-envelope.js progressively tucks it
+         into the envelope and enables the open/close controls. -->
+    <div class="orpho-hero__plate" id="hero-envelope">
       <div class="orpho-envelope">
         <span class="orpho-envelope__flap"></span>
         <span class="orpho-envelope__closure"></span>
         <span class="orpho-envelope__string" aria-hidden="true"></span>
+        <span class="orpho-envelope__pocket" aria-hidden="true"><span class="orpho-envelope__fold"></span></span>
         <!-- Flap crest removed 2026-08-10 (founder): the debossed medallion
              on the flap never read right. The envelope carries the emblem
              once, where the reference puts it — the red wax seal below. -->
 
       </div>
 
-      <article class="orpho-receipt orpho-receipt--floating orpho-hero__receipt">
+      <article class="orpho-receipt orpho-receipt--floating orpho-hero__receipt" id="hero-sample-receipt">
+        <img class="orpho-receipt__crest" src="/seal-display.png?v=8" alt="" width="44" height="44">
         <p class="orpho-receipt__title">Orphograph Receipt</p>
         <p class="orpho-receipt__sub orpho-label">Empirical Notary</p>
         <hr class="orpho-rule orpho-rule--centered">
+        <!-- EVERY VALUE BELOW IS THE REAL RECEIPT XwTULwlh76PcCst9, as
+             returned by GET /api/receipt/XwTULwlh76PcCst9. Anyone can check
+             it. A notary that prints invented figures beside a real receipt
+             id has published the exact thing it sells protection against, so
+             tests/test_hero_receipt_is_real.py fails the build if any of
+             these drift from the live API. Fields the API does not return
+             (block height, confirmation count, file size) are NOT shown —
+             they were fabricated here until 2026-08-25. -->
         <dl class="orpho-receipt__meta">
-          <dt>File</dt>            <dd>whitepaper.pdf</dd>
-          <dt>Hash (SHA256)</dt>   <dd>2f7c4e0b8e3a3f6d9c0a1b2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a</dd>
-          <dt>Size</dt>            <dd>1.42 MB</dd>
-          <dt>Timestamp (UTC)</dt> <dd>2026-05-20 14:37:22</dd>
-          <dt>Bitcoin block</dt>   <dd>897,736</dd>
-          <dt>Confirmations</dt>   <dd>6+</dd>
+          <dt>Label</dt>           <dd>orphograph-sample-v1</dd>
+          <dt>Hash (SHA256)</dt>   <dd>7accf9e90453280e6fb081fd9d83dfb1eeef3bd64e0d680826989ba79bccac88</dd>
+          <dt>Anchored (UTC)</dt>  <dd>2026-05-12 17:41:58</dd>
+          <dt>Bitcoin attested</dt><dd>2026-05-18 01:18:38</dd>
+          <dt>Calendars</dt>       <dd>5 of 5 accepted</dd>
+          <dt>Bitcoin proofs</dt>  <dd>3 of 5 upgraded</dd>
           <dt>Receipt ID</dt>      <dd>XwTULwlh76PcCst9</dd>
         </dl>
         <p class="orpho-receipt__sig">Orphograph</p>
         <p class="orpho-receipt__sig-sub orpho-label">Empirical Notary</p>
       </article>
+
+      <button class="orpho-envelope__toggle" id="hero-envelope-toggle" type="button"
+              aria-expanded="false" aria-controls="hero-sample-receipt"
+              aria-describedby="hero-envelope-hint">
+        <span class="orpho-envelope__toggle-action">Open the receipt</span>
+        <span class="orpho-envelope__toggle-hint" id="hero-envelope-hint">Click the envelope</span>
+      </button>
     </div>
   </div>
 </section>
@@ -513,5 +530,6 @@
 <script src="/assets/event.js?v=1" defer></script>
 <script src="/assets/scroll-depth.js?v=1" defer></script>
 <script src="/assets/drop-observer.js?v=1" defer></script>
+<script src="/hero-envelope.js?v=3" defer></script>
 </body>
 </html>
