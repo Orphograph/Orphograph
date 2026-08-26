@@ -44,7 +44,6 @@ LEGACY = frozenset({
     "test_badge.py",
     "test_biweekly_safety_audit.py",
     "test_blog_static_css.py",
-    "test_btc_amount_never_undercharges.py",
     "test_buy_btc_funnel.py",
     "test_capability_copy.py",
     "test_card_notify_capture.py",
@@ -57,7 +56,6 @@ LEGACY = frozenset({
     "test_founder_funnel_endpoint.py",
     "test_founder_token_bruteforce.py",
     "test_funnel_event_whitelist.py",
-    "test_generated_artifacts_parse.py",
     "test_harness_cleanup.py",
     "test_head_method.py",
     "test_l402_single_use.py",
@@ -80,15 +78,36 @@ LEGACY = frozenset({
     "test_renewal.py",
     "test_scroll_depth.py",
     "test_security_txt.py",
-    "test_sha512_claim_honesty.py",
     "test_snark_receipt.py",
     "test_stripe_checkout.py",
     "test_subscription_inheritance.py",
     "test_ui.py",
     "test_vault_api_key.py",
     "test_vault_filters.py",
-    "test_versioned_asset_bump.py",
 })
+
+
+def _code_only(src: str) -> str:
+    """Source with docstrings and comments stripped.
+
+    Added 2026-08-26. The detector below used to match raw file text, so a
+    module that merely NAMED server/app.py in a docstring -- explaining which
+    endpoint its subject is reachable from -- was reported as spinning a
+    server. That is the scanner-reads-its-own-prose defect this repo has now
+    shipped six times; tests/test_no_phantom_env_knobs.py carries the same
+    remedy. A guard that fires on prose trains people to add allowlist entries
+    for tests that were never offenders, which is how a shrink-only list grows.
+    """
+    tree = ast.parse(src)
+    _strip_docstrings(tree)
+    return ast.unparse(tree)
+
+
+def _strip_docstrings(tree: ast.AST) -> None:
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef,
+                             ast.AsyncFunctionDef)) and ast.get_docstring(node):
+            node.body = node.body[1:]
 
 
 def _spins_a_server(text: str) -> bool:
@@ -96,9 +115,32 @@ def _spins_a_server(text: str) -> bool:
     in-process. The in-process form is included because it is WORSE, not
     exempt: test_c2pa_roundtrip.py ran that way, popped 32 modules out of
     sys.modules to do it, and failed under full-suite load three times before
-    being moved to a subprocess."""
-    return ("server/app.py" in text or '"app.py"' in text
-            or "app.Handler" in text)
+    being moved to a subprocess.
+
+    Judged on CODE only -- naming app.py in prose is not launching it."""
+    try:
+        tree = ast.parse(text)
+    except SyntaxError:
+        # Unparseable: fall back to raw text. A scan that cannot read the file
+        # reports "maybe", never "clean".
+        return ("server/app.py" in text or '"app.py"' in text
+                or "app.Handler" in text)
+
+    _strip_docstrings(tree)
+    for node in ast.walk(tree):
+        # A string CONSTANT naming app.py -- quote style is irrelevant, which
+        # is the point: an earlier version of this matched the literal text
+        # '"app.py"' and silently stopped seeing 24 real offenders the moment
+        # the source was normalised to single quotes.
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            v = node.value
+            if v == "app.py" or v.endswith("/app.py") or "server/app.py" in v:
+                return True
+        # In-process: app.Handler
+        if (isinstance(node, ast.Attribute) and node.attr == "Handler"
+                and isinstance(node.value, ast.Name) and node.value.id == "app"):
+            return True
+    return False
 
 
 def _modules():
@@ -169,7 +211,13 @@ def test_the_scan_can_actually_see_a_server_fixture() -> None:
     """NEGATIVE CONTROL. If _spins_a_server() ever stops matching, every
     assertion above passes over an empty set and reports clean forever."""
     spinning = [p.name for p, t in _modules() if _spins_a_server(t)]
-    assert len(spinning) >= 54, (
+    # Floor was 54 while the detector matched raw text. Four LEGACY entries
+    # turned out to mention server/app.py only in a docstring or comment and
+    # never started anything (verified: zero Popen/socket/HTTPServer between
+    # them), so they were false entries the textual detector had manufactured.
+    # The floor moves with the corpus; it exists to catch the detector going
+    # blind, not to freeze a number.
+    assert len(spinning) >= 50, (
         f"only {len(spinning)} modules detected as starting a server — the "
         "detector is broken, not the suite clean"
     )
