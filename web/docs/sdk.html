@@ -49,14 +49,14 @@
   </p>
 
   <div class="arch-callout">
-    <p>Neither package is on a public registry yet, so both install from source. If you would rather not take a dependency at all, <a href="/docs/api">the HTTP API</a> is plain JSON over HTTPS and the libraries add nothing you cannot do with a request client.</p>
+    <p>The Python package is on PyPI. The Node package is not on npm yet, so it installs from source. If you would rather not take a dependency at all, <a href="/docs/api">the HTTP API</a> is plain JSON over HTTPS and the libraries add nothing you cannot do with a request client.</p>
   </div>
 
   <section>
     <h2>Python</h2>
     <div class="arch-rule"></div>
     <p>Python 3.9 or newer. Standard library only — no third-party dependencies at runtime.</p>
-<pre><code>pip install "git+https://github.com/Orphograph/Orphograph#subdirectory=sdk-python"</code></pre>
+<pre><code>pip install orphograph</code></pre>
 <pre><code>from orphograph import anchor_folder, verify_folder
 
 result = anchor_folder("/path/to/folder", label="Case file 2026-05-20")

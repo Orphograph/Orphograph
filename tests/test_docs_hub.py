@@ -56,6 +56,12 @@ WEB = REPO_ROOT / "web"
 PUBLISHED_PACKAGES = frozenset({
     "orphograph-mcp",
     "opentimestamps-client",
+    # PUBLISHED 2026-08-26: https://pypi.org/project/orphograph/0.1.0/
+    # Verified before this line was added — `pip install orphograph` into a
+    # clean venv with --no-cache-dir imports and runs the console script.
+    # NOTE: PyPI only. npm still has no `orphograph`, so the Node docs keep
+    # the clone-and-build instructions until that is published too.
+    "orphograph",
 })
 
 # `pip install "git+https://..."` and `npm install /local/path` are source
