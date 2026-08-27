@@ -32,17 +32,13 @@ AA_SMALL = 4.5
 
 TEXT_TOKENS = ("--muted", "--accent", "--warn")
 
-# Shrink-only. Pages still resolving to the legacy web/style.css palette, whose
-# --muted (3.87:1) and --accent (3.27:1) fail AA. Migrating them changes 15
-# live pages including the purchase flow, so it is a deliberate decision rather
-# than a defect fix. Entries may be REMOVED as pages migrate; adding one back
-# means a page regressed onto the legacy palette.
-LEGACY_PALETTE_PAGES = frozenset({
-    "about.html", "account.html", "buy.html", "gift.html", "index-legacy.html",
-    "pay/btc.html", "pay/crypto.html", "privacy.html", "signin.html",
-    "stats.html", "team/join.html", "terms.html", "v2/index.html",
-    "verify/index.html",
-})
+# The 14-page legacy exception was retired 2026-08-26. Keep the collection so
+# any future exception requires an explicit code review; it must remain empty.
+LEGACY_PALETTE_PAGES = frozenset()
+
+
+def test_no_pages_are_exempt_from_contrast_guard():
+    assert LEGACY_PALETTE_PAGES == frozenset()
 
 
 def _strip_comments(css: str) -> str:

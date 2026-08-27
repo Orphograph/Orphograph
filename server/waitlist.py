@@ -31,7 +31,10 @@ ALLOWED_INTERESTS = {"personal", "creator", "capture", "b2b", "other",
                      # the landing page's leads indistinguishable from every
                      # other source -- a capture that cannot attribute is not
                      # a measurement.
-                     "agent_receipts"}
+                     "agent_receipts",
+                     # Disabled-by-default price/pack smoke test. This is a
+                     # non-transactional interest form, never a checkout.
+                     "demand_pack_v1"}
 
 
 def add(email: str, interest: str) -> bool:
@@ -47,4 +50,3 @@ def add(email: str, interest: str) -> bool:
             "interest": interest,
         }, separators=(",", ":")) + "\n")
     return True
-

@@ -89,6 +89,18 @@ def snapshot() -> dict:
             "receipt_vault": True,     # always available to subscribers
             "nowpayments_enabled": bool(os.environ.get("NOWPAYMENTS_API_KEY", "").strip()),
         },
+        # Non-transactional smoke test. It never supplies a checkout URL and
+        # cannot charge; enabling it only reveals an email-interest form. The
+        # fixed offer prevents display/charge drift while demand is unknown.
+        "experiments": {
+            "demand_pack_v1": {
+                "enabled": os.environ.get("ORPHO_DEMAND_PACK_V1", "0") == "1",
+                "offer_version": "demand-pack-v1",
+                "price_usd": 5,
+                "credits": 10,
+                "transactional": False,
+            },
+        },
     }
 
 

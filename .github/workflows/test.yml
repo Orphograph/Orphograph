@@ -15,6 +15,19 @@ permissions:
   contents: read
 
 jobs:
+  fresh-base:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      # Check the contributor's actual HEAD, not GitHub's synthetic merge
+      # commit (which contains master by construction and would pass vacuously).
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - name: Require the current origin/master in the feature branch
+        run: python3 tools/check_branch_freshness.py --base origin/master
+
   pytest:
     runs-on: ubuntu-latest
     strategy:

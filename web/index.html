@@ -218,6 +218,15 @@
           <button type="button" class="tier-badge-link" id="tier-badge-clear" hidden>Switch to Free tier</button>
         </div>
         <p class="tier-explainer" id="tier-explainer">Anchors don't charge anything until you buy a Pack. The free tier is permanent.</p>
+        <form class="demand-experiment" id="demand-pack-v1" hidden>
+          <p><strong>Candidate offer: 10 anchors for $5, once.</strong> This is an interest test, not checkout. Nothing will be charged.</p>
+          <div class="pack-form-row">
+            <label class="sr-only" for="demand-pack-email">Email address</label>
+            <input class="pack-form-input" id="demand-pack-email" type="email" autocomplete="email" required placeholder="you@example.com">
+            <button class="pack-form-submit" type="submit">I would buy this</button>
+          </div>
+          <p class="pack-form-msg" id="demand-pack-msg" aria-live="polite" hidden></p>
+        </form>
         <form class="pack-form" id="pack-form" hidden>
           <label class="pack-form-label" for="pack-form-input">Enter your Pack code</label>
           <div class="pack-form-row">
@@ -523,7 +532,7 @@
   </div>
 </footer>
 
-<script src="/v2.js?v=5"></script>
+<script src="/v2.js?v=6"></script>
 <script type="module" src="/folder.js?v=2"></script>
 <script src="/statusbar.js?v=2" defer></script>
 <script src="/status-badge.js?v=2" defer></script>

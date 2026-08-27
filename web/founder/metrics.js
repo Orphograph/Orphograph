@@ -34,21 +34,51 @@ async function loadMetrics() {
 }
 
 function displayMetrics(data) {
-  document.getElementById('mrr').textContent = data.mrr.toFixed(2);
-  document.getElementById('arr').textContent = data.arr.toFixed(2);
+  document.getElementById('mrr').textContent = Number.isFinite(data.mrr) ? data.mrr.toFixed(2) : '—';
+  document.getElementById('arr').textContent = Number.isFinite(data.arr) ? data.arr.toFixed(2) : '—';
   document.getElementById('churn-rate').textContent = (data.churn_rate * 100).toFixed(1);
-  document.getElementById('ltv').textContent = data.ltv.toFixed(2);
+  document.getElementById('ltv').textContent = Number.isFinite(data.ltv) ? data.ltv.toFixed(2) : '—';
   document.getElementById('active-customers').textContent = data.customers.active;
   document.getElementById('total-customers').textContent = data.customers.total;
   document.getElementById('active-count').textContent = data.customers.active;
   document.getElementById('churned-count').textContent = data.customers.churned_this_month;
 
   renderWaitlist(data.waitlist);
+  renderDemand(data.demand);
 
   const timestamp = new Date(data.timestamp);
   document.getElementById('timestamp').textContent = timestamp.toLocaleString();
 
   document.getElementById('metrics-content').style.display = 'block';
+}
+
+function renderDemand(d) {
+  const el = document.getElementById('anchor-demand-readout');
+  if (!el) return;
+  el.textContent = '';
+  if (!d || d.error) {
+    el.textContent = 'UNAVAILABLE — ' + ((d && d.error) || 'not reported by this build');
+    return;
+  }
+  const origins = d.origins || {};
+  const events = d.events || {};
+  const rows = [
+    ['data quality', d.data_quality],
+    ['external events', origins.external || 0],
+    ['office automation', origins.office_automation || 0],
+    ['unknown origin', origins.unknown || 0],
+    ['anchors succeeded', events.anchor_succeeded || 0],
+    ['free limits reached', events.free_limit_reached || 0],
+    ['payments confirmed', events.payment_confirmed || 0]
+  ];
+  rows.forEach(function (r) {
+    const dt = document.createElement('dt');
+    dt.textContent = r[0];
+    const dd = document.createElement('dd');
+    dd.textContent = String(r[1]);
+    el.appendChild(dt);
+    el.appendChild(dd);
+  });
 }
 
 // Demand readout. Revenue answers "did anyone pay"; this answers "did anyone
