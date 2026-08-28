@@ -1,0 +1,7 @@
+{
+  "rounds": 8,
+  "st0_hex": "91b03769ef161426c9754ee607778b097f67958bf416f9f6b8ee9d2c96ddcd13",
+  "stN_hex": "f462ad35a856ecbcb9f46e5b4fe2992b72c9e47403c3c141a146d6c45caf4986",
+  "commitment_hex": "4c4b8ec621cd577b3d416b83ca2e6af1466153698e0ec55dc6259366ebe1c2d3",
+  "output_hash_hex": "2dc55094f7e705abe5ac86370ee60a06fcf6fd614e85ecaebd2cd7c4c43b6dd3"
+}

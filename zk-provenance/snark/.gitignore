@@ -9,3 +9,12 @@ input.json
 expected.json
 public.json
 proof.json
+# The patterns above are for REGENERABLE build outputs (build_dev/,
+# build_full/). The curated 2026-08-04 evidence is the COMMITTED fixture
+# tests/test_snark_receipt.py and tests/test_snark_wire_path.py run on —
+# without it both suites skip silently in CI (which is exactly what
+# happened until 2026-08-28). No secrets: proof/public/expected are
+# publishable groth16 artifacts; the vk was already tracked.
+!evidence_8round_2026_08_04/expected.json
+!evidence_8round_2026_08_04/public.json
+!evidence_8round_2026_08_04/proof.json
