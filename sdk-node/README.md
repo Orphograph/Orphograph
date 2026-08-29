@@ -1,9 +1,11 @@
 # orphograph
 
-A Node SDK and command-line tool for anchoring a folder of evidence to the
-Bitcoin chain via the Orphograph hosted service. The file contents never
-leave the local machine; only the manifest (paths plus SHA-256 digests)
-and the Merkle root are transmitted.
+Bitcoin-anchored folder receipts that a relying party can verify **without
+the issuer**. Anchoring goes through the Orphograph service; `verify-inclusion`
+checks a file against its saved proof with no server, no account, and no
+network. File contents never leave the local machine; only the manifest
+(paths plus SHA-256 digests) and the Merkle root are transmitted at anchor
+time.
 
 - **License:** MIT
 - **Runtime:** Node 20 or later

@@ -1,11 +1,67 @@
 # orphograph
 
-A Python SDK for anchoring a local folder to the Bitcoin chain through the
-[Orphograph](https://orphograph.com) hosted service.
+Bitcoin-anchored folder receipts that a relying party can verify **without
+the issuer**. Anchoring goes through the [Orphograph](https://orphograph.com)
+service; verifying a file against its saved proof needs no server, no
+account, and no network — the service can be unreachable or gone.
 
 - License: MIT
 - Python: 3.9 or newer
 - Runtime dependencies: Python standard library only
+
+## Verify without the issuer
+
+This is the command a relying party runs. It needs the file, the POSIX path
+the file had inside the anchored folder, the `proof.json` the anchoring
+party saved, and the Merkle root from the receipt. Nothing is fetched.
+
+```
+python -m orphograph verify-inclusion /path/to/sub/photo.jpg sub/photo.jpg proof.json <root_hex>
+# {"ok": true, "root_hex": "…", "root_source": "argument"}
+# exit 0 on a match, 1 on a mismatch, 2 on an I/O or parse error
+```
+
+`root_hex` is the root recorded on the receipt (and in its OpenTimestamps
+proof). Pin it. `ok` means "this file is in the tree with THAT root"; it
+says nothing about a root you did not check against the receipt.
+
+Same thing from Python:
+
+```python
+import json
+from orphograph import verify_inclusion
+
+saved = json.load(open("proof.json"))
+ok = verify_inclusion(
+    file_path="/path/to/sub/photo.jpg",
+    rel_path="sub/photo.jpg",
+    proof=saved["proof"],
+    root_hex=saved["root_hex"],
+)
+```
+
+`verify_inclusion` reads the file, recomputes its SHA-256, walks the proof
+up to the root, and compares. It takes no `server_url` and opens no socket.
+A missing local file raises `FileNotFoundError` rather than returning
+`False`, so an I/O problem is never mistaken for a "not included" verdict.
+
+To hand a relying party what they need, the anchoring party saves the
+proof once, while the service is reachable:
+
+```
+python -m orphograph inclusion-proof <receipt_id> sub/photo.jpg > proof.json
+```
+
+`proof.json` carries `root_hex` and `proof`. The 4th argument may be
+omitted, in which case the root inside `proof.json` is used and the verdict
+reports `"root_source": "proof_json"`. That root came from the same file as
+the proof, so a bundle is always self-consistent: compare the echoed
+`root_hex` to the receipt before treating `ok` as meaningful. An explicit
+`root_hex` always overrides the one in the file.
+
+The receipt's Bitcoin anchoring is an OpenTimestamps proof over the same
+root; it verifies against the chain with the standard `ots` tooling, also
+without this service.
 
 ## Privacy contract
 
@@ -87,14 +143,16 @@ The package installs an `orphograph` console script and is also runnable
 as a module.
 
 ```
+python -m orphograph verify-inclusion <file> <posix/rel/path> proof.json [root_hex]   # local only
 python -m orphograph anchor /path/to/folder
 python -m orphograph verify /path/to/folder <receipt_id>
 python -m orphograph inclusion-proof <receipt_id> <posix/rel/path>
 ```
 
 Each subcommand writes a single line of JSON to standard output. The
-`verify` subcommand exits with status `0` on a match and `1` on a
-mismatch.
+`verify` and `verify-inclusion` subcommands exit with status `0` on a
+match and `1` on a mismatch. `verify-inclusion` ignores `--server-url`
+and `--api-key`; it never connects anywhere.
 
 Environment variables:
 
