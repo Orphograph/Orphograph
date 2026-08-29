@@ -10,7 +10,7 @@
     "url": "https://registry.modelcontextprotocol.io"
   },
   "transport": "stdio",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "tools": [
     {
       "name": "orphograph_anchor_file",
