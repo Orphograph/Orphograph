@@ -1,70 +1,55 @@
-# PyPI upload — one-command path
+# PyPI upload — release runbook
 
-The wheel and sdist for `orphograph 0.1.0` are already built and pass
-`twine check`. Once your PyPI account is verified and you have an API
-token, the upload is one command.
+`orphograph` is live on PyPI (0.1.0 uploaded 2026-08-26). Every release
+after that follows the same three steps. **Always rebuild before uploading:**
+`dist/` may hold artifacts from an older commit, and PyPI burns a version
+number permanently — an upload of a stale wheel under a new version cannot
+be undone.
 
-## Steps the founder runs
+## 1 · Bump the version in TWO places (a test holds them equal)
 
-### 1 · Generate a PyPI API token (after verification email lands)
+- `pyproject.toml` → `version = "X.Y.Z"`
+- `orphograph/__init__.py` → `__version__ = "X.Y.Z"`
 
-1. Sign in at <https://pypi.org/manage/account/>.
-2. Enable 2FA (PyPI requires it for any upload).
-3. Under "API tokens" → "Add API token". For the first upload, choose
-   "Entire account" scope (after the first upload you can re-scope to
-   the `orphograph` project specifically).
-4. Copy the token. It looks like `pypi-AgEIcHlwaS5vcmcCJ…`.
+`tests/test_cli_offline.py::TestVersionAndCopyDrift` fails if they differ.
 
-### 2 · Upload
+## 2 · Rebuild from the commit you intend to ship, then check
 
 ```sh
-cd /path/to/orphograph/sdk-python
-python3 -m twine upload dist/*
+cd sdk-python
+git log --oneline -1                       # confirm this is the merged commit
+rm -rf dist build orphograph.egg-info
+python3 -m build .
+python3 -m twine check dist/*              # both artifacts must read PASSED
+unzip -p dist/orphograph-X.Y.Z-py3-none-any.whl orphograph/_cli.py | head -5
 ```
 
-When prompted:
-- Username: `__token__` (literal string, that's the API-token
-  convention)
-- Password: paste the token from step 1
+## 3 · Upload
+
+The token lives in the login keychain under the service name `PYPI_TOKEN`.
+It is never pasted into a file or a chat.
+
+```sh
+cd sdk-python
+TWINE_USERNAME=__token__ \
+TWINE_PASSWORD="$(security find-generic-password -s PYPI_TOKEN -w)" \
+python3 -m twine upload --non-interactive dist/*
+```
 
 Twine prints the upload progress and a final URL on success.
-The package is then live at `https://pypi.org/project/orphograph/`
-and installable everywhere with `pip install orphograph`.
 
-### 3 · Verify
+## 4 · Verify the PUBLISHED artifact, not the local one
 
 ```sh
-pip install --no-cache-dir orphograph
-python3 -m orphograph --help
+python3 -m venv /tmp/orpho-check && /tmp/orpho-check/bin/pip install --no-cache-dir "orphograph==X.Y.Z"
+/tmp/orpho-check/bin/python -m orphograph --help
+curl -s https://pypi.org/pypi/orphograph/json | python3 -c "import sys,json; d=json.load(sys.stdin)['info']; print(d['version'], '|', d['summary'])"
 ```
 
-## Artifacts
+The summary printed by the last line is the first sentence a relying party
+reads on PyPI; it must match `pyproject.toml`.
 
-```
-dist/
-  orphograph-0.1.0-py3-none-any.whl     (15.7 KB)
-  orphograph-0.1.0.tar.gz                (17.2 KB)
-```
+## If the upload fails with `400 File already exists`
 
-Both pass `twine check`. Stdlib-only at runtime, MIT-licensed.
-
-## Subsequent releases
-
-Bump `version` in `pyproject.toml` AND `[tool.orphograph]` `mcp_name`
-(if used), then:
-
-```sh
-rm -rf dist build
-python3 -m build .
-python3 -m twine upload dist/*
-```
-
-The same token works for all future uploads under the project once
-the first upload reserves the name.
-
-## If the upload fails with `403 Forbidden`
-
-The name `orphograph` was taken between when this office reserved it
-and when the upload ran. Pick `orphograph-anchor` or `orphograph-mcp`
-as a fallback name; the import path `orphograph` stays unchanged
-inside the package.
+That version number is spent. Bump to the next patch version in both places
+(step 1), rebuild (step 2), and upload again. Never reuse a number.
