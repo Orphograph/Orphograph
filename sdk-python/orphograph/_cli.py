@@ -2,9 +2,19 @@
 
 Subcommands:
 
+    verify-inclusion <file> <rel_path> <proof.json> [root_hex]
+                                    Verify ONE file against a saved proof.
+                                    Purely local: no server, no network.
     anchor <folder>                 Anchor a folder; prints one line of JSON.
     verify <folder> <receipt_id>    Verify a folder against a receipt.
     inclusion-proof <rid> <path>    Fetch an inclusion proof; prints JSON.
+
+``verify-inclusion`` is the relying party's command. It needs only the file,
+its POSIX path inside the anchored folder, and the ``proof.json`` written by
+``inclusion-proof`` (or a bare proof array plus an explicit ``root_hex``).
+It never consults ``--server-url``; the service can be gone. Same positional
+shape as the Node CLI's ``verify-inclusion``, except that ``root_hex`` may be
+omitted when ``proof.json`` already carries it.
 
 Both ``anchor`` and ``verify`` accept repeatable ``--exclude GLOB`` flags.
 A folder anchored with custom excludes can only re-derive the same Merkle
@@ -22,7 +32,7 @@ import os
 import sys
 from typing import List, Optional
 
-from . import anchor_folder, inclusion_proof, verify_folder
+from . import anchor_folder, inclusion_proof, verify_folder, verify_inclusion
 from ._client import DEFAULT_SERVER_URL, OrphographError
 
 
@@ -38,7 +48,11 @@ def _env_api_key() -> Optional[str]:
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="orphograph",
-        description="Anchor folders to Bitcoin via the Orphograph service.",
+        description=(
+            "Bitcoin-anchored folder receipts. verify-inclusion checks a file "
+            "against a saved proof with no server involved; anchor / verify / "
+            "inclusion-proof talk to the Orphograph service."
+        ),
     )
     parser.add_argument(
         "--server-url",
@@ -77,7 +91,49 @@ def _build_parser() -> argparse.ArgumentParser:
     p_proof.add_argument("receipt_id", help="Folder receipt id.")
     p_proof.add_argument("path", help="POSIX relative path inside the folder.")
 
+    p_vi = sub.add_parser(
+        "verify-inclusion",
+        help="Verify one file against a saved proof. Local only; no network.",
+    )
+    p_vi.add_argument("file", help="Local file to check.")
+    p_vi.add_argument("rel_path", help="POSIX relative path the file had inside the anchored folder.")
+    p_vi.add_argument(
+        "proof_json",
+        help="Path to the JSON written by `inclusion-proof` (or a bare proof array).",
+    )
+    p_vi.add_argument(
+        "root_hex",
+        nargs="?",
+        default=None,
+        help="Merkle root to verify against. Overrides the root inside proof_json; "
+             "required when proof_json is a bare array.",
+    )
+
     return parser
+
+
+def _load_proof(proof_json: str, root_override: Optional[str]) -> tuple:
+    """Read ``proof.json`` and pin the root.
+
+    Accepts the object ``inclusion-proof`` writes (``{"root_hex", "proof", ...}``)
+    or a bare ``[[direction, hex], ...]`` array, exactly like the Node CLI.
+    An explicit ``root_hex`` always wins over the one inside the file: a
+    relying party handed the root out-of-band is pinning THAT root.
+    """
+    with open(proof_json, "r", encoding="utf-8") as f:
+        parsed = json.load(f)
+    if isinstance(parsed, list):
+        proof, embedded_root = parsed, None
+    elif isinstance(parsed, dict):
+        proof, embedded_root = parsed.get("proof", []), parsed.get("root_hex")
+    else:
+        raise ValueError("proof_json must be an object or an array")
+    root = root_override if root_override is not None else embedded_root
+    if not isinstance(root, str) or not root:
+        raise ValueError("no root_hex: pass it as the 4th argument or use the JSON written by inclusion-proof")
+    if not isinstance(proof, list):
+        raise ValueError("proof must be a list of [direction, hex] steps")
+    return proof, root
 
 
 def main(argv: Optional[List[str]] = None) -> int:
@@ -87,6 +143,13 @@ def main(argv: Optional[List[str]] = None) -> int:
     api_key = args.api_key if args.api_key is not None else _env_api_key()
 
     try:
+        if args.command == "verify-inclusion":
+            # Deliberately first and deliberately without server_url/api_key:
+            # this branch must stay correct with the service unreachable.
+            proof, root_hex = _load_proof(args.proof_json, args.root_hex)
+            ok = verify_inclusion(args.file, args.rel_path, proof, root_hex)
+            sys.stdout.write(json.dumps({"ok": bool(ok)}) + "\n")
+            return 0 if ok else 1
         if args.command == "anchor":
             result = anchor_folder(
                 args.folder,

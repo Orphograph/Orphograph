@@ -1,16 +1,21 @@
-"""orphograph — Python SDK for anchoring folders to Bitcoin.
+"""orphograph — Bitcoin-anchored folder receipts you can verify without us.
 
-The SDK constructs an RFC 6962-style Merkle tree from a local folder, then
+The relying party's entry point is ``verify_inclusion``: given a file, its
+path inside the anchored folder, a saved proof, and the Merkle root, it
+returns a verdict with no network call and no dependency on the Orphograph
+service being reachable — or existing.
+
+Anchoring builds an RFC 6962-style Merkle tree from a local folder and
 submits only the manifest (paths, per-file SHA-256 digests, leaf hashes,
-and a 32-byte root) to the Orphograph hosted service. File bodies do not
-cross the network at any point in this module.
+and a 32-byte root) to the Orphograph service. File bodies do not cross
+the network at any point in this module.
 
 Public API:
 
+    verify_inclusion(file_path, rel_path, proof, root_hex)    # offline
     anchor_folder(folder_path, server_url=..., api_key=..., client_label=..., exclude=...)
     verify_folder(folder_path, receipt_id, server_url=...)
     inclusion_proof(receipt_id, path, server_url=...)
-    verify_inclusion(file_path, rel_path, proof, root_hex)
 
 Algorithm tag: ``orphograph-merkle-v1-rfc6962``.
 """
@@ -33,7 +38,7 @@ __all__ = [
     "verify_inclusion",
 ]
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 
 def anchor_folder(

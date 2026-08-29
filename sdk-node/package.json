@@ -1,7 +1,7 @@
 {
   "name": "orphograph",
   "version": "0.1.0",
-  "description": "Anchor a folder of evidence to the Bitcoin chain via the Orphograph hosted service. File contents never leave the local machine; only the manifest and the Merkle root are transmitted.",
+  "description": "Bitcoin-anchored folder receipts a relying party can verify without the issuer. Anchor via the Orphograph service; verify inclusion offline; file contents never leave the machine.",
   "type": "module",
   "license": "MIT",
   "engines": {
