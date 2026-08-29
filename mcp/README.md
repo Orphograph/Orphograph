@@ -11,7 +11,7 @@ machine.
 `mcp-name: io.github.Orphograph/orphograph`
 
 - **License:** MIT
-- **Dependencies:** Python ≥ 3.9 standard library only. No `pip install` required.
+- **Dependencies:** Python ≥ 3.9 standard library only. Also on PyPI as `orphograph-mcp` 0.1.1.
 - **Lines of code:** ~310, single file.
 - **Protocol:** MCP 2024-11-05 over stdio.
 
