@@ -25,18 +25,21 @@ python -m orphograph verify-inclusion /path/to/sub/photo.jpg sub/photo.jpg proof
 proof). Pin it. `ok` means "this file is in the tree with THAT root"; it
 says nothing about a root you did not check against the receipt.
 
-Same thing from Python:
+Same thing from Python, reading the object `inclusion-proof` writes
+(`root_hex` and `proof` keys; the CLI additionally accepts a bare proof
+array when `root_hex` is passed explicitly):
 
 ```python
 import json
 from orphograph import verify_inclusion
 
-saved = json.load(open("proof.json"))
+with open("proof.json") as f:
+    saved = json.load(f)
 ok = verify_inclusion(
     file_path="/path/to/sub/photo.jpg",
     rel_path="sub/photo.jpg",
     proof=saved["proof"],
-    root_hex=saved["root_hex"],
+    root_hex=saved["root_hex"],   # match this to the receipt's root first
 )
 ```
 
@@ -60,8 +63,11 @@ the proof, so a bundle is always self-consistent: compare the echoed
 `root_hex` always overrides the one in the file.
 
 The receipt's Bitcoin anchoring is an OpenTimestamps proof over the same
-root; it verifies against the chain with the standard `ots` tooling, also
-without this service.
+root. The anchoring party exports it with the rest of their vault
+(`GET /api/me/anchors.zip`, authenticated; each receipt folder carries its
+`.ots` files and `manifest.json`) and hands the `.ots` alongside
+`proof.json`; `ots verify` then checks the root against the Bitcoin chain
+with no dependency on this service.
 
 ## Privacy contract
 
