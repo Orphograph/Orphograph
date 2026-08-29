@@ -19,9 +19,26 @@ time.
 
 ## Install
 
+The Node package is **not on npm yet**. Until `npm view orphograph version`
+returns `0.1.0`, install from source (and use the Python SDK from PyPI):
+
 ```
-npm install orphograph
+pip install orphograph
 ```
+
+```
+git clone https://github.com/Orphograph/Orphograph.git
+cd Orphograph/sdk-node
+npm install
+# from your project:
+npm install /path/to/Orphograph/sdk-node
+```
+
+The compiled `dist/` is not committed, so the `npm install` inside
+`sdk-node` is what builds it. Run it before installing the package into
+your project; a path install against a never-built directory fails with
+`tsc: command not found`.
+
 
 ## Usage
 
