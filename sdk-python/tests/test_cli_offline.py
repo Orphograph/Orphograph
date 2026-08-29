@@ -86,7 +86,13 @@ class TestVerifyInclusionCli(unittest.TestCase):
                 "verify-inclusion", str(td / "sub" / "c.txt"), "sub/c.txt", str(proof_path),
             ])
             self.assertEqual(rc, 0, err)
-            self.assertEqual(json.loads(out), {"ok": True})
+            verdict = json.loads(out)
+            self.assertTrue(verdict["ok"])
+            # The verdict names the root it was checked against and where
+            # that root came from, so the relying party can match it to the
+            # receipt. A root read from the bundle is self-attested.
+            self.assertEqual(verdict["root_hex"], _root)
+            self.assertEqual(verdict["root_source"], "proof_json")
 
     def test_explicit_root_positional_matches_node_cli_shape(self):
         with tempfile.TemporaryDirectory() as d:
@@ -97,7 +103,10 @@ class TestVerifyInclusionCli(unittest.TestCase):
                 str(proof_path), root,
             ])
             self.assertEqual(rc, 0)
-            self.assertEqual(json.loads(out), {"ok": True})
+            verdict = json.loads(out)
+            self.assertTrue(verdict["ok"])
+            self.assertEqual(verdict["root_hex"], root)
+            self.assertEqual(verdict["root_source"], "argument")
 
     def test_tampered_file_exits_one_with_ok_false(self):
         with tempfile.TemporaryDirectory() as d:
@@ -108,7 +117,7 @@ class TestVerifyInclusionCli(unittest.TestCase):
                 "verify-inclusion", str(td / "sub" / "c.txt"), "sub/c.txt", str(proof_path),
             ])
             self.assertEqual(rc, 1)
-            self.assertEqual(json.loads(out), {"ok": False})
+            self.assertFalse(json.loads(out)["ok"])
 
     def test_explicit_root_overrides_the_one_inside_proof_json(self):
         # A relying party handed the root out-of-band pins THAT root; a
@@ -121,7 +130,10 @@ class TestVerifyInclusionCli(unittest.TestCase):
                 str(proof_path), "00" * 32,
             ])
             self.assertEqual(rc, 1)
-            self.assertEqual(json.loads(out), {"ok": False})
+            verdict = json.loads(out)
+            self.assertFalse(verdict["ok"])
+            self.assertEqual(verdict["root_hex"], "00" * 32)
+            self.assertEqual(verdict["root_source"], "argument")
 
     def test_bare_proof_array_is_accepted_like_node(self):
         with tempfile.TemporaryDirectory() as d:
@@ -133,7 +145,7 @@ class TestVerifyInclusionCli(unittest.TestCase):
                 "verify-inclusion", str(td / "sub" / "c.txt"), "sub/c.txt", str(bare), root,
             ])
             self.assertEqual(rc, 0)
-            self.assertEqual(json.loads(out), {"ok": True})
+            self.assertTrue(json.loads(out)["ok"])
 
     def test_bare_proof_array_without_root_is_a_usage_error(self):
         with tempfile.TemporaryDirectory() as d:
@@ -181,7 +193,23 @@ class TestVerifyInclusionCli(unittest.TestCase):
                     "verify-inclusion", str(td / "sub" / "c.txt"), "sub/c.txt", str(proof_path),
                 ])
             self.assertEqual(rc, 0)
-            self.assertEqual(json.loads(out), {"ok": True})
+            self.assertTrue(json.loads(out)["ok"])
+
+    def test_a_crash_is_exit_two_never_the_mismatch_code(self):
+        # Exit 1 means "not included". Python's default for an uncaught
+        # exception is ALSO 1, so a crash inside json.load (here: nesting
+        # deep enough for RecursionError) would have read as a verdict.
+        with tempfile.TemporaryDirectory() as d:
+            td = Path(d)
+            _folder_with_proof(td)
+            deep = td / "deep.json"
+            deep.write_text("[" * 200_000 + "]" * 200_000)
+            rc, out, err = _run([
+                "verify-inclusion", str(td / "a.txt"), "a.txt", str(deep),
+            ])
+            self.assertEqual(rc, 2)
+            self.assertEqual(out, "")
+            self.assertIn("RecursionError", json.loads(err)["error"])
 
 
 class TestCliParityWithNode(unittest.TestCase):

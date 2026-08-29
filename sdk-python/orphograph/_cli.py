@@ -113,12 +113,18 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def _load_proof(proof_json: str, root_override: Optional[str]) -> tuple:
-    """Read ``proof.json`` and pin the root.
+    """Read ``proof.json`` and pin the root. Returns ``(proof, root, source)``.
 
     Accepts the object ``inclusion-proof`` writes (``{"root_hex", "proof", ...}``)
     or a bare ``[[direction, hex], ...]`` array, exactly like the Node CLI.
     An explicit ``root_hex`` always wins over the one inside the file: a
     relying party handed the root out-of-band is pinning THAT root.
+
+    ``source`` is ``"argument"`` or ``"proof_json"`` and is echoed in the
+    verdict. A root read from the same file that supplied the proof is
+    self-attested: ``ok`` then means "consistent with the root written in
+    this bundle", and the relying party must still match that root against
+    the receipt (or the OpenTimestamps proof) for it to mean anything.
     """
     with open(proof_json, "r", encoding="utf-8") as f:
         parsed = json.load(f)
@@ -128,12 +134,15 @@ def _load_proof(proof_json: str, root_override: Optional[str]) -> tuple:
         proof, embedded_root = parsed.get("proof", []), parsed.get("root_hex")
     else:
         raise ValueError("proof_json must be an object or an array")
-    root = root_override if root_override is not None else embedded_root
+    if root_override is not None:
+        root, source = root_override, "argument"
+    else:
+        root, source = embedded_root, "proof_json"
     if not isinstance(root, str) or not root:
         raise ValueError("no root_hex: pass it as the 4th argument or use the JSON written by inclusion-proof")
     if not isinstance(proof, list):
         raise ValueError("proof must be a list of [direction, hex] steps")
-    return proof, root
+    return proof, root, source
 
 
 def main(argv: Optional[List[str]] = None) -> int:
@@ -146,9 +155,11 @@ def main(argv: Optional[List[str]] = None) -> int:
         if args.command == "verify-inclusion":
             # Deliberately first and deliberately without server_url/api_key:
             # this branch must stay correct with the service unreachable.
-            proof, root_hex = _load_proof(args.proof_json, args.root_hex)
+            proof, root_hex, source = _load_proof(args.proof_json, args.root_hex)
             ok = verify_inclusion(args.file, args.rel_path, proof, root_hex)
-            sys.stdout.write(json.dumps({"ok": bool(ok)}) + "\n")
+            sys.stdout.write(json.dumps(
+                {"ok": bool(ok), "root_hex": root_hex, "root_source": source}
+            ) + "\n")
             return 0 if ok else 1
         if args.command == "anchor":
             result = anchor_folder(
@@ -184,6 +195,13 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 2
     except (OSError, ValueError) as e:
         sys.stderr.write(json.dumps({"error": str(e)}) + "\n")
+        return 2
+    except Exception as e:  # noqa: BLE001 — see below
+        # Exit 1 is the MISMATCH verdict. An uncaught exception also exits 1
+        # (Python's default), so a crash — a proof.json nested deep enough to
+        # raise RecursionError inside json.load, say — would read as "not
+        # included". Every failure that is not a verdict must be exit 2.
+        sys.stderr.write(json.dumps({"error": f"{type(e).__name__}: {e}"}) + "\n")
         return 2
     return 2
 

@@ -12,13 +12,18 @@ account, and no network — the service can be unreachable or gone.
 ## Verify without the issuer
 
 This is the command a relying party runs. It needs the file, the POSIX path
-the file had inside the anchored folder, and the `proof.json` the anchoring
-party saved. Nothing is fetched.
+the file had inside the anchored folder, the `proof.json` the anchoring
+party saved, and the Merkle root from the receipt. Nothing is fetched.
 
 ```
-python -m orphograph verify-inclusion /path/to/sub/photo.jpg sub/photo.jpg proof.json
-# {"ok": true}   exit 0 on a match, 1 on a mismatch, 2 on an I/O or parse error
+python -m orphograph verify-inclusion /path/to/sub/photo.jpg sub/photo.jpg proof.json <root_hex>
+# {"ok": true, "root_hex": "…", "root_source": "argument"}
+# exit 0 on a match, 1 on a mismatch, 2 on an I/O or parse error
 ```
+
+`root_hex` is the root recorded on the receipt (and in its OpenTimestamps
+proof). Pin it. `ok` means "this file is in the tree with THAT root"; it
+says nothing about a root you did not check against the receipt.
 
 Same thing from Python:
 
@@ -47,13 +52,12 @@ proof once, while the service is reachable:
 python -m orphograph inclusion-proof <receipt_id> sub/photo.jpg > proof.json
 ```
 
-`proof.json` carries `root_hex` and `proof`. If you give the relying party
-the root by another channel, they can pin it explicitly and it overrides the
-one in the file:
-
-```
-python -m orphograph verify-inclusion sub/photo.jpg sub/photo.jpg proof.json <root_hex>
-```
+`proof.json` carries `root_hex` and `proof`. The 4th argument may be
+omitted, in which case the root inside `proof.json` is used and the verdict
+reports `"root_source": "proof_json"`. That root came from the same file as
+the proof, so a bundle is always self-consistent: compare the echoed
+`root_hex` to the receipt before treating `ok` as meaningful. An explicit
+`root_hex` always overrides the one in the file.
 
 The receipt's Bitcoin anchoring is an OpenTimestamps proof over the same
 root; it verifies against the chain with the standard `ots` tooling, also
