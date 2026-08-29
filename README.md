@@ -83,13 +83,15 @@ Listed in the official MCP registry as `io.github.Orphograph/orphograph`.
 
 Quickstart (stdio transport):
 
+Also on PyPI: `pip install orphograph-mcp` (stdlib-only; same server).
+
 ```bash
 curl -sSL https://orphograph.com/mcp/orphograph_mcp.py -o orphograph_mcp.py
 claude mcp add orphograph -- python3 orphograph_mcp.py
 ```
 
 The free tier needs no API key; set `ORPHO_API_KEY` to use vault features.
-An MCPB bundle is attached to release `mcp-v0.1.0`, and
+An MCPB bundle is attached to release `mcp-v0.1.1`, and
 [`mcp/Dockerfile`](mcp/Dockerfile) builds a minimal container for MCP
 directory crawlers — the server starts and answers MCP introspection with
 no configuration. Full tool schemas and options: [`mcp/README.md`](mcp/README.md).
