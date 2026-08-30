@@ -119,6 +119,54 @@ def parse_timestamp(b: bytes, i: int, depth: int = 0) -> tuple[int, dict]:
         # An op is followed by exactly one Timestamp: loop, don't recurse.
 
 
+def bitcoin_heights(b: bytes, i: int = 0) -> list[int]:
+    """Block heights of every Bitcoin attestation in one serialized timestamp.
+
+    Same walk as parse_timestamp; raises ValueError on malformed input. Used
+    by tests and tooling that pin WHICH blocks a proof commits to, not just
+    that one exists.
+    """
+    heights: list[int] = []
+
+    def walk(i: int, depth: int) -> int:
+        if depth > _MAX_FORK_DEPTH:
+            raise ValueError("fork nesting too deep")
+        while True:
+            if i >= len(b):
+                raise ValueError("truncated timestamp")
+            tag = b[i]
+            i += 1
+            if tag == _FORK:
+                i = walk(i, depth + 1)
+                continue
+            if tag == _ATTESTATION:
+                att_tag = b[i:i + 8]
+                i += 8
+                ln, i = read_varint(b, i)
+                payload = b[i:i + ln]
+                i += ln
+                if att_tag == BITCOIN_ATTESTATION_TAG:
+                    heights.append(read_varint(payload, 0)[0])
+                return i
+            if tag in _OPS_VARBYTES:
+                ln, i = read_varint(b, i)
+                i += ln
+            elif tag not in _OPS_UNARY:
+                raise ValueError(f"unknown op 0x{tag:02x}")
+
+    end = walk(i, 0)
+    if end != len(b):
+        raise ValueError("trailing bytes")
+    return heights
+
+
+def proof_bitcoin_heights(blob: bytes) -> list[int]:
+    """bitcoin_heights over a stored proof file (header + digest + timestamp)."""
+    if not blob.startswith(OTS_HEADER_MAGIC + OTS_VERSION + OTS_TAG_SHA256):
+        raise ValueError("not an OpenTimestamps sha256 proof")
+    return bitcoin_heights(blob[PROOF_PREFIX_LEN:])
+
+
 def timestamp_verdict(body: bytes, *, require_bitcoin: bool) -> tuple[bool, str]:
     """Decide whether `body` may be written into a proof.
 
