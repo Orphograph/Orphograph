@@ -19,24 +19,15 @@ sys.path.insert(0, str(ROOT / "server"))
 import upgrade_worker  # noqa: E402
 
 
+from conftest import PINNED_BODY, make_pending_ots  # noqa: E402
+
+
 def _pinned_body() -> bytes:
-    """A minimal calendar body the guard accepts: sha256 then a Bitcoin
-    attestation for block 949156 (varint 0xa4 0xf7 0x39, payload len 3)."""
-    return b"\x08\x00" + upgrade_worker.BITCOIN_ATTESTATION_TAG + b"\x03\xa4\xf7\x39"
+    return PINNED_BODY
 
 
 def _make_pending_ots() -> bytes:
-    """A minimal but well-formed pending .ots blob that _commitment_for_pending
-    parses successfully: header + version + SHA256 tag + 32-byte commitment +
-    the pending-attestation marker (zero ops between, which is valid)."""
-    return (
-        upgrade_worker.OTS_HEADER_MAGIC
-        + upgrade_worker.OTS_VERSION
-        + upgrade_worker.OTS_TAG_SHA256
-        + (b"\x11" * 32)
-        + upgrade_worker.PENDING_ATTESTATION_MARKER
-        + b"\x00\x00"
-    )
+    return make_pending_ots()
 
 
 def _write_receipt(receipts_dir: Path, rid: str, record: dict, ots: dict[str, bytes]) -> Path:

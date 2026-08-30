@@ -261,6 +261,12 @@ class TestVaultApiKey(unittest.TestCase):
         mpath.write_text(json.dumps({"receipt_id": rid, "kind": "folder",
                                      "root_hex": self.r_owner["hash_hex"],
                                      "leaves": []}))
+        # Renewal records ride along too (receipt_export.export_zip parity):
+        # verify_renewal.py fails hard on a missing batch block.
+        rdir = self.engine.RECEIPTS_DIR / rid / "renewal"
+        rdir.mkdir(exist_ok=True)
+        rpath = rdir / "001.json"
+        rpath.write_text(json.dumps({"sequence": 1, "target": {"receipt_id": rid}}))
         try:
             status, body, _ = self._get("/api/me/anchors.zip",
                                         api_key=self.owner_key)
@@ -268,8 +274,10 @@ class TestVaultApiKey(unittest.TestCase):
             names = zipfile.ZipFile(io.BytesIO(body)).namelist()
             self.assertIn(f"{rid}/receipt.json", names)
             self.assertIn(f"{rid}/manifest.json", names)
+            self.assertIn(f"{rid}/renewal/001.json", names)
         finally:
             mpath.unlink(missing_ok=True)
+            rpath.unlink(missing_ok=True)
 
     def test_csv_export_with_key(self):
         status, body, _ = self._get("/api/me/anchors.csv",

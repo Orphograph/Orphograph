@@ -24,6 +24,7 @@ import json
 import pytest
 
 import engine
+from conftest import PENDING_BODY  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
@@ -31,7 +32,7 @@ def isolated_storage(tmp_path, monkeypatch):
     monkeypatch.setattr(engine, "ROOT", tmp_path)
     monkeypatch.setattr(engine, "RECEIPTS_DIR", tmp_path / "receipts")
     monkeypatch.setattr(engine, "LEDGER", tmp_path / "ledger.jsonl")
-    monkeypatch.setattr(engine, "_submit", lambda _u, h: (True, b"body-" + h[:4]))
+    monkeypatch.setattr(engine, "_submit", lambda _u, h: (True, PENDING_BODY))
     yield
 
 

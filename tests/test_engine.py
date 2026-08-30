@@ -6,6 +6,7 @@ import json
 import pytest
 
 import engine
+from conftest import PENDING_BODY  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
@@ -17,7 +18,7 @@ def isolated_storage(tmp_path, monkeypatch):
 
 
 def _fake_submit_all_ok(_url, hash_bytes):
-    return True, b"calendar-body-for-" + hash_bytes[:4]
+    return True, PENDING_BODY
 
 
 def _fake_submit_all_fail(_url, _hash_bytes):
@@ -90,7 +91,7 @@ def test_partial_calendar_failure_recorded(monkeypatch):
         calls["n"] += 1
         if calls["n"] % 2 == 0:
             return False, "HTTP 503"
-        return True, b"ok-body"
+        return True, PENDING_BODY
 
     monkeypatch.setattr(engine, "_submit", half_ok)
     rec = engine.anchor_hash(_hash_of("partial"))

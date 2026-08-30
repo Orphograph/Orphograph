@@ -7,12 +7,14 @@ OpenTimestamps protocol:
   /timestamp/<hex-hash> returns the upgraded proof that includes the
   block attestation. A 404 means "still pending."
 
-This worker is honest about what it does: it fetches the latest blob
-from each calendar and writes it back. It does NOT parse the OTS
-binary or independently confirm Bitcoin inclusion — that's what the
-standalone verify_cli.py + `ots upgrade` is for. What we DO get from
-storing the upgraded blob is a server-side hint that the proof is
-no longer calendar-pending: that's what status="pinned" reflects.
+What this worker establishes, and no more: a calendar's /timestamp body is
+accepted only when it parses as one well-formed OpenTimestamps timestamp
+carrying a Bitcoin attestation (server/ots_timestamp.py, reference size
+caps included), and a stored proof with no pending marker counts as pinned
+only when it parses the same way. It does NOT replay the ops against a
+Bitcoin block header — that needs a node and is what verify_cli.py /
+`ots verify` are for. status="pinned" means "this proof carries a
+Bitcoin attestation", never "we confirmed inclusion".
 
 Run via cron / launchd / scripts/upgrade_cron.sh.
 
@@ -85,98 +87,23 @@ def _fetch_upgrade(calendar_url: str, hash_hex: str) -> tuple[bool, bytes | str]
         return False, f"{type(e).__name__}"
 
 
-# Attestation tags (8 bytes each, following the 0x00 attestation byte).
-BITCOIN_ATTESTATION_TAG = b"\x05\x88\x96\x0d\x73\xd7\x19\x01"
-_OPS_UNARY = frozenset({0x02, 0x03, 0x08, 0x67, 0xf2, 0xf3})  # sha1 ripemd160 sha256 keccak256 reverse hexlify
-_OPS_VARBYTES = frozenset({0xf0, 0xf1})                       # append prepend
-_FORK = 0xff
-_ATTESTATION = 0x00
-_MAX_FORK_DEPTH = 64
+import ots_timestamp  # noqa: E402
+from ots_timestamp import proof_verdict, read_varint, timestamp_verdict  # noqa: E402
 
-
-def _read_varint(b: bytes, i: int) -> tuple[int, int]:
-    """LEB128 unsigned varint at b[i]. Returns (value, next_index)."""
-    value, shift = 0, 0
-    while True:
-        if i >= len(b):
-            raise ValueError("truncated varint")
-        byte = b[i]
-        i += 1
-        value |= (byte & 0x7F) << shift
-        if not byte & 0x80:
-            return value, i
-        shift += 7
-        if shift > 63:
-            raise ValueError("varint too long")
-
-
-def _parse_timestamp(b: bytes, i: int, depth: int = 0) -> tuple[int, int]:
-    """Walk one serialized OpenTimestamps Timestamp starting at b[i].
-
-    Grammar (opentimestamps-core Timestamp.serialize): any number of
-    ``0xff <Timestamp>`` forks, then either an attestation
-    (``0x00 <8-byte tag> <varbytes payload>``) or one op followed by a
-    Timestamp. Returns (next_index, bitcoin_attestation_count). Raises
-    ValueError on anything that is not that grammar — the whole point is
-    that an HTML page, an empty body, or a truncated read never gets this
-    far as "valid".
-
-    Ops are walked iteratively (a real proof is a long linear op chain);
-    only forks recurse, and fork depth is capped so a hostile body cannot
-    turn the guard into a RecursionError.
-    """
-    if depth > _MAX_FORK_DEPTH:
-        raise ValueError("fork nesting too deep")
-    btc = 0
-    while True:
-        if i >= len(b):
-            raise ValueError("truncated timestamp")
-        tag = b[i]
-        i += 1
-        if tag == _FORK:
-            i, n = _parse_timestamp(b, i, depth + 1)
-            btc += n
-            continue
-        if tag == _ATTESTATION:
-            if i + 8 > len(b):
-                raise ValueError("truncated attestation tag")
-            att_tag = b[i:i + 8]
-            i += 8
-            ln, i = _read_varint(b, i)
-            if i + ln > len(b):
-                raise ValueError("truncated attestation payload")
-            i += ln
-            return i, btc + (1 if att_tag == BITCOIN_ATTESTATION_TAG else 0)
-        if tag in _OPS_VARBYTES:
-            ln, i = _read_varint(b, i)
-            if ln == 0 or i + ln > len(b):
-                raise ValueError("bad varbytes op")
-            i += ln
-        elif tag not in _OPS_UNARY:
-            raise ValueError(f"unknown op 0x{tag:02x}")
-        # An op is followed by exactly one Timestamp: loop, don't recurse.
+# Re-exported: tests and callers address the tag through this module.
+BITCOIN_ATTESTATION_TAG = ots_timestamp.BITCOIN_ATTESTATION_TAG
 
 
 def calendar_body_verdict(body: bytes) -> tuple[bool, str]:
-    """Decide whether a calendar's /timestamp response may replace a proof.
+    """A /timestamp body may replace a proof only if it is one well-formed
+    timestamp with a Bitcoin attestation (see ots_timestamp.timestamp_verdict)."""
+    return timestamp_verdict(body, require_bitcoin=True)
 
-    The body is spliced in place of the pending attestation and becomes the
-    customer's Bitcoin proof, so it must (1) parse as exactly one timestamp
-    with nothing left over and (2) carry at least one Bitcoin attestation —
-    a 200 that is still pending, an HTML challenge page, or an empty read
-    must never be written and must never flip the receipt to pinned.
-    """
-    if not body:
-        return False, "calendar body empty"
-    try:
-        end, btc = _parse_timestamp(body, 0)
-    except (ValueError, IndexError, RecursionError) as e:
-        return False, f"calendar body is not a well-formed OpenTimestamps timestamp ({e})"
-    if end != len(body):
-        return False, f"calendar body has {len(body) - end} trailing bytes after the timestamp"
-    if btc == 0:
-        return False, "calendar body carries no Bitcoin attestation"
-    return True, "ok"
+
+def stored_proof_verdict(blob: bytes) -> tuple[bool, str]:
+    """A stored proof with no pending marker is 'pinned' only if it parses
+    as a Bitcoin-attested timestamp — not merely because the marker is gone."""
+    return proof_verdict(blob, require_bitcoin=True)
 
 
 def _commitment_for_pending(ots_blob: bytes) -> tuple[str | None, int]:
@@ -201,13 +128,11 @@ def _commitment_for_pending(ots_blob: bytes) -> tuple[str | None, int]:
         op = ots_blob[i]
         i += 1
         if op == 0xf0:  # OP_APPEND
-            ln = ots_blob[i]
-            i += 1
+            ln, i = read_varint(ots_blob, i)
             cur = cur + ots_blob[i:i + ln]
             i += ln
         elif op == 0xf1:  # OP_PREPEND
-            ln = ots_blob[i]
-            i += 1
+            ln, i = read_varint(ots_blob, i)
             cur = ots_blob[i:i + ln] + cur
             i += ln
         elif op == 0x08:  # OP_SHA256
@@ -319,10 +244,17 @@ def _upgrade_one(receipt_dir: Path, record: dict) -> dict:
         old_blob = ots_path.read_bytes()
         commitment_hex, marker_idx = _commitment_for_pending(old_blob)
         if commitment_hex is None:
-            # No pending marker: blob is either already upgraded or malformed.
-            # Treat as pinned-no-op so the receipt advances; verify_cli is the
-            # authoritative check on actual Bitcoin inclusion.
-            upgrades.append({"calendar": cal, "pinned": True, "changed": False})
+            # No pending marker. That is what an upgraded proof looks like —
+            # and also what a proof that had garbage spliced into it looks
+            # like. Parse the stored bytes and let THAT decide; a blob that
+            # is not a Bitcoin-attested timestamp is not pinned, whatever
+            # the marker says.
+            ok, why = stored_proof_verdict(old_blob)
+            if ok:
+                upgrades.append({"calendar": cal, "pinned": True, "changed": False})
+            else:
+                upgrades.append({"calendar": cal, "pinned": False,
+                                 "reason": f"stored proof malformed: {why}"})
             continue
         ok, body = _fetch_upgrade(cal, commitment_hex)
         if not ok:
@@ -358,6 +290,12 @@ def _upgrade_one(receipt_dir: Path, record: dict) -> dict:
     # fields reflect Bitcoin PIN confirmation, which can be a strict subset.
     record["pinned_count"] = pinned_count
     record["pinned_total"] = len(record.get("successes", []))
+    malformed = sorted(_calendar_short(u["calendar"]) for u in upgrades
+                       if str(u.get("reason", "")).startswith("stored proof malformed"))
+    if malformed:
+        record["proof_malformed"] = malformed
+    else:
+        record.pop("proof_malformed", None)
     # Stall/freeze accounting. A receipt stuck at pending/partial because a
     # pool calendar's commitment permanently 404s would otherwise be re-fetched
     # on every run forever. Count consecutive eligible runs that make no forward

@@ -26,6 +26,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from conftest import PENDING_BODY  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 SERVER_DIR = ROOT / "server"
@@ -59,7 +60,7 @@ def setUpModule() -> None:
     ENGINE = engine_mod
     RENEWAL = renewal_mod
     _ORIG_SUBMIT = engine_mod._submit
-    engine_mod._submit = lambda cal, h: (True, b"\xf0stub-calendar-body")
+    engine_mod._submit = lambda cal, h: (True, PENDING_BODY)
 
 
 def tearDownModule() -> None:
