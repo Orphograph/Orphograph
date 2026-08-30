@@ -30,6 +30,8 @@ DATA_DIR = Path(os.environ.get("ORPHO_DATA_DIR", str(ROOT / "data") if (ROOT / "
 RECEIPTS_DIR = Path(os.environ.get("ORPHO_RECEIPTS_DIR", str(DATA_DIR / "receipts")))
 LEDGER = Path(os.environ.get("ORPHO_LEDGER", str(DATA_DIR / "ledger.jsonl")))
 
+import ots_timestamp  # noqa: E402
+
 OTS_HEADER_MAGIC = b"\x00OpenTimestamps\x00\x00Proof\x00\xbf\x89\xe2\xe8\x84\xe8\x92\x94"
 OTS_VERSION = b"\x01"
 OTS_TAG_SHA256 = b"\x08"
@@ -361,6 +363,15 @@ def anchor_hash(
 
     successes, failures = [], []
     for cal, (ok, body) in zip(CALENDARS, results):
+        if ok:
+            # The body becomes the customer's proof. A 200 that is not one
+            # well-formed timestamp (a proxy's HTML page, an empty read)
+            # would be written with no pending marker and read as "already
+            # upgraded" by the worker forever. Same guard as the upgrade
+            # path, one hop earlier.
+            valid, why = ots_timestamp.timestamp_verdict(body, require_bitcoin=False)
+            if not valid:
+                ok, body = False, why
         if ok:
             ots_bytes = _build_ots(hash_bytes, body)
             ots_path = receipt_dir / f"{_calendar_short(cal)}.ots"

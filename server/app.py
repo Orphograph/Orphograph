@@ -1913,6 +1913,14 @@ class Handler(BaseHTTPRequestHandler):
                         zf.write(mjson, arcname=f"{rid}/manifest.json")
                     for ots in sorted(rdir.glob("*.ots")):
                         zf.write(ots, arcname=f"{rid}/{ots.name}")
+                    # Renewal records, as receipt_export.export_zip ships
+                    # them: verify_renewal.py treats a missing batch block as
+                    # a hard failure, so a vault without them is not
+                    # self-sufficient for a renewed subscriber.
+                    renewal_dir = rdir / "renewal"
+                    if renewal_dir.is_dir():
+                        for rec in sorted(renewal_dir.glob("*.json")):
+                            zf.write(rec, arcname=f"{rid}/renewal/{rec.name}")
             body = buf.getvalue()
             ts = datetime.now(timezone.utc).strftime("%Y%m%d")
             self.send_response(200)

@@ -34,9 +34,7 @@ sys.path.insert(0, str(ROOT / "server"))
 # a receipt stops matching the file it was issued for.
 COMMITMENT_FIELDS = ("receipt_id", "created_at", "hash_hex", "sha512_hex")
 
-# sha256 then a Bitcoin attestation (block 949156): the smallest calendar
-# body upgrade_worker.calendar_body_verdict accepts (test_upgrade_body_guard.py).
-_PINNED_BODY = b"\x08\x00\x05\x88\x96\x0d\x73\xd7\x19\x01\x03\xa4\xf7\x39"
+from conftest import PINNED_BODY as _PINNED_BODY  # noqa: E402
 
 
 def _make_receipt_dir(base: Path, receipt_id: str, calendars: list[str]) -> Path:

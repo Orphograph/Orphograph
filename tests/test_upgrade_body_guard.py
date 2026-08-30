@@ -29,11 +29,12 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "server"))
 
 import upgrade_worker  # noqa: E402
+from conftest import make_pending_ots  # noqa: E402
 
 FIX = ROOT / "tests" / "fixtures" / "ots"
-BLOB_PREFIX_LEN = (len(upgrade_worker.OTS_HEADER_MAGIC)
-                   + len(upgrade_worker.OTS_VERSION)
-                   + len(upgrade_worker.OTS_TAG_SHA256) + 32)
+import ots_timestamp  # noqa: E402
+
+BLOB_PREFIX_LEN = ots_timestamp.PROOF_PREFIX_LEN
 BITCOIN_TAG = b"\x05\x88\x96\x0d\x73\xd7\x19\x01"
 PENDING_TAG = b"\x83\xdf\xe3\x0d\x2e\xf9\x0c\x8e"
 
@@ -67,10 +68,7 @@ def _good_body() -> bytes:
 
 
 def _pending_ots() -> bytes:
-    return (upgrade_worker.OTS_HEADER_MAGIC + upgrade_worker.OTS_VERSION
-            + upgrade_worker.OTS_TAG_SHA256 + (b"\x22" * 32)
-            + b"\xf0\x02\xab\xcd\x08"
-            + upgrade_worker.PENDING_ATTESTATION_MARKER + b"\x00\x00")
+    return make_pending_ots(b"\x22" * 32, ops=b"\xf0\x02\xab\xcd\x08")
 
 
 def _receipt(tmp_path: Path, monkeypatch) -> tuple[Path, dict, bytes]:
@@ -176,3 +174,75 @@ def test_bitcoin_attested_body_is_spliced_and_pinned(tmp_path, monkeypatch):
         "calendar": "https://alice.btc.calendar.opentimestamps.org",
         "pinned": True, "changed": True,
     }
+
+
+# --- follow-ups from the #213 review -----------------------------------------
+
+def test_reference_size_caps_are_enforced():
+    # python-opentimestamps rejects varbytes > 4096 and payloads > 8192; a
+    # body we accept must be one `ots` can read back.
+    ok, why = upgrade_worker.calendar_body_verdict(b"\xf0" + _leb128(4096) + b"a" * 4096 + _bitcoin_attestation())
+    assert ok, why
+    ok, why = upgrade_worker.calendar_body_verdict(b"\xf0" + _leb128(4097) + b"a" * 4097 + _bitcoin_attestation())
+    assert not ok and "4096" in why
+    big = b"\x00" + b"\x01" * 8 + _leb128(8193) + b"z" * 8193
+    ok, why = upgrade_worker.calendar_body_verdict(b"\xff" + big + _good_body())
+    assert not ok and "8192" in why
+
+
+@pytest.mark.parametrize("payload", [b"", b"\xff", b"\xa4\xf7\x39\x00"])
+def test_bitcoin_attestation_payload_must_be_one_block_height(payload):
+    body = b"\x08\x00" + BITCOIN_TAG + _leb128(len(payload)) + payload
+    ok, why = upgrade_worker.calendar_body_verdict(body)
+    assert not ok
+    assert "well-formed" in why
+
+
+def test_stored_proof_without_marker_is_pinned_only_if_it_parses(tmp_path, monkeypatch):
+    # Pre-#213 corruption: header + digest + ops + HTML, no pending marker.
+    rd, record, _ = _receipt(tmp_path, monkeypatch)
+    corrupted = (upgrade_worker.OTS_HEADER_MAGIC + upgrade_worker.OTS_VERSION
+                 + upgrade_worker.OTS_TAG_SHA256 + b"\x22" * 32 + b"\xf0\x02\xab\xcd\x08"
+                 + b"<html>Attention Required!</html>")
+    (rd / "alice.ots").write_bytes(corrupted)
+    monkeypatch.setattr(upgrade_worker, "_fetch_upgrade", lambda c, h: (_ for _ in ()).throw(AssertionError("must not fetch")))
+    result = upgrade_worker._upgrade_one(rd, dict(record))
+    assert result["status"] == "pending"
+    assert result["pinned_count"] == 0
+    assert result["upgrades"][0]["pinned"] is False
+    assert "stored proof malformed" in result["upgrades"][0]["reason"]
+    stored = json.loads((rd / "receipt.json").read_text())
+    assert stored["proof_malformed"] == ["alice"]
+    assert "btc_pinned_at" not in stored
+    # The real upgraded proof (11 forks, one Bitcoin attestation) IS pinned.
+    (rd / "alice.ots").write_bytes((FIX / "XwTULwlh76PcCst9_btc_upgraded.ots").read_bytes())
+    result = upgrade_worker._upgrade_one(rd, dict(record))
+    assert result["status"] == "pinned"
+    assert result["upgrades"][0] == {"calendar": record["successes"][0]["calendar"], "pinned": True, "changed": False}
+    assert "proof_malformed" not in json.loads((rd / "receipt.json").read_text())
+
+
+def test_rejected_200_counts_as_a_stall_and_never_resets(tmp_path, monkeypatch):
+    rd, record, before = _receipt(tmp_path, monkeypatch)
+    monkeypatch.setattr(upgrade_worker, "MAX_UPGRADE_STALLS", 3)
+    html = b"<html>Attention Required!</html>"
+    monkeypatch.setattr(upgrade_worker, "_fetch_upgrade", lambda c, h: (True, html))
+    rec = dict(record)
+    for n in (1, 2):
+        result = upgrade_worker._upgrade_one(rd, rec)
+        rec = json.loads((rd / "receipt.json").read_text())
+        assert rec["upgrade_stalls"] == n
+        assert not result["frozen"]
+    result = upgrade_worker._upgrade_one(rd, rec)
+    rec = json.loads((rd / "receipt.json").read_text())
+    assert rec["upgrade_stalls"] == 3 and rec["upgrade_frozen"] is True and result["frozen"]
+    assert (rd / "alice.ots").read_bytes() == before
+
+
+def test_walker_reads_varint_lengths_like_the_guard():
+    # A 130-byte append is legal OTS (<= 4096); the old single-byte read misparsed it.
+    blob = make_pending_ots(b"\x33" * 32, ops=b"\xf0" + _leb128(130) + b"n" * 130 + b"\x08")
+    commitment, idx = upgrade_worker._commitment_for_pending(blob)
+    import hashlib
+    assert commitment == hashlib.sha256(b"\x33" * 32 + b"n" * 130).hexdigest()
+    assert idx > 0

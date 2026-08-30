@@ -27,10 +27,7 @@ import urllib.error
 from pathlib import Path
 from unittest import mock
 
-# sha256 then a Bitcoin attestation (block 949156): the smallest calendar
-# body upgrade_worker.calendar_body_verdict accepts. Anything else is
-# rejected and never pins (test_upgrade_body_guard.py).
-_PINNED_BODY = b"\x08\x00\x05\x88\x96\x0d\x73\xd7\x19\x01\x03\xa4\xf7\x39"
+from conftest import PINNED_BODY as _PINNED_BODY  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "server"))

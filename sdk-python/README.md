@@ -60,7 +60,9 @@ omitted, in which case the root inside `proof.json` is used and the verdict
 reports `"root_source": "proof_json"`. That root came from the same file as
 the proof, so a bundle is always self-consistent: compare the echoed
 `root_hex` to the receipt before treating `ok` as meaningful. An explicit
-`root_hex` always overrides the one in the file.
+`root_hex` always overrides the one in the file. When `proof.json` records a
+`path` that differs from `rel_path`, one JSON warning line goes to standard
+error; standard output and the exit code are unchanged.
 
 The receipt's Bitcoin anchoring is an OpenTimestamps proof over the same
 root. The anchoring party exports it with the rest of their vault
