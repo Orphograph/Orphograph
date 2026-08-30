@@ -50,6 +50,15 @@ UPGRADE_LOG = Path(os.environ.get("ORPHO_UPGRADE_LOG", str(DATA_DIR / "upgrade_l
 # freezing only halts the wasteful polling. Set 0 to disable; clear
 # `upgrade_frozen` on a record to resume it.
 MAX_UPGRADE_STALLS = int(os.environ.get("ORPHO_MAX_UPGRADE_STALLS", "24"))
+
+# Bumped when the worker's own behaviour changes in a way that can rescue
+# receipts it previously froze. A frozen record below this schema is thawed
+# exactly once (stalls reset, frozen cleared) and stamped, so a fix to the
+# polling logic reaches the receipts the old logic gave up on.
+#   2 (2026-08-30): query the calendar the pending attestation NAMES, not the
+#      submit URL. Pool aliases (a.pool / b.pool) 404 forever on /timestamp;
+#      the real calendar behind them (alice / bob) answers.
+UPGRADE_SCHEMA = 2
 # Bound the append-only upgrade log: rotate to a single .1 backup past this
 # size so a long-stuck backlog can't grow it without limit.
 UPGRADE_LOG_MAX_BYTES = int(os.environ.get("ORPHO_UPGRADE_LOG_MAX_BYTES", str(5 * 1024 * 1024)))
@@ -104,6 +113,26 @@ def stored_proof_verdict(blob: bytes) -> tuple[bool, str]:
     """A stored proof with no pending marker is 'pinned' only if it parses
     as a Bitcoin-attested timestamp — not merely because the marker is gone."""
     return proof_verdict(blob, require_bitcoin=True)
+
+
+def _pending_calendar_url(ots_blob: bytes, marker_idx: int) -> str | None:
+    """The calendar URL written into the pending attestation at marker_idx.
+
+    Layout after the 0x00 + 8-byte tag: varint(payload_len) varint(uri_len)
+    uri. A pool alias submits on behalf of a real calendar and writes THAT
+    calendar's URL here; /timestamp/<commitment> is only known there.
+    Returns None when the bytes are not a plausible https URL.
+    """
+    i = marker_idx + len(PENDING_ATTESTATION_MARKER)
+    try:
+        _payload_len, i = read_varint(ots_blob, i)
+        uri_len, i = read_varint(ots_blob, i)
+        uri = ots_blob[i:i + uri_len].decode("ascii")
+    except (ValueError, UnicodeDecodeError):
+        return None
+    if len(uri) != uri_len or not uri.startswith("https://") or "/" in uri[8:]:
+        return None
+    return uri
 
 
 def _commitment_for_pending(ots_blob: bytes) -> tuple[str | None, int]:
@@ -256,23 +285,27 @@ def _upgrade_one(receipt_dir: Path, record: dict) -> dict:
                 upgrades.append({"calendar": cal, "pinned": False,
                                  "reason": f"stored proof malformed: {why}"})
             continue
-        ok, body = _fetch_upgrade(cal, commitment_hex)
+        # Ask the calendar the proof names. The submit URL may be a pool
+        # alias that never learns the commitment (404 forever); the pending
+        # attestation carries the real calendar's URL.
+        query_url = _pending_calendar_url(old_blob, marker_idx) or cal
+        ok, body = _fetch_upgrade(query_url, commitment_hex)
         if not ok:
-            upgrades.append({"calendar": cal, "pinned": False, "reason": str(body)})
+            upgrades.append({"calendar": cal, "queried": query_url, "pinned": False, "reason": str(body)})
             continue
         # The body replaces the customer's proof bytes and decides "pinned":
         # parse it before either happens. An unparseable or still-pending
         # 200 is a non-event for this receipt, not an upgrade.
         valid, why = calendar_body_verdict(body)
         if not valid:
-            upgrades.append({"calendar": cal, "pinned": False, "reason": why})
+            upgrades.append({"calendar": cal, "queried": query_url, "pinned": False, "reason": why})
             continue
         new_blob = old_blob[:marker_idx] + body
         if new_blob == old_blob:
-            upgrades.append({"calendar": cal, "pinned": True, "changed": False})
+            upgrades.append({"calendar": cal, "queried": query_url, "pinned": True, "changed": False})
             continue
         ots_path.write_bytes(new_blob)
-        upgrades.append({"calendar": cal, "pinned": True, "changed": True})
+        upgrades.append({"calendar": cal, "queried": query_url, "pinned": True, "changed": True})
 
     pinned_count = sum(1 for u in upgrades if u.get("pinned"))
     if pinned_count == len(record.get("successes", [])) and pinned_count > 0:
@@ -296,14 +329,15 @@ def _upgrade_one(receipt_dir: Path, record: dict) -> dict:
         record["proof_malformed"] = malformed
     else:
         record.pop("proof_malformed", None)
-    # Stall/freeze accounting. A receipt stuck at pending/partial because a
-    # pool calendar's commitment permanently 404s would otherwise be re-fetched
-    # on every run forever. Count consecutive eligible runs that make no forward
+    # Stall/freeze accounting. A receipt stuck at pending/partial (a calendar
+    # that is down for good, a commitment it really never learned) would
+    # otherwise be re-fetched on every run forever. Count consecutive eligible runs that make no forward
     # progress (no calendar's blob changed this run); once the ceiling is hit,
     # freeze it so upgrade_all() skips it like a pinned receipt. This touches
     # only polling cadence — never the proof bytes or the commitment walk.
     progressed = any(u.get("changed") for u in upgrades)
     record["upgrade_attempts"] = int(record.get("upgrade_attempts", 0) or 0) + 1
+    record["upgrade_schema"] = UPGRADE_SCHEMA
     if status == "pinned" or progressed:
         record["upgrade_stalls"] = 0
     else:
@@ -357,11 +391,22 @@ def upgrade_all(min_age_sec: int = 3600) -> dict:
             record = json.loads(receipt_file.read_text())
         except json.JSONDecodeError:
             continue
-        if record.get("status") == "pinned" or record.get("upgrade_frozen"):
-            # Pinned = done. Frozen = a permanently-stuck partial we've stopped
-            # polling (see MAX_UPGRADE_STALLS) so it can't burn calls forever.
+        if record.get("status") == "pinned":
             skipped += 1
             continue
+        if record.get("upgrade_frozen"):
+            if int(record.get("upgrade_schema", 1) or 1) >= UPGRADE_SCHEMA:
+                # Frozen under the current logic: a genuinely stuck partial
+                # we've stopped polling (see MAX_UPGRADE_STALLS).
+                skipped += 1
+                continue
+            # Frozen by an older worker whose polling was the problem.
+            # Thaw once; _upgrade_one stamps the schema so this cannot loop.
+            record["upgrade_frozen"] = False
+            record["upgrade_stalls"] = 0
+            record["upgrade_thawed_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+            for k in ("upgrade_frozen_at", "upgrade_frozen_reason"):
+                record.pop(k, None)
         age = now - receipt_file.stat().st_mtime
         if age < min_age_sec:
             skipped += 1

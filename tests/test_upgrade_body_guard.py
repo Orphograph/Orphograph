@@ -172,6 +172,7 @@ def test_bitcoin_attested_body_is_spliced_and_pinned(tmp_path, monkeypatch):
     assert result["status"] == "pinned"
     assert result["upgrades"][0] == {
         "calendar": "https://alice.btc.calendar.opentimestamps.org",
+        "queried": "https://alice.btc.calendar.opentimestamps.org",
         "pinned": True, "changed": True,
     }
 
