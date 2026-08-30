@@ -120,6 +120,10 @@ def _parse_timestamp(b: bytes, i: int, depth: int = 0) -> tuple[int, int]:
     ValueError on anything that is not that grammar — the whole point is
     that an HTML page, an empty body, or a truncated read never gets this
     far as "valid".
+
+    Ops are walked iteratively (a real proof is a long linear op chain);
+    only forks recurse, and fork depth is capped so a hostile body cannot
+    turn the guard into a RecursionError.
     """
     if depth > _MAX_FORK_DEPTH:
         raise ValueError("fork nesting too deep")
@@ -150,8 +154,7 @@ def _parse_timestamp(b: bytes, i: int, depth: int = 0) -> tuple[int, int]:
             i += ln
         elif tag not in _OPS_UNARY:
             raise ValueError(f"unknown op 0x{tag:02x}")
-        i, n = _parse_timestamp(b, i, depth)
-        return i, btc + n
+        # An op is followed by exactly one Timestamp: loop, don't recurse.
 
 
 def calendar_body_verdict(body: bytes) -> tuple[bool, str]:

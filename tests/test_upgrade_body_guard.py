@@ -124,6 +124,20 @@ def test_fork_with_bitcoin_branch_is_accepted():
     assert ok, why
 
 
+def test_long_linear_op_chain_is_not_a_recursion_error():
+    # Real proofs are long linear chains; the walker must not recurse per op.
+    body = b"\x08" * 5000 + _bitcoin_attestation()
+    ok, why = upgrade_worker.calendar_body_verdict(body)
+    assert ok, why
+
+
+def test_deep_fork_nesting_is_rejected_not_crashed():
+    body = b"\xff" * 100 + _good_body()
+    ok, why = upgrade_worker.calendar_body_verdict(body)
+    assert not ok
+    assert "well-formed" in why
+
+
 # --- driven through the real entry point ------------------------------------
 
 def test_html_200_does_not_replace_the_proof_or_claim_pinned(tmp_path, monkeypatch):
