@@ -135,7 +135,7 @@ class TestCommitmentImmutable(unittest.TestCase):
             "btc_pinned_at", "integration_email_sent_at", "pin_email_sent_at",
             "pinned_count", "pinned_total", "status", "upgrade_attempts",
             "upgrade_frozen", "upgrade_frozen_at", "upgrade_frozen_reason",
-            "upgrade_stalls", "successes", "failures", "calendars_ok",
+            "upgrade_stalls", "upgrade_schema", "upgrade_thawed_at", "successes", "failures", "calendars_ok",
         }
         before, after, _ = self._run(
             "rid_keys", ["https://a.pool.opentimestamps.org"])
