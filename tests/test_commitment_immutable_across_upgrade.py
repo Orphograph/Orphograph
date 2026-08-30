@@ -34,6 +34,10 @@ sys.path.insert(0, str(ROOT / "server"))
 # a receipt stops matching the file it was issued for.
 COMMITMENT_FIELDS = ("receipt_id", "created_at", "hash_hex", "sha512_hex")
 
+# sha256 then a Bitcoin attestation (block 949156): the smallest calendar
+# body upgrade_worker.calendar_body_verdict accepts (test_upgrade_body_guard.py).
+_PINNED_BODY = b"\x08\x00\x05\x88\x96\x0d\x73\xd7\x19\x01\x03\xa4\xf7\x39"
+
 
 def _make_receipt_dir(base: Path, receipt_id: str, calendars: list[str]) -> Path:
     rd = base / receipt_id
@@ -89,7 +93,7 @@ class TestCommitmentImmutable(unittest.TestCase):
         commit = mock.patch.object(self.uw, "_commitment_for_pending",
                                    return_value=("c" * 64, 100))
         fetch = mock.patch.object(self.uw, "_fetch_upgrade",
-                                  return_value=(True, b"UPGRADED_BLOB_BYTES"))
+                                  return_value=(True, _PINNED_BODY))
         return commit, fetch
 
     def _run(self, rid: str, cals: list[str]):

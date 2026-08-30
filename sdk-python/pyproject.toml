@@ -28,7 +28,7 @@ dependencies = []
 
 [project.urls]
 Homepage = "https://orphograph.com"
-Documentation = "https://orphograph.com/method/architecture.html"
+Documentation = "https://orphograph.com/method/architecture"
 
 [project.scripts]
 orphograph = "orphograph._cli:main"

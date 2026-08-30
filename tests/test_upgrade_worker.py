@@ -19,6 +19,12 @@ sys.path.insert(0, str(ROOT / "server"))
 import upgrade_worker  # noqa: E402
 
 
+def _pinned_body() -> bytes:
+    """A minimal calendar body the guard accepts: sha256 then a Bitcoin
+    attestation for block 949156 (varint 0xa4 0xf7 0x39, payload len 3)."""
+    return b"\x08\x00" + upgrade_worker.BITCOIN_ATTESTATION_TAG + b"\x03\xa4\xf7\x39"
+
+
 def _make_pending_ots() -> bytes:
     """A minimal but well-formed pending .ots blob that _commitment_for_pending
     parses successfully: header + version + SHA256 tag + 32-byte commitment +
@@ -90,7 +96,7 @@ def test_progress_resets_stall_counter(tmp_path, monkeypatch):
         "upgrade_stalls": 2,  # already two stalls deep
         "successes": [{"calendar": "https://a.pool.opentimestamps.org"}],
     }
-    monkeypatch.setattr(upgrade_worker, "_fetch_upgrade", lambda c, h: (True, b"UPGRADED_BODY"))
+    monkeypatch.setattr(upgrade_worker, "_fetch_upgrade", lambda c, h: (True, _pinned_body()))
     upgrade_worker._upgrade_one(rdir, rec)
     assert rec["upgrade_stalls"] == 0
     assert not rec.get("upgrade_frozen")
