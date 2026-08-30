@@ -21,6 +21,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "server"))
+from conftest import PENDING_BODY  # noqa: E402
 
 _POLLUTED = (
     "app", "engine", "auth", "rate_limit", "credits", "stats",
@@ -64,7 +65,7 @@ class TestL402(unittest.TestCase):
         from http.server import ThreadingHTTPServer
         cls.lightning = lightning_mod
         cls._orig_submit = engine_mod._submit
-        engine_mod._submit = lambda cal, h: (True, b"\xf0stub-calendar-body")
+        engine_mod._submit = lambda cal, h: (True, PENDING_BODY)
         cls._server = ThreadingHTTPServer(("127.0.0.1", 0), app.Handler)
         cls._base = f"http://127.0.0.1:{cls._server.server_address[1]}"
         threading.Thread(target=cls._server.serve_forever, daemon=True).start()

@@ -26,6 +26,7 @@ import pytest
 
 import badge_svg
 import engine
+from conftest import PENDING_BODY  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -51,7 +52,7 @@ def isolated_storage(tmp_path, monkeypatch):
 
 
 def _fake_submit_all_ok(_url, hash_bytes):
-    return True, b"calendar-body-for-" + hash_bytes[:4]
+    return True, PENDING_BODY
 
 
 def test_render_returns_svg_document():

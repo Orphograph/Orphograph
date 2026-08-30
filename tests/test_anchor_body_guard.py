@@ -16,10 +16,10 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "server"))
 
 import engine  # noqa: E402
+from conftest import PENDING_BODY  # noqa: E402
 
 DIGEST = "ab" * 32
 # ops + a pending attestation: what a calendar actually returns from /digest.
-PENDING_BODY = b"\xf0\x10" + b"\x01" * 16 + b"\x08" + b"\x00\x83\xdf\xe3\x0d\x2e\xf9\x0c\x8e" + b"\x02\x01x"
 
 
 @pytest.fixture

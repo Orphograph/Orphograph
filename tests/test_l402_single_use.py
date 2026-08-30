@@ -45,6 +45,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "server"))
+from conftest import PENDING_BODY  # noqa: E402
 
 _POLLUTED = (
     "app", "engine", "auth", "rate_limit", "credits", "stats", "health",
@@ -99,7 +100,7 @@ class TestL402SingleUse(unittest.TestCase):
         # credential under the fairness rule — so a single-use test written
         # on a failing stub proves nothing. (It briefly did; that is why this
         # comment exists.)
-        engine._submit = lambda cal, h: (True, b"\x00" * 32)
+        engine._submit = lambda cal, h: (True, PENDING_BODY)
         cls.engine, cls.lightning = engine, lightning
         cls._server = ThreadingHTTPServer(("127.0.0.1", 0), app.Handler)
         threading.Thread(target=cls._server.serve_forever, daemon=True).start()
@@ -164,7 +165,7 @@ class TestL402SingleUse(unittest.TestCase):
             self.assertEqual(code, 200, body)
             self.assertEqual(body["calendars_ok"], 0)
         finally:
-            self.engine._submit = lambda cal, h: (True, b"\x00" * 32)
+            self.engine._submit = lambda cal, h: (True, PENDING_BODY)
         self.assertFalse(
             self.lightning.is_spent(ph),
             "a 0-calendar anchor ate the Lightning payment; the agent cannot "
