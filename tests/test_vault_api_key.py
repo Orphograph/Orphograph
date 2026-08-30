@@ -250,6 +250,27 @@ class TestVaultApiKey(unittest.TestCase):
         self.assertEqual(headers.get("Content-Type"), "application/zip")
         self.assertTrue(body.startswith(b"PK"))
 
+    def test_zip_export_carries_folder_manifest(self):
+        # A folder receipt's manifest.json is the only way a relying party
+        # can recompute the anchored root from the files; the vault export
+        # advertised it (sdk README) but only wrote receipt.json + *.ots.
+        import io
+        import zipfile
+        rid = self.r_owner["receipt_id"]
+        mpath = self.engine.RECEIPTS_DIR / rid / "manifest.json"
+        mpath.write_text(json.dumps({"receipt_id": rid, "kind": "folder",
+                                     "root_hex": self.r_owner["hash_hex"],
+                                     "leaves": []}))
+        try:
+            status, body, _ = self._get("/api/me/anchors.zip",
+                                        api_key=self.owner_key)
+            self.assertEqual(status, 200)
+            names = zipfile.ZipFile(io.BytesIO(body)).namelist()
+            self.assertIn(f"{rid}/receipt.json", names)
+            self.assertIn(f"{rid}/manifest.json", names)
+        finally:
+            mpath.unlink(missing_ok=True)
+
     def test_csv_export_with_key(self):
         status, body, _ = self._get("/api/me/anchors.csv",
                                     api_key=self.owner_key)

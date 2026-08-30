@@ -78,6 +78,30 @@ class TestNetworkCutBites(unittest.TestCase):
 
 
 class TestVerifyInclusionCli(unittest.TestCase):
+    def test_rel_path_disagreeing_with_proof_json_path_warns_on_stderr(self):
+        with tempfile.TemporaryDirectory() as d:
+            td = Path(d)
+            proof_path, _root = _folder_with_proof(td)
+            rc, out, err = _run([
+                "verify-inclusion", str(td / "sub" / "c.txt"), "other/c.txt", str(proof_path),
+            ])
+            self.assertEqual(rc, 1)
+            self.assertFalse(json.loads(out)["ok"])
+            warning = json.loads(err)
+            self.assertIn("rel_path", warning["warning"])
+            self.assertEqual(warning["proof_json_path"], "sub/c.txt")
+            self.assertEqual(warning["rel_path"], "other/c.txt")
+
+    def test_agreeing_rel_path_prints_no_warning(self):
+        with tempfile.TemporaryDirectory() as d:
+            td = Path(d)
+            proof_path, _root = _folder_with_proof(td)
+            rc, _out, err = _run([
+                "verify-inclusion", str(td / "sub" / "c.txt"), "sub/c.txt", str(proof_path),
+            ])
+            self.assertEqual(rc, 0)
+            self.assertEqual(err, "")
+
     def test_match_exits_zero_with_ok_true(self):
         with tempfile.TemporaryDirectory() as d:
             td = Path(d)

@@ -65,9 +65,13 @@ the proof, so a bundle is always self-consistent: compare the echoed
 The receipt's Bitcoin anchoring is an OpenTimestamps proof over the same
 root. The anchoring party exports it with the rest of their vault
 (`GET /api/me/anchors.zip`, authenticated; each receipt folder carries its
-`.ots` files and `manifest.json`) and hands the `.ots` alongside
-`proof.json`; `ots verify` then checks the root against the Bitcoin chain
-with no dependency on this service.
+`receipt.json`, `.ots` files and, for folder receipts, `manifest.json`) or
+per receipt (`GET /api/receipt/<receipt_id>.zip`, no login for public
+receipts) and hands the `.ots` alongside `proof.json`. `ots info <file>.ots`
+prints the attested Bitcoin block height with no service and no node;
+`ots verify -d <root_hex> <file>.ots` checks the root against the chain
+itself and needs a local Bitcoin node to do it (it exits 1 without one).
+Neither step depends on this service.
 
 ## Privacy contract
 

@@ -113,7 +113,12 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def _load_proof(proof_json: str, root_override: Optional[str]) -> tuple:
-    """Read ``proof.json`` and pin the root. Returns ``(proof, root, source)``.
+    """Read ``proof.json`` and pin the root. Returns ``(proof, root, source, path)``.
+
+    ``path`` is the relative path recorded in the file when it is the object
+    ``inclusion-proof`` writes, else None. It is advisory only: the leaf hash
+    binds the path the caller passes, so a disagreement is reported as a
+    warning and the verdict is computed on the caller's ``rel_path``.
 
     Accepts the object ``inclusion-proof`` writes (``{"root_hex", "proof", ...}``)
     or a bare ``[[direction, hex], ...]`` array, exactly like the Node CLI.
@@ -128,10 +133,13 @@ def _load_proof(proof_json: str, root_override: Optional[str]) -> tuple:
     """
     with open(proof_json, "r", encoding="utf-8") as f:
         parsed = json.load(f)
+    embedded_path = None
     if isinstance(parsed, list):
         proof, embedded_root = parsed, None
     elif isinstance(parsed, dict):
         proof, embedded_root = parsed.get("proof", []), parsed.get("root_hex")
+        if isinstance(parsed.get("path"), str):
+            embedded_path = parsed["path"]
     else:
         raise ValueError("proof_json must be an object or an array")
     if root_override is not None:
@@ -142,7 +150,7 @@ def _load_proof(proof_json: str, root_override: Optional[str]) -> tuple:
         raise ValueError("no root_hex: pass it as the 4th argument or use the JSON written by inclusion-proof")
     if not isinstance(proof, list):
         raise ValueError("proof must be a list of [direction, hex] steps")
-    return proof, root, source
+    return proof, root, source, embedded_path
 
 
 def main(argv: Optional[List[str]] = None) -> int:
@@ -155,8 +163,17 @@ def main(argv: Optional[List[str]] = None) -> int:
         if args.command == "verify-inclusion":
             # Deliberately first and deliberately without server_url/api_key:
             # this branch must stay correct with the service unreachable.
-            proof, root_hex, source = _load_proof(args.proof_json, args.root_hex)
+            proof, root_hex, source, embedded_path = _load_proof(args.proof_json, args.root_hex)
             ok = verify_inclusion(args.file, args.rel_path, proof, root_hex)
+            # After the verdict, so an I/O or parse failure keeps stderr to
+            # its single error line (exit 2 stays machine-readable).
+            if embedded_path is not None and embedded_path != args.rel_path:
+                sys.stderr.write(json.dumps({
+                    "warning": "rel_path differs from the path recorded in proof_json; "
+                               "the leaf hash binds rel_path, so a mismatch verdict is expected",
+                    "rel_path": args.rel_path,
+                    "proof_json_path": embedded_path,
+                }) + "\n")
             sys.stdout.write(json.dumps(
                 {"ok": bool(ok), "root_hex": root_hex, "root_source": source}
             ) + "\n")

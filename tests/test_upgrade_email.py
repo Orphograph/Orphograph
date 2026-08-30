@@ -27,6 +27,11 @@ import urllib.error
 from pathlib import Path
 from unittest import mock
 
+# sha256 then a Bitcoin attestation (block 949156): the smallest calendar
+# body upgrade_worker.calendar_body_verdict accepts. Anything else is
+# rejected and never pins (test_upgrade_body_guard.py).
+_PINNED_BODY = b"\x08\x00\x05\x88\x96\x0d\x73\xd7\x19\x01\x03\xa4\xf7\x39"
+
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "server"))
 
@@ -144,7 +149,7 @@ class UpgradeEmailTest(unittest.TestCase):
         )
         fetch_patch = mock.patch.object(
             uw, "_fetch_upgrade",
-            return_value=(True, b"UPGRADED_BLOB_BYTES"),
+            return_value=(True, _PINNED_BODY),
         )
         return commit_patch, fetch_patch
 
@@ -161,7 +166,7 @@ class UpgradeEmailTest(unittest.TestCase):
             i = counter["i"]
             counter["i"] += 1
             if i < n_ok:
-                return True, b"UPGRADED_BLOB_BYTES"
+                return True, _PINNED_BODY
             return False, "HTTP 404"
 
         fetch_patch = mock.patch.object(uw, "_fetch_upgrade", side_effect=fake_fetch)

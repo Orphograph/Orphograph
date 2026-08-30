@@ -85,6 +85,100 @@ def _fetch_upgrade(calendar_url: str, hash_hex: str) -> tuple[bool, bytes | str]
         return False, f"{type(e).__name__}"
 
 
+# Attestation tags (8 bytes each, following the 0x00 attestation byte).
+BITCOIN_ATTESTATION_TAG = b"\x05\x88\x96\x0d\x73\xd7\x19\x01"
+_OPS_UNARY = frozenset({0x02, 0x03, 0x08, 0x67, 0xf2, 0xf3})  # sha1 ripemd160 sha256 keccak256 reverse hexlify
+_OPS_VARBYTES = frozenset({0xf0, 0xf1})                       # append prepend
+_FORK = 0xff
+_ATTESTATION = 0x00
+_MAX_FORK_DEPTH = 64
+
+
+def _read_varint(b: bytes, i: int) -> tuple[int, int]:
+    """LEB128 unsigned varint at b[i]. Returns (value, next_index)."""
+    value, shift = 0, 0
+    while True:
+        if i >= len(b):
+            raise ValueError("truncated varint")
+        byte = b[i]
+        i += 1
+        value |= (byte & 0x7F) << shift
+        if not byte & 0x80:
+            return value, i
+        shift += 7
+        if shift > 63:
+            raise ValueError("varint too long")
+
+
+def _parse_timestamp(b: bytes, i: int, depth: int = 0) -> tuple[int, int]:
+    """Walk one serialized OpenTimestamps Timestamp starting at b[i].
+
+    Grammar (opentimestamps-core Timestamp.serialize): any number of
+    ``0xff <Timestamp>`` forks, then either an attestation
+    (``0x00 <8-byte tag> <varbytes payload>``) or one op followed by a
+    Timestamp. Returns (next_index, bitcoin_attestation_count). Raises
+    ValueError on anything that is not that grammar — the whole point is
+    that an HTML page, an empty body, or a truncated read never gets this
+    far as "valid".
+
+    Ops are walked iteratively (a real proof is a long linear op chain);
+    only forks recurse, and fork depth is capped so a hostile body cannot
+    turn the guard into a RecursionError.
+    """
+    if depth > _MAX_FORK_DEPTH:
+        raise ValueError("fork nesting too deep")
+    btc = 0
+    while True:
+        if i >= len(b):
+            raise ValueError("truncated timestamp")
+        tag = b[i]
+        i += 1
+        if tag == _FORK:
+            i, n = _parse_timestamp(b, i, depth + 1)
+            btc += n
+            continue
+        if tag == _ATTESTATION:
+            if i + 8 > len(b):
+                raise ValueError("truncated attestation tag")
+            att_tag = b[i:i + 8]
+            i += 8
+            ln, i = _read_varint(b, i)
+            if i + ln > len(b):
+                raise ValueError("truncated attestation payload")
+            i += ln
+            return i, btc + (1 if att_tag == BITCOIN_ATTESTATION_TAG else 0)
+        if tag in _OPS_VARBYTES:
+            ln, i = _read_varint(b, i)
+            if ln == 0 or i + ln > len(b):
+                raise ValueError("bad varbytes op")
+            i += ln
+        elif tag not in _OPS_UNARY:
+            raise ValueError(f"unknown op 0x{tag:02x}")
+        # An op is followed by exactly one Timestamp: loop, don't recurse.
+
+
+def calendar_body_verdict(body: bytes) -> tuple[bool, str]:
+    """Decide whether a calendar's /timestamp response may replace a proof.
+
+    The body is spliced in place of the pending attestation and becomes the
+    customer's Bitcoin proof, so it must (1) parse as exactly one timestamp
+    with nothing left over and (2) carry at least one Bitcoin attestation —
+    a 200 that is still pending, an HTML challenge page, or an empty read
+    must never be written and must never flip the receipt to pinned.
+    """
+    if not body:
+        return False, "calendar body empty"
+    try:
+        end, btc = _parse_timestamp(body, 0)
+    except (ValueError, IndexError, RecursionError) as e:
+        return False, f"calendar body is not a well-formed OpenTimestamps timestamp ({e})"
+    if end != len(body):
+        return False, f"calendar body has {len(body) - end} trailing bytes after the timestamp"
+    if btc == 0:
+        return False, "calendar body carries no Bitcoin attestation"
+    return True, "ok"
+
+
 def _commitment_for_pending(ots_blob: bytes) -> tuple[str | None, int]:
     """Walk the op-chain in an .ots blob up to its pending-attestation marker.
 
@@ -233,6 +327,13 @@ def _upgrade_one(receipt_dir: Path, record: dict) -> dict:
         ok, body = _fetch_upgrade(cal, commitment_hex)
         if not ok:
             upgrades.append({"calendar": cal, "pinned": False, "reason": str(body)})
+            continue
+        # The body replaces the customer's proof bytes and decides "pinned":
+        # parse it before either happens. An unparseable or still-pending
+        # 200 is a non-event for this receipt, not an upgrade.
+        valid, why = calendar_body_verdict(body)
+        if not valid:
+            upgrades.append({"calendar": cal, "pinned": False, "reason": why})
             continue
         new_blob = old_blob[:marker_idx] + body
         if new_blob == old_blob:

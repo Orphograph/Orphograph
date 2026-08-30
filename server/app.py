@@ -1905,6 +1905,12 @@ class Handler(BaseHTTPRequestHandler):
                     rjson = rdir / "receipt.json"
                     if rjson.exists():
                         zf.write(rjson, arcname=f"{rid}/receipt.json")
+                    # Folder receipts: the manifest is what lets a relying
+                    # party recompute the root from the files. Without it
+                    # the .ots proves a root nobody can re-derive.
+                    mjson = rdir / "manifest.json"
+                    if mjson.exists():
+                        zf.write(mjson, arcname=f"{rid}/manifest.json")
                     for ots in sorted(rdir.glob("*.ots")):
                         zf.write(ots, arcname=f"{rid}/{ots.name}")
             body = buf.getvalue()
