@@ -196,6 +196,23 @@ class TestVerifyInclusionCli(unittest.TestCase):
             self.assertEqual(out, "")
             self.assertIn("error", json.loads(err))
 
+    def test_object_without_proof_key_exits_two_not_the_tamper_verdict(self):
+        # A mixed-up file (receipt.json instead of the inclusion-proof JSON)
+        # used to default to an EMPTY proof, mismatch the root, and exit 1 —
+        # the verdict the README defines as not-included/tampered. A usage
+        # slip must be exit 2 with an error, never evidence of tampering.
+        with tempfile.TemporaryDirectory() as d:
+            td = Path(d)
+            _folder_with_proof(td)
+            wrong = td / "receipt.json"
+            wrong.write_text(json.dumps({"receipt_id": "x", "root_hex": "aa" * 32}))
+            rc, out, err = _run([
+                "verify-inclusion", str(td / "a.txt"), "a.txt", str(wrong), "aa" * 32,
+            ])
+            self.assertEqual(rc, 2)
+            self.assertEqual(out, "")
+            self.assertIn("proof", json.loads(err)["error"])
+
     def test_unparseable_proof_file_exits_two(self):
         with tempfile.TemporaryDirectory() as d:
             td = Path(d)

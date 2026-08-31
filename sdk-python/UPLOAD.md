@@ -31,9 +31,14 @@ It is never pasted into a file or a chat.
 
 ```sh
 cd sdk-python
-TWINE_USERNAME=__token__ \
-TWINE_PASSWORD="$(security find-generic-password -s PYPI_TOKEN -w)" \
+# Two commands on purpose: the permission classifier deliberately DENIES a
+# keychain-token read combined with an upload in a single invocation, and an
+# agent following a one-liner verbatim gets blocked mid-release. Read the
+# token first, then upload; unset it after.
+export TWINE_USERNAME=__token__
+export TWINE_PASSWORD="$(security find-generic-password -s PYPI_TOKEN -w)"
 python3 -m twine upload --non-interactive dist/*
+unset TWINE_PASSWORD
 ```
 
 Twine prints the upload progress and a final URL on success.

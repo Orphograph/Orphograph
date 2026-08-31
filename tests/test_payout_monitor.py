@@ -315,16 +315,24 @@ def test_watch_addresses_includes_recent_order_addresses(monkeypatch, tmp_path):
     assert "bc1qissuedbyhd" in addrs
 
 
-def test_watch_addresses_skips_stale_order_addresses(monkeypatch, tmp_path):
-    """Negative control: an address from an order far outside the recency
-    window is NOT added — the watch list must stay bounded and polite."""
+def test_watch_addresses_keeps_old_unswept_addresses_and_stays_bounded(monkeypatch, tmp_path):
+    """An OLD issued address stays watched — settlement credits the order,
+    not the coins, so age never retires an address (the 30-day window this
+    replaces re-hid funded addresses on day 31). Boundedness comes from the
+    cap alone: newest distinct addresses win."""
     import json as _json
     orders = tmp_path / "btc_orders.jsonl"
     monkeypatch.setattr(btc_payments, "ORDERS_PATH", orders)
     old = btc_payments._now_unix() - 90 * 86400
-    row = {"ts": btc_payments._iso(old), "event": "created", "order_id": "o0",
-           "email": "x@example.invalid", "address": "bc1qancient",
-           "amount_sats": 1000, "usd_amount": 1.0, "status": "pending",
-           "expires_unix": old + 3600}
-    orders.write_text(_json.dumps(row) + "\n")
-    assert "bc1qancient" not in payout_monitor._watch_addresses()
+    rows = [{"ts": btc_payments._iso(old), "event": "created", "order_id": "o0",
+             "email": "x@example.invalid", "address": "bc1qancientfunded",
+             "amount_sats": 1000, "usd_amount": 1.0, "status": "pending",
+             "expires_unix": old + 3600}]
+    orders.write_text("\n".join(_json.dumps(r) for r in rows) + "\n")
+    assert "bc1qancientfunded" in payout_monitor._watch_addresses()
+    # cap: with cap+1 distinct addresses the OLDEST drops, never the newest
+    many = [dict(rows[0], order_id=f"o{i}", address=f"bc1qaddr{i}") for i in range(6)]
+    orders.write_text("\n".join(_json.dumps(r) for r in many) + "\n")
+    capped = btc_payments.recent_order_addresses(cap=5)
+    assert len(capped) == 5
+    assert "bc1qaddr5" in capped and "bc1qaddr0" not in capped

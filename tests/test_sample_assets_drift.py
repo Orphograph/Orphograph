@@ -85,3 +85,16 @@ def test_ots_bytes_records_anchor_time_size_never_larger_than_the_file():
         name = entry["ots_path"].rsplit("/", 1)[-1]
         blob = (SAMPLE / name).read_bytes()
         assert 0 < entry["ots_bytes"] <= len(blob), (name, entry["ots_bytes"], len(blob))
+
+
+def test_the_second_bundle_copy_is_byte_identical():
+    """web/verify/examples/sample/ is the SAME canonical bundle served at a
+    second path (the offline-verifier walkthrough curls it). It sat with May
+    PENDING proofs while /sample/index.json declared the receipt pinned 5/5 —
+    a stale proof beside a fresh index, on the exact artifact that exists to
+    disprove that drift. Every file must be byte-identical to web/sample/."""
+    second = ROOT / "web" / "verify" / "examples" / "sample"
+    names = sorted(p.name for p in SAMPLE.iterdir())
+    assert names == sorted(p.name for p in second.iterdir())
+    for name in names:
+        assert (SAMPLE / name).read_bytes() == (second / name).read_bytes(), name

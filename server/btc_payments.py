@@ -219,15 +219,18 @@ def _read_all() -> list[dict]:
     return rows
 
 
-def recent_order_addresses(days: int = 30, cap: int = 500) -> list[str]:
-    """Distinct receive addresses from orders created in the last `days`.
+def recent_order_addresses(cap: int = 500) -> list[str]:
+    """Distinct receive addresses ever issued to an order, newest first, capped.
 
     The payout monitor polls the address POOL, but path-1 orders issue
     HD-derived addresses that exist only in this ledger — funds landing on an
-    issued address were invisible to the sweep threshold. Newest first, capped
-    so the polite 200ms-per-address poll stays bounded.
+    issued address were invisible to the sweep threshold. No age or state
+    filter is safe here: settlement credits the ORDER, it does not sweep the
+    COINS, and no sweep ledger exists — a 30-day window would make a
+    funded-but-unswept address invisible again on day 31. The cap alone
+    bounds the polite 200ms-per-address poll (newest cap distinct addresses);
+    retiring addresses from the watch list requires a sweep ledger first.
     """
-    cutoff = _now_unix() - days * 86400
     out: list[str] = []
     seen: set[str] = set()
     for row in reversed(_read_all()):
@@ -235,12 +238,6 @@ def recent_order_addresses(days: int = 30, cap: int = 500) -> list[str]:
             continue
         addr = row.get("address")
         if not isinstance(addr, str) or not addr or addr in seen:
-            continue
-        try:
-            created = datetime.fromisoformat(row["ts"]).timestamp()
-        except (KeyError, TypeError, ValueError):
-            continue
-        if created < cutoff:
             continue
         seen.add(addr)
         out.append(addr)
@@ -354,7 +351,10 @@ def mark_settled(order_id: str, tx_hash: str, sats_received: int) -> bool:
         "event": "settled",
         "order_id": order_id,
         "email": state.get("email", ""),
-        "address": BTC_RECEIVE_ADDRESS,
+        # The ORDER's address, not the global fallback — a settled HD-derived
+        # order logged the wrong address here, which also poisoned any reader
+        # trying to attribute settlements per address.
+        "address": state.get("address", ""),
         "amount_sats": state.get("amount_sats", 0),
         "sats_received": int(sats_received),
         "tx_hash": tx_hash,
