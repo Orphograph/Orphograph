@@ -641,3 +641,20 @@ class TestEveryTestFileIsRunByCI(unittest.TestCase):
                     "zk-provenance/test_zk_provenance.py", "sdk-python/tests/"):
             self.assertIn(tok, t, f"test.yml lacks {tok}")
             self.assertIn(tok, d, f"deploy.yml lacks {tok}")
+
+
+class TestDeployBuildLocation(unittest.TestCase):
+    """CI must not require privileges to create a Fly remote-builder app."""
+
+    def test_fly_deploy_builds_on_the_github_runner(self):
+        deploy = (ROOT / ".github" / "workflows" / "deploy.yml").read_text()
+        commands = [
+            line.strip()
+            for line in deploy.splitlines()
+            if line.strip().startswith("- run: flyctl deploy ")
+        ]
+        self.assertEqual(len(commands), 1, "expected one Fly deploy command")
+        command = commands[0]
+        self.assertIn("--local-only", command)
+        self.assertNotIn("--remote-only", command)
+        self.assertNotIn("--depot", command)
