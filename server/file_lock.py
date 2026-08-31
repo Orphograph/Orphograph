@@ -47,3 +47,33 @@ def locked(path: Path, *, mode: str = "a", exclusive: bool = True) -> Iterator[I
         except OSError:
             pass
         f.close()
+
+
+@contextlib.contextmanager
+def try_locked(path: Path, *, mode: str = "a") -> Iterator[IO | None]:
+    """Non-blocking exclusive lock: yields the open file, or None when another
+    process holds it. For per-item critical sections where a busy item should
+    be SKIPPED and retried on the next pass, never waited on (the upgrade
+    worker's per-receipt read-modify-write: an hourly in-app thread and a
+    manually run CLI must not interleave on the same receipt — a lost update
+    there can erase pin_email_sent_at and re-email the customer)."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    f = open(path, mode)
+    try:
+        os.chmod(path, 0o600)
+    except OSError:
+        pass
+    try:
+        fcntl.flock(f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        f.close()
+        yield None
+        return
+    try:
+        yield f
+    finally:
+        try:
+            fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+        except OSError:
+            pass
+        f.close()

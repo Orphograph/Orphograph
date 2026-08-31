@@ -173,3 +173,30 @@ def test_legacy_mislabeled_pinned_receipt_is_audited_once(tmp_path, monkeypatch)
     assert after.get("proof_malformed"), after
     assert after.get("status") != "pinned"
     assert int(after.get("upgrade_schema", 0) or 0) >= upgrade_worker.UPGRADE_SCHEMA
+
+
+def test_locked_receipt_is_skipped_untouched(tmp_path, monkeypatch):
+    """Mutation lens (cycle 7): the in-app hourly thread and a manually run
+    CLI both call upgrade_all on the same volume; without a per-receipt lock
+    both read-modify-write receipt.json across seconds of calendar
+    round-trips, and the loser's write can erase pin_email_sent_at (a record
+    field) and re-email the customer. A receipt whose lock is held must be
+    skipped with its bytes untouched; the next pass retries."""
+    from file_lock import locked as _locked
+    monkeypatch.setattr(upgrade_worker, "UPGRADE_LOG", tmp_path / "up.jsonl")
+    monkeypatch.setattr(upgrade_worker, "RECEIPTS_DIR", tmp_path / "receipts")
+    rd, record = _receipt(tmp_path, monkeypatch, _pending_ots_naming(REAL))
+    import os as _os
+    import time as _t
+    old = _t.time() - 7200
+    _os.utime(rd / "receipt.json", (old, old))
+    before = (rd / "receipt.json").read_bytes()
+    monkeypatch.setattr(upgrade_worker, "_fetch_upgrade", lambda u, c: (True, PINNED_BODY))
+    with _locked(rd / ".upgrade.lock"):
+        summary = upgrade_worker.upgrade_all(min_age_sec=3600)
+    assert summary["skipped"] >= 1
+    assert (rd / "receipt.json").read_bytes() == before
+    # …and once the holder releases, the same receipt upgrades normally.
+    summary2 = upgrade_worker.upgrade_all(min_age_sec=3600)
+    after = json.loads((rd / "receipt.json").read_text())
+    assert after["status"] == "pinned"

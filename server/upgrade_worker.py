@@ -35,7 +35,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from file_lock import locked  # noqa: E402
+from file_lock import locked, try_locked  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = Path(os.environ.get("ORPHO_DATA_DIR", str(ROOT / "data") if (ROOT / "data").is_dir() else str(ROOT)))
@@ -421,37 +421,47 @@ def upgrade_all(min_age_sec: int = 3600) -> dict:
         if not receipt_file.exists():
             continue
         scanned += 1
-        try:
-            record = json.loads(receipt_file.read_text())
-        except json.JSONDecodeError:
-            continue
-        if (record.get("status") == "pinned"
-                and int(record.get("upgrade_schema", 1) or 1) >= UPGRADE_SCHEMA):
-            skipped += 1
-            continue
-        # A pinned record NOT yet stamped with the current schema may be a
-        # pre-guard mislabel (garbage spliced in, status flipped). Let it flow
-        # into _upgrade_one: a markerless blob is parsed by
-        # stored_proof_verdict with no network call, the verdict recomputes
-        # status, and the schema stamp makes the audit one-time.
-        if record.get("upgrade_frozen"):
-            if int(record.get("upgrade_schema", 1) or 1) >= UPGRADE_SCHEMA:
-                # Frozen under the current logic: a genuinely stuck partial
-                # we've stopped polling (see MAX_UPGRADE_STALLS).
+        # Per-receipt critical section: the read, the calendar round-trips,
+        # and the receipt.json write in _upgrade_one must not interleave with
+        # another runner's (the in-app hourly thread vs a manually run CLI on
+        # the same volume — the module already expects concurrent cron runs).
+        # A lost update here can erase pin_email_sent_at and re-email the
+        # customer. Busy lock → skip; the next pass retries.
+        with try_locked(receipt_dir / ".upgrade.lock") as _lk:
+            if _lk is None:
                 skipped += 1
                 continue
-            # Frozen by an older worker whose polling was the problem.
-            # Thaw once; _upgrade_one stamps the schema so this cannot loop.
-            record["upgrade_frozen"] = False
-            record["upgrade_stalls"] = 0
-            record["upgrade_thawed_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
-            for k in ("upgrade_frozen_at", "upgrade_frozen_reason"):
-                record.pop(k, None)
-        age = now - receipt_file.stat().st_mtime
-        if age < min_age_sec:
-            skipped += 1
-            continue
-        result = _upgrade_one(receipt_dir, record)
+            try:
+                record = json.loads(receipt_file.read_text())
+            except json.JSONDecodeError:
+                continue
+            if (record.get("status") == "pinned"
+                    and int(record.get("upgrade_schema", 1) or 1) >= UPGRADE_SCHEMA):
+                skipped += 1
+                continue
+            # A pinned record NOT yet stamped with the current schema may be a
+            # pre-guard mislabel (garbage spliced in, status flipped). Let it flow
+            # into _upgrade_one: a markerless blob is parsed by
+            # stored_proof_verdict with no network call, the verdict recomputes
+            # status, and the schema stamp makes the audit one-time.
+            if record.get("upgrade_frozen"):
+                if int(record.get("upgrade_schema", 1) or 1) >= UPGRADE_SCHEMA:
+                    # Frozen under the current logic: a genuinely stuck partial
+                    # we've stopped polling (see MAX_UPGRADE_STALLS).
+                    skipped += 1
+                    continue
+                # Frozen by an older worker whose polling was the problem.
+                # Thaw once; _upgrade_one stamps the schema so this cannot loop.
+                record["upgrade_frozen"] = False
+                record["upgrade_stalls"] = 0
+                record["upgrade_thawed_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+                for k in ("upgrade_frozen_at", "upgrade_frozen_reason"):
+                    record.pop(k, None)
+            age = now - receipt_file.stat().st_mtime
+            if age < min_age_sec:
+                skipped += 1
+                continue
+            result = _upgrade_one(receipt_dir, record)
         results.append(result)
         if result["status"] in ("pinned", "partial"):
             upgraded += 1

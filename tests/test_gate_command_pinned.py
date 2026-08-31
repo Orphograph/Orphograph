@@ -40,3 +40,16 @@ def test_gate_and_sdk_lines_identical_in_all_three_sources():
 def test_the_local_entry_point_is_executable():
     sh = SOURCES["run_gate_tests.sh"]
     assert sh.stat().st_mode & 0o111, "scripts/run_gate_tests.sh is not executable"
+
+
+def test_gate_scripts_delegate_instead_of_rederiving():
+    """predeploy.sh shipped `pytest | tail -1` + `grep -q "passed"` — which
+    matches '1 failed, 100 passed', so a failing suite PASSED the predeploy
+    gate; go_live.sh ran a weaker command than the deploy gate. Any script
+    that gates on the suite must call scripts/run_gate_tests.sh and carry no
+    hand-derived pytest invocation of its own."""
+    for name in ("predeploy.sh", "go_live.sh"):
+        text = (ROOT / "scripts" / name).read_text(encoding="utf-8")
+        assert "run_gate_tests.sh" in text, f"{name} does not delegate to the gate script"
+        assert not re.search(r"python3? -m pytest", text), (
+            f"{name} still hand-derives a pytest command")
