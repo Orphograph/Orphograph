@@ -705,6 +705,7 @@ class TestDeployBuildLocation(unittest.TestCase):
 
         script = ROOT / "scripts" / "deploy_fly_ci.sh"
         env = os.environ | {"FLY_API_TOKEN": "test-only"}
+        env.pop("GITHUB_ACTIONS", None)
         outside_ci = subprocess.run([str(script)], env=env, capture_output=True)
         self.assertEqual(outside_ci.returncode, 64)
         env["GITHUB_ACTIONS"] = "true"
