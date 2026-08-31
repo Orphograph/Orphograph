@@ -79,7 +79,7 @@ def parse_timestamp(b: bytes, i: int, depth: int = 0) -> tuple[int, dict]:
     """
     if depth > _MAX_FORK_DEPTH:
         raise ValueError("fork nesting too deep")
-    counts = {"bitcoin": 0, "pending": 0}
+    counts = {"bitcoin": 0, "pending": 0, "heights": []}
     while True:
         if i >= len(b):
             raise ValueError("truncated timestamp")
@@ -89,6 +89,7 @@ def parse_timestamp(b: bytes, i: int, depth: int = 0) -> tuple[int, dict]:
             i, sub = parse_timestamp(b, i, depth + 1)
             counts["bitcoin"] += sub["bitcoin"]
             counts["pending"] += sub["pending"]
+            counts["heights"] += sub["heights"]
             continue
         if tag == _ATTESTATION:
             if i + 8 > len(b):
@@ -104,6 +105,7 @@ def parse_timestamp(b: bytes, i: int, depth: int = 0) -> tuple[int, dict]:
             i += ln
             if att_tag == BITCOIN_ATTESTATION_TAG:
                 counts["bitcoin"] += 1
+                counts["heights"].append(read_varint(b[i - ln:i], 0)[0])
             elif att_tag == PENDING_ATTESTATION_TAG:
                 counts["pending"] += 1
             return i, counts
@@ -122,42 +124,15 @@ def parse_timestamp(b: bytes, i: int, depth: int = 0) -> tuple[int, dict]:
 def bitcoin_heights(b: bytes, i: int = 0) -> list[int]:
     """Block heights of every Bitcoin attestation in one serialized timestamp.
 
-    Same walk as parse_timestamp; raises ValueError on malformed input. Used
-    by tests and tooling that pin WHICH blocks a proof commits to, not just
-    that one exists.
+    Delegates to parse_timestamp — one grammar, one set of caps. Raises
+    ValueError on anything the validator would reject, including trailing
+    bytes, so a caller can never read a height out of a proof that
+    timestamp_verdict refuses.
     """
-    heights: list[int] = []
-
-    def walk(i: int, depth: int) -> int:
-        if depth > _MAX_FORK_DEPTH:
-            raise ValueError("fork nesting too deep")
-        while True:
-            if i >= len(b):
-                raise ValueError("truncated timestamp")
-            tag = b[i]
-            i += 1
-            if tag == _FORK:
-                i = walk(i, depth + 1)
-                continue
-            if tag == _ATTESTATION:
-                att_tag = b[i:i + 8]
-                i += 8
-                ln, i = read_varint(b, i)
-                payload = b[i:i + ln]
-                i += ln
-                if att_tag == BITCOIN_ATTESTATION_TAG:
-                    heights.append(read_varint(payload, 0)[0])
-                return i
-            if tag in _OPS_VARBYTES:
-                ln, i = read_varint(b, i)
-                i += ln
-            elif tag not in _OPS_UNARY:
-                raise ValueError(f"unknown op 0x{tag:02x}")
-
-    end = walk(i, 0)
-    if end != len(b):
+    endpos, counts = parse_timestamp(b, i)
+    if endpos != len(b):
         raise ValueError("trailing bytes")
-    return heights
+    return counts["heights"]
 
 
 def proof_bitcoin_heights(blob: bytes) -> list[int]:

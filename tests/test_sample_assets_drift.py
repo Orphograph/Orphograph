@@ -72,3 +72,16 @@ def test_index_and_receipt_agree_on_identity():
     assert ix["receipt_id"] == r["receipt_id"]
     assert ix["hash_hex"] == r["hash_hex"]
     assert ix["sha512_hex"] == r["sha512_hex"]
+
+
+def test_ots_bytes_records_anchor_time_size_never_larger_than_the_file():
+    # successes[*].ots_bytes is the ANCHOR-TIME proof size; upgrade_worker
+    # rewrites the .ots in place but never this field, and the live record
+    # keeps the same May values. Pin the semantic so the gap between the
+    # recorded size and the (larger) upgraded file reads as intended, not as
+    # tampering — and so a future writer that starts syncing it breaks here.
+    r = json.loads((SAMPLE / "receipt.json").read_text())
+    for entry in r["successes"]:
+        name = entry["calendar"].split("//")[1].split(".")[0]
+        blob = (SAMPLE / f"{name}.ots").read_bytes()
+        assert 0 < entry["ots_bytes"] <= len(blob), (name, entry["ots_bytes"], len(blob))
