@@ -46,6 +46,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
-      - run: flyctl deploy --remote-only --ha=false
+      # --depot=false: Fly's Depot builder service timed out 4x across two runs
+      # on 2026-08-31 ("Waiting for depot builder... deadline_exceeded",
+      # auth handshake EOF) with no incident on their status page. The classic
+      # remote builder machine is the documented fallback. One-line revert
+      # when Depot recovers.
+      - run: flyctl deploy --remote-only --depot=false --ha=false
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
