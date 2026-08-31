@@ -63,14 +63,20 @@ PING_COOLDOWN_SEC = int(os.environ.get("ORPHO_PING_COOLDOWN_SEC", "21600"))  # 6
 def _watch_addresses() -> list[str]:
     """All addresses we should poll mempool.space for.
 
-    Priority: HD-derived recent indices (TODO) + pool + single fallback.
-    For now, we cover the pool + single fallback. HD-derived addresses are
-    only generated lazily by btc_payments — we'd need a parallel index
-    counter to enumerate all-ever-issued. That's the next iteration.
+    Pool + single fallback + every address issued to a recent order (the
+    orders ledger records each one, HD-derived included — no parallel index
+    counter needed; see btc_payments.recent_order_addresses).
     """
     addrs = btc_payments._load_pool()
     if btc_payments.BTC_RECEIVE_ADDRESS and btc_payments.BTC_RECEIVE_ADDRESS not in addrs:
         addrs.append(btc_payments.BTC_RECEIVE_ADDRESS)
+    # Issued addresses live in the orders ledger, not the pool — HD-derived
+    # (path 1) addresses in particular exist nowhere else. Without this union
+    # funds arriving on an issued address never counted toward the sweep
+    # threshold (wire lens, 2026-08-31).
+    for a in btc_payments.recent_order_addresses():
+        if a not in addrs:
+            addrs.append(a)
     return [a for a in addrs if a]
 
 

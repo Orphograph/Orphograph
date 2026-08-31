@@ -200,10 +200,14 @@ def _append(row: dict) -> None:
 
 
 def _read_all() -> list[dict]:
-    if not ORDERS_PATH.exists():
-        return []
+    # No exists() pre-check: it is TOCTOU, and a monkeypatched Path.exists in
+    # tests made it lie. A missing ledger is simply an empty one.
     rows: list[dict] = []
-    with ORDERS_PATH.open() as f:
+    try:
+        f = ORDERS_PATH.open()
+    except FileNotFoundError:
+        return rows
+    with f:
         for line in f:
             line = line.strip()
             if not line:
@@ -213,6 +217,36 @@ def _read_all() -> list[dict]:
             except json.JSONDecodeError:
                 continue
     return rows
+
+
+def recent_order_addresses(days: int = 30, cap: int = 500) -> list[str]:
+    """Distinct receive addresses from orders created in the last `days`.
+
+    The payout monitor polls the address POOL, but path-1 orders issue
+    HD-derived addresses that exist only in this ledger — funds landing on an
+    issued address were invisible to the sweep threshold. Newest first, capped
+    so the polite 200ms-per-address poll stays bounded.
+    """
+    cutoff = _now_unix() - days * 86400
+    out: list[str] = []
+    seen: set[str] = set()
+    for row in reversed(_read_all()):
+        if row.get("event") != "created":
+            continue
+        addr = row.get("address")
+        if not isinstance(addr, str) or not addr or addr in seen:
+            continue
+        try:
+            created = datetime.fromisoformat(row["ts"]).timestamp()
+        except (KeyError, TypeError, ValueError):
+            continue
+        if created < cutoff:
+            continue
+        seen.add(addr)
+        out.append(addr)
+        if len(out) >= cap:
+            break
+    return out
 
 
 def is_configured() -> bool:

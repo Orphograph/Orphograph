@@ -53,7 +53,12 @@ def _mempool_payload(confirmed_net=0, unconfirmed_net=0, chain_tx=0, mem_tx=0):
 
 def _payload_urlopen(payload_dict):
     def _fake(req, timeout=0):
-        return _FakeResp(json.dumps(payload_dict).encode())
+        # Echo the queried address, as the real explorers do. The watcher now
+        # rejects a response naming a DIFFERENT subject (wire-lens guard,
+        # 2026-08-31); a stub with a hardcoded address was lying to it.
+        body = dict(payload_dict)
+        body["address"] = req.full_url.rstrip("/").rsplit("/", 1)[-1]
+        return _FakeResp(json.dumps(body).encode())
     return _fake
 
 
@@ -89,6 +94,9 @@ def _isolated_paths(tmp_path, monkeypatch):
     monkeypatch.setattr(btc_payments, "BTC_RECEIVE_ADDRESS", "")
     # Point the address-pool file at a tmp location so tests can write to it.
     monkeypatch.setattr(btc_payments, "POOL_PATH", tmp_path / "btc_address_pool.txt")
+    # Isolate the orders ledger too — _watch_addresses now unions issued
+    # addresses from it, and the machine's real ledger must not leak in.
+    monkeypatch.setattr(btc_payments, "ORDERS_PATH", tmp_path / "btc_orders.jsonl")
 
     yield
 
@@ -284,3 +292,39 @@ def test_check_once_above_threshold_pings_once(monkeypatch):
     assert snap["pinged"] is True
     assert snap["total_sats"] == 600_000
     assert len(calls) == 1
+
+
+# ---------------------------------------------------------------------------
+# _watch_addresses covers ISSUED addresses, not just the pool (2026-08-31)
+# ---------------------------------------------------------------------------
+
+def test_watch_addresses_includes_recent_order_addresses(monkeypatch, tmp_path):
+    """Wire lens: the monitor polled the POOL while orders issue HD-derived
+    addresses the ledger NAMES — funds arriving on an issued address were
+    invisible to the sweep threshold. The orders ledger already records every
+    issued address; the watch list must union it in."""
+    import json as _json
+    orders = tmp_path / "btc_orders.jsonl"
+    monkeypatch.setattr(btc_payments, "ORDERS_PATH", orders)
+    row = {"ts": btc_payments._iso(), "event": "created", "order_id": "o1",
+           "email": "x@example.invalid", "address": "bc1qissuedbyhd",
+           "amount_sats": 1000, "usd_amount": 1.0, "status": "pending",
+           "expires_unix": btc_payments._now_unix() + 3600}
+    orders.write_text(_json.dumps(row) + "\n")
+    addrs = payout_monitor._watch_addresses()
+    assert "bc1qissuedbyhd" in addrs
+
+
+def test_watch_addresses_skips_stale_order_addresses(monkeypatch, tmp_path):
+    """Negative control: an address from an order far outside the recency
+    window is NOT added — the watch list must stay bounded and polite."""
+    import json as _json
+    orders = tmp_path / "btc_orders.jsonl"
+    monkeypatch.setattr(btc_payments, "ORDERS_PATH", orders)
+    old = btc_payments._now_unix() - 90 * 86400
+    row = {"ts": btc_payments._iso(old), "event": "created", "order_id": "o0",
+           "email": "x@example.invalid", "address": "bc1qancient",
+           "amount_sats": 1000, "usd_amount": 1.0, "status": "pending",
+           "expires_unix": old + 3600}
+    orders.write_text(_json.dumps(row) + "\n")
+    assert "bc1qancient" not in payout_monitor._watch_addresses()
