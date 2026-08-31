@@ -98,3 +98,17 @@ def test_the_second_bundle_copy_is_byte_identical():
     assert names == sorted(p.name for p in second.iterdir())
     for name in names:
         assert (SAMPLE / name).read_bytes() == (second / name).read_bytes(), name
+
+
+def test_ots_walkthrough_describes_the_shipped_upgraded_proof():
+    """The article curls this mutable sample path and must narrate its state."""
+    article = (ROOT / "web" / "blog" / "reading-ots-file-by-hand.html").read_text()
+    feed = (ROOT / "web" / "blog" / "atom.xml").read_text()
+    index = json.loads((SAMPLE / "index.json").read_text())
+    a_block = next(c["bitcoin_block"] for c in index["calendars"]
+                   if c["file"] == "a.ots")
+    expected = f"BitcoinBlockHeaderAttestation({a_block})"
+    for published_copy in (article, feed):
+        assert expected in published_copy
+        assert "ots upgrade a.ots" not in published_copy
+        assert "alice.btc.calendar.opentimestamps.org" not in published_copy
