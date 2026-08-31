@@ -87,7 +87,7 @@ def server(tmp_path_factory):
     """One server, via the shared helper. See tests/_srv.py for why
     the hand-copied version of this was replaced."""
     data_dir = tmp_path_factory.mktemp("c2pa_fuzz_data")
-    yield from _srv.server_processes(data_dir)
+    yield from _srv.server_processes(data_dir, stub_calendars=True)
 
 
 

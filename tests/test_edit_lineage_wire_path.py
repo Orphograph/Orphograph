@@ -48,7 +48,7 @@ import merkle as MERKLE          # noqa: E402
 
 @pytest.fixture(scope="module")
 def server(tmp_path_factory):
-    yield from _srv.server_processes(tmp_path_factory.mktemp("lineage_wire"))
+    yield from _srv.server_processes(tmp_path_factory.mktemp("lineage_wire"), stub_calendars=True)
 
 
 def _post(base: str, path: str, body: dict):

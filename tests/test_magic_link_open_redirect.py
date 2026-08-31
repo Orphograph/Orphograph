@@ -78,7 +78,7 @@ def server(tmp_path_factory):
     """One server, via the shared helper. See tests/_srv.py for why
     the hand-copied version of this was replaced."""
     data_dir = tmp_path_factory.mktemp("openredirect_data")
-    for base in _srv.server_processes(data_dir):
+    for base in _srv.server_processes(data_dir, stub_calendars=True):
         yield base, str(data_dir)
 
 
