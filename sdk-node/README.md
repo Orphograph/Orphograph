@@ -98,7 +98,11 @@ npx orphograph verify /path/to/folder abcd1234
 npx orphograph proof abcd1234 sub/photo.jpg
 # {"receipt_id":"abcd1234","root_hex":"...","path":"sub/photo.jpg",...}
 
-npx orphograph verify-inclusion /path/to/sub/photo.jpg sub/photo.jpg proof.json <root_hex>
+npx orphograph verify-inclusion /path/to/sub/photo.jpg sub/photo.jpg proof.json [root_hex]
+# root_hex optional: omitted, the root inside proof.json is used and the
+# verdict reports "root_source": "proof_json" (self-attested — compare the
+# echoed root_hex to the receipt); an explicit argument always overrides.
+# exit codes: 0 match, 1 mismatch, 2 error (a crash never reads as mismatch).
 ```
 
 Flags:
