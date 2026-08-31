@@ -45,7 +45,7 @@ def _start(data_dir):
     timeout would have hidden that; subprocess isolation removes the coupling.
     Port reservation, startup deadline and server-log capture live in _srv.py.
     """
-    bases, procs, logs = _srv.spin(data_dir)
+    bases, procs, logs = _srv.spin(data_dir, stub_calendars=True)
     _srv.wait_ready(bases, procs, logs)
     return (procs, logs), bases[0]
 

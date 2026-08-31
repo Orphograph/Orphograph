@@ -67,16 +67,14 @@ def _burn(base: str, prefix: str) -> list[int]:
 # rather than the property they name. Observed 2026-08-25.
 @pytest.fixture
 def untrusted(tmp_path_factory):
-    yield from _srv.server_processes(
-        tmp_path_factory.mktemp("rl_untrusted"),
-        RATE_LIMIT_PER_DAY=str(LIMIT), ORPHO_TRUST_PROXY_HEADERS="0")
+    yield from _srv.server_processes(tmp_path_factory.mktemp("rl_untrusted"),
+        RATE_LIMIT_PER_DAY=str(LIMIT), ORPHO_TRUST_PROXY_HEADERS="0", stub_calendars=True)
 
 
 @pytest.fixture
 def trusted(tmp_path_factory):
-    yield from _srv.server_processes(
-        tmp_path_factory.mktemp("rl_trusted"),
-        RATE_LIMIT_PER_DAY=str(LIMIT), ORPHO_TRUST_PROXY_HEADERS="1")
+    yield from _srv.server_processes(tmp_path_factory.mktemp("rl_trusted"),
+        RATE_LIMIT_PER_DAY=str(LIMIT), ORPHO_TRUST_PROXY_HEADERS="1", stub_calendars=True)
 
 
 @pytest.mark.parametrize("header", ["Fly-Client-IP", "X-Forwarded-For"])

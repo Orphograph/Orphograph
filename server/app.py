@@ -943,6 +943,13 @@ def _static_cache_control(suffix: str, rel_path: str = "") -> str:
     short_lived = {".html", ".json", ".webmanifest"}
     if suffix in short_lived:
         return "public, max-age=300, must-revalidate"
+    if rel_path.startswith("sample/"):
+        # _serve_static already lstrips the leading slash; POSIX-only server.
+        # The sample bundle's bytes CHANGE at fixed URLs when the canonical
+        # receipt's proofs upgrade (pending → Bitcoin-attested). A day-stale
+        # /sample/a.ots beside a 5-minute /sample/index.json is the drift
+        # this bundle exists to disprove.
+        return "public, max-age=300, must-revalidate"
     return "public, max-age=86400"
 
 

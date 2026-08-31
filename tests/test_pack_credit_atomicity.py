@@ -68,7 +68,7 @@ def _free_port() -> int:
 def server(tmp_path_factory):
     """One server, via the shared helper (tests/_srv.py)."""
     data_dir = tmp_path_factory.mktemp("pack_race_data")
-    for base in _srv.server_processes(data_dir):
+    for base in _srv.server_processes(data_dir, stub_calendars=True):
         yield base, str(data_dir)
 
 
@@ -161,7 +161,7 @@ def two_servers(tmp_path_factory):
     exercises the fcntl lock, and what found the _seed_sample_receipt
     crash-on-boot race. Port reservation and stderr capture live in _srv.py."""
     data_dir = tmp_path_factory.mktemp("pack_race_2p")
-    for bases in _srv.server_processes(data_dir, n=2):
+    for bases in _srv.server_processes(data_dir, n=2, stub_calendars=True):
         yield bases, str(data_dir)
 
 

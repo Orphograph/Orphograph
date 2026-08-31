@@ -145,6 +145,17 @@ def test_landing_does_not_load_third_party_scripts(live_server):
         assert is_self_src or is_jsonld, f"disallowed script tag: {s}"
 
 
+def test_sample_ots_cache_is_short_lived(live_server):
+    # /sample/*.ots bytes change at fixed URLs when the canonical receipt's
+    # proofs upgrade; a 1-day browser cache beside a 5-minute index.json
+    # serves a pending proof for a receipt the index calls pinned.
+    with urllib.request.urlopen(live_server + "/sample/a.ots") as r:
+        assert "max-age=300" in r.headers.get("Cache-Control", ""), r.headers.get("Cache-Control")
+    # Control: versioned binaries elsewhere keep the long cache.
+    with urllib.request.urlopen(live_server + "/verify/orphograph-verify-0.1.tar.gz") as r:
+        assert "max-age=86400" in r.headers.get("Cache-Control", ""), r.headers.get("Cache-Control")
+
+
 def test_sample_index_serves_and_has_sha512(live_server):
     with urllib.request.urlopen(live_server + "/sample/index.json") as r:
         import json
