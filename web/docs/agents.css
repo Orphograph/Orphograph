@@ -1,0 +1,18 @@
+/* agents.css — page styles for /docs/agents (strict CSP: no inline styles). */
+
+.arch-wrap { max-width: 820px; margin: 0 auto; padding: 0 24px 64px; }
+  .arch-wrap h1 { font-family: var(--serif); font-size: 36px; font-weight: 500; margin: 32px 0 6px; }
+  .arch-wrap h2 { font-family: var(--serif); font-size: 22px; font-weight: 500; margin: 36px 0 4px; color: var(--ink); }
+  .arch-rule { border-top: 1px solid var(--ink); width: 32px; margin: 8px 0 16px; opacity: 0.6; }
+  .arch-wrap p, .arch-wrap li, .arch-wrap td, .arch-wrap th { color: var(--ink-2); line-height: 1.75; font-size: 15.5px; }
+  .arch-wrap code { background: rgba(74,154,115,0.08); padding: 2px 6px; border-radius: 3px; font-size: 0.92em; }
+  .arch-wrap pre { background: #f1ead7; border: 1px solid #d9d2c0; border-radius: 6px; padding: 14px 16px; overflow-x: auto; font-size: 12.5px; line-height: 1.5; color: var(--ink); }
+  .arch-wrap pre code { background: none; padding: 0; }
+  .arch-lede { font-size: 17px; line-height: 1.7; color: var(--ink-2); margin: 0 0 24px; }
+  .arch-callout { background: rgba(74,154,115,0.06); border-left: 3px solid var(--confirm); padding: 16px 20px; margin: 24px 0; border-radius: 0 6px 6px 0; }
+  .arch-callout p { margin: 0; }
+  .tool-map { width: 100%; border-collapse: collapse; margin: 16px 0 8px; }
+  .tool-map th { text-align: left; font-family: var(--serif); font-weight: 500; font-size: 14px; letter-spacing: 0.04em; border-bottom: 1px solid var(--ink); padding: 8px 10px 8px 0; }
+  .tool-map td { border-bottom: 1px solid #e5dec9; padding: 10px 10px 10px 0; vertical-align: top; }
+  .tool-map td:first-child { white-space: nowrap; }
+  .caveat { font-size: 14px; color: var(--muted); }

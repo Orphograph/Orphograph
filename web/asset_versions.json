@@ -163,6 +163,10 @@
     "version": "1",
     "sha256": "803c7488fe983accf4dde09dcec834457ca5917c382ad58304584bec0ee0d0b0"
   },
+  "/docs/agents.css": {
+    "version": "1",
+    "sha256": "f9cbe9a6478e78d59918de9b7f51891b6ba1fa4bb744f965f86f4e2dad459af9"
+  },
   "/docs/api.css": {
     "version": "2",
     "sha256": "17ab47602f316324223d65ea303c4f1f553d99cd36b231d73eba7d9f4a8e4a67"

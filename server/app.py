@@ -638,6 +638,7 @@ def _build_sitemap() -> str:
         ("/method/whitepaper", "0.6"),
         ("/method/why-filenames-are-not-stored", "0.6"),
         ("/docs", "0.7"),
+        ("/docs/agents", "0.6"),
         ("/docs/api", "0.6"),
         ("/docs/webhooks", "0.6"),
         ("/docs/cli", "0.6"),

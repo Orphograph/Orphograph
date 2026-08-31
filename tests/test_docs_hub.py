@@ -156,7 +156,8 @@ def test_guard_would_catch_the_original_defect() -> None:
 
 # ─────────────────────────────── static checks ────────────────────────────
 
-NEW_PAGES = ("docs/index.html", "docs/cli.html", "docs/sdk.html")
+NEW_PAGES = ("docs/index.html", "docs/cli.html", "docs/sdk.html",
+             "docs/agents.html")
 
 
 @pytest.mark.parametrize("rel", NEW_PAGES)
@@ -173,7 +174,7 @@ def test_docs_index_links_every_docs_page() -> None:
     html = (WEB / "docs/index.html").read_text(encoding="utf-8")
     for target in ("/docs/quickstart", "/docs/install", "/docs/verify",
                    "/docs/api", "/docs/webhooks", "/docs/cli", "/docs/sdk",
-                   "/mcp"):
+                   "/docs/agents", "/mcp"):
         assert f'href="{target}"' in html, f"docs index does not link {target}"
 
 
@@ -269,3 +270,45 @@ def test_new_docs_pages_are_in_the_sitemap(server) -> None:
         assert loc in body, f"sitemap missing {loc}"
     # The redirect must NOT be advertised — crawlers should index /mcp.
     assert "/docs/mcp</loc>" not in body
+
+
+# ─────────────────────────── /docs/agents (2026-08-31) ─────────────────────
+
+_AGENT_TOOLS = ("anchor_output", "anchor_file", "anchor_folder",
+                "verify_receipt", "verify_lineage", "list_vault")
+
+
+def test_docs_agents_serves_200_and_names_every_tool(server) -> None:
+    status, body = _get(server + "/docs/agents")
+    assert status == 200, f"/docs/agents returned {status}"
+    for tool in _AGENT_TOOLS:
+        assert tool in body, f"/docs/agents does not name {tool}"
+    assert "/api/anchor/batch" in body
+
+
+def test_docs_agents_head_matches_get(server) -> None:
+    """Scanners and link checkers use HEAD; parity is the 2026-08-07 lesson."""
+    req = urllib.request.Request(server + "/docs/agents", method="HEAD")
+    with urllib.request.urlopen(req, timeout=5) as r:
+        assert r.status == 200
+
+
+def test_docs_agents_batch_cap_matches_the_server_constant() -> None:
+    """Claim-vs-code guard: the page states the batch cap; the server owns it.
+    If MAX_BATCH_ITEMS moves, this fails until the page moves with it."""
+    # Reading the constant without executing the server: parse, don't import.
+    import ast
+    tree = ast.parse((REPO_ROOT / "server" / "app.py").read_text())
+    vals = [n.value.value for n in ast.walk(tree)
+            if isinstance(n, ast.Assign)
+            and any(getattr(t, "id", None) == "MAX_BATCH_ITEMS" for t in n.targets)
+            and isinstance(n.value, ast.Constant)]
+    assert vals, "MAX_BATCH_ITEMS not found in server/app.py"
+    html = (WEB / "docs/agents.html").read_text(encoding="utf-8")
+    assert f"up to {vals[0]} hashes" in html
+
+
+def test_docs_agents_is_in_the_sitemap(server) -> None:
+    status, body = _get(server + "/sitemap.xml")
+    assert status == 200
+    assert "/docs/agents</loc>" in body

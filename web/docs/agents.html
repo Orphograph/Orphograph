@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Orphograph — Agent workflows</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#f6f1e3">
+<meta name="description" content="How an autonomous agent anchors its work: which of the six MCP tools fits which workflow, the batch API for backlogs, and the receipt an agent hands over with a deliverable.">
+<meta property="og:title" content="Orphograph — Agent workflows">
+<meta property="og:description" content="Map the six MCP tools and the batch API to agent workflows. Digests travel; the work stays on the machine.">
+<meta property="og:url" content="https://orphograph.com/docs/agents">
+<meta property="og:type" content="article">
+<meta property="og:image" content="https://orphograph.com/og-image.png?v=8">
+<link rel="canonical" href="https://orphograph.com/docs/agents">
+<link rel="icon" type="image/png" href="/favicon.png?v=8">
+<link rel="stylesheet" href="/css/orpho-tokens.css?v=2">
+<link rel="stylesheet" href="/css/orpho-primitives.css?v=3">
+<link rel="stylesheet" href="/index.css?v=21">
+<link rel="stylesheet" href="/docs/agents.css?v=1">
+<link rel="stylesheet" href="/u.css?v=1">
+<meta name="copyright" content="© 2026 Orphograph. Code under MIT (see /LICENSE). Brand, content, and design — all rights reserved.">
+</head>
+<body class="orpho">
+
+<header class="orpho-header nav">
+  <a href="/" class="orpho-brand brand">
+    <img class="orpho-brand__mark" src="/seal-display.png?v=8" alt="" width="62" height="62">
+    <span class="orpho-brand__text">
+      <span class="orpho-brand__name">Orphograph</span>
+      <span class="orpho-brand__sub">Empirical Notary</span>
+    </span>
+  </a>
+  <nav class="orpho-nav">
+    <a href="/learn">Method</a>
+      <a href="/faq">FAQ</a>
+      <a href="/continuity">Continuity</a>
+      <a href="/pricing">Pricing</a>
+      <a href="/signin">Sign in</a>
+      <a href="/#drop" class="cta">Anchor a file</a>
+  </nav>
+</header>
+
+<main class="arch-wrap">
+
+  <p class="u-eyebrow">Docs · Agent workflows</p>
+  <h1>An agent's work, anchored before it is handed over.</h1>
+  <p class="arch-lede">
+    An agent that produces work someone relies on can anchor that work before delivering it.
+    The deliverable is hashed on the agent's machine; only the 64-hex digest crosses the wire;
+    the receipt that comes back is committed to Bitcoin and outlives the platform, the agent,
+    and this service. This page maps the six MCP tools and the batch API onto the workflows
+    an agent actually runs.
+  </p>
+
+  <div class="arch-callout">
+    <p>Installing the server itself — the config block, tiers, and the privacy contract — is
+    covered on the <a href="/mcp">MCP server page</a>. The raw HTTP surface is on the
+    <a href="/docs/api">API page</a>. This page is about which tool to reach for, when.</p>
+  </div>
+
+  <section>
+    <h2>The six tools, by workflow</h2>
+    <div class="arch-rule"></div>
+    <table class="tool-map">
+      <thead>
+        <tr><th>The tool</th><th>The moment</th><th>What actually happens</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>anchor_output</code></td>
+          <td>The agent just produced a result — a response, a report, a transcript.</td>
+          <td>The text is hashed in-process and never leaves the machine; only the SHA-256 and
+              SHA-512 digests are submitted. An optional <code>zk_proof</code> is forwarded and
+              echoed back as <code>zk_provenance</code> — it proves a fixed published hash-chain
+              procedure ran, not that a particular AI model ran.</td>
+        </tr>
+        <tr>
+          <td><code>anchor_file</code></td>
+          <td>The deliverable is a single file on disk.</td>
+          <td>The file is read locally in streamed chunks, its SHA-256 and SHA-512 are computed,
+              and the digests are submitted. The receipt id and receipt URL come back.</td>
+        </tr>
+        <tr>
+          <td><code>anchor_folder</code></td>
+          <td>The deliverable is a whole output tree.</td>
+          <td>Every file is hashed locally into an RFC-6962 Merkle tree; only the manifest of
+              relative paths, digests, and the root is submitted. One receipt covers the tree,
+              and each file stays independently verifiable via an inclusion proof.</td>
+        </tr>
+        <tr>
+          <td><code>verify_receipt</code></td>
+          <td>The agent (or its counterparty) checks a receipt during a handoff.</td>
+          <td>Returns what the office recorded: calendar counts, and
+              <code>btc_pinned_at</code> when present. This is a lookup, not an independent
+              check — for an independent chain check, run <code>ots verify</code> against the
+              receipt's <code>.ots</code> files.</td>
+        </tr>
+        <tr>
+          <td><code>verify_lineage</code></td>
+          <td>The deliverable was revised, and the revision history is in question.</td>
+          <td>Walks an edit-lineage chain from a receipt back through its committed parents and
+              reports the ordering the anchors establish.</td>
+        </tr>
+        <tr>
+          <td><code>list_vault</code></td>
+          <td>The agent audits what it has anchored so far.</td>
+          <td>Lists the signed-in subscriber's receipts. Requires an API key
+              (<code>ORPHO_API_KEY</code>), issued from <a href="/account.html">the account
+              page</a>; without one the server returns a clean error saying so.</td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="caveat">In every row the pattern is the same: the work stays on the agent's
+    machine, and the digest is what travels.</p>
+  </section>
+
+  <section>
+    <h2>Backlogs: the batch API</h2>
+    <div class="arch-rule"></div>
+    <p>An agent that accumulated a backlog — a watcher that was offline, a pipeline that
+    produced fifty artifacts before anchoring any — submits them in one request rather than
+    fifty. <code>POST /api/anchor/batch</code> takes up to 50 hashes and issues each item its
+    own receipt:</p>
+<pre><code>curl -X POST https://orphograph.com/api/anchor/batch \
+  -H "Content-Type: application/json" \
+  -H "X-Orpho-Api-Key: $ORPHO_API_KEY" \
+  -d '{"hashes": [
+        {"hash_hex": "&lt;64-hex sha256&gt;", "client_label": "report-001"},
+        {"hash_hex": "&lt;64-hex sha256&gt;", "sha512_hex": "&lt;128-hex sha512&gt;"}
+      ]}'</code></pre>
+    <p>Each item takes an optional <code>sha512_hex</code> sibling and an optional
+    <code>client_label</code> (truncated at 200 characters). Auth is the same as
+    <code>/api/anchor</code>: an API key or subscription anchors under the account, a Pack
+    token consumes one credit per item, and the free tier consumes a single rate-limit token
+    for the whole batch. A malformed item is rejected without burning a credit.</p>
+  </section>
+
+  <section>
+    <h2>Agent-to-agent: hiring the notary</h2>
+    <div class="arch-rule"></div>
+    <p>An agent can also hire Orphograph as an agent — the service runs a listing on an
+    agent-commerce protocol. The job spec carries the deliverable's SHA-256, and nothing else
+    about the work; the response carries the receipt and a proof bundle
+    (<code>/api/receipt/&lt;id&gt;.zip</code>) whose <code>.ots</code> files verify offline.
+    The paying agent never uploads its deliverable — the same digest-only contract as every
+    row above.</p>
+  </section>
+
+  <section>
+    <h2>What the receipt settles later</h2>
+    <div class="arch-rule"></div>
+    <p>Agent economies settle disputes with logs, and logs can be edited. A receipt cannot:
+    five OpenTimestamps calendars commit the digest toward Bitcoin, and anyone can verify the
+    proof offline with the MIT-licensed verifier — no account, no API call, no Orphograph.
+    The verification story for a counterparty is on
+    <a href="/docs/verify">the verify page</a>; the case for anchoring agent work is at
+    <a href="/lp/agent-receipts">agent receipts</a>.</p>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap u-sitefoot">
+    <p>Orphograph · An empirical notary.</p>
+    <p class="u-mt-8">
+      <a href="/" class="u-muted">Home</a> ·
+      <a href="/method" class="u-muted">Method</a> ·
+      <a href="/faq" class="u-muted">FAQ</a> ·
+      <a href="/continuity" class="u-muted">Continuity</a>
+    </p>
+  </div>
+  <!-- legal-disclaimer -->
+  <div class="wrap legal-disclaimer">
+    Orphograph is not a law firm, not a notary, and not a qualified electronic-trust-service provider — a receipt is cryptographic proof that a file existed before a point in time, not legal advice.
+  </div>
+  <div class="wrap legal-links"><a href="/terms">Terms</a> &#183; <a href="/privacy">Privacy</a></div>
+</footer>
+
+<script src="/statusbar.js?v=2" defer></script>
+<script src="/assets/event.js?v=1" defer></script>
+</body>
+</html>
