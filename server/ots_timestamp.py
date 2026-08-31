@@ -53,33 +53,38 @@ def read_varint(b: bytes, i: int) -> tuple[int, int]:
             raise ValueError("varint too long")
 
 
-def _check_attestation_payload(tag: bytes, payload: bytes) -> None:
+def _check_attestation_payload(tag: bytes, payload: bytes) -> int | None:
+    """Validate one attestation payload; return the block height for Bitcoin
+    attestations, None otherwise. Unknown tags are legal and skipped by
+    length, as the reference client does."""
     if tag == BITCOIN_ATTESTATION_TAG:
         # Payload is exactly one varint: the block height.
         if not payload:
             raise ValueError("Bitcoin attestation has an empty payload")
-        _height, end = read_varint(payload, 0)
+        height, end = read_varint(payload, 0)
         if end != len(payload):
             raise ValueError("Bitcoin attestation payload is not a single block height")
-    elif tag == PENDING_ATTESTATION_TAG:
+        return height
+    if tag == PENDING_ATTESTATION_TAG:
         # Payload is varbytes(uri).
         ln, end = read_varint(payload, 0)
         if end + ln != len(payload):
             raise ValueError("pending attestation payload is not a single URI")
-    # Unknown tags are legal and skipped by length, as the reference client does.
+    return None
 
 
 def parse_timestamp(b: bytes, i: int, depth: int = 0) -> tuple[int, dict]:
     """Walk one serialized Timestamp starting at b[i].
 
-    Returns (next_index, {"bitcoin": n, "pending": m}). Raises ValueError on
+    Returns (next_index, {"heights": [block, ...], "pending": m}) — one
+    heights entry per Bitcoin attestation. Raises ValueError on
     anything outside the grammar or the reference size caps. Ops are walked
     iteratively (a real proof is a long linear chain); only forks recurse,
     with a depth cap so a hostile body cannot become a RecursionError.
     """
     if depth > _MAX_FORK_DEPTH:
         raise ValueError("fork nesting too deep")
-    counts = {"bitcoin": 0, "pending": 0, "heights": []}
+    counts = {"heights": [], "pending": 0}
     while True:
         if i >= len(b):
             raise ValueError("truncated timestamp")
@@ -87,7 +92,6 @@ def parse_timestamp(b: bytes, i: int, depth: int = 0) -> tuple[int, dict]:
         i += 1
         if tag == _FORK:
             i, sub = parse_timestamp(b, i, depth + 1)
-            counts["bitcoin"] += sub["bitcoin"]
             counts["pending"] += sub["pending"]
             counts["heights"] += sub["heights"]
             continue
@@ -101,11 +105,10 @@ def parse_timestamp(b: bytes, i: int, depth: int = 0) -> tuple[int, dict]:
                 raise ValueError(f"attestation payload {ln} > {MAX_ATTESTATION_PAYLOAD}")
             if i + ln > len(b):
                 raise ValueError("truncated attestation payload")
-            _check_attestation_payload(att_tag, b[i:i + ln])
+            height = _check_attestation_payload(att_tag, b[i:i + ln])
             i += ln
-            if att_tag == BITCOIN_ATTESTATION_TAG:
-                counts["bitcoin"] += 1
-                counts["heights"].append(read_varint(b[i - ln:i], 0)[0])
+            if height is not None:
+                counts["heights"].append(height)
             elif att_tag == PENDING_ATTESTATION_TAG:
                 counts["pending"] += 1
             return i, counts
@@ -121,25 +124,17 @@ def parse_timestamp(b: bytes, i: int, depth: int = 0) -> tuple[int, dict]:
         # An op is followed by exactly one Timestamp: loop, don't recurse.
 
 
-def bitcoin_heights(b: bytes, i: int = 0) -> list[int]:
-    """Block heights of every Bitcoin attestation in one serialized timestamp.
-
-    Delegates to parse_timestamp — one grammar, one set of caps. Raises
-    ValueError on anything the validator would reject, including trailing
-    bytes, so a caller can never read a height out of a proof that
-    timestamp_verdict refuses.
-    """
-    endpos, counts = parse_timestamp(b, i)
-    if endpos != len(b):
-        raise ValueError("trailing bytes")
-    return counts["heights"]
-
-
 def proof_bitcoin_heights(blob: bytes) -> list[int]:
-    """bitcoin_heights over a stored proof file (header + digest + timestamp)."""
-    if not blob.startswith(OTS_HEADER_MAGIC + OTS_VERSION + OTS_TAG_SHA256):
-        raise ValueError("not an OpenTimestamps sha256 proof")
-    return bitcoin_heights(blob[PROOF_PREFIX_LEN:])
+    """Block heights of every Bitcoin attestation in a stored proof file.
+
+    Runs the SAME structural verdict as proof_verdict (header, caps, exact
+    consumption) and then reads the heights out of the one parse — a caller
+    can never get a height from a proof the validator refuses.
+    """
+    ok, why = proof_verdict(blob, require_bitcoin=False)
+    if not ok:
+        raise ValueError(why)
+    return parse_timestamp(blob, PROOF_PREFIX_LEN)[1]["heights"]
 
 
 def timestamp_verdict(body: bytes, *, require_bitcoin: bool) -> tuple[bool, str]:
@@ -157,7 +152,7 @@ def timestamp_verdict(body: bytes, *, require_bitcoin: bool) -> tuple[bool, str]
         return False, f"calendar body is not a well-formed OpenTimestamps timestamp ({e})"
     if end != len(body):
         return False, f"calendar body has {len(body) - end} trailing bytes after the timestamp"
-    if require_bitcoin and counts["bitcoin"] == 0:
+    if require_bitcoin and not counts["heights"]:
         return False, "calendar body carries no Bitcoin attestation"
     return True, "ok"
 

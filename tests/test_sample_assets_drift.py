@@ -82,6 +82,6 @@ def test_ots_bytes_records_anchor_time_size_never_larger_than_the_file():
     # tampering — and so a future writer that starts syncing it breaks here.
     r = json.loads((SAMPLE / "receipt.json").read_text())
     for entry in r["successes"]:
-        name = entry["calendar"].split("//")[1].split(".")[0]
-        blob = (SAMPLE / f"{name}.ots").read_bytes()
+        name = entry["ots_path"].rsplit("/", 1)[-1]
+        blob = (SAMPLE / name).read_bytes()
         assert 0 < entry["ots_bytes"] <= len(blob), (name, entry["ots_bytes"], len(blob))
