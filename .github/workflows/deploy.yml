@@ -46,11 +46,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
-      # --depot=false: Fly's Depot builder service timed out 4x across two runs
-      # on 2026-08-31 ("Waiting for depot builder... deadline_exceeded",
-      # auth handshake EOF) with no incident on their status page. The classic
-      # remote builder machine is the documented fallback. One-line revert
-      # when Depot recovers.
-      - run: flyctl deploy --remote-only --depot=false --ha=false
+      # Build on GitHub's Docker daemon. The app-scoped deploy token can push
+      # and release an image, but cannot create Fly's fly-builder-* app; both
+      # Depot and the classic remote-builder fallback therefore fail before
+      # our Dockerfile runs.
+      - run: flyctl deploy --local-only --ha=false
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
