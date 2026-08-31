@@ -101,8 +101,13 @@ def anchor_hash(endpoint: str, hash_hex: str, sha512_hex: str,
     )
     try:
         with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT_SEC) as resp:
-            raw = resp.read().decode()
-            return True, json.loads(raw)
+            raw = resp.read()
+        try:
+            return True, json.loads(raw.decode())
+        except (ValueError, UnicodeDecodeError):
+            # A 200 that is not the API's JSON (captive portal, proxy) must be
+            # a failure dict, never an unhandled parse crash in the daemon.
+            return False, {"error": "non-JSON 200 response (captive portal or proxy?)"}
     except urllib.error.HTTPError as e:
         try:
             return False, json.loads(e.read().decode())

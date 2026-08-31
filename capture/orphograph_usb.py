@@ -105,7 +105,14 @@ def anchor_hash(endpoint: str, hash_hex: str, sha512_hex: str,
         endpoint.rstrip("/") + "/api/anchor", data=data, method="POST", headers=headers)
     try:
         with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT_SEC) as resp:
-            return True, json.loads(resp.read().decode())
+            raw = resp.read()
+        try:
+            return True, json.loads(raw.decode())
+        except (ValueError, UnicodeDecodeError):
+            # A 200 that is not the API's JSON — a captive portal answering
+            # for every host is the recorder's normal travel scenario. A
+            # failure dict, never an unhandled parse crash mid-pass.
+            return False, {"error": "non-JSON 200 response (captive portal or proxy?)"}
     except urllib.error.HTTPError as e:
         try:
             d = json.loads(e.read().decode())
@@ -150,6 +157,13 @@ def fetch_proof_bundle(endpoint: str, rid: str, dest_dir: Path, api_key: str = "
                 if member.startswith("/") or ".." in Path(member).parts:
                     continue
                 z.extract(member, out)
+        # The promise is "the FULL proof verifies OFFLINE": success means the
+        # bundle actually landed, not that a zip (possibly empty, possibly
+        # all-skipped members) merely extracted without error.
+        if not (out / "receipt.json").is_file() or not any(out.glob("*.ots")):
+            print(f"{_now()} proof-bundle for {rid} extracted EMPTY "
+                  f"(no receipt.json/.ots) — treating as failed", flush=True)
+            return False
         return True
     except (urllib.error.URLError, urllib.error.HTTPError, socket.timeout,
             OSError, zipfile.BadZipFile) as e:
