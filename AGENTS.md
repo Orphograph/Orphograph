@@ -20,3 +20,14 @@
   test.
 - Public receipts and cryptographic commitment bytes must never carry internal
   analytics metadata.
+
+## Production deployment invariant
+
+- GitHub Actions must deploy only through `scripts/deploy_fly_ci.sh`.
+- Do not replace that script with a direct `flyctl deploy` workflow step or
+  add caller-controlled build flags. The production token is app-scoped and
+  cannot create or operate Fly remote-builder apps.
+- Keep the setup action at an immutable commit and `flyctl` at an explicit
+  production version. Upgrade either only in a tested pull request.
+- Never weaken `TestDeployBuildLocation`; it is the executable guard for this
+  incident class.
