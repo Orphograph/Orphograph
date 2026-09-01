@@ -72,7 +72,7 @@ function printUsage(): void {
     "  orphograph anchor <folder> [--server URL] [--api-key KEY] [--label TEXT]",
     "  orphograph verify <folder> <receipt_id> [--server URL]",
     "  orphograph proof  <receipt_id> <rel_path> [--server URL]",
-    "  orphograph verify-inclusion <local_file> <rel_path> <proof.json> <root_hex>",
+    "  orphograph verify-inclusion <local_file> <rel_path> <proof.json> [root_hex]",
     "",
     "Environment:",
     "  ORPHO_API_KEY  optional API key sent as X-Orpho-Api-Key.",
@@ -132,22 +132,64 @@ async function cmdProof(args: ParsedArgs): Promise<number> {
 }
 
 async function cmdVerifyInclusion(args: ParsedArgs): Promise<number> {
+  // Contract shared with the Python CLI (sdk-python/orphograph/_cli.py):
+  // exit 0 = match, 1 = mismatch, 2 = error — a crash must never wear the
+  // mismatch code. root_hex is optional: omitted, the root inside proof.json
+  // is used and the verdict says root_source "proof_json" (self-attested —
+  // match it against the receipt before treating ok as meaningful); an
+  // explicit argument always wins and echoes "argument".
   const localFile = args.positional[0];
   const relPath = args.positional[1];
   const proofFile = args.positional[2];
-  const rootHex = args.positional[3];
-  if (!localFile || !relPath || !proofFile || !rootHex) {
+  const rootOverride = args.positional[3];
+  if (!localFile || !relPath || !proofFile) {
     printUsage();
     return 2;
   }
-  const raw = await readFile(proofFile, "utf-8");
-  const parsed = JSON.parse(raw) as { proof?: ProofStep[] } | ProofStep[];
-  const proof: ProofStep[] = Array.isArray(parsed)
-    ? (parsed as ProofStep[])
-    : ((parsed as { proof?: ProofStep[] }).proof ?? []);
-  const ok = await verifyInclusion(localFile, relPath, proof, rootHex);
-  process.stdout.write(JSON.stringify({ ok }) + "\n");
-  return ok ? 0 : 1;
+  try {
+    const raw = await readFile(proofFile, "utf-8");
+    const parsed = JSON.parse(raw) as
+      | { proof?: ProofStep[]; root_hex?: string; path?: string }
+      | ProofStep[];
+    const isBare = Array.isArray(parsed);
+    const proof: ProofStep[] = isBare
+      ? (parsed as ProofStep[])
+      : ((parsed as { proof?: ProofStep[] }).proof ?? []);
+    const embeddedRoot = isBare ? undefined : (parsed as { root_hex?: string }).root_hex;
+    const embeddedPath = isBare ? undefined : (parsed as { path?: string }).path;
+    const root = rootOverride ?? embeddedRoot;
+    const source = rootOverride ? "argument" : "proof_json";
+    if (!root) {
+      process.stderr.write(
+        JSON.stringify({
+          error:
+            "no root_hex: pass it as the 4th argument or use the JSON written by the proof subcommand",
+        }) + "\n",
+      );
+      return 2;
+    }
+    const ok = await verifyInclusion(localFile, relPath, proof, root);
+    process.stdout.write(
+      JSON.stringify({ ok, root_hex: root, root_source: source }) + "\n",
+    );
+    // After the verdict, so an I/O or parse failure keeps stderr to its
+    // single error line. Advisory only: the leaf hash binds relPath.
+    if (typeof embeddedPath === "string" && embeddedPath !== relPath) {
+      process.stderr.write(
+        JSON.stringify({
+          warning:
+            "rel_path differs from the path recorded in proof_json; the leaf hash binds rel_path, so a mismatch verdict is expected",
+          rel_path: relPath,
+          proof_json_path: embeddedPath,
+        }) + "\n",
+      );
+    }
+    return ok ? 0 : 1;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    process.stderr.write(JSON.stringify({ error: msg }) + "\n");
+    return 2;
+  }
 }
 
 async function main(): Promise<number> {
@@ -177,8 +219,11 @@ async function main(): Promise<number> {
     }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
+    // 2, not 1: exit 1 is the verify/verify-inclusion MISMATCH verdict, and
+    // a network failure or unreadable input must never impersonate it
+    // (same rule as the Python CLI).
     process.stderr.write(`error: ${msg}\n`);
-    return 1;
+    return 2;
   }
 }
 

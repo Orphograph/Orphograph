@@ -27,7 +27,7 @@
     "build": "tsc",
     "prepare": "tsc",
     "pretest": "tsc",
-    "test": "node --experimental-strip-types --test test/*.test.ts",
+    "test": "npm run build && node --experimental-strip-types --test test/*.test.ts",
     "release:check": "npm test && node scripts/verify-release.mjs"
   },
   "keywords": [
