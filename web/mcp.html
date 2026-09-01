@@ -158,7 +158,7 @@
       An agent producing work at volume has three further surfaces, all built on the same contract — the file stays on the agent's machine, only fingerprints travel.
       Up to fifty hashes anchor in one call through <a href="/docs/api#post-api-anchor-batch" class="mcp-link-confirm">POST /api/anchor/batch</a>.
       A whole output tree anchors as one Merkle root through <code class="inline">orphograph.anchor_folder</code>, and any single file inside it is later provable with the SDK's offline <code class="inline">verify-inclusion</code> — no server, no account.
-      For an agent-to-agent delivery, anchor the deliverable's digest before handoff and send the receipt URL with its downloadable proof bundle; the work itself never leaves the producer.
+      For an agent-to-agent delivery, anchor the deliverable's digest before handoff and send the receipt URL with its downloadable proof bundle; only the digest goes to Orphograph.
     </p>
   </section>
 
