@@ -522,8 +522,8 @@ def send_pin_email(to: str, receipt: dict) -> bool:
 
     Fires once, from the upgrade worker, when btc_pinned_at first gets set
     on a record that has a notify_email. Honest-framing rule: if not all
-    calendars confirmed, the body says "N of M calendars confirmed" rather
-    than claiming a clean pin. Transactional only — no marketing CTA.
+    proofs have reached Bitcoin, the body says "N of M anchored" rather than
+    claiming the whole receipt is anchored. Transactional only — no marketing CTA.
     """
     rid = receipt.get("receipt_id", "")
     btc_pinned_at = receipt.get("btc_pinned_at", "")
@@ -535,7 +535,7 @@ def send_pin_email(to: str, receipt: dict) -> bool:
         f"The instrument is now committed to the Bitcoin chain.\n\n"
         f"  Receipt           {rid}\n"
         f"  Pin observed (UTC)  {btc_pinned_at}\n"
-        f"  Calendars         {pinned_count} of {total} confirmed\n\n"
+        f"  Proofs            {pinned_count} of {total} anchored\n\n"
         f"  Full receipt      {receipt_url}\n\n"
         f"From this point forward the receipt verifies against the chain "
         f"without further reference to this office. The original file "
@@ -551,8 +551,8 @@ def send_pin_email(to: str, receipt: dict) -> bool:
         f"<td style=\"font-family:Menlo,Consolas,monospace;color:#1a1a1a;\"><code>{rid}</code></td></tr>"
         f"<tr><td style=\"padding:4px 14px 4px 0;color:#666;\">Pin observed (UTC)</td>"
         f"<td>{btc_pinned_at}</td></tr>"
-        f"<tr><td style=\"padding:4px 14px 4px 0;color:#666;\">Calendars</td>"
-        f"<td>{pinned_count} of {total} confirmed</td></tr>"
+        f"<tr><td style=\"padding:4px 14px 4px 0;color:#666;\">Proofs</td>"
+        f"<td>{pinned_count} of {total} anchored</td></tr>"
         f"</table>"
         f"<p style=\"margin:22px 0;\">"
         f"<a href=\"{receipt_url}\" "

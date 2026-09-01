@@ -13,7 +13,7 @@ Conditions verified:
                                                 worker still reports success
   5. Partial transition (3/5)                 → email subject says
                                                 "Bitcoin-anchored", body says
-                                                "3 of 5 calendars confirmed"
+                                                "3 of 5 anchored"
 """
 from __future__ import annotations
 
@@ -294,11 +294,10 @@ class UpgradeEmailTest(unittest.TestCase):
         self.assertIn("rid_partial", subject)
         self.assertIn("Bitcoin", subject)
         text = payload["text"]
-        # Institutional-notary rewrite phrases the partial-anchor body as
-        # "3 of 5 confirmed" instead of "3 of 5 calendars". Either phrasing
-        # honestly conveys the partial state; assert the numeric ratio plus
-        # the calendar concept appears somewhere in the body.
-        self.assertIn("3 of 5", text)
+        # Name the achieved state directly: three receipt proofs have reached
+        # Bitcoin. "Confirmed" was ambiguous about what had been confirmed.
+        self.assertIn("3 of 5 anchored", text)
+        self.assertNotIn("3 of 5 confirmed", text)
         # We never call it "pinned" when partial — honest framing.
         self.assertNotIn("clean pin", text.lower())
 
