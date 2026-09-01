@@ -30,12 +30,10 @@ echo "predeploy: orphograph local deploy gate"
 echo "  repo: $REPO_ROOT"
 echo
 
-check "1. pytest suite (full)" bash -c '
-  out=$(python -m pytest tests/ -q -p no:anchorpy --ignore=tests/test_biweekly_safety_audit.py 2>&1 | tail -1)
-  echo "$out" | grep -q "passed" || exit 1
-  echo "$out" | grep -qE "failed|error" && exit 1
-  exit 0
-'
+# The DEPLOY-GATE command, not a hand-derived subset: the old line ran
+# tests/ only (no capture/, gate reader, zk-provenance, sdk) and judged a
+# tail'd summary line instead of pytest's exit code.
+check "1. pytest suite (deploy gate)" "$REPO_ROOT/scripts/run_gate_tests.sh"
 
 check "2. no founder-PII / brand-lineage in externals" bash -c '
   ! grep -rIn -E "rodriguezrivera|hyperliquid|\bhydroboro\b|boroscope|thermohydro|trail-audit" \

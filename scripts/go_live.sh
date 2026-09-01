@@ -70,13 +70,15 @@ ok "flyctl: $FLY"
 
 # Run tests + safety check before doing anything irreversible.
 echo
-echo "${dim}Running 183-test suite (~17s)...${off}"
-if ! PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest tests/ -q >/tmp/orpho_pytest.log 2>&1; then
+echo "${dim}Running the deploy-gate test suite (~2 min)...${off}"
+# scripts/run_gate_tests.sh is THE gate command (pinned byte-identical to CI
+# by tests/test_gate_command_pinned.py); the old line here ran tests/ only.
+if ! "$(dirname "$0")/run_gate_tests.sh" >/tmp/orpho_pytest.log 2>&1; then
   fail "tests failed. Read /tmp/orpho_pytest.log and fix before deploying."
   tail -20 /tmp/orpho_pytest.log
   exit 1
 fi
-ok "183/183 tests passing"
+ok "deploy-gate suite passing"
 
 echo "${dim}Running publish safety check on web/verify/...${off}"
 if ! bash "$ROOT/scripts/publish_safety_check.sh" >/tmp/orpho_safety.log 2>&1; then

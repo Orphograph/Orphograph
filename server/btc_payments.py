@@ -200,10 +200,14 @@ def _append(row: dict) -> None:
 
 
 def _read_all() -> list[dict]:
-    if not ORDERS_PATH.exists():
-        return []
+    # No exists() pre-check: it is TOCTOU, and a monkeypatched Path.exists in
+    # tests made it lie. A missing ledger is simply an empty one.
     rows: list[dict] = []
-    with ORDERS_PATH.open() as f:
+    try:
+        f = ORDERS_PATH.open()
+    except FileNotFoundError:
+        return rows
+    with f:
         for line in f:
             line = line.strip()
             if not line:
@@ -213,6 +217,33 @@ def _read_all() -> list[dict]:
             except json.JSONDecodeError:
                 continue
     return rows
+
+
+def recent_order_addresses(cap: int = 500) -> list[str]:
+    """Distinct receive addresses ever issued to an order, newest first, capped.
+
+    The payout monitor polls the address POOL, but path-1 orders issue
+    HD-derived addresses that exist only in this ledger — funds landing on an
+    issued address were invisible to the sweep threshold. No age or state
+    filter is safe here: settlement credits the ORDER, it does not sweep the
+    COINS, and no sweep ledger exists — a 30-day window would make a
+    funded-but-unswept address invisible again on day 31. The cap alone
+    bounds the polite 200ms-per-address poll (newest cap distinct addresses);
+    retiring addresses from the watch list requires a sweep ledger first.
+    """
+    out: list[str] = []
+    seen: set[str] = set()
+    for row in reversed(_read_all()):
+        if row.get("event") != "created":
+            continue
+        addr = row.get("address")
+        if not isinstance(addr, str) or not addr or addr in seen:
+            continue
+        seen.add(addr)
+        out.append(addr)
+        if len(out) >= cap:
+            break
+    return out
 
 
 def is_configured() -> bool:
@@ -320,7 +351,10 @@ def mark_settled(order_id: str, tx_hash: str, sats_received: int) -> bool:
         "event": "settled",
         "order_id": order_id,
         "email": state.get("email", ""),
-        "address": BTC_RECEIVE_ADDRESS,
+        # The ORDER's address, not the global fallback — a settled HD-derived
+        # order logged the wrong address here, which also poisoned any reader
+        # trying to attribute settlements per address.
+        "address": state.get("address", ""),
         "amount_sats": state.get("amount_sats", 0),
         "sats_received": int(sats_received),
         "tx_hash": tx_hash,

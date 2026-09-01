@@ -103,3 +103,100 @@ def test_frozen_receipt_already_on_new_schema_stays_frozen(tmp_path, monkeypatch
     monkeypatch.setattr(upgrade_worker, "_fetch_upgrade", lambda u, c: (_ for _ in ()).throw(AssertionError("must not fetch")))
     summary = upgrade_worker.upgrade_all(min_age_sec=0)
     assert summary["skipped"] == 1
+
+
+# ── 2026-08-31: host allowlist · non-destructive splice · legacy audit ─────
+
+EVIL = "https://evil.example"
+
+
+def test_attestation_naming_an_unknown_host_is_not_queried(tmp_path, monkeypatch):
+    """The worker follows the URL EMBEDDED IN THE STORED PROOF. A mangled or
+    hostile pending attestation naming an arbitrary https host must not
+    receive our GET on every cron run — fall back to the submit URL."""
+    rd, record = _receipt(tmp_path, monkeypatch, _pending_ots_naming(EVIL))
+    asked = []
+    monkeypatch.setattr(upgrade_worker, "_fetch_upgrade",
+                        lambda u, c: (asked.append(u), (False, "HTTP 404"))[1])
+    upgrade_worker._upgrade_one(rd, dict(record))
+    assert asked == [POOL], asked
+
+
+def test_every_shipped_calendar_host_stays_allowlisted():
+    """Negative control: the hosts we ship, and the real calendars the pool
+    aliases write into attestations, must all pass the allowlist."""
+    for url in (POOL, REAL, "https://b.pool.opentimestamps.org",
+                "https://bob.btc.calendar.opentimestamps.org",
+                "https://finney.calendar.eternitywall.com",
+                "https://btc.calendar.catallaxy.com"):
+        blob = _pending_ots_naming(url)
+        _c, idx = upgrade_worker._commitment_for_pending(blob)
+        assert upgrade_worker._pending_calendar_url(blob, idx) == url, url
+
+
+def test_splice_keeps_the_original_pending_proof(tmp_path, monkeypatch):
+    """The pending original is the only thing a correct re-upgrade could be
+    derived from; splicing in place made a wrong-body 200 irrecoverable. The
+    first splice must preserve the original beside the proof."""
+    blob = _pending_ots_naming(REAL)
+    rd, record = _receipt(tmp_path, monkeypatch, blob)
+    monkeypatch.setattr(upgrade_worker, "_fetch_upgrade", lambda u, c: (True, PINNED_BODY))
+    result = upgrade_worker._upgrade_one(rd, dict(record))
+    assert result["status"] == "pinned"
+    prev = rd / "a.ots.prev"
+    assert prev.exists() and prev.read_bytes() == blob
+    assert not prev.name.endswith(".ots")   # export globs must not ship it
+
+
+def test_legacy_mislabeled_pinned_receipt_is_audited_once(tmp_path, monkeypatch):
+    """upgrade_all skipped on status=='pinned' BEFORE any parse, so garbage a
+    pre-guard worker spliced in stayed 'pinned' forever. A pinned record not
+    yet stamped with the current schema is audited (no network: a markerless
+    blob never reaches a calendar), then stamped so the next run skips it."""
+    import os
+    import time as _t
+    monkeypatch.setattr(upgrade_worker, "UPGRADE_LOG", tmp_path / "up.jsonl")
+    monkeypatch.setattr(upgrade_worker, "RECEIPTS_DIR", tmp_path / "receipts")
+    monkeypatch.setattr(upgrade_worker, "_fetch_upgrade",
+                        lambda u, c: (_ for _ in ()).throw(AssertionError("network hit")))
+    rd = tmp_path / "receipts" / "rid_legacy"
+    rd.mkdir(parents=True)
+    (rd / "a.ots").write_bytes(b"<html>challenge page</html>")
+    record = {"receipt_id": "rid_legacy", "hash_hex": "44" * 32, "status": "pinned",
+              "btc_pinned_at": "2026-08-01T00:00:00+00:00",
+              "successes": [{"calendar": POOL}]}
+    (rd / "receipt.json").write_text(json.dumps(record))
+    old = _t.time() - 7200
+    os.utime(rd / "receipt.json", (old, old))
+    upgrade_worker.upgrade_all(min_age_sec=3600)
+    after = json.loads((rd / "receipt.json").read_text())
+    assert after.get("proof_malformed"), after
+    assert after.get("status") != "pinned"
+    assert int(after.get("upgrade_schema", 0) or 0) >= upgrade_worker.UPGRADE_SCHEMA
+
+
+def test_locked_receipt_is_skipped_untouched(tmp_path, monkeypatch):
+    """Mutation lens (cycle 7): the in-app hourly thread and a manually run
+    CLI both call upgrade_all on the same volume; without a per-receipt lock
+    both read-modify-write receipt.json across seconds of calendar
+    round-trips, and the loser's write can erase pin_email_sent_at (a record
+    field) and re-email the customer. A receipt whose lock is held must be
+    skipped with its bytes untouched; the next pass retries."""
+    from file_lock import locked as _locked
+    monkeypatch.setattr(upgrade_worker, "UPGRADE_LOG", tmp_path / "up.jsonl")
+    monkeypatch.setattr(upgrade_worker, "RECEIPTS_DIR", tmp_path / "receipts")
+    rd, record = _receipt(tmp_path, monkeypatch, _pending_ots_naming(REAL))
+    import os as _os
+    import time as _t
+    old = _t.time() - 7200
+    _os.utime(rd / "receipt.json", (old, old))
+    before = (rd / "receipt.json").read_bytes()
+    monkeypatch.setattr(upgrade_worker, "_fetch_upgrade", lambda u, c: (True, PINNED_BODY))
+    with _locked(rd / ".upgrade.lock"):
+        summary = upgrade_worker.upgrade_all(min_age_sec=3600)
+    assert summary["skipped"] >= 1
+    assert (rd / "receipt.json").read_bytes() == before
+    # …and once the holder releases, the same receipt upgrades normally.
+    summary2 = upgrade_worker.upgrade_all(min_age_sec=3600)
+    after = json.loads((rd / "receipt.json").read_text())
+    assert after["status"] == "pinned"

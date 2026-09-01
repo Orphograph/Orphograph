@@ -33,5 +33,9 @@
       "ots_bytes": 215
     }
   ],
-  "failures": []
+  "failures": [],
+  "status": "pinned",
+  "pinned_count": 5,
+  "pinned_total": 5,
+  "btc_pinned_at": "2026-05-18T01:18:38+00:00"
 }

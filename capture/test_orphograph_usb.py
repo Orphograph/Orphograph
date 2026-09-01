@@ -532,3 +532,26 @@ def test_anchor_hash_network_error_returns_error_dict(monkeypatch):
     assert ok is False
     assert "URLError" in resp["error"]
     assert usb._is_rate_limited(resp) is False
+
+
+def test_anchor_hash_html_200_is_a_failure_not_a_crash(monkeypatch):
+    """A captive portal answers 200 with HTML — the recorder's exact travel
+    scenario. An unparseable success body must come back as (False, error),
+    never as an unhandled JSONDecodeError that kills the whole pass."""
+    monkeypatch.setattr(usb.urllib.request, "urlopen",
+                        lambda req, timeout=None: _FakeHTTPResponse(b"<html>hotel wifi</html>"))
+    ok, resp = usb.anchor_hash(ENDPOINT, "aa" * 32, "bb" * 64, "", "")
+    assert ok is False
+    assert "error" in resp
+
+
+def test_fetch_proof_bundle_empty_zip_is_a_failure(tmp_path, monkeypatch):
+    """The bundle's promise is 'the FULL proof verifies OFFLINE'. A valid but
+    EMPTY zip (or one whose members were all skipped by the zip-slip guard)
+    delivered nothing verifiable and must not report success."""
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w"):
+        pass
+    monkeypatch.setattr(usb.urllib.request, "urlopen",
+                        lambda req, timeout=None: _FakeHTTPResponse(buf.getvalue()))
+    assert usb.fetch_proof_bundle(ENDPOINT, "RIDE", tmp_path) is False

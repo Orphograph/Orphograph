@@ -500,3 +500,23 @@ def test_touch_only_mtime_change_is_not_reanchored(watch_dir, recorder):
     counts = _scan(watch_dir)
     assert counts["skipped_seen"] == 1
     assert len(recorder.calls) == 1
+
+
+def test_anchor_hash_html_200_is_a_failure_not_a_crash(monkeypatch):
+    """Same class as the USB recorder: a captive-portal 200 with an HTML body
+    must be (False, error), not an unhandled JSONDecodeError crashing the
+    capture daemon mid-pass."""
+    class _Resp(io.BytesIO):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            self.close()
+            return False
+
+    monkeypatch.setattr(oc.urllib.request, "urlopen",
+                        lambda req, timeout=None: _Resp(b"<html>hotel wifi</html>"))
+    ok, resp = oc.anchor_hash("https://example.invalid", "aa" * 32, "bb" * 64,
+                              "lbl", "")
+    assert ok is False
+    assert "error" in resp

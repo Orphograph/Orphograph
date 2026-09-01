@@ -1474,7 +1474,7 @@
   <p>That&#x27;s a real hash of a real file matching what&#x27;s embedded in the .ots proof. No mystery.</p>
   <p>This is the <strong>input</strong> to the OTS proof. The .ots file&#x27;s job is to prove that this 32-byte fingerprint existed in Bitcoin&#x27;s blockchain at a specific time.</p>
   <h2>Section 3 — the merkle path</h2>
-  <p>Everything after byte 57 is the merkle path. This is where the proof structure lives.</p>
+  <p>Everything from byte 64 onward is the merkle path. This is where the proof structure lives.</p>
   <p>Each step in the path is one of:</p>
   <ul>
   <li><strong>SHA-256 op</strong> (<code>\x08</code>) — &quot;hash whatever&#x27;s accumulated so far with SHA-256&quot;</li>
@@ -1484,19 +1484,18 @@
   <li><strong>Bitcoin block attestation</strong> (<code>\x05\x88\x96\x0d\x73\xd7\x19\x01 &lt;varint-block-height&gt;</code>) — &quot;this hash is incorporated in the Bitcoin block at height N&quot;</li>
   </ul>
   <p>Walking the path means: start with your file&#x27;s hash, follow each op, accumulating values, until you arrive at a Bitcoin block header&#x27;s merkle root.</p>
-  <p>For the sample file, the calendar attestation reads:</p>
-  <pre><code>.-https://alice.btc.calendar.opentimestamps.org</code></pre>
-  <p>That is the protocol saying: this hash was submitted to alice&#x27;s calendar. For the full Bitcoin merkle proof, ask that calendar for the upgraded version.</p>
-  <p>When the calendar batches your hash with thousands of others into a Bitcoin transaction (which it does roughly once per hour), the upgraded .ots file gets extended with:</p>
+  <p>The downloadable sample is already upgraded. Its path ends with:</p>
+  <pre><code>verify BitcoinBlockHeaderAttestation(949117)</code></pre>
+  <p>That is the protocol saying the completed path commits the sample hash into Bitcoin block 949117. A pending proof would end in a calendar URL instead; this file no longer needs a calendar response to complete its proof.</p>
+  <p>Before that upgrade completed, the calendar batched the hash with thousands of others into a Bitcoin transaction. The upgraded .ots file contains:</p>
   <p><strong>1.</strong> The merkle path WITHIN the calendar&#x27;s batch (from your hash to their root)</p>
   <p><strong>2.</strong> The Bitcoin transaction ID containing that root</p>
   <p><strong>3.</strong> The Bitcoin block height where that transaction landed</p>
   <p><strong>4.</strong> The merkle path WITHIN that block (from the calendar&#x27;s root transaction up to the block header&#x27;s merkle root field)</p>
-  <p>After that &quot;upgrade&quot; runs, the .ots file is self-sufficient — no calendar is needed to verify, just the public Bitcoin chain.</p>
-  <p>You can trigger the upgrade yourself:</p>
+  <p>After that upgrade, the .ots file is self-sufficient — no calendar is needed to verify, just the public Bitcoin chain. Inspect the shipped proof with:</p>
   <pre><code>pip install opentimestamps-client
-  ots upgrade a.ots</code></pre>
-  <p>Then <code>xxd a.ots | tail</code> will show the new bytes that got appended.</p>
+  ots info a.ots</code></pre>
+  <p>The final line names <code>BitcoinBlockHeaderAttestation(949117)</code>, matching the sample receipt&#x27;s recorded block.</p>
   <h2>Section 4 — what the math actually proves</h2>
   <p>Once an .ots file has been upgraded to include the Bitcoin block attestation, here&#x27;s what its math proves:</p>
   <p>Given:</p>

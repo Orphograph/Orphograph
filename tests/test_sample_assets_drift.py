@@ -85,3 +85,30 @@ def test_ots_bytes_records_anchor_time_size_never_larger_than_the_file():
         name = entry["ots_path"].rsplit("/", 1)[-1]
         blob = (SAMPLE / name).read_bytes()
         assert 0 < entry["ots_bytes"] <= len(blob), (name, entry["ots_bytes"], len(blob))
+
+
+def test_the_second_bundle_copy_is_byte_identical():
+    """web/verify/examples/sample/ is the SAME canonical bundle served at a
+    second path (the offline-verifier walkthrough curls it). It sat with May
+    PENDING proofs while /sample/index.json declared the receipt pinned 5/5 —
+    a stale proof beside a fresh index, on the exact artifact that exists to
+    disprove that drift. Every file must be byte-identical to web/sample/."""
+    second = ROOT / "web" / "verify" / "examples" / "sample"
+    names = sorted(p.name for p in SAMPLE.iterdir())
+    assert names == sorted(p.name for p in second.iterdir())
+    for name in names:
+        assert (SAMPLE / name).read_bytes() == (second / name).read_bytes(), name
+
+
+def test_ots_walkthrough_describes_the_shipped_upgraded_proof():
+    """The article curls this mutable sample path and must narrate its state."""
+    article = (ROOT / "web" / "blog" / "reading-ots-file-by-hand.html").read_text()
+    feed = (ROOT / "web" / "blog" / "atom.xml").read_text()
+    index = json.loads((SAMPLE / "index.json").read_text())
+    a_block = next(c["bitcoin_block"] for c in index["calendars"]
+                   if c["file"] == "a.ots")
+    expected = f"BitcoinBlockHeaderAttestation({a_block})"
+    for published_copy in (article, feed):
+        assert expected in published_copy
+        assert "ots upgrade a.ots" not in published_copy
+        assert "alice.btc.calendar.opentimestamps.org" not in published_copy

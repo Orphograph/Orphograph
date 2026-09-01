@@ -30,11 +30,17 @@ DATA_DIR = Path(os.environ.get("ORPHO_DATA_DIR", str(ROOT / "data") if (ROOT / "
 RECEIPTS_DIR = Path(os.environ.get("ORPHO_RECEIPTS_DIR", str(DATA_DIR / "receipts")))
 LEDGER = Path(os.environ.get("ORPHO_LEDGER", str(DATA_DIR / "ledger.jsonl")))
 
-import ots_timestamp  # noqa: E402
+try:
+    import ots_timestamp  # noqa: E402
+except ImportError:  # package-style caller (import server.engine)
+    from server import ots_timestamp  # type: ignore[no-redef]  # noqa: E402
 
-OTS_HEADER_MAGIC = b"\x00OpenTimestamps\x00\x00Proof\x00\xbf\x89\xe2\xe8\x84\xe8\x92\x94"
-OTS_VERSION = b"\x01"
-OTS_TAG_SHA256 = b"\x08"
+# One home for the OTS byte constants: ots_timestamp. Re-exported here because
+# callers and tests address them through this module; a second literal copy
+# silently desyncs the builder's header from the verifier's header check.
+OTS_HEADER_MAGIC = ots_timestamp.OTS_HEADER_MAGIC
+OTS_VERSION = ots_timestamp.OTS_VERSION
+OTS_TAG_SHA256 = ots_timestamp.OTS_TAG_SHA256
 
 CALENDARS = [
     "https://a.pool.opentimestamps.org",

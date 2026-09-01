@@ -35,7 +35,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from file_lock import locked  # noqa: E402
+from file_lock import locked, try_locked  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = Path(os.environ.get("ORPHO_DATA_DIR", str(ROOT / "data") if (ROOT / "data").is_dir() else str(ROOT)))
@@ -63,17 +63,39 @@ UPGRADE_SCHEMA = 2
 # size so a long-stuck backlog can't grow it without limit.
 UPGRADE_LOG_MAX_BYTES = int(os.environ.get("ORPHO_UPGRADE_LOG_MAX_BYTES", str(5 * 1024 * 1024)))
 
-# Matches engine.py header so an upgraded .ots stays well-formed.
-OTS_HEADER_MAGIC = b"\x00OpenTimestamps\x00\x00Proof\x00\xbf\x89\xe2\xe8\x84\xe8\x92\x94"
-OTS_VERSION = b"\x01"
-OTS_TAG_SHA256 = b"\x08"
-# Magic bytes that begin a calendar-pending attestation inside an .ots blob.
-# The calendar's commitment digest is the running hash AT this point in the
+try:
+    import ots_timestamp  # noqa: E402
+except ImportError:  # package-style caller (import server.upgrade_worker)
+    from server import ots_timestamp  # type: ignore[no-redef]  # noqa: E402
+
+# One home for the OTS byte constants: ots_timestamp (a literal copy here
+# silently desyncs the splice's framing from the verifier's). Re-exported
+# because tests and callers address them through this module.
+OTS_HEADER_MAGIC = ots_timestamp.OTS_HEADER_MAGIC
+OTS_VERSION = ots_timestamp.OTS_VERSION
+OTS_TAG_SHA256 = ots_timestamp.OTS_TAG_SHA256
+# Bytes that begin a calendar-pending attestation inside an .ots blob: the
+# 0x00 byte that introduces an attestation, then the pending tag. The
+# calendar's commitment digest is the running hash AT this point in the
 # op-chain, not the user's original hash. /timestamp/<digest> on the calendar
 # is keyed by THIS hash; querying with the original SHA-256 returns 404 forever.
-PENDING_ATTESTATION_MARKER = b"\x00\x83\xdf\xe3\x0d\x2e\xf9\x0c\x8e"
+PENDING_ATTESTATION_MARKER = b"\x00" + ots_timestamp.PENDING_ATTESTATION_TAG
 HTTP_TIMEOUT_SEC = 15
 USER_AGENT = "orphograph-upgrade/0.1 (stdlib)"
+
+# The only hosts this worker will ever GET. The query URL comes from bytes
+# embedded in the STORED PROOF (a pending attestation's URI), so without this
+# gate a mangled or hostile attestation turns the cron into a beacon against
+# an arbitrary https host. Submit URLs plus the real calendars the pool
+# aliases write into attestations.
+ALLOWED_CALENDAR_HOSTS = frozenset({
+    "a.pool.opentimestamps.org",
+    "b.pool.opentimestamps.org",
+    "alice.btc.calendar.opentimestamps.org",
+    "bob.btc.calendar.opentimestamps.org",
+    "finney.calendar.eternitywall.com",
+    "btc.calendar.catallaxy.com",
+})
 
 
 def _fetch_upgrade(calendar_url: str, hash_hex: str) -> tuple[bool, bytes | str]:
@@ -96,8 +118,10 @@ def _fetch_upgrade(calendar_url: str, hash_hex: str) -> tuple[bool, bytes | str]
         return False, f"{type(e).__name__}"
 
 
-import ots_timestamp  # noqa: E402
-from ots_timestamp import proof_verdict, read_varint, timestamp_verdict  # noqa: E402
+# ots_timestamp is imported (dual-context) above, next to the constants it owns.
+proof_verdict = ots_timestamp.proof_verdict
+read_varint = ots_timestamp.read_varint
+timestamp_verdict = ots_timestamp.timestamp_verdict
 
 # Re-exported: tests and callers address the tag through this module.
 BITCOIN_ATTESTATION_TAG = ots_timestamp.BITCOIN_ATTESTATION_TAG
@@ -132,6 +156,8 @@ def _pending_calendar_url(ots_blob: bytes, marker_idx: int) -> str | None:
         return None
     if len(uri) != uri_len or not uri.startswith("https://") or "/" in uri[8:]:
         return None
+    if uri[8:].lower() not in ALLOWED_CALENDAR_HOSTS:
+        return None   # unknown host in a stored proof: fall back to the submit URL
     return uri
 
 
@@ -304,6 +330,14 @@ def _upgrade_one(receipt_dir: Path, record: dict) -> dict:
         if new_blob == old_blob:
             upgrades.append({"calendar": cal, "queried": query_url, "pinned": True, "changed": False})
             continue
+        # Keep the FIRST pending original beside the proof before splicing:
+        # it is the only artifact a correct re-upgrade could ever be derived
+        # from, and the in-place overwrite made a wrong-body 200 (cache,
+        # proxy, hostile host) irrecoverable. `.prev` so "*.ots" export
+        # globs never ship it.
+        prev_path = ots_path.with_name(ots_path.name + ".prev")
+        if not prev_path.exists():
+            prev_path.write_bytes(old_blob)
         ots_path.write_bytes(new_blob)
         upgrades.append({"calendar": cal, "queried": query_url, "pinned": True, "changed": True})
 
@@ -387,31 +421,47 @@ def upgrade_all(min_age_sec: int = 3600) -> dict:
         if not receipt_file.exists():
             continue
         scanned += 1
-        try:
-            record = json.loads(receipt_file.read_text())
-        except json.JSONDecodeError:
-            continue
-        if record.get("status") == "pinned":
-            skipped += 1
-            continue
-        if record.get("upgrade_frozen"):
-            if int(record.get("upgrade_schema", 1) or 1) >= UPGRADE_SCHEMA:
-                # Frozen under the current logic: a genuinely stuck partial
-                # we've stopped polling (see MAX_UPGRADE_STALLS).
+        # Per-receipt critical section: the read, the calendar round-trips,
+        # and the receipt.json write in _upgrade_one must not interleave with
+        # another runner's (the in-app hourly thread vs a manually run CLI on
+        # the same volume — the module already expects concurrent cron runs).
+        # A lost update here can erase pin_email_sent_at and re-email the
+        # customer. Busy lock → skip; the next pass retries.
+        with try_locked(receipt_dir / ".upgrade.lock") as _lk:
+            if _lk is None:
                 skipped += 1
                 continue
-            # Frozen by an older worker whose polling was the problem.
-            # Thaw once; _upgrade_one stamps the schema so this cannot loop.
-            record["upgrade_frozen"] = False
-            record["upgrade_stalls"] = 0
-            record["upgrade_thawed_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
-            for k in ("upgrade_frozen_at", "upgrade_frozen_reason"):
-                record.pop(k, None)
-        age = now - receipt_file.stat().st_mtime
-        if age < min_age_sec:
-            skipped += 1
-            continue
-        result = _upgrade_one(receipt_dir, record)
+            try:
+                record = json.loads(receipt_file.read_text())
+            except json.JSONDecodeError:
+                continue
+            if (record.get("status") == "pinned"
+                    and int(record.get("upgrade_schema", 1) or 1) >= UPGRADE_SCHEMA):
+                skipped += 1
+                continue
+            # A pinned record NOT yet stamped with the current schema may be a
+            # pre-guard mislabel (garbage spliced in, status flipped). Let it flow
+            # into _upgrade_one: a markerless blob is parsed by
+            # stored_proof_verdict with no network call, the verdict recomputes
+            # status, and the schema stamp makes the audit one-time.
+            if record.get("upgrade_frozen"):
+                if int(record.get("upgrade_schema", 1) or 1) >= UPGRADE_SCHEMA:
+                    # Frozen under the current logic: a genuinely stuck partial
+                    # we've stopped polling (see MAX_UPGRADE_STALLS).
+                    skipped += 1
+                    continue
+                # Frozen by an older worker whose polling was the problem.
+                # Thaw once; _upgrade_one stamps the schema so this cannot loop.
+                record["upgrade_frozen"] = False
+                record["upgrade_stalls"] = 0
+                record["upgrade_thawed_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+                for k in ("upgrade_frozen_at", "upgrade_frozen_reason"):
+                    record.pop(k, None)
+            age = now - receipt_file.stat().st_mtime
+            if age < min_age_sec:
+                skipped += 1
+                continue
+            result = _upgrade_one(receipt_dir, record)
         results.append(result)
         if result["status"] in ("pinned", "partial"):
             upgraded += 1
