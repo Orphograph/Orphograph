@@ -45,12 +45,14 @@ jobs:
     if: ${{ vars.CI_DEPLOY_ENABLED == 'true' }}
     steps:
       - uses: actions/checkout@v4
-      - uses: superfly/flyctl-actions/setup-flyctl@master
-      # --depot=false: Fly's Depot builder service timed out 4x across two runs
-      # on 2026-08-31 ("Waiting for depot builder... deadline_exceeded",
-      # auth handshake EOF) with no incident on their status page. The classic
-      # remote builder machine is the documented fallback. One-line revert
-      # when Depot recovers.
-      - run: flyctl deploy --remote-only --depot=false --ha=false
+      # Pin both the action and flyctl: Fly recommends a fixed CLI version for
+      # production, and a moving action branch can change underneath us.
+      - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
+        with:
+          version: 0.4.96
+      # This script is the repository's deployment invariant. It refuses
+      # arguments and always builds on GitHub's Docker daemon, so an app-scoped
+      # token never needs permission to create a fly-builder-* app.
+      - run: scripts/deploy_fly_ci.sh
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

@@ -641,3 +641,75 @@ class TestEveryTestFileIsRunByCI(unittest.TestCase):
                     "zk-provenance/test_zk_provenance.py", "sdk-python/tests/"):
             self.assertIn(tok, t, f"test.yml lacks {tok}")
             self.assertIn(tok, d, f"deploy.yml lacks {tok}")
+
+
+class TestDeployBuildLocation(unittest.TestCase):
+    """CI must not require privileges to create a Fly remote-builder app.
+
+    This is intentionally repository-level: changing deploy.yml and the shell
+    entry point together must still leave an executable test that proves the
+    command reaching flyctl is local-only and accepts no caller flags.
+    """
+
+    def test_workflows_delegate_to_the_only_deploy_entry_point(self):
+        deploy = (ROOT / ".github" / "workflows" / "deploy.yml").read_text()
+        all_workflows = "\n".join(path.read_text() for path in _WORKFLOWS)
+        self.assertIn("- run: scripts/deploy_fly_ci.sh", deploy)
+        self.assertNotIn("run: flyctl deploy", all_workflows)
+
+    def test_flyctl_setup_is_immutable_and_versioned(self):
+        import re
+        deploy = (ROOT / ".github" / "workflows" / "deploy.yml").read_text()
+        self.assertRegex(
+            deploy,
+            r"superfly/flyctl-actions/setup-flyctl@[0-9a-f]{40}",
+        )
+        self.assertRegex(deploy, r"(?m)^\s+version: \d+\.\d+\.\d+$")
+
+    def test_entry_point_executes_only_the_local_build(self):
+        import os
+        import subprocess
+        import tempfile
+
+        script = ROOT / "scripts" / "deploy_fly_ci.sh"
+        self.assertTrue(os.access(script, os.X_OK), "deploy entry point is not executable")
+        with tempfile.TemporaryDirectory() as td:
+            bindir = Path(td)
+            calls = bindir / "flyctl.calls"
+            docker = bindir / "docker"
+            flyctl = bindir / "flyctl"
+            docker.write_text("#!/bin/sh\nexit 0\n")
+            flyctl.write_text(
+                "#!/bin/sh\nprintf '%s\\n' \"$*\" > \"$FLYCTL_CALLS\"\n"
+            )
+            docker.chmod(0o755)
+            flyctl.chmod(0o755)
+            env = os.environ | {
+                "PATH": f"{bindir}:{os.environ.get('PATH', '')}",
+                "GITHUB_ACTIONS": "true",
+                "FLY_API_TOKEN": "test-only",
+                "FLYCTL_CALLS": str(calls),
+            }
+            result = subprocess.run(
+                [str(script)], env=env, text=True, capture_output=True
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            command = calls.read_text().strip()
+            self.assertEqual(command, "deploy --local-only --ha=false")
+            self.assertNotIn("--remote-only", command)
+            self.assertNotIn("--depot", command)
+
+    def test_entry_point_refuses_arguments_and_non_ci_callers(self):
+        import os
+        import subprocess
+
+        script = ROOT / "scripts" / "deploy_fly_ci.sh"
+        env = os.environ | {"FLY_API_TOKEN": "test-only"}
+        env.pop("GITHUB_ACTIONS", None)
+        outside_ci = subprocess.run([str(script)], env=env, capture_output=True)
+        self.assertEqual(outside_ci.returncode, 64)
+        env["GITHUB_ACTIONS"] = "true"
+        with_flags = subprocess.run(
+            [str(script), "--remote-only"], env=env, capture_output=True
+        )
+        self.assertEqual(with_flags.returncode, 64)
