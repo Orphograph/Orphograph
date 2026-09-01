@@ -3,5 +3,28 @@
   "hash_hex": "7accf9e90453280e6fb081fd9d83dfb1eeef3bd64e0d680826989ba79bccac88",
   "sha512_hex": "64b4ce79796cc9ffbe8a2dd4e6ec8dbcc8c44a4307830893e620d1a476cc72fda39b543c177003ae796b7544a0a8282a7b75dab95a811f7d9fbe0f0a56cf30f9",
   "sample_file": "/sample/sample.txt",
-  "description": "Real receipt with SHA-256 + SHA-512 sibling witness. SHA-256 is anchored to Bitcoin via OpenTimestamps; SHA-512 is the quantum-hedge sibling \u2014 a collision in either alone is not enough to forge."
+  "description": "Real receipt with SHA-256 + SHA-512 sibling witness. SHA-256 is anchored to Bitcoin via OpenTimestamps; SHA-512 is the quantum-hedge sibling \u2014 a collision in either alone is not enough to forge.",
+  "status": "pinned",
+  "calendars": [
+    {
+      "file": "a.ots",
+      "bitcoin_block": 949117
+    },
+    {
+      "file": "alice.ots",
+      "bitcoin_block": 949117
+    },
+    {
+      "file": "b.ots",
+      "bitcoin_block": 949114
+    },
+    {
+      "file": "btc.ots",
+      "bitcoin_block": 949156
+    },
+    {
+      "file": "finney.ots",
+      "bitcoin_block": 949210
+    }
+  ]
 }

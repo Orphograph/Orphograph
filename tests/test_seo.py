@@ -51,6 +51,7 @@ EXPECTED_URLS = [
     "https://orphograph.com/method/whitepaper",
     "https://orphograph.com/method/why-filenames-are-not-stored",
     "https://orphograph.com/docs",
+    "https://orphograph.com/docs/agents",
     "https://orphograph.com/docs/api",
     "https://orphograph.com/docs/webhooks",
     "https://orphograph.com/docs/cli",

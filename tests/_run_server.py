@@ -28,8 +28,12 @@ def main() -> int:
         if len(hash_bytes) != 32:
             return False, "hash must be exactly 32 bytes (SHA-256)"
         # A well-formed pending timestamp (nonce · sha256 · pending attestation);
-        # engine.anchor_hash rejects anything that is not one.
-        return True, b"\xf0\x10" + b"\x01" * 16 + b"\x08" + b"\x00\x83\xdf\xe3\x0d\x2e\xf9\x0c\x8e" + b"\x02\x01x"
+        # engine.anchor_hash rejects anything that is not one. The tag comes
+        # from ots_timestamp — the single home for OTS byte constants — so a
+        # tag change cannot silently desync this stub from the verifier.
+        import ots_timestamp
+        return True, (b"\xf0\x10" + b"\x01" * 16 + b"\x08"
+                      + b"\x00" + ots_timestamp.PENDING_ATTESTATION_TAG + b"\x02\x01x")
 
     engine._submit = accepted
     import app

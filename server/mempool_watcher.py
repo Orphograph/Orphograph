@@ -69,6 +69,12 @@ def address_balance_sats(address: str) -> tuple[int, int, int]:
         data = _get_json(f"{base}/address/{address}")
         if not data:
             continue
+        # The response names its own subject; a 200 with the right shape for
+        # the WRONG address (cache, proxy, misconfigured base URL) must not be
+        # counted. Contradiction fails; absence of the echo is accepted.
+        subject = data.get("address")
+        if isinstance(subject, str) and subject and subject != address:
+            continue
         try:
             chain = data["chain_stats"]
             mem = data["mempool_stats"]

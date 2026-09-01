@@ -35,7 +35,9 @@ class _FakeResp:
 def _mempool_payload(funded=120_000, spent=20_000, mem_funded=5_000, mem_spent=0,
                      chain_tx=4, mem_tx=1):
     return {
-        "address": "bc1qfake",
+        # No "address" echo by default: the watcher accepts its absence, and
+        # several tests serve one payload for MANY queried addresses. A test
+        # exercising the subject-mismatch guard sets the key explicitly.
         "chain_stats": {
             "funded_txo_sum": funded,
             "spent_txo_sum": spent,
@@ -228,3 +230,29 @@ def test_latest_snapshot_skips_blank_lines():
     )
     latest = mempool_watcher.latest_snapshot()
     assert latest == {"total_sats": 7}
+
+
+def test_address_balance_sats_rejects_a_response_naming_a_different_address(monkeypatch):
+    """Wire lens (the PR #215 class): the response names its own subject, and
+    the parser must check it against the address the REQUEST named. A cache,
+    proxy, or misconfigured ORPHO_MEMPOOL_BASE answering 200 with the right
+    shape for the wrong address must not be counted as this address's balance."""
+    payload = _mempool_payload()
+    payload["address"] = "bc1qfake"       # response names a different subject
+    def fake_urlopen(req, timeout=0):
+        return _FakeResp(json.dumps(payload).encode())
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    assert mempool_watcher.address_balance_sats("bc1qother") == (-1, -1, -1)
+
+
+def test_address_balance_sats_accepts_a_response_without_the_subject_field(monkeypatch):
+    """Negative control for the guard: an explorer variant that omits the
+    `address` echo entirely is still accepted — the guard fires only on a
+    CONTRADICTION, never on absence."""
+    payload = _mempool_payload()
+    assert "address" not in payload
+    def fake_urlopen(req, timeout=0):
+        return _FakeResp(json.dumps(payload).encode())
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    confirmed, _, _ = mempool_watcher.address_balance_sats("bc1qfake")
+    assert confirmed == 100_000

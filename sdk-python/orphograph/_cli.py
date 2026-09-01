@@ -137,7 +137,15 @@ def _load_proof(proof_json: str, root_override: Optional[str]) -> tuple:
     if isinstance(parsed, list):
         proof, embedded_root = parsed, None
     elif isinstance(parsed, dict):
-        proof, embedded_root = parsed.get("proof", []), parsed.get("root_hex")
+        if "proof" not in parsed:
+            # A wrong file (e.g. receipt.json) must be a USAGE error, exit 2.
+            # Defaulting to an empty proof compared the bare leaf to the root
+            # and printed the MISMATCH/tamper verdict (exit 1) for a mixed-up
+            # argument — a usage slip must never read as evidence of tampering.
+            raise ValueError(
+                "proof_json object has no 'proof' key — is this the receipt "
+                "instead of the inclusion-proof JSON written by inclusion-proof?")
+        proof, embedded_root = parsed["proof"], parsed.get("root_hex")
         if isinstance(parsed.get("path"), str):
             embedded_path = parsed["path"]
     else:
