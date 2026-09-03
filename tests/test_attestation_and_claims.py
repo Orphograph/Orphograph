@@ -16,6 +16,8 @@
    The brief's own test for it had never been run.
 """
 
+import atexit
+import shutil
 import subprocess
 import tempfile
 import sys
@@ -40,6 +42,7 @@ def _local_receipts_dir():
     if d.is_dir() and any((p / "receipt.json").is_file() for p in d.iterdir()):
         return d
     synth = Path(tempfile.mkdtemp(prefix="orpho-fixture-receipts-"))
+    atexit.register(shutil.rmtree, synth, ignore_errors=True)
     write_fixture_receipt(synth)
     return synth
 
