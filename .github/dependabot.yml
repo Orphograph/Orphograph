@@ -1,0 +1,12 @@
+# Keeps the SHA-pinned actions/* steps current. Weekly, one grouped PR, so the
+# push-pacing rule holds and each bump arrives with its release notes instead
+# of being discovered from a deprecation warning in a deploy log (PR #224).
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      github-actions:
+        patterns: ["*"]

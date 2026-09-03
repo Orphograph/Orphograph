@@ -29,6 +29,15 @@ notify() {
   fi
 }
 
+# ACP supervisor persistence. launchd refuses to bootstrap com.orphograph.acp
+# on this Mac (IO error 5), so this already-loaded 60s job re-arms keeper_v2
+# when it is absent. The ensure script is idempotent and never spawns a second
+# keeper; it lives outside the repo with the ACP service.
+ENSURE_ACP="$HOME/orphograph-acp/ensure_acp_keeper.sh"
+if [ -x "$ENSURE_ACP" ]; then
+  bash "$ENSURE_ACP" >/dev/null 2>&1 || true
+fi
+
 # State: "ok" or "down:<since-ts>"
 prev_state="$(cat "$STATE_FILE" 2>/dev/null || echo ok)"
 
