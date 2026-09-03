@@ -17,8 +17,8 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.11'
       # Install OPTIONAL deps so test_manifest_signature.py (cryptography) and
@@ -44,7 +44,7 @@ jobs:
     # on demand via the workflow_dispatch trigger above.
     if: ${{ vars.CI_DEPLOY_ENABLED == 'true' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # Pin both the action and flyctl: Fly recommends a fixed CLI version for
       # production, and a moving action branch can change underneath us.
       - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1

@@ -21,7 +21,7 @@ jobs:
     steps:
       # Check the contributor's actual HEAD, not GitHub's synthetic merge
       # commit (which contains master by construction and would pass vacuously).
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
@@ -34,9 +34,9 @@ jobs:
       matrix:
         python-version: ["3.11", "3.12"]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install test deps (cryptography + PyYAML, like deploy.yml)
@@ -70,8 +70,8 @@ jobs:
   sdk-node:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: '22'
       # `npm test` runs `pretest: tsc` FIRST, and that ordering is the point.
@@ -90,9 +90,9 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Use Node 20
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: "20"
       - name: Syntax-check every frontend JS file
