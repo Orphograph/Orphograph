@@ -1,4 +1,5 @@
-"""GitHub Action pins: runtime floor, one major per action, docs parity.
+"""GitHub Action pins: runtime floor, one major per action, docs parity,
+SHA pins tied to the version they claim.
 
 History. PR #224 moved checkout/setup-python/setup-node off the deprecated
 Node 20 runtime; review found the public copy-paste template in
@@ -8,10 +9,15 @@ regex checker; its review found the checker (1) had `upload-artifact` at
 floor 5 when v5 still runs node20, (2) stayed silent on any `actions/*`
 name missing from its table, (3) could not see quoted, SHA, or branch
 pins, (4) counted commented-out and prose mentions as live pins, and
-(5) only read `*.yml`. This version parses the workflow YAML (so comments
-vanish), fails CLOSED on unknown `actions/*` names and on branch refs,
-accepts SHA pins, reads every fenced block in every *.md and every <pre>
-in web/*.html, and proves each of those behaviours with a negative control.
+(5) only read `*.yml`. PR #226 parsed the workflow YAML (comments vanish),
+failed CLOSED on unknown names and branch refs, and scanned every *.md
+fence and web/*.html <pre>. PR #227 SHA-pinned the workflows; its review
+found the first SHA pass (6) dropped any pin whose comment was not exactly
+`# vN.N.N`, (7) trusted the comment as the SHA's version, and (8) left docs
+parity vacuous for SHA-pinned snippets. This version matches the SHA first
+and judges the comment separately, ties every SHA to a checked-in ledger
+(KNOWN_SHAS) so a pasted SHA cannot wear the wrong version, and threads raw
+snippet text through docs parity. Each behaviour has a negative control.
 """
 import html
 import re
@@ -25,6 +31,8 @@ WORKFLOW_DIR = ROOT / ".github" / "workflows"
 WORKFLOWS = sorted(
     p for ext in ("*.yml", "*.yaml") for p in WORKFLOW_DIR.glob(ext)
 )
+WORKFLOW_TEXT = {p: p.read_text() for p in WORKFLOWS}
+WORKFLOW_RAW = "\n".join(WORKFLOW_TEXT.values())
 SKIP_DIRS = {".git", "node_modules", ".venv", "venv", "__pycache__", "dist", "build"}
 
 # First major of each official action whose runtime is node24. Verified from
@@ -36,10 +44,22 @@ NODE24_FLOOR = {
     "actions/upload-artifact": 6,
 }
 
+# SHA → (action, version). The ledger that ties a 40-hex pin to the release
+# it claims. Resolved with `gh api repos/<action>/git/ref/tags/<version>` and
+# confirmed as commit objects. A dependabot bump that changes a SHA fails
+# here until a human adds the new row — that is the review step, on purpose.
+KNOWN_SHAS = {
+    "3d3c42e5aac5ba805825da76410c181273ba90b1": ("actions/checkout", "v7.0.1"),
+    "5fda3b95a4ea91299a34e894583c3862153e4b97": ("actions/setup-python", "v7.0.0"),
+    "820762786026740c76f36085b0efc47a31fe5020": ("actions/setup-node", "v7.0.0"),
+}
+
 USES = re.compile(r"^(?P<action>[^@\s'\"]+)@(?P<ref>[^\s'\"]+)$")
 TAG = re.compile(r"^v(\d+)(?:\.\d+)*$")
 SHA = re.compile(r"^[0-9a-f]{40}$")
-USES_LINE = re.compile(r"""^\s*-?\s*uses:\s*["']?([^\s"'#]+)["']?\s*(?:#.*)?$""")
+# A raw `uses:` line: the value, then whatever trails it (a comment or junk).
+USES_LINE = re.compile(r"""^\s*-?\s*uses:\s*["']?(?P<uses>[^\s"'#]+)["']?\s*(?P<trail>.*)$""")
+VERSION_COMMENT = re.compile(r"^#\s*(?P<version>v\d+(?:\.\d+)*)\s*$")
 
 
 def classify(uses):
@@ -72,17 +92,54 @@ def uses_in_workflow_text(text):
     return out
 
 
-def uses_in_snippet(text):
-    """`uses:` values from a code snippet that may not be a full workflow.
-    Lines whose first non-blank character is `#` are comments, not pins."""
+def raw_uses_lines(text):
+    """[(uses, trail)] from raw lines; whole-line comments are skipped."""
     out = []
     for line in text.splitlines():
         if line.lstrip().startswith("#"):
             continue
         m = USES_LINE.match(line)
         if m:
-            out.append(m.group(1))
+            out.append((m.group("uses"), m.group("trail").strip()))
     return out
+
+
+def uses_in_snippet(text):
+    """`uses:` values from a code snippet that may not be a full workflow."""
+    return [u for u, _trail in raw_uses_lines(text)]
+
+
+def sha_pins_in_text(text):
+    """[(action, sha, version_or_None)] for every SHA-pinned actions/* line.
+    The SHA is matched FIRST; the trailing comment is judged on its own, so a
+    pin with an odd comment is reported as unversioned rather than vanishing."""
+    out = []
+    for uses, trail in raw_uses_lines(text):
+        action, kind, _ = classify(uses)
+        if kind != "sha" or not action.startswith("actions/"):
+            continue
+        cm = VERSION_COMMENT.match(trail)
+        out.append((action, uses.split("@", 1)[1], cm.group("version") if cm else None))
+    return out
+
+
+def unversioned_sha_pins(text):
+    return sorted(f"{a}@{s[:12]}" for a, s, v in sha_pins_in_text(text) if v is None)
+
+
+def ledger_violations(text, ledger=KNOWN_SHAS):
+    """A SHA must be in the ledger, for the same action, with the comment
+    naming the ledger's version. Anything else is a violation."""
+    out = []
+    for action, sha, version in sha_pins_in_text(text):
+        row = ledger.get(sha)
+        if row is None:
+            out.append(f"{action}@{sha[:12]}: SHA not in KNOWN_SHAS")
+        elif row[0] != action:
+            out.append(f"{action}@{sha[:12]}: SHA belongs to {row[0]}")
+        elif version != row[1]:
+            out.append(f"{action}@{sha[:12]}: comment says {version}, ledger says {row[1]}")
+    return sorted(out)
 
 
 def fenced_blocks(markdown):
@@ -112,78 +169,97 @@ def violations(uses_list, floor=NODE24_FLOOR):
     return sorted(out)
 
 
-def majors_by_action(uses_list):
+def majors_by_action(uses_list, raw_text):
+    """Tag pins contribute their major; SHA pins contribute the major from
+    their version comment. raw_text is required so a caller cannot silently
+    drop the SHA half."""
     out = {}
     for u in uses_list:
         action, kind, major = classify(u)
         if action.startswith("actions/") and kind == "tag":
             out.setdefault(action, set()).add(major)
+    for action, _sha, version in sha_pins_in_text(raw_text):
+        if version is not None:
+            out.setdefault(action, set()).add(int(TAG.match(version).group(1)))
     return out
 
 
-def doc_pins():
-    """{path: [uses...]} for every fenced/<pre> block in docs and web pages."""
+def doc_snippets():
+    """{path: snippet_text} — every fenced/<pre> block that carries a `uses:`."""
     found = {}
     md = [p for p in ROOT.rglob("*.md") if not (set(p.parts) & SKIP_DIRS)]
     for p in md:
-        us = [u for b in fenced_blocks(p.read_text(errors="replace")) for u in uses_in_snippet(b)]
-        if us:
-            found[p] = us
+        blocks = [b for b in fenced_blocks(p.read_text(errors="replace")) if uses_in_snippet(b)]
+        if blocks:
+            found[p] = "\n".join(blocks)
     for p in (ROOT / "web").glob("*.html"):
-        us = [u for b in pre_blocks(p.read_text(errors="replace")) for u in uses_in_snippet(b)]
-        if us:
-            found[p] = us
+        blocks = [b for b in pre_blocks(p.read_text(errors="replace")) if uses_in_snippet(b)]
+        if blocks:
+            found[p] = "\n".join(blocks)
     return found
 
 
-class Workflows(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.uses = [u for p in WORKFLOWS for u in uses_in_workflow_text(p.read_text())]
+WORKFLOW_USES = [u for t in WORKFLOW_TEXT.values() for u in uses_in_workflow_text(t)]
+WORKFLOW_MAJORS = majors_by_action(WORKFLOW_USES, WORKFLOW_RAW)
 
+
+class Workflows(unittest.TestCase):
     def test_there_are_pins_to_check(self):
         # Floor: an empty extraction would pass every other test vacuously.
         self.assertGreaterEqual(len(WORKFLOWS), 3)
-        actions = {classify(u)[0] for u in self.uses}
+        actions = {classify(u)[0] for u in WORKFLOW_USES}
         self.assertIn("actions/checkout", actions)
         self.assertIn("actions/setup-python", actions)
+        self.assertTrue(sha_pins_in_text(WORKFLOW_RAW), "no SHA pins found to check")
 
     def test_pins_are_sha_or_known_tag_at_node24_floor(self):
-        self.assertEqual(violations(self.uses), [])
+        self.assertEqual(violations(WORKFLOW_USES), [])
+
+    def test_every_sha_pin_names_its_version(self):
+        self.assertEqual(unversioned_sha_pins(WORKFLOW_RAW), [])
+
+    def test_every_sha_pin_matches_the_ledger(self):
+        self.assertEqual(ledger_violations(WORKFLOW_RAW), [])
+
+    def test_ledger_versions_meet_floor(self):
+        # A SHA whose ledger row says v4 is a Node 20 pin wearing a disguise.
+        self.assertEqual(violations([f"{a}@{v}" for a, v in KNOWN_SHAS.values()]), [])
 
     def test_one_major_per_action(self):
-        split = {a: sorted(m) for a, m in majors_by_action(self.uses).items() if len(m) > 1}
+        split = {a: sorted(m) for a, m in WORKFLOW_MAJORS.items() if len(m) > 1}
         self.assertEqual(split, {}, "same action pinned at different majors")
 
 
 class DocsTemplates(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.docs = doc_pins()
-        cls.workflow_majors = majors_by_action(
-            [u for p in WORKFLOWS for u in uses_in_workflow_text(p.read_text())]
-        )
+        cls.docs = doc_snippets()
 
     def test_the_known_template_is_scanned(self):
         readme = ROOT / "integrations" / "github-action" / "README.md"
         self.assertIn(readme, self.docs, "README template not found by the scan")
-        self.assertIn("actions/checkout", {classify(u)[0] for u in self.docs[readme]})
+        self.assertIn("actions/checkout", {classify(u)[0] for u in uses_in_snippet(self.docs[readme])})
 
     def test_every_doc_snippet_meets_floor_and_matches_workflows(self):
-        for path, us in self.docs.items():
+        for path, text in self.docs.items():
             rel = path.relative_to(ROOT)
+            us = uses_in_snippet(text)
             self.assertEqual(violations(us), [], f"{rel}")
-            for action, majors in majors_by_action(us).items():
-                if action in self.workflow_majors:
+            self.assertEqual(unversioned_sha_pins(text), [], f"{rel}")
+            self.assertEqual(ledger_violations(text), [], f"{rel}")
+            for action, majors in majors_by_action(us, text).items():
+                if action in WORKFLOW_MAJORS:
                     self.assertEqual(
-                        majors, self.workflow_majors[action],
+                        majors, WORKFLOW_MAJORS[action],
                         f"{rel} pins {action} at {sorted(majors)}, "
-                        f"workflows use {sorted(self.workflow_majors[action])}",
+                        f"workflows use {sorted(WORKFLOW_MAJORS[action])}",
                     )
 
 
 class NegativeControls(unittest.TestCase):
-    """Each control is a way the previous checker stayed silent."""
+    """Each control is a way a previous checker stayed silent."""
+
+    SHA_OK = "3d3c42e5aac5ba805825da76410c181273ba90b1"  # checkout v7.0.1
 
     def test_pre_fix_readme_is_caught(self):
         stale = "- uses: actions/checkout@v4\n  uses: actions/upload-artifact@v4\n"
@@ -199,9 +275,6 @@ class NegativeControls(unittest.TestCase):
     def test_branch_ref_fails(self):
         self.assertEqual(len(violations(["actions/checkout@main"])), 1)
 
-    def test_sha_pin_is_accepted(self):
-        self.assertEqual(violations(["actions/checkout@" + "a" * 40]), [])
-
     def test_quoted_pin_is_seen(self):
         for q in ('uses: "actions/checkout@v4"', "uses: 'actions/checkout@v4'"):
             self.assertEqual(len(violations(uses_in_snippet(q))), 1, q)
@@ -211,6 +284,31 @@ class NegativeControls(unittest.TestCase):
         self.assertEqual(uses_in_snippet("Previously `uses: actions/checkout@v4` was used.\n"), [])
         wf = "jobs:\n  a:\n    runs-on: x\n    steps:\n      # - uses: actions/checkout@v4\n      - uses: actions/checkout@v7\n"
         self.assertEqual(uses_in_workflow_text(wf), ["actions/checkout@v7"])
+
+    def test_sha_pin_with_odd_or_missing_comment_is_unversioned_not_invisible(self):
+        for trail in ("", " # 7.0.1", " # v7.0.1 pinned", " # V7.0.1", " # v7.0.1 # extra"):
+            line = f"- uses: actions/checkout@{self.SHA_OK}{trail}\n"
+            self.assertEqual(len(sha_pins_in_text(line)), 1, repr(trail))
+            self.assertEqual(unversioned_sha_pins(line), [f"actions/checkout@{self.SHA_OK[:12]}"], repr(trail))
+        good = f"- uses: actions/checkout@{self.SHA_OK} # v7.0.1\n"
+        self.assertEqual(unversioned_sha_pins(good), [])
+        self.assertEqual(majors_by_action([], good), {"actions/checkout": {7}})
+
+    def test_sha_not_in_ledger_is_caught(self):
+        self.assertEqual(len(ledger_violations(f"- uses: actions/checkout@{'b' * 40} # v7.0.1\n")), 1)
+
+    def test_ledger_sha_with_wrong_comment_or_wrong_action_is_caught(self):
+        self.assertEqual(len(ledger_violations(f"- uses: actions/checkout@{self.SHA_OK} # v4.2.2\n")), 1)
+        self.assertEqual(len(ledger_violations(f"- uses: actions/setup-node@{self.SHA_OK} # v7.0.1\n")), 1)
+        self.assertEqual(ledger_violations(f"- uses: actions/checkout@{self.SHA_OK} # v7.0.1\n"), [])
+
+    def test_sha_pinned_doc_snippet_is_not_vacuous(self):
+        snippet = f"- uses: actions/checkout@{self.SHA_OK} # v4.2.2\n"
+        self.assertEqual(majors_by_action(uses_in_snippet(snippet), snippet), {"actions/checkout": {4}})
+        self.assertEqual(len(ledger_violations(snippet)), 1)
+
+    def test_sha_pin_is_accepted_by_floor(self):
+        self.assertEqual(violations([f"actions/checkout@{self.SHA_OK}"]), [])
 
     def test_non_github_actions_are_not_floor_checked(self):
         self.assertEqual(violations(["superfly/flyctl-actions/setup-flyctl@master",
