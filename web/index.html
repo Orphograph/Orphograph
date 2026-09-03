@@ -17,7 +17,7 @@
 <link rel="preload" as="font" type="font/woff2" href="/fonts/Spectral-400.woff2" crossorigin>
 <link rel="stylesheet" href="/css/orpho-tokens.css?v=2">
 <link rel="stylesheet" href="/css/orpho-primitives.css?v=3">
-<link rel="stylesheet" href="/css/orpho-home.css?v=14">
+<link rel="stylesheet" href="/css/orpho-home.css?v=15">
 <link rel="stylesheet" href="/index.css?v=21">
 <link rel="preload" as="image" href="/seal-display.png?v=8" fetchpriority="high">
 <meta name="copyright" content="© 2026 Orphograph. MIT — see /LICENSE">
@@ -93,6 +93,8 @@
     <a href="/writers">Whom it serves</a>
     <a href="/pricing">Pricing</a>
     <a href="/about-the-office">Office</a>
+    <a href="/docs/agents" class="nav-agents">Agents</a>
+    <a href="/lp/" class="nav-guides">Guides</a>
     <a href="/verify/" class="nav-verify">Verify</a>
     <a href="/access" class="nav-signin">Sign in</a>
     <a href="/status" id="live-status-badge" class="live-status-badge" data-state="checking" aria-label="Live service status"><span class="dot" aria-hidden="true"></span><span class="label">status</span></a>
@@ -177,6 +179,40 @@
 </section>
 
 <!-- ─────────────────────── 2b · FEATURE STRIP ─────────────────────── -->
+<!-- ─────────────────────── 2b · THREE DOORS + THE COUNTER ───────────────────────
+     Three entries above the fold: a file, an agent, an acceptor. The strip
+     above them is filled by v2.js from /api/stats (ids c-anchors / c-blocks);
+     without JavaScript it stays hidden — no count is ever typed by hand. -->
+<section class="orpho-doors-wrap" id="doors" aria-labelledby="orpho-doors-title">
+  <p class="orpho-stats" id="home-stats" aria-live="polite">
+    <span class="orpho-stats__item"><strong id="c-anchors">—</strong> receipts issued</span>
+    <span class="orpho-stats__sep" aria-hidden="true">·</span>
+    <span class="orpho-stats__item"><strong id="c-blocks">—</strong> Bitcoin blocks carry them</span>
+    <span class="orpho-stats__sep" aria-hidden="true">·</span>
+    <a class="orpho-stats__link" href="/stats">the public ledger &rarr;</a>
+  </p>
+  <h2 class="orpho-doors__title" id="orpho-doors-title">Which door?</h2>
+  <ul class="orpho-doors">
+    <li class="orpho-door">
+      <h3 class="orpho-door__title">I have a file.</h3>
+      <p class="orpho-door__body">Drop it below. It is hashed on your device; only the fingerprint travels. A receipt comes back with the time it existed, anchored in Bitcoin.</p>
+      <a class="orpho-btn orpho-btn--primary orpho-door__cta" href="#drop">Anchor a file</a>
+    </li>
+    <li class="orpho-door">
+      <h3 class="orpho-door__title">I run agents.</h3>
+      <p class="orpho-door__body">Logs can be edited after the fact. A receipt cannot. Give each piece of agent output a dated, independently checkable record before it is handed over.</p>
+      <a class="orpho-btn orpho-btn--secondary orpho-door__cta" href="/mcp">Install the MCP server</a>
+      <p class="orpho-door__links"><a href="/anchor-output">Anchor output by API</a> &middot; <a href="/lp/agent-receipts">How operators use it</a></p>
+    </li>
+    <li class="orpho-door">
+      <h3 class="orpho-door__title">I accept agent work.</h3>
+      <p class="orpho-door__body">Ask for the receipt with the deliverable. Verify it yourself, offline, with open-source tools — no account with us, no trust in us.</p>
+      <a class="orpho-btn orpho-btn--secondary orpho-door__cta" href="/accept">What to ask for</a>
+      <p class="orpho-door__links"><a href="/verify/">Verify a receipt</a> &middot; <a href="/learn">Why it matters</a></p>
+    </li>
+  </ul>
+</section>
+
 <section class="orpho-card orpho-features-wrap">
   <ul class="orpho-features">
     <li class="orpho-feature">
@@ -273,6 +309,21 @@
 </section>
 
 <!-- ─────────────────────── 4 · THREE TRUST STATEMENTS ─────────────────────── -->
+<!-- ─────────────────────── 3b · PICK YOUR SITUATION ───────────────────────
+     Routes intent traffic into the guides that already exist under /lp/. -->
+<section class="orpho-situations-wrap" aria-labelledby="orpho-situations-title">
+  <h2 class="orpho-situations__title" id="orpho-situations-title">Pick your situation</h2>
+  <ul class="orpho-situations">
+    <li><a href="/lp/agent-receipts">An AI agent's actions need an audit trail</a></li>
+    <li><a href="/lp/manuscript-priority-date">A manuscript needs a priority date</a></li>
+    <li><a href="/lp/eu-ai-act-training-data">EU AI Act training-data documentation</a></li>
+    <li><a href="/lp/bitcoin-timestamp-file">A file needs a Bitcoin timestamp, explained</a></li>
+    <li><a href="/lp/c2pa-alternative">An open alternative to vendor-signed Content Credentials</a></li>
+    <li><a href="/lp/ai-image-detector-vs-provenance">Detection versus provenance for images</a></li>
+  </ul>
+  <p class="orpho-situations__more"><a href="/lp/">All guides &rarr;</a></p>
+</section>
+
 <section class="trust-statements">
   <div class="wrap">
     <div class="trust-cols">

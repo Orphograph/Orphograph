@@ -426,6 +426,17 @@ async function main() {
 
 // Initialises the "Share this proof" block on the receipt page:
 // copy-link, native share (mobile), embeddable SVG badge with preview.
+// A link ending in #share opens the embed drawer and brings the share block
+// into view, so a "share this proof" CTA elsewhere lands on the controls.
+function openShareFromHash() {
+  if (window.location.hash !== "#share") return;
+  const block = document.querySelector(".share-block");
+  const details = document.querySelector(".share-block .embed-details");
+  if (details) details.open = true;
+  if (block && block.scrollIntoView) block.scrollIntoView({ block: "start" });
+}
+window.addEventListener("hashchange", openShareFromHash);
+document.addEventListener("DOMContentLoaded", openShareFromHash);
 // All actions are origin-local — no third-party network calls.
 function initShareBlock(rec) {
   const rid = rec.receipt_id;
