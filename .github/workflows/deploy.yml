@@ -13,11 +13,19 @@ concurrency:
   group: deploy
   cancel-in-progress: false
 
+# Nothing here pushes with GITHUB_TOKEN: the deploy uses FLY_API_TOKEN and
+# builds --local-only from the workspace. Keep the token read-only and off
+# the runner so an unpinned pip dependency or action cannot reach master.
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@v7
         with:
           python-version: '3.11'
@@ -45,6 +53,8 @@ jobs:
     if: ${{ vars.CI_DEPLOY_ENABLED == 'true' }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       # Pin both the action and flyctl: Fly recommends a fixed CLI version for
       # production, and a moving action branch can change underneath us.
       - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
