@@ -55,7 +55,7 @@ jobs:
           cache-dependency-path: zk-provenance/snark/package-lock.json
       - name: Install snarkjs for the pairing-check tests (pinned by lockfile)
         # tests/test_snark_*.py exercise `snarkjs groth16 verify`. Without it
-        # they skipped, and tests/conftest.py now fails the session on any
+        # they skipped, and the repo-root conftest.py now fails the session on any
         # unbudgeted skip, so CI must carry the tool.
         run: |
           npm ci --prefix zk-provenance/snark --no-audit --no-fund

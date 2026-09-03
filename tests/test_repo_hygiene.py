@@ -78,10 +78,11 @@ def _all_test_files() -> list[Path]:
     `outreach/test_discovery_log.py` (gitignored) still killed collection.
     """
     out = []
-    # pytest's default `python_files` is `test_*.py` AND `*_test.py`, and this
-    # repo has no pytest.ini/pyproject section narrowing it -- so globbing only
-    # the first pattern would let a `foo_test.py` collision through, which is
-    # the same defect wearing a different filename.
+    # pytest's default `python_files` is `test_*.py` AND `*_test.py`. The
+    # repo's pytest.ini deliberately sets no options (it exists only to pin
+    # rootdir for the root conftest), so the default applies; if `python_files`
+    # is ever set there, mirror it here. Globbing only the first pattern would
+    # let a `foo_test.py` collision through -- the same defect, different name.
     for pattern in ("test_*.py", "*_test.py"):
         for path in ROOT.rglob(pattern):
             if any(part in _SKIP_DIRS for part in path.parts):
