@@ -19,6 +19,8 @@ from pathlib import Path
 
 import pytest
 
+from conftest import write_fixture_receipt
+
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "dispute_bundle.py"
 
@@ -27,18 +29,20 @@ dispute_bundle = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(dispute_bundle)
 
 
-# SHA-256 of the literal bytes b"test" — the fixture receipt anchors this.
+# SHA-256 of the literal bytes b"test" — the fixture receipt anchors this
+# (conftest.FIXTURE_HASH_HEX).
 KNOWN_HASH = "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
 
 
 @pytest.fixture(scope="module")
 def built_bundle(tmp_path_factory):
     """Build a real bundle from a real receipt, then extract it."""
-    receipt_dir = ROOT / "data" / "receipts" / "J7uAbxdxcmwXx88m"
-    if not (receipt_dir / "receipt.json").is_file():
-        pytest.skip("no local fixture receipt in this checkout")
-
     work = tmp_path_factory.mktemp("bundle")
+    # A synthetic receipt laid out exactly as engine.anchor_hash writes one
+    # (conftest.write_fixture_receipt). The production fixture this test
+    # used to want is gone, and a test that skips when its input is missing
+    # is a test that never runs.
+    receipt_dir = write_fixture_receipt(work / "receipts")
     src = work / "evidence.txt"
     src.write_bytes(b"test")
     out = work / "b.tar.gz"
@@ -164,3 +168,17 @@ def test_missing_created_at_does_not_crash_the_sheet():
     out = dispute_bundle.summary_text("en", "f.txt", {"hash_hex": "cd" * 32}, 1)
     assert "f.txt" in out
     assert "{" not in out
+
+
+def test_bundle_warns_when_file_does_not_match_receipt(tmp_path):
+    """Negative control for the fixture path: the bundle builder must say
+    'does NOT match' when the evidence file's hash is not the receipt's."""
+    receipt_dir = write_fixture_receipt(tmp_path / "receipts", hash_hex="ab" * 32)
+    src = tmp_path / "evidence.txt"
+    src.write_bytes(b"test")
+    out = tmp_path / "b.tar.gz"
+    proc = subprocess.run(
+        [sys.executable, str(SCRIPT), str(src), str(receipt_dir), "-o", str(out)],
+        capture_output=True, text=True, timeout=120,
+    )
+    assert "does NOT match" in proc.stdout, proc.stdout + proc.stderr
