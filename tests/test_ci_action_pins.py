@@ -1,88 +1,220 @@
-"""GitHub Action pin parity and runtime floor.
+"""GitHub Action pins: runtime floor, one major per action, docs parity.
 
-PR #224 moved checkout/setup-python/setup-node off the deprecated Node 20
-runtime, and review found the public copy-paste template in
+History. PR #224 moved checkout/setup-python/setup-node off the deprecated
+Node 20 runtime; review found the public copy-paste template in
 integrations/github-action/README.md still shipped `checkout@v4` and
-`upload-artifact@v4`: the repo's own CI was green while the documented
-integration would print the exact warning the PR removed. Nothing read the
-README's code fences. This test does, and it also refuses any `actions/*`
-major below the Node 24 line so the next runtime deprecation is caught here
-rather than by reading a run warning.
+`upload-artifact@v4`, and nothing read README code fences. PR #225 added a
+regex checker; its review found the checker (1) had `upload-artifact` at
+floor 5 when v5 still runs node20, (2) stayed silent on any `actions/*`
+name missing from its table, (3) could not see quoted, SHA, or branch
+pins, (4) counted commented-out and prose mentions as live pins, and
+(5) only read `*.yml`. This version parses the workflow YAML (so comments
+vanish), fails CLOSED on unknown `actions/*` names and on branch refs,
+accepts SHA pins, reads every fenced block in every *.md and every <pre>
+in web/*.html, and proves each of those behaviours with a negative control.
 """
+import html
 import re
 import unittest
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
-WORKFLOWS = sorted((ROOT / ".github" / "workflows").glob("*.yml"))
-TEMPLATE_DOCS = [ROOT / "integrations" / "github-action" / "README.md"]
+import yaml
 
-# First major of each official action that runs on the Node 24 runtime.
+ROOT = Path(__file__).resolve().parent.parent
+WORKFLOW_DIR = ROOT / ".github" / "workflows"
+WORKFLOWS = sorted(
+    p for ext in ("*.yml", "*.yaml") for p in WORKFLOW_DIR.glob(ext)
+)
+SKIP_DIRS = {".git", "node_modules", ".venv", "venv", "__pycache__", "dist", "build"}
+
+# First major of each official action whose runtime is node24. Verified from
+# each tag's action.yml `using:` line (upload-artifact v5 is still node20).
 NODE24_FLOOR = {
     "actions/checkout": 5,
     "actions/setup-python": 6,
     "actions/setup-node": 5,
-    "actions/upload-artifact": 5,
+    "actions/upload-artifact": 6,
 }
 
-PIN = re.compile(r"uses:\s*(actions/[a-z0-9-]+)@v(\d+)\b")
+USES = re.compile(r"^(?P<action>[^@\s'\"]+)@(?P<ref>[^\s'\"]+)$")
+TAG = re.compile(r"^v(\d+)(?:\.\d+)*$")
+SHA = re.compile(r"^[0-9a-f]{40}$")
+USES_LINE = re.compile(r"""^\s*-?\s*uses:\s*["']?([^\s"'#]+)["']?\s*(?:#.*)?$""")
 
 
-def pins_in(text):
-    """{action: set(majors)} for every `uses: actions/<name>@vN` in text."""
+def classify(uses):
+    """'owner/name@ref' -> (action, kind, major). kind: tag | sha | other."""
+    m = USES.match(uses.strip())
+    if not m:
+        return uses, "other", None
+    action, ref = m.group("action"), m.group("ref")
+    t = TAG.match(ref)
+    if t:
+        return action, "tag", int(t.group(1))
+    if SHA.match(ref):
+        return action, "sha", None
+    return action, "other", None
+
+
+def uses_in_workflow_text(text):
+    """Every `uses:` value in a workflow document, via the YAML parser so
+    comments and prose never count."""
+    doc = yaml.safe_load(text) or {}
+    out = []
+    for job in (doc.get("jobs") or {}).values():
+        if not isinstance(job, dict):
+            continue
+        if job.get("uses"):
+            out.append(str(job["uses"]))
+        for step in job.get("steps") or []:
+            if isinstance(step, dict) and step.get("uses"):
+                out.append(str(step["uses"]))
+    return out
+
+
+def uses_in_snippet(text):
+    """`uses:` values from a code snippet that may not be a full workflow.
+    Lines whose first non-blank character is `#` are comments, not pins."""
+    out = []
+    for line in text.splitlines():
+        if line.lstrip().startswith("#"):
+            continue
+        m = USES_LINE.match(line)
+        if m:
+            out.append(m.group(1))
+    return out
+
+
+def fenced_blocks(markdown):
+    return re.findall(r"```[^\n]*\n(.*?)```", markdown, re.S)
+
+
+def pre_blocks(html_text):
+    return [html.unescape(b) for b in re.findall(r"<pre[^>]*>(.*?)</pre>", html_text, re.S)]
+
+
+def violations(uses_list, floor=NODE24_FLOOR):
+    """Fail closed: every actions/* pin must be a SHA or a tag at/above a
+    KNOWN floor. Unknown actions/* names and branch refs are violations."""
+    out = []
+    for u in uses_list:
+        action, kind, major = classify(u)
+        if not action.startswith("actions/"):
+            continue
+        if kind == "sha":
+            continue
+        if kind == "other":
+            out.append(f"{u}: branch/unknown ref (pin a tag or SHA)")
+        elif action not in floor:
+            out.append(f"{u}: no NODE24_FLOOR entry (add one; unknown = fail)")
+        elif major < floor[action]:
+            out.append(f"{u}: below node24 floor v{floor[action]}")
+    return sorted(out)
+
+
+def majors_by_action(uses_list):
+    out = {}
+    for u in uses_list:
+        action, kind, major = classify(u)
+        if action.startswith("actions/") and kind == "tag":
+            out.setdefault(action, set()).add(major)
+    return out
+
+
+def doc_pins():
+    """{path: [uses...]} for every fenced/<pre> block in docs and web pages."""
     found = {}
-    for action, major in PIN.findall(text):
-        found.setdefault(action, set()).add(int(major))
+    md = [p for p in ROOT.rglob("*.md") if not (set(p.parts) & SKIP_DIRS)]
+    for p in md:
+        us = [u for b in fenced_blocks(p.read_text(errors="replace")) for u in uses_in_snippet(b)]
+        if us:
+            found[p] = us
+    for p in (ROOT / "web").glob("*.html"):
+        us = [u for b in pre_blocks(p.read_text(errors="replace")) for u in uses_in_snippet(b)]
+        if us:
+            found[p] = us
     return found
 
 
-def below_floor(pins, floor=NODE24_FLOOR):
-    return sorted(
-        f"{action}@v{major}"
-        for action, majors in pins.items()
-        for major in majors
-        if action in floor and major < floor[action]
-    )
+class Workflows(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.uses = [u for p in WORKFLOWS for u in uses_in_workflow_text(p.read_text())]
 
+    def test_there_are_pins_to_check(self):
+        # Floor: an empty extraction would pass every other test vacuously.
+        self.assertGreaterEqual(len(WORKFLOWS), 3)
+        actions = {classify(u)[0] for u in self.uses}
+        self.assertIn("actions/checkout", actions)
+        self.assertIn("actions/setup-python", actions)
 
-class CiActionPins(unittest.TestCase):
-    def test_workflows_have_pins_to_check(self):
-        # Floor: a regex that matches nothing would pass every test below.
-        pins = pins_in("\n".join(p.read_text() for p in WORKFLOWS))
-        self.assertIn("actions/checkout", pins)
-        self.assertIn("actions/setup-python", pins)
+    def test_pins_are_sha_or_known_tag_at_node24_floor(self):
+        self.assertEqual(violations(self.uses), [])
 
-    def test_workflow_pins_meet_node24_floor(self):
-        pins = pins_in("\n".join(p.read_text() for p in WORKFLOWS))
-        self.assertEqual(below_floor(pins), [])
-
-    def test_workflows_agree_on_one_major_per_action(self):
-        pins = pins_in("\n".join(p.read_text() for p in WORKFLOWS))
-        split = {a: sorted(m) for a, m in pins.items() if len(m) > 1}
+    def test_one_major_per_action(self):
+        split = {a: sorted(m) for a, m in majors_by_action(self.uses).items() if len(m) > 1}
         self.assertEqual(split, {}, "same action pinned at different majors")
 
-    def test_public_template_matches_workflow_majors(self):
-        workflow = pins_in("\n".join(p.read_text() for p in WORKFLOWS))
-        for doc in TEMPLATE_DOCS:
-            doc_pins = pins_in(doc.read_text())
-            self.assertTrue(doc_pins, f"{doc} has no action pins to check")
-            self.assertEqual(below_floor(doc_pins), [], f"{doc}")
-            for action, majors in doc_pins.items():
-                if action in workflow:
+
+class DocsTemplates(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.docs = doc_pins()
+        cls.workflow_majors = majors_by_action(
+            [u for p in WORKFLOWS for u in uses_in_workflow_text(p.read_text())]
+        )
+
+    def test_the_known_template_is_scanned(self):
+        readme = ROOT / "integrations" / "github-action" / "README.md"
+        self.assertIn(readme, self.docs, "README template not found by the scan")
+        self.assertIn("actions/checkout", {classify(u)[0] for u in self.docs[readme]})
+
+    def test_every_doc_snippet_meets_floor_and_matches_workflows(self):
+        for path, us in self.docs.items():
+            rel = path.relative_to(ROOT)
+            self.assertEqual(violations(us), [], f"{rel}")
+            for action, majors in majors_by_action(us).items():
+                if action in self.workflow_majors:
                     self.assertEqual(
-                        majors, workflow[action],
-                        f"{doc.relative_to(ROOT)} pins {action} at {sorted(majors)}, "
-                        f"workflows use {sorted(workflow[action])}",
+                        majors, self.workflow_majors[action],
+                        f"{rel} pins {action} at {sorted(majors)}, "
+                        f"workflows use {sorted(self.workflow_majors[action])}",
                     )
 
-    def test_negative_control_stale_pin_is_caught(self):
-        # Prove the checker can fail: the exact README state before this fix.
+
+class NegativeControls(unittest.TestCase):
+    """Each control is a way the previous checker stayed silent."""
+
+    def test_pre_fix_readme_is_caught(self):
         stale = "- uses: actions/checkout@v4\n  uses: actions/upload-artifact@v4\n"
-        self.assertEqual(
-            below_floor(pins_in(stale)),
-            ["actions/checkout@v4", "actions/upload-artifact@v4"],
-        )
-        self.assertEqual(below_floor(pins_in("uses: actions/checkout@v7")), [])
+        self.assertEqual(len(violations(uses_in_snippet(stale))), 2)
+
+    def test_upload_artifact_v5_is_still_node20(self):
+        self.assertEqual(len(violations(["actions/upload-artifact@v5"])), 1)
+        self.assertEqual(violations(["actions/upload-artifact@v6"]), [])
+
+    def test_unknown_actions_name_fails_closed(self):
+        self.assertEqual(len(violations(["actions/cache@v3", "actions/download-artifact@v9"])), 2)
+
+    def test_branch_ref_fails(self):
+        self.assertEqual(len(violations(["actions/checkout@main"])), 1)
+
+    def test_sha_pin_is_accepted(self):
+        self.assertEqual(violations(["actions/checkout@" + "a" * 40]), [])
+
+    def test_quoted_pin_is_seen(self):
+        for q in ('uses: "actions/checkout@v4"', "uses: 'actions/checkout@v4'"):
+            self.assertEqual(len(violations(uses_in_snippet(q))), 1, q)
+
+    def test_comments_and_prose_do_not_count(self):
+        self.assertEqual(uses_in_snippet("# - uses: actions/checkout@v4\n"), [])
+        self.assertEqual(uses_in_snippet("Previously `uses: actions/checkout@v4` was used.\n"), [])
+        wf = "jobs:\n  a:\n    runs-on: x\n    steps:\n      # - uses: actions/checkout@v4\n      - uses: actions/checkout@v7\n"
+        self.assertEqual(uses_in_workflow_text(wf), ["actions/checkout@v7"])
+
+    def test_non_github_actions_are_not_floor_checked(self):
+        self.assertEqual(violations(["superfly/flyctl-actions/setup-flyctl@master",
+                                     "Orphograph/Orphograph/.github/actions/anchor@master"]), [])
 
 
 if __name__ == "__main__":

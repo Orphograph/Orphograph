@@ -566,7 +566,10 @@ if __name__ == "__main__":
 # The class this closes: capture/, tools/test_gate_read.py, zk-provenance/ and
 # marketplace/…/test_anchor.py existed for months and were run by NO workflow.
 # ---------------------------------------------------------------------------
-_WORKFLOWS = sorted((ROOT / ".github" / "workflows").glob("*.yml"))
+_WORKFLOWS = sorted(
+    p for ext in ("*.yml", "*.yaml")
+    for p in (ROOT / ".github" / "workflows").glob(ext)
+)
 
 
 def _ci_pytest_paths() -> list[Path]:

@@ -29,6 +29,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
+          persist-credentials: false
       - name: Require the current origin/master in the feature branch
         run: python3 tools/check_branch_freshness.py --base origin/master
 
@@ -39,6 +40,8 @@ jobs:
         python-version: ["3.11", "3.12"]
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - name: Set up Python
         uses: actions/setup-python@v7
         with:
@@ -75,14 +78,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v7
         with:
           node-version: '22'
-          # setup-node v5+ auto-caches when a ROOT package.json declares
-          # `packageManager`. There is none, and the only lockfile is
-          # sdk-node/package-lock.json, so a root package.json would make this
-          # job fail with "lock file is not found". Pin the behaviour off.
-          package-manager-cache: false
+          # The only lockfile is sdk-node/package-lock.json, not the root, so
+          # name it explicitly. (setup-node's auto-cache keys off a ROOT
+          # package.json `packageManager` field and would fail on this layout.)
+          cache: npm
+          cache-dependency-path: sdk-node/package-lock.json
       # `npm test` runs `pretest: tsc` FIRST, and that ordering is the point.
       # test/client.test.ts deliberately imports from dist/ so the tests
       # exercise what a consumer of the published package gets. The hazard is
@@ -100,6 +105,8 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - name: Set up Node
         uses: actions/setup-node@v7
         with:
