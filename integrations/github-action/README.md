@@ -17,7 +17,7 @@ jobs:
   build-and-anchor:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: make dist          # produce your artifacts in dist/
 
       - name: Anchor artifacts on Bitcoin
@@ -27,7 +27,7 @@ jobs:
           api_key: ${{ secrets.ORPHO_API_KEY }}
 
       - name: Upload receipts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: orphograph-receipts
           path: orphograph-receipts.json
