@@ -16,11 +16,16 @@
    The brief's own test for it had never been run.
 """
 
+import atexit
+import shutil
 import subprocess
+import tempfile
 import sys
 from pathlib import Path
 
 import pytest
+
+from conftest import write_fixture_receipt
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -29,23 +34,37 @@ WEB = ROOT / "web"
 
 
 # ───────────────────── 1. attestation reporting ─────────────────────
-def _receipt_ids():
+def _local_receipts_dir():
+    """Real local receipts when the checkout has them (backdata), otherwise a
+    synthetic receipt built by conftest.write_fixture_receipt — never an empty
+    parameter set, which pytest reports as a skip and CI reads as green."""
     d = ROOT / "data" / "receipts"
-    if not d.is_dir():
-        return []
-    return [p.name for p in d.iterdir() if (p / "receipt.json").is_file()][:5]
+    if d.is_dir() and any((p / "receipt.json").is_file() for p in d.iterdir()):
+        return d
+    synth = Path(tempfile.mkdtemp(prefix="orpho-fixture-receipts-"))
+    atexit.register(shutil.rmtree, synth, ignore_errors=True)
+    write_fixture_receipt(synth)
+    return synth
+
+
+RECEIPTS_DIR = _local_receipts_dir()
+
+
+def _receipt_ids():
+    return [p.name for p in RECEIPTS_DIR.iterdir() if (p / "receipt.json").is_file()][:5]
 
 
 @pytest.mark.parametrize("rid", _receipt_ids())
 def test_verify_receipt_reports_bitcoin_attestation(rid, monkeypatch):
     from server import engine
-    # Pin RECEIPTS_DIR explicitly. These ids are resolved at collection time
-    # against the repo, but other tests in the suite repoint the module global,
-    # so without this the result depends on execution order — it passed alone
-    # and failed in the full run.
-    monkeypatch.setattr(engine, "RECEIPTS_DIR", ROOT / "data" / "receipts")
+    # Pin RECEIPTS_DIR explicitly. These ids are resolved at collection time,
+    # but other tests in the suite repoint the module global, so without this
+    # the result depends on execution order — it passed alone and failed in
+    # the full run.
+    monkeypatch.setattr(engine, "RECEIPTS_DIR", RECEIPTS_DIR)
     out = engine.verify_receipt(rid)
     assert out["found"] is True
+    assert isinstance(out.get("bitcoin_attested"), bool)
     for field in ("bitcoin_attested", "pinned_count", "pinned_total", "upgrade_frozen"):
         assert field in out, f"{field} missing from verify_receipt output"
     assert isinstance(out["bitcoin_attested"], bool)
@@ -188,9 +207,8 @@ def test_standalone_verifier_has_no_network_capability():
 def test_verifier_runs_with_no_account_and_no_env():
     """No API key, no account, no service configuration of any kind."""
     ids = _receipt_ids()
-    if not ids:
-        pytest.skip("no local receipts in this checkout")
-    rdir = ROOT / "data" / "receipts" / ids[0]
+    assert ids, "fixture receipt missing — conftest.write_fixture_receipt failed"
+    rdir = RECEIPTS_DIR / ids[0]
     proc = subprocess.run(
         [sys.executable, str(ROOT / "server" / "verify_cli.py"),
          str(rdir / "receipt.json")],

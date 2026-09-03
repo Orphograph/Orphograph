@@ -1,7 +1,6 @@
 node_modules/
 build_dev/
 build_full/
-package-lock.json
 *.ptau
 *.zkey
 *.wtns
@@ -18,3 +17,4 @@ proof.json
 !evidence_8round_2026_08_04/expected.json
 !evidence_8round_2026_08_04/public.json
 !evidence_8round_2026_08_04/proof.json
+# package-lock.json is COMMITTED: CI installs snarkjs with `npm ci` from it.

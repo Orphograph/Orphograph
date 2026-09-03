@@ -48,6 +48,18 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Install test deps (cryptography + PyYAML, like deploy.yml)
         run: pip install --upgrade pip && pip install pytest cryptography PyYAML
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: zk-provenance/snark/package-lock.json
+      - name: Install snarkjs for the pairing-check tests (pinned by lockfile)
+        # tests/test_snark_*.py exercise `snarkjs groth16 verify`. Without it
+        # they skipped, and tests/conftest.py now fails the session on any
+        # unbudgeted skip, so CI must carry the tool.
+        run: |
+          npm ci --prefix zk-provenance/snark --no-audit --no-fund
+          echo "$PWD/zk-provenance/snark/node_modules/.bin" >> "$GITHUB_PATH"
       - name: Compile check every server module
         run: python3 -m py_compile server/*.py
       - name: Run pytest (same command as the deploy gate)
