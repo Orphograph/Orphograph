@@ -29,13 +29,26 @@ notify() {
   fi
 }
 
-# ACP supervisor persistence. launchd refuses to bootstrap com.orphograph.acp
-# on this Mac (IO error 5), so this already-loaded 60s job re-arms keeper_v2
-# when it is absent. The ensure script is idempotent and never spawns a second
-# keeper; it lives outside the repo with the ACP service.
+# Optional local supervisor re-arm. If a sibling service ships an
+# `ensure_*.sh` hook at this path, run it each tick and surface its verdict:
+# exit 0 = fine, 3 = it had to restart something (say so once), anything
+# else = it refused to act (alert once per state change, never every tick).
 ENSURE_ACP="$HOME/orphograph-acp/ensure_acp_keeper.sh"
+ENSURE_STATE="$STATE_DIR/.acp_ensure_state"
 if [ -x "$ENSURE_ACP" ]; then
-  bash "$ENSURE_ACP" >/dev/null 2>&1 || true
+  bash "$ENSURE_ACP" >/dev/null 2>&1
+  ensure_rc=$?
+  prev_ensure="$(cat "$ENSURE_STATE" 2>/dev/null || echo 0)"
+  if [ "$ensure_rc" -eq 3 ]; then
+    log "acp ensure: supervisor was absent — restarted"
+    notify "⚠️ ACP supervisor was absent — restarted ($(ts))"
+  elif [ "$ensure_rc" -ne 0 ] && [ "$ensure_rc" != "$prev_ensure" ]; then
+    log "acp ensure: refused to act (rc $ensure_rc)"
+    notify "⚠️ ACP supervisor re-arm refused (rc $ensure_rc) — check keeper.log ($(ts))"
+  elif [ "$ensure_rc" -eq 0 ] && [ "$prev_ensure" != "0" ]; then
+    log "acp ensure: back to normal"
+  fi
+  echo "$ensure_rc" > "$ENSURE_STATE"
 fi
 
 # State: "ok" or "down:<since-ts>"
