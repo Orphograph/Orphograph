@@ -447,9 +447,8 @@
       const a = j.anchors || {};
       if (a.total != null && $("c-anchors")) {
         $("c-anchors").textContent = fmtNum(a.total);
-      }
-      if (j.bitcoin_blocks_anchored != null && $("c-blocks")) {
-        $("c-blocks").textContent = fmtNum(j.bitcoin_blocks_anchored);
+        // The homepage strip ships hidden; it appears only with a real count.
+        if ($("home-stats")) $("home-stats").hidden = false;
       }
       if (a.last_anchor_at) {
         const tz = $("latest-tz-block");

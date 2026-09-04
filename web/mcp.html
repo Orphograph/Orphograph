@@ -51,8 +51,21 @@
   <section class="mcp-section">
     <h2>Install</h2>
     <div class="mcp-rule"></div>
+    <h3>The fastest path</h3>
     <p>
-      The server is registered with the host application via a configuration entry. The path to the script is supplied by the user; the same shape of entry applies to each host.
+      The server is published on PyPI as <code class="inline">orphograph-mcp</code>. Installed, it provides an
+      <code class="inline">orphograph-mcp</code> command that any MCP host can run directly, with no path to type.
+    </p>
+<pre><code>pip install orphograph-mcp
+claude mcp add orphograph -- orphograph-mcp</code></pre>
+    <p>
+      Cursor users may add the same server in one step:
+      <a class="mcp-deeplink" href="cursor://anysphere.cursor-deeplink/mcp/install?name=orphograph&amp;config=eyJjb21tYW5kIjoib3JwaG9ncmFwaC1tY3AifQ==">Add Orphograph to Cursor</a>
+      (the link carries the configuration <code class="inline">{"command":"orphograph-mcp"}</code> and nothing else).
+      The hand-edited configurations below are equivalent and remain the reference.
+    </p>
+    <p>
+      Running from a checkout instead of the package, the server is registered with the host application via a configuration entry whose command is <code class="inline">python3</code> plus the path to the script; with the package installed, the command is simply <code class="inline">orphograph-mcp</code> with no arguments. The same shape of entry applies to each host.
     </p>
 
     <h3>Claude Desktop</h3>
@@ -73,7 +86,7 @@
 
     <h3>Claude Code</h3>
     <p>
-      The same configuration shape applies. The server may be added either by editing the <code class="inline">mcpServers</code> block in the configuration file, or by invoking <code class="inline">claude mcp add</code> at a terminal and supplying the script path when prompted.
+      The same configuration shape applies. The server may be added either by editing the <code class="inline">mcpServers</code> block in the configuration file, or by invoking <code class="inline">claude mcp add orphograph -- orphograph-mcp</code> at a terminal (or <code class="inline">-- python3 /absolute/path/to/orphograph_mcp.py</code> from a checkout).
     </p>
 
     <h3>Cursor</h3>

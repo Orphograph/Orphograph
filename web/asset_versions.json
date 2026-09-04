@@ -428,8 +428,8 @@
     "sha256": "b4ec3bb15e88b287a225d760a08f594c81fcb58bdacee4317bfd1419000f2094"
   },
   "/receipt.js": {
-    "version": "6",
-    "sha256": "3d3c667485475bdf4ddf066676294e10b28a5a40494481bf2222b2e6b180bcd9"
+    "version": "7",
+    "sha256": "94e164e07e34bb954ef0d5bff908c45011b69ac36c2a02e9ffe0185be81dd2cf"
   },
   "/recover.css": {
     "version": "2",
@@ -500,8 +500,8 @@
     "sha256": "6bd02ba7636f2e03d7a82299097d0be93dd9937f5c5cc5242628c34d48820801"
   },
   "/v2.js": {
-    "version": "6",
-    "sha256": "2f5ee1ea56d348b80a54b086d39d986990a49fa45c46f028b5ef6d0138e93458"
+    "version": "7",
+    "sha256": "ad21dabb246cbca8cff5aa664ea7d7065add4fb0eb9ea31b1cd7bb6bd59f48ce"
   },
   "/v2/app.js": {
     "version": "4",
