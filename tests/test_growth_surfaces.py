@@ -16,9 +16,11 @@ V2 = (WEB / "v2.js").read_text()
 
 
 def _page_exists(href: str) -> bool:
-    path = href.split("#")[0].split("?")[0]
+    path, _, frag = href.partition("#")
+    path = path.split("?")[0]
     if path in ("", "/"):
-        return True
+        # A fragment-only link must land on an element of the homepage.
+        return not frag or f'id="{frag}"' in INDEX
     rel = path.lstrip("/")
     return ((WEB / rel).is_file() or (WEB / f"{rel}.html").is_file()
             or (WEB / rel / "index.html").is_file())
@@ -32,12 +34,15 @@ class HomepageDoors(unittest.TestCase):
             self.assertTrue(_page_exists(href), f"{href} has no page")
         self.assertEqual(INDEX.count('class="orpho-door"'), 3)
 
-    def test_counter_ids_are_the_ones_v2_fills_and_start_blank(self):
-        for cid in ("c-anchors", "c-blocks"):
-            self.assertIn(f'$("{cid}")', V2, f"v2.js does not fill #{cid}")
-            m = re.search(rf'id="{cid}">([^<]*)<', INDEX)
-            self.assertIsNotNone(m)
-            self.assertEqual(m.group(1).strip(), "—", "no hand-typed count on the homepage")
+    def test_counter_is_hidden_until_the_api_answers(self):
+        self.assertIn('id="home-stats" hidden', INDEX)
+        self.assertIn('$("home-stats").hidden = false', V2)
+        m = re.search(r'id="c-anchors">([^<]*)<', INDEX)
+        self.assertEqual(m.group(1).strip(), "—", "no hand-typed count on the homepage")
+        # Every counter id on the page must be one the API can feed: v2.js
+        # reads anchors.total, and stats.snapshot() emits it.
+        self.assertIn('"total"', (ROOT / "server" / "stats.py").read_text())
+        self.assertNotIn('id="c-blocks"', INDEX, "no stats key feeds c-blocks")
 
     def test_situation_strip_links_only_to_existing_guides(self):
         block = INDEX.split('class="orpho-situations"', 1)[1].split("</ul>", 1)[0]
@@ -65,6 +70,9 @@ class AgentsDocsAcp(unittest.TestCase):
         self.assertIn("0x73113714cae2e351e2e0146b2f9b55c316b93f14", html)
         for name in ("bitcoin_timestamp_receipt", "verify_receipt"):
             self.assertIn(f"<code>{name}</code>", html)
+        for price in ("0.50 USDC", "0.25 USDC"):
+            self.assertIn(price, html)
+        self.assertNotIn("parent_receipt_id", html, "not accepted by the handler")
         # No availability, uptime or turnaround promise on a surface the
         # office cannot guarantee while its session can expire.
         for word in ("24/7", "always on", "guaranteed", "within 5 minutes"):
@@ -76,6 +84,10 @@ class ReceiptShareHash(unittest.TestCase):
         js = (WEB / "receipt.js").read_text()
         self.assertIn('window.location.hash !== "#share"', js)
         self.assertIn('details.open = true', js)
+        # Runs after the share block is initialised, never on DOMContentLoaded
+        # (the block's contents are not rendered yet then).
+        self.assertNotIn('DOMContentLoaded", openShareFromHash', js)
+        self.assertIn("  openShareFromHash();\n", js)
         self.assertIn('/receipt.js?v=7', (WEB / "receipt.html").read_text())
 
 

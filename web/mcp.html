@@ -65,7 +65,7 @@ claude mcp add orphograph -- orphograph-mcp</code></pre>
       The hand-edited configurations below are equivalent and remain the reference.
     </p>
     <p>
-      The server is registered with the host application via a configuration entry. The path to the script is supplied by the user; the same shape of entry applies to each host.
+      Running from a checkout instead of the package, the server is registered with the host application via a configuration entry whose command is <code class="inline">python3</code> plus the path to the script; with the package installed, the command is simply <code class="inline">orphograph-mcp</code> with no arguments. The same shape of entry applies to each host.
     </p>
 
     <h3>Claude Desktop</h3>
@@ -86,7 +86,7 @@ claude mcp add orphograph -- orphograph-mcp</code></pre>
 
     <h3>Claude Code</h3>
     <p>
-      The same configuration shape applies. The server may be added either by editing the <code class="inline">mcpServers</code> block in the configuration file, or by invoking <code class="inline">claude mcp add</code> at a terminal and supplying the script path when prompted.
+      The same configuration shape applies. The server may be added either by editing the <code class="inline">mcpServers</code> block in the configuration file, or by invoking <code class="inline">claude mcp add orphograph -- orphograph-mcp</code> at a terminal (or <code class="inline">-- python3 /absolute/path/to/orphograph_mcp.py</code> from a checkout).
     </p>
 
     <h3>Cursor</h3>

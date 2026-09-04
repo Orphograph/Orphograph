@@ -17,7 +17,7 @@
 <link rel="preload" as="font" type="font/woff2" href="/fonts/Spectral-400.woff2" crossorigin>
 <link rel="stylesheet" href="/css/orpho-tokens.css?v=2">
 <link rel="stylesheet" href="/css/orpho-primitives.css?v=3">
-<link rel="stylesheet" href="/css/orpho-home.css?v=15">
+<link rel="stylesheet" href="/css/orpho-home.css?v=16">
 <link rel="stylesheet" href="/index.css?v=21">
 <link rel="preload" as="image" href="/seal-display.png?v=8" fetchpriority="high">
 <meta name="copyright" content="© 2026 Orphograph. MIT — see /LICENSE">
@@ -178,16 +178,13 @@
   </div>
 </section>
 
-<!-- ─────────────────────── 2b · FEATURE STRIP ─────────────────────── -->
 <!-- ─────────────────────── 2b · THREE DOORS + THE COUNTER ───────────────────────
      Three entries above the fold: a file, an agent, an acceptor. The strip
-     above them is filled by v2.js from /api/stats (ids c-anchors / c-blocks);
-     without JavaScript it stays hidden — no count is ever typed by hand. -->
+     above them ships `hidden` and is revealed by v2.js only once /api/stats
+     has answered (id c-anchors) — no count is ever typed by hand. -->
 <section class="orpho-doors-wrap" id="doors" aria-labelledby="orpho-doors-title">
-  <p class="orpho-stats" id="home-stats" aria-live="polite">
+  <p class="orpho-stats" id="home-stats" hidden>
     <span class="orpho-stats__item"><strong id="c-anchors">—</strong> receipts issued</span>
-    <span class="orpho-stats__sep" aria-hidden="true">·</span>
-    <span class="orpho-stats__item"><strong id="c-blocks">—</strong> Bitcoin blocks carry them</span>
     <span class="orpho-stats__sep" aria-hidden="true">·</span>
     <a class="orpho-stats__link" href="/stats">the public ledger &rarr;</a>
   </p>
@@ -213,6 +210,7 @@
   </ul>
 </section>
 
+<!-- ─────────────────────── 2c · FEATURE STRIP ─────────────────────── -->
 <section class="orpho-card orpho-features-wrap">
   <ul class="orpho-features">
     <li class="orpho-feature">
@@ -308,7 +306,6 @@
   </div>
 </section>
 
-<!-- ─────────────────────── 4 · THREE TRUST STATEMENTS ─────────────────────── -->
 <!-- ─────────────────────── 3b · PICK YOUR SITUATION ───────────────────────
      Routes intent traffic into the guides that already exist under /lp/. -->
 <section class="orpho-situations-wrap" aria-labelledby="orpho-situations-title">
@@ -324,6 +321,7 @@
   <p class="orpho-situations__more"><a href="/lp/">All guides &rarr;</a></p>
 </section>
 
+<!-- ─────────────────────── 4 · THREE TRUST STATEMENTS ─────────────────────── -->
 <section class="trust-statements">
   <div class="wrap">
     <div class="trust-cols">
@@ -583,7 +581,7 @@
   </div>
 </footer>
 
-<script src="/v2.js?v=6"></script>
+<script src="/v2.js?v=7"></script>
 <script type="module" src="/folder.js?v=2"></script>
 <script src="/statusbar.js?v=2" defer></script>
 <script src="/status-badge.js?v=2" defer></script>

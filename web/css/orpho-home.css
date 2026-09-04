@@ -1490,49 +1490,6 @@
   .orpho-hero__receipt .orpho-receipt__title { padding: 0 36px; font-size: 1rem; }
 }
 
-/* ══ TERMINAL BLOCK — mobile reassert (2026-08-10) ══════════════════════
- * Founder's phone screenshots: two squeezed columns at 390pt, receipt
- * clipped mid-word, wax adrift. Cause: correction passes 1–8 appended
- * UNSCOPED layout rules after the responsive media queries, so the last
- * declaration won at every width and the phone collapse never applied.
- *
- * This block is the LAST thing in the file BY CONTRACT (pinned by
- * tests/test_css_cascade_order.py). Any future correction pass goes ABOVE
- * it; layout set after it re-breaks every phone.
- */
-/* Legacy index.css (deliberately loaded last) zeroes .hero's side padding
- * at its mobile breakpoints. Two-class specificity beats it at every width
- * without touching the legacy sheet that 40 other pages share. */
-.orpho-hero.hero {
-  padding-left: var(--orpho-s-5);
-  padding-right: var(--orpho-s-5);
-}
-@media (max-width: 680px) {
-  .orpho-hero.hero { padding-left: var(--orpho-s-4); padding-right: var(--orpho-s-4); }
-}
-
-@media (max-width: 1040px) {
-  .orpho-hero__inner { grid-template-columns: 1fr; }
-}
-@media (max-width: 680px) {
-  .orpho-hero__inner { grid-template-columns: 1fr; gap: var(--orpho-s-5); }
-  .orpho-hero { padding: var(--orpho-s-5) var(--orpho-s-4) var(--orpho-s-6); }
-  .orpho-hero-title { font-size: clamp(1.9rem, 8vw, 2.4rem); }
-  .orpho-hero-title__line { white-space: normal; }
-  /* The plate scales to the phone instead of cropping: envelope loses its
-   * right overhang, receipt spans nearly full width below the closure,
-   * seal tucks inside the plate. */
-  .orpho-hero__plate { min-height: 470px; }
-  .orpho-envelope { inset: 0 0 8% 0; }
-  .orpho-hero__receipt { left: 4%; right: 4%; top: 24%; }
-  .orpho-hero__wax { right: 2%; bottom: 4%; }
-  .orpho-wax { width: 84px; height: 84px; }
-  .orpho-envelope__crest { width: 56px; height: 56px; right: 4%; }
-  .orpho-receipt__meta { grid-template-columns: 1fr; gap: 0.2rem 0; }
-  .orpho-receipt__meta dt { padding-top: 0.5rem; border-bottom: 0; }
-}
-
-
 /* ── Three doors + the counter (homepage §2b) ─────────────────────────────
  * Same paper, same ink, same measure as the feature list below it. */
 .orpho-doors-wrap {
@@ -1605,4 +1562,53 @@
 @media (max-width: 1040px) {
   .orpho-doors { grid-template-columns: 1fr; }
   .orpho-situations { grid-template-columns: 1fr; }
+}
+
+/* The two new header links fit only on wide viewports; below that the doors
+ * carry the same routes, so the links step aside instead of pushing the
+ * status badge and the primary CTA off-canvas (measured 881–1197px). */
+@media (max-width: 1200px) {
+  .orpho-nav .nav-agents, .orpho-nav .nav-guides { display: none; }
+}
+
+/* ══ TERMINAL BLOCK — mobile reassert (2026-08-10) ══════════════════════
+ * Founder's phone screenshots: two squeezed columns at 390pt, receipt
+ * clipped mid-word, wax adrift. Cause: correction passes 1–8 appended
+ * UNSCOPED layout rules after the responsive media queries, so the last
+ * declaration won at every width and the phone collapse never applied.
+ *
+ * This block is the LAST thing in the file BY CONTRACT (pinned by
+ * tests/test_css_cascade_order.py). Any future correction pass goes ABOVE
+ * it; layout set after it re-breaks every phone.
+ */
+/* Legacy index.css (deliberately loaded last) zeroes .hero's side padding
+ * at its mobile breakpoints. Two-class specificity beats it at every width
+ * without touching the legacy sheet that 40 other pages share. */
+.orpho-hero.hero {
+  padding-left: var(--orpho-s-5);
+  padding-right: var(--orpho-s-5);
+}
+@media (max-width: 680px) {
+  .orpho-hero.hero { padding-left: var(--orpho-s-4); padding-right: var(--orpho-s-4); }
+}
+
+@media (max-width: 1040px) {
+  .orpho-hero__inner { grid-template-columns: 1fr; }
+}
+@media (max-width: 680px) {
+  .orpho-hero__inner { grid-template-columns: 1fr; gap: var(--orpho-s-5); }
+  .orpho-hero { padding: var(--orpho-s-5) var(--orpho-s-4) var(--orpho-s-6); }
+  .orpho-hero-title { font-size: clamp(1.9rem, 8vw, 2.4rem); }
+  .orpho-hero-title__line { white-space: normal; }
+  /* The plate scales to the phone instead of cropping: envelope loses its
+   * right overhang, receipt spans nearly full width below the closure,
+   * seal tucks inside the plate. */
+  .orpho-hero__plate { min-height: 470px; }
+  .orpho-envelope { inset: 0 0 8% 0; }
+  .orpho-hero__receipt { left: 4%; right: 4%; top: 24%; }
+  .orpho-hero__wax { right: 2%; bottom: 4%; }
+  .orpho-wax { width: 84px; height: 84px; }
+  .orpho-envelope__crest { width: 56px; height: 56px; right: 4%; }
+  .orpho-receipt__meta { grid-template-columns: 1fr; gap: 0.2rem 0; }
+  .orpho-receipt__meta dt { padding-top: 0.5rem; border-bottom: 0; }
 }

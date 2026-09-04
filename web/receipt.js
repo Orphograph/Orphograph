@@ -436,7 +436,6 @@ function openShareFromHash() {
   if (block && block.scrollIntoView) block.scrollIntoView({ block: "start" });
 }
 window.addEventListener("hashchange", openShareFromHash);
-document.addEventListener("DOMContentLoaded", openShareFromHash);
 // All actions are origin-local — no third-party network calls.
 function initShareBlock(rec) {
   const rid = rec.receipt_id;
@@ -507,6 +506,7 @@ function initShareBlock(rec) {
       } catch (_) { /* user dismissed; no-op */ }
     });
   }
+  openShareFromHash();
 }
 
 main();
