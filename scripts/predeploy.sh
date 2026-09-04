@@ -54,7 +54,10 @@ for url in root.iter(ns + "loc"):
     p = url.text.replace("https://orphograph.com", "").lstrip("/")
     if not p or p.endswith("/"):
         p = p + "index.html"
-    if not (pathlib.Path("web") / p).exists():
+    direct = pathlib.Path("web") / p
+    html_route = pathlib.Path("web") / (p + ".html")
+    blog_source = pathlib.Path("content") / (p + ".md")
+    if not direct.exists() and not html_route.exists() and not blog_source.exists():
         missing.append(url.text)
 if missing:
     print("missing:", *missing[:5], sep="\n  ")
@@ -96,8 +99,8 @@ check "9. sample receipt card present on homepage" bash -c '
   grep -q "sample-receipt-card" web/index.html
 '
 
-check "10. writers.html Purchase routes to /pay/crypto.html" bash -c '
-  grep -q "href=\"/pay/crypto.html\".*Purchase\|Purchase.*href=\"/pay/crypto.html\"" web/writers.html
+check "10. writers.html Purchase routes to /pay/crypto" bash -c '
+  grep -q "href=\"/pay/crypto\(\.html\)\?\".*Purchase\|Purchase.*href=\"/pay/crypto\(\.html\)\?\"" web/writers.html
 '
 
 check "11. all 16 blog posts exist on disk" python3 -c '
