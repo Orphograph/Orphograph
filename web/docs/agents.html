@@ -146,6 +146,7 @@
     row above.</p>
     <p>On the Virtuals Agent Commerce Protocol the office is listed as provider
     <code>0x73113714cae2e351e2e0146b2f9b55c316b93f14</code> on Base, with two offerings:</p>
+    <p>Listing is published; fulfillment is not yet open while end-to-end settlement is being verified.</p>
     <ul>
       <li><code>bitcoin_timestamp_receipt</code> — requirements <code>{"hash_hex": "&lt;sha256&gt;"}</code>
       (the published offering schema lists the optional fields it accepts);
@@ -158,8 +159,9 @@
     <p>A hiring agent creates the job against that provider address by offering name
     (<code>acp client create-job --provider … --offering-name bitcoin_timestamp_receipt --requirements '{"hash_hex":"…"}'</code>),
     funds it, and receives the deliverable when the office's handler completes it. Verification of
-    the delivered receipt needs neither the marketplace nor the office: the proof bundle checks
-    against the Bitcoin chain with open-source tools.</p>
+    an attested receipt needs neither the marketplace nor the office: after Bitcoin attestation,
+    the proof bundle checks against the Bitcoin chain with open-source tools. Pending receipts
+    must first obtain that attestation.</p>
   </section>
 
   <section id="sold-to-machines">
@@ -176,7 +178,7 @@
       above &mdash; <code>bitcoin_timestamp_receipt</code> and <code>verify_receipt</code>.
       Verification stays free with the open tools; the paid piece is an agent doing the office
       work for another agent.</li>
-      <li><strong>The proof stays on Bitcoin, not on whoever hosts the marketplace.</strong> If the
+      <li><strong>The proof stays on Bitcoin, not on whoever hosts the marketplace.</strong> Once Bitcoin has attested it, if the
       marketplace or the chain it settles on goes away, the receipt still points at a Bitcoin
       block. Same doctrine as the five calendars: the office and the platform are both allowed
       to disappear.</li>

@@ -70,7 +70,7 @@ def test_measurement_never_animates_and_restores_state():
 def test_stage_starts_behind_the_pocket_and_comes_forward():
     script = _script()
     assert 'stage.style.zIndex = opening ? "2" : "6"' in script
-    assert 'stage.style.zIndex = opening ? "6" : "2"' in script
+    assert '{ zIndex: opening ? "6" : "2" }' in script
     genie = _styles().split(".orpho-genie {", 1)[1].split("}", 1)[0]
     assert "pointer-events: none" in genie, "the clone must never eat the click"
 
@@ -82,7 +82,7 @@ def test_phone_plate_grows_to_the_real_letter_height():
     assert "min-height: var(--orpho-open-h, 780px)" in styles
     # The envelope keeps its shape while the plate grows.
     env = styles.split(".orpho-hero__plate.is-interactive .orpho-envelope {", 1)[1].split("}", 1)[0]
-    assert "aspect-ratio" in env and "inset: 0 0 auto 0" in env
+    assert "height: min(400px" in env and "inset: 0 0 auto 0" in env
     assert "transition: min-height" in styles
 
 
@@ -94,10 +94,10 @@ def test_click_guard_covers_the_whole_warp():
 
 def test_genie_css_sits_above_the_terminal_block():
     styles = _styles()
-    assert styles.find("Genie warp (2026-09-05)") < styles.find("TERMINAL BLOCK")
+    assert 0 <= styles.find("Genie warp (2026-09-05)") < styles.find("TERMINAL BLOCK")
 
 
 def test_script_version_bumped_with_its_bytes():
     html = INDEX.read_text(encoding="utf-8")
-    assert 'src="/hero-envelope.js?v=4"' in html
-    assert re.search(r'/css/orpho-home\.css\?v=17"', html)
+    assert 'src="/hero-envelope.js?v=5"' in html
+    assert re.search(r'/css/orpho-home\.css\?v=18"', html)

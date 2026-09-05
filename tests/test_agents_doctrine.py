@@ -33,3 +33,10 @@ def test_doctrine_names_no_competitor_and_promises_no_detection():
     sec = _section().lower()
     for banned in ("court", "admissib", "ai-detect", "authorship", "ownership"):
         assert banned not in sec
+
+
+def test_bitcoin_claim_requires_attestation_and_fulfillment_is_qualified():
+    html = PAGE.read_text(encoding="utf-8")
+    assert "Once Bitcoin has attested it" in _section()
+    assert "fulfillment is not yet open" in html
+    assert "Pending receipts" in html

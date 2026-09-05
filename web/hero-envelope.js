@@ -36,8 +36,7 @@
   // f_i * STAGGER_MS after the first and travels for TRAVEL_MS, so the head
   // of the letter is out while the tail is still in the throat — that lag
   // is the genie taper. Closing reverses the stagger: tail in first.
-  const PHONE = window.innerWidth <= 680;
-  const WARP_BANDS = PHONE ? 14 : 22;
+
   const TRAVEL_MS = 560;
   const STAGGER_MS = 300;
   const LEAD_MS = 120;           // the flap starts lifting before the letter moves
@@ -46,6 +45,16 @@
   const SWAY = 0.05;             // lateral bow at mid-flight, fraction of the width
   let warpStage = null;
   let warpRun = 0;
+  let warpAnimations = [];
+
+  function cancelWarp() {
+    ++warpRun;
+    warpAnimations.forEach((animation) => animation.cancel());
+    warpAnimations = [];
+    if (warpStage) warpStage.remove();
+    warpStage = null;
+    plate.classList.remove("is-warp");
+  }
 
   // Phones: the plate grows to the letter's real height instead of a fixed
   // 780px the letter used to overflow. Desktop keeps its fixed composition.
@@ -103,11 +112,15 @@
     stage.style.transform = box.transform === "none" ? "" : box.transform;
     stage.style.transformOrigin = box.origin;
     const bands = [];
+    const WARP_BANDS = window.innerWidth <= 680 ? 48 : 64;
     for (let i = 0; i < WARP_BANDS; i++) {
       const band = document.createElement("div");
       band.className = "orpho-genie__band";
-      const top = (i / WARP_BANDS) * 100;
-      const bottom = 100 - ((i + 1) / WARP_BANDS) * 100;
+      band.style.transformOrigin = "50% " + ((i + 0.5) / WARP_BANDS * 100) + "%";
+      // A one-pixel overlap prevents antialiased seams between adjacent slices.
+      const overlap = 100 / box.height;
+      const top = Math.max(0, (i / WARP_BANDS) * 100 - overlap);
+      const bottom = Math.max(0, 100 - ((i + 1) / WARP_BANDS) * 100 - overlap);
       band.style.clipPath = "inset(" + top + "% 0 " + bottom + "% 0)";
       const paper = receipt.cloneNode(true);
       paper.removeAttribute("id");
@@ -129,16 +142,16 @@
     const startY = mouthY - f * box.height;
     const sway = Math.sin(Math.PI * f) * box.width * SWAY;
     return [
-      { transform: "translate3d(" + mouthDX + "px, " + startY + "px, 0) scaleX(" + THROAT + ")", offset: 0 },
+      { transform: "translate3d(" + mouthDX + "px, " + startY + "px, 0) scaleX(" + THROAT + ") scaleY(.02)", offset: 0 },
       { transform: "translate3d(" + (mouthDX * 0.55 + sway) + "px, " + (startY * 0.42) + "px, 0) scaleX(" +
-                   (THROAT + (1 - THROAT) * 0.5) + ")", offset: 0.5 },
-      { transform: "translate3d(0, 0, 0) scaleX(1)", offset: 1 }
+                   (THROAT + (1 - THROAT) * 0.5) + ") scaleY(.6)", offset: 0.5 },
+      { transform: "translate3d(0, 0, 0) scaleX(1) scaleY(1)", offset: 1 }
     ];
   }
 
   function runWarp(opening) {
-    const run = ++warpRun;
-    if (warpStage) { warpStage.remove(); warpStage = null; }
+    cancelWarp();
+    const run = warpRun;
     fitPlate();
     const box = measureOpenPose();
     // The real letter parks, invisible, at its end pose for the whole flight;
@@ -162,23 +175,32 @@
     // Behind the pocket while the head funnels out of the mouth; in front once
     // the tail — the part that rests over the pocket — starts to leave it.
     stage.style.zIndex = opening ? "2" : "6";
-    const animations = built.bands.map((band, i) => {
+    const animations = [];
+    built.bands.forEach((band, i) => {
       const f = (i + 0.5) / built.bands.length;
-      return band.animate(bandFrames(f, box, mouthY, mouthDX), {
+      const animation = band.animate(bandFrames(f, box, mouthY, mouthDX), {
         duration: TRAVEL_MS,
         delay: lead + (opening ? f : 1 - f) * STAGGER_MS,
         easing: "cubic-bezier(.22, .9, .32, 1)",
         direction: opening ? "normal" : "reverse",
         fill: "both"
       });
+      animations.push(animation);
+      warpAnimations.push(animation);
     });
     const zAt = opening ? lead + fMouth * STAGGER_MS
                         : (1 - fMouth) * STAGGER_MS + TRAVEL_MS * 0.6;
-    window.setTimeout(() => {
-      if (run === warpRun && warpStage === stage) stage.style.zIndex = opening ? "6" : "2";
-    }, zAt);
+    // Use the document animation timeline for layering as well as bands.
+    // Background throttling must not advance only the pocket hand-off.
+    const layer = stage.animate([
+      { zIndex: opening ? "2" : "6" },
+      { zIndex: opening ? "6" : "2" }
+    ], { duration: 1, delay: zAt, fill: "forwards" });
+    warpAnimations = animations.concat(layer);
     const done = () => {
       if (run !== warpRun) return;
+      warpAnimations.forEach((animation) => animation.cancel());
+      warpAnimations = [];
       stage.remove();
       warpStage = null;
       plate.classList.remove("is-warp");
@@ -196,8 +218,13 @@
     const settled = !plate.classList.contains("is-closing") && !warpStage;
     open = Boolean(next);
     if (warpAvailable && settled) {
-      runWarp(open);
-      return;
+      try {
+        runWarp(open);
+        return;
+      } catch (_) {
+        // A partial WAAPI failure must leave the real receipt usable.
+        cancelWarp();
+      }
     }
     // Both directions get the genie motion when starting from a settled
     // state; a direction change mid-flight stays on the transition path,
@@ -236,7 +263,7 @@
   const MOTION_MS = Math.max(960, WARP_MS + 100);
 
   function motionInFlight() {
-    return performance.now() < busyUntil;
+    return Boolean(warpStage) || performance.now() < busyUntil;
   }
 
   function toggleOpen() {
@@ -274,11 +301,21 @@
   });
 
   receipt.addEventListener("transitionend", (event) => {
-    if (event.propertyName === "transform" && !open) {
+    if (event.propertyName === "transform" && !open && !warpStage) {
       window.clearTimeout(settleTimer);
       plate.classList.remove("is-closing");
     }
   });
+
+  window.addEventListener("resize", () => {
+    cancelWarp();
+    plate.classList.remove("is-closing", "is-genie");
+    fitPlate();
+    busyUntil = 0;
+  });
+  if (typeof ResizeObserver === "function") {
+    new ResizeObserver(fitPlate).observe(receipt);
+  }
 
   // Apply the tucked state without animating the page's first paint. Motion
   // is enabled one frame later for deliberate user-triggered transitions.

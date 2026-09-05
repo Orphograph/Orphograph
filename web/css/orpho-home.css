@@ -1632,7 +1632,7 @@
    * measurable independently of the plate's. */
   .orpho-hero__plate.is-interactive .orpho-envelope {
     inset: 0 0 auto 0;
-    aspect-ratio: 358 / 400;
+    height: min(400px, 111.73vw);
   }
   .orpho-hero__plate.is-ready {
     transition: min-height 700ms cubic-bezier(.2, .72, .2, 1);
@@ -1649,6 +1649,15 @@
     transform: translate3d(0, 0, 24px) scale(.98) rotate(-.2deg);
   }
   .orpho-genie { filter: none; }
+  @keyframes orpho-genie-phone {
+    0% { z-index: 2; clip-path: inset(0 0 72% 0); transform: translate3d(0, 180px, 0) scale(.28, .3); }
+    52% { z-index: 2; clip-path: inset(0 0 8% 0); }
+    56% { z-index: 6; clip-path: inset(0); }
+    100% { z-index: 6; clip-path: inset(0); transform: translate3d(0, 0, 24px) scale(.98) rotate(-.2deg); }
+  }
+  .orpho-hero__plate.is-ready.is-genie .orpho-hero__receipt {
+    animation-name: orpho-genie-phone;
+  }
 }
 
 /* ══ TERMINAL BLOCK — mobile reassert (2026-08-10) ══════════════════════
