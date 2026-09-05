@@ -50,3 +50,14 @@ for(const [reduced,unavailable] of [[true,false],[false,true]]) {
  e.click();e.step();e.win.events.resize();assert.equal(e.surfaces.length,0);assert.equal(e.button.attrs['aria-expanded'],'true');
 }
 console.log('lifecycle: reduced motion, missing canvas, reversal, completion, Escape, resize pass');
+{
+ const e=environment();e.finish();
+ e.click();e.step();e.doc.hidden=true;e.doc.events.visibilitychange();
+ assert.equal(e.surfaces.length,0);assert.equal(e.frames.size,0);
+ assert.equal(e.button.attrs['aria-expanded'],'true');
+ e.doc.hidden=false;e.doc.events.visibilitychange();
+ for(let i=0;i<50;i++)e.win.events.resize();
+ assert.equal(e.frames.size,1,'resize storms coalesce to one measurement frame');
+ e.finish();assert.equal(e.surfaces.length,0);
+ e.click();e.finish();assert.equal(e.button.attrs['aria-expanded'],'false');
+}

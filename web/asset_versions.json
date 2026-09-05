@@ -211,10 +211,6 @@
     "version": "2",
     "sha256": "e13066c4284f453f2f17b3c56e0d1a7ff389d40119668ee784900eb157a76979"
   },
-  "/hero-envelope.js": {
-    "version": "6",
-    "sha256": "a81be9b7f3a116aef1c64268c5181b486e936285593db15eb84c3b52bcac4458"
-  },
   "/founder/admin.css": {
     "version": "2",
     "sha256": "1f58f0bfc011b0276c387b7a0b689fbeade60b5293cfe62971d3b1a1e9896817"
@@ -250,6 +246,14 @@
   "/gift.css": {
     "version": "1",
     "sha256": "67973b9aa3ffd448aec6b3acec936e4dc2b5d053d308bfa40dc4bb0963df9cb9"
+  },
+  "/hero-envelope.js": {
+    "version": "7",
+    "sha256": "269195fb45c223152de86ca3e344726440f5ebd8f91a69d18b1e1d38ca179cd0"
+  },
+  "/home-layout.css": {
+    "version": "1",
+    "sha256": "da1b92a54dbec20afb56678d8a387b5cc7061178d44795ab422c7590326ef49a"
   },
   "/index-legacy.css": {
     "version": "1",

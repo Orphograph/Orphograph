@@ -32,7 +32,6 @@
   const receipt = document.getElementById("hero-sample-receipt");
   if (!plate || !toggle || !receipt) return;
   const action = toggle.querySelector(".orpho-envelope__toggle-action");
-  const envelope = plate.querySelector(".orpho-envelope");
   const motion = matchMedia("(prefers-reduced-motion: reduce)");
   let progress = 0;
   let destination = 0;
@@ -42,16 +41,23 @@
   let staleTexture = false;
   let surface = null;
   let context = null;
+  let layout = null;
+  let target = null;
+  let currentHeight = 0;
+  let resizeFrame = 0;
   const pixelRatio = () => Math.min(devicePixelRatio || 1, 2);
 
   function dimensions() {
-    const width = plate.clientWidth;
+    if (layout) return layout;
+    const width = Math.max(1, plate.clientWidth);
     const envelopeHeight = Math.min(width * 0.94, 420) / 1.62;
-    return { closed: envelopeHeight + 100, opened: receipt.offsetHeight + 156 };
+    layout = { width, envelopeHeight, closed: envelopeHeight + 100, opened: receipt.offsetHeight + 156 };
+    return layout;
   }
   function fit() {
     const size = dimensions();
-    plate.style.height = mix(size.closed, size.opened, smooth(progress)) + "px";
+    currentHeight = mix(size.closed, size.opened, smooth(progress));
+    plate.style.height = currentHeight + "px";
   }
   function clearSurface() {
     if (surface) surface.remove();
@@ -64,7 +70,7 @@
     frame = 0;
     progress = destination;
     fit();
-    if (staleTexture) { texture = null; staleTexture = false; }
+    if (staleTexture) { texture = null; layout = null; staleTexture = false; fit(); }
     clearSurface();
     plate.classList.toggle("is-open", Boolean(destination));
     plate.classList.remove("is-closing");
@@ -142,16 +148,20 @@
     context = surface.getContext("2d");
     if (!context) throw new Error("Canvas unavailable");
     context.scale(ratio, ratio);
+    const p = plate.getBoundingClientRect();
+    const r = receipt.getBoundingClientRect();
+    target = { left: r.left - p.left, top: r.top - p.top, width: r.width, height: r.height };
     plate.appendChild(surface);
     plate.classList.add("is-warp");
   }
 
   function draw() {
-    const p = plate.getBoundingClientRect();
-    const r = receipt.getBoundingClientRect();
-    const e = envelope.getBoundingClientRect();
-    const target = { left: r.left - p.left, top: r.top - p.top, width: r.width, height: r.height };
-    const mouth = { x: e.left - p.left + e.width / 2, y: e.top - p.top + e.height * 0.12, width: e.width * 0.12 };
+    const size = dimensions();
+    const mouth = {
+      x: size.width / 2,
+      y: currentHeight - 58 - size.envelopeHeight * 0.88,
+      width: size.envelopeHeight * 1.62 * 0.12
+    };
     const ctx = context;
     ctx.clearRect(0, 0, surface.width, surface.height);
     if (progress < 0.003) return;
@@ -195,7 +205,7 @@
     plate.classList.toggle("is-open", next || progress > 0);
     plate.classList.toggle("is-closing", !next && progress > 0);
     fit();
-    if (motion.matches) { settle(); return; }
+    if (motion.matches || document.hidden || plate.clientWidth < 1) { settle(); return; }
     try {
       prepare();
       if (!frame) { previousTime = 0; frame = requestAnimationFrame(tick); }
@@ -211,17 +221,34 @@
       toggle.focus({ preventScroll: true });
     }
   });
-  function resize() {
+  function refreshLayout() {
+    resizeFrame = 0;
+    layout = null;
     texture = null;
-    clearSurface();
     settle();
-    fit();
+  }
+  function resize() {
+    // Resize events can arrive many times in one frame while dragging a window.
+    // Stop the old surface immediately, then measure once at the next paint.
+    cancelAnimationFrame(frame);
+    frame = 0;
+    clearSurface();
+    if (!resizeFrame) resizeFrame = requestAnimationFrame(refreshLayout);
   }
   window.addEventListener("resize", resize);
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) {
+      cancelAnimationFrame(resizeFrame);
+      resizeFrame = 0;
+      settle();
+      texture = null;
+    } else {
+      resize();
+    }
+  });
   motion.addEventListener("change", () => { if (motion.matches) settle(); });
   if (document.fonts) document.fonts.ready.then(() => {
-    if (frame) staleTexture = true; else texture = null;
-    fit();
+    if (frame) { staleTexture = true; } else { layout = null; texture = null; fit(); }
   });
   plate.classList.add("is-interactive", "is-continuous");
   fit();
