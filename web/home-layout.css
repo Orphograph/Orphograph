@@ -1,82 +1,150 @@
-/* Homepage layout boundary. Loaded after shared legacy styles so changes here
-   cannot change other pages or be undone by index.css specificity. */
-body.orpho-home { text-align: center; }
+/* Homepage layout boundary — FULL-BLEED (2026-09-05, supersedes the centered
+   v1 of the same day). Loaded LAST and scoped to body.orpho-home, so nothing
+   here reaches the 47 other pages that share index.css, and nothing in
+   index.css can undo it on specificity.
+
+   Contract:
+   * The FRAME goes to the rail. Section grounds, cards, the header row, the
+     hero grid and the footer run from --orpho-rail to --orpho-rail at every
+     width. Nothing on this page is centred inside an invisible column.
+   * COPY keeps a measure. Body text inside those frames is capped in `ch`, so
+     the page stays readable at 2560px instead of running 140-character lines.
+   * This sheet declares NO grid-template-columns for .orpho-hero__inner,
+     .orpho-sample__grid or .orpho-pair. Their columns — and the phone collapse
+     in orpho-home.css's TERMINAL BLOCK — stay authoritative. Pinned by
+     tests/test_home_layout_fullbleed.py.
+   * No `transform` on any ancestor of #hero-envelope (it flattens the
+     envelope/receipt z-stack). No `100vw` (includes the scrollbar). No
+     overflow-x:hidden on html/body (it kills #sticky-status mid-anchor).
+   * Colours, radii, durations come from orpho-tokens.css only. */
+
+.orpho-home { --orpho-rail: clamp(1rem, 4vw, 4.5rem); }
+
+/* ── Header: one row, brand at the left rail, navigation at the right.
+ * Scrolls away with the page (legacy index.css makes it sticky). */
 .orpho-home > header.orpho-header.nav {
-  position: relative; top: auto; display: flex; flex-direction: column;
-  align-items: center; justify-content: center; gap: 20px;
-  width: 100%; max-width: 1180px; padding: 24px 20px;
+  position: relative; top: auto; z-index: 2;
+  display: flex; flex-direction: row; align-items: center;
+  justify-content: space-between; gap: var(--orpho-s-6);
+  width: 100%; max-width: none; margin: 0;
+  padding: var(--orpho-s-5) var(--orpho-rail);
   backdrop-filter: none; -webkit-backdrop-filter: none;
 }
-.orpho-home header.nav .brand { justify-content: center; margin: 0; }
+.orpho-home header.nav .brand { margin: 0; flex: 0 0 auto; }
 .orpho-home header.nav .orpho-nav {
-  margin: 0; width: 100%; flex-wrap: wrap; justify-content: center; gap: 6px;
+  margin: 0 0 0 auto; min-width: 0;
+  flex-wrap: wrap; justify-content: flex-end;
+  gap: var(--orpho-s-3) var(--orpho-s-4);
+}
+/* Eleven items need 975px in one row; the rail leaves 985px at 1440 and
+ * 838px at 1280 (measured), so the CTA fell to a second row. Below 1500px
+ * the Agents and Guides links step aside — the three doors carry the same
+ * routes, which is orpho-home.css's own rationale at 1200 — and link
+ * padding tightens. Measured after: 791px needed at 1280. */
+@media (max-width: 1600px) {
+  .orpho-home header.nav .orpho-nav { gap: var(--orpho-s-2); }
+}
+@media (max-width: 1500px) {
+  .orpho-home .orpho-nav .nav-agents,
+  .orpho-home .orpho-nav .nav-guides { display: none; }
+  .orpho-home header.nav .orpho-nav a:not(.cta) { padding-left: var(--orpho-s-2); padding-right: var(--orpho-s-2); }
 }
 .orpho-home header.nav .orpho-nav a { white-space: nowrap; }
+
+/* ── Hero: the asymmetric two-column grid from orpho-home.css, released from
+ * its 1180px cage. Columns are NOT declared here (see contract). */
+.orpho-home .orpho-hero.hero {
+  padding-left: var(--orpho-rail);
+  padding-right: var(--orpho-rail);
+  text-align: left;
+}
 .orpho-home .orpho-hero__inner {
-  display: flex; flex-direction: column; align-items: center; gap: 36px;
-  width: 100%; max-width: 860px;
+  display: grid;
+  width: 100%; max-width: none; margin: 0;
 }
 .orpho-home .orpho-hero .orpho-hero__lede,
 .orpho-home .orpho-hero .orpho-hero__copy,
-.orpho-home .orpho-hero .orpho-hero__trust,
-.orpho-home .orpho-hero.hero { text-align: center; }
-.orpho-home .orpho-hero__lede { width: 100%; min-width: 0; padding-top: 0; }
-.orpho-home .orpho-hero-title { max-width: 100%; margin-inline: auto; }
-.orpho-home .orpho-hero-title__line { white-space: normal; }
-.orpho-home .orpho-hero__copy { max-width: 62ch; margin-inline: auto; }
-.orpho-home .orpho-hero .orpho-hero__actions { justify-content: center; }
-.orpho-home .orpho-hero__lede > .orpho-rule { max-width: 560px; margin-inline: auto; }
-.orpho-home #hero-envelope { align-self: center; min-width: 0; }
-.orpho-home #hero-envelope .orpho-receipt__meta { text-align: center; }
-.orpho-home .orpho-doors-wrap,
-.orpho-home .orpho-situations-wrap { width: 100%; padding-inline: 24px; }
-.orpho-home .orpho-door { min-width: 0; align-items: center; }
-.orpho-home .orpho-door__cta { align-self: center; max-width: 100%; white-space: normal; }
-.orpho-home .orpho-door__body { width: 100%; overflow-wrap: anywhere; }
-.orpho-home .orpho-situations { text-align: center; }
-.orpho-home .action-card,
-.orpho-home .trust-cols,
-.orpho-home .gateway-grid,
-.orpho-home .orpho-hiw,
-.orpho-home .orpho-sample,
-.orpho-home .orpho-arch,
-.orpho-home footer.site { text-align: center; }
-.orpho-home .tier-badge-row,
-.orpho-home footer.site .footer-top,
-.orpho-home footer.site .footer-bottom { justify-content: center; flex-wrap: wrap; }
-.orpho-home :is(section, footer) :is(h1, h2, h3, h4, p) { text-align: center; }
-.orpho-home :is(.orpho-btn, .cta, .gateway, .wrap) { max-width: 100%; }
-.orpho-home .orpho-receipt__meta dd { min-width: 0; overflow-wrap: anywhere; }
+.orpho-home .orpho-hero .orpho-hero__trust { text-align: left; }
+.orpho-home .orpho-hero__lede { min-width: 0; }
+/* Legacy `.hero h1 { margin: 0 auto; max-width: 18ch }` is what kept the
+ * headline centred even after the grid moved. Two classes beat it here. */
+.orpho-home .orpho-hero-title { max-width: none; margin-inline: 0; }
+.orpho-home .orpho-hero__copy { max-width: 60ch; margin-inline: 0; }
+.orpho-home .orpho-hero .orpho-hero__actions { justify-content: flex-start; }
+.orpho-home .orpho-hero__lede > .orpho-rule { margin-inline: 0; }
+.orpho-home #hero-envelope { min-width: 0; }
+/* The drifting engraved crest stays static: less per-frame work for every
+ * visitor, and the probe measures a settled page. It still bleeds off the
+ * left edge exactly where orpho-home.css puts it. */
 .orpho-home .orpho-ornament { animation: none; }
+
+/* ── Bare wraps: content flush to the rail. */
+.orpho-home .orpho-doors-wrap,
+.orpho-home .orpho-situations-wrap,
+.orpho-home .orpho-pair {
+  width: 100%; max-width: none; margin-inline: 0;
+  padding-left: var(--orpho-rail); padding-right: var(--orpho-rail);
+}
+.orpho-home .orpho-pair > section { min-width: 0; max-width: none; }
+.orpho-home .orpho-hiw__inner { max-width: none; margin-inline: 0; }
+
+/* ── Cards: the border sits on the rail; their own inner padding stays. */
+.orpho-home .orpho-features-wrap,
+.orpho-home .orpho-arch {
+  max-width: none; margin-inline: var(--orpho-rail);
+}
+.orpho-home .orpho-arch { text-align: left; }
+.orpho-home .orpho-arch__layers { margin-inline: 0; }
+
+/* ── Legacy `.wrap` (instrument, trust, gateways, final CTA, footer):
+ * 1200px cage → rail. (0,2,0) beats every `.wrap` rule in index.css. */
+.orpho-home .wrap {
+  max-width: none; margin-inline: 0;
+  padding-left: var(--orpho-rail); padding-right: var(--orpho-rail);
+}
+/* The drop target is a bounded well anchored at the left rail — a rail-to-
+ * rail dashed box reads as a page border, not a target. */
+.orpho-home .action-card--solo {
+  margin-inline: 0;
+  max-width: clamp(40rem, 60%, 60rem);
+}
+.orpho-home .trust-cols { max-width: none; margin-inline: 0; }
+.orpho-home .after-tiers {
+  max-width: none; margin-inline: 0; text-align: left;
+  padding-left: var(--orpho-rail); padding-right: var(--orpho-rail);
+}
+.orpho-home .foot-cta { text-align: left; padding-left: 0; padding-right: 0; }
+.orpho-home footer.site .footer-top,
+.orpho-home footer.site .footer-bottom { justify-content: space-between; flex-wrap: wrap; }
+
+/* ── Measures: what the rail releases, the `ch` cap keeps readable. */
+.orpho-home .orpho-door__body,
+.orpho-home .orpho-step__body,
+.orpho-home .trust-col p,
+.orpho-home .gateway p,
+.orpho-home .orpho-arch__note { max-width: 46ch; }
+.orpho-home .after-tiers > p,
+.orpho-home .orpho-situations__more { max-width: 72ch; }
+
+/* ── Robustness carried over from v1 (unrelated to centring). */
+.orpho-home .orpho-door { min-width: 0; }
+.orpho-home .orpho-door__cta { max-width: 100%; white-space: normal; }
+.orpho-home .orpho-door__body { width: 100%; overflow-wrap: anywhere; }
+.orpho-home :is(.orpho-btn, .cta, .gateway) { max-width: 100%; }
+.orpho-home .orpho-receipt__meta dd { min-width: 0; overflow-wrap: anywhere; }
+.orpho-home .orpho-sample__grid { min-width: 0; }
+.orpho-home .orpho-sample__grid > * { min-width: 0; }
+
 @media (max-width: 680px) {
-  .orpho-home > header.orpho-header.nav { padding: 20px 16px; gap: 14px; }
+  .orpho-home > header.orpho-header.nav { gap: var(--orpho-s-4); }
+  .orpho-home header.nav .orpho-nav { justify-content: flex-start; }
   .orpho-home .orpho-brand__name { font-size: clamp(1.15rem, 6vw, 1.85rem); }
   .orpho-home .orpho-brand__sub { font-size: .6rem; letter-spacing: .16em; }
-  .orpho-home header.nav .brand { gap: 10px; }
-  .orpho-home .orpho-hero__inner { gap: 24px; }
+  .orpho-home header.nav .brand { gap: var(--orpho-s-3); }
   .orpho-home .orpho-hero__copy br { display: none; }
-  .orpho-home .orpho-doors-wrap,
-  .orpho-home .orpho-situations-wrap { padding-inline: 16px; }
+  .orpho-home .action-card--solo { max-width: none; }
   .orpho-home #hero-envelope .orpho-receipt__title {
     font-size: clamp(.65rem, 3.5vw, .94rem); letter-spacing: .12em;
   }
   .orpho-home footer.site .cols { grid-template-columns: 1fr; }
-}
-/* Keep the process and example on the same centerline even at zoomed widths. */
-.orpho-home .orpho-pair {
-  display: flex; flex-direction: column; align-items: center; gap: 36px;
-  width: 100%; max-width: 860px;
-}
-.orpho-home .orpho-pair > section { width: 100%; min-width: 0; max-width: 760px; }
-.orpho-home .orpho-hiw__steps { margin-inline: auto; }
-.orpho-home .orpho-step { padding: 48px 0 24px; }
-.orpho-home .orpho-step::before { left: calc(50% - 1.05rem); }
-.orpho-home .orpho-step::after { display: none; }
-.orpho-home .orpho-sample__grid { min-width: 0; }
-.orpho-home .orpho-sample__grid > * { min-width: 0; }
-.orpho-home .orpho-ornament {
-  left: 50%; right: auto; transform: translateX(-50%); opacity: .045;
-}
-.orpho-home .orpho-footer > .orpho-footer__medallion {
-  left: 50%; right: auto; transform: translateX(-50%); opacity: .12;
 }
