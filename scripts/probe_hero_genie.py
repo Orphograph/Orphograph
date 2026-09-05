@@ -1,5 +1,8 @@
-"""Reproducible Chromium/Brave hero lifecycle proof; requires playwright.
-Run: python scripts/probe_hero_genie.py [--browser /path/to/chromium]
+"""Real-browser visual and lifecycle proof for the continuous receipt surface.
+
+Requires Playwright and a local Chromium browser. --url checks a released site;
+without it a loopback server serves this worktree. Visual frames still require
+human inspection: passing assertions alone never establishes aesthetic quality.
 """
 import argparse
 import functools
@@ -11,88 +14,103 @@ from playwright.sync_api import sync_playwright
 
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--url', help='Public release URL; defaults to the local worktree')
-    parser.add_argument('--screenshots', type=Path, help='Optional output directory for phone frames')
-    parser.add_argument('--browser', default='/Applications/Brave Browser.app/Contents/MacOS/Brave Browser')
-    args = parser.parse_args()
-    root = Path(__file__).resolve().parents[1]
-    handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(root / 'web'))
-    server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), handler)
-    threading.Thread(target=server.serve_forever, daemon=True).start()
-    results = []
+    parser=argparse.ArgumentParser()
+    parser.add_argument('--url')
+    parser.add_argument('--screenshots',type=Path)
+    parser.add_argument('--browser',default='/Applications/Brave Browser.app/Contents/MacOS/Brave Browser')
+    args=parser.parse_args()
+    root=Path(__file__).resolve().parents[1]
+    server=http.server.ThreadingHTTPServer(('127.0.0.1',0),functools.partial(http.server.SimpleHTTPRequestHandler,directory=str(root/'web')))
+    threading.Thread(target=server.serve_forever,daemon=True).start()
+    results=[]
+    coverage=set()
+    source_length=0
     try:
         with sync_playwright() as pw:
-            browser = pw.chromium.launch(executable_path=args.browser, headless=True)
-            for width, mode in [(1280, 'warp'), (390, 'warp'), (680, 'warp'), (390, 'fallback'), (390, 'reduce'), (390, 'failure')]:
-                page = browser.new_page(viewport={'width': width, 'height': 900}, reduced_motion='reduce' if mode == 'reduce' else 'no-preference')
-                if mode == 'failure':
-                    page.add_init_script('Element.prototype.animate = () => { throw new Error("WAAPI unavailable") }')
-                if mode == 'fallback':
-                    page.add_init_script('Element.prototype.animate = undefined')
-                errors = []
-                page.on('pageerror', lambda error: errors.append(str(error)))
-                cdp = page.context.new_cdp_session(page)
-                cdp.send('Profiler.enable')
-                cdp.send('Profiler.startPreciseCoverage', {'callCount': True, 'detailed': True})
-                page.goto(args.url or f'http://127.0.0.1:{server.server_port}/index.html', wait_until='load')
-                page.evaluate("scrollTo(0, document.querySelector('#hero-envelope').getBoundingClientRect().top + scrollY - 170)")
+            browser=pw.chromium.launch(executable_path=args.browser,headless=True)
+            for width,mode in [(1280,'normal'),(390,'normal'),(680,'normal'),(390,'reduce'),(390,'unavailable'),(390,'failure')]:
+                page=browser.new_page(viewport={'width':width,'height':1050},reduced_motion='reduce' if mode=='reduce' else 'no-preference')
+                page.add_init_script('''window.frozenFrames=[];const nativeRAF=requestAnimationFrame;
+                  window.requestAnimationFrame=cb=>nativeRAF(t=>{if(window.freezeFrames)frozenFrames.push(cb);else cb(t)});
+                  window.freezeScene=()=>{freezeFrames=true;window.frozenAnimations=document.getAnimations();frozenAnimations.forEach(a=>a.pause())};
+                  window.resumeScene=()=>{freezeFrames=false;frozenAnimations.forEach(a=>a.play());frozenFrames.splice(0).forEach(cb=>nativeRAF(cb))};''')
+                if mode=='unavailable':
+                    page.add_init_script('HTMLCanvasElement.prototype.getContext=()=>null')
+                if mode=='failure':
+                    page.add_init_script('''const draw=CanvasRenderingContext2D.prototype.drawImage;
+                      CanvasRenderingContext2D.prototype.drawImage=function(...args){
+                        if(this.canvas.classList.contains('orpho-genie-surface'))throw new Error('draw unavailable');
+                        return draw.apply(this,args)}''')
+                client=page.context.new_cdp_session(page)
+                client.send('Profiler.enable')
+                client.send('Profiler.startPreciseCoverage',{'callCount':True,'detailed':True})
+                errors=[]
+                page.on('pageerror',lambda error:errors.append(str(error)))
+                page.goto(args.url or f'http://127.0.0.1:{server.server_port}/index.html',wait_until='load')
+                page.evaluate("scrollTo(0,document.querySelector('#hero-envelope').getBoundingClientRect().top+scrollY-170)")
                 page.wait_for_timeout(500)
-                before = page.evaluate('scrollY')
-                if args.screenshots and width == 390 and mode == 'warp':
-                    args.screenshots.mkdir(parents=True, exist_ok=True)
-                    page.screenshot(path=str(args.screenshots / 'phone-closed.png'))
-                page.evaluate("window.frameDeltas=[]; let last=performance.now(), end=last+1400; requestAnimationFrame(function tick(now){frameDeltas.push(now-last);last=now;if(now<end)requestAnimationFrame(tick)})")
+                before=page.evaluate('scrollY')
+                if args.screenshots:
+                    args.screenshots.mkdir(parents=True,exist_ok=True)
+                    page.screenshot(path=str(args.screenshots/f'{width}-{mode}-closed.png'))
                 page.locator('#hero-envelope-toggle').click()
-                page.wait_for_timeout(300)
-                assert page.locator('.orpho-genie').count() == (1 if mode == 'warp' else 0)
-                if args.screenshots and width == 390 and mode == 'warp':
-                    args.screenshots.mkdir(parents=True, exist_ok=True)
-                    page.evaluate("document.querySelectorAll('.orpho-genie, .orpho-genie__band').forEach(el => el.getAnimations().forEach(a => {a.pause(); a.currentTime = 300}))")
-                    page.screenshot(path=str(args.screenshots / 'phone-flight.png'))
-                    page.evaluate("document.querySelectorAll('.orpho-genie, .orpho-genie__band').forEach(el => el.getAnimations().forEach(a => a.play()))")
-                page.wait_for_timeout(1200)
-                assert page.locator('#hero-envelope-toggle').get_attribute('aria-expanded') == 'true'
-                page.wait_for_function("!document.querySelector('.orpho-genie')", timeout=10000)
+                page.wait_for_timeout(550)
+                if mode=='normal':
+                    assert page.locator('.orpho-genie-surface').count()==1
+                    assert page.locator('.orpho-genie__band').count()==0
+                    if args.screenshots:
+                        page.evaluate('freezeScene()');page.wait_for_timeout(40)
+                        page.screenshot(path=str(args.screenshots/f'{width}-{mode}-opening.png'))
+                        page.evaluate('resumeScene()')
+                page.wait_for_timeout(1600)
+                assert page.locator('#hero-envelope-toggle').get_attribute('aria-expanded')=='true'
+                assert page.locator('.orpho-genie-surface').count()==0
                 assert page.locator('#hero-sample-receipt').is_visible()
-                jump = page.evaluate('scrollY') - before
-                assert abs(jump) <= 1, (width, mode, 'unexpected scroll jump', jump)
-                if args.screenshots and width == 390 and mode == 'warp':
-                    page.screenshot(path=str(args.screenshots / 'phone-open.png'))
-                # Resize open and ensure the newly wrapped letter fits.
-                page.set_viewport_size({'width': 350, 'height': 900})
-                page.wait_for_timeout(900)
-                fits = page.evaluate('''() => {const p=document.querySelector('#hero-envelope').getBoundingClientRect(); const r=document.querySelector('#hero-sample-receipt').getBoundingClientRect(); return r.bottom <= p.bottom + 1}''')
-                assert fits, (width, mode, 'receipt overflows resized plate')
+                delta=page.evaluate('scrollY')-before
+                assert abs(delta)<=1,('scroll jump',width,mode,delta)
+                if args.screenshots:
+                    page.screenshot(path=str(args.screenshots/f'{width}-{mode}-open.png'))
                 page.locator('#hero-envelope-toggle').click()
-                page.wait_for_timeout(1400)
-                assert page.locator('#hero-envelope-toggle').get_attribute('aria-expanded') == 'false'
-                page.wait_for_function("!document.querySelector('.orpho-genie')", timeout=10000)
-                # Resize during a flight cancels obsolete geometry cleanly.
-                page.locator('#hero-envelope-toggle').click()
-                page.wait_for_timeout(200)
-                page.set_viewport_size({'width': 410, 'height': 900})
-                page.wait_for_timeout(1200)
-                page.wait_for_function("!document.querySelector('.orpho-genie')", timeout=10000)
+                page.wait_for_timeout(550)
+                if mode=='normal' and args.screenshots:
+                    page.evaluate('freezeScene()');page.wait_for_timeout(40)
+                    page.screenshot(path=str(args.screenshots/f'{width}-{mode}-closing.png'))
+                    page.evaluate('resumeScene()')
+                page.wait_for_timeout(1600)
+                assert page.locator('#hero-envelope-toggle').get_attribute('aria-expanded')=='false'
+                assert page.locator('.orpho-genie-surface').count()==0
+                assert abs(page.evaluate('scrollY')-before)<=1, ('closing scroll jump', width, mode)
+                # Reverse immediately without restarting from either endpoint.
+                page.locator('#hero-envelope-toggle').click();page.wait_for_timeout(180)
+                page.locator('#hero-envelope-toggle').dispatch_event('click');page.wait_for_timeout(1600)
+                assert page.locator('#hero-envelope-toggle').get_attribute('aria-expanded')=='false'
+                assert page.locator('.orpho-genie-surface').count()==0
+                page.locator('#hero-envelope-toggle').click();page.wait_for_timeout(200)
+                page.set_viewport_size({'width':350,'height':1050});page.wait_for_timeout(1400)
                 assert page.locator('#hero-sample-receipt').is_visible()
-                assert not errors, errors
-                coverage = cdp.send('Profiler.takePreciseCoverage')['result']
-                hero = next(item for item in coverage if '/hero-envelope.js?' in item['url'])
-                ranges = [r for fn in hero['functions'] for r in fn['ranges']]
-                measured = bytearray(max(r['endOffset'] for r in ranges))
-                for r in sorted(ranges, key=lambda r: r['endOffset'] - r['startOffset'], reverse=True):
-                    measured[r['startOffset']:r['endOffset']] = bytes([int(r['count'] > 0)]) * (r['endOffset']-r['startOffset'])
-                if 'covered' not in locals():
-                    covered = measured
-                else:
-                    covered = bytearray(a or b for a,b in zip(covered, measured))
-                results.append({'width': width, 'mode': mode, 'scroll_delta': jump, 'resize_fits': fits, 'page_errors': errors, 'frame_intervals_ms': page.evaluate('({median: frameDeltas.sort((a,b)=>a-b)[Math.floor(frameDeltas.length/2)], p95:frameDeltas[Math.floor(frameDeltas.length*.95)]})')})
+                assert page.locator('.orpho-genie-surface').count()==0
+                assert not errors,errors
+                results.append({'width':width,'mode':mode,'scroll_delta':delta,'errors':errors,'passed':True})
+                for script in client.send('Profiler.takePreciseCoverage')['result']:
+                    if '/hero-envelope.js' not in script['url']:
+                        continue
+                    # Apply nested block ranges in order, then union executions
+                    # across desktop, mobile and all fallback scenarios.
+                    functions=script['functions']
+                    source_length=max(source_length,max(r['endOffset'] for f in functions for r in f['ranges']))
+                    hits=set()
+                    for function in functions:
+                        for r in function['ranges']:
+                            region=range(r['startOffset'],r['endOffset'])
+                            if r['count']:hits.update(region)
+                            else:hits.difference_update(region)
+                    coverage.update(hits)
                 page.close()
             browser.close()
-        print(json.dumps({'scenarios': results, 'script_byte_coverage_percent': round(100*sum(covered)/len(covered), 2)}, indent=2))
+        print(json.dumps({'scenarios':results,'js_byte_coverage_percent':round(100*len(coverage)/source_length,2) if source_length else None},indent=2))
     finally:
         server.shutdown()
 
 
-if __name__ == '__main__':
+if __name__=='__main__':
     main()

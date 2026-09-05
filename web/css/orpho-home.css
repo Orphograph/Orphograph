@@ -999,666 +999,125 @@
   margin: 0;
 }
 
-/* ══ Interactive envelope reveal (2026-08-23) ══════════════════════════
- * Progressive enhancement: the unmodified plate remains the fully visible
- * sample. hero-envelope.js adds .is-interactive only after all hooks exist,
- * then the receipt becomes a letter peeking from the envelope pocket.
- */
-.orpho-hero__plate.is-interactive {
-  perspective: 1200px;
+/* Continuous genie composition: the envelope has its own fixed proportions,
+ * independent of the receipt's height. Scoped IDs retire the old wallet poses. */
+#hero-envelope.is-continuous {
+  min-height: 0;
+  width: 100%;
+  max-width: 510px;
+  margin: 0 auto;
+  perspective: none;
+  overflow: visible;
+  overflow-anchor: none;
+  align-self: start;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
-
-.orpho-envelope__pocket {
-  display: none;
+#hero-envelope.is-continuous.is-ready { transition: none; }
+#hero-envelope.is-continuous .orpho-envelope {
+  all: unset; position: absolute; box-sizing: border-box; display: block;
+  top: auto; bottom: 58px; left: 0; right: 0;
+  width: 94%; max-width: 420px; height: auto; aspect-ratio: 1.62;
+  margin: 0 auto;
+  border: 1px solid #d4c4a5;
+  border-radius: 5px;
+  background: linear-gradient(145deg, #fcf8ed, #eee2ca);
+  box-shadow: 0 22px 35px -22px rgba(71,48,20,.45), inset 0 1px #fffdf7;
 }
-
-.orpho-hero__plate.is-interactive .orpho-envelope__pocket {
-  display: block;
-  position: absolute;
-  z-index: 3;
-  left: 0;
-  right: 0;
-  top: 44%;
-  bottom: 0;
-  /* Side folds are the base tone; the bottom fold is a real triangle
-   * (::before) whose edges run corner-to-apex, so every crease line closes
-   * the way a mailing envelope's back does — no line ends mid-air. */
-  background: linear-gradient(168deg, #f2eadb 0%, #e6dac3 62%, #decfb4 100%);
-  border-top: 1px solid rgba(118, 92, 55, 0.13);
-  box-shadow: inset 0 1px 0 rgba(255, 252, 245, 0.72),
-              inset 0 -14px 22px -18px rgba(90, 70, 44, 0.35);
-  pointer-events: none;
-}
-
-/* Bottom fold of the envelope back: base = the two bottom corners, apex just
- * under the pocket mouth. clip-path keeps the two crease edges geometrically
- * exact at any aspect ratio. Filter is applied BEFORE clip-path on the same
- * element (Filter Effects order), which would clip the crease shadows away —
- * so the drop-shadows live on a transparent wrapper (.orpho-envelope__fold)
- * and the clipped triangle is its ::before child; the shadows then follow
- * the triangle's alpha edges and actually draw the crease. */
-.orpho-hero__plate.is-interactive .orpho-envelope__fold {
-  position: absolute;
-  inset: 0;
-  filter: drop-shadow(0 -1px 0 rgba(118, 92, 55, 0.30))
-          drop-shadow(0 1px 0 rgba(255, 252, 245, 0.65));
-}
-.orpho-hero__plate.is-interactive .orpho-envelope__fold::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  clip-path: polygon(0 100%, 50% 7%, 100% 100%);
-  background: linear-gradient(180deg, #efe6d4 0%, #e2d5bb 68%, #d9c9ab 100%);
-}
-
-/* The static composition's right-side crease scratches belong to the flat
- * artwork; in the interactive envelope the pocket owns the folds. */
-.orpho-hero__plate.is-interactive .orpho-envelope::before,
-.orpho-hero__plate.is-interactive .orpho-envelope::after {
-  display: none;
-}
-
-/* The twine must never vanish behind the closed flap: a string-and-button
- * envelope wraps its cord OVER the flap. Strands above the flap (5), discs
- * over the strand ends (6) — pass-9 doctrine, now under the interactive
- * z-order too. Opening unwinds the tie: strands swing loose and fade. */
-.orpho-hero__plate.is-interactive .orpho-envelope__string { z-index: 5; }
-.orpho-hero__plate.is-interactive .orpho-envelope__closure { z-index: 6; }
-.orpho-hero__plate.is-ready .orpho-envelope__string {
-  transition: opacity 260ms ease, transform 420ms cubic-bezier(.2, .72, .2, 1);
-}
-.orpho-hero__plate.is-open .orpho-envelope__string {
-  opacity: 0;
-  transform: rotate(44deg);
-}
-
-.orpho-hero__plate.is-interactive .orpho-envelope__flap {
-  z-index: 4;
+#hero-envelope.is-continuous .orpho-envelope__flap {
+  all: unset; position: absolute; z-index: 5;
+  left: 0; right: 0; top: 0; height: 58%;
+  border: 0; border-radius: 0;
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+  background: linear-gradient(180deg, #fffaf0, #ecdec1);
+  filter: none;
+  transform: none;
+  opacity: 1;
   transform-origin: 50% 0;
-  backface-visibility: hidden;
+  transition: transform 450ms ease, opacity 300ms ease;
 }
-
-.orpho-hero__plate.is-ready .orpho-envelope__flap {
-  transition: transform 620ms cubic-bezier(.2, .72, .2, 1),
-              opacity 300ms ease, box-shadow 420ms ease;
-  transition-delay: 360ms, 360ms, 360ms;
+#hero-envelope.is-continuous.is-open .orpho-envelope__flap {
+  transform: scaleY(-.72); opacity: .55;
 }
-
-.orpho-hero__plate.is-ready .orpho-envelope {
-  /* Only box-shadow changes on this element now — the open press-down is
-   * shadow-only, deliberately, so the envelope never becomes a stacking
-   * context and never flattens the pocket/receipt z-order. */
-  transition: box-shadow 500ms ease;
-}
-
-.orpho-hero__plate.is-open .orpho-envelope {
-  /* No transform here: a transformed envelope becomes a stacking context,
-   * which flattens the pocket/flap z-order and paints the rising receipt
-   * IN FRONT of the pocket — killing the emerge-from-inside illusion.
-   * The open press-down is expressed with shadow only. */
-  box-shadow: 0 28px 58px -25px var(--orpho-shadow-deep),
-              inset 0 1px 0 var(--orpho-emboss-lit);
-}
-
-/* Tucked = INVISIBLE (founder 2026-08-23 night): closed shows only the
- * envelope — no peek strip. The receipt rests below the pocket mouth,
- * behind the pocket (z 2), with its tail clipped so nothing pokes past the
- * envelope's bottom edge. Opening is the only time the receipt shows. */
-.orpho-hero__plate.is-interactive .orpho-hero__receipt {
-  z-index: 2;
-  left: 16%;
-  right: 2%;
-  top: 40%;
-  /* The ambient orpho-float animation would mask every author transform
-   * here (animations outrank normal declarations for animated properties),
-   * killing the open/close motion. Interactive mode owns the transform
-   * channel; the non-JS page keeps its float. */
-  animation: none;
-  /* Closed shows ONLY the envelope. A percentage clip is relative to the
-   * receipt, which is much taller than the envelope on narrow viewports —
-   * at 560px a 55% clip still spilled the hash rows past the envelope's
-   * bottom edge. visibility is exact at every width and every text wrap;
-   * the open/closing states below turn it back on. */
-  visibility: hidden;
-  transform: translate3d(0, 0, 0);
-  transform-origin: 50% 0;
-  clip-path: inset(0 0 55% 0);
-  will-change: transform;
-}
-
-@media (max-width: 1040px) {
-  .orpho-hero__plate.is-interactive .orpho-hero__receipt {
-    left: 7%;
-    right: 7%;
-    top: 41%;
-  }
-}
-
-@media (max-width: 680px) {
-  .orpho-hero__plate.is-interactive .orpho-hero__receipt {
-    left: 5%;
-    right: 5%;
-    top: 42%;
-  }
-}
-
-.orpho-hero__plate.is-ready .orpho-hero__receipt {
-  transition: transform 760ms cubic-bezier(.16, 1, .3, 1),
-              clip-path 260ms ease,
-              box-shadow 500ms ease;
-}
-
-.orpho-hero__plate.is-open .orpho-envelope__flap {
-  transform: rotateX(112deg) translateY(-5%);
-  opacity: .42;
-  box-shadow: 0 2px 3px -2px rgba(90, 70, 44, 0.18);
-  transition-delay: 0ms, 0ms, 0ms;
-}
-
-.orpho-hero__plate.is-open .orpho-hero__receipt,
-.orpho-hero__plate.is-closing .orpho-hero__receipt {
-  visibility: visible;
-  z-index: 6;
-  clip-path: inset(0);
-}
-
-.orpho-hero__plate.is-open .orpho-hero__receipt {
-  /* Final open pose — also the instant fallback when the genie animation
-   * is unavailable (reduced motion, or animations disabled). Vertical lift
-   * only, so the receipt stays inside the envelope at every width. */
-  transform: translate3d(0, -40%, 34px) scale(1.02) rotate(-.35deg);
-  box-shadow: 0 32px 62px -24px rgba(59, 42, 21, .38),
-              0 8px 18px -12px rgba(59, 42, 21, .25);
-  transition-delay: 180ms, 120ms, 180ms;
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  /* Genie, from inside the letter: the receipt starts invisible below the
-   * mouth, rises while held BEHIND the pocket (z 2 in the keyframes masks
-   * the is-open z 6) with its tail clip released only as it clears the
-   * envelope, then comes forward and settles. The 100% frame equals the
-   * is-open pose, so the reduced-motion/no-animation fallback lands on
-   * identical geometry. Closing stays a transition (slides back inside).
-   * .is-genie comes from hero-envelope.js and is only set when opening
-   * from the settled tucked state — re-opening mid-close stays on the
-   * transition path and reverses smoothly instead of teleporting. */
-  @keyframes orpho-genie {
-    0%   { z-index: 2; clip-path: inset(0 0 72% 0); transform: translate3d(0, 0, 0) scale(1, .3); }
-    20%  { clip-path: inset(0 0 52% 0); transform: translate3d(0, -10%, 0) scale(1, .6) skewY(-1deg); }
-    52%  { z-index: 2; clip-path: inset(0 0 8% 0); transform: translate3d(0, -34%, 0) scale(1, 1.02) skewY(.8deg); }
-    56%  { z-index: 6; clip-path: inset(0); }
-    76%  { transform: translate3d(0, -46%, 34px) scale(1.05, 1.04) skewY(-.4deg); }
-    100% { z-index: 6; clip-path: inset(0); transform: translate3d(0, -40%, 34px) scale(1.02) rotate(-.35deg); }
-  }
-  .orpho-hero__plate.is-ready.is-open.is-genie .orpho-hero__receipt {
-    animation: orpho-genie 820ms cubic-bezier(.3, .7, .3, 1) 120ms both;
-  }
-  /* Going back in is the same motion reversed: the receipt descends, slips
-   * behind the pocket, and tucks away. Duration stays under the JS settle
-   * deadline (1050ms) because an animated property emits no transitionend. */
-  .orpho-hero__plate.is-ready.is-closing.is-genie .orpho-hero__receipt {
-    animation: orpho-genie 700ms cubic-bezier(.3, .7, .3, 1) reverse both;
-  }
-}
-
-.orpho-envelope__toggle {
-  display: none;
-}
-
-.orpho-hero__plate.is-interactive .orpho-envelope__toggle {
-  position: absolute;
-  z-index: 9;
-  right: .5%;
-  top: 54%;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 1px;
-  min-width: 144px;
-  padding: 10px 14px 9px;
-  color: var(--orpho-ink);
-  background: rgba(248, 242, 228, .9);
-  border: 1px solid rgba(139, 108, 57, .42);
-  border-radius: 2px;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .66),
-              0 5px 14px -9px rgba(57, 40, 21, .5);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.orpho-envelope__toggle-action {
-  font-family: var(--orpho-display);
-  font-size: .95rem;
-  line-height: 1.15;
-}
-
-.orpho-envelope__toggle-hint {
-  color: var(--orpho-ink-faint);
-  font-size: .62rem;
-  letter-spacing: .16em;
-  line-height: 1.4;
-  text-transform: uppercase;
-}
-
-.orpho-envelope__toggle::after {
-  content: "\2197";
-  position: absolute;
-  right: 12px;
-  top: 50%;
-  color: var(--orpho-gold-deep);
-  transform: translateY(-50%);
-  transition: transform 300ms ease;
-}
-
-.orpho-hero__plate.is-open .orpho-envelope__toggle::after {
-  transform: translateY(-50%) rotate(180deg);
-}
-
-/* Affordance: the envelope answers the pointer before it is clicked. The
- * flap eases up a few degrees on hover (no stagger delay — this is a
- * response, not the choreography) and the whole plate's shadow deepens. */
-.orpho-hero__plate.is-ready:not(.is-open):hover .orpho-envelope__flap {
-  transform: rotateX(14deg);
-  transition-delay: 0ms, 0ms, 0ms;
-}
-.orpho-hero__plate.is-ready:not(.is-open):hover .orpho-envelope {
-  box-shadow: 0 26px 54px -22px var(--orpho-shadow-deep),
-              inset 0 1px 0 var(--orpho-emboss-lit);
-}
-.orpho-hero__plate.is-ready .orpho-envelope__toggle {
-  transition: box-shadow 240ms ease, transform 240ms ease;
-}
-.orpho-hero__plate.is-ready .orpho-envelope__toggle:hover {
-  transform: translateY(-1px);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .66),
-              0 8px 18px -10px rgba(57, 40, 21, .55);
-}
-.orpho-envelope__toggle:focus-visible {
-  outline: 2px solid var(--orpho-gold-deep, #8f7340);
-  outline-offset: 2px;
-}
-
-/* Once open, the large instruction collapses to a quiet return control so
- * the proof itself remains unobstructed. Its text stays as the accessible
- * name and is only visually clipped. */
-.orpho-hero__plate.is-open .orpho-envelope__toggle,
-.orpho-hero__plate.is-closing .orpho-envelope__toggle {
-  width: 42px;
-  height: 42px;
-  min-width: 0;
-  padding: 0;
-  border-radius: 50%;
-}
-.orpho-hero__plate.is-open .orpho-envelope__toggle-action,
-.orpho-hero__plate.is-open .orpho-envelope__toggle-hint,
-.orpho-hero__plate.is-closing .orpho-envelope__toggle-action,
-.orpho-hero__plate.is-closing .orpho-envelope__toggle-hint {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
+#hero-envelope.is-continuous .orpho-envelope__pocket {
+  all: unset; position: absolute; z-index: 3;
+  inset: 0;
   border: 0;
-}
-.orpho-hero__plate.is-open .orpho-envelope__toggle::after,
-.orpho-hero__plate.is-closing .orpho-envelope__toggle::after {
-  right: 50%;
-  transform: translate(50%, -50%) rotate(180deg);
-}
-
-.orpho-envelope__toggle:hover {
-  border-color: var(--orpho-gold-deep);
-  background: rgba(252, 247, 236, .96);
-}
-
-.orpho-envelope__toggle:focus-visible {
-  outline: 2px solid var(--orpho-gold-deep);
-  outline-offset: 4px;
-}
-
-@media (max-width: 680px) {
-  .orpho-hero__plate.is-open,
-  .orpho-hero__plate.is-closing {
-    min-height: 780px;
-  }
-  .orpho-hero__plate.is-open .orpho-hero__receipt {
-    transform: translate3d(0, -8%, 24px) scale(.98) rotate(-.2deg);
-  }
-  .orpho-hero__plate.is-interactive .orpho-envelope__toggle {
-    right: 3%;
-    top: auto;
-    bottom: 2%;
-    min-width: 142px;
-    padding: 8px 12px;
-  }
-  .orpho-hero__plate.is-open .orpho-envelope__toggle,
-  .orpho-hero__plate.is-closing .orpho-envelope__toggle {
-    width: 42px;
-    min-width: 0;
-    padding: 0;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .orpho-hero__plate.is-ready .orpho-envelope__flap,
-  .orpho-hero__plate.is-ready .orpho-envelope,
-  .orpho-hero__plate.is-ready .orpho-hero__receipt,
-  .orpho-hero__plate.is-ready .orpho-envelope__string,
-  .orpho-envelope__toggle::after {
-    transition: none;
-  }
-}
-
-/* ══ Pass 12 — real-envelope fidelity (founder 2026-08-24) ══════════════
- * Reference: a kraft string-and-button mailer seen from the back. Six
- * things separated the painted object from the real one, and none of them
- * needs a new element or a new asset:
- *   1. the paper had grain nowhere — only smooth gradients
- *   2. the edge had no thickness and cast no contact shadow
- *   3. the side flaps left no seams, so nothing tucked into anything
- *   4. the bottom flap was one floating triangle rather than a trapezoid
- *      whose corner creases run out to those seams
- *   5. the tie was a single 4px X; a real one is wound several times
- *   6. the discs had no rim, so they read as printed dots
- *
- * HARD CONSTRAINT: .orpho-envelope must never take a transform, filter,
- * opacity < 1 or will-change. Any of them makes it a stacking context,
- * which flattens the pocket/receipt z-order the reveal depends on and
- * silently kills the emerge-from-inside animation (the #185 defect).
- * Grain therefore rides as a BACKGROUND LAYER, never an overlay element.
- */
-.orpho-hero__plate {
-  --orpho-grain: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='g'><feTurbulence type='fractalNoise' baseFrequency='1.6' numOctaves='3' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='140' height='140' filter='url(%23g)' opacity='0.32'/></svg>");
-  --orpho-fibre: repeating-linear-gradient(93deg, rgba(120, 96, 58, .05) 0 1px, transparent 1px 4px);
-}
-
-/* Body: grain, fibre, and the two side seams painted straight into the
- * background so no element competes with the receipt for z-order. */
-.orpho-envelope {
-  background-image:
-    linear-gradient(90deg, transparent 0 5.6%, rgba(96, 74, 44, .17) 5.6% 6%,
-                    rgba(255, 252, 245, .55) 6% 6.4%, transparent 6.4%),
-    linear-gradient(90deg, transparent 0 93.6%, rgba(255, 252, 245, .55) 93.6% 94%,
-                    rgba(96, 74, 44, .17) 94% 94.4%, transparent 94.4%),
-    var(--orpho-grain),
-    var(--orpho-fibre),
-    linear-gradient(168deg, #f7f2e7 0%, #efe7d6 54%, #e2d7c0 100%);
-  background-size: 100% 64%, 100% 64%, 140px 140px, auto, auto;
-  background-position: 0 36%, 0 36%, 0 0, 0 0, 0 0;
-  background-repeat: no-repeat, no-repeat, repeat, repeat, no-repeat;
-  background-blend-mode: normal, normal, multiply, multiply, normal;
-  box-shadow:
-    inset 0 1px 0 var(--orpho-emboss-lit),
-    0 1px 0 1px rgba(150, 124, 84, .20),
-    0 3px 5px -2px rgba(32, 24, 16, .14),
-    0 26px 44px -26px var(--orpho-shadow-deep);
-}
-
-/* Flap: shallower arc (a real one is not a lens), lit fold edge, grain. */
-.orpho-envelope__flap {
-  border-radius: 0 0 36% 36% / 0 0 46% 46%;
-  background-image: var(--orpho-grain), var(--orpho-fibre),
-    linear-gradient(180deg, #fbf7ee 0%, #f2e9d7 70%, #e8dcc4 100%);
-  background-size: 140px 140px, auto, auto;
-  background-blend-mode: multiply, multiply, normal;
-  box-shadow: inset 0 1px 0 rgba(255, 253, 248, .9),
-              0 1px 0 rgba(150, 124, 84, .38),
-              0 8px 13px -6px rgba(90, 70, 44, .40);
-}
-
-/* Discs: a rim and a bevel, so brass reads as metal pressed into paper. */
-.orpho-envelope__closure,
-.orpho-envelope__closure::after {
-  background: radial-gradient(circle at 34% 30%, #eed6a4 0%, #cfa963 38%,
-                              var(--orpho-brass) 60%, #6d5429 100%);
-  box-shadow: 0 3px 5px -1px var(--orpho-shadow-deep),
-              inset 0 1px 0 rgba(255, 244, 219, .8),
-              inset 0 -2px 3px rgba(70, 52, 24, .45),
-              0 0 0 1px rgba(90, 68, 30, .30);
-}
-
-/* Tie: the stripe axes stay button-center to button-center (pass 9 maths),
- * but the cord is now wound TWICE — an outer wrap offset off-centre and the
- * inner pair thickened. Four strands cross, which is what a wound tie is. */
-.orpho-envelope__string {
-  background:
-    linear-gradient(109.75deg, transparent calc(50% - 8px), #dccfae calc(50% - 8px),
-                    #a89670 calc(50% - 3.5px), transparent calc(50% - 3.5px)),
-    linear-gradient(70.25deg, transparent calc(50% - 8px), #dccfae calc(50% - 8px),
-                    #a89670 calc(50% - 3.5px), transparent calc(50% - 3.5px)),
-    linear-gradient(109.75deg, transparent calc(50% - 2.5px), #e8dcbb calc(50% - 2.5px),
-                    #ab9873 calc(50% + 2.5px), transparent calc(50% + 2.5px)),
-    linear-gradient(70.25deg, transparent calc(50% - 2.5px), #e8dcbb calc(50% - 2.5px),
-                    #ab9873 calc(50% + 2.5px), transparent calc(50% + 2.5px));
-  filter: drop-shadow(1px 1px 1px rgba(90, 70, 44, .40));
-}
-
-/* Pocket: grain, plus a shadow at the mouth so the paper overlaps rather
- * than meeting in a hairline. Contained by the pocket's own stacking
- * context (z-index 3), so nothing here can disturb the reveal. */
-.orpho-hero__plate.is-interactive .orpho-envelope__pocket {
-  background-image: var(--orpho-grain), var(--orpho-fibre),
-    linear-gradient(168deg, #f2eadb 0%, #e6dac3 62%, #decfb4 100%);
-  background-size: 140px 140px, auto, auto;
-  background-blend-mode: multiply, multiply, normal;
-  box-shadow: inset 0 1px 0 rgba(255, 252, 245, .72),
-              inset 0 4px 8px -6px rgba(90, 70, 44, .5),
-              inset 0 -14px 22px -18px rgba(90, 70, 44, .35);
-}
-
-/* Bottom flap: a TRAPEZOID. Its slanted edges are the corner creases, and
- * they run out to the side seams instead of meeting at a floating apex. */
-.orpho-hero__plate.is-interactive .orpho-envelope__fold::before {
-  clip-path: polygon(6% 100%, 16% 5%, 84% 5%, 94% 100%);
-  /* Same paper as the pocket, within a couple of units. A tone JUMP is what
-   * made this read as a panel pasted on the envelope; a real fold is the
-   * same sheet, and the eye reads it from the crease alone. */
-  /* SAME PAPER as the pocket: identical grain + fibre layers and blend mode.
-   * Collapsing the base tone alone was not enough — a smooth fill surrounded
-   * by grained paper reads as a different material whatever its colour. */
-  background-image: var(--orpho-grain), var(--orpho-fibre),
-    linear-gradient(168deg, #f1e9d9 0%, #e5d9c1 62%, #ddcdb1 100%);
-  background-size: 140px 140px, auto, auto;
-  background-blend-mode: multiply, multiply, normal;
-}
-/* The fold is read from its crease, not from a tone jump — a panel-shaped
- * lightness difference is what made the first cut look pasted on. */
-.orpho-hero__plate.is-interactive .orpho-envelope__fold {
-  /* With the tone jump gone the crease carries the whole fold, so it gets
-   * a firmer dark line, a deeper falloff, and a brighter lit lip. */
-  filter: drop-shadow(0 -1px 0 rgba(88, 67, 38, .55))
-          drop-shadow(0 -4px 6px rgba(96, 74, 44, .20))
-          drop-shadow(0 1.5px 0 rgba(255, 253, 247, .85));
-}
-
-/* Regression fix (shipped live in #185): clearing the corner crest with
- * symmetric 62px padding took 124px off a ~435px title box, so the centred
- * "Orphograph Receipt" wrapped onto two lines. Padding is not the lever —
- * the title must simply never wrap, at a size that fits the reduced box. */
-.orpho-hero__receipt .orpho-receipt__title {
-  padding: 0 48px;
-  font-size: 1.12rem;
-  white-space: nowrap;
-}
-@media (max-width: 680px) {
-  .orpho-hero__receipt .orpho-receipt__title { padding: 0 36px; font-size: 1rem; }
-}
-
-/* ── Three doors + the counter (homepage §2b) ─────────────────────────────
- * Same paper, same ink, same measure as the feature list below it. */
-.orpho-doors-wrap {
-  max-width: var(--orpho-measure);
-  margin: 0 auto var(--orpho-s-8);
-  padding: 0 var(--orpho-s-2);
-}
-.orpho-stats {
-  font-family: var(--orpho-body);
-  font-size: var(--orpho-t-small);
-  color: var(--orpho-ink-faint);
-  letter-spacing: 0.02em;
-  margin: 0 0 var(--orpho-s-5);
-  text-align: center;
-}
-.orpho-stats strong { color: var(--orpho-ink); font-weight: 600; }
-.orpho-stats__sep { margin: 0 0.55em; }
-.orpho-stats__link { color: var(--orpho-ink-soft); text-decoration: underline; text-underline-offset: 0.18em; }
-.orpho-doors__title {
-  font-size: 0.82rem;
-  letter-spacing: var(--orpho-track-wide);
-  text-transform: uppercase;
-  color: var(--orpho-ink-faint);
-  margin: 0 0 var(--orpho-s-4);
-  text-align: center;
-}
-.orpho-doors {
-  list-style: none; margin: 0; padding: 0;
-  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--orpho-s-4);
-}
-.orpho-door {
-  display: flex; flex-direction: column; gap: var(--orpho-s-3);
-  padding: var(--orpho-s-5) var(--orpho-s-4);
-  background: var(--orpho-paper-lit);
-  border: 1px solid var(--orpho-paper-deep);
-  border-radius: 6px;
-}
-.orpho-door__title {
-  font-family: var(--orpho-display);
-  font-size: 1.28rem; line-height: 1.2;
-  color: var(--orpho-ink); margin: 0;
-}
-.orpho-door__body { font-size: var(--orpho-t-small); color: var(--orpho-ink-soft); line-height: 1.55; margin: 0; flex: 1; }
-.orpho-door__cta { align-self: flex-start; }
-.orpho-door__links { font-size: var(--orpho-t-small); color: var(--orpho-ink-faint); margin: 0; }
-.orpho-door__links a { color: var(--orpho-ink-soft); text-decoration: underline; text-underline-offset: 0.18em; }
-
-/* ── Pick your situation (homepage §3b) ─────────────────────────────── */
-.orpho-situations-wrap {
-  max-width: var(--orpho-measure);
-  margin: 0 auto var(--orpho-s-8);
-  padding: 0 var(--orpho-s-2);
-}
-.orpho-situations__title {
-  font-size: 0.82rem; letter-spacing: var(--orpho-track-wide); text-transform: uppercase;
-  color: var(--orpho-ink-faint); margin: 0 0 var(--orpho-s-3);
-}
-.orpho-situations {
-  list-style: none; margin: 0; padding: 0;
-  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--orpho-s-2) var(--orpho-s-5);
-}
-.orpho-situations li a {
-  display: block; padding: 0.55rem 0;
-  border-bottom: 1px solid var(--orpho-paper-deep);
-  color: var(--orpho-ink); text-decoration: none; font-size: 0.97rem;
-}
-.orpho-situations li a:hover { color: var(--orpho-gold-deep); }
-.orpho-situations__more { margin: var(--orpho-s-3) 0 0; font-size: var(--orpho-t-small); }
-.orpho-situations__more a { color: var(--orpho-ink-soft); }
-@media (max-width: 1040px) {
-  .orpho-doors { grid-template-columns: 1fr; }
-  .orpho-situations { grid-template-columns: 1fr; }
-}
-
-/* The two new header links fit only on wide viewports; below that the doors
- * carry the same routes, so the links step aside instead of pushing the
- * status badge and the primary CTA off-canvas (measured 881–1197px). */
-@media (max-width: 1200px) {
-  .orpho-nav .nav-agents, .orpho-nav .nav-guides { display: none; }
-}
-
-/* ══ Genie warp (2026-09-05) ═══════════════════════════════════════════
- * hero-envelope.js cuts a clone of the letter into horizontal bands and
- * funnels them out of the pocket mouth with the Web Animations API — the
- * macOS Dock genie, both directions. While the warp plays, the real
- * receipt is parked invisible at its END pose, so the hand-off from the
- * last band frame to the live element is pixel-exact. The orpho-genie
- * keyframes above remain the fallback for engines without WAAPI.
- */
-.orpho-hero__plate.is-warp .orpho-hero__receipt {
-  visibility: hidden !important;
-  animation: none !important;
-  transition: none !important;
-}
-.orpho-hero__plate.is-measuring,
-.orpho-hero__plate.is-measuring * {
-  transition: none !important;
-  animation: none !important;
-}
-.orpho-genie {
-  position: absolute;
-  z-index: 2;
-  pointer-events: none;
-  filter: drop-shadow(0 22px 26px rgba(59, 42, 21, .26));
-}
-.orpho-genie__band {
-  position: absolute;
-  inset: 0;
-  will-change: transform;
-  backface-visibility: hidden;
-}
-.orpho-genie__paper {
-  position: absolute;
-  left: 0; top: 0;
-  width: 100%;
-  margin: 0;
-  animation: none !important;
-  transform: none !important;
+  background: linear-gradient(32deg, #e4d4b5 0%, #f4ebd8 49.7%, transparent 50%) left/50.1% 100% no-repeat,
+              linear-gradient(-32deg, #e4d4b5 0%, #f4ebd8 49.7%, transparent 50%) right/50.1% 100% no-repeat;
   box-shadow: none;
 }
-
-/* The pocket mouth reads as a SLOT: a short depth gradient under the lip,
- * so the letter visibly leaves an opening rather than crossing a seam. */
-.orpho-hero__plate.is-interactive .orpho-envelope__pocket::before {
-  content: "";
-  position: absolute;
-  left: 3%; right: 3%; top: 0;
-  height: 9px;
-  background: linear-gradient(180deg, rgba(70, 52, 28, .30), rgba(70, 52, 28, 0));
+#hero-envelope.is-continuous .orpho-envelope__pocket::before { display: none; }
+#hero-envelope.is-continuous .orpho-envelope__fold {
+  all: unset; position: absolute;
+  inset: 0; filter: drop-shadow(0 -1px 0 rgba(129,96,46,.17));
+}
+#hero-envelope.is-continuous .orpho-envelope__fold::before {
+  content: ""; position: absolute; inset: 0;
+  clip-path: polygon(0 100%, 50% 44%, 100% 100%);
+  background: linear-gradient(0deg, #ede1c9, #f8f0df);
+}
+#hero-envelope.is-continuous .orpho-envelope__string { display: none; }
+#hero-envelope.is-continuous .orpho-envelope__closure {
+  all: unset; position: absolute; z-index: 6; border-radius: 50%;
+  left: calc(50% - 20px); top: calc(49% - 20px); margin: 0;
+  width: 40px; height: 40px;
+  border: 1px solid #b89a5c;
+  background: radial-gradient(circle at 35% 25%, #e6d19c, #bf9952 65%, #ad8748);
+  box-shadow: inset 0 1px 2px #f6e8c4, 0 3px 6px rgba(95,63,17,.2);
+  transition: opacity 200ms ease;
+}
+#hero-envelope.is-continuous .orpho-envelope__closure::before {
+  all: unset;
+  content: ""; position: absolute; inset: 6px;
+  background: url('/seal-display.png?v=8') center/contain no-repeat;
+  mix-blend-mode: multiply; opacity: .7;
+}
+#hero-envelope.is-continuous .orpho-envelope__closure::after { display: none; }
+#hero-envelope.is-continuous.is-open .orpho-envelope__closure { opacity: 0; }
+#hero-envelope.is-continuous .orpho-hero__receipt {
+  visibility: hidden; z-index: 6;
+  top: 58px; left: 8%; right: 8%;
+  transform: none !important;
+  animation: none !important;
+  transition: none !important;
+  clip-path: none;
+  border-radius: 2px;
+  background: linear-gradient(#fcf8ef, #f1e8d6);
+}
+#hero-envelope.is-continuous.is-closing .orpho-hero__receipt { visibility: hidden; }
+#hero-envelope.is-continuous.is-open .orpho-hero__receipt { visibility: visible; }
+#hero-envelope.is-continuous.is-warp .orpho-hero__receipt { visibility: hidden !important; }
+#hero-envelope.is-continuous .orpho-genie-surface {
+  position: absolute; left: 0; top: 0; z-index: 7;
   pointer-events: none;
+  filter: drop-shadow(0 12px 14px rgba(63,44,20,.12));
+}
+#hero-envelope.is-continuous .orpho-envelope__toggle {
+  position: absolute; display: flex; flex-direction: column; z-index: 9;
+  font: inherit; color: var(--orpho-ink); cursor: pointer;
+  top: 0; bottom: auto; left: 50%; right: auto;
+  transform: translateX(-50%);
+  align-items: center;
+  padding: 7px 26px 7px 12px;
+  min-width: 190px;
+  background: transparent;
+  border: 0; box-shadow: none;
+}
+#hero-envelope.is-continuous .orpho-envelope__toggle-hint { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  #hero-envelope.is-continuous, #hero-envelope.is-continuous * { transition: none !important; }
 }
 
-@media (max-width: 680px) {
-  /* Phones. The envelope keeps its proportions (the old rule stretched it to
-   * 718px tall when open) and the plate grows to the letter's REAL height
-   * (--orpho-open-h, set by hero-envelope.js) instead of a fixed 780px the
-   * letter overflowed by 50px. The growth is transitioned, so the page
-   * below slides rather than jumps. The open letter rests 16px from the
-   * plate top with no vertical translate, which is what makes its height
-   * measurable independently of the plate's. */
-  .orpho-hero__plate.is-interactive .orpho-envelope {
-    inset: 0 0 auto 0;
-    height: min(400px, 111.73vw);
-  }
-  .orpho-hero__plate.is-ready {
-    transition: min-height 700ms cubic-bezier(.2, .72, .2, 1);
-  }
-  .orpho-hero__plate.is-open,
-  .orpho-hero__plate.is-closing {
-    min-height: var(--orpho-open-h, 780px);
-  }
-  .orpho-hero__plate.is-open .orpho-hero__receipt,
-  .orpho-hero__plate.is-closing .orpho-hero__receipt {
-    top: 16px;
-  }
-  .orpho-hero__plate.is-open .orpho-hero__receipt {
-    transform: translate3d(0, 0, 24px) scale(.98) rotate(-.2deg);
-  }
-  .orpho-genie { filter: none; }
-  @keyframes orpho-genie-phone {
-    0% { z-index: 2; clip-path: inset(0 0 72% 0); transform: translate3d(0, 180px, 0) scale(.28, .3); }
-    52% { z-index: 2; clip-path: inset(0 0 8% 0); }
-    56% { z-index: 6; clip-path: inset(0); }
-    100% { z-index: 6; clip-path: inset(0); transform: translate3d(0, 0, 24px) scale(.98) rotate(-.2deg); }
-  }
-  .orpho-hero__plate.is-ready.is-genie .orpho-hero__receipt {
-    animation-name: orpho-genie-phone;
-  }
-}
+#hero-envelope.is-continuous .orpho-envelope::before,
+#hero-envelope.is-continuous .orpho-envelope::after,
+#hero-envelope.is-continuous::before, #hero-envelope.is-continuous::after,
+#hero-envelope.is-continuous .orpho-hero__receipt::before,
+#hero-envelope.is-continuous .orpho-hero__receipt::after { display: none; }
+
+#hero-envelope.is-continuous .orpho-receipt__crest { width: 30px; height: 30px; top: 16px; left: calc(50% - 15px); }
+#hero-envelope.is-continuous .orpho-receipt__title { margin-top: 34px; font-size: .94rem; white-space: nowrap; padding: 0; }
+#hero-envelope.is-continuous .orpho-receipt__sub { font-size: .58rem; }
 
 /* ══ TERMINAL BLOCK — mobile reassert (2026-08-10) ══════════════════════
  * Founder's phone screenshots: two squeezed columns at 390pt, receipt
