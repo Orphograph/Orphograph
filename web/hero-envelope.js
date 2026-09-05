@@ -51,7 +51,7 @@
   }
   function fit() {
     const size = dimensions();
-    plate.style.height = (destination ? size.opened : size.closed) + "px";
+    plate.style.height = mix(size.closed, size.opened, smooth(progress)) + "px";
   }
   function clearSurface() {
     if (surface) surface.remove();
@@ -63,6 +63,7 @@
     cancelAnimationFrame(frame);
     frame = 0;
     progress = destination;
+    fit();
     if (staleTexture) { texture = null; staleTexture = false; }
     clearSurface();
     plate.classList.toggle("is-open", Boolean(destination));
@@ -182,6 +183,7 @@
     const elapsed = previousTime ? Math.min(now - previousTime, 40) : 0;
     previousTime = now;
     progress = advance(progress, destination, elapsed);
+    fit();
     try { draw(); } catch (_) { settle(); return; }
     if (progress === destination) { settle(); return; }
     frame = requestAnimationFrame(tick);
@@ -190,7 +192,7 @@
     destination = next ? 1 : 0;
     toggle.setAttribute("aria-expanded", next ? "true" : "false");
     action.textContent = next ? "Return the receipt" : "Open the receipt";
-    plate.classList.toggle("is-open", next);
+    plate.classList.toggle("is-open", next || progress > 0);
     plate.classList.toggle("is-closing", !next && progress > 0);
     fit();
     if (motion.matches) { settle(); return; }

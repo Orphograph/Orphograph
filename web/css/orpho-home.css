@@ -1013,7 +1013,7 @@
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
-#hero-envelope.is-continuous.is-ready { transition: height 1050ms cubic-bezier(.4, 0, .2, 1); }
+#hero-envelope.is-continuous.is-ready { transition: none; }
 #hero-envelope.is-continuous .orpho-envelope {
   all: unset; position: absolute; box-sizing: border-box; display: block;
   top: auto; bottom: 58px; left: 0; right: 0;
@@ -1077,7 +1077,7 @@
 #hero-envelope.is-continuous.is-open .orpho-envelope__closure { opacity: 0; }
 #hero-envelope.is-continuous .orpho-hero__receipt {
   visibility: hidden; z-index: 6;
-  top: 18px; left: 8%; right: 8%;
+  top: 58px; left: 8%; right: 8%;
   transform: none !important;
   animation: none !important;
   transition: none !important;
@@ -1096,7 +1096,7 @@
 #hero-envelope.is-continuous .orpho-envelope__toggle {
   position: absolute; display: flex; flex-direction: column; z-index: 9;
   font: inherit; color: var(--orpho-ink); cursor: pointer;
-  top: auto; bottom: 6px; left: 50%; right: auto;
+  top: 0; bottom: auto; left: 50%; right: auto;
   transform: translateX(-50%);
   align-items: center;
   padding: 7px 26px 7px 12px;

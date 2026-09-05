@@ -23,6 +23,8 @@ def main():
     server=http.server.ThreadingHTTPServer(('127.0.0.1',0),functools.partial(http.server.SimpleHTTPRequestHandler,directory=str(root/'web')))
     threading.Thread(target=server.serve_forever,daemon=True).start()
     results=[]
+    coverage=set()
+    source_length=0
     try:
         with sync_playwright() as pw:
             browser=pw.chromium.launch(executable_path=args.browser,headless=True)
@@ -39,6 +41,9 @@ def main():
                       CanvasRenderingContext2D.prototype.drawImage=function(...args){
                         if(this.canvas.classList.contains('orpho-genie-surface'))throw new Error('draw unavailable');
                         return draw.apply(this,args)}''')
+                client=page.context.new_cdp_session(page)
+                client.send('Profiler.enable')
+                client.send('Profiler.startPreciseCoverage',{'callCount':True,'detailed':True})
                 errors=[]
                 page.on('pageerror',lambda error:errors.append(str(error)))
                 page.goto(args.url or f'http://127.0.0.1:{server.server_port}/index.html',wait_until='load')
@@ -49,7 +54,7 @@ def main():
                     args.screenshots.mkdir(parents=True,exist_ok=True)
                     page.screenshot(path=str(args.screenshots/f'{width}-{mode}-closed.png'))
                 page.locator('#hero-envelope-toggle').click()
-                page.wait_for_timeout(400)
+                page.wait_for_timeout(550)
                 if mode=='normal':
                     assert page.locator('.orpho-genie-surface').count()==1
                     assert page.locator('.orpho-genie__band').count()==0
@@ -66,7 +71,7 @@ def main():
                 if args.screenshots:
                     page.screenshot(path=str(args.screenshots/f'{width}-{mode}-open.png'))
                 page.locator('#hero-envelope-toggle').click()
-                page.wait_for_timeout(400)
+                page.wait_for_timeout(550)
                 if mode=='normal' and args.screenshots:
                     page.evaluate('freezeScene()');page.wait_for_timeout(40)
                     page.screenshot(path=str(args.screenshots/f'{width}-{mode}-closing.png'))
@@ -74,6 +79,7 @@ def main():
                 page.wait_for_timeout(1600)
                 assert page.locator('#hero-envelope-toggle').get_attribute('aria-expanded')=='false'
                 assert page.locator('.orpho-genie-surface').count()==0
+                assert abs(page.evaluate('scrollY')-before)<=1, ('closing scroll jump', width, mode)
                 # Reverse immediately without restarting from either endpoint.
                 page.locator('#hero-envelope-toggle').click();page.wait_for_timeout(180)
                 page.locator('#hero-envelope-toggle').dispatch_event('click');page.wait_for_timeout(1600)
@@ -85,9 +91,23 @@ def main():
                 assert page.locator('.orpho-genie-surface').count()==0
                 assert not errors,errors
                 results.append({'width':width,'mode':mode,'scroll_delta':delta,'errors':errors,'passed':True})
+                for script in client.send('Profiler.takePreciseCoverage')['result']:
+                    if '/hero-envelope.js' not in script['url']:
+                        continue
+                    # Apply nested block ranges in order, then union executions
+                    # across desktop, mobile and all fallback scenarios.
+                    functions=script['functions']
+                    source_length=max(source_length,max(r['endOffset'] for f in functions for r in f['ranges']))
+                    hits=set()
+                    for function in functions:
+                        for r in function['ranges']:
+                            region=range(r['startOffset'],r['endOffset'])
+                            if r['count']:hits.update(region)
+                            else:hits.difference_update(region)
+                    coverage.update(hits)
                 page.close()
             browser.close()
-        print(json.dumps(results,indent=2))
+        print(json.dumps({'scenarios':results,'js_byte_coverage_percent':round(100*len(coverage)/source_length,2) if source_length else None},indent=2))
     finally:
         server.shutdown()
 

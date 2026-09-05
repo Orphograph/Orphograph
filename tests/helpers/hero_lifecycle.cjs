@@ -39,9 +39,12 @@ for(const [reduced,unavailable] of [[true,false],[false,true]]) {
   e.click();assert.equal(e.button.attrs['aria-expanded'],'false');assert.equal(e.surfaces.length,0);
 }
 {
- const e=environment();e.click();for(let i=0;i<20;i++)e.step();
+ const e=environment();const closedHeight=parseFloat(e.plate.style.height);e.click();
+ assert.equal(parseFloat(e.plate.style.height),closedHeight);
+ for(let i=0;i<20;i++)e.step();
+ assert.ok(parseFloat(e.plate.style.height)>closedHeight && parseFloat(e.plate.style.height)<856);
  assert.equal(e.surfaces.length,1);assert.ok(e.plate.classList.contains('is-warp'));
- e.click();e.finish();assert.equal(e.surfaces.length,0);assert.equal(e.button.attrs['aria-expanded'],'false');
+ e.click();assert.ok(e.plate.classList.contains('is-open'));e.finish();assert.equal(parseFloat(e.plate.style.height),closedHeight);assert.equal(e.surfaces.length,0);assert.equal(e.button.attrs['aria-expanded'],'false');
  e.click();e.finish();assert.equal(e.button.attrs['aria-expanded'],'true');assert.equal(e.surfaces.length,0);
  e.doc.events.keydown({key:'Escape'});e.finish();assert.equal(e.button.attrs['aria-expanded'],'false');
  e.click();e.step();e.win.events.resize();assert.equal(e.surfaces.length,0);assert.equal(e.button.attrs['aria-expanded'],'true');
