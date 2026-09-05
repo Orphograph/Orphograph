@@ -1,326 +1,227 @@
-// hero-envelope.js — accessible envelope/receipt reveal on the homepage.
-// The static HTML stays fully readable when JavaScript is unavailable.
-//
-// Motion has two tiers:
-//   1. GENIE WARP (below, Web Animations API): a clone of the letter is cut
-//      into horizontal bands that funnel out of the pocket mouth — the top
-//      band first, every band squeezed to the throat width and released on a
-//      stagger — the way a window leaves the macOS Dock. Closing plays the
-//      same warp backwards, tail first.
-//   2. CSS keyframes (orpho-genie in orpho-home.css): the fallback for an
-//      engine without Element.animate or inset clip-paths. Reduced motion
-//      skips both and lands on the is-open pose without a transition.
-
+// One continuous paper surface, drawn from the real receipt. No DOM band copies.
 (function () {
   "use strict";
+  const clamp = (x) => Math.max(0, Math.min(1, x));
+  const smooth = (x) => { x = clamp(x); return x * x * (3 - 2 * x); };
+  const mix = (a, b, p) => a + (b - a) * p;
 
+  // Every row shares the same monotone vertical map. Adjacent rows therefore
+  // meet exactly, while the lower edge remains a narrow neck until late in flight.
+  function point(progress, row, target, mouth) {
+    const p = clamp(progress);
+    const v = clamp(row);
+    const head = smooth(p);
+    const tail = smooth((p - 0.48) / 0.52);
+    const top = mix(mouth.y, target.top, head);
+    const bottom = mix(mouth.y, target.top + target.height, tail);
+    const spread = smooth(p * 1.65 - v * 0.65);
+    const width = mix(mouth.width, target.width, spread);
+    const center = mix(mouth.x, target.left + target.width / 2, head) +
+      Math.sin(v * Math.PI) * Math.sin(p * Math.PI) * target.width * 0.035;
+    return { x: center - width / 2, y: mix(top, bottom, v), width };
+  }
+  function advance(value, destination, elapsed) {
+    return clamp(value + (destination ? 1 : -1) * Math.min(elapsed, 40) / 1050);
+  }
+  if (typeof document === "undefined") {
+    if (typeof module !== "undefined") module.exports = { point, advance };
+    return;
+  }
   const plate = document.getElementById("hero-envelope");
   const toggle = document.getElementById("hero-envelope-toggle");
   const receipt = document.getElementById("hero-sample-receipt");
-  const action = toggle && toggle.querySelector(".orpho-envelope__toggle-action");
+  if (!plate || !toggle || !receipt) return;
+  const action = toggle.querySelector(".orpho-envelope__toggle-action");
+  const envelope = plate.querySelector(".orpho-envelope");
+  const motion = matchMedia("(prefers-reduced-motion: reduce)");
+  let progress = 0;
+  let destination = 0;
+  let frame = 0;
+  let previousTime = 0;
+  let texture = null;
+  let staleTexture = false;
+  let surface = null;
+  let context = null;
+  const pixelRatio = () => Math.min(devicePixelRatio || 1, 2);
 
-  if (!plate || !toggle || !receipt || !action) return;
-
-  let open = false;
-  let settleTimer = 0;
-  const CLOSE_SETTLE_MS = 1050;
-  const reducedMotion = window.matchMedia &&
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-  // Warp availability. Anything less falls back to the CSS keyframes.
-  const warpAvailable = !reducedMotion &&
-    typeof Element.prototype.animate === "function" &&
-    Boolean(window.CSS && CSS.supports && CSS.supports("clip-path", "inset(0 0 0 0)"));
-
-  // Warp choreography. Bands run top (0) to bottom (N-1). Band i starts
-  // f_i * STAGGER_MS after the first and travels for TRAVEL_MS, so the head
-  // of the letter is out while the tail is still in the throat — that lag
-  // is the genie taper. Closing reverses the stagger: tail in first.
-
-  const TRAVEL_MS = 560;
-  const STAGGER_MS = 300;
-  const LEAD_MS = 120;           // the flap starts lifting before the letter moves
-  const WARP_MS = LEAD_MS + TRAVEL_MS + STAGGER_MS;
-  const THROAT = 0.28;           // band width at the mouth, fraction of the letter
-  const SWAY = 0.05;             // lateral bow at mid-flight, fraction of the width
-  let warpStage = null;
-  let warpRun = 0;
-  let warpAnimations = [];
-
-  function cancelWarp() {
-    ++warpRun;
-    warpAnimations.forEach((animation) => animation.cancel());
-    warpAnimations = [];
-    if (warpStage) warpStage.remove();
-    warpStage = null;
+  function dimensions() {
+    const width = plate.clientWidth;
+    const envelopeHeight = Math.min(width * 0.94, 420) / 1.62;
+    return { closed: envelopeHeight + 100, opened: receipt.offsetHeight + 156 };
+  }
+  function fit() {
+    const size = dimensions();
+    plate.style.height = (destination ? size.opened : size.closed) + "px";
+  }
+  function clearSurface() {
+    if (surface) surface.remove();
+    surface = null;
+    context = null;
     plate.classList.remove("is-warp");
   }
-
-  // Phones: the plate grows to the letter's real height instead of a fixed
-  // 780px the letter used to overflow. Desktop keeps its fixed composition.
-  function fitPlate() {
-    if (window.innerWidth > 680) {
-      plate.style.removeProperty("--orpho-open-h");
-      return;
-    }
-    plate.style.setProperty("--orpho-open-h",
-      Math.ceil(receipt.offsetHeight * 0.98 + 40) + "px");
-  }
-
-  // The letter's OPEN pose in plate coordinates plus the pocket mouth, read
-  // with every transition suppressed so the end state is measured, not the
-  // in-flight one. State classes are restored before anything paints.
-  function measureOpenPose() {
-    const hadOpen = plate.classList.contains("is-open");
-    const hadClosing = plate.classList.contains("is-closing");
-    plate.classList.add("is-measuring");
-    plate.classList.add("is-open");
+  function settle() {
+    cancelAnimationFrame(frame);
+    frame = 0;
+    progress = destination;
+    if (staleTexture) { texture = null; staleTexture = false; }
+    clearSurface();
+    plate.classList.toggle("is-open", Boolean(destination));
     plate.classList.remove("is-closing");
-    void plate.offsetWidth;
-    const p = plate.getBoundingClientRect();
-    const r = receipt.getBoundingClientRect();
-    const pocket = plate.querySelector(".orpho-envelope__pocket");
-    const m = pocket ? pocket.getBoundingClientRect() : p;
-    const cs = getComputedStyle(receipt);
-    const box = {
-      left: receipt.offsetLeft,
-      top: receipt.offsetTop,
-      width: receipt.offsetWidth,
-      height: receipt.offsetHeight,
-      transform: cs.transform,
-      origin: cs.transformOrigin,
-      rect: { left: r.left - p.left, top: r.top - p.top, width: r.width, height: r.height },
-      mouthTop: m.top - p.top,
-      mouthLeft: m.left - p.left,
-      mouthWidth: m.width
-    };
-    plate.classList.toggle("is-open", hadOpen);
-    plate.classList.toggle("is-closing", hadClosing);
-    void plate.offsetWidth;
-    plate.classList.remove("is-measuring");
-    return box;
   }
 
-  function buildStage(box) {
-    const stage = document.createElement("div");
-    stage.className = "orpho-genie";
-    stage.setAttribute("aria-hidden", "true");
-    stage.style.left = box.left + "px";
-    stage.style.top = box.top + "px";
-    stage.style.width = box.width + "px";
-    stage.style.height = box.height + "px";
-    stage.style.transform = box.transform === "none" ? "" : box.transform;
-    stage.style.transformOrigin = box.origin;
-    const bands = [];
-    const WARP_BANDS = window.innerWidth <= 680 ? 48 : 64;
-    for (let i = 0; i < WARP_BANDS; i++) {
-      const band = document.createElement("div");
-      band.className = "orpho-genie__band";
-      band.style.transformOrigin = "50% " + ((i + 0.5) / WARP_BANDS * 100) + "%";
-      // A one-pixel overlap prevents antialiased seams between adjacent slices.
-      const overlap = 100 / box.height;
-      const top = Math.max(0, (i / WARP_BANDS) * 100 - overlap);
-      const bottom = Math.max(0, 100 - ((i + 1) / WARP_BANDS) * 100 - overlap);
-      band.style.clipPath = "inset(" + top + "% 0 " + bottom + "% 0)";
-      const paper = receipt.cloneNode(true);
-      paper.removeAttribute("id");
-      paper.classList.remove("orpho-hero__receipt", "orpho-receipt--floating");
-      paper.classList.add("orpho-genie__paper");
-      paper.querySelectorAll("[id]").forEach((el) => el.removeAttribute("id"));
-      band.appendChild(paper);
-      stage.appendChild(band);
-      bands.push(band);
-    }
-    plate.appendChild(stage);
-    return { stage, bands };
-  }
-
-  // One band's flight path. Every band starts on the mouth line, squeezed to
-  // the throat and pulled to the mouth's centre, and travels to its resting
-  // place with a small lateral bow half-way — the neck of the genie.
-  function bandFrames(f, box, mouthY, mouthDX) {
-    const startY = mouthY - f * box.height;
-    const sway = Math.sin(Math.PI * f) * box.width * SWAY;
-    return [
-      { transform: "translate3d(" + mouthDX + "px, " + startY + "px, 0) scaleX(" + THROAT + ") scaleY(.02)", offset: 0 },
-      { transform: "translate3d(" + (mouthDX * 0.55 + sway) + "px, " + (startY * 0.42) + "px, 0) scaleX(" +
-                   (THROAT + (1 - THROAT) * 0.5) + ") scaleY(.6)", offset: 0.5 },
-      { transform: "translate3d(0, 0, 0) scaleX(1) scaleY(1)", offset: 1 }
-    ];
-  }
-
-  function runWarp(opening) {
-    cancelWarp();
-    const run = warpRun;
-    fitPlate();
-    const box = measureOpenPose();
-    // The real letter parks, invisible, at its end pose for the whole flight;
-    // the choreography classes still drive the flap, the tie and the toggle.
-    plate.classList.add("is-warp");
-    plate.classList.remove("is-genie");
-    plate.classList.toggle("is-open", opening);
-    plate.classList.toggle("is-closing", !opening);
-    toggle.setAttribute("aria-expanded", opening ? "true" : "false");
-    action.textContent = opening ? "Return the receipt" : "Open the receipt";
-
-    const built = buildStage(box);
-    const stage = built.stage;
-    warpStage = stage;
-    const sy = box.rect.height / box.height || 1;
-    const sx = box.rect.width / box.width || 1;
-    const mouthY = (box.mouthTop - box.rect.top) / sy;
-    const mouthDX = (box.mouthLeft + box.mouthWidth / 2 - box.rect.left) / sx - box.width / 2;
-    const fMouth = Math.min(1, Math.max(0, mouthY / box.height));
-    const lead = opening ? LEAD_MS : 0;
-    // Behind the pocket while the head funnels out of the mouth; in front once
-    // the tail — the part that rests over the pocket — starts to leave it.
-    stage.style.zIndex = opening ? "2" : "6";
-    const animations = [];
-    built.bands.forEach((band, i) => {
-      const f = (i + 0.5) / built.bands.length;
-      const animation = band.animate(bandFrames(f, box, mouthY, mouthDX), {
-        duration: TRAVEL_MS,
-        delay: lead + (opening ? f : 1 - f) * STAGGER_MS,
-        easing: "cubic-bezier(.22, .9, .32, 1)",
-        direction: opening ? "normal" : "reverse",
-        fill: "both"
-      });
-      animations.push(animation);
-      warpAnimations.push(animation);
+  // Rasterize the visible content in place from measured glyph positions. This
+  // avoids foreignObject/SVG security restrictions and keeps the exact live values
+  // and fonts rather than maintaining a second, decorative receipt template.
+  function snapshot() {
+    const bounds = receipt.getBoundingClientRect();
+    const ratio = pixelRatio();
+    const image = document.createElement("canvas");
+    image.width = Math.ceil(bounds.width * ratio);
+    image.height = Math.ceil(bounds.height * ratio);
+    const ctx = image.getContext("2d");
+    if (!ctx) throw new Error("Canvas unavailable");
+    ctx.scale(ratio, ratio);
+    const paper = ctx.createLinearGradient(0, 0, 0, bounds.height);
+    paper.addColorStop(0, "#fcf8ef");
+    paper.addColorStop(1, "#f1e8d6");
+    ctx.fillStyle = paper;
+    ctx.fillRect(0, 0, bounds.width, bounds.height);
+    ctx.strokeStyle = "rgba(133,107,66,.22)";
+    ctx.strokeRect(0.5, 0.5, bounds.width - 1, bounds.height - 1);
+    receipt.querySelectorAll("hr, dd").forEach((node) => {
+      const r = node.getBoundingClientRect();
+      ctx.beginPath();
+      ctx.strokeStyle = node.tagName === "HR" ? "#bc9a60" : "rgba(133,107,66,.16)";
+      ctx.setLineDash(node.tagName === "HR" ? [] : [1, 2]);
+      const y = node.tagName === "HR" ? r.top - bounds.top : r.bottom - bounds.top;
+      ctx.moveTo(r.left - bounds.left, y);
+      ctx.lineTo(r.right - bounds.left, y);
+      ctx.stroke();
     });
-    const zAt = opening ? lead + fMouth * STAGGER_MS
-                        : (1 - fMouth) * STAGGER_MS + TRAVEL_MS * 0.6;
-    // Use the document animation timeline for layering as well as bands.
-    // Background throttling must not advance only the pocket hand-off.
-    const layer = stage.animate([
-      { zIndex: opening ? "2" : "6" },
-      { zIndex: opening ? "6" : "2" }
-    ], { duration: 1, delay: zAt, fill: "forwards" });
-    warpAnimations = animations.concat(layer);
-    const done = () => {
-      if (run !== warpRun) return;
-      warpAnimations.forEach((animation) => animation.cancel());
-      warpAnimations = [];
-      stage.remove();
-      warpStage = null;
-      plate.classList.remove("is-warp");
-      if (!open) plate.classList.remove("is-closing");
-    };
-    Promise.all(animations.map((a) => a.finished)).then(done, done);
-  }
-
-  function setOpen(next) {
-    window.clearTimeout(settleTimer);
-    // Genie emergence only runs when opening from the settled tucked state;
-    // re-opening while the close transition is mid-flight would restart the
-    // animation at its 0% frame and teleport the receipt back into the
-    // pocket, so that path stays on the (smoothly reversing) transition.
-    const settled = !plate.classList.contains("is-closing") && !warpStage;
-    open = Boolean(next);
-    if (warpAvailable && settled) {
-      try {
-        runWarp(open);
-        return;
-      } catch (_) {
-        // A partial WAAPI failure must leave the real receipt usable.
-        cancelWarp();
+    const crest = receipt.querySelector("img");
+    if (crest && crest.complete && crest.naturalWidth) {
+      const r = crest.getBoundingClientRect();
+      ctx.drawImage(crest, r.left - bounds.left, r.top - bounds.top, r.width, r.height);
+    }
+    const walker = document.createTreeWalker(receipt, NodeFilter.SHOW_TEXT);
+    let text;
+    while ((text = walker.nextNode())) {
+      if (!text.textContent.trim()) continue;
+      const style = getComputedStyle(text.parentElement);
+      ctx.font = style.fontStyle + " " + style.fontWeight + " " + style.fontSize + " " + style.fontFamily;
+      ctx.fillStyle = style.color;
+      ctx.textBaseline = "alphabetic";
+      const fontSize = parseFloat(style.fontSize);
+      const range = document.createRange();
+      for (let i = 0; i < text.length; i++) {
+        const character = text.textContent[i];
+        if (/\s/.test(character)) continue;
+        range.setStart(text, i);
+        range.setEnd(text, i + 1);
+        const r = range.getBoundingClientRect();
+        const glyph = style.textTransform === "uppercase" ? character.toUpperCase() : character;
+        ctx.fillText(glyph, r.left - bounds.left, r.top - bounds.top + fontSize * 0.86);
       }
     }
-    // Both directions get the genie motion when starting from a settled
-    // state; a direction change mid-flight stays on the transition path,
-    // which reverses smoothly instead of restarting at a keyframe.
-    fitPlate();
-    plate.classList.toggle("is-genie", settled);
-    plate.classList.toggle("is-open", open);
-    plate.classList.toggle("is-closing", !open);
-    toggle.setAttribute("aria-expanded", open ? "true" : "false");
-    action.textContent = open ? "Return the receipt" : "Open the receipt";
+    return image;
+  }
 
-    if (open) {
-      plate.classList.remove("is-closing");
-    } else if (reducedMotion || !plate.classList.contains("is-ready")) {
-      // With transitions disabled there is no transitionend event to perform
-      // the final tuck-behind-the-pocket layer change.
-      plate.classList.remove("is-closing");
-    } else {
-      // transitionend is the fast path below. This deadline is the durable
-      // fallback for engines that omit it when transform layers are retimed.
-      settleTimer = window.setTimeout(() => {
-        if (!open) plate.classList.remove("is-closing");
-      }, CLOSE_SETTLE_MS);
+  function prepare() {
+    if (!texture) texture = snapshot();
+    if (surface) return;
+    surface = document.createElement("canvas");
+    surface.className = "orpho-genie-surface";
+    surface.setAttribute("aria-hidden", "true");
+    const ratio = pixelRatio();
+    const height = Math.max(dimensions().opened, dimensions().closed);
+    surface.width = Math.ceil(plate.clientWidth * ratio);
+    surface.height = Math.ceil(height * ratio);
+    surface.style.width = plate.clientWidth + "px";
+    surface.style.height = height + "px";
+    context = surface.getContext("2d");
+    if (!context) throw new Error("Canvas unavailable");
+    context.scale(ratio, ratio);
+    plate.appendChild(surface);
+    plate.classList.add("is-warp");
+  }
+
+  function draw() {
+    const p = plate.getBoundingClientRect();
+    const r = receipt.getBoundingClientRect();
+    const e = envelope.getBoundingClientRect();
+    const target = { left: r.left - p.left, top: r.top - p.top, width: r.width, height: r.height };
+    const mouth = { x: e.left - p.left + e.width / 2, y: e.top - p.top + e.height * 0.12, width: e.width * 0.12 };
+    const ctx = context;
+    ctx.clearRect(0, 0, surface.width, surface.height);
+    if (progress < 0.003) return;
+    const rows = Math.ceil(target.height / 2);
+    const edges = Array.from({ length: rows + 1 }, (_, i) => point(progress, i / rows, target, mouth));
+    ctx.save();
+    // A single continuous silhouette clips the whole image; no disconnected
+    // rectangles, cracks, or full-height text stacked at the mouth.
+    ctx.beginPath();
+    edges.forEach((a, i) => i ? ctx.lineTo(a.x, a.y) : ctx.moveTo(a.x, a.y));
+    for (let i = rows; i >= 0; i--) ctx.lineTo(edges[i].x + edges[i].width, edges[i].y);
+    ctx.closePath();
+    ctx.clip();
+    ctx.fillStyle = "#f8f2e5";
+    ctx.fillRect(0, 0, surface.width, surface.height);
+    for (let i = 0; i < rows; i++) {
+      const a = edges[i];
+      const b = edges[i + 1];
+      const h = b.y - a.y;
+      if (h <= 0) continue;
+      const sy = i / rows * texture.height;
+      ctx.drawImage(texture, 0, sy, texture.width, texture.height / rows,
+        (a.x + b.x) / 2, a.y, (a.width + b.width) / 2, h + 0.6);
     }
+    ctx.restore();
   }
 
-  // One click = one motion. While a pop-out or return is in flight, extra
-  // clicks are swallowed instead of toggling the state back mid-animation —
-  // the founder-reported "takes four clicks to close" was mid-close clicks
-  // re-opening the envelope.
-  let busyUntil = 0;
-  // Covers the longest motion: the warp (lead + travel + stagger) or the CSS
-  // emergence (120ms delay plus an 820ms animation). A guard shorter than
-  // that leaves a window where a click can land mid-flight and reverse the
-  // state.
-  const MOTION_MS = Math.max(960, WARP_MS + 100);
-
-  function motionInFlight() {
-    return Boolean(warpStage) || performance.now() < busyUntil;
+  function tick(now) {
+    const elapsed = previousTime ? Math.min(now - previousTime, 40) : 0;
+    previousTime = now;
+    progress = advance(progress, destination, elapsed);
+    try { draw(); } catch (_) { settle(); return; }
+    if (progress === destination) { settle(); return; }
+    frame = requestAnimationFrame(tick);
   }
-
-  function toggleOpen() {
-    if (motionInFlight()) return;
-    busyUntil = performance.now() + MOTION_MS;
-    setOpen(!open);
+  function setOpen(next) {
+    destination = next ? 1 : 0;
+    toggle.setAttribute("aria-expanded", next ? "true" : "false");
+    action.textContent = next ? "Return the receipt" : "Open the receipt";
+    plate.classList.toggle("is-open", next);
+    plate.classList.toggle("is-closing", !next && progress > 0);
+    fit();
+    if (motion.matches) { settle(); return; }
+    try {
+      prepare();
+      if (!frame) { previousTime = 0; frame = requestAnimationFrame(tick); }
+    } catch (_) { settle(); }
   }
-
-  // Escape and click-away close through the same guard as a click; otherwise
-  // they can start a return while the emergence is still playing.
-  function requestClose() {
-    if (motionInFlight()) return;
-    busyUntil = performance.now() + MOTION_MS;
-    setOpen(false);
-  }
-
-  toggle.addEventListener("click", toggleOpen);
-
-  // The full physical object is clickable, while the visible button remains
-  // the single keyboard and accessibility control.
+  toggle.addEventListener("click", () => setOpen(!destination));
   plate.addEventListener("click", (event) => {
-    if (event.target.closest("button")) return;
-    toggleOpen();
+    if (!event.target.closest("button, a")) setOpen(!destination);
   });
-
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && open) {
-      requestClose();
+    if (event.key === "Escape" && destination) {
+      setOpen(false);
       toggle.focus({ preventScroll: true });
     }
   });
-
-  document.addEventListener("click", (event) => {
-    if (open && !plate.contains(event.target)) requestClose();
-  });
-
-  receipt.addEventListener("transitionend", (event) => {
-    if (event.propertyName === "transform" && !open && !warpStage) {
-      window.clearTimeout(settleTimer);
-      plate.classList.remove("is-closing");
-    }
-  });
-
-  window.addEventListener("resize", () => {
-    cancelWarp();
-    plate.classList.remove("is-closing", "is-genie");
-    fitPlate();
-    busyUntil = 0;
-  });
-  if (typeof ResizeObserver === "function") {
-    new ResizeObserver(fitPlate).observe(receipt);
+  function resize() {
+    texture = null;
+    clearSurface();
+    settle();
+    fit();
   }
-
-  // Apply the tucked state without animating the page's first paint. Motion
-  // is enabled one frame later for deliberate user-triggered transitions.
-  plate.classList.add("is-interactive");
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => plate.classList.add("is-ready"));
+  window.addEventListener("resize", resize);
+  motion.addEventListener("change", () => { if (motion.matches) settle(); });
+  if (document.fonts) document.fonts.ready.then(() => {
+    if (frame) staleTexture = true; else texture = null;
+    fit();
   });
+  plate.classList.add("is-interactive", "is-continuous");
+  fit();
+  requestAnimationFrame(() => plate.classList.add("is-ready"));
 })();
