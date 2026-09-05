@@ -49,7 +49,7 @@ def test_reveal_keeps_static_receipt_available_without_javascript():
     assert 'class="orpho-hero__plate"' in html
     assert 'aria-hidden="true"' not in html.split('id="hero-envelope"', 1)[0][-120:]
     assert ".is-interactive" in STYLES.read_text(encoding="utf-8")
-    assert 'src="/hero-envelope.js?v=3"' in html
+    assert 'src="/hero-envelope.js?v=4"' in html
 
 
 def test_reveal_covers_keyboard_and_motion_preferences():

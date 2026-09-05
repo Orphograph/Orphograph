@@ -1571,6 +1571,86 @@
   .orpho-nav .nav-agents, .orpho-nav .nav-guides { display: none; }
 }
 
+/* ══ Genie warp (2026-09-05) ═══════════════════════════════════════════
+ * hero-envelope.js cuts a clone of the letter into horizontal bands and
+ * funnels them out of the pocket mouth with the Web Animations API — the
+ * macOS Dock genie, both directions. While the warp plays, the real
+ * receipt is parked invisible at its END pose, so the hand-off from the
+ * last band frame to the live element is pixel-exact. The orpho-genie
+ * keyframes above remain the fallback for engines without WAAPI.
+ */
+.orpho-hero__plate.is-warp .orpho-hero__receipt {
+  visibility: hidden !important;
+  animation: none !important;
+  transition: none !important;
+}
+.orpho-hero__plate.is-measuring,
+.orpho-hero__plate.is-measuring * {
+  transition: none !important;
+  animation: none !important;
+}
+.orpho-genie {
+  position: absolute;
+  z-index: 2;
+  pointer-events: none;
+  filter: drop-shadow(0 22px 26px rgba(59, 42, 21, .26));
+}
+.orpho-genie__band {
+  position: absolute;
+  inset: 0;
+  will-change: transform;
+  backface-visibility: hidden;
+}
+.orpho-genie__paper {
+  position: absolute;
+  left: 0; top: 0;
+  width: 100%;
+  margin: 0;
+  animation: none !important;
+  transform: none !important;
+  box-shadow: none;
+}
+
+/* The pocket mouth reads as a SLOT: a short depth gradient under the lip,
+ * so the letter visibly leaves an opening rather than crossing a seam. */
+.orpho-hero__plate.is-interactive .orpho-envelope__pocket::before {
+  content: "";
+  position: absolute;
+  left: 3%; right: 3%; top: 0;
+  height: 9px;
+  background: linear-gradient(180deg, rgba(70, 52, 28, .30), rgba(70, 52, 28, 0));
+  pointer-events: none;
+}
+
+@media (max-width: 680px) {
+  /* Phones. The envelope keeps its proportions (the old rule stretched it to
+   * 718px tall when open) and the plate grows to the letter's REAL height
+   * (--orpho-open-h, set by hero-envelope.js) instead of a fixed 780px the
+   * letter overflowed by 50px. The growth is transitioned, so the page
+   * below slides rather than jumps. The open letter rests 16px from the
+   * plate top with no vertical translate, which is what makes its height
+   * measurable independently of the plate's. */
+  .orpho-hero__plate.is-interactive .orpho-envelope {
+    inset: 0 0 auto 0;
+    aspect-ratio: 358 / 400;
+  }
+  .orpho-hero__plate.is-ready {
+    transition: min-height 700ms cubic-bezier(.2, .72, .2, 1);
+  }
+  .orpho-hero__plate.is-open,
+  .orpho-hero__plate.is-closing {
+    min-height: var(--orpho-open-h, 780px);
+  }
+  .orpho-hero__plate.is-open .orpho-hero__receipt,
+  .orpho-hero__plate.is-closing .orpho-hero__receipt {
+    top: 16px;
+  }
+  .orpho-hero__plate.is-open .orpho-hero__receipt {
+    transform: translate3d(0, 0, 24px) scale(.98) rotate(-.2deg);
+  }
+  .orpho-genie { filter: none; }
+}
+
 /* ══ TERMINAL BLOCK — mobile reassert (2026-08-10) ══════════════════════
  * Founder's phone screenshots: two squeezed columns at 390pt, receipt
  * clipped mid-word, wax adrift. Cause: correction passes 1–8 appended
