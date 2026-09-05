@@ -139,3 +139,20 @@ jobs:
   # and (2) redundant — tests/test_dist_verifier.py already invokes dist/orphograph-verify/
   # verify.py as a subprocess against freshly-built folder-manifest AND inclusion-proof
   # fixtures (folder OK, tamper-detect, file mode), and runs in the pytest job above.
+
+  homepage-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Install pinned browser test runtime
+        run: |
+          pip install playwright==1.62.0
+          python -m playwright install --with-deps chromium
+      - name: Check whole-page geometry and window lifecycle
+        run: python scripts/probe_home_layout.py --browser chromium --screenshots /tmp/homepage-layout

@@ -1,0 +1,82 @@
+/* Homepage layout boundary. Loaded after shared legacy styles so changes here
+   cannot change other pages or be undone by index.css specificity. */
+body.orpho-home { text-align: center; }
+.orpho-home > header.orpho-header.nav {
+  position: relative; top: auto; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 20px;
+  width: 100%; max-width: 1180px; padding: 24px 20px;
+  backdrop-filter: none; -webkit-backdrop-filter: none;
+}
+.orpho-home header.nav .brand { justify-content: center; margin: 0; }
+.orpho-home header.nav .orpho-nav {
+  margin: 0; width: 100%; flex-wrap: wrap; justify-content: center; gap: 6px;
+}
+.orpho-home header.nav .orpho-nav a { white-space: nowrap; }
+.orpho-home .orpho-hero__inner {
+  display: flex; flex-direction: column; align-items: center; gap: 36px;
+  width: 100%; max-width: 860px;
+}
+.orpho-home .orpho-hero .orpho-hero__lede,
+.orpho-home .orpho-hero .orpho-hero__copy,
+.orpho-home .orpho-hero .orpho-hero__trust,
+.orpho-home .orpho-hero.hero { text-align: center; }
+.orpho-home .orpho-hero__lede { width: 100%; min-width: 0; padding-top: 0; }
+.orpho-home .orpho-hero-title { max-width: 100%; margin-inline: auto; }
+.orpho-home .orpho-hero-title__line { white-space: normal; }
+.orpho-home .orpho-hero__copy { max-width: 62ch; margin-inline: auto; }
+.orpho-home .orpho-hero .orpho-hero__actions { justify-content: center; }
+.orpho-home .orpho-hero__lede > .orpho-rule { max-width: 560px; margin-inline: auto; }
+.orpho-home #hero-envelope { align-self: center; min-width: 0; }
+.orpho-home #hero-envelope .orpho-receipt__meta { text-align: center; }
+.orpho-home .orpho-doors-wrap,
+.orpho-home .orpho-situations-wrap { width: 100%; padding-inline: 24px; }
+.orpho-home .orpho-door { min-width: 0; align-items: center; }
+.orpho-home .orpho-door__cta { align-self: center; max-width: 100%; white-space: normal; }
+.orpho-home .orpho-door__body { width: 100%; overflow-wrap: anywhere; }
+.orpho-home .orpho-situations { text-align: center; }
+.orpho-home .action-card,
+.orpho-home .trust-cols,
+.orpho-home .gateway-grid,
+.orpho-home .orpho-hiw,
+.orpho-home .orpho-sample,
+.orpho-home .orpho-arch,
+.orpho-home footer.site { text-align: center; }
+.orpho-home .tier-badge-row,
+.orpho-home footer.site .footer-top,
+.orpho-home footer.site .footer-bottom { justify-content: center; flex-wrap: wrap; }
+.orpho-home :is(section, footer) :is(h1, h2, h3, h4, p) { text-align: center; }
+.orpho-home :is(.orpho-btn, .cta, .gateway, .wrap) { max-width: 100%; }
+.orpho-home .orpho-receipt__meta dd { min-width: 0; overflow-wrap: anywhere; }
+.orpho-home .orpho-ornament { animation: none; }
+@media (max-width: 680px) {
+  .orpho-home > header.orpho-header.nav { padding: 20px 16px; gap: 14px; }
+  .orpho-home .orpho-brand__name { font-size: clamp(1.15rem, 6vw, 1.85rem); }
+  .orpho-home .orpho-brand__sub { font-size: .6rem; letter-spacing: .16em; }
+  .orpho-home header.nav .brand { gap: 10px; }
+  .orpho-home .orpho-hero__inner { gap: 24px; }
+  .orpho-home .orpho-hero__copy br { display: none; }
+  .orpho-home .orpho-doors-wrap,
+  .orpho-home .orpho-situations-wrap { padding-inline: 16px; }
+  .orpho-home #hero-envelope .orpho-receipt__title {
+    font-size: clamp(.65rem, 3.5vw, .94rem); letter-spacing: .12em;
+  }
+  .orpho-home footer.site .cols { grid-template-columns: 1fr; }
+}
+/* Keep the process and example on the same centerline even at zoomed widths. */
+.orpho-home .orpho-pair {
+  display: flex; flex-direction: column; align-items: center; gap: 36px;
+  width: 100%; max-width: 860px;
+}
+.orpho-home .orpho-pair > section { width: 100%; min-width: 0; max-width: 760px; }
+.orpho-home .orpho-hiw__steps { margin-inline: auto; }
+.orpho-home .orpho-step { padding: 48px 0 24px; }
+.orpho-home .orpho-step::before { left: calc(50% - 1.05rem); }
+.orpho-home .orpho-step::after { display: none; }
+.orpho-home .orpho-sample__grid { min-width: 0; }
+.orpho-home .orpho-sample__grid > * { min-width: 0; }
+.orpho-home .orpho-ornament {
+  left: 50%; right: auto; transform: translateX(-50%); opacity: .045;
+}
+.orpho-home .orpho-footer > .orpho-footer__medallion {
+  left: 50%; right: auto; transform: translateX(-50%); opacity: .12;
+}

@@ -1119,6 +1119,88 @@
 #hero-envelope.is-continuous .orpho-receipt__title { margin-top: 34px; font-size: .94rem; white-space: nowrap; padding: 0; }
 #hero-envelope.is-continuous .orpho-receipt__sub { font-size: .58rem; }
 
+/* ── Three doors + the counter (homepage §2b) ─────────────────────────────
+ * Same paper, same ink, same measure as the feature list below it. */
+.orpho-doors-wrap {
+  max-width: var(--orpho-measure);
+  margin: 0 auto var(--orpho-s-8);
+  padding: 0 var(--orpho-s-2);
+}
+.orpho-stats {
+  font-family: var(--orpho-body);
+  font-size: var(--orpho-t-small);
+  color: var(--orpho-ink-faint);
+  letter-spacing: 0.02em;
+  margin: 0 0 var(--orpho-s-5);
+  text-align: center;
+}
+.orpho-stats strong { color: var(--orpho-ink); font-weight: 600; }
+.orpho-stats__sep { margin: 0 0.55em; }
+.orpho-stats__link { color: var(--orpho-ink-soft); text-decoration: underline; text-underline-offset: 0.18em; }
+.orpho-doors__title {
+  font-size: 0.82rem;
+  letter-spacing: var(--orpho-track-wide);
+  text-transform: uppercase;
+  color: var(--orpho-ink-faint);
+  margin: 0 0 var(--orpho-s-4);
+  text-align: center;
+}
+.orpho-doors {
+  list-style: none; margin: 0; padding: 0;
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--orpho-s-4);
+}
+.orpho-door {
+  display: flex; flex-direction: column; gap: var(--orpho-s-3);
+  padding: var(--orpho-s-5) var(--orpho-s-4);
+  background: var(--orpho-paper-lit);
+  border: 1px solid var(--orpho-paper-deep);
+  border-radius: 6px;
+}
+.orpho-door__title {
+  font-family: var(--orpho-display);
+  font-size: 1.28rem; line-height: 1.2;
+  color: var(--orpho-ink); margin: 0;
+}
+.orpho-door__body { font-size: var(--orpho-t-small); color: var(--orpho-ink-soft); line-height: 1.55; margin: 0; flex: 1; }
+.orpho-door__cta { align-self: flex-start; }
+.orpho-door__links { font-size: var(--orpho-t-small); color: var(--orpho-ink-faint); margin: 0; }
+.orpho-door__links a { color: var(--orpho-ink-soft); text-decoration: underline; text-underline-offset: 0.18em; }
+
+/* ── Pick your situation (homepage §3b) ─────────────────────────────── */
+.orpho-situations-wrap {
+  max-width: var(--orpho-measure);
+  margin: 0 auto var(--orpho-s-8);
+  padding: 0 var(--orpho-s-2);
+}
+.orpho-situations__title {
+  font-size: 0.82rem; letter-spacing: var(--orpho-track-wide); text-transform: uppercase;
+  color: var(--orpho-ink-faint); margin: 0 0 var(--orpho-s-3);
+}
+.orpho-situations {
+  list-style: none; margin: 0; padding: 0;
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--orpho-s-2) var(--orpho-s-5);
+}
+.orpho-situations li a {
+  display: block; padding: 0.55rem 0;
+  border-bottom: 1px solid var(--orpho-paper-deep);
+  color: var(--orpho-ink); text-decoration: none; font-size: 0.97rem;
+}
+.orpho-situations li a:hover { color: var(--orpho-gold-deep); }
+.orpho-situations__more { margin: var(--orpho-s-3) 0 0; font-size: var(--orpho-t-small); }
+.orpho-situations__more a { color: var(--orpho-ink-soft); }
+@media (max-width: 1040px) {
+  .orpho-doors { grid-template-columns: 1fr; }
+  .orpho-situations { grid-template-columns: 1fr; }
+}
+
+/* The two new header links fit only on wide viewports; below that the doors
+ * carry the same routes, so the links step aside instead of pushing the
+ * status badge and the primary CTA off-canvas (measured 881–1197px). */
+@media (max-width: 1200px) {
+  .orpho-nav .nav-agents, .orpho-nav .nav-guides { display: none; }
+}
+
+
 /* ══ TERMINAL BLOCK — mobile reassert (2026-08-10) ══════════════════════
  * Founder's phone screenshots: two squeezed columns at 390pt, receipt
  * clipped mid-word, wax adrift. Cause: correction passes 1–8 appended
