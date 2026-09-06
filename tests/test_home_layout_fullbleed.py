@@ -58,6 +58,7 @@ def _rules(css: str):
     """Yield (selector_text, declaration_block) for every rule, media blocks
     flattened. Good enough for a hand-written sheet; not a CSS parser."""
     css = _strip_comments(css)
+    css = re.sub(r"@keyframes[^{]*\{(?:[^{}]*\{[^{}]*\})*[^{}]*\}", "", css)  # whole keyframes blocks
     css = re.sub(r"@media[^{]*\{", "", css)          # open media blocks
     for m in re.finditer(r"([^{}]+)\{([^{}]*)\}", css):
         sel = " ".join(m.group(1).split())
@@ -112,6 +113,32 @@ class TestFullBleedSheet(unittest.TestCase):
             self.assertEqual(_declares(CSS, anc, "transform"), [],
                              f"transform on {anc} flattens the #hero-envelope z-stack")
 
+    def test_phase_c_ornament_is_decorative_and_respects_reduced_motion(self):
+        """Corners, ledger ground and connector: absolute, pointer-events none,
+        and every animation this sheet declares is switched off under
+        prefers-reduced-motion. A keyframes name that is animated but never
+        stilled is the regression this pins."""
+        code = _strip_comments(CSS)
+        for sel in (".orpho-corners", ".orpho-hero::before", ".orpho-connector"):
+            blocks = [b for s, b in _rules(CSS) if any(part.endswith(sel) for part in _split_selectors(s))]
+            self.assertTrue(blocks, f"{sel} missing")
+            joined = " ".join(blocks)
+            self.assertRegex(joined, r"position\s*:\s*absolute", f"{sel} must be absolutely positioned")
+            self.assertRegex(joined, r"pointer-events\s*:\s*none", f"{sel} must not take the pointer")
+        for sel in (".orpho-hero::before", ".orpho-connector"):
+            joined = " ".join(b for s, b in _rules(CSS) if s.endswith(sel))
+            self.assertRegex(joined, r"z-index\s*:\s*0", f"{sel} sits under .orpho-hero__inner (z 1)")
+        animated = set(re.findall(r"animation\s*:\s*([a-zA-Z][\w-]*)", code)) - {"none"}
+        defined = set(re.findall(r"@keyframes\s+([\w-]+)", code))
+        self.assertTrue(animated, "Phase C declares at least one animation")
+        self.assertEqual(animated - defined, set(), "animation names must be defined in this sheet")
+        rm = re.search(r"@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{(.*?)\}\s*$", code, flags=re.S)
+        self.assertIsNotNone(rm, "a prefers-reduced-motion block must close the sheet")
+        for sel, block in _rules(CSS):
+            if re.search(r"animation\s*:\s*orpho-", block):
+                self.assertRegex(rm.group(1), re.escape(sel.split()[-1]) + r"[^{]*\{[^}]*animation\s*:\s*none",
+                                 f"{sel} animates but is not stilled under reduced motion")
+
     def test_negative_control_checker_sees_a_planted_defect(self):
         planted = (".orpho-home .orpho-hero__inner { grid-template-columns: 1fr 1fr; }\n"
                    ".orpho-home .orpho-hero { transform: translateX(0); }\n"
@@ -122,6 +149,8 @@ class TestFullBleedSheet(unittest.TestCase):
                          [".orpho-home .orpho-hero"])
         self.assertTrue(re.findall(r"#[0-9a-fA-F]{3,8}\b", planted))
         self.assertIn("100vw", planted)
+        kf = "@keyframes x { 0% { left: 0 } 100% { left: 10px } }\n.orpho-home .a { color: red; }\n"
+        self.assertEqual([s for s, _ in _rules(kf)], [".orpho-home .a"], "keyframes steps are not rules")
 
 
 if __name__ == "__main__":
