@@ -16,7 +16,8 @@
    * No `transform` on any ancestor of #hero-envelope (it flattens the
      envelope/receipt z-stack). No `100vw` (includes the scrollbar). No
      overflow-x:hidden on html/body (it kills #sticky-status mid-anchor).
-   * Colours, radii, durations come from orpho-tokens.css only. */
+   * Colours, radii, durations come from orpho-tokens.css only.
+   * Phase C ornament (corners, ledger ground, connector) is the last block. */
 
 .orpho-home { --orpho-rail: clamp(1rem, 4vw, 4.5rem); }
 
@@ -63,8 +64,7 @@
   width: 100%; max-width: none; margin: 0;
 }
 .orpho-home .orpho-hero .orpho-hero__lede,
-.orpho-home .orpho-hero .orpho-hero__copy,
-.orpho-home .orpho-hero .orpho-hero__trust { text-align: left; }
+.orpho-home .orpho-hero .orpho-hero__copy { text-align: left; }
 .orpho-home .orpho-hero__lede { min-width: 0; }
 /* Legacy `.hero h1 { margin: 0 auto; max-width: 18ch }` is what kept the
  * headline centred even after the grid moved. Two classes beat it here. */
@@ -147,4 +147,101 @@
     font-size: clamp(.65rem, 3.5vw, .94rem); letter-spacing: .12em;
   }
   .orpho-home footer.site .cols { grid-template-columns: 1fr; }
+}
+
+/* ══ Phase C — ornament at the edges (2026-09-05, founder lifted the gate) ══
+ * Everything below is decorative and lives in the hero's padding band or
+ * beneath the hero grid: nothing here moves the lede, the plate or the
+ * buttons, and nothing takes a pointer. Above 1040px only — the one-column
+ * hero has no corners to speak of.
+ *
+ * C2/C3 · ledger rules + edge fade. ONE pseudo-element, two background
+ *   layers. body.orpho::before already paints the paper grain, so a second
+ *   noise texture would double it; faint horizontal ledger rules give the
+ *   hero a ruled-page ground instead, and the paper deepens toward both
+ *   edges the way a sheet does under a lamp. z 0, under .orpho-hero__inner
+ *   (z 1). Colours: tokens only.
+ * C1 · corners. Four <li> in the hero's four corners, in the padding band,
+ *   so they cannot collide with the grid by construction (the probe still
+ *   measures it). Each has a 1px gold hairline through the rail to the edge.
+ * C4 · connector. A hairline from behind the envelope to the right edge, a
+ *   block glyph half off the edge (clipped by the hero's overflow:hidden),
+ *   one gold point travelling it on the --orpho-m-float clock. No transform
+ *   anywhere on an ancestor of #hero-envelope; the dot animates `left`. */
+@media (min-width: 1041px) {
+  .orpho-home .orpho-hero.hero {
+    padding-top: calc(var(--orpho-s-8) + var(--orpho-s-4));
+    padding-bottom: calc(var(--orpho-s-8) + var(--orpho-s-4));
+  }
+  .orpho-home .orpho-hero::before {
+    content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none;
+    background:
+      linear-gradient(to right, var(--orpho-paper-deep), transparent 14%, transparent 86%, var(--orpho-paper-deep)),
+      repeating-linear-gradient(to bottom, transparent 0, transparent calc(2.25rem - 1px), var(--orpho-hairline) calc(2.25rem - 1px), var(--orpho-hairline) 2.25rem);
+    mix-blend-mode: multiply;
+    opacity: .55;
+  }
+
+  .orpho-home .orpho-corners {
+    list-style: none; margin: 0; padding: 0;
+    position: absolute; inset: 0; z-index: 1; pointer-events: none;
+  }
+  .orpho-home .orpho-corner {
+    position: absolute; margin: 0; max-width: 15rem;
+    font-size: .8rem; line-height: 1.5; color: var(--orpho-ink-faint);
+  }
+  .orpho-home .orpho-corner strong {
+    display: block; margin-bottom: var(--orpho-s-1);
+    font-size: .66rem; font-weight: 600; letter-spacing: var(--orpho-track-cap);
+    text-transform: uppercase; color: var(--orpho-gold-deep);
+  }
+  .orpho-home .orpho-corner--tl, .orpho-home .orpho-corner--bl { left: var(--orpho-rail); text-align: left; }
+  .orpho-home .orpho-corner--tr, .orpho-home .orpho-corner--br { right: var(--orpho-rail); text-align: right; }
+  .orpho-home .orpho-corner--tl, .orpho-home .orpho-corner--tr { top: var(--orpho-s-4); }
+  .orpho-home .orpho-corner--bl, .orpho-home .orpho-corner--br { bottom: var(--orpho-s-4); }
+  /* The hairline: from the corner's far edge, through the rail, to the viewport edge. */
+  .orpho-home .orpho-corner::after {
+    content: ""; position: absolute; top: -.6rem; height: 1px;
+    width: calc(100% + var(--orpho-rail));
+  }
+  .orpho-home .orpho-corner--tl::after, .orpho-home .orpho-corner--bl::after {
+    left: calc(-1 * var(--orpho-rail));
+    background: linear-gradient(to right, var(--orpho-gold), var(--orpho-gold) 40%, transparent);
+  }
+  .orpho-home .orpho-corner--tr::after, .orpho-home .orpho-corner--br::after {
+    right: calc(-1 * var(--orpho-rail));
+    background: linear-gradient(to left, var(--orpho-gold), var(--orpho-gold) 40%, transparent);
+  }
+
+  .orpho-home .orpho-connector {
+    position: absolute; right: 0; top: 50%; z-index: 0; pointer-events: none;
+    width: calc(var(--orpho-rail) + 18vw); height: 1px;
+    background: linear-gradient(to right, transparent, var(--orpho-gold) 30%, var(--orpho-gold));
+  }
+  .orpho-home .orpho-connector__block {
+    position: absolute; right: -.6rem; top: -.6rem;
+    width: 1.2rem; height: 1.2rem; box-sizing: border-box;
+    border: 1px solid var(--orpho-gold);
+    background: var(--orpho-paper-lit);
+    box-shadow: inset 0 0 0 3px var(--orpho-paper-lit), inset 0 0 0 4px var(--orpho-gold-deep);
+  }
+  .orpho-home .orpho-connector__dot {
+    position: absolute; top: -.2rem; left: 0;
+    width: .4rem; height: .4rem; border-radius: 50%;
+    background: var(--orpho-gold);
+    box-shadow: 0 0 0 2px var(--orpho-paper-lit);
+    animation: orpho-connector-travel var(--orpho-m-float) var(--orpho-ease) infinite;
+  }
+}
+@media (max-width: 1040px) {
+  .orpho-home .orpho-corners, .orpho-home .orpho-connector { display: none; }
+}
+@keyframes orpho-connector-travel {
+  0%   { left: 0; opacity: 0; }
+  12%  { opacity: 1; }
+  88%  { opacity: 1; }
+  100% { left: calc(100% - 1.2rem); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .orpho-home .orpho-connector__dot { animation: none; left: calc(100% - 1.2rem); opacity: 1; }
 }

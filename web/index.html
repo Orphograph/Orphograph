@@ -19,7 +19,7 @@
 <link rel="stylesheet" href="/css/orpho-primitives.css?v=3">
 <link rel="stylesheet" href="/css/orpho-home.css?v=20">
 <link rel="stylesheet" href="/index.css?v=21">
-<link rel="stylesheet" href="/home-layout.css?v=2">
+<link rel="stylesheet" href="/home-layout.css?v=3">
 <link rel="preload" as="image" href="/seal-display.png?v=8" fetchpriority="high">
 <meta name="copyright" content="© 2026 Orphograph. MIT — see /LICENSE">
 <script type="application/ld+json">
@@ -123,9 +123,6 @@
         <a href="#drop" class="orpho-btn orpho-btn--primary cta cta-btn">Anchor a file</a>
         <a href="/verify/" class="orpho-btn orpho-btn--secondary cta cta-ghost">Verify a receipt</a>
       </div>
-      <p class="orpho-hero__trust reassure">
-        Open. Transparent. Decentralized.<br>Your proof. Forever.
-      </p>
     </div>
 
     <!-- Interactive product reveal. Without JavaScript this remains the same
@@ -177,6 +174,24 @@
       </button>
     </div>
   </div>
+
+  <!-- Phase C (2026-09-05, "Push to Every Corner"): the four guarantees sit
+       in the hero's four corners — the copy is the feature strip's, verbatim,
+       so the same promise is made once in the same words. Each carries a
+       gold hairline that runs through the rail to the viewport edge. They
+       replace the former trust line under the buttons; hidden at and below
+       1040px, where the hero is one column and the corners have no room. -->
+  <ul class="orpho-corners" aria-label="Guarantees">
+    <li class="orpho-corner orpho-corner--tl"><strong>Privacy First</strong><span>Your file stays on your device. Only its fingerprint is submitted.</span></li>
+    <li class="orpho-corner orpho-corner--tr"><strong>Open Source</strong><span>Auditable. Reproducible. Built for truth.</span></li>
+    <li class="orpho-corner orpho-corner--bl"><strong>Independently Verifiable</strong><span>Anyone, anywhere can verify your proof.</span></li>
+    <li class="orpho-corner orpho-corner--br"><strong>Bitcoin Anchored</strong><span>Committed on-chain for censorship resistance.</span></li>
+  </ul>
+  <!-- Receipt → block connector: a hairline leaves from behind the envelope
+       and runs off the right edge into an engraved block glyph; one point of
+       gold travels it. Decorative, beneath the hero grid, still under
+       prefers-reduced-motion. -->
+  <span class="orpho-connector" aria-hidden="true"><span class="orpho-connector__dot"></span><span class="orpho-connector__block"></span></span>
 </section>
 
 <!-- ─────────────────────── 2b · THREE DOORS + THE COUNTER ───────────────────────
