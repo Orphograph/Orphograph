@@ -8,7 +8,9 @@ Layout contract (2026-09-05, full-bleed): the FRAME is flush to the page rail
 (--orpho-rail = clamp(1rem, 4vw, 4.5rem)) on both sides at every width, copy is
 left-aligned and keeps a reading measure, the hero is two columns above 1040px
 and one below, nothing escapes the viewport, and the document never scrolls
-sideways. The rail is recomputed here from the same clamp rather than read
+sideways. Phase C ornament (four corner guarantees with hairlines to the edge,
+a receipt-to-block connector, a ruled ground) shows only above 1040px and never
+overlaps the headline, copy, buttons, plate, receipt or toggle. The rail is recomputed here from the same clamp rather than read
 back from CSS, so a sheet that silently drops the custom property fails.
 """
 import argparse
@@ -58,6 +60,43 @@ def check_layout(page, width):
       }
       const cols = getComputedStyle(q('.orpho-doors')).gridTemplateColumns.split(' ').length;
       if (cols !== (W <= 1040 ? 1 : 3)) problems.push('doors grid lost');
+      // Phase C ornament: corners + connector above 1040 only, never touching the
+      // hero content, hairlines reaching the viewport edge, ground texture painted.
+      const corners = [...document.querySelectorAll('.orpho-corner')];
+      const conn = q('.orpho-connector');
+      const shown = el => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(el).display !== 'none'; };
+      const hit = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+      if (corners.length !== 4) problems.push(`expected 4 corners, found ${corners.length}`);
+      if (W <= 1040) {
+        if (corners.some(shown) || shown(conn)) problems.push('ornament visible in the one-column hero');
+      } else {
+        const hero = rect('.orpho-hero');
+        // The tucked receipt keeps a layout box below the envelope while visibility:hidden; only visible boxes can collide.
+        const content = ['.orpho-hero-title', '.orpho-hero__copy', '.orpho-hero__actions', '#hero-envelope', '#hero-envelope-toggle', '#hero-sample-receipt']
+          .filter(s => getComputedStyle(q(s)).visibility !== 'hidden').map(s => rect(s));
+        for (const c of corners) {
+          const r = c.getBoundingClientRect();
+          if (!shown(c)) { problems.push(c.className + ' hidden above 1040'); continue; }
+          if (r.left < hero.left - 1 || r.right > hero.right + 1 || r.top < hero.top - 1 || r.bottom > hero.bottom + 1) problems.push(c.className + ' outside the hero');
+          for (const [i, b] of content.entries()) if (hit(r, b)) problems.push(`${c.className} collides with content #${i}`);
+          const onLeft = c.className.includes('--tl') || c.className.includes('--bl');
+          if (Math.abs((onLeft ? r.left : W - r.right) - rail) >= TOL) problems.push(c.className + ' not at rail');
+          const after = getComputedStyle(c, '::after');
+          const hairline = parseFloat(after.width);
+          if (Math.abs(hairline - (r.width + rail)) >= TOL) problems.push(`${c.className} hairline ${hairline.toFixed(1)} does not reach the edge (${(r.width + rail).toFixed(1)})`);
+        }
+        if (!shown(conn)) problems.push('connector hidden above 1040');
+        else {
+          const r = conn.getBoundingClientRect();
+          if (Math.abs(W - r.right) >= 1) problems.push(`connector stops ${(W - r.right).toFixed(1)}px short of the edge`);
+          if (!hit(r, rect('#hero-envelope'))) problems.push('connector does not reach the envelope plate');
+          if (hit(r, rect('#hero-envelope-toggle'))) problems.push('connector crosses the toggle');
+          for (const c of corners) if (hit(r, c.getBoundingClientRect())) problems.push('connector crosses a corner');
+          if (parseInt(getComputedStyle(conn).zIndex, 10) !== 0) problems.push('connector must sit under the hero grid');
+        }
+        const ground = getComputedStyle(q('.orpho-hero'), '::before');
+        if (!ground.backgroundImage.includes('gradient')) problems.push('hero ground texture missing');
+      }
       return problems;
     }''', [width, FRAMES, CARDS])
 

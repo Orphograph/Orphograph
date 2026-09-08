@@ -143,5 +143,53 @@ class TestHomepageHooksSurvive(unittest.TestCase):
             "The header crest must use the canonical seal artwork.")
 
 
+    def test_hero_corners_are_decorative_and_quote_the_feature_strip(self):
+        """The hero corners repeat the feature strip's promises verbatim, so
+        they must not be announced a second time.
+
+        Measured in the accessibility tree on 2026-09-07 (Brave, CDP
+        `Accessibility.getFullAXTree`): the shipped markup exposed the Privacy
+        First body text TWICE at 1440px and once at 900px, so what a screen
+        reader announced changed with viewport width — while the sheet's own
+        header calls the whole block decorative and the sibling connector
+        already carried aria-hidden. The `<ul>` is now aria-hidden, which
+        leaves the feature strip as the single semantic copy.
+
+        The second assertion pins the "verbatim" claim the markup makes in a
+        comment: every corner's (title, body) pair must appear in the strip.
+        A comment cannot hold that; the next copy edit to one list would fork
+        them silently.
+        """
+        corners = re.search(r'<ul class="orpho-corners"[^>]*>(.*?)</ul>',
+                            self.html, re.S)
+        self.assertIsNotNone(corners, "the hero corner list must exist")
+        self.assertRegex(
+            corners.group(0).split(">", 1)[0], r'aria-hidden\s*=\s*"true"',
+            "the corner list duplicates the feature strip and must be "
+            "aria-hidden, or the promises are announced twice")
+        self.assertNotIn(
+            "aria-label", corners.group(0).split(">", 1)[0],
+            "an aria-hidden list needs no label")
+
+        def pairs(fragment):
+            return {(re.sub(r"\s+", " ", t).strip(), re.sub(r"\s+", " ", b).strip())
+                    for t, b in re.findall(r"<strong[^>]*>(.*?)</strong>\s*"
+                                           r"<span[^>]*>(.*?)</span>", fragment, re.S)}
+
+        corner_pairs = pairs(corners.group(1))
+        self.assertEqual(len(corner_pairs), 4, "four corners are expected")
+        strip = re.search(r'<(?:ul|div)[^>]*class="[^"]*orpho-features[^"]*"[^>]*>(.*?)</(?:ul|div)>',
+                          self.html, re.S)
+        if strip is None:                     # strip markup moved; pin what we can
+            self.skipTest("feature strip not found by class orpho-features")
+        strip_text = re.sub(r"<[^>]+>", " ", strip.group(1))
+        strip_text = re.sub(r"\s+", " ", strip_text)
+        for title, body in sorted(corner_pairs):
+            self.assertIn(title, strip_text,
+                          f"corner title {title!r} is not in the feature strip")
+            self.assertIn(body, strip_text,
+                          f"corner body {body!r} is not in the feature strip "
+                          "verbatim; the two lists have forked")
+
 if __name__ == "__main__":
     unittest.main()
