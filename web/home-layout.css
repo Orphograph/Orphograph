@@ -168,7 +168,19 @@
  *   block glyph half off the edge (clipped by the hero's overflow:hidden),
  *   one gold point travelling it on the --orpho-m-float clock. No transform
  *   anywhere on an ancestor of #hero-envelope; the dot animates `left`. */
+/* Base state is HIDDEN (2026-09-07 review). The ornament used to be styled
+ * only inside `@media (min-width: 1041px)` and hidden only inside
+ * `@media (max-width: 1040px)`: an exclusive PAIR, so the breakpoint was
+ * written twice and the band between the two literals was covered by
+ * neither rule. Hiding by default and unlocking once leaves one literal in
+ * this sheet and no uncovered width. */
+.orpho-home .orpho-corners,
+.orpho-home .orpho-connector { display: none; }
+
 @media (min-width: 1041px) {
+  .orpho-home .orpho-corners,
+  .orpho-home .orpho-connector { display: block; }
+
   .orpho-home .orpho-hero.hero {
     padding-top: calc(var(--orpho-s-8) + var(--orpho-s-4));
     padding-bottom: calc(var(--orpho-s-8) + var(--orpho-s-4));
@@ -233,15 +245,12 @@
     animation: orpho-connector-travel var(--orpho-m-float) var(--orpho-ease) infinite;
   }
 }
-@media (max-width: 1040px) {
-  .orpho-home .orpho-corners, .orpho-home .orpho-connector { display: none; }
-}
 @keyframes orpho-connector-travel {
   0%   { left: 0; opacity: 0; }
   12%  { opacity: 1; }
   88%  { opacity: 1; }
-  100% { left: calc(100% - 1.2rem); opacity: 0; }
+  100% { left: calc(100% - 1rem); opacity: 0; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .orpho-home .orpho-connector__dot { animation: none; left: calc(100% - 1.2rem); opacity: 1; }
+  .orpho-home .orpho-connector__dot { animation: none; left: calc(100% - 1rem); opacity: 1; }
 }

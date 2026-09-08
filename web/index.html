@@ -181,7 +181,12 @@
        gold hairline that runs through the rail to the viewport edge. They
        replace the former trust line under the buttons; hidden at and below
        1040px, where the hero is one column and the corners have no room. -->
-  <ul class="orpho-corners" aria-label="Guarantees">
+  <!-- aria-hidden: the same four promises are the feature strip's (below,
+       verbatim), and the sheet declares this block decorative. Without
+       this, a screen reader announced them twice above 1040px and once
+       below, so the page structure changed with viewport width
+       (measured in the accessibility tree, 2026-09-07 review). -->
+  <ul class="orpho-corners" aria-hidden="true">
     <li class="orpho-corner orpho-corner--tl"><strong>Privacy First</strong><span>Your file stays on your device. Only its fingerprint is submitted.</span></li>
     <li class="orpho-corner orpho-corner--tr"><strong>Open Source</strong><span>Auditable. Reproducible. Built for truth.</span></li>
     <li class="orpho-corner orpho-corner--bl"><strong>Independently Verifiable</strong><span>Anyone, anywhere can verify your proof.</span></li>
