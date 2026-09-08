@@ -23,6 +23,8 @@ import re
 import unittest
 from pathlib import Path
 
+from _css import rules_mentioning
+
 ROOT = Path(__file__).resolve().parent.parent
 SHEET = ROOT / "web" / "home-layout.css"
 CSS = SHEET.read_text()
@@ -183,10 +185,14 @@ class TestFullBleedSheet(unittest.TestCase):
                     if any(part.endswith(sel) for part in _split_selectors(s_))
                     and re.search(r"display\s*:\s*none", b)]
             self.assertTrue(base, f"{sel} must be display:none in the base state")
-        ornament = re.findall(
-            r"@media\s*\(([^)]*width[^)]*)\)\s*\{((?:[^{}]|\{[^{}]*\})*)\}", code)
-        governing = {q.strip() for q, body in ornament
-                     if ".orpho-corners" in body or ".orpho-connector" in body}
+        # Brace-matched, not regex-nested. The regex form shipped 2026-09-05
+        # tolerated exactly ONE level of nesting, so a rule any deeper dropped
+        # out of `governing` silently and this assertion passed on a partial
+        # set. rules_mentioning walks braces, so depth cannot hide a rule.
+        governing = set()
+        for sel in (".orpho-corners", ".orpho-connector"):
+            for kind, px in rules_mentioning(CSS, sel):
+                governing.add(f"{kind}: {px:g}px")
         self.assertEqual(
             len(governing), 1,
             f"exactly one width breakpoint may govern the ornament, found {governing}")
