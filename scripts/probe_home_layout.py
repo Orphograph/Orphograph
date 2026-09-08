@@ -33,6 +33,19 @@ CARDS = ['.orpho-features-wrap', '.orpho-arch']
 def check_layout(page, width):
     return page.evaluate('''([width, frames, cards]) => {
       const W = document.documentElement.clientWidth;
+      // `width` is the viewport Playwright was asked for; W is the layout
+      // viewport the MEDIA QUERY actually evaluates, which is narrower by the
+      // scrollbar. Every check below uses W, so `width` used to be a dead
+      // argument -- passed in, shadowed, never read. That mattered: the probe
+      // asserted "hero is one column at <= 1040" against a number that is not
+      // the number the browser branched on, so near a boundary the probe and
+      // the stylesheet could disagree about which side they were on. Report
+      // the divergence instead of hiding it. Scrollbars run ~15-17px, so the
+      // gap is only suspicious when it is larger.
+      const problems = [];
+      if (Math.abs(width - W) > 20)
+        problems.push(`viewport asked for ${width} but layout viewport is ${W}; ` +
+                      `media queries branch on ${W}`);
       const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
       const rail = Math.min(Math.max(1 * rem, 0.04 * W), 4.5 * rem);
       const TOL = 2.5;
@@ -41,7 +54,6 @@ def check_layout(page, width):
       const content = s => { const r = rect(s), cs = getComputedStyle(q(s));
         return { l: r.left + parseFloat(cs.paddingLeft), r: r.right - parseFloat(cs.paddingRight) }; };
       const onRail = (l, r) => Math.abs(l - rail) < TOL && Math.abs((W - r) - rail) < TOL;
-      const problems = [];
       for (const s of frames) { const b = content(s); if (!onRail(b.l, b.r)) problems.push(`${s} not flush to rail (${b.l.toFixed(1)}..${(W - b.r).toFixed(1)} vs ${rail.toFixed(1)})`); }
       for (const s of cards) { const r = rect(s); if (!onRail(r.left, r.right)) problems.push(`${s} card not on rail (${r.left.toFixed(1)}..${(W - r.right).toFixed(1)} vs ${rail.toFixed(1)})`); }
       // The headline must start at the rail: proves legacy `.hero h1 { margin:0 auto }` is beaten.
