@@ -6,6 +6,11 @@ and the published terms described a system that did not exist. Since
 2026-09-11 the pages say free receipts are kept. This test ties that wording
 to whether anything schedules server/expire_worker.py, in either direction:
 unscheduled means the pages say "kept"; scheduled means they disclose pruning.
+
+Blind spot, stated rather than hidden: a job scheduled from the CLI with
+`fly machines cron` leaves nothing in the repo, so this test cannot see it.
+scripts/expire_cron.sh and server/expire_worker.py both carry the warning
+that the Terms must change before the job is wired anywhere.
 """
 from __future__ import annotations
 
@@ -17,10 +22,23 @@ WEB = ROOT / "web"
 
 JOB = re.compile(r"expire_worker|expire_cron")
 PRUNE_DISCLOSED = re.compile(r"(?i)\bmay be pruned\b|\bpruned from our servers\b")
+# Any page that tells a reader free receipts go away.
+# Verb forms only: "a full or pruned Bitcoin node" and a customer's own
+# "retention window" are not claims about our receipts.
+PRUNE_ANYWHERE = re.compile(
+    r"(?i)\b(?:may be|be|been|is|are|gets?)\s+pruned\b"
+    r"|receipts last \d+ days|free-tier retention"
+)
 KEPT = re.compile(r"(?i)free-tier receipts\W+(?:\w+\W+){0,3}(kept|retained)\b")
 
 POLICY_PAGES = [WEB / "terms.html", WEB / "privacy.html"]
-OTHER_PAGES = [WEB / "faq.html", WEB / "pricing.html", WEB / "llms.txt"]
+
+
+def _public_surface() -> list[Path]:
+    out = [p for p in WEB.rglob("*.html")
+           if not p.relative_to(WEB).as_posix().startswith("_mockups/")
+           and p.relative_to(WEB).as_posix() != "index-legacy.html"]
+    return sorted(out + [WEB / "llms.txt"])
 
 
 def _schedulers() -> list[Path]:
@@ -55,8 +73,9 @@ def test_retention_copy_matches_whether_pruning_is_scheduled() -> None:
         assert KEPT.search(text), (
             f"{page.relative_to(ROOT)} must say free-tier receipts are kept."
         )
-    for page in OTHER_PAGES:
-        assert not PRUNE_DISCLOSED.search(_text(page)), page.relative_to(ROOT)
+    hits = [p.relative_to(ROOT).as_posix() for p in _public_surface()
+            if PRUNE_ANYWHERE.search(_text(p))]
+    assert not hits, f"pages still say free receipts are pruned: {hits}"
 
 
 def test_scheduler_detection_can_fire() -> None:
@@ -67,3 +86,7 @@ def test_scheduler_detection_can_fire() -> None:
     assert not JOB.search("exec python3 server/upgrade_worker.py")
     assert PRUNE_DISCLOSED.search("Free-tier receipts may be pruned after 30 days.")
     assert KEPT.search("Free-tier receipts are kept on our servers.")
+    assert PRUNE_ANYWHERE.search("Receipts last 30 days.")
+    assert PRUNE_ANYWHERE.search("it has been pruned (free-tier retention)")
+    assert not PRUNE_ANYWHERE.search("Anyone with a Bitcoin node, full or pruned, can check.")
+    assert not PRUNE_ANYWHERE.search("Durable for the retention window.")

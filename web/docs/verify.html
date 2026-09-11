@@ -137,7 +137,7 @@ Confirmed. Bitcoin block 949114 attests existence as of
     <div class="arch-rule"></div>
     <ul>
       <li><strong>Browser verifier</strong> — the file in your hand reproduces the fingerprint recorded in the receipt. The proof itself is left to the next two paths.</li>
-      <li><strong>Offline CLI verifier</strong> — the same two checks, on a machine that has never spoken to the office and need not speak to it.</li>
+      <li><strong>Offline CLI verifier</strong> — re-hashes the file and walks its inclusion proof with no network call, on a machine that has never spoken to the office; with <code>--ots</code> it hands the proof to the OpenTimestamps client, which needs a Bitcoin node for the chain step.</li>
       <li><strong>Bitcoin chain directly</strong> — the recorded block is part of the canonical chain; the commitment is present in that block; the file's fingerprint walks to that commitment.</li>
     </ul>
     <p>The three paths agree when the receipt is genuine. Disagreement of any kind is evidence that the receipt, the file, or the proof has been altered since issuance.</p>

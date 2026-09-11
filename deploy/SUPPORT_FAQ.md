@@ -222,7 +222,7 @@ A: No. You hash it in your browser. Only the hash reaches us.
 
 A: 
 - **Receipt data:** Indefinitely (it's the product)
-- **Free-tier receipts:** May be pruned after 30 days (your local copy is still valid)
+- **Free-tier receipts:** Kept on our servers, the same as paid receipts (your local copy is valid either way)
 - **Email addresses:** 7 years (for tax records and refunds)
 - **IP prefixes:** 24 hours, then deleted
 
@@ -285,7 +285,7 @@ If the file is sensitive, don't share the receipt ID publicly (coming Month 2: p
 
 A: Yes, but only if you're signed in and bought a Pack. Sign in, go to your account, and look for the receipt in your history.
 
-If you used the free anchor (not signed in), we might have pruned it after 30 days. Sorry. Always save your receipt locally.
+If you used the free anchor (not signed in), the receipt is still on our servers, but there is no account tying it to you, so we cannot pick out which one is yours. Always save your receipt locally.
 
 **Q: The verify page says "Pending proof"? What does that mean?**
 

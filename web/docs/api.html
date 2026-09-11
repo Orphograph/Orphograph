@@ -308,8 +308,8 @@ def anchor(path):
     <strong>Save the receipt locally.</strong> The returned
     <code>receipt_id</code> is what you'll feed to <code>/api/verify/&lt;id&gt;</code>
     later. Don't rely on us to remember it for you — write the full JSON
-    response next to the original file. Anonymous free-tier receipts may
-    be pruned after the retention window.
+    response next to the original file. We keep free-tier receipts too,
+    but your own copy is the one that does not depend on us.
   </div>
 </section>
 
@@ -420,7 +420,7 @@ X-Orpho-Api-Key: orpho_xxxxxxxxxxxxxxxxxxxxxxxx
   <h3>Errors</h3>
   <ul>
     <li><code>400</code> — receipt ID does not match <code>^[A-Za-z0-9_-]{1,64}$</code>.</li>
-    <li><code>404</code> — no receipt exists with that ID, or it has been pruned (free-tier retention).</li>
+    <li><code>404</code> — no receipt exists with that ID.</li>
   </ul>
 
   <h3>curl</h3>
