@@ -1,0 +1,50 @@
+name: Dependency audit
+
+# Scans every third-party dependency this repo pulls in against the public
+# advisory databases (OSV for Python, the GitHub advisory feed for npm). The
+# server is stdlib-only and the three Python packages declare no dependencies,
+# so the surface is CI's Python test tools and the two npm lockfiles. Runs on
+# every PR, on master, and weekly, so a new advisory against a lockfile nobody
+# touched still turns something red. tests/test_dependency_audit_workflow.py
+# keeps these lists in step with what test.yml and deploy.yml install.
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  schedule:
+    - cron: '41 8 * * 1'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  pip-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Audit CI's Python tool set
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pip-audit==2.10.1
+          printf 'pytest\ncryptography\nPyYAML\nplaywright==1.62.0\n' > /tmp/ci-reqs.txt
+          pip-audit -r /tmp/ci-reqs.txt --progress-spinner off
+
+  npm-audit:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        dir: [sdk-node, zk-provenance/snark]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+      - name: npm audit (${{ matrix.dir }})
+        working-directory: ${{ matrix.dir }}
+        run: npm audit --audit-level=high
