@@ -474,3 +474,19 @@ def test_check_test_suite_fails_on_green_by_skip_exit(monkeypatch):
     _gate_run(monkeypatch, f"{audit.PYTEST_BASELINE} passed, 4 skipped in 1s\n", returncode=1)
     f = audit.check_test_suite()
     assert f.status == audit.FAIL and "gate exit=1" in f.summary
+
+
+def test_check_test_suite_runs_the_gate_on_the_audits_own_python(monkeypatch):
+    # launchd's PATH puts /usr/bin first; the gate's bare `python3` must still
+    # resolve to the interpreter running the audit.
+    seen = {}
+
+    def fake_run(cmd, **kw):
+        seen.update(kw)
+        return subprocess.CompletedProcess(cmd, 0, stdout=f"{audit.PYTEST_BASELINE} passed\n", stderr="")
+
+    monkeypatch.setattr(audit.subprocess, "run", fake_run)
+    monkeypatch.setenv("PATH", "/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin")
+    audit.check_test_suite()
+    first = seen["env"]["PATH"].split(":")[0]
+    assert first == str(Path(sys.executable).parent), seen["env"]["PATH"][:120]

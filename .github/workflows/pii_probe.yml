@@ -19,10 +19,14 @@ jobs:
           for p in $PAGES; do
             # A failed fetch must not reuse the previous page's body or count
             # as a clean page: clear it first, and fail if nothing answered.
+            # Follow redirects: 14 of these paths answer 301 with an empty body,
+            # which grep used to read as a clean page. Anything but a 2xx with a
+            # body is a page the probe did not read.
             rm -f /tmp/page.html
-            code=$(curl -sS -o /tmp/page.html -w "%{http_code}" "https://orphograph.com${p}" --max-time 30) || true
-            if [ "$code" = "000" ] || [ ! -f /tmp/page.html ]; then
-              echo "  UNREACHABLE  $p"; UNREACHABLE=$((UNREACHABLE + 1)); continue
+            code=$(curl -sS -L -o /tmp/page.html -w "%{http_code}" "https://orphograph.com${p}" --max-time 30) || true
+            case "$code" in 2??) ;; *) code_ok=no ;; esac
+            if [ "${code_ok:-yes}" = "no" ] || [ ! -s /tmp/page.html ]; then
+              echo "  NOT READ ($code)  $p"; UNREACHABLE=$((UNREACHABLE + 1)); code_ok=; continue
             fi
             hits=$(grep -ciE 'rodriguezrivera|criptopitirre|franciscoefrain|Francisco Efrain|Francisco Rodriguez' /tmp/page.html || true)
             size=$(wc -c < /tmp/page.html)

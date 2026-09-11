@@ -427,9 +427,16 @@ def check_test_suite() -> Finding:
         # The gate script, not bare `pytest`: a bare run from the repo root
         # collects both `orphograph` SDKs into one process, which the root
         # conftest refuses (exit 4) and which used to fail 10 tests falsely.
+        # run_gate_tests.sh calls bare `python3`. Under the launchd template's
+        # PATH (/usr/bin before /opt/homebrew/bin) that is Apple's interpreter,
+        # which has no pytest; put this interpreter's directory first so the
+        # gate runs on the same Python as the audit.
+        env = dict(os.environ)
+        env["PATH"] = os.path.dirname(sys.executable) + os.pathsep + env.get("PATH", "")
         out = subprocess.run(
             ["sh", str(ROOT / "scripts" / "run_gate_tests.sh")],
             cwd=ROOT,
+            env=env,
             capture_output=True,
             text=True,
             timeout=600,
