@@ -141,7 +141,7 @@
     <p>The same digest-only handoff contract can be used with an agent-commerce protocol. Its
     job spec can carry the deliverable's SHA-256, and nothing else about the work; a completed response
     carries the receipt and a proof bundle
-    (<code>/api/receipt/&lt;id&gt;.zip</code>) whose <code>.ots</code> files verify offline.
+    (<code>/api/receipt/&lt;id&gt;.zip</code>) whose <code>.ots</code> files verify without us.
     The paying agent never uploads its deliverable — the same digest-only contract as every
     row above.</p>
     <p>On the Virtuals Agent Commerce Protocol the office is listed as provider
@@ -189,8 +189,9 @@
     <h2>What the receipt settles later</h2>
     <div class="arch-rule"></div>
     <p>Agent economies settle disputes with logs, and logs can be edited. A receipt cannot:
-    five OpenTimestamps calendars commit the digest toward Bitcoin, and anyone can verify the
-    proof offline with the MIT-licensed verifier — no account, no API call, no Orphograph.
+    five OpenTimestamps calendars commit the digest toward Bitcoin, and anyone can check the
+    proof's structure offline with the MIT-licensed verifier and confirm it against Bitcoin with
+    any OpenTimestamps client — no account, no API call, no Orphograph.
     The verification story for a counterparty is on
     <a href="/docs/verify">the verify page</a>; the case for anchoring agent work is at
     <a href="/lp/agent-receipts">agent receipts</a>.</p>

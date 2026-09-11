@@ -76,7 +76,7 @@ file contents, file metadata (EXIF), credit card data (Stripe holds
 it), passwords (none exist).
 
 **D.3 How long is data retained?** Receipts: indefinitely (the
-product). Free-tier receipts: may be pruned at 30 days per ToS.
+product). Free-tier receipts: kept, the same as paid receipts, per the ToS as of 2026-09-11.
 Emails: lifetime of active claim code or subscription, plus 7 years
 for tax/refund records per Privacy Policy. Truncated IP prefixes:
 24h log rotation (Fly default).

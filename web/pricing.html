@@ -5,10 +5,10 @@
 <title>Pricing — Orphograph</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#f6f1e3">
-<meta name="description" content="Orphograph schedule of fees. Free tier: 3 anchors per day. Writer Pack $19, Pack of Fifty $29, Standing Order $9/month. Same calendars, same chain on every tier.">
+<meta name="description" content="Orphograph schedule of fees. Standing Order $9/month: private receipts, a receipt vault and API access. Free tier: 3 anchors per day. One-off packs: Writer Pack $19, Pack of Fifty $29. Same calendars, same chain on every tier.">
 <link rel="icon" type="image/png" href="/favicon.png?v=8">
 <meta property="og:title" content="Pricing — Orphograph">
-<meta property="og:description" content="Free tier, one-time Packs, or a Standing Order. Same Bitcoin attestation on every tier.">
+<meta property="og:description" content="A Standing Order with private receipts and a vault, a free tier, or one-time Packs. Same Bitcoin attestation on every tier.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://orphograph.com/pricing">
 <link rel="stylesheet" href="/css/orpho-tokens.css?v=2">
@@ -43,13 +43,13 @@
 
 <!-- ─────────────────────── PRICE ANCHOR ─────────────────────── -->
 <div class="price-anchor" aria-label="Schedule of fees, at a glance">
+  <span class="pa-item"><strong>Standing Order</strong> — $9 / month · private receipts, vault, API</span>
+  <span class="pa-sep" aria-hidden="true">·</span>
   <span class="pa-item"><strong>Free</strong> — 3/day</span>
   <span class="pa-sep" aria-hidden="true">·</span>
   <span class="pa-item"><strong>Writer Pack</strong> — 10 anchors · $19</span>
   <span class="pa-sep" aria-hidden="true">·</span>
   <span class="pa-item"><strong>Pack of Fifty</strong> — 50 anchors · $29</span>
-  <span class="pa-sep" aria-hidden="true">·</span>
-  <span class="pa-item"><strong>Standing Order</strong> — $9 / month</span>
   <a class="pa-link" href="/#drop">Anchor a file →</a>
   <a class="pa-link" href="/pack">Already bought? Access your pack →</a>
 </div>
@@ -60,9 +60,37 @@
     <div class="head">
       <div class="eyebrow">Schedule of fees</div>
       <h2>One file. One receipt. No surprises.</h2>
-      <p class="head-sub">Free tier resets every twenty-four hours by the server's clock. Paid tiers verify identically — same calendars, same chain.</p>
+      <p class="head-sub">Every tier gets the same proof — same calendars, same chain. What the Standing Order adds is privacy and a place to keep your record. Free tier resets every twenty-four hours by the server's clock.</p>
     </div>
     <div class="tiers tiers-4">
+      <div class="tier featured">
+        <span class="ribbon">Recommended</span>
+        <div class="t-name">Standing Order</div>
+        <div class="t-price">$9<small> / month</small></div>
+        <p class="t-desc">The standing record. Receipts only you can see, kept in your vault, reachable by API. For working creators and small teams. Cancel anytime.</p>
+        <ul>
+          <li>Unrestricted anchoring</li>
+          <li>Private receipts</li>
+          <li>Receipt vault</li>
+          <li>API access</li>
+        </ul>
+        <div class="cta-row">
+          <a id="buy-personal" class="cta" hidden>Pay with card</a>
+          <a href="/pay/crypto?plan=pack_50" class="cta cta-alt">Pay with crypto</a>
+        </div>
+        <p class="cta-fineprint terms-assent">By subscribing, you agree to the <a href="/terms">Terms of Service</a>.</p>
+        <form class="card-notify" id="notify-personal" hidden>
+          <p class="card-notify-note">Card checkout is briefly unavailable. Leave an email and the office will send one notice when it returns. Crypto checkout remains open above.</p>
+          <div class="card-notify-row">
+            <input type="email" name="email" autocomplete="email" required placeholder="you@example.com" aria-label="Email address for the card-checkout notice">
+            <button type="submit">Notify me</button>
+          </div>
+          <p class="card-notify-done" hidden>Noted. One notice will be sent when card checkout returns; nothing else.</p>
+        </form>
+        <p class="cta-fineprint">
+          <span class="crypto-tokens" id="crypto-pay-sub-fineprint">Card bills $9/month, cancel anytime. Crypto bills as a Pack of Fifty for equivalent value.</span>
+        </p>
+      </div>
       <div class="tier">
         <div class="t-name">Free</div>
         <div class="t-price">$0</div>
@@ -79,7 +107,7 @@
       <div class="tier">
         <div class="t-name">Writer Pack</div>
         <div class="t-price">$19<small> one-time</small></div>
-        <p class="t-desc">The practice. The entry pack. For writers, journalists, anyone proving a draft predated something.</p>
+        <p class="t-desc">A handful of anchors, no subscription. For writers, journalists, anyone proving a draft predated something.</p>
         <ul>
           <li>10 anchor credits</li>
           <li>Use them anytime</li>
@@ -100,11 +128,10 @@
           <p class="card-notify-done" hidden>Noted. One notice will be sent when card checkout returns; nothing else.</p>
         </form>
       </div>
-      <div class="tier featured">
-        <span class="ribbon">Most Popular</span>
+      <div class="tier">
         <div class="t-name">Pack of Fifty</div>
         <div class="t-price">$29<small> one-time</small></div>
-        <p class="t-desc">The body of work. For working creators with a backlog. Best value per anchor.</p>
+        <p class="t-desc">A one-off batch, no subscription. For a backlog you want anchored once. Best value per anchor.</p>
         <ul>
           <li>50 anchor credits</li>
           <li>Use them anytime</li>
@@ -130,33 +157,6 @@
         </form>
         <p class="cta-fineprint">
           <span class="crypto-tokens" id="crypto-pay-fineprint">9 cryptos accepted (BTC, USDC, ETH, SOL, USDT, LTC, XRP, DOGE, MATIC) · non-custodial via NOWPayments</span>
-        </p>
-      </div>
-      <div class="tier">
-        <div class="t-name">Standing Order</div>
-        <div class="t-price">$9<small> / month</small></div>
-        <p class="t-desc">The standing record. For working creators and small teams. Cancel anytime.</p>
-        <ul>
-          <li>Unrestricted anchoring</li>
-          <li>Private receipts</li>
-          <li>Receipt vault</li>
-          <li>API access</li>
-        </ul>
-        <div class="cta-row">
-          <a id="buy-personal" class="cta" hidden>Pay with card</a>
-          <a href="/pay/crypto?plan=pack_50" class="cta cta-alt">Pay with crypto</a>
-        </div>
-        <p class="cta-fineprint terms-assent">By subscribing, you agree to the <a href="/terms">Terms of Service</a>.</p>
-        <form class="card-notify" id="notify-personal" hidden>
-          <p class="card-notify-note">Card checkout is briefly unavailable. Leave an email and the office will send one notice when it returns. Crypto checkout remains open above.</p>
-          <div class="card-notify-row">
-            <input type="email" name="email" autocomplete="email" required placeholder="you@example.com" aria-label="Email address for the card-checkout notice">
-            <button type="submit">Notify me</button>
-          </div>
-          <p class="card-notify-done" hidden>Noted. One notice will be sent when card checkout returns; nothing else.</p>
-        </form>
-        <p class="cta-fineprint">
-          <span class="crypto-tokens" id="crypto-pay-sub-fineprint">Card bills $9/month, cancel anytime. Crypto bills as a Pack of Fifty for equivalent value.</span>
         </p>
       </div>
     </div>
