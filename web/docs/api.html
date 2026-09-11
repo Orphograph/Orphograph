@@ -453,12 +453,14 @@ print(receipt["status"], receipt.get("btc_pinned_at"))</pre>
   </p>
 
   <div class="callout">
-    <strong>Trust-minimized verification belongs offline.</strong>
+    <strong>Trust-minimized verification does not ask us.</strong>
     For evidence-grade verification, ship the receipt JSON + the five
     <code>.ots</code> files through the open-source
     <a href="https://github.com/Orphograph/Orphograph">verify_cli.py</a>
-    against your local copy of the file. This endpoint is a convenience
-    for live integrations — it asks <em>us</em>; the CLI asks <em>Bitcoin</em>.
+    against your local copy of the file (it checks their structure, with no
+    network call), then run the OpenTimestamps client for the chain step.
+    This endpoint is a convenience for live integrations — it asks <em>us</em>;
+    the OpenTimestamps client asks <em>Bitcoin</em>.
   </div>
 
   <h3>Auth</h3>
@@ -836,9 +838,9 @@ Accept: image/svg+xml</pre>
   at <code>/r/&lt;id&gt;</code> renders the version chain — draft two provably
   committed to draft one. The scope is deliberately narrow: lineage proves the
   order of commitment — never what changed, when the edit happened, or who made
-  it. The chain checks offline with the open-source verifier and the
-  <code>orphograph_verify_lineage</code> MCP tool; like every receipt, it
-  verifies with our service gone.
+  it. The <code>orphograph_verify_lineage</code> MCP tool walks the chain by
+  reading each linked receipt from this service; every receipt in the chain,
+  like every receipt, still verifies with our service gone.
 </p>
 
 <h3 id="zk-proof">Optional <code>zk_proof</code> — execution proof for agent outputs</h3>

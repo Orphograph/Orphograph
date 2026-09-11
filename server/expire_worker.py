@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 """expire_worker.py — periodic pruning of free-tier receipts.
 
-Per the ToS: free-tier receipts may be pruned 30 days after creation.
+NOT SCHEDULED, and must stay that way unless the ToS changes first. Since
+2026-09-11 the Terms and Privacy pages say free-tier receipts are kept the
+same as paid ones; running this worker would delete receipts the published
+terms promise to keep. tests/test_retention_promise.py pins the pages to
+whether anything schedules this job.
 Paid-tier (Pack / Subscription) receipts NEVER expire.
 
 The original receipt JSON + the 5 .ots files leaves with the user
