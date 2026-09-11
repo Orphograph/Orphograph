@@ -16,8 +16,39 @@ tests/test_no_phantom_env_knobs.py polices). tests/test_skip_gate.py drives
 this file through a real pytest subprocess for each of those cases.
 """
 import os as _os
+import pathlib as _pl
+
+import pytest as _pytest
 
 _SKIPS: list = []
+
+# sdk/orphograph (tests/test_sdk.py) and sdk-python/orphograph share the
+# import name `orphograph`, so one process can only hold one of them: with
+# sdk-python/tests first, test_sdk.py fails 10 tests on a missing Client;
+# with test_sdk.py first, sdk-python/tests hits 2 collection errors. CI
+# runs them in two interpreters (scripts/run_gate_tests.sh). A run that
+# would collect both stops here with one honest error instead.
+_ROOT = _pl.Path(__file__).resolve().parent
+_SDK_PAIR = (_ROOT / "tests" / "test_sdk.py", _ROOT / "sdk-python" / "tests")
+
+
+def pytest_configure(config):
+    inv = _pl.Path(config.invocation_params.dir)
+    args = [(inv / a.split("::")[0]).resolve() for a in (config.args or [str(inv)])]
+    ignored = [(inv / i).resolve() for i in (config.getoption("ignore") or [])]
+
+    def _in_scope(target):
+        if any(target == ig or ig in target.parents for ig in ignored):
+            return False
+        return any(target == a or a in target.parents for a in args)
+
+    if all(_in_scope(t) for t in _SDK_PAIR):
+        raise _pytest.UsageError(
+            "tests/test_sdk.py and sdk-python/tests both import a package named "
+            "`orphograph` and cannot share one pytest process. Run "
+            "scripts/run_gate_tests.sh, or pass --ignore=sdk-python "
+            "(or --ignore=tests/test_sdk.py)."
+        )
 
 
 def _reason(report) -> str:

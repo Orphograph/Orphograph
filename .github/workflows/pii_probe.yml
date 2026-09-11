@@ -1,6 +1,9 @@
 name: PII probe — live site
 on:
   workflow_dispatch: {}
+  # Daily, so a leak is caught without someone remembering to press the button.
+  schedule:
+    - cron: '23 7 * * *'
 jobs:
   probe:
     runs-on: ubuntu-latest
@@ -10,12 +13,20 @@ jobs:
           set -e
           PAGES="/ /api/health /buy.html /account.html /method/folder-merkle.html /method/evidence-law.html /method/architecture.html /method/bitcoin-attestation.html /method/the-mit-verifier-annotated.html /method/why-filenames-are-not-stored.html /faq.html /learn.html /changelog.html /continuity.html /recover.html /signin.html /legal/ /LICENSE"
           TOTAL=0
+          UNREACHABLE=0
           for p in $PAGES; do
+            # A failed fetch must not reuse the previous page's body or count
+            # as a clean page: clear it first, and fail if nothing answered.
+            rm -f /tmp/page.html
             code=$(curl -sS -o /tmp/page.html -w "%{http_code}" "https://orphograph.com${p}" --max-time 30) || true
+            if [ "$code" = "000" ] || [ ! -f /tmp/page.html ]; then
+              echo "  UNREACHABLE  $p"; UNREACHABLE=$((UNREACHABLE + 1)); continue
+            fi
             hits=$(grep -ciE 'rodriguezrivera|criptopitirre|franciscoefrain|Francisco Efrain|Francisco Rodriguez' /tmp/page.html || true)
             size=$(wc -c < /tmp/page.html)
             printf "  %3s  %5sb  pii=%s  %s\n" "$code" "$size" "$hits" "$p"
             TOTAL=$((TOTAL + hits))
           done
-          echo "TOTAL PII hits across all pages: $TOTAL"
+          echo "TOTAL PII hits across all pages: $TOTAL (unreachable: $UNREACHABLE)"
+          test "$UNREACHABLE" = "0" || (echo "PROBE DID NOT RUN on $UNREACHABLE page(s): not a pass" && exit 1)
           test "$TOTAL" = "0" || (echo "PII LEAK DETECTED" && exit 1)

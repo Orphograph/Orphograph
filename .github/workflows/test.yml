@@ -73,7 +73,7 @@ jobs:
         # ORPHO_DATA_DIR/sys.modules for the process. deploy.yml runs the SAME line;
         # tests/test_repo_hygiene.py asserts every collectible test file is named
         # by some workflow, so the next orphan suite fails CI instead of rotting.
-        run: python3 -m pytest tests/ capture/ tools/test_gate_read.py zk-provenance/test_zk_provenance.py -q --ignore=tests/test_biweekly_safety_audit.py
+        run: python3 -m pytest tests/ capture/ tools/test_gate_read.py zk-provenance/test_zk_provenance.py -q
 
       # sdk-python/ ships its own package ALSO named `orphograph`, distinct from
       # sdk/orphograph, so the two cannot share one pytest process -- they fight
