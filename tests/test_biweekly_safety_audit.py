@@ -462,3 +462,15 @@ def test_check_test_suite_fails_without_a_passed_line(monkeypatch):
 def test_baseline_is_not_the_stale_381():
     # 381 dated from a suite a sixth this size; a floor that low cannot fire.
     assert audit.PYTEST_BASELINE >= 2000
+
+
+def test_check_test_suite_fails_on_collection_errors(monkeypatch):
+    _gate_run(monkeypatch, f"{audit.PYTEST_BASELINE} passed, 2 errors in 1s\n", returncode=1)
+    assert audit.check_test_suite().status == audit.FAIL
+
+
+def test_check_test_suite_fails_on_green_by_skip_exit(monkeypatch):
+    # The root conftest exits 1 on any skip; passing counts alone are not green.
+    _gate_run(monkeypatch, f"{audit.PYTEST_BASELINE} passed, 4 skipped in 1s\n", returncode=1)
+    f = audit.check_test_suite()
+    assert f.status == audit.FAIL and "gate exit=1" in f.summary

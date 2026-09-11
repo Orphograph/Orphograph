@@ -444,16 +444,20 @@ def check_test_suite() -> Finding:
         return Finding(section, FAIL, f"gate exit={out.returncode}; no 'N passed' line. last: {last[:160]}")
     n = sum(passed)
     failed_n = sum(int(x) for x in re.findall(r'(\d+)\s+failed', output))
-    if failed_n > 0:
-        return Finding(section, FAIL, f"{failed_n} failed, {n} passed")
+    errors_n = sum(int(x) for x in re.findall(r'(\d+)\s+errors?\b', output))
+    if failed_n > 0 or errors_n > 0:
+        return Finding(section, FAIL, f"{failed_n} failed, {errors_n} errors, {n} passed")
+    if out.returncode != 0:
+        # A nonzero gate with no failures is the skip gate (GREEN-BY-SKIP) or
+        # the sdk line never ran under `set -e`. Neither is a green suite.
+        return Finding(section, FAIL, f"gate exit={out.returncode} with {n} passed; skip gate or an unrun line")
     if n < PYTEST_BASELINE:
         return Finding(
             section,
             FAIL,
             f"{n} passed (below baseline {PYTEST_BASELINE}); tests may have been deleted",
         )
-    note = "" if out.returncode == 0 else f"; gate exit={out.returncode} (skip gate or sdk line)"
-    return Finding(section, PASS, f"{n} passed (baseline {PYTEST_BASELINE}){note}")
+    return Finding(section, PASS, f"{n} passed (baseline {PYTEST_BASELINE})")
 
 
 _KEY_PATTERNS = {

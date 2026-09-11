@@ -4,6 +4,8 @@ on:
   # Daily, so a leak is caught without someone remembering to press the button.
   schedule:
     - cron: '23 7 * * *'
+permissions:
+  contents: read
 jobs:
   probe:
     runs-on: ubuntu-latest
