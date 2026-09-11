@@ -37,6 +37,17 @@ method here, nothing else.
 4. Verify: `curl -X POST https://orphograph.com/api/ln/quote` returns an
    invoice; pay it; anchor with the credential; confirm the receipt's
    `source` starts with `ln:`.
+5. Flip the public copy in the same PR as arming. Every public surface that
+   mentions Lightning says "coming" / "not open" / "answers 503 until armed",
+   and llms.txt tells agents to read a 503 as "not yet". Once armed, that copy
+   turns a working rail into one agents are told is closed. The list of
+   surfaces is whatever
+   `tests/test_capability_copy.py::test_lightning_only_ever_appears_adjacent_to_coming_wording`
+   scans (every `web/**/*.html` plus `web/llms.txt`, so new pages are
+   included automatically); `grep -ril lightning web/` prints the same set.
+   Update each surface and retire or invert that test together. CI cannot do
+   this for you: it never sees production secrets, so it cannot tell that the
+   rail is armed.
 
 ## Test posture
 tests/test_lightning_l402.py drives the REAL HTTP handler with the mock

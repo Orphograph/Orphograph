@@ -152,3 +152,26 @@ def test_lightning_only_ever_appears_adjacent_to_coming_wording() -> None:
         "No public page mentions Lightning — the coming-soon copy this test "
         "pins has been removed; update or retire the test."
     )
+
+
+def _llms_bullets() -> list[str]:
+    """llms.txt list items, each joined with its indented continuation lines."""
+    bullets: list[str] = []
+    for line in (WEB / "llms.txt").read_text(encoding="utf-8").splitlines():
+        if line.startswith("- "):
+            bullets.append(line)
+        elif line.startswith("  ") and bullets:
+            bullets[-1] += " " + line.strip()
+    return bullets
+
+
+def test_free_tier_note_stays_on_the_anchor_bullet_not_lightning() -> None:
+    # 58e80ea inserted the Lightning bullet between /api/anchor and its note,
+    # so agents read "the free tier needs no API key" as part of the paid rail.
+    note = "the free tier needs no API key"
+    bullets = _llms_bullets()
+    anchor = [b for b in bullets if "/api/anchor —" in b]
+    quote = [b for b in bullets if "/api/ln/quote" in b]
+    assert len(anchor) == 1 and len(quote) == 1, (anchor, quote)
+    assert note in anchor[0], f"/api/anchor bullet lost its note: {anchor[0]!r}"
+    assert note not in quote[0], f"note re-attached to Lightning: {quote[0]!r}"
