@@ -62,7 +62,7 @@
 4. browser computes SHA-256, compares it with the
    receipt, and reports OK / mismatch
 </code></pre>
-    <p>The verifier handles single-file receipts directly. For folder receipts, the browser verifier accepts the manifest produced at anchor time and reconstructs the Merkle root from the files in place; see <a href="/method/folder-merkle">folder anchoring by Merkle root</a> for the algorithm.</p>
+    <p>The browser verifier handles single-file receipts only. For folder receipts, use the command-line verifier&rsquo;s <code>folder</code> subcommand below, which rebuilds the Merkle root from the files in place; see <a href="/method/folder-merkle">folder anchoring by Merkle root</a> for the algorithm.</p>
   </section>
 
   <section>

@@ -1,6 +1,11 @@
 name: PII probe — live site
 on:
   workflow_dispatch: {}
+  # Daily, so a leak is caught without someone remembering to press the button.
+  schedule:
+    - cron: '23 7 * * *'
+permissions:
+  contents: read
 jobs:
   probe:
     runs-on: ubuntu-latest
@@ -10,12 +15,24 @@ jobs:
           set -e
           PAGES="/ /api/health /buy.html /account.html /method/folder-merkle.html /method/evidence-law.html /method/architecture.html /method/bitcoin-attestation.html /method/the-mit-verifier-annotated.html /method/why-filenames-are-not-stored.html /faq.html /learn.html /changelog.html /continuity.html /recover.html /signin.html /legal/ /LICENSE"
           TOTAL=0
+          UNREACHABLE=0
           for p in $PAGES; do
-            code=$(curl -sS -o /tmp/page.html -w "%{http_code}" "https://orphograph.com${p}" --max-time 30) || true
+            # A failed fetch must not reuse the previous page's body or count
+            # as a clean page: clear it first, and fail if nothing answered.
+            # Follow redirects: 14 of these paths answer 301 with an empty body,
+            # which grep used to read as a clean page. Anything but a 2xx with a
+            # body is a page the probe did not read.
+            rm -f /tmp/page.html
+            code=$(curl -sS -L -o /tmp/page.html -w "%{http_code}" "https://orphograph.com${p}" --max-time 30) || true
+            case "$code" in 2??) ;; *) code_ok=no ;; esac
+            if [ "${code_ok:-yes}" = "no" ] || [ ! -s /tmp/page.html ]; then
+              echo "  NOT READ ($code)  $p"; UNREACHABLE=$((UNREACHABLE + 1)); code_ok=; continue
+            fi
             hits=$(grep -ciE 'rodriguezrivera|criptopitirre|franciscoefrain|Francisco Efrain|Francisco Rodriguez' /tmp/page.html || true)
             size=$(wc -c < /tmp/page.html)
             printf "  %3s  %5sb  pii=%s  %s\n" "$code" "$size" "$hits" "$p"
             TOTAL=$((TOTAL + hits))
           done
-          echo "TOTAL PII hits across all pages: $TOTAL"
+          echo "TOTAL PII hits across all pages: $TOTAL (unreachable: $UNREACHABLE)"
+          test "$UNREACHABLE" = "0" || (echo "PROBE DID NOT RUN on $UNREACHABLE page(s): not a pass" && exit 1)
           test "$TOTAL" = "0" || (echo "PII LEAK DETECTED" && exit 1)

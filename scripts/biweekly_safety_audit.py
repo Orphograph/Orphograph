@@ -42,7 +42,11 @@ DATA_RECEIPTS = ROOT / "data" / "receipts"
 
 BASE_URL = "https://orphograph.com"
 GENESIS_RECEIPT_ID = "o3WGD22T4UwqfCrb"
-PYTEST_BASELINE = 381
+# Floor for tests passed by scripts/run_gate_tests.sh (both lines summed, or
+# line 1 alone when its skip gate stops `set -e` early). Measured 2026-09-11:
+# 2336 passed on line 1. Was 381, set when the suite was a sixth this size,
+# so a deletion of 1900 tests would have passed this check.
+PYTEST_BASELINE = 2336
 HTTP_TIMEOUT = 15
 
 # Mirrors server/engine.py CALENDARS as of 2026-05-18. Hard-coded so the audit
@@ -420,9 +424,19 @@ def _extract_machine_memory(data: object) -> int | None:
 def check_test_suite() -> Finding:
     section = "11. Test suite green"
     try:
+        # The gate script, not bare `pytest`: a bare run from the repo root
+        # collects both `orphograph` SDKs into one process, which the root
+        # conftest refuses (exit 4) and which used to fail 10 tests falsely.
+        # run_gate_tests.sh calls bare `python3`. Under the launchd template's
+        # PATH (/usr/bin before /opt/homebrew/bin) that is Apple's interpreter,
+        # which has no pytest; put this interpreter's directory first so the
+        # gate runs on the same Python as the audit.
+        env = dict(os.environ)
+        env["PATH"] = os.path.dirname(sys.executable) + os.pathsep + env.get("PATH", "")
         out = subprocess.run(
-            [sys.executable, "-m", "pytest", "-p", "no:anchorpy", "-q", "--tb=no"],
+            ["sh", str(ROOT / "scripts" / "run_gate_tests.sh")],
             cwd=ROOT,
+            env=env,
             capture_output=True,
             text=True,
             timeout=600,
@@ -431,15 +445,19 @@ def check_test_suite() -> Finding:
     except (FileNotFoundError, subprocess.SubprocessError) as e:
         return Finding(section, SKIPPED, f"pytest not available: {e}")
     output = out.stdout + "\n" + out.stderr
-    m = re.search(r'(\d+)\s+passed', output)
-    if not m:
+    passed = [int(x) for x in re.findall(r'(\d+)\s+passed', output)]
+    if not passed:
         last = (out.stdout.strip().splitlines() or [""])[-1]
-        return Finding(section, FAIL, f"pytest exit={out.returncode}; no 'N passed' line. last: {last[:160]}")
-    n = int(m.group(1))
-    failed_m = re.search(r'(\d+)\s+failed', output)
-    failed_n = int(failed_m.group(1)) if failed_m else 0
-    if failed_n > 0:
-        return Finding(section, FAIL, f"{failed_n} failed, {n} passed")
+        return Finding(section, FAIL, f"gate exit={out.returncode}; no 'N passed' line. last: {last[:160]}")
+    n = sum(passed)
+    failed_n = sum(int(x) for x in re.findall(r'(\d+)\s+failed', output))
+    errors_n = sum(int(x) for x in re.findall(r'(\d+)\s+errors?\b', output))
+    if failed_n > 0 or errors_n > 0:
+        return Finding(section, FAIL, f"{failed_n} failed, {errors_n} errors, {n} passed")
+    if out.returncode != 0:
+        # A nonzero gate with no failures is the skip gate (GREEN-BY-SKIP) or
+        # the sdk line never ran under `set -e`. Neither is a green suite.
+        return Finding(section, FAIL, f"gate exit={out.returncode} with {n} passed; skip gate or an unrun line")
     if n < PYTEST_BASELINE:
         return Finding(
             section,

@@ -412,3 +412,81 @@ def test_head_returns_http_error_code(monkeypatch):
         raise urllib.error.HTTPError("u", 503, "x", {}, None)
     monkeypatch.setattr(audit.urllib.request, "urlopen", raiser)
     assert audit._head("https://example.invalid") == 503
+
+
+# -------------------------------------------------- check_test_suite
+
+
+def _gate_run(monkeypatch, stdout: str, returncode: int = 0):
+    calls = []
+
+    def fake_run(cmd, **kw):
+        calls.append(cmd)
+        return subprocess.CompletedProcess(cmd, returncode, stdout=stdout, stderr="")
+
+    monkeypatch.setattr(audit.subprocess, "run", fake_run)
+    return calls
+
+
+def test_check_test_suite_runs_the_gate_script_not_bare_pytest(monkeypatch):
+    calls = _gate_run(monkeypatch, f"{audit.PYTEST_BASELINE} passed in 1s\n")
+    audit.check_test_suite()
+    assert calls and calls[0][-1].endswith("scripts/run_gate_tests.sh"), calls
+    assert "pytest" not in calls[0], "bare pytest mixes the two orphograph SDKs"
+
+
+def test_check_test_suite_sums_both_gate_lines(monkeypatch):
+    first = audit.PYTEST_BASELINE - 38
+    _gate_run(monkeypatch, f"{first} passed, 4 skipped in 90s\n38 passed in 1s\n")
+    f = audit.check_test_suite()
+    assert f.status == audit.PASS, f.summary
+    assert f"{first + 38} passed" in f.summary
+
+
+def test_check_test_suite_fails_below_baseline(monkeypatch):
+    _gate_run(monkeypatch, f"{audit.PYTEST_BASELINE - 1} passed in 1s\n")
+    f = audit.check_test_suite()
+    assert f.status == audit.FAIL and "below baseline" in f.summary
+
+
+def test_check_test_suite_fails_on_any_failure(monkeypatch):
+    _gate_run(monkeypatch, f"1 failed, {audit.PYTEST_BASELINE} passed in 1s\n", returncode=1)
+    assert audit.check_test_suite().status == audit.FAIL
+
+
+def test_check_test_suite_fails_without_a_passed_line(monkeypatch):
+    _gate_run(monkeypatch, "ERROR: usage\n", returncode=4)
+    assert audit.check_test_suite().status == audit.FAIL
+
+
+def test_baseline_is_not_the_stale_381():
+    # 381 dated from a suite a sixth this size; a floor that low cannot fire.
+    assert audit.PYTEST_BASELINE >= 2000
+
+
+def test_check_test_suite_fails_on_collection_errors(monkeypatch):
+    _gate_run(monkeypatch, f"{audit.PYTEST_BASELINE} passed, 2 errors in 1s\n", returncode=1)
+    assert audit.check_test_suite().status == audit.FAIL
+
+
+def test_check_test_suite_fails_on_green_by_skip_exit(monkeypatch):
+    # The root conftest exits 1 on any skip; passing counts alone are not green.
+    _gate_run(monkeypatch, f"{audit.PYTEST_BASELINE} passed, 4 skipped in 1s\n", returncode=1)
+    f = audit.check_test_suite()
+    assert f.status == audit.FAIL and "gate exit=1" in f.summary
+
+
+def test_check_test_suite_runs_the_gate_on_the_audits_own_python(monkeypatch):
+    # launchd's PATH puts /usr/bin first; the gate's bare `python3` must still
+    # resolve to the interpreter running the audit.
+    seen = {}
+
+    def fake_run(cmd, **kw):
+        seen.update(kw)
+        return subprocess.CompletedProcess(cmd, 0, stdout=f"{audit.PYTEST_BASELINE} passed\n", stderr="")
+
+    monkeypatch.setattr(audit.subprocess, "run", fake_run)
+    monkeypatch.setenv("PATH", "/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin")
+    audit.check_test_suite()
+    first = seen["env"]["PATH"].split(":")[0]
+    assert first == str(Path(sys.executable).parent), seen["env"]["PATH"][:120]
