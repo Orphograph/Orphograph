@@ -29,13 +29,19 @@ FRAMES = ['header', '.orpho-hero__inner', '#doors', '.action > .wrap',
 # Border edge must sit on the rail (cards keep their own inner padding).
 CARDS = ['.orpho-features-wrap', '.orpho-arch']
 # Inner content that keeps a measure inside a rail-to-rail ground (plan B1): the
-# leftover width must be shared, not banked on one side.
-MEASURED = [{'ground': '.orpho-arch', 'inner': '.orpho-arch__layers'},
-            {'ground': '.orpho-features-wrap', 'inner': '.orpho-features'}]
+# cap must survive AND the leftover width must be shared, not banked on one side.
+# `measure` is the declared cap in px; asserting it is what stops the centring
+# check passing vacuously when someone deletes the cap and the inner fills the
+# ground (slack 0 reads as "nothing to strand").
+MEASURED = [{'ground': '.orpho-arch', 'inner': '.orpho-arch__layers', 'measure': 460},
+            {'ground': '.orpho-features-wrap', 'inner': '.orpho-features', 'measure': 1180}]
+# The arch is the one section that keeps a CENTRED composition inside its
+# rail-to-rail ground; pinned so the choice cannot be reverted silently.
+CENTRED = ['.orpho-arch__title', '.orpho-arch__kicker', '.orpho-arch__foot']
 
 
 def check_layout(page, width):
-    return page.evaluate('''([width, frames, cards, measured]) => {
+    return page.evaluate('''([width, frames, cards, measured, centred]) => {
       const W = document.documentElement.clientWidth;
       // `width` is the viewport Playwright was asked for; W is the layout
       // viewport the MEDIA QUERY actually evaluates, which is narrower by the
@@ -70,17 +76,29 @@ def check_layout(page, width):
       // of a ~1900px ground. Fires only when there is real slack to distribute.
       for (const s of measured) {
         const el = q(s.inner), host = q(s.ground);
-        if (!el || !host) { problems.push(`${s.inner} missing`); continue; }
+        if (!host) { problems.push(`${s.ground} (ground) missing`); continue; }
+        if (!el) { problems.push(`${s.inner} (inner) missing`); continue; }
         const hs = getComputedStyle(host), h = host.getBoundingClientRect();
         const gl = h.left + parseFloat(hs.paddingLeft), gr = h.right - parseFloat(hs.paddingRight);
         const r = el.getBoundingClientRect();
+        // Half of plan B1 is that the measure SURVIVES the release to the rail.
+        // Without this, deleting the cap lets the inner fill the ground, slack
+        // falls to 0, and the centring check below skips -- passing vacuously on
+        // the very regression it exists to catch.
+        if (r.width > s.measure + TOL)
+          problems.push(`${s.inner} exceeds its ${s.measure}px measure (${r.width.toFixed(0)}px in ${(gr - gl).toFixed(0)}px ground)`);
         const slack = (gr - gl) - r.width;
-        if (slack <= 2 * TOL) continue;           // no room to strand it in
+        if (slack <= 2 * TOL) continue;           // ground too narrow to strand it in
         const lead = r.left - gl, trail = gr - r.right;
-        if (Math.abs(lead - trail) > Math.max(TOL, slack * 0.15))
+        // `margin-inline: auto` splits the slack exactly, so the only tolerance
+        // needed is the measurement one. A proportional band would have let 283px
+        // of visible skew through at 2560.
+        if (Math.abs(lead - trail) > TOL)
           problems.push(`${s.inner} stranded in ${s.ground} (${lead.toFixed(0)}px lead vs ` +
                         `${trail.toFixed(0)}px trail of ${slack.toFixed(0)}px slack)`);
       }
+      for (const s of centred)
+        if (getComputedStyle(q(s)).textAlign !== 'center') problems.push(s + ' not centred');
       for (const s of ['.orpho-hero__copy', '.orpho-hero-title', '.orpho-door__body', '.orpho-situations__title', '.orpho-step__body'])
         if (!['left', 'start'].includes(getComputedStyle(q(s)).textAlign)) problems.push(s + ' not left-aligned');
       // Copy keeps a measure at every width (60ch of the hero body face).
@@ -133,7 +151,7 @@ def check_layout(page, width):
         if (!ground.backgroundImage.includes('gradient')) problems.push('hero ground texture missing');
       }
       return problems;
-    }''', [width, FRAMES, CARDS, MEASURED])
+    }''', [width, FRAMES, CARDS, MEASURED, CENTRED])
 
 
 def main():
