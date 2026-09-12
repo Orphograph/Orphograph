@@ -6,7 +6,11 @@ concurrent-viewer checks use only the local static server.
 
 Layout contract (2026-09-05, full-bleed): the FRAME is flush to the page rail
 (--orpho-rail = clamp(1rem, 4vw, 4.5rem)) on both sides at every width, copy is
-left-aligned and keeps a reading measure, the hero is two columns above 1040px
+left-aligned and keeps a reading measure — except `.orpho-arch`, which keeps the
+centred composition orpho-home.css authored for it inside a rail-to-rail ground
+(CENTRED pins that; MEASURED pins that every capped measure keeps its cap and
+shares its leftover width instead of stranding against one edge) —
+the hero is two columns above 1040px
 and one below, nothing escapes the viewport, and the document never scrolls
 sideways. Phase C ornament (four corner guarantees with hairlines to the edge,
 a receipt-to-block connector, a ruled ground) shows only above 1040px and never
@@ -28,10 +32,20 @@ FRAMES = ['header', '.orpho-hero__inner', '#doors', '.action > .wrap',
           '.orpho-situations-wrap', '.orpho-pair', 'footer.site > .wrap']
 # Border edge must sit on the rail (cards keep their own inner padding).
 CARDS = ['.orpho-features-wrap', '.orpho-arch']
+# Inner content that keeps a measure inside a rail-to-rail ground (plan B1): the
+# cap must survive AND the leftover width must be shared, not banked on one side.
+# `measure` is the declared cap in px; asserting it is what stops the centring
+# check passing vacuously when someone deletes the cap and the inner fills the
+# ground (slack 0 reads as "nothing to strand").
+MEASURED = [{'ground': '.orpho-arch', 'inner': '.orpho-arch__layers', 'measure': 460},
+            {'ground': '.orpho-features-wrap', 'inner': '.orpho-features', 'measure': 1180}]
+# The arch is the one section that keeps a CENTRED composition inside its
+# rail-to-rail ground; pinned so the choice cannot be reverted silently.
+CENTRED = ['.orpho-arch__title', '.orpho-arch__kicker', '.orpho-arch__foot']
 
 
 def check_layout(page, width):
-    return page.evaluate('''([width, frames, cards]) => {
+    return page.evaluate('''([width, frames, cards, measured, centred]) => {
       const W = document.documentElement.clientWidth;
       // `width` is the viewport Playwright was asked for; W is the layout
       // viewport the MEDIA QUERY actually evaluates, which is narrower by the
@@ -58,6 +72,37 @@ def check_layout(page, width):
       for (const s of cards) { const r = rect(s); if (!onRail(r.left, r.right)) problems.push(`${s} card not on rail (${r.left.toFixed(1)}..${(W - r.right).toFixed(1)} vs ${rail.toFixed(1)})`); }
       // The headline must start at the rail: proves legacy `.hero h1 { margin:0 auto }` is beaten.
       if (Math.abs(rect('.orpho-hero-title').left - rail) >= TOL) problems.push('hero title not at rail');
+      // A rail-to-rail ground keeps its inner content as a MEASURE (plan B1), which
+      // the card-on-rail loop above cannot see: it measures the ground only, and
+      // passes while the content sits stranded against one edge. `.orpho-arch` shipped
+      // exactly that way -- the sheet widened the ground to the rail and zeroed the
+      // base `margin: 0 auto` on the layer stack, leaving a 460px column pinned left
+      // of a ~1900px ground. Fires only when there is real slack to distribute.
+      for (const s of measured) {
+        const el = q(s.inner), host = q(s.ground);
+        if (!host) { problems.push(`${s.ground} (ground) missing`); continue; }
+        if (!el) { problems.push(`${s.inner} (inner) missing`); continue; }
+        const hs = getComputedStyle(host), h = host.getBoundingClientRect();
+        const gl = h.left + parseFloat(hs.paddingLeft), gr = h.right - parseFloat(hs.paddingRight);
+        const r = el.getBoundingClientRect();
+        // Half of plan B1 is that the measure SURVIVES the release to the rail.
+        // Without this, deleting the cap lets the inner fill the ground, slack
+        // falls to 0, and the centring check below skips -- passing vacuously on
+        // the very regression it exists to catch.
+        if (r.width > s.measure + TOL)
+          problems.push(`${s.inner} exceeds its ${s.measure}px measure (${r.width.toFixed(0)}px in ${(gr - gl).toFixed(0)}px ground)`);
+        const slack = (gr - gl) - r.width;
+        if (slack <= 2 * TOL) continue;           // ground too narrow to strand it in
+        const lead = r.left - gl, trail = gr - r.right;
+        // `margin-inline: auto` splits the slack exactly, so the only tolerance
+        // needed is the measurement one. A proportional band would have let 283px
+        // of visible skew through at 2560.
+        if (Math.abs(lead - trail) > TOL)
+          problems.push(`${s.inner} stranded in ${s.ground} (${lead.toFixed(0)}px lead vs ` +
+                        `${trail.toFixed(0)}px trail of ${slack.toFixed(0)}px slack)`);
+      }
+      for (const s of centred)
+        if (getComputedStyle(q(s)).textAlign !== 'center') problems.push(s + ' not centred');
       for (const s of ['.orpho-hero__copy', '.orpho-hero-title', '.orpho-door__body', '.orpho-situations__title', '.orpho-step__body'])
         if (!['left', 'start'].includes(getComputedStyle(q(s)).textAlign)) problems.push(s + ' not left-aligned');
       // Copy keeps a measure at every width (60ch of the hero body face).
@@ -110,7 +155,7 @@ def check_layout(page, width):
         if (!ground.backgroundImage.includes('gradient')) problems.push('hero ground texture missing');
       }
       return problems;
-    }''', [width, FRAMES, CARDS])
+    }''', [width, FRAMES, CARDS, MEASURED, CENTRED])
 
 
 def main():
