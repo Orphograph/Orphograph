@@ -6,9 +6,16 @@
    Contract:
    * The FRAME goes to the rail. Section grounds, cards, the header row, the
      hero grid and the footer run from --orpho-rail to --orpho-rail at every
-     width. Nothing on this page is centred inside an invisible column.
+     width. No section GROUND is centred inside an invisible column.
    * COPY keeps a measure. Body text inside those frames is capped in `ch`, so
      the page stays readable at 2560px instead of running 140-character lines.
+     A capped measure sitting in a rail-to-rail ground SHARES its leftover width
+     rather than banking it on one side — pinned by probe_home_layout.py's
+     MEASURED, which also asserts the cap itself survives.
+   * ONE EXCEPTION, deliberate: `.orpho-arch` keeps the centred composition
+     orpho-home.css authored for it (centred type, a 460px chain, connectors at
+     left:50%). Its ground still spans the rail; only its contents centre.
+     Pinned by probe_home_layout.py's CENTRED, so a silent revert fails.
    * This sheet declares NO grid-template-columns for .orpho-hero__inner,
      .orpho-sample__grid or .orpho-pair. Their columns — and the phone collapse
      in orpho-home.css's TERMINAL BLOCK — stay authoritative. Pinned by

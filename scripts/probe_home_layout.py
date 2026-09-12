@@ -6,7 +6,11 @@ concurrent-viewer checks use only the local static server.
 
 Layout contract (2026-09-05, full-bleed): the FRAME is flush to the page rail
 (--orpho-rail = clamp(1rem, 4vw, 4.5rem)) on both sides at every width, copy is
-left-aligned and keeps a reading measure, the hero is two columns above 1040px
+left-aligned and keeps a reading measure — except `.orpho-arch`, which keeps the
+centred composition orpho-home.css authored for it inside a rail-to-rail ground
+(CENTRED pins that; MEASURED pins that every capped measure keeps its cap and
+shares its leftover width instead of stranding against one edge) —
+the hero is two columns above 1040px
 and one below, nothing escapes the viewport, and the document never scrolls
 sideways. Phase C ornament (four corner guarantees with hairlines to the edge,
 a receipt-to-block connector, a ruled ground) shows only above 1040px and never
