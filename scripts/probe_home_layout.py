@@ -28,10 +28,14 @@ FRAMES = ['header', '.orpho-hero__inner', '#doors', '.action > .wrap',
           '.orpho-situations-wrap', '.orpho-pair', 'footer.site > .wrap']
 # Border edge must sit on the rail (cards keep their own inner padding).
 CARDS = ['.orpho-features-wrap', '.orpho-arch']
+# Inner content that keeps a measure inside a rail-to-rail ground (plan B1): the
+# leftover width must be shared, not banked on one side.
+MEASURED = [{'ground': '.orpho-arch', 'inner': '.orpho-arch__layers'},
+            {'ground': '.orpho-features-wrap', 'inner': '.orpho-features'}]
 
 
 def check_layout(page, width):
-    return page.evaluate('''([width, frames, cards]) => {
+    return page.evaluate('''([width, frames, cards, measured]) => {
       const W = document.documentElement.clientWidth;
       // `width` is the viewport Playwright was asked for; W is the layout
       // viewport the MEDIA QUERY actually evaluates, which is narrower by the
@@ -58,6 +62,25 @@ def check_layout(page, width):
       for (const s of cards) { const r = rect(s); if (!onRail(r.left, r.right)) problems.push(`${s} card not on rail (${r.left.toFixed(1)}..${(W - r.right).toFixed(1)} vs ${rail.toFixed(1)})`); }
       // The headline must start at the rail: proves legacy `.hero h1 { margin:0 auto }` is beaten.
       if (Math.abs(rect('.orpho-hero-title').left - rail) >= TOL) problems.push('hero title not at rail');
+      // A rail-to-rail ground keeps its inner content as a MEASURE (plan B1), which
+      // the card-on-rail loop above cannot see: it measures the ground only, and
+      // passes while the content sits stranded against one edge. `.orpho-arch` shipped
+      // exactly that way -- the sheet widened the ground to the rail and zeroed the
+      // base `margin: 0 auto` on the layer stack, leaving a 460px column pinned left
+      // of a ~1900px ground. Fires only when there is real slack to distribute.
+      for (const s of measured) {
+        const el = q(s.inner), host = q(s.ground);
+        if (!el || !host) { problems.push(`${s.inner} missing`); continue; }
+        const hs = getComputedStyle(host), h = host.getBoundingClientRect();
+        const gl = h.left + parseFloat(hs.paddingLeft), gr = h.right - parseFloat(hs.paddingRight);
+        const r = el.getBoundingClientRect();
+        const slack = (gr - gl) - r.width;
+        if (slack <= 2 * TOL) continue;           // no room to strand it in
+        const lead = r.left - gl, trail = gr - r.right;
+        if (Math.abs(lead - trail) > Math.max(TOL, slack * 0.15))
+          problems.push(`${s.inner} stranded in ${s.ground} (${lead.toFixed(0)}px lead vs ` +
+                        `${trail.toFixed(0)}px trail of ${slack.toFixed(0)}px slack)`);
+      }
       for (const s of ['.orpho-hero__copy', '.orpho-hero-title', '.orpho-door__body', '.orpho-situations__title', '.orpho-step__body'])
         if (!['left', 'start'].includes(getComputedStyle(q(s)).textAlign)) problems.push(s + ' not left-aligned');
       // Copy keeps a measure at every width (60ch of the hero body face).
@@ -110,7 +133,7 @@ def check_layout(page, width):
         if (!ground.backgroundImage.includes('gradient')) problems.push('hero ground texture missing');
       }
       return problems;
-    }''', [width, FRAMES, CARDS])
+    }''', [width, FRAMES, CARDS, MEASURED])
 
 
 def main():

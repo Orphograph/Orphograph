@@ -93,8 +93,17 @@
 .orpho-home .orpho-arch {
   max-width: none; margin-inline: var(--orpho-rail);
 }
-.orpho-home .orpho-arch { text-align: left; }
-.orpho-home .orpho-arch__layers { margin-inline: 0; }
+/* The feature strip is a 5×236px measure that orpho-primitives.css centres with
+ * `margin: … auto`; orpho-home.css then sets `margin: 0`. That was a no-op while
+ * the wrap was itself a 1180px measure — parent and child were the same width —
+ * and became visible the moment this sheet released the wrap to the rail. */
+.orpho-home .orpho-features { margin-inline: auto; }
+
+/* The arch keeps the CENTRED composition orpho-home.css gives it. Plan B1 asks
+ * for "ground rail-to-rail, inner content keeps its measure", and this section's
+ * measure is a 460px vertical chain: left-aligning it and zeroing the base
+ * `margin: 0 auto` stranded that chain against the left edge with the rest of
+ * the ground — ~1400px at 1920 — left empty. The ground still spans the rail. */
 
 /* ── Legacy `.wrap` (instrument, trust, gateways, final CTA, footer):
  * 1200px cage → rail. (0,2,0) beats every `.wrap` rule in index.css. */
