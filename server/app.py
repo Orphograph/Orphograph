@@ -974,8 +974,8 @@ class Handler(BaseHTTPRequestHandler):
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex">
 <link rel="icon" type="image/png" href="/favicon.png?v=8">
-<link rel="stylesheet" href="/style.css?v=5">
-<link rel="stylesheet" href="/blog.css">
+<link rel="stylesheet" href="/style.css?v=8">
+<link rel="stylesheet" href="/blog.css?v=1">
 <link rel="stylesheet" href="/css/orpho-tokens.css?v=2">
 <link rel="stylesheet" href="/css/orpho-primitives.css?v=3">
 <link rel="stylesheet" href="/index.css?v=21">
