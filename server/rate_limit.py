@@ -15,6 +15,7 @@ Public API:
 """
 from __future__ import annotations
 
+import ipaddress
 import json
 import os
 import threading
@@ -153,10 +154,21 @@ def truncate_ip(addr: str) -> str:
     """
     if not addr:
         return ""
-    if ":" in addr:
-        parts = addr.split(":")
-        return ":".join(parts[:3]) + "::/48"
-    parts = addr.split(".")
-    if len(parts) == 4:
-        return ".".join(parts[:3]) + ".0/24"
-    return "unknown"
+    a = addr.strip()
+    # Proxies and clients sometimes emit host:port. Strip it BEFORE parsing:
+    # the previous string-split implementation treated any ':' as IPv6 and
+    # persisted "203.0.113.77:1234::/48" — the full IPv4 — and kept host
+    # hextets of compressed IPv6 ("2001::1::/48"). Found 2026-09-13 by the
+    # review of the privacy-table test that was supposed to prove this
+    # function; the fix parses the address instead of slicing its text.
+    if a.startswith("["):                       # "[2001:db8::1]:443"
+        a = a[1:].split("]", 1)[0]
+    elif a.count(":") == 1:                     # "203.0.113.77:1234"
+        a = a.split(":", 1)[0]
+    try:
+        ip = ipaddress.ip_address(a)
+    except ValueError:
+        return "unknown"
+    if ip.version == 4:
+        return str(ipaddress.ip_network(f"{ip}/24", strict=False))
+    return str(ipaddress.ip_network(f"{ip}/48", strict=False))

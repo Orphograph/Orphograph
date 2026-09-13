@@ -136,13 +136,14 @@ def test_compressed_ipv6_yields_a_stable_if_ugly_slash_48_label():
     ip, _ = app._resolve_analytics_ip("2606:4700:3031::ac43:cfd5", "", "", True)
     assert truncate_ip(ip) == "2606:4700:3031::/48"
 
-    # Degenerate short form: ugly label, but stable and correctly grouped.
-    assert truncate_ip("2001:db8::1") == "2001:db8:::/48"
+    # Compressed short form: parsed as an address since 2026-09-13, so the
+    # label is the canonical /48 network rather than the old "2001:db8:::/48".
+    assert truncate_ip("2001:db8::1") == "2001:db8::/48"
     assert truncate_ip("2001:db8::2") == truncate_ip("2001:db8::1")   # same /48, truly
     assert truncate_ip("2001:db8:1::1") != truncate_ip("2001:db8::1")  # different /48
 
     # Whatever the label looks like, no full address survives.
-    assert "db8::1" not in truncate_ip("2001:db8::1").replace("2001:db8:::/48", "")
+    assert "db8::1" not in truncate_ip("2001:db8::1").replace("2001:db8::/48", "")
 
 
 def test_truncated_output_never_contains_the_host_octet():
