@@ -1014,6 +1014,27 @@ class Handler(BaseHTTPRequestHandler):
         truncated = truncate_ip(self.client_address[0] if self.client_address else "")
         sys.stderr.write(f"[{self.log_date_time_string()}] {truncated} - {fmt % args}\n")
 
+    # BaseHTTPRequestHandler.send_error() never calls _security_headers(), so every
+    # error answer — unknown paths, GET on POST-only API routes, a malformed login
+    # token; 35 call sites — reached clients without HSTS, CSP, nosniff,
+    # X-Frame-Options or Referrer-Policy. Found 2026-09-12 by a production sweep of
+    # every dispatched route. send_error() flags the response and end_headers()
+    # adds the bundle exactly once; responses that already call _security_headers()
+    # never set the flag, so nothing is sent twice. The HEAD shim in do_HEAD wraps
+    # the bound end_headers, so HEAD errors get the same headers.
+    def send_error(self, code, message=None, explain=None):
+        self._error_needs_security_headers = True
+        try:
+            super().send_error(code, message, explain)
+        finally:
+            self._error_needs_security_headers = False
+
+    def end_headers(self):
+        if getattr(self, "_error_needs_security_headers", False):
+            self._error_needs_security_headers = False
+            _security_headers(self)
+        super().end_headers()
+
     def handle_one_request(self):  # noqa: N802 (stdlib name)
         # Clients (browsers, health probes, proxies) routinely disconnect before a
         # response finishes sending. The stdlib then propagates the write failure as
