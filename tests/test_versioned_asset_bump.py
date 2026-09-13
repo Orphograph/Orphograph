@@ -47,7 +47,7 @@ PINS = WEB / "asset_versions.json"
 
 # ?v= references to a same-origin .js or .css, excluding the web/css/ sheets
 # already governed by versions.json + test_css_cache_discipline.
-REF = re.compile(r'(?:src|href)="(/(?!css/)[^"?]+\.(?:js|css))\?v=(\d+)"')
+REF = re.compile(r'(?:src|href)=["\'](/(?!css/)[^"\'?]+\.(?:js|css))\?v=(\d+)["\']')
 # The same reference as a string literal inside a script
 # (`link.href = "/statusbar.css?v=1"`).
 JS_REF = re.compile(r'["\'](/(?!css/|/)[^"\'?\s]+\.(?:js|css))\?v=(\d+)["\']')
@@ -169,6 +169,11 @@ class TestVersionedAssetBump(unittest.TestCase):
         under a key that never changes."""
         pins = json.loads(PINS.read_text())
         refs, bare = _scan()
+        # Control on real files: the deliberately unpinned /vendor/ bundles
+        # are loaded bare, so an empty bare set means the scan went blind.
+        self.assertTrue(any(a.startswith("/vendor/") for a in bare),
+                        "bare-reference scan found no /vendor/ bundle; it is "
+                        "not reading pages, so this test proves nothing")
         unbumped = {a: s for a, s in sorted(bare.items())
                     if a in pins or a in refs}
         self.assertEqual(
@@ -180,6 +185,8 @@ class TestVersionedAssetBump(unittest.TestCase):
         """NEGATIVE CONTROL for the three patterns, on literal input."""
         self.assertEqual(REF.findall('<link href="/a.css?v=3">'),
                          [("/a.css", "3")])
+        self.assertEqual(REF.findall("<link href='/a.css?v=5'>"),
+                         [("/a.css", "5")])
         self.assertEqual(REF.findall('<link href="/css/orpho-tokens.css?v=2">'),
                          [])
         self.assertEqual(JS_REF.findall('link.href = "/statusbar.css?v=1";'),
