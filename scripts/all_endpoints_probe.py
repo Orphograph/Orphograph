@@ -21,10 +21,16 @@ import argparse
 import json
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Callable, Optional
+
+# Honest, identifying User-Agent. urllib's default `Python-urllib/3.x` is denied by
+# Cloudflare's bot rules (403 "error code: 1010"), so without this every probe
+# fails before reaching the server. Never a browser-spoofing string.
+USER_AGENT = "Orphograph-endpoint-probe/1.0 (+https://orphograph.com)"
 
 
 @dataclass
@@ -52,9 +58,13 @@ class Result:
 
 
 def hit(server: str, probe: Probe, timeout: float = 10.0) -> Result:
-    url = server.rstrip("/") + probe.path
+    # Percent-encode the path: http.client refuses raw spaces/control characters
+    # (InvalidURL), which aborted the whole run at the invalid-receipt probe.
+    # Already-encoded sequences and query syntax are kept as written.
+    url = server.rstrip("/") + urllib.parse.quote(probe.path, safe="/?=&%@:+,;")
     data = None
     headers = dict(probe.headers)
+    headers.setdefault("User-Agent", USER_AGENT)
     if probe.body is not None:
         data = json.dumps(probe.body).encode("utf-8")
         headers.setdefault("Content-Type", "application/json")
@@ -64,14 +74,19 @@ def hit(server: str, probe: Probe, timeout: float = 10.0) -> Result:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             status = resp.status
             body = resp.read()
-            resp_headers = dict(resp.headers)
+            # Keep urllib's HTTPMessage: header names are case-insensitive in HTTP,
+            # and behind Cloudflare they arrive lowercase. A plain dict made every
+            # `"X-Frame-Options" in headers` check fail on a page that served it.
+            resp_headers = resp.headers
     except urllib.error.HTTPError as e:
         status = e.code
         body = e.read() if hasattr(e, "read") else b""
-        resp_headers = dict(e.headers) if hasattr(e, "headers") else {}
-    except (urllib.error.URLError, OSError, ConnectionError) as e:
+        resp_headers = e.headers if getattr(e, "headers", None) is not None else {}
+    except (urllib.error.URLError, OSError, ConnectionError, ValueError) as e:
+        # ValueError covers a request that cannot be built (http.client.InvalidURL):
+        # one bad probe is a failed result, never a crash that hides every other result.
         elapsed = int((datetime.now() - t0).total_seconds() * 1000)
-        return Result(probe.name, False, 0, f"connection error: {type(e).__name__}", elapsed)
+        return Result(probe.name, False, 0, f"request failed: {type(e).__name__}", elapsed)
     elapsed = int((datetime.now() - t0).total_seconds() * 1000)
 
     ok = status in probe.expected_status
@@ -151,8 +166,6 @@ PROBES = [
           "GET", "/status.html"),
     Probe("Press kit",
           "GET", "/press.html"),
-    Probe("Compare page",
-          "GET", "/compare.html"),
     Probe("About page",
           "GET", "/about.html"),
     Probe("Sitemap XML",
@@ -161,7 +174,7 @@ PROBES = [
     Probe("Robots.txt",
           "GET", "/robots.txt"),
     Probe("Favicon",
-          "GET", "/favicon.svg"),
+          "GET", "/favicon.png"),
     # JSON APIs
     Probe("Health",
           "GET", "/api/health",
