@@ -483,6 +483,10 @@
     "version": "1",
     "sha256": "832bc6c73c80098620f150c51b1f327459258db614984c4bd5fdfa4c8c7228a3"
   },
+  "/statusbar.css": {
+    "version": "1",
+    "sha256": "5bd1bd7da3ae9ee66d73df8a6cad7cf405213bc9dfc3ae48e2996042ce4e5837"
+  },
   "/statusbar.js": {
     "version": "2",
     "sha256": "7185835c3b9b828ec8f30ff54f325ce210d3cbaf0dac52af32c3f7763d2788ac"

@@ -287,8 +287,8 @@ _SHELL_HEAD = """<!DOCTYPE html>
 <meta name="description" content="{description}">
 <link rel="icon" type="image/png" href="/favicon.png?v=8">
 <link rel="alternate" type="application/atom+xml" title="Orphograph blog" href="/blog/atom.xml">
-<link rel="stylesheet" href="/style.css">
-<link rel="stylesheet" href="/blog.css">
+<link rel="stylesheet" href="/style.css?v=8">
+<link rel="stylesheet" href="/blog.css?v=1">
 {og_tags}
 </head>
 <body>

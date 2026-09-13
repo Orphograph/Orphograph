@@ -22,6 +22,16 @@ page. The narrower asset had the test.
 This test is content-addressed rather than diff-addressed: it pins the sha256
 of each versioned asset against the ?v= its pages reference. Change the bytes
 without changing the version and it fails, whatever branch you are on.
+
+2026-09-12: the scan read web/**/*.html only, so every reference it could not
+see drifted. The error template in server/app.py (every 400/404/501) loaded
+/style.css?v=5 and a bare /blog.css against pins of v=8 and v=1; the markdown
+blog shell in server/blog.py loaded both bare; server/verticals.py sat on
+/index.css?v=16 and /statusbar.js?v=1; and statusbar.js injects
+/statusbar.css?v=1, which was never pinned at all. test_card_notify_capture
+had patched one asset in one template in August -- the class survived it. The
+scan now reads the server templates and same-origin string references in
+web/**/*.js, and a pinned asset referenced with no ?v= fails.
 """
 from __future__ import annotations
 
@@ -38,24 +48,63 @@ PINS = WEB / "asset_versions.json"
 # ?v= references to a same-origin .js or .css, excluding the web/css/ sheets
 # already governed by versions.json + test_css_cache_discipline.
 REF = re.compile(r'(?:src|href)="(/(?!css/)[^"?]+\.(?:js|css))\?v=(\d+)"')
+# The same reference as a string literal inside a script
+# (`link.href = "/statusbar.css?v=1"`).
+JS_REF = re.compile(r'["\'](/(?!css/|/)[^"\'?\s]+\.(?:js|css))\?v=(\d+)["\']')
+# A reference with no ?v= at all -- invisible to REF, so it had no gate.
+BARE = re.compile(r'(?:src|href)=["\'](/(?!css/|/)[^"\'?#\s]+\.(?:js|css))["\']')
 EXCLUDE_DIRS = ("_mockups/", "dist/", "construction/", "vendor/", "node_modules/")
+SERVER = ROOT / "server"
+
+
+def _excluded(rel):
+    return any(rel.startswith(d) or f"/{d}" in rel for d in EXCLUDE_DIRS)
 
 
 def _pages():
     for p in WEB.rglob("*.html"):
         rel = p.relative_to(WEB).as_posix()
-        if any(rel.startswith(d) or f"/{d}" in rel for d in EXCLUDE_DIRS):
+        if _excluded(rel):
             continue
         yield rel, p
 
 
-def _references():
-    """{asset_path: {version: [pages]}} across the whole visitor surface."""
+def _templates():
+    """Server modules that render HTML: the error page, the markdown blog
+    shell, the vertical pages. A page the server builds is still a page."""
+    for p in sorted(SERVER.glob("*.py")):
+        yield p.relative_to(ROOT).as_posix(), p
+
+
+def _scripts():
+    for p in WEB.rglob("*.js"):
+        rel = p.relative_to(WEB).as_posix()
+        if _excluded(rel) or rel.endswith(".min.js"):
+            continue
+        yield rel, p
+
+
+def _scan():
+    """(versioned, bare): {asset: {version: [sources]}} and
+    {asset: [sources]} across pages, server templates and scripts."""
     found: dict[str, dict[str, list[str]]] = {}
-    for rel, p in _pages():
-        for asset, ver in REF.findall(p.read_text(encoding="utf-8")):
+    bare: dict[str, list[str]] = {}
+    markup = list(_pages()) + list(_templates())
+    for rel, p in markup:
+        text = p.read_text(encoding="utf-8")
+        for asset, ver in REF.findall(text):
             found.setdefault(asset, {}).setdefault(ver, []).append(rel)
-    return found
+        for asset in BARE.findall(text):
+            bare.setdefault(asset, []).append(rel)
+    for rel, p in _scripts():
+        for asset, ver in JS_REF.findall(p.read_text(encoding="utf-8")):
+            found.setdefault(asset, {}).setdefault(ver, []).append(rel)
+    return found, bare
+
+
+def _references():
+    """{asset_path: {version: [sources]}} across the whole visitor surface."""
+    return _scan()[0]
 
 
 class TestVersionedAssetBump(unittest.TestCase):
@@ -106,6 +155,39 @@ class TestVersionedAssetBump(unittest.TestCase):
                            "not reading pages, so it proves nothing")
         self.assertTrue(any(a.endswith(".js") for a in refs),
                         "no .js references found; this test exists for .js")
+        sources = {s for versions in refs.values()
+                   for pages in versions.values() for s in pages}
+        self.assertTrue(any(s.startswith("server/") for s in sources),
+                        "no server-template references found; the error page "
+                        "template is not being read")
+        self.assertTrue(any(s.endswith(".js") for s in sources),
+                        "no script string references found; statusbar.js "
+                        "injects a stylesheet and is not being read")
+
+    def test_pinned_assets_are_never_referenced_bare(self):
+        """A pinned asset loaded with no ?v= has no bump at all: an edit ships
+        under a key that never changes."""
+        pins = json.loads(PINS.read_text())
+        refs, bare = _scan()
+        unbumped = {a: s for a, s in sorted(bare.items())
+                    if a in pins or a in refs}
+        self.assertEqual(
+            unbumped, {},
+            "pinned asset referenced without ?v=: "
+            + json.dumps(unbumped, indent=2))
+
+    def test_the_patterns_discriminate(self):
+        """NEGATIVE CONTROL for the three patterns, on literal input."""
+        self.assertEqual(REF.findall('<link href="/a.css?v=3">'),
+                         [("/a.css", "3")])
+        self.assertEqual(REF.findall('<link href="/css/orpho-tokens.css?v=2">'),
+                         [])
+        self.assertEqual(JS_REF.findall('link.href = "/statusbar.css?v=1";'),
+                         [("/statusbar.css", "1")])
+        self.assertEqual(JS_REF.findall('fetch("//cdn.example/x.js?v=1")'), [])
+        self.assertEqual(BARE.findall('<link href="/blog.css">'), ["/blog.css"])
+        self.assertEqual(BARE.findall('<link href="/blog.css?v=1">'), [])
+        self.assertEqual(BARE.findall('<script src="//cdn.example/x.js">'), [])
 
 
 if __name__ == "__main__":
