@@ -129,15 +129,17 @@ class TestStaticMarkup(unittest.TestCase):
         # serving stale CSS for up to 24h from the CDN. The loop below is the
         # drift guard — it is the part that actually prevents a recurrence.
         index = (ROOT / "web" / "index.html").read_text()
-        self.assertIn("/index.css?v=21", index)
+        css_version = json.loads((ROOT / "web" / "asset_versions.json").read_text())["/index.css"]["version"]
+        css_ref = f"/index.css?v={css_version}"
+        self.assertIn(css_ref, index)
         pricing = (ROOT / "web" / "pricing.html").read_text()
         self.assertIn("/checkout-cta.js?v=4", pricing)
-        self.assertIn("/index.css?v=21", pricing)
+        self.assertIn(css_ref, pricing)
         # No page may still reference a stale index.css version.
         for page in (ROOT / "web").rglob("*.html"):
             body = page.read_text()
             if "/index.css?v=" in body:
-                self.assertIn("/index.css?v=21", body,
+                self.assertIn(css_ref, body,
                               f"{page.name} loads a stale index.css version")
         v2 = (ROOT / "web" / "v2" / "index.html").read_text()
         self.assertIn("/checkout-cta.js?v=4", v2)

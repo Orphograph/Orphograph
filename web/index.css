@@ -908,15 +908,6 @@ section.band.band-glow{
     footer.site .made-for a{ display: inline-block; }
   }
 
-/* ── From the inline `style=` on <p class="reassure"> (index.html ~399) ── */
-.reassure{
-  font-family:var(--serif);
-  font-size:16px;
-  color:var(--ink);
-  font-weight:500;
-  margin:0 0 6px;
-  letter-spacing:0.04em;
-}
 
 /* ── From the inline `style=` on <section class="sample-receipt-section">
       and its nested <style> block (index.html ~528-573) ─────────────────── */
