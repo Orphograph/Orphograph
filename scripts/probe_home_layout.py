@@ -38,7 +38,8 @@ CARDS = ['.orpho-features-wrap', '.orpho-arch']
 # check passing vacuously when someone deletes the cap and the inner fills the
 # ground (slack 0 reads as "nothing to strand").
 MEASURED = [{'ground': '.orpho-arch', 'inner': '.orpho-arch__layers', 'measure': 460},
-            {'ground': '.orpho-features-wrap', 'inner': '.orpho-features', 'measure': 1180}]
+            {'ground': '.orpho-features-wrap', 'inner': '.orpho-features', 'measure': 1180},
+            {'ground': '.orpho-sample', 'inner': '.sample-receipt-card', 'measure': 680}]
 # The arch is the one section that keeps a CENTRED composition inside its
 # rail-to-rail ground; pinned so the choice cannot be reverted silently.
 CENTRED = ['.orpho-arch__title', '.orpho-arch__kicker', '.orpho-arch__foot']

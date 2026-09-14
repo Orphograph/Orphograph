@@ -11,7 +11,10 @@ endpoints, reporting pass/fail for each. Designed for:
 Stdlib only. No dependency on pytest or requests.
 
 Usage:
-    python3 scripts/all_endpoints_probe.py [--server URL] [--json] [--verbose]
+    python3 scripts/all_endpoints_probe.py [--server URL] [--json] [--verbose] [--allow-writes]
+
+Only GET/HEAD probes run by default. --allow-writes explicitly opts into
+POST probes, including a real waitlist signup.
 
 Returns exit 0 if every probe passes, exit 1 otherwise.
 """
@@ -25,6 +28,7 @@ import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Callable, Optional
 
 # Honest, identifying User-Agent. urllib's default `Python-urllib/3.x` is denied by
@@ -144,7 +148,31 @@ def check_no_secrets(status: int, headers: dict, body: bytes) -> tuple[bool, str
     return True, "no secret prefixes leaked"
 
 
+def check_sample_receipt(status: int, headers: dict, body: bytes) -> tuple[bool, str]:
+    try:
+        receipt = json.loads(body)
+    except (ValueError, UnicodeDecodeError):
+        return False, "not receipt JSON"
+    if not isinstance(receipt, dict):
+        return False, "not a receipt object"
+    ok = (receipt.get("receipt_id") == SAMPLE["receipt_id"]
+          and receipt.get("hash_hex") == SAMPLE["hash_hex"]
+          and receipt.get("found") is True)
+    return ok, "canonical receipt matches" if ok else "canonical receipt mismatch"
+
+
+SAMPLE = json.loads((Path(__file__).resolve().parents[1] / "web/sample/receipt.json").read_text())
+SAMPLE_ID = SAMPLE["receipt_id"]
+
+
 PROBES = [
+    Probe("Canonical receipt", "GET", f"/api/receipt/{SAMPLE_ID}", check=check_sample_receipt),
+    Probe("Canonical badge", "GET", f"/api/badge/{SAMPLE_ID}.svg",
+          check=check_html_contains("<svg", SAMPLE_ID)),
+    Probe("Canonical certificate", "GET", f"/certificate/{SAMPLE_ID}",
+          check=check_html_contains("Provenance Certificate", SAMPLE_ID)),
+    Probe("Canonical receipt page", "GET", f"/r/{SAMPLE_ID}",
+          check=check_html_contains("Orphograph Receipt", SAMPLE_ID)),
     Probe("Landing page",
           "GET", "/",
           check=check_html_contains("Orphograph", "Bitcoin")),
@@ -249,10 +277,16 @@ def main() -> int:
                     help="emit JSON report instead of text")
     ap.add_argument("--verbose", "-v", action="store_true",
                     help="print details for every probe, not just failures")
+    ap.add_argument("--allow-writes", action="store_true",
+                    help="also run write probes (including a real waitlist signup)")
     args = ap.parse_args()
 
     results: list[Result] = []
+    skipped = []
     for probe in PROBES:
+        if not args.allow_writes and probe.method.upper() not in {"GET", "HEAD"}:
+            skipped.append(probe.name)
+            continue
         r = hit(args.server, probe)
         results.append(r)
 
@@ -266,6 +300,7 @@ def main() -> int:
             "total": len(results),
             "passed": passed,
             "failed": failed,
+            "skipped_write_probes": skipped,
             "results": [
                 {
                     "name": r.name,
@@ -282,6 +317,8 @@ def main() -> int:
 
     print(f"All-endpoints probe — {args.server}")
     print(f"Probes: {len(results)}  Passed: {passed}  Failed: {failed}")
+    if skipped:
+        print(f"Skipped {len(skipped)} write probes; opt in with --allow-writes.")
     print()
     for r in results:
         mark = "✓" if r.ok else "✗"

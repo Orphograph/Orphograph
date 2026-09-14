@@ -978,7 +978,7 @@ class Handler(BaseHTTPRequestHandler):
 <link rel="stylesheet" href="/blog.css?v=1">
 <link rel="stylesheet" href="/css/orpho-tokens.css?v=2">
 <link rel="stylesheet" href="/css/orpho-primitives.css?v=3">
-<link rel="stylesheet" href="/index.css?v=21">
+<link rel="stylesheet" href="/index.css?v=22">
 </head>
 <body class="orpho">
 <header>

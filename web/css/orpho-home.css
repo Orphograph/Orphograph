@@ -42,25 +42,7 @@
   margin-bottom: var(--orpho-s-7);
 }
 
-.orpho-hero__trust {
-  font-size: var(--orpho-t-small);
-  line-height: 1.55;
-  color: var(--orpho-ink-faint);
-  padding-left: 2.6rem;
-  position: relative;
-}
 
-/* The small shield glyph before the trust line, drawn in CSS rather than
- * shipped as another asset. */
-.orpho-hero__trust::before {
-  content: "";
-  position: absolute;
-  left: 0; top: 0.15rem;
-  width: 1.7rem; height: 1.9rem;
-  border: 1px solid var(--orpho-border-firm);
-  border-radius: 3px 3px 46% 46% / 3px 3px 34% 34%;
-  box-shadow: inset 0 1px 0 var(--orpho-emboss-lit);
-}
 
 /* ── The plate: envelope, receipt, wax ──────────────────────────────────
  * Three stacked layers. The receipt is the hero of the composition, so it
@@ -226,7 +208,6 @@
 .orpho-hero .orpho-hero__lede,
 .orpho-hero .orpho-hero__copy,
 .orpho-hero .orpho-hero__actions,
-.orpho-hero .orpho-hero__trust { text-align: left; }
 .orpho-hero .orpho-hero__actions { justify-content: flex-start; }
 
 /* 2. Headline wrapped to three lines because the lede column was too narrow.
@@ -269,8 +250,6 @@
 /* 5. The CSS shield glyph rendered as an empty box. The reference's mark is a
  *    small outlined shield with a tick; until that asset exists, drop the
  *    pseudo-element rather than ship a stray rectangle. */
-.orpho-hero__trust { padding-left: 0; }
-.orpho-hero__trust::before { content: none; }
 
 /* 6. Ornament sat too high and too pale to read as engraving. */
 .orpho-ornament--left { left: -26vw; top: 14vh; opacity: 0.12; }
