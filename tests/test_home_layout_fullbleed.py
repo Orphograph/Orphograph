@@ -222,7 +222,9 @@ class TestFullBleedSheet(unittest.TestCase):
         # so the glyph's left edge sits at 100% + block_right - ... no: at
         # 100% - block_right_inset - width, with the inset measured inward.
         block_left = -block_right - block_w          # rem offset from 100%, negative = inside
-        ends = re.findall(r"left\s*:\s*calc\(100%\s*-\s*([\d.]+)rem\)", code)
+        # The dot moves on transform (2026-09-13): its end pose is stated as a
+        # translateX of the connector's own width minus the end offset.
+        ends = re.findall(r"translateX\(calc\(var\(--orpho-connector-w\)\s*-\s*([\d.]+)rem\)\)", code)
         self.assertEqual(len(ends), 2,
                          "both the keyframe end and the reduced-motion rest pose "
                          f"must state an end offset, found {ends}")
@@ -232,6 +234,52 @@ class TestFullBleedSheet(unittest.TestCase):
                 dot_right, block_left, places=3,
                 msg=f"dot right edge at 100%{dot_right:+}rem does not meet the "
                     f"block's left edge at 100%{block_left:+}rem")
+
+    def test_connector_dot_animates_off_the_layout_thread(self):
+        """Measured 2026-09-13 in headless Chromium at 1440x900 over 4s: the
+        `left` keyframes forced 234 layouts (one per frame, ~16ms/s of layout
+        + pre-paint on the main thread); with the dot static, 1 layout. So the
+        travel keyframes may move the dot only through transform and opacity,
+        and the reduced-motion rest pose parks it the same way."""
+        code = _strip_comments(CSS)
+        start = code.find("@keyframes orpho-connector-travel")
+        self.assertNotEqual(start, -1, "the travel keyframes must exist")
+        stop = code.find("@media", start)
+        body = code[start:stop if stop != -1 else None]
+        layout = re.findall(r"\b(left|right|top|bottom|width|height|margin[\w-]*|inset)\s*:", body)
+        self.assertEqual(layout, [], f"layout property animated in orpho-connector-travel: {layout}")
+        self.assertIn("transform", body, "the dot travels on transform")
+        rm = code[code.find("@media (prefers-reduced-motion: reduce)"):]
+        self.assertRegex(rm, r"\.orpho-connector__dot\s*\{[^}]*transform\s*:\s*translateX\(",
+                         "the reduced-motion rest pose must park the dot on transform too")
+
+    def test_gold_hairlines_fade_on_one_token(self):
+        """The corner hairlines faded at 40% and the connector at 30%: two
+        curves for one ornament (review of #235). One token, every gradient."""
+        code = _strip_comments(CSS)
+        grads = re.findall(r"linear-gradient\((?:[^()]|\([^()]*\))*\)", code)
+        gold = [g for g in grads if "var(--orpho-gold)" in g]
+        self.assertGreaterEqual(len(gold), 3, gold)
+        for g in gold:
+            self.assertIn("var(--orpho-hairline-fade)", g, g)
+            self.assertNotRegex(g, r"\d+%", f"literal stop in {g}")
+        self.assertRegex(code, r"--orpho-hairline-fade\s*:\s*\d+%", "the fade token must be declared once")
+        self.assertEqual(len(re.findall(r"--orpho-hairline-fade\s*:", code)), 1)
+
+    def test_corner_title_reuses_the_label_primitive(self):
+        """`.orpho-corner strong` re-declared the letterspaced-uppercase recipe
+        that `.orpho-label` already owns (review of #235). The markup carries
+        the primitive; the corner rule states only what differs."""
+        html = (ROOT / "web" / "index.html").read_text()
+        strongs = re.findall(r'<li class="orpho-corner[^"]*"><strong([^>]*)>', html)
+        self.assertEqual(len(strongs), 4, "four corner titles expected")
+        for attrs in strongs:
+            self.assertRegex(attrs, r'class="[^"]*\borpho-label\b', f"corner title lacks orpho-label: {attrs!r}")
+        code = _strip_comments(CSS)
+        m = re.search(r"\.orpho-home \.orpho-corner strong\s*\{([^}]*)\}", code)
+        self.assertIsNotNone(m, "the corner title rule must exist")
+        for dup in ("text-transform", "letter-spacing", "font-family"):
+            self.assertNotIn(dup, m.group(1), f"{dup} is the .orpho-label primitive's job")
 
     def test_negative_control_checker_sees_a_planted_defect(self):
         planted = (".orpho-home .orpho-hero__inner { grid-template-columns: 1fr 1fr; }\n"
