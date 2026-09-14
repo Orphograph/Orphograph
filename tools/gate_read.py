@@ -30,7 +30,11 @@ Known instrument defects this tool compensates for:
       count toward the unique leg.
 
   G5  The founder's own events are demand-negative. Pass --exclude-prefix
-      to drop them; the count of dropped rows is always reported.
+      to drop them; the count of dropped rows is always reported. Matching
+      is EXACT membership on ip_trunc, and the label shape changed at the
+      2026-09-13 deploy (PR #245: compressed IPv6 "2001:db8:::/48" became
+      "2001:db8::/48"; host:port peers became a /24), so a founder on such
+      an address needs one --exclude-prefix per shape across that boundary.
 
 Truncation caveat that survives every fix: ip_trunc is a /24 (v4) or /48
 (v6) PREFIX. This tool says "distinct prefixes" and never "visitors",

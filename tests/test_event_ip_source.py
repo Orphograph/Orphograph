@@ -118,19 +118,16 @@ def test_resolved_ipv6_truncates_to_slash_48():
     assert src == "cf"
 
 
-def test_compressed_ipv6_yields_a_stable_if_ugly_slash_48_label():
-    """Documents existing `truncate_ip` behaviour, newly exercised by this fix.
+def test_compressed_ipv6_yields_a_canonical_slash_48_label():
+    """Cloudflare sends RFC 5952 compressed IPv6. Until 2026-09-13 `truncate_ip`
+    was string-based and a compressed run left an empty group in the label
+    ("2001:db8:::/48"). It now parses the address (PR #245), so the label is
+    the canonical /48 network; the mapping stays deterministic and two
+    addresses collide only when they really share a /48.
 
-    Cloudflare sends RFC 5952 compressed IPv6. `truncate_ip` is string-based,
-    so a compressed run can leave an empty group and produce a malformed-
-    looking label ("2001:db8:::/48"). This is COSMETIC, not count-affecting:
-    the mapping is deterministic, so one address always lands in one bucket,
-    and two addresses only collide when their third group is genuinely zero
-    in both — i.e. when they really do share a /48.
-
-    Deliberately NOT fixed here: `truncate_ip` is the shared rate-limit helper
-    and is pinned by tests/test_security_hardening.py. Changing it belongs in
-    its own PR, outside the analytics path.
+    Deploy-boundary note: rows written before that fix carry the old shape,
+    rows after carry the new one. tools/gate_read.py --exclude-prefix is
+    exact membership, so a founder exclusion may need both shapes.
     """
     # Realistic Cloudflare visitor addresses truncate cleanly.
     ip, _ = app._resolve_analytics_ip("2606:4700:3031::ac43:cfd5", "", "", True)
@@ -143,7 +140,7 @@ def test_compressed_ipv6_yields_a_stable_if_ugly_slash_48_label():
     assert truncate_ip("2001:db8:1::1") != truncate_ip("2001:db8::1")  # different /48
 
     # Whatever the label looks like, no full address survives.
-    assert "db8::1" not in truncate_ip("2001:db8::1").replace("2001:db8::/48", "")
+    assert "::1" not in truncate_ip("2001:db8::1")
 
 
 def test_truncated_output_never_contains_the_host_octet():

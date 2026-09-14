@@ -28,6 +28,9 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+import hashlib
+import time
+
 import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -43,7 +46,9 @@ SHA512 = "cd" * 64
 CDN_IP = "203.0.113.77"
 REAL_IP = "198.51.100.23"
 XFF_IP = "192.0.2.99"
-XFF_IP_WITH_PORT = "192.0.2.99:1234"
+# A DIFFERENT /24 from XFF_IP and from REAL_IP: the wire positive control asserts the
+# truncated form was absent before the row ran, so two rows may not share a network.
+XFF_IP_WITH_PORT = "198.18.0.99:1234"
 V6_IP = "2001:db8:85a3:8d3:1319:8a2e:370:7348"
 
 
@@ -203,7 +208,7 @@ def test_row5_a_free_anchor_records_no_identity(server, data_dir):
 @pytest.mark.parametrize("header,value,expect_trunc", [
     ("CF-Connecting-IP", CDN_IP, "203.0.113.0/24"),
     ("X-Forwarded-For", XFF_IP, "192.0.2.0/24"),
-    ("X-Forwarded-For", XFF_IP_WITH_PORT, "192.0.2.0/24"),   # host:port from a proxy
+    ("X-Forwarded-For", XFF_IP_WITH_PORT, "198.18.0.0/24"),   # host:port from a proxy
     ("CF-Connecting-IP", V6_IP, "2001:db8:85a3::/48"),
 ])
 def test_row6_each_honoured_header_is_persisted_truncated_never_in_full(
@@ -212,30 +217,52 @@ def test_row6_each_honoured_header_is_persisted_truncated_never_in_full(
     is the one that answers; the /api/event row is the positive control that
     the branch ran and wrote a truncated form."""
     full = value.split("]")[0].lstrip("[").rsplit(":", 1)[0] if value.count(":") == 1 else value
+    # One hash and one /24 per row, so the positive controls below measure THIS
+    # row: with the shared HASH and a shared network, the previous row had
+    # already written both and the "vacuous" guards could never fire
+    # (planted-defect proof, review of PR #245: dropping the host:port branch
+    # left this wire test green).
+    row_hash = hashlib.sha256(f"row6:{header}:{value}".encode()).hexdigest()
     before = _persisted(data_dir)
     assert full.encode() not in before, "fixture already contaminated — re-check earlier rows"
+    assert expect_trunc.encode() not in before, f"{expect_trunc} already persisted — this row would prove nothing"
+    assert row_hash.encode() not in before
     hdr = {header: value}
-    code, rec = _anchor(server, {"hash_hex": HASH}, headers=hdr)
+    code, rec = _anchor(server, {"hash_hex": row_hash}, headers=hdr)
     assert code in (200, 201), (code, rec)
     code, _ = _request(server, "/api/event", "POST",
                        json.dumps({"event": "page_view", "page": "/"}).encode(),
                        {"Content-Type": "application/json", **hdr})
     assert code in (200, 201, 202, 204), code
     persisted = _persisted(data_dir)
-    assert HASH.encode() in persisted, "anchor was not persisted — the check would be vacuous"
+    assert row_hash.encode() in persisted, "anchor was not persisted — the check would be vacuous"
     assert expect_trunc.encode() in persisted, f"{header}={value}: no truncated form recorded — vacuous"
     assert full.encode() not in persisted, f"full IP {full} was persisted (header {header})"
 
 
 def test_row6_platform_real_ip_header_is_never_persisted_in_full(server, data_dir):
-    """Fly-Client-IP feeds rate-limit bucketing (in-memory, snapshot on an
-    interval) and no analytics row, so there is no deterministic truncated
-    form to positive-control here. The claim tested is only the negative:
-    the full address is nowhere the server writes."""
+    """Fly-Client-IP feeds rate-limit bucketing, which snapshots its keys to
+    DATA_DIR/rate_limit_state.json on an interval. That snapshot is the
+    positive control: the truncated key must appear there, or the header was
+    never read (planted defect, review of PR #245: with ORPHO_REAL_IP_HEADER
+    pointed at a header nobody sends, the negative-only version stayed
+    green). The negative still holds: the full address is nowhere."""
+    before = _persisted(data_dir)
+    assert b"198.51.100.0/24" not in before, "truncated key already present — control would be vacuous"
     hdr = {"Fly-Client-IP": REAL_IP}
-    code, rec = _anchor(server, {"hash_hex": HASH}, headers=hdr)
+    code, rec = _anchor(server, {"hash_hex": "ef" * 32}, headers=hdr)
     assert code in (200, 201, 429), (code, rec)
-    assert REAL_IP.encode() not in _persisted(data_dir)
+    # The limiter writes its snapshot on the first check() after the interval;
+    # keep poking the same key until the file carries it.
+    deadline = time.time() + 20
+    while time.time() < deadline:
+        if b"198.51.100.0/24" in _persisted(data_dir):
+            break
+        time.sleep(1)
+        _anchor(server, {"hash_hex": "ef" * 32}, headers=hdr)
+    persisted = _persisted(data_dir)
+    assert b"198.51.100.0/24" in persisted, "Fly-Client-IP bucket never snapshotted — header not read?"
+    assert REAL_IP.encode() not in persisted
 
 
 def test_row6_truncation_shapes():
@@ -250,3 +277,21 @@ def test_row6_truncation_shapes():
     # Nothing below the truncation boundary survives, ever.
     assert "77" not in truncate_ip("203.0.113.77:1234")
     assert "7348" not in truncate_ip(V6_IP)
+
+
+def test_row6_ipv6_transition_forms_do_not_smuggle_a_full_ipv4():
+    """A /48 keeps the hextets that 6to4, Teredo, IPv4-mapped and NAT64 use
+    to carry a whole IPv4 (review of PR #245: 2002:cb00:7149::/48 decodes
+    straight to 203.0.113.73). Each unwraps to its IPv4 /24."""
+    from rate_limit import truncate_ip
+    assert truncate_ip("2002:cb00:7149::1") == "203.0.113.0/24"                # 6to4
+    assert truncate_ip("::ffff:203.0.113.77") == "203.0.113.0/24"              # IPv4-mapped
+    assert truncate_ip("64:ff9b::cb00:7149") == "203.0.113.0/24"               # NAT64
+    assert truncate_ip("2001:0:4136:e378:8000:63bf:3fff:fdd2") == "192.0.2.0/24"  # Teredo client
+    for form in ("2002:cb00:7149::1", "::ffff:203.0.113.77", "64:ff9b::cb00:7149"):
+        assert "cb00" not in truncate_ip(form) and "113.7" not in truncate_ip(form)
+    # Mapped clients no longer collapse into one shared ::/48 bucket.
+    assert truncate_ip("::ffff:203.0.113.77") != truncate_ip("::ffff:198.51.100.5")
+    # Unparseable forms share ONE bucket by decision, never their raw text.
+    for bad in ("2001:db8::zzz", "203.0.113.77:1234:", "300.1.1.1"):
+        assert truncate_ip(bad) == "unknown"

@@ -146,6 +146,9 @@ class TokenBucket:
             self._buckets.popitem(last=False)
 
 
+_NAT64 = ipaddress.ip_network("64:ff9b::/96")
+
+
 def truncate_ip(addr: str) -> str:
     """Truncate an IP for logging: /24 for IPv4, /48 for IPv6.
 
@@ -168,7 +171,30 @@ def truncate_ip(addr: str) -> str:
     try:
         ip = ipaddress.ip_address(a)
     except ValueError:
+        # Fail-SHARED, deliberately: every unparseable address lands in the
+        # one "unknown" bucket (one anchor quota, one founder-lockout key)
+        # rather than leaking its raw text as its own key, which is what the
+        # string slicer did. The global counters still backstop it.
         return "unknown"
+    if ip.version == 6:
+        # A /48 keeps hextets 1-3, and four transition formats carry a FULL
+        # IPv4 inside exactly those bits: ::ffff:a.b.c.d (mapped), 2002:AABB:
+        # CCDD:: (6to4), Teredo 2001:0::/32 (server in bits 32-63, client
+        # XOR'd in 96-127) and NAT64 64:ff9b::/96. Left as IPv6, the label IS
+        # the address (2002:cb00:7149::/48 decodes to 203.0.113.73) or every
+        # such client collapses into ::/48. Unwrap to the IPv4 and truncate
+        # that instead. (Review of PR #245, 2026-09-13.)
+        embedded = ip.ipv4_mapped
+        if embedded is None:
+            embedded = ip.sixtofour
+        if embedded is None and ip.teredo is not None and not ip.teredo[0].is_unspecified:
+            # Python decodes anything under 2001:0::/32 as Teredo; a real
+            # Teredo address names its server, so 2001::1 stays an IPv6 /48.
+            embedded = ip.teredo[1]
+        if embedded is None and ip in _NAT64:
+            embedded = ipaddress.IPv4Address(int(ip) & 0xFFFFFFFF)
+        if embedded is not None:
+            ip = embedded
     if ip.version == 4:
         return str(ipaddress.ip_network(f"{ip}/24", strict=False))
     return str(ipaddress.ip_network(f"{ip}/48", strict=False))
