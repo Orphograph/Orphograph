@@ -10,6 +10,9 @@ Two failures this locks down, both measured against production on 2026-09-12:
      Both 404 in production, so the probe would fail on them forever.
 """
 import importlib.util
+import contextlib
+import io
+import json
 import pathlib
 import sys
 import unittest
@@ -20,6 +23,32 @@ PROBE_SCRIPT = REPO / "scripts" / "all_endpoints_probe.py"
 WEB = REPO / "web"
 # Served by explicit routes in server/app.py, not by files under web/.
 ROUTED_FILES = {"/sitemap.xml", "/robots.txt", "/LICENSE", "/llms.txt", "/security.txt"}
+
+
+class TestWriteOptIn(unittest.TestCase):
+    def run_cli(self, *args):
+        mod = _load()
+        sent = []
+        def hit(server, probe):
+            sent.append(probe)
+            return mod.Result(probe.name, True, 200, "fixture", 0)
+        out = io.StringIO()
+        with mock.patch.object(sys, "argv", ["probe", "--json", *args]), \
+             mock.patch.object(mod, "hit", hit), contextlib.redirect_stdout(out):
+            self.assertEqual(mod.main(), 0)
+        return sent, json.loads(out.getvalue())
+
+    def test_default_cli_never_sends_write_requests(self):
+        sent, report = self.run_cli()
+        self.assertGreater(len(sent), 10)
+        self.assertTrue(all(p.method in {"GET", "HEAD"} for p in sent))
+        self.assertIn("Waitlist signup", report["skipped_write_probes"])
+        self.assertEqual(report["total"], len(sent))
+
+    def test_explicit_opt_in_includes_waitlist(self):
+        sent, report = self.run_cli("--allow-writes")
+        self.assertTrue(any(p.path == "/api/waitlist" and p.method == "POST" for p in sent))
+        self.assertEqual(report["skipped_write_probes"], [])
 
 
 def _load():
@@ -173,3 +202,16 @@ class TestOneBadProbeCannotAbortTheRun(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestCanonicalReceipt(unittest.TestCase):
+    def test_real_receipt_and_in_domain_mutations(self):
+        mod = _load()
+        payload = dict(mod.SAMPLE, found=True)
+        self.assertTrue(mod.check_sample_receipt(200, {}, json.dumps(payload).encode())[0])
+        for key, value in [("receipt_id", "wrong"), ("hash_hex", "0" * 64), ("found", False)]:
+            with self.subTest(key=key):
+                mutated = dict(payload, **{key: value})
+                self.assertFalse(mod.check_sample_receipt(200, {}, json.dumps(mutated).encode())[0])
+        for body in (b"[]", b"not-json"):
+            self.assertFalse(mod.check_sample_receipt(200, {}, body)[0])
