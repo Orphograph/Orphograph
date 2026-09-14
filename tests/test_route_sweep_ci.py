@@ -27,3 +27,10 @@ def test_cli_exit_matches_verdict(verdict, expected):
 def test_interpolated_receipt_probe_remains_in_route_oracle():
     assert rs.es._probe_entries('Probe("receipt", "GET", f"/api/receipt/{SAMPLE_ID}")') == [
         ("GET", "/api/receipt/sweep-probe")]
+
+
+@pytest.mark.parametrize('statuses', [(400, 429), (429, 400)])
+def test_rate_limit_boundary_is_not_a_route_bug(statuses):
+    headers = {'strict-transport-security':'max-age=1', 'x-content-type-options':'nosniff'}
+    a,b = [dict(status=status,headers=headers) for status in statuses]
+    assert rs.classify(a,b)[0] == 'UNKNOWN'
