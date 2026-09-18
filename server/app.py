@@ -660,7 +660,6 @@ def _build_sitemap() -> str:
         ("/access", "0.6"),
         ("/pack", "0.6"),
         ("/construction/", "0.4"),
-        ("/inspection/", "0.4"),
         ("/listings/", "0.4"),
         ("/matters/", "0.4"),
         ("/practice/", "0.4"),

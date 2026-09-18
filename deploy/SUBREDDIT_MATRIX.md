@@ -1169,8 +1169,8 @@ purposes. Bad?"**
 > Fair. The anchor doesn't help with scope. It helps with the
 > sub-class of disputes where the disputed fact is "did you
 > send this exact file by this date." That's maybe 20-30% of
-> disputes in my experience. Not all of them, but a cheap
-> insurance for the ones it covers.
+> disputes in my experience. Not all of them, but cheap
+> protection for the ones it covers.
 
 **Obj 3: "Sounds like over-engineering for $500 invoices."**
 > The free tier exists for small invoices. The $19 Writer Pack

@@ -63,7 +63,7 @@ VERTICAL_KEYWORDS: dict[str, list[str]] = {
         "roofing", "roofer", "restoration", "remediation", "remediator",
         "general contractor", "gc", "framer", "siding",
         # work signals
-        "storm damage", "hail", "wildfire", "insurance claim",
+        "storm damage", "hail", "wildfire",
         "supplement", "scope of work", "xactimate", "job site",
         "field documentation", "photo documentation",
         # associations

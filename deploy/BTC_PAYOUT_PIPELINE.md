@@ -71,7 +71,7 @@ Decoupling these two decisions is the whole point. The pipeline keeps you accumu
 | **Secondary Phantom on a "never-browse" phone** | $0 | Medium (still software wallet) | Phantom restore from 12-word phrase |
 | **Just Phantom (no cold sweep at all)** | $0 | Lowest — single hot wallet | Phantom restore |
 
-**Recommendation for solo bootstrapped:** start with Phantom-only until accumulated balance > $1000. At that point, buy a Coldcard ($150 is ~1% of the stack at that point — defensible insurance). Sweep weekly to the Coldcard's first address. Sleep better.
+**Recommendation for solo bootstrapped:** start with Phantom-only until accumulated balance > $1000. At that point, buy a Coldcard ($150 is ~1% of the stack at that point — a defensible safeguard). Sweep weekly to the Coldcard's first address. Sleep better.
 
 **Recommendation for "right now, no hardware":** create a NEW Phantom account on a separate iCloud/device you don't browse on (an old iPhone in a drawer works). Use that as cold. Sweep to its address. Total cost: $0. Risk: still a software wallet, so a sophisticated phone compromise is theoretically possible — but vastly safer than a hot wallet you carry daily.
 

@@ -263,10 +263,6 @@
     "version": "22",
     "sha256": "07fb4d8d23b13cce7b00dc97a9319a8ca584f8539bba62751f758e4b8ad58cbf"
   },
-  "/inspection/index.css": {
-    "version": "1",
-    "sha256": "9c2f71e3ab73f70f454ce30acf8ef5400c1991341522782e4fac2cdc86c36e03"
-  },
   "/integrations.css": {
     "version": "1",
     "sha256": "b723e018e3094df1a76f199f3a53e869e8b2cc8732d2d3c590a7d3835b837931"

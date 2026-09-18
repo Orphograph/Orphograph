@@ -73,7 +73,6 @@ EXPECTED_URLS = [
     "https://orphograph.com/access",
     "https://orphograph.com/pack",
     "https://orphograph.com/construction/",
-    "https://orphograph.com/inspection/",
     "https://orphograph.com/listings/",
     "https://orphograph.com/matters/",
     "https://orphograph.com/practice/",
