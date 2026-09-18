@@ -28,8 +28,6 @@ works if it is the anchor bucket and not some other gate.
 from __future__ import annotations
 
 import json
-import urllib.error
-import urllib.request
 
 import pytest
 
@@ -71,21 +69,7 @@ def roomy(tmp_path_factory):
 
 
 def _post(base, path, payload):
-    req = urllib.request.Request(
-        f"{base}{path}",
-        data=json.dumps(payload).encode(),
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=60) as r:
-            return r.status, json.loads(r.read().decode())
-    except urllib.error.HTTPError as e:
-        body = e.read().decode()
-        try:
-            return e.code, json.loads(body)
-        except json.JSONDecodeError:
-            return e.code, {"raw": body[:200]}
+    return _srv.post_json(base, path, payload, timeout=60)
 
 
 def test_batch_of_many_consumes_exactly_one_free_token(base):

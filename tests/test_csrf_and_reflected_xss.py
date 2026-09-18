@@ -24,15 +24,7 @@ scanner never ran" produce identical output.
 """
 from __future__ import annotations
 
-import json
-import os
-import socket
-import subprocess
-import sys
-import time
-import urllib.error
 import urllib.parse
-import urllib.request
 from pathlib import Path
 
 import pytest
@@ -62,14 +54,6 @@ XSS_PARAMS = ["q", "next", "email", "code", "id", "receipt", "ref", "token",
               "label", "utm_source", "plan", "msg", "error"]
 
 
-def _free_port() -> int:
-    s = socket.socket()
-    s.bind(("127.0.0.1", 0))
-    p = s.getsockname()[1]
-    s.close()
-    return p
-
-
 @pytest.fixture(scope="module")
 def server(tmp_path_factory):
     """One server, via the shared helper. See tests/_srv.py for why
@@ -80,26 +64,15 @@ def server(tmp_path_factory):
 
 
 def _post(base: str, path: str, ctype: str) -> int:
-    req = urllib.request.Request(base + path, data=b'{"hash_hex":"' + b"a" * 64 + b'"}',
-                                 headers={"Content-Type": ctype}, method="POST")
-    try:
-        with urllib.request.urlopen(req, timeout=20) as r:
-            return r.status
-    except urllib.error.HTTPError as e:
-        return e.code
+    body = b'{"hash_hex":"' + b"a" * 64 + b'"}'
+    return _srv.request(base, path, "POST", body, {"Content-Type": ctype}, timeout=20)[0]
 
 
 def _get(base: str, url: str) -> tuple[int, str]:
-    try:
-        with urllib.request.urlopen(base + url, timeout=20) as r:
-            return r.status, r.read().decode("utf-8", "replace")
-    except urllib.error.HTTPError as e:
-        try:
-            return e.code, e.read().decode("utf-8", "replace")
-        except Exception:
-            return e.code, ""
-    except Exception:
-        return 0, ""
+    """One answered request. A server that is gone raises (_srv.ServerGone);
+    nothing here turns "no answer" into an empty, reflection-free body."""
+    status, raw, headers = _srv.request(base, url, timeout=20)
+    return status, raw.decode("utf-8", "replace") + "\n" + (headers.get("Location") or "")
 
 
 @pytest.mark.parametrize("path", STATE_CHANGING)
@@ -121,15 +94,20 @@ def test_json_is_not_blanket_rejected(server):
 
 def test_no_query_parameter_is_reflected_into_a_response(server):
     """THE XSS GUARD. 234 route x param combinations with an executable payload."""
-    reflected = []
+    reflected, unanswered = [], []
     for route in XSS_ROUTES:
         for p in XSS_PARAMS:
-            _st, body = _get(server, f"{route}?{p}={urllib.parse.quote(XSS_MARK)}")
+            st, body = _get(server, f"{route}?{p}={urllib.parse.quote(XSS_MARK)}")
+            if st != 200:
+                # A page that did not render was not swept. Counting it clean
+                # is how a renamed route leaves this guard without anyone seeing.
+                unanswered.append((route, p, st))
             if "xSsPrObE" in body:
                 raw = "<svg/onload" in body
                 reflected.append((route, p, "RAW-UNESCAPED" if raw else "escaped"))
     executable = [r for r in reflected if r[2] == "RAW-UNESCAPED"]
     assert not executable, f"reflected XSS: {executable}"
+    assert not unanswered, f"swept pages that did not answer 200: {unanswered[:10]}"
     assert not reflected, f"unexpected reflection (escaped, but still new): {reflected}"
 
 
