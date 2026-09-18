@@ -29,7 +29,6 @@ was observed — the rejection branch must be reached before it can be trusted.
 from __future__ import annotations
 
 import hashlib
-import socket
 from pathlib import Path
 
 import pytest
@@ -67,14 +66,6 @@ VECTORS = [
 ]
 
 
-def _free_port() -> int:
-    s = socket.socket()
-    s.bind(("127.0.0.1", 0))
-    p = s.getsockname()[1]
-    s.close()
-    return p
-
-
 @pytest.fixture(scope="module")
 def server(tmp_path_factory):
     """One server, via the shared helper. See tests/_srv.py for why
@@ -91,8 +82,7 @@ def _anchor(base: str, tag: str, c2pa):
 
 
 def _stored_c2pa(base: str, receipt_id: str):
-    status, rec = _srv.get_json(base, f"/api/receipt/{receipt_id}", timeout=20)
-    assert status == 200, (status, rec)
+    rec = _srv.ok_json(*_srv.get_json(base, f"/api/receipt/{receipt_id}", timeout=20))
     return rec.get("c2pa_manifest_hash")
 
 

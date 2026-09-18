@@ -230,22 +230,58 @@ def test_the_scan_can_actually_see_a_server_fixture() -> None:
 # exception, so its 234-request reflected-XSS sweep read a dead server, or a
 # swept page that had started to 404, as "nothing reflected".
 
-_OWN_CONNECTION_CALLS = frozenset({
-    "urlopen", "HTTPConnection", "HTTPSConnection", "build_opener"})
+_OWN_CONNECTION_NAMES = frozenset({
+    "urlopen", "urlretrieve", "build_opener", "OpenerDirector",
+    "HTTPConnection", "HTTPSConnection", "create_connection"})
+_OWN_CONNECTION_MODULES = frozenset({"requests", "httpx", "urllib3", "aiohttp"})
+
+
+def _imports_srv(tree: ast.AST) -> bool:
+    """`import _srv`, `import _srv as s`, `from _srv import x` — judged on the
+    import statement, not on the text, so prose cannot opt a module in or out."""
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import) and any(a.name == "_srv" for a in node.names):
+            return True
+        if isinstance(node, ast.ImportFrom) and node.module == "_srv":
+            return True
+    return False
+
+
+def _parse_code(text: str) -> ast.AST | None:
+    try:
+        tree = ast.parse(text)
+    except SyntaxError:
+        return None
+    _strip_docstrings(tree)
+    return tree
 
 
 def _opens_its_own_connection(text: str) -> list[str]:
-    """Names of connection-opening calls in CODE (docstrings do not count)."""
-    tree = ast.parse(text)
-    _strip_docstrings(tree)
+    """Connection-opening names REFERENCED in code: called, aliased, imported
+    under another name, or passed as a value (`pool.map(urlopen, urls)`)."""
+    tree = _parse_code(text)
+    if tree is None:
+        # Unparseable: a scan that cannot read the file reports "maybe".
+        return sorted(n for n in _OWN_CONNECTION_NAMES if n in text)
     found = []
     for node in ast.walk(tree):
-        if isinstance(node, ast.Call):
-            fn = node.func
-            name = fn.attr if isinstance(fn, ast.Attribute) else getattr(fn, "id", None)
-            if name in _OWN_CONNECTION_CALLS:
-                found.append(name)
+        if isinstance(node, ast.Attribute) and node.attr in _OWN_CONNECTION_NAMES:
+            found.append(node.attr)
+        elif isinstance(node, ast.Name) and node.id in _OWN_CONNECTION_NAMES:
+            found.append(node.id)
+        elif isinstance(node, ast.ImportFrom):
+            found += [a.name for a in node.names if a.name in _OWN_CONNECTION_NAMES]
+            if (node.module or "").split(".")[0] in _OWN_CONNECTION_MODULES:
+                found.append(node.module)
+        elif isinstance(node, ast.Import):
+            found += [a.name for a in node.names
+                      if a.name.split(".")[0] in _OWN_CONNECTION_MODULES]
     return found
+
+
+def _on_the_shared_helper(text: str) -> bool:
+    tree = _parse_code(text)
+    return "_srv" in text if tree is None else _imports_srv(tree)
 
 
 def test_modules_on_the_shared_helper_do_not_open_their_own_connections() -> None:
@@ -255,7 +291,7 @@ def test_modules_on_the_shared_helper_do_not_open_their_own_connections() -> Non
     server's own last words instead of an empty body."""
     offenders = {
         p.name: sorted(set(calls)) for p, t in _modules()
-        if "import _srv" in t and p.name != "test_server_fixture_hygiene.py"
+        if p.name != "test_server_fixture_hygiene.py" and _on_the_shared_helper(t)
         and (calls := _opens_its_own_connection(t))
     }
     assert not offenders, (
@@ -264,20 +300,24 @@ def test_modules_on_the_shared_helper_do_not_open_their_own_connections() -> Non
 
 
 def test_the_connection_scan_can_actually_see_a_private_helper() -> None:
-    """NEGATIVE CONTROL, twice: a planted source, and the real corpus."""
-    planted = (
-        'import urllib.request, http.client\n'
-        'def _get(u):\n'
-        '    """urlopen in prose must not count."""\n'
-        '    return urllib.request.urlopen(u).read()\n'
-        'def _raw(h):\n'
-        '    return http.client.HTTPConnection(h)\n')
-    assert sorted(_opens_its_own_connection(planted)) == ["HTTPConnection", "urlopen"]
-    assert _opens_its_own_connection('def f():\n    """urlopen(x)"""\n') == []
-    # The legacy fixtures still carry private helpers, so a detector that has
-    # gone blind shows up here as a corpus with none.
-    seen = [p.name for p, t in _modules() if _opens_its_own_connection(t)]
-    assert len(seen) >= 20, (
-        f"only {len(seen)} modules detected opening a connection — the detector "
-        "is broken, not the suite clean")
+    """NEGATIVE CONTROL. Every spelling below is one a guard matching only
+    `urlopen(...)` calls would have missed."""
+    sees = _opens_its_own_connection
+    assert sees("import urllib.request\ndef g(u):\n    return urllib.request.urlopen(u)\n")
+    assert sees("from http.client import HTTPConnection as Conn\nc = Conn('h')\n")
+    assert sees("import urllib.request\nfetch = urllib.request.urlopen\n")
+    assert sees("import urllib.request as r\npool.map(r.urlopen, urls)\n")
+    assert sees("import socket\ns = socket.create_connection(('h', 1))\n")
+    assert sees("import requests\n")
+    assert sees("def broken(:\n    urlopen(x)\n"), "unparseable must read as maybe"
+    assert sees('def f():\n    """urlopen(x) in prose must not count."""\n') == []
 
+    assert _on_the_shared_helper("from _srv import request\n")
+    assert _on_the_shared_helper("import _srv as s\n")
+    assert not _on_the_shared_helper('"""see: import _srv"""\nimport os\n')
+
+    # The corpus, while it still has any: every LEGACY fixture carries a private
+    # helper today, so a detector gone blind shows up as a corpus with none.
+    # Not a fixed floor — LEGACY is meant to shrink to nothing.
+    seen = [p.name for p, t in _modules() if _opens_its_own_connection(t)]
+    assert seen or not LEGACY, "no module detected opening a connection — detector is blind"

@@ -70,11 +70,6 @@ def server(tmp_path_factory):
     yield from _srv.server_processes(data_dir, stub_calendars=True)
 
 
-def _ok_json(status: int, rec: dict) -> dict:
-    assert 200 <= status < 300, (status, rec)
-    return rec
-
-
 def _run_verifier(receipt_path: Path, vk: bool) -> subprocess.CompletedProcess:
     cmd = [sys.executable, str(VERIFY_SNARK), str(receipt_path)]
     if vk:
@@ -91,14 +86,14 @@ def anchored(zk, server):
         EVIDENCE / "verification_key.json",
         label="snark wire-path pin",
     )
-    resp = _ok_json(*_srv.anchor(server, payload, timeout=15))
+    resp = _srv.ok_json(*_srv.anchor(server, payload, timeout=15))
     return payload, resp
 
 
 @pytest.fixture()
 def receipt(anchored, server, tmp_path):
     _payload, resp = anchored
-    rec = _ok_json(*_srv.get_json(server, f"/api/receipt/{resp['receipt_id']}", timeout=15))
+    rec = _srv.ok_json(*_srv.get_json(server, f"/api/receipt/{resp['receipt_id']}", timeout=15))
     rp = tmp_path / "receipt.json"
     rp.write_text(json.dumps(rec))
     return rec, rp, tmp_path
@@ -114,7 +109,7 @@ def test_anchor_response_carries_the_proof(anchored):
 def test_proof_survives_to_the_receipt_endpoint(anchored, server):
     """THE PIN — the exact hop that silently dropped the schnorr field before."""
     payload, resp = anchored
-    rec = _ok_json(*_srv.get_json(server, f"/api/receipt/{resp['receipt_id']}", timeout=15))
+    rec = _srv.ok_json(*_srv.get_json(server, f"/api/receipt/{resp['receipt_id']}", timeout=15))
     z = rec.get("zk_provenance")
     assert z, "zk_provenance did not survive to GET /api/receipt/<id>"
     for field in ("proof_type", "output_hash", "model_id", "program", "protocol",

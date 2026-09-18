@@ -53,9 +53,7 @@ def _post(base: str, path: str, body: dict):
 
 
 def _receipt(base: str, rid: str) -> dict:
-    status, rec = _srv.get_json(base, f"/api/receipt/{rid}", timeout=30)
-    assert status == 200, (status, rec)
-    return rec
+    return _srv.ok_json(*_srv.get_json(base, f"/api/receipt/{rid}", timeout=30))
 
 
 def _reserved_leaf(parent_root: str) -> dict:

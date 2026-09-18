@@ -152,6 +152,9 @@ def wait_ready(bases, procs, logs) -> None:
 
 
 def _kill_all(procs, logs) -> None:
+    gone = {path for path, _lf in logs}
+    for base in [b for b, path in _LOG_BY_BASE.items() if path in gone]:
+        del _LOG_BY_BASE[base]          # a reused port must not inherit this log
     for p in procs:
         p.terminate()
         try:
@@ -198,15 +201,19 @@ def request(base: str, path: str, method: str = "GET", body: bytes | None = None
     is never replayed as a GET against its Location. Headers come back as the
     HTTPMessage itself: `.get()` is case-insensitive and `.get_all()` /
     `.items()` keep a header the server sent twice, which a dict would hide.
-    A server spun by `spin()` that has stopped answering raises ServerGone
-    with its last output instead of a bare connection error."""
+    A server spun by `spin()` that has stopped answering — refused, reset or
+    timed out — raises ServerGone with its last output instead of a bare
+    connection error."""
     req = urllib.request.Request(base + path, data=body, method=method, headers=headers or {})
     try:
         with _OPENER.open(req, timeout=timeout) as r:
             return r.status, r.read(), r.headers
     except urllib.error.HTTPError as e:
         return e.code, e.read(), e.headers
-    except (urllib.error.URLError, ConnectionError, http.client.HTTPException) as e:
+    except (OSError, http.client.BadStatusLine, http.client.IncompleteRead) as e:
+        # OSError covers URLError (refused), ConnectionError (reset) and
+        # TimeoutError (wedged). NOT HTTPException as a whole: InvalidURL is
+        # raised client-side before anything is sent, and is the test's bug.
         log_path = _LOG_BY_BASE.get(base)
         if log_path is None:
             raise
@@ -216,12 +223,21 @@ def request(base: str, path: str, method: str = "GET", body: bytes | None = None
 
 def _json_object(raw: bytes) -> dict:
     try:
-        parsed = json.loads(raw or b"{}")
+        parsed = json.loads(raw)
     except ValueError:
         parsed = None
     if not isinstance(parsed, dict):
         return {"_raw": raw.decode("utf-8", "replace")}
     return parsed
+
+
+def ok_json(status: int, rec: dict) -> dict:
+    """The reply was a 200 carrying a JSON object. An empty or non-JSON body
+    arrives as {"_raw": ...}; without this, `assert "field" not in rec` passes
+    over a page that never rendered."""
+    assert status == 200, (status, rec)
+    assert "_raw" not in rec, f"200 without a JSON object: {rec['_raw'][:200]!r}"
+    return rec
 
 
 def get_json(base: str, path: str, headers: dict | None = None,

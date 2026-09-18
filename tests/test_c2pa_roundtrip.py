@@ -59,14 +59,10 @@ class TestC2paRoundtrip(unittest.TestCase):
         cls._tmp.cleanup()
 
     def _post(self, path, body):
-        status, rec = _srv.post_json(self._base, path, body, timeout=15)
-        self.assertEqual(status, 200, rec)
-        return rec
+        return _srv.ok_json(*_srv.post_json(self._base, path, body, timeout=15))
 
     def _get(self, path):
-        status, rec = _srv.get_json(self._base, path, timeout=15)
-        self.assertEqual(status, 200, rec)
-        return rec
+        return _srv.ok_json(*_srv.get_json(self._base, path, timeout=15))
 
     def test_c2pa_survives_the_round_trip(self):
         c2pa = "cd" * 32

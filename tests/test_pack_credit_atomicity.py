@@ -37,7 +37,6 @@ describes.
 from __future__ import annotations
 
 import hashlib
-import socket
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
@@ -49,14 +48,6 @@ import _srv
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CONCURRENCY = 12
-
-
-def _free_port() -> int:
-    s = socket.socket()
-    s.bind(("127.0.0.1", 0))
-    p = s.getsockname()[1]
-    s.close()
-    return p
 
 
 @pytest.fixture(scope="module")

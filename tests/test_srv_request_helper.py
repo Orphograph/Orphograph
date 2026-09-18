@@ -8,7 +8,9 @@ mid-module surfacing as a bare connection error with its last words discarded.
 """
 from __future__ import annotations
 
+import http.client
 import json
+import socket
 import sys
 import threading
 import urllib.error
@@ -49,6 +51,10 @@ class _Handler(BaseHTTPRequestHandler):
             return None
         if self.path == "/obj":
             return self._send(200, b'{"k": 1}')
+        if self.path == "/empty":
+            return self._send(200, b"")
+        if self.path == "/html":
+            return self._send(200, b"<html>not json</html>")
         return self._send(404, b"nope")
 
     def do_POST(self):
@@ -123,18 +129,69 @@ def test_get_json_parses_an_object(tiny):
     assert _srv.get_json(tiny, "/obj") == (200, {"k": 1})
 
 
+def test_a_200_without_a_json_object_is_not_a_usable_reply(tiny):
+    """An absence assertion (`"field" not in rec`) must not pass over a page
+    that answered 200 with nothing, or with HTML."""
+    assert _srv.get_json(tiny, "/empty") == (200, {"_raw": ""})
+    for path in ("/empty", "/html"):
+        with pytest.raises(AssertionError):
+            _srv.ok_json(*_srv.get_json(tiny, path))
+    with pytest.raises(AssertionError):
+        _srv.ok_json(*_srv.get_json(tiny, "/missing"))
+    assert _srv.ok_json(*_srv.get_json(tiny, "/obj")) == {"k": 1}
+
+
 def test_a_server_that_died_reports_its_last_words(tmp_path):
     bases, procs, logs = _srv.spin(tmp_path, stub_calendars=True)
     try:
         _srv.wait_ready(bases, procs, logs)
         marker = "/no-such-page-last-words-marker"
         assert _srv.request(bases[0], marker)[0] == 404
+        procs[0].kill()                 # dies mid-module; the fixture is still up
+        procs[0].wait(timeout=10)
+        with pytest.raises(_srv.ServerGone) as exc:
+            _srv.request(bases[0], "/api/health")
     finally:
         _srv._kill_all(procs, logs)
-    with pytest.raises(_srv.ServerGone) as exc:
-        _srv.request(bases[0], "/api/health")
     assert "--- server output ---" in str(exc.value)
     assert marker in str(exc.value), "the server's own log is not in the failure"
+
+
+def test_a_server_that_hangs_reports_its_last_words(tmp_path):
+    """Wedged, not dead: accepts the connection and never answers."""
+    hung = socket.socket()
+    hung.bind(("127.0.0.1", 0))
+    hung.listen(1)
+    base = f"http://127.0.0.1:{hung.getsockname()[1]}"
+    log = tmp_path / "hung.log"
+    log.write_text("last words of a wedged server\n")
+    _srv._LOG_BY_BASE[base] = log
+    try:
+        with pytest.raises(_srv.ServerGone) as exc:
+            _srv.request(base, "/api/health", timeout=0.5)
+    finally:
+        _srv._LOG_BY_BASE.pop(base, None)
+        hung.close()
+    assert "last words of a wedged server" in str(exc.value)
+
+
+def test_a_malformed_url_is_the_tests_bug_not_a_dead_server(tmp_path):
+    bases, procs, logs = _srv.spin(tmp_path, stub_calendars=True)
+    try:
+        _srv.wait_ready(bases, procs, logs)
+        with pytest.raises(http.client.InvalidURL):
+            _srv.request(bases[0], "/a b\n")
+    finally:
+        _srv._kill_all(procs, logs)
+
+
+def test_teardown_forgets_the_log_so_a_reused_port_does_not_inherit_it(tmp_path):
+    bases, procs, logs = _srv.spin(tmp_path, stub_calendars=True)
+    assert bases[0] in _srv._LOG_BY_BASE
+    _srv._kill_all(procs, logs)
+    assert bases[0] not in _srv._LOG_BY_BASE
+    with pytest.raises(urllib.error.URLError):
+        _srv.request(bases[0], "/")
 
 
 def test_an_unknown_base_keeps_the_plain_connection_error():
