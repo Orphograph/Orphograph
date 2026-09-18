@@ -1,20 +1,21 @@
 ---
-title: Why Orphograph uses five OpenTimestamps calendars instead of one
+title: Why Orphograph uses five OpenTimestamps calendar servers instead of one
 slug: why-5-opentimestamps-calendars-not-1
 date: 2026-05-17
+updated: 2026-09-18
 canonical: https://orphograph.com/blog/why-5-opentimestamps-calendars-not-1/
 author: Orphograph
-summary: Submitting a hash to five independent OpenTimestamps calendar servers removes any single point of failure. The redundancy argument, explained in full.
-description: Why submitting to five OpenTimestamps calendars instead of one matters — independent operators, no single point of failure, receipt survives outages.
+summary: Submitting a hash to five OpenTimestamps calendar servers removes any single point of failure. The redundancy argument, explained in full.
+description: Why submitting to five OpenTimestamps calendar servers instead of one matters — separate operators, no single point of failure, receipt survives outages.
 tags: [opentimestamps, redundancy, infrastructure, reliability]
 ---
 
-# Why Orphograph uses five OpenTimestamps calendars instead of one
+# Why Orphograph uses five OpenTimestamps calendar servers instead of one
 
-When Orphograph anchors a file, the browser submits the file's
-hash to five different OpenTimestamps calendar servers, not one.
-The receipt you download contains five `.ots` proof files, one per
-calendar. This is more bytes, more network calls, and more moving
+When Orphograph anchors a file, the office submits the file's hash
+to five different OpenTimestamps calendar servers, not one. The
+receipt you download contains five `.ots` proof files, one per
+server. This is more bytes, more network calls, and more moving
 parts than the minimum required to produce a working anchor.
 
 The reason is straightforward: one calendar is a single point of
@@ -47,11 +48,13 @@ keeps the historical Merkle paths so that anyone can come back
 years later, supply a hash, and receive the chain of proofs back
 to the on-chain root.
 
-Run by independent operators. The OpenTimestamps project lists
-several public calendars run by different teams — `alice.btc.calendar`,
-`bob.btc.calendar`, `finney.calendar.eternitywall.com`,
-`pool.opentimestamps.org`, and others. Each is a separate
-operator with separate infrastructure.
+Run by more than one operator. The public calendars are
+`alice.btc.calendar` and `bob.btc.calendar`, both on the
+OpenTimestamps project's own domain, plus
+`finney.calendar.eternitywall.com` and `btc.calendar.catallaxy.com`.
+The `a.pool` and `b.pool` addresses are aggregators: front doors
+that batch requests into alice and bob. That is four calendars under
+three separately run domains.
 
 ## What goes wrong with one calendar
 
@@ -85,22 +88,27 @@ chain does not care that a calendar went away. But it is not
 survivable for the user whose receipt only points to that
 calendar's Merkle path.
 
-## How five calendars fix this
+## How five submissions fix this
 
-If a hash is submitted to five independent calendars, the receipt
-contains five separate Merkle paths leading to five separate
-on-chain anchors. The receipt verifies if any one of them still
-verifies.
+Orphograph submits each hash to five servers: the two aggregators,
+plus alice, finney and catallaxy directly. The receipt carries five
+proof files that lead to four distinct calendars, each with its own
+on-chain anchor. The `a.pool` proof and the alice proof both go
+through alice, so they normally end in the same transaction. The
+receipt verifies if any one of the five still verifies.
 
 The math is simple. If each calendar has a 95% probability of
 being available three years from now — a reasonable working
 estimate based on the last decade of OpenTimestamps operation —
-then the probability that all five fail simultaneously is roughly
-0.05 to the fifth power, or about one in three million. The
-probability that at least one survives is essentially 100%.
+then the probability that all four calendars fail simultaneously is
+roughly 0.05 to the fourth power, or about one in 160,000. That
+assumes they fail independently. Alice and bob share an operator, so
+a cautious reader should count three: about one in 8,000. Either
+way, the probability that at least one survives is far higher than
+with a single calendar, where it is 95%.
 
-This is the entire redundancy argument. Five independent operators
-means five independent failure modes. Failures must coincide for
+This is the entire redundancy argument. Separate operators mean
+separate failure modes. Failures must coincide for
 the receipt to break. Coincident failures of unrelated
 infrastructure are rare enough to ignore.
 
@@ -110,44 +118,48 @@ kilobytes larger. There is no per-anchor pricing difference.
 
 ## What "independent" actually means here
 
-Redundancy only works if the five calendars are genuinely
-independent. Five servers run by one operator in one data center is
-not redundancy — a single power outage takes all of them down.
+Redundancy only works where the calendars are genuinely independent.
+Five servers run by one operator in one data center is not
+redundancy — a single power outage takes all of them down.
 
-The five calendars Orphograph uses are run by different teams,
-hosted in different jurisdictions, on different infrastructure
-providers, with different funding sources. There is no single
-event that takes all five down at once short of a full Bitcoin
-network outage, and a Bitcoin network outage means everyone with a
-timestamp anchored to that chain has a problem, not just
-Orphograph users.
+So here is the plain count. Of the five servers Orphograph submits
+to, two are aggregators for alice and bob, which sit on the
+OpenTimestamps project's own domain. Finney runs under
+eternitywall.com and the fifth calendar under catallaxy.com. That is
+four calendars and three separately run domains, not five of each.
+For every proof to be lost, all three would have to fail together,
+before the proofs were upgraded. Once a proof is upgraded it carries
+its full path to a Bitcoin block and no longer needs its calendar at
+all.
 
-Five independent operators also means five separate trust
-assumptions. If one calendar issues a fake proof, the other four
-will not match. A verifier can compare across calendars and notice
-the inconsistency immediately. With one calendar, there is no
-cross-check.
+Separate operators also mean separate trust assumptions. If one
+calendar issues a fake proof, the others will not match. A verifier
+can compare across calendars and notice the inconsistency
+immediately. With one calendar, there is no cross-check.
 
 ## The point you can check yourself
 
 If you want to confirm that the redundancy is real, the receipt
 shows it. The receipt zip from any Orphograph anchor contains five
-separate `.ots` files. Each one references a different calendar's
-batch and a different Bitcoin transaction. You can verify each one
-independently with the OpenTimestamps command-line tool:
+separate `.ots` files: `a.ots`, `b.ots`, `alice.ots`, `finney.ots`
+and `btc.ots`. Run `ots info` on each. A pending proof names the
+calendar behind it; an upgraded proof shows the Bitcoin transaction
+it ends in. `a.ots` and `alice.ots` name the same calendar and
+normally end in the same Bitcoin transaction (they do in the public
+sample receipt); the other three each end in their own. You can
+verify each one with the OpenTimestamps command-line tool:
 
 ```bash
-ots verify my_photo.jpg.ots.alice
-ots verify my_photo.jpg.ots.bob
-ots verify my_photo.jpg.ots.finney
-ots verify my_photo.jpg.ots.pool
-ots verify my_photo.jpg.ots.catallaxy
+ots verify -f my_photo.jpg alice.ots
+ots verify -f my_photo.jpg b.ots
+ots verify -f my_photo.jpg finney.ots
+ots verify -f my_photo.jpg a.ots
+ots verify -f my_photo.jpg btc.ots
 ```
 
-Each verification produces an independent confirmation, anchored
-to a different transaction in a different block. If two
-verifications succeed, the proof is already redundantly anchored.
-If five succeed, the proof is anchored five times.
+Each verification is a confirmation against Bitcoin, and the five
+proofs end in at least four different transactions. If two of those
+succeed, the proof is already redundantly anchored.
 
 For a receipt to fail verification entirely, all five would have
 to fail simultaneously. That is the threshold Orphograph is
@@ -168,18 +180,17 @@ everything required to confirm the anchor. Nothing in that chain
 depends on Orphograph still being online. Nothing depends on any
 specific calendar still being online — as long as at least one is.
 
-Five calendars is the practical engineering answer to "what would
-need to be true for this receipt to still work in 2046?" One
-calendar surviving is enough. Five gives you four redundant ways
-for that to happen.
+Five submissions to four calendars is the practical engineering
+answer to "what would need to be true for this receipt to still work
+in 2046?" One calendar surviving is enough. Four calendars give you
+three redundant ways for that to happen.
 
 ## The trade-off
 
-The cost of five-calendar fan-out is not zero. The browser does
-five submissions instead of one, the receipt is roughly five times
+The cost of five-server fan-out is not zero. The office makes five
+submissions instead of one, the receipt is roughly five times
 larger, and there is more code to test. The Orphograph receipt
-format adds about 4 KB per anchor for the additional `.ots`
-files.
+format adds about 4 KB per anchor for the additional `.ots` files.
 
 In exchange, the receipt has no single point of failure on the
 calendar side. The redundancy is the entire reason for the
@@ -187,13 +198,20 @@ overhead. For a service whose receipts are supposed to verify
 indefinitely, that trade-off is the right one.
 
 There is no version of the product where you only get one
-calendar's proof. The five-calendar receipt is the only receipt
+calendar's proof. The five-proof receipt is the only receipt
 Orphograph issues.
+
+*Corrected 2026-09-18. An earlier version of this post counted five
+calendars and five operators, and said each proof ended in its own
+Bitcoin transaction. Two of the five servers are aggregators for
+alice and bob, so the five proofs reach four calendars. The text
+above carries the corrected count; the address of the post is
+unchanged.*
 
 ---
 
 *Orphograph is a Bitcoin file-timestamping service. Three free
 anchors every 24 hours, $29 for a 10-anchor pack, $9/mo for
-unlimited. Five OpenTimestamps calendars, five independent
-operators, no single point of failure. Receipts verify against any
+unlimited. Five calendar servers, four distinct calendars, no single point of
+failure. Receipts verify against any
 Bitcoin node without our servers.*

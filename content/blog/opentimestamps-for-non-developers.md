@@ -2,6 +2,7 @@
 title: OpenTimestamps for non-developers — a 10-minute walkthrough
 slug: opentimestamps-for-non-developers
 date: 2026-05-13
+updated: 2026-09-18
 author: Orphograph
 summary: A practical explainer of what OpenTimestamps is, why it works, and how to use it without ever opening a terminal. Bitcoin without the gas fees, timestamping without the CLI.
 tags: [opentimestamps, bitcoin, non-developers, photographers]
@@ -141,10 +142,9 @@ Each calendar:
 - Returns to you a small proof file (the `.ots`) that includes the
   steps from your hash to the Merkle root, plus the Bitcoin tx ID
 
-Calendars are run by independent operators with no financial
-relationship to OpenTimestamps. The protocol uses 5 of them
-simultaneously so a single calendar going down doesn't lose your
-proof.
+Calendars are public servers. Two of them (alice and bob) sit on the OpenTimestamps project's own domain; the finney and catallaxy calendars are run under separate domains. Orphograph submits to five servers at
+once, which reach those four calendars, so a single calendar going
+down doesn't lose your proof.
 
 ### Layer 3 — Bitcoin
 

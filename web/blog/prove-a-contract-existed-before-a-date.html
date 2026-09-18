@@ -127,7 +127,7 @@
     <ul class="means-bullets">
       <li><strong>Save</strong> the final contract as a single file — typically the executed PDF, but the method does not care about format. Word, plain text, scanned image, even a zip of the contract and its exhibits — anything that reduces to a stable byte sequence works.</li>
       <li><strong>Drop the file</strong> at <a href="/" class="link-confirm">orphograph.com</a>. The browser computes the SHA-256 fingerprint locally; the contract's contents never leave the device. Only the sixty-four-character fingerprint is submitted to the calendars.</li>
-      <li><strong>Save the receipt.</strong> The receipt consists of a sixteen-character ID, a public URL of the form <code>orphograph.com/r/&lt;id&gt;</code>, and five small <code>.ots</code> proof files from five independent calendars. Keep them in the matter file alongside the executed contract.</li>
+      <li><strong>Save the receipt.</strong> The receipt consists of a sixteen-character ID, a public URL of the form <code>orphograph.com/r/&lt;id&gt;</code>, and five small <code>.ots</code> proof files, one from each of five calendar servers. Keep them in the matter file alongside the executed contract.</li>
     </ul>
     <p>
       The fingerprint is committed to a Bitcoin block within about an hour. From that block forward, the receipt is evidence that the contract existed by no later than that block's mined timestamp.

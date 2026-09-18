@@ -74,10 +74,10 @@
     Only the fingerprint did.
   </li>
   <li>
-    <strong>The fingerprint was submitted to five independent OpenTimestamps calendars.</strong>
-    These are independent public servers that collect hashes from many
+    <strong>The fingerprint was submitted to five OpenTimestamps calendar servers.</strong>
+    These are public servers that collect hashes from many
     people, batch them into a single Merkle tree, and roughly once per
-    hour commit the root of that tree to a real Bitcoin transaction.
+    hour commit the root of that tree to a real Bitcoin transaction. Two of the five, <code>a.pool</code> and <code>b.pool</code>, are aggregators that feed the alice and bob calendars, so the five submissions reach four distinct calendars (alice, bob, finney, catallaxy) under three separately run domains.
   </li>
   <li>
     <strong>You received a receipt</strong> — a short ID like <code>o3WGD22T4UwqfCrb</code> plus
@@ -241,7 +241,7 @@ Success! Bitcoin block 949114 attests existence as of 2026-05-12 18:34:43 UTC</p
   <li><strong>Bitcoin's chain has not been reorganized beyond ~6 blocks in 16 years.</strong> A block from an hour ago is, for any practical purpose, immutable.</li>
   <li><strong>OpenTimestamps has been in production since 2016</strong> and aggregates hashes from many independent users into the same Bitcoin commitments. Your hash is part of the same merkle root as thousands of other people's hashes — if the proof for one is good, it's good for all of them.</li>
   <li><strong>The math is verifiable offline.</strong> Once you have the <code>.ots</code> file and a Bitcoin block header (87 bytes), no network is required to verify the timestamp.</li>
-  <li><strong>The five-calendar redundancy</strong> means that even if four of the five calendar operators vanish, the fifth's <code>.ots</code> file still verifies. Orphograph's role is just to make the original submission easy.</li>
+  <li><strong>The calendar redundancy</strong> means the receipt needs only one of its five <code>.ots</code> files to verify. The five reach four distinct calendars, so every one of those would have to vanish before its proof was upgraded. Once a proof is upgraded to a Bitcoin attestation, it verifies without any calendar at all. Orphograph's role is just to make the original submission easy.</li>
 </ul>
 
 <h2 id="how-people-learn">If you want to go deeper</h2>
@@ -267,7 +267,7 @@ Success! Bitcoin block 949114 attests existence as of 2026-05-12 18:34:43 UTC</p
   <dd>An open standard and reference client for timestamping any data by anchoring its hash into the Bitcoin blockchain. Created in 2016. Independent of Orphograph.</dd>
 
   <dt>Calendar</dt>
-  <dd>A public server that batches incoming hashes into a Merkle tree and commits the root to Bitcoin roughly once an hour. There are five calendars run by independent operators; Orphograph submits to all five for redundancy.</dd>
+  <dd>A public server that batches incoming hashes into a Merkle tree and commits the root to Bitcoin roughly once an hour. Orphograph submits to five calendar servers for redundancy. Two of the five, <code>a.pool</code> and <code>b.pool</code>, are aggregators that feed the alice and bob calendars, so the five submissions reach four distinct calendars (alice, bob, finney, catallaxy) under three separately run domains.</dd>
 
   <dt>.ots file</dt>
   <dd>A small (~1–2 KB) binary file containing the Merkle path from your hash up to a known Bitcoin transaction. It is the portable proof — keep it next to your original file forever.</dd>

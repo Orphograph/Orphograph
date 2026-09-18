@@ -184,8 +184,7 @@ anchor time or the anchor is rejected, and the receipt records
 
 ## 3. Redundancy: five calendars, and the distinct states of a receipt
 
-Each anchor is submitted, in parallel, to five independently operated
-OpenTimestamps calendars:
+Each anchor is submitted, in parallel, to five public OpenTimestamps calendar servers:
 
 1. `a.pool.opentimestamps.org`
 2. `b.pool.opentimestamps.org`
@@ -193,7 +192,7 @@ OpenTimestamps calendars:
 4. `finney.calendar.eternitywall.com`
 5. `btc.calendar.catallaxy.com`
 
-Each acceptance produces an independent `.ots` proof. The receipt
+Each acceptance produces its own `.ots` proof. Two of the five, `a.pool` and `b.pool`, are aggregators that feed the alice and bob calendars, so the five submissions reach four distinct calendars (alice, bob, finney, catallaxy) under three separately run domains. The `a.pool` proof and the alice proof both go through the alice calendar and normally end in the same commitment. The receipt
 records `calendars_ok` (acceptances) out of `calendars_total` (five),
 with per-calendar failures listed verbatim.
 
@@ -330,8 +329,7 @@ may later be adversarial, and that the receipt must survive them.
   also holds and is stated plainly: the receipt cannot prove the bytes
   did *not* exist before the anchor; anchoring late proves nothing
   about early.
-- **Calendar failure or hostility.** Five independently operated
-  calendars each hold an independent commitment path. The evidentiary
+- **Calendar failure or hostility.** The five proofs lead to four distinct calendars, each holding its own commitment path. The evidentiary
   claim survives if any single calendar's proof upgrades to a Bitcoin
   attestation; a calendar that goes silent, refuses service, or
   disappears reduces redundancy without invalidating the receipt.

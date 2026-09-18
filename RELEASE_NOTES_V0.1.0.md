@@ -7,7 +7,7 @@
 ### Core Features
 
 - **Client-side hashing**: Your files stay on your machine. Only the 32-byte SHA-256 digest reaches our servers.
-- **Bitcoin anchoring**: 5 independent OpenTimestamps calendars (a.pool, b.pool, alice, finney, btc.catallaxy) batch your hash into the Bitcoin blockchain within ~1 hour.
+- **Bitcoin anchoring**: 5 OpenTimestamps calendar servers (a.pool, b.pool, alice, finney, btc.catallaxy) batch your hash into the Bitcoin blockchain within ~1 hour.
 - **Verifiable receipts**: Each anchor produces a JSON receipt + 5 OTS proof files. Our open-source verifier checks the receipt's structure offline; the OpenTimestamps command-line client checks the commitment against Bitcoin's public chain. Neither requires a login or contacts us.
 - **Free tier**: 3 anchors per 24 hours, rate-limited. Free-tier receipts may be pruned after 30 days, but your local copy remains independently verifiable forever.
 - **Writer Pack tier** ($19 one-shot): 10 anchor credits. Credits never expire.

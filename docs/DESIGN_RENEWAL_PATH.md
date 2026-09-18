@@ -594,6 +594,14 @@ The correct public sentence is: *five calendars across three operators give
 route and operator redundancy over a single chain.* Not "five independent
 authorities". Anything stronger is inaccurate.
 
+> **Correction, 2026-09-18.** "Five calendars" above counts servers. `a.pool`
+> and `b.pool` are aggregators for the alice and bob calendars (their own
+> status pages say so, and the public sample's `a.ots` and `alice.ots` end in
+> the same Bitcoin transaction), so the five submissions reach **four**
+> distinct calendars. The operator count (three) stands. The public sentence
+> becomes: *five calendar servers reach four calendars across three operators,
+> giving route and operator redundancy over a single chain.*
+
 ### 4.2 What a genuinely independent second authority looks like
 
 Four candidates, assessed honestly.
