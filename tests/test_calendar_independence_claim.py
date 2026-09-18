@@ -18,9 +18,7 @@ Bitcoin transaction. The upgrade worker had known about the aliases since
 """
 from __future__ import annotations
 
-import html
 import re
-import subprocess
 import sys
 from pathlib import Path
 
@@ -28,10 +26,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "server"))
 
 import engine  # noqa: E402
-
-# Copy a customer can read lives in page source, in email and PDF builders, in
-# MCP tool descriptions and in YAML page sources, not only in .html.
-TEXT_EXT = {"html", "md", "txt", "xml", "json", "svg", "js", "ts", "py", "yml", "yaml", "toml"}
+import _sitetext  # noqa: E402
 
 _COUNT = r"(?:five|5)"
 _CAL = r"calendars?(?! servers?)"          # "five different calendar servers" is true
@@ -55,38 +50,10 @@ POOL_UPSTREAM = {
     "https://b.pool.opentimestamps.org": "https://bob.btc.calendar.opentimestamps.org",
 }
 
-_READABLE_ATTRS = re.compile(
-    r"""\b(?:content|alt|title|aria-label|placeholder)\s*=\s*(?:"([^"]*)"|'([^']*)')""", re.I)
-
-
-def _flat(text: str) -> str:
-    """What a reader (or a search snippet) sees, on one line. Attribute text a
-    person reads — meta/og descriptions, alt, title — is kept: the claim sat in
-    three meta descriptions. Entities are decoded: the built HTML spells an
-    apostrophe &#x27;. Whitespace is collapsed: the claim wraps across lines,
-    and a line-by-line grep missed five surfaces the first time."""
-    attrs = " ".join(a or b for a, b in _READABLE_ATTRS.findall(text))
-    body = re.sub(r"<[^>]+>", " ", text)
-    return re.sub(r"\s+", " ", html.unescape(body + " " + attrs)).replace("\u00a0", " ")
-
-
-def _public_text_files() -> list[Path]:
-    out = subprocess.run(["git", "ls-files"], cwd=ROOT, capture_output=True,
-                         text=True, check=True).stdout.split("\n")
-    return [ROOT / f for f in out
-            if f and f.rsplit(".", 1)[-1] in TEXT_EXT
-            and not f.startswith(("tests/", "outreach/"))]
-
-
 def test_no_public_text_claims_five_independent_calendars() -> None:
-    files = _public_text_files()
     read, hits = 0, []
-    for p in files:
-        if not p.is_file():
-            continue                                  # tracked but deleted in this tree
-        # errors="replace", never skip: a page saved in the wrong encoding is
-        # still a page a customer reads.
-        flat = _flat(p.read_text(encoding="utf-8", errors="replace"))
+    for p in _sitetext.tracked_text_files(exclude=("tests/", "outreach/")):
+        flat = _sitetext.read_flat(p)
         read += 1
         hits += [(str(p.relative_to(ROOT)), m.group(0)) for m in FALSE_CLAIMS.finditer(flat)]
     assert read > 300, f"only {read} files READ — the scan is not seeing the tree"
@@ -116,7 +83,7 @@ def test_the_scan_can_see_the_claim_it_hunts() -> None:
         "If five succeed, the proof is anchored five times.",
         "five independent Bitcoin-timestamp services",
     ):
-        assert FALSE_CLAIMS.search(_flat(planted)), planted
+        assert FALSE_CLAIMS.search(_sitetext.flat(planted)), planted
     for fine in ("verifiable independently of this office",
                  "five calendars across three operators",
                  "five different OpenTimestamps calendar servers, not one",
@@ -124,7 +91,7 @@ def test_the_scan_can_see_the_claim_it_hunts() -> None:
                  "Any one of the five files verifies independently.",
                  "five OpenTimestamps calendar servers",
                  "Redundancy only works where the calendars are genuinely independent."):
-        assert not FALSE_CLAIMS.search(_flat(fine)), fine
+        assert not FALSE_CLAIMS.search(_sitetext.flat(fine)), fine
 
 
 def test_the_corrected_count_still_matches_the_code() -> None:
@@ -135,5 +102,5 @@ def test_the_corrected_count_still_matches_the_code() -> None:
     assert len(distinct) == 4, distinct
     domains = {".".join(u.split("/")[2].split(".")[-2:]) for u in distinct}
     assert domains == {"opentimestamps.org", "eternitywall.com", "catallaxy.com"}
-    learn = _flat((ROOT / "web" / "learn.html").read_text(encoding="utf-8"))
+    learn = _sitetext.read_flat(ROOT / "web" / "learn.html")
     assert "four distinct calendars" in learn and "three separately run domains" in learn

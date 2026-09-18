@@ -59,7 +59,7 @@ If timestamped proof-of-existence is not relevant to your practice, reply STOP a
     ),
     "construction": (
         "Independent date-of-record for storm-damage photos",
-        """The crew already shoots a hundred photos per roof. The fight is rarely the photo. It is the carrier asking, weeks after the job closed, whether the date and the file are the originals.
+        """The crew already shoots a hundred photos per roof. The fight is rarely the photo. It is someone asking, weeks after the job closed, whether the date and the file are the originals.
 
 The office at orphograph.com publishes a method that lets a contractor compute a cryptographic fingerprint of any photo or PDF on their own machine and anchor that fingerprint into the Bitcoin chain through a public timestamping protocol. The file is processed locally and is not transmitted to any external server. The output is a single-page receipt — with share link, an embeddable badge for the job folder, and a verify link anyone can open on a separate computer.
 
