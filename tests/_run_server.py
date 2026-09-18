@@ -13,6 +13,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "server"))
+# Explicit, not the implicit script-dir entry: PYTHONSAFEPATH / -P remove that.
+sys.path.insert(0, str(ROOT / "tests"))
 
 
 def main() -> int:
@@ -23,17 +25,14 @@ def main() -> int:
         parser.error("this launcher requires --stub-calendars")
 
     import engine
+    # The one definition of the well-formed pending body the tests compare
+    # against; a hand copy here drifted from it once.
+    from _ots_bodies import PENDING_BODY
 
     def accepted(_calendar_url: str, hash_bytes: bytes):
         if len(hash_bytes) != 32:
             return False, "hash must be exactly 32 bytes (SHA-256)"
-        # A well-formed pending timestamp (nonce · sha256 · pending attestation);
-        # engine.anchor_hash rejects anything that is not one. The tag comes
-        # from ots_timestamp — the single home for OTS byte constants — so a
-        # tag change cannot silently desync this stub from the verifier.
-        import ots_timestamp
-        return True, (b"\xf0\x10" + b"\x01" * 16 + b"\x08"
-                      + b"\x00" + ots_timestamp.PENDING_ATTESTATION_TAG + b"\x02\x01x")
+        return True, PENDING_BODY
 
     engine._submit = accepted
     import app

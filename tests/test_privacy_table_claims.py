@@ -24,8 +24,6 @@ from __future__ import annotations
 import json
 import re
 import sys
-import urllib.error
-import urllib.request
 from pathlib import Path
 
 import hashlib
@@ -63,27 +61,8 @@ def server(data_dir):
                                      ORPHO_TRUST_PROXY_HEADERS="1")
 
 
-def _request(base: str, path: str, method: str = "GET", body: bytes | None = None,
-             headers: dict | None = None) -> tuple[int, bytes]:
-    req = urllib.request.Request(base + path, data=body, method=method, headers=headers or {})
-    try:
-        with urllib.request.urlopen(req, timeout=10) as r:
-            return r.status, r.read()
-    except urllib.error.HTTPError as e:
-        return e.code, e.read()
-
-
-def _anchor(base: str, payload: dict, headers: dict | None = None) -> tuple[int, dict]:
-    h = {"Content-Type": "application/json", **(headers or {})}
-    code, raw = _request(base, "/api/anchor", "POST", json.dumps(payload).encode(), h)
-    try:
-        return code, json.loads(raw or b"{}")
-    except ValueError:
-        return code, {"_raw": raw.decode("utf-8", "replace")}
-
-
 def _receipt(base: str, rid: str) -> dict:
-    code, raw = _request(base, f"/api/receipt/{rid}")
+    code, raw, _ = _srv.request(base, f"/api/receipt/{rid}")
     assert code == 200, (code, raw[:200])
     return json.loads(raw)
 
@@ -120,7 +99,7 @@ def test_row1_a_file_part_is_refused_and_persists_nothing(server, data_dir):
             "Content-Type: text/plain\r\n\r\n"
             "THE-FILE-BODY-MUST-NEVER-ARRIVE\r\n"
             f"--{boundary}--\r\n").encode()
-    code, raw = _request(server, "/api/anchor", "POST", body,
+    code, raw, _ = _srv.request(server, "/api/anchor", "POST", body,
                          {"Content-Type": f"multipart/form-data; boundary={boundary}"})
     assert code not in (200, 201), (code, raw[:200])
     after_receipts = sorted(str(p) for p in (data_dir / "receipts").rglob("*")) \
@@ -153,7 +132,7 @@ def test_row2_row3_proof_commits_to_sha256_only_sha512_lives_in_the_receipt(serv
     therefore `_build_ots(<what was submitted>, PENDING_BODY)`. Equality with
     the SHA-256 form proves the submission was the SHA-256 and nothing else."""
     import engine  # noqa: WPS433 — for _build_ots / CALENDARS only; no server state
-    code, rec = _anchor(server, {"hash_hex": HASH, "sha512_hex": SHA512})
+    code, rec = _srv.anchor(server, {"hash_hex": HASH, "sha512_hex": SHA512})
     assert code in (200, 201), (code, rec)
     rid = rec["receipt_id"]
     stored = _receipt(server, rid)
@@ -170,7 +149,7 @@ def test_row2_row3_proof_commits_to_sha256_only_sha512_lives_in_the_receipt(serv
 # ── Row 4: Filename / label — opt-in, off by default ───────────────────────────
 
 def test_row4_no_label_and_no_filename_unless_the_client_sends_them(server):
-    code, rec = _anchor(server, {"hash_hex": HASH})
+    code, rec = _srv.anchor(server, {"hash_hex": HASH})
     assert code in (200, 201), (code, rec)
     stored = _receipt(server, rec["receipt_id"])
     assert stored.get("client_label") in (None, "")
@@ -191,7 +170,7 @@ def test_row4_textual_homepage_sends_a_constant_tag_never_the_filename():
 # ── Row 5: Email — only when needed ─────────────────────────────────────────────
 
 def test_row5_a_free_anchor_records_no_identity(server, data_dir):
-    code, rec = _anchor(server, {"hash_hex": HASH, "sha512_hex": SHA512})
+    code, rec = _srv.anchor(server, {"hash_hex": HASH, "sha512_hex": SHA512})
     assert code in (200, 201), (code, rec)
     rid = rec["receipt_id"]
     stored = _receipt(server, rid)
@@ -228,9 +207,9 @@ def test_row6_each_honoured_header_is_persisted_truncated_never_in_full(
     assert expect_trunc.encode() not in before, f"{expect_trunc} already persisted — this row would prove nothing"
     assert row_hash.encode() not in before
     hdr = {header: value}
-    code, rec = _anchor(server, {"hash_hex": row_hash}, headers=hdr)
+    code, rec = _srv.anchor(server, {"hash_hex": row_hash}, headers=hdr)
     assert code in (200, 201), (code, rec)
-    code, _ = _request(server, "/api/event", "POST",
+    code, _, _ = _srv.request(server, "/api/event", "POST",
                        json.dumps({"event": "page_view", "page": "/"}).encode(),
                        {"Content-Type": "application/json", **hdr})
     assert code in (200, 201, 202, 204), code
@@ -250,7 +229,7 @@ def test_row6_platform_real_ip_header_is_never_persisted_in_full(server, data_di
     before = _persisted(data_dir)
     assert b"198.51.100.0/24" not in before, "truncated key already present — control would be vacuous"
     hdr = {"Fly-Client-IP": REAL_IP}
-    code, rec = _anchor(server, {"hash_hex": "ef" * 32}, headers=hdr)
+    code, rec = _srv.anchor(server, {"hash_hex": "ef" * 32}, headers=hdr)
     assert code in (200, 201, 429), (code, rec)
     # The limiter writes its snapshot on the first check() after the interval;
     # keep poking the same key until the file carries it.
@@ -259,7 +238,7 @@ def test_row6_platform_real_ip_header_is_never_persisted_in_full(server, data_di
         if b"198.51.100.0/24" in _persisted(data_dir):
             break
         time.sleep(1)
-        _anchor(server, {"hash_hex": "ef" * 32}, headers=hdr)
+        _srv.anchor(server, {"hash_hex": "ef" * 32}, headers=hdr)
     persisted = _persisted(data_dir)
     assert b"198.51.100.0/24" in persisted, "Fly-Client-IP bucket never snapshotted — header not read?"
     assert REAL_IP.encode() not in persisted

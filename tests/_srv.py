@@ -24,11 +24,13 @@ test needs beyond this belongs in that test, not in another copy of this.
 """
 from __future__ import annotations
 
+import json
 import os
 import socket
 import subprocess
 import sys
 import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -168,3 +170,40 @@ def server_processes(data_dir, n: int = 1, *,
         yield bases[0] if n == 1 else bases
     finally:
         _kill_all(procs, logs)
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+_OPENER = urllib.request.build_opener(_NoRedirect)
+
+
+def request(base: str, path: str, method: str = "GET", body: bytes | None = None,
+            headers: dict | None = None, timeout: float = 10) -> tuple[int, bytes, dict]:
+    """Exactly one round-trip against a spun server: (status, body, headers).
+    3xx/4xx/5xx come back as sent — redirects are never followed, so a POST
+    is never replayed as a GET against its Location."""
+    req = urllib.request.Request(base + path, data=body, method=method, headers=headers or {})
+    try:
+        with _OPENER.open(req, timeout=timeout) as r:
+            return r.status, r.read(), dict(r.headers)
+    except urllib.error.HTTPError as e:
+        return e.code, e.read(), dict(e.headers)
+
+
+def anchor(base: str, payload: dict, headers: dict | None = None,
+           timeout: float = 10) -> tuple[int, dict]:
+    """POST /api/anchor as JSON. The body comes back as the object the server
+    sent; anything that is not a JSON object comes back as {"_raw": ...}."""
+    h = {"Content-Type": "application/json", **(headers or {})}
+    code, raw, _ = request(base, "/api/anchor", "POST", json.dumps(payload).encode(), h,
+                           timeout=timeout)
+    try:
+        parsed = json.loads(raw or b"{}")
+    except ValueError:
+        parsed = None
+    if not isinstance(parsed, dict):
+        return code, {"_raw": raw.decode("utf-8", "replace")}
+    return code, parsed
