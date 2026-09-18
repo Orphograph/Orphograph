@@ -32,13 +32,8 @@ here.
 """
 from __future__ import annotations
 
-import os
-import socket
 import subprocess
 import sys
-import time
-import urllib.error
-import urllib.request
 from pathlib import Path
 
 import pytest
@@ -63,14 +58,6 @@ CASES = [
     ("legit_fragment",       "/%23drop",                 False),
     ("legit_plain",          "/pricing",                 False),
 ]
-
-
-def _free_port() -> int:
-    s = socket.socket()
-    s.bind(("127.0.0.1", 0))
-    p = s.getsockname()[1]
-    s.close()
-    return p
 
 
 @pytest.fixture(scope="module")
@@ -98,19 +85,9 @@ def _mint_token(data_dir: str, label: str) -> str:
     return out.stdout.strip()
 
 
-class _NoRedirect(urllib.request.HTTPRedirectHandler):
-    def redirect_request(self, *a, **kw):
-        return None
-
-
 def _location(base: str, token: str, nxt: str) -> str:
-    opener = urllib.request.build_opener(_NoRedirect)
-    url = f"{base}/a/{token}?next={nxt}"
-    try:
-        r = opener.open(url, timeout=15)
-        return r.headers.get("Location", "")
-    except urllib.error.HTTPError as e:
-        return e.headers.get("Location", "")
+    _status, _body, headers = _srv.request(base, f"/a/{token}?next={nxt}", timeout=15)
+    return headers.get("Location", "")
 
 
 @pytest.mark.parametrize("label,nxt,must_reject", CASES, ids=[c[0] for c in CASES])
@@ -142,12 +119,8 @@ def test_a_rejected_next_still_signs_the_user_in(server):
     reason to refuse the authentication."""
     base, data_dir = server
     token = _mint_token(data_dir, "still-signs-in@example.test")
-    opener = urllib.request.build_opener(_NoRedirect)
-    try:
-        r = opener.open(f"{base}/a/{token}?next=/%5Cevil.example", timeout=15)
-        headers = r.headers
-    except urllib.error.HTTPError as e:
-        headers = e.headers
+    _status, _body, headers = _srv.request(
+        base, f"/a/{token}?next=/%5Cevil.example", timeout=15)
     assert headers.get("Location") == "/account"
     cookie = headers.get("Set-Cookie", "")
     assert "orpho_sid=" in cookie, f"no session cookie issued: {cookie!r}"

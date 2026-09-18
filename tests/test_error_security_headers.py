@@ -14,9 +14,6 @@ headers asserted are the bytes a client receives.
 """
 from __future__ import annotations
 
-import http.client
-from urllib.parse import urlsplit
-
 import pytest
 
 import _srv
@@ -43,15 +40,8 @@ def base(tmp_path_factory):
 
 
 def _request(base: str, method: str, path: str):
-    parts = urlsplit(base)
-    conn = http.client.HTTPConnection(parts.hostname, parts.port, timeout=10)
-    try:
-        conn.request(method, path)
-        resp = conn.getresponse()
-        resp.read()
-        return resp.status, resp.getheaders()
-    finally:
-        conn.close()
+    status, _body, headers = _srv.request(base, path, method)
+    return status, headers.items()   # items(), not a dict: a repeat must stay visible
 
 
 @pytest.mark.parametrize("method", ("GET", "HEAD"))

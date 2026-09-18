@@ -28,11 +28,8 @@ is what the homepage describes and what this file pins. Reporting that as
 from __future__ import annotations
 
 import hashlib
-import json
 import sys
 import tempfile
-import urllib.error
-import urllib.request
 from pathlib import Path
 
 import pytest
@@ -52,19 +49,13 @@ def server(tmp_path_factory):
 
 
 def _post(base: str, path: str, body: dict):
-    req = urllib.request.Request(base + path, data=json.dumps(body).encode(),
-                                 headers={"Content-Type": "application/json"},
-                                 method="POST")
-    try:
-        with urllib.request.urlopen(req, timeout=60) as r:
-            return r.status, json.loads(r.read())
-    except urllib.error.HTTPError as e:
-        return e.code, None
+    return _srv.post_json(base, path, body, timeout=60)
 
 
 def _receipt(base: str, rid: str) -> dict:
-    with urllib.request.urlopen(f"{base}/api/receipt/{rid}", timeout=30) as r:
-        return json.loads(r.read())
+    status, rec = _srv.get_json(base, f"/api/receipt/{rid}", timeout=30)
+    assert status == 200, (status, rec)
+    return rec
 
 
 def _reserved_leaf(parent_root: str) -> dict:

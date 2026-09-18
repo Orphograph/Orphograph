@@ -9,13 +9,9 @@ check the binding. Harness conventions from tests/test_agent_discovery.py.
 """
 from __future__ import annotations
 
-import json
-import os
 import sys
 import tempfile
-import threading
 import unittest
-import urllib.request
 from pathlib import Path
 
 import _srv
@@ -63,13 +59,14 @@ class TestC2paRoundtrip(unittest.TestCase):
         cls._tmp.cleanup()
 
     def _post(self, path, body):
-        req = urllib.request.Request(self._base + path,
-                                     data=json.dumps(body).encode(),
-                                     headers={"Content-Type": "application/json"})
-        return json.loads(urllib.request.urlopen(req, timeout=15).read())
+        status, rec = _srv.post_json(self._base, path, body, timeout=15)
+        self.assertEqual(status, 200, rec)
+        return rec
 
     def _get(self, path):
-        return json.loads(urllib.request.urlopen(self._base + path, timeout=15).read())
+        status, rec = _srv.get_json(self._base, path, timeout=15)
+        self.assertEqual(status, 200, rec)
+        return rec
 
     def test_c2pa_survives_the_round_trip(self):
         c2pa = "cd" * 32

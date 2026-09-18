@@ -32,9 +32,6 @@ absent, which is the property that must never regress.
 from __future__ import annotations
 
 import hashlib
-import json
-import urllib.error
-import urllib.request
 
 import pytest
 
@@ -44,17 +41,8 @@ LIMIT = 3
 
 
 def _anchor(base: str, tag: str, headers: dict | None = None) -> int:
-    h = {"Content-Type": "application/json"}
-    h.update(headers or {})
-    req = urllib.request.Request(
-        base + "/api/anchor",
-        data=json.dumps({"hash_hex": hashlib.sha256(tag.encode()).hexdigest()}).encode(),
-        headers=h, method="POST")
-    try:
-        with urllib.request.urlopen(req, timeout=30) as r:
-            return r.status
-    except urllib.error.HTTPError as e:
-        return e.code
+    payload = {"hash_hex": hashlib.sha256(tag.encode()).hexdigest()}
+    return _srv.anchor(base, payload, headers, timeout=30)[0]
 
 
 def _burn(base: str, prefix: str) -> list[int]:

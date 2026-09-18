@@ -24,6 +24,7 @@ test needs beyond this belongs in that test, not in another copy of this.
 """
 from __future__ import annotations
 
+import http.client
 import json
 import os
 import socket
@@ -42,6 +43,14 @@ TEST_SERVER = REPO_ROOT / "tests" / "_run_server.py"
 
 STARTUP_TIMEOUT_SEC = 45
 _TAIL_CHARS = 1500
+
+# base URL -> log path of the server spun on it, so a request that finds the
+# server gone can say what the server said last.
+_LOG_BY_BASE: dict[str, Path] = {}
+
+
+class ServerGone(RuntimeError):
+    """A spun server stopped answering. The message carries its log tail."""
 
 
 def reserve_ports(n: int) -> list[int]:
@@ -109,6 +118,7 @@ def spin(data_dir: str | os.PathLike, n: int = 1, *,
             stdout=lf, stderr=subprocess.STDOUT,   # never DEVNULL — see docstring
         ))
         bases.append(f"http://127.0.0.1:{port}")
+        _LOG_BY_BASE[bases[-1]] = log_path
     return bases, procs, logs
 
 
@@ -181,29 +191,55 @@ _OPENER = urllib.request.build_opener(_NoRedirect)
 
 
 def request(base: str, path: str, method: str = "GET", body: bytes | None = None,
-            headers: dict | None = None, timeout: float = 10) -> tuple[int, bytes, dict]:
+            headers: dict | None = None,
+            timeout: float = 10) -> tuple[int, bytes, http.client.HTTPMessage]:
     """Exactly one round-trip against a spun server: (status, body, headers).
     3xx/4xx/5xx come back as sent — redirects are never followed, so a POST
-    is never replayed as a GET against its Location."""
+    is never replayed as a GET against its Location. Headers come back as the
+    HTTPMessage itself: `.get()` is case-insensitive and `.get_all()` /
+    `.items()` keep a header the server sent twice, which a dict would hide.
+    A server spun by `spin()` that has stopped answering raises ServerGone
+    with its last output instead of a bare connection error."""
     req = urllib.request.Request(base + path, data=body, method=method, headers=headers or {})
     try:
         with _OPENER.open(req, timeout=timeout) as r:
-            return r.status, r.read(), dict(r.headers)
+            return r.status, r.read(), r.headers
     except urllib.error.HTTPError as e:
-        return e.code, e.read(), dict(e.headers)
+        return e.code, e.read(), e.headers
+    except (urllib.error.URLError, ConnectionError, http.client.HTTPException) as e:
+        log_path = _LOG_BY_BASE.get(base)
+        if log_path is None:
+            raise
+        raise ServerGone(f"{method} {base}{path} got no answer ({e!r})\n"
+                         f"--- server output ---\n{_tail(log_path)}") from e
 
 
-def anchor(base: str, payload: dict, headers: dict | None = None,
-           timeout: float = 10) -> tuple[int, dict]:
-    """POST /api/anchor as JSON. The body comes back as the object the server
-    sent; anything that is not a JSON object comes back as {"_raw": ...}."""
-    h = {"Content-Type": "application/json", **(headers or {})}
-    code, raw, _ = request(base, "/api/anchor", "POST", json.dumps(payload).encode(), h,
-                           timeout=timeout)
+def _json_object(raw: bytes) -> dict:
     try:
         parsed = json.loads(raw or b"{}")
     except ValueError:
         parsed = None
     if not isinstance(parsed, dict):
-        return code, {"_raw": raw.decode("utf-8", "replace")}
-    return code, parsed
+        return {"_raw": raw.decode("utf-8", "replace")}
+    return parsed
+
+
+def get_json(base: str, path: str, headers: dict | None = None,
+             timeout: float = 10) -> tuple[int, dict]:
+    code, raw, _ = request(base, path, headers=headers, timeout=timeout)
+    return code, _json_object(raw)
+
+
+def post_json(base: str, path: str, payload: dict, headers: dict | None = None,
+              timeout: float = 10) -> tuple[int, dict]:
+    """POST a JSON body. The reply comes back as the object the server sent;
+    anything that is not a JSON object comes back as {"_raw": ...}."""
+    h = {"Content-Type": "application/json", **(headers or {})}
+    code, raw, _ = request(base, path, "POST", json.dumps(payload).encode(), h,
+                           timeout=timeout)
+    return code, _json_object(raw)
+
+
+def anchor(base: str, payload: dict, headers: dict | None = None,
+           timeout: float = 10) -> tuple[int, dict]:
+    return post_json(base, "/api/anchor", payload, headers, timeout)

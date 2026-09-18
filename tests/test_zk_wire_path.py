@@ -22,13 +22,8 @@ from __future__ import annotations
 
 import importlib.util
 import json
-import os
-import socket
 import subprocess
 import sys
-import time
-import urllib.error
-import urllib.request
 from pathlib import Path
 
 import pytest
@@ -56,14 +51,6 @@ def zk():
     return mod
 
 
-def _free_port() -> int:
-    s = socket.socket()
-    s.bind(("127.0.0.1", 0))
-    p = s.getsockname()[1]
-    s.close()
-    return p
-
-
 @pytest.fixture(scope="module")
 def server(tmp_path_factory):
     """One server, via the shared helper. See tests/_srv.py for why
@@ -75,17 +62,9 @@ def server(tmp_path_factory):
 
 
 
-def _post_json(url: str, payload: dict) -> dict:
-    req = urllib.request.Request(
-        url, data=json.dumps(payload).encode(),
-        headers={"Content-Type": "application/json"}, method="POST")
-    with urllib.request.urlopen(req, timeout=15) as r:
-        return json.loads(r.read())
-
-
-def _get_json(url: str) -> dict:
-    with urllib.request.urlopen(url, timeout=15) as r:
-        return json.loads(r.read())
+def _ok_json(status: int, rec: dict) -> dict:
+    assert 200 <= status < 300, (status, rec)
+    return rec
 
 
 @pytest.fixture(scope="module")
@@ -93,7 +72,7 @@ def anchored(zk, server):
     _out, proof = zk.prove(model_id="claude-opus-5",
                            prompt="wire-path pin", seed="deadbeef")
     payload = zk.build_anchor_payload(proof, label="wire-path pin")
-    resp = _post_json(server + "/api/anchor", payload)
+    resp = _ok_json(*_srv.anchor(server, payload, timeout=15))
     return proof, payload, resp
 
 
@@ -107,7 +86,7 @@ def test_anchor_response_carries_the_proof(anchored):
 def test_proof_survives_to_the_receipt_endpoint(anchored, server):
     """THE PIN. This is the exact hop that silently dropped the field before."""
     proof, _payload, resp = anchored
-    rec = _get_json(f"{server}/api/receipt/{resp['receipt_id']}")
+    rec = _ok_json(*_srv.get_json(server, f"/api/receipt/{resp['receipt_id']}", timeout=15))
     z = rec.get("zk_provenance")
     assert z, "zk_provenance did not survive to GET /api/receipt/<id>"
     for field in ("A", "s1", "s2", "challenge", "commitment", "model_id",
@@ -121,7 +100,7 @@ def test_the_shipped_verifier_accepts_the_api_receipt(anchored, server, tmp_path
     """End-to-end across TWO independent implementations: the generator's
     crypto and the standalone verifier that customers actually run."""
     _proof, _payload, resp = anchored
-    rec = _get_json(f"{server}/api/receipt/{resp['receipt_id']}")
+    rec = _ok_json(*_srv.get_json(server, f"/api/receipt/{resp['receipt_id']}", timeout=15))
     rp = tmp_path / "receipt.json"
     rp.write_text(json.dumps(rec))
     r = subprocess.run(
@@ -142,7 +121,7 @@ def test_shipped_verifier_rejects_tampered_proofs(anchored, server, tmp_path, fi
     repo has shipped twice (a chain check that read stdout and threw away the
     exit code)."""
     _proof, _payload, resp = anchored
-    rec = _get_json(f"{server}/api/receipt/{resp['receipt_id']}")
+    rec = _ok_json(*_srv.get_json(server, f"/api/receipt/{resp['receipt_id']}", timeout=15))
     rec["zk_provenance"][field] = mutate(rec["zk_provenance"][field])
     rp = tmp_path / f"bad_{field}.json"
     rp.write_text(json.dumps(rec))

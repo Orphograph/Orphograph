@@ -37,14 +37,9 @@ describes.
 from __future__ import annotations
 
 import hashlib
-import json
-import os
 import socket
 import subprocess
 import sys
-import time
-import urllib.error
-import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -101,15 +96,8 @@ def _balance(data_dir: str, code: str) -> int:
 
 def _anchor(base: str, code: str, i: int):
     body = {"hash_hex": hashlib.sha256(f"race-{code}-{i}".encode()).hexdigest()}
-    req = urllib.request.Request(
-        base + "/api/anchor", data=json.dumps(body).encode(),
-        headers={"Content-Type": "application/json", "X-Pack-Token": code},
-        method="POST")
-    try:
-        with urllib.request.urlopen(req, timeout=60) as r:
-            return json.loads(r.read()).get("pack_consumed")
-    except urllib.error.HTTPError:
-        return "http-error"
+    status, rec = _srv.anchor(base, body, {"X-Pack-Token": code}, timeout=60)
+    return rec.get("pack_consumed") if 200 <= status < 300 else "http-error"
 
 
 def test_one_credit_survives_concurrent_anchors(server):

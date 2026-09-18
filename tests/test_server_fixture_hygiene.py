@@ -221,3 +221,63 @@ def test_the_scan_can_actually_see_a_server_fixture() -> None:
         f"only {len(spinning)} modules detected as starting a server — the "
         "detector is broken, not the suite clean"
     )
+
+
+# --- request helpers (added 2026-09-18) ------------------------------------
+# The same duplication, one layer up. Ten modules that already spun their server
+# through _srv still carried a private urlopen/HTTPConnection wrapper, and the
+# copies had drifted the way the fixtures did: one returned (0, "") on ANY
+# exception, so its 234-request reflected-XSS sweep read a dead server, or a
+# swept page that had started to 404, as "nothing reflected".
+
+_OWN_CONNECTION_CALLS = frozenset({
+    "urlopen", "HTTPConnection", "HTTPSConnection", "build_opener"})
+
+
+def _opens_its_own_connection(text: str) -> list[str]:
+    """Names of connection-opening calls in CODE (docstrings do not count)."""
+    tree = ast.parse(text)
+    _strip_docstrings(tree)
+    found = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            fn = node.func
+            name = fn.attr if isinstance(fn, ast.Attribute) else getattr(fn, "id", None)
+            if name in _OWN_CONNECTION_CALLS:
+                found.append(name)
+    return found
+
+
+def test_modules_on_the_shared_helper_do_not_open_their_own_connections() -> None:
+    """THE GUARD. A module that imports _srv talks to its server through
+    _srv.request / get_json / post_json / anchor: one place that never follows
+    a redirect, keeps a header sent twice, and reports a dead server with the
+    server's own last words instead of an empty body."""
+    offenders = {
+        p.name: sorted(set(calls)) for p, t in _modules()
+        if "import _srv" in t and p.name != "test_server_fixture_hygiene.py"
+        and (calls := _opens_its_own_connection(t))
+    }
+    assert not offenders, (
+        "These modules import _srv and still open their own connections. Use "
+        f"_srv.request / get_json / post_json / anchor:\n  {offenders}")
+
+
+def test_the_connection_scan_can_actually_see_a_private_helper() -> None:
+    """NEGATIVE CONTROL, twice: a planted source, and the real corpus."""
+    planted = (
+        'import urllib.request, http.client\n'
+        'def _get(u):\n'
+        '    """urlopen in prose must not count."""\n'
+        '    return urllib.request.urlopen(u).read()\n'
+        'def _raw(h):\n'
+        '    return http.client.HTTPConnection(h)\n')
+    assert sorted(_opens_its_own_connection(planted)) == ["HTTPConnection", "urlopen"]
+    assert _opens_its_own_connection('def f():\n    """urlopen(x)"""\n') == []
+    # The legacy fixtures still carry private helpers, so a detector that has
+    # gone blind shows up here as a corpus with none.
+    seen = [p.name for p, t in _modules() if _opens_its_own_connection(t)]
+    assert len(seen) >= 20, (
+        f"only {len(seen)} modules detected opening a connection — the detector "
+        "is broken, not the suite clean")
+
