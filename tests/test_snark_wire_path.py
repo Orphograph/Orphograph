@@ -33,7 +33,6 @@ import json
 import shutil
 import subprocess
 import sys
-import urllib.request
 from pathlib import Path
 
 import pytest
@@ -71,19 +70,6 @@ def server(tmp_path_factory):
     yield from _srv.server_processes(data_dir, stub_calendars=True)
 
 
-def _post_json(url: str, payload: dict) -> dict:
-    req = urllib.request.Request(
-        url, data=json.dumps(payload).encode(),
-        headers={"Content-Type": "application/json"}, method="POST")
-    with urllib.request.urlopen(req, timeout=15) as r:
-        return json.loads(r.read())
-
-
-def _get_json(url: str) -> dict:
-    with urllib.request.urlopen(url, timeout=15) as r:
-        return json.loads(r.read())
-
-
 def _run_verifier(receipt_path: Path, vk: bool) -> subprocess.CompletedProcess:
     cmd = [sys.executable, str(VERIFY_SNARK), str(receipt_path)]
     if vk:
@@ -100,14 +86,14 @@ def anchored(zk, server):
         EVIDENCE / "verification_key.json",
         label="snark wire-path pin",
     )
-    resp = _post_json(server + "/api/anchor", payload)
+    resp = _srv.ok_json(*_srv.anchor(server, payload, timeout=15))
     return payload, resp
 
 
 @pytest.fixture()
 def receipt(anchored, server, tmp_path):
     _payload, resp = anchored
-    rec = _get_json(f"{server}/api/receipt/{resp['receipt_id']}")
+    rec = _srv.ok_json(*_srv.get_json(server, f"/api/receipt/{resp['receipt_id']}", timeout=15))
     rp = tmp_path / "receipt.json"
     rp.write_text(json.dumps(rec))
     return rec, rp, tmp_path
@@ -123,7 +109,7 @@ def test_anchor_response_carries_the_proof(anchored):
 def test_proof_survives_to_the_receipt_endpoint(anchored, server):
     """THE PIN — the exact hop that silently dropped the schnorr field before."""
     payload, resp = anchored
-    rec = _get_json(f"{server}/api/receipt/{resp['receipt_id']}")
+    rec = _srv.ok_json(*_srv.get_json(server, f"/api/receipt/{resp['receipt_id']}", timeout=15))
     z = rec.get("zk_provenance")
     assert z, "zk_provenance did not survive to GET /api/receipt/<id>"
     for field in ("proof_type", "output_hash", "model_id", "program", "protocol",

@@ -29,14 +29,6 @@ was observed — the rejection branch must be reached before it can be trusted.
 from __future__ import annotations
 
 import hashlib
-import json
-import os
-import socket
-import subprocess
-import sys
-import time
-import urllib.error
-import urllib.request
 from pathlib import Path
 
 import pytest
@@ -74,14 +66,6 @@ VECTORS = [
 ]
 
 
-def _free_port() -> int:
-    s = socket.socket()
-    s.bind(("127.0.0.1", 0))
-    p = s.getsockname()[1]
-    s.close()
-    return p
-
-
 @pytest.fixture(scope="module")
 def server(tmp_path_factory):
     """One server, via the shared helper. See tests/_srv.py for why
@@ -94,19 +78,12 @@ def server(tmp_path_factory):
 def _anchor(base: str, tag: str, c2pa):
     body = {"hash_hex": hashlib.sha256(tag.encode()).hexdigest(),
             "c2pa_manifest_hash": c2pa}
-    req = urllib.request.Request(
-        base + "/api/anchor", data=json.dumps(body).encode(),
-        headers={"Content-Type": "application/json"}, method="POST")
-    try:
-        with urllib.request.urlopen(req, timeout=20) as r:
-            return r.status, json.loads(r.read())
-    except urllib.error.HTTPError as e:
-        return e.code, None
+    return _srv.anchor(base, body, timeout=20)
 
 
 def _stored_c2pa(base: str, receipt_id: str):
-    with urllib.request.urlopen(f"{base}/api/receipt/{receipt_id}", timeout=20) as r:
-        return json.loads(r.read()).get("c2pa_manifest_hash")
+    rec = _srv.ok_json(*_srv.get_json(base, f"/api/receipt/{receipt_id}", timeout=20))
+    return rec.get("c2pa_manifest_hash")
 
 
 @pytest.mark.parametrize("tag,value,expect_400", VECTORS, ids=[v[0] for v in VECTORS])
