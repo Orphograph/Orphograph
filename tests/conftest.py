@@ -10,17 +10,14 @@ if str(SERVER_DIR) not in sys.path:
     sys.path.insert(0, str(SERVER_DIR))
 
 
-# --- shared OpenTimestamps test bodies (one definition, four users) ---------
-# sha256 then a Bitcoin attestation for block 949156 (varint a4 f7 39,
-# payload length 3): the smallest calendar body the guard accepts.
-# What a calendar returns from POST /digest: append(16-byte nonce) · sha256 ·
-# pending attestation (URI "x"). engine.anchor_hash accepts nothing less.
-import ots_timestamp as _ots  # noqa: E402  (SERVER_DIR inserted above)
+# --- shared OpenTimestamps test bodies (one definition, in _ots_bodies) ------
+# Re-exported here so `from conftest import PENDING_BODY` keeps working; the
+# definition lives in a plain module the stub server launcher can import too.
+TESTS_DIR = ROOT / "tests"
+if str(TESTS_DIR) not in sys.path:
+    sys.path.insert(0, str(TESTS_DIR))
 
-PENDING_BODY = (b"\xf0\x10" + b"\x01" * 16 + b"\x08"
-                + b"\x00" + _ots.PENDING_ATTESTATION_TAG + b"\x02\x01x")
-
-PINNED_BODY = b"\x08\x00" + _ots.BITCOIN_ATTESTATION_TAG + b"\x03\xa4\xf7\x39"
+from _ots_bodies import PENDING_BODY, PINNED_BODY  # noqa: E402,F401
 
 
 def make_pending_ots(digest: bytes = b"\x11" * 32, ops: bytes = b"") -> bytes:

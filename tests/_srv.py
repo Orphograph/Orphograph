@@ -172,22 +172,38 @@ def server_processes(data_dir, n: int = 1, *,
         _kill_all(procs, logs)
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+_OPENER = urllib.request.build_opener(_NoRedirect)
+
+
 def request(base: str, path: str, method: str = "GET", body: bytes | None = None,
-            headers: dict | None = None, timeout: float = 10) -> tuple[int, bytes]:
-    """One round-trip against a spun server: (status, body), 4xx/5xx included."""
+            headers: dict | None = None, timeout: float = 10) -> tuple[int, bytes, dict]:
+    """Exactly one round-trip against a spun server: (status, body, headers).
+    3xx/4xx/5xx come back as sent — redirects are never followed, so a POST
+    is never replayed as a GET against its Location."""
     req = urllib.request.Request(base + path, data=body, method=method, headers=headers or {})
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as r:
-            return r.status, r.read()
+        with _OPENER.open(req, timeout=timeout) as r:
+            return r.status, r.read(), dict(r.headers)
     except urllib.error.HTTPError as e:
-        return e.code, e.read()
+        return e.code, e.read(), dict(e.headers)
 
 
-def anchor(base: str, payload: dict, headers: dict | None = None) -> tuple[int, dict]:
-    """POST /api/anchor as JSON; the body comes back parsed, or as {"_raw": ...}."""
+def anchor(base: str, payload: dict, headers: dict | None = None,
+           timeout: float = 10) -> tuple[int, dict]:
+    """POST /api/anchor as JSON. The body comes back as the object the server
+    sent; anything that is not a JSON object comes back as {"_raw": ...}."""
     h = {"Content-Type": "application/json", **(headers or {})}
-    code, raw = request(base, "/api/anchor", "POST", json.dumps(payload).encode(), h)
+    code, raw, _ = request(base, "/api/anchor", "POST", json.dumps(payload).encode(), h,
+                           timeout=timeout)
     try:
-        return code, json.loads(raw or b"{}")
+        parsed = json.loads(raw or b"{}")
     except ValueError:
+        parsed = None
+    if not isinstance(parsed, dict):
         return code, {"_raw": raw.decode("utf-8", "replace")}
+    return code, parsed

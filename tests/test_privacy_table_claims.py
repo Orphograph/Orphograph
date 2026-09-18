@@ -62,7 +62,7 @@ def server(data_dir):
 
 
 def _receipt(base: str, rid: str) -> dict:
-    code, raw = _srv.request(base, f"/api/receipt/{rid}")
+    code, raw, _ = _srv.request(base, f"/api/receipt/{rid}")
     assert code == 200, (code, raw[:200])
     return json.loads(raw)
 
@@ -99,7 +99,7 @@ def test_row1_a_file_part_is_refused_and_persists_nothing(server, data_dir):
             "Content-Type: text/plain\r\n\r\n"
             "THE-FILE-BODY-MUST-NEVER-ARRIVE\r\n"
             f"--{boundary}--\r\n").encode()
-    code, raw = _srv.request(server, "/api/anchor", "POST", body,
+    code, raw, _ = _srv.request(server, "/api/anchor", "POST", body,
                          {"Content-Type": f"multipart/form-data; boundary={boundary}"})
     assert code not in (200, 201), (code, raw[:200])
     after_receipts = sorted(str(p) for p in (data_dir / "receipts").rglob("*")) \
@@ -209,7 +209,7 @@ def test_row6_each_honoured_header_is_persisted_truncated_never_in_full(
     hdr = {header: value}
     code, rec = _srv.anchor(server, {"hash_hex": row_hash}, headers=hdr)
     assert code in (200, 201), (code, rec)
-    code, _ = _srv.request(server, "/api/event", "POST",
+    code, _, _ = _srv.request(server, "/api/event", "POST",
                        json.dumps({"event": "page_view", "page": "/"}).encode(),
                        {"Content-Type": "application/json", **hdr})
     assert code in (200, 201, 202, 204), code

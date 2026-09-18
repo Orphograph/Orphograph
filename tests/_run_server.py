@@ -13,6 +13,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "server"))
+# Explicit, not the implicit script-dir entry: PYTHONSAFEPATH / -P remove that.
+sys.path.insert(0, str(ROOT / "tests"))
 
 
 def main() -> int:
@@ -25,7 +27,7 @@ def main() -> int:
     import engine
     # The one definition of the well-formed pending body the tests compare
     # against; a hand copy here drifted from it once.
-    from conftest import PENDING_BODY
+    from _ots_bodies import PENDING_BODY
 
     def accepted(_calendar_url: str, hash_bytes: bytes):
         if len(hash_bytes) != 32:
