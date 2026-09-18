@@ -24,11 +24,13 @@ test needs beyond this belongs in that test, not in another copy of this.
 """
 from __future__ import annotations
 
+import json
 import os
 import socket
 import subprocess
 import sys
 import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -168,3 +170,24 @@ def server_processes(data_dir, n: int = 1, *,
         yield bases[0] if n == 1 else bases
     finally:
         _kill_all(procs, logs)
+
+
+def request(base: str, path: str, method: str = "GET", body: bytes | None = None,
+            headers: dict | None = None, timeout: float = 10) -> tuple[int, bytes]:
+    """One round-trip against a spun server: (status, body), 4xx/5xx included."""
+    req = urllib.request.Request(base + path, data=body, method=method, headers=headers or {})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return r.status, r.read()
+    except urllib.error.HTTPError as e:
+        return e.code, e.read()
+
+
+def anchor(base: str, payload: dict, headers: dict | None = None) -> tuple[int, dict]:
+    """POST /api/anchor as JSON; the body comes back parsed, or as {"_raw": ...}."""
+    h = {"Content-Type": "application/json", **(headers or {})}
+    code, raw = request(base, "/api/anchor", "POST", json.dumps(payload).encode(), h)
+    try:
+        return code, json.loads(raw or b"{}")
+    except ValueError:
+        return code, {"_raw": raw.decode("utf-8", "replace")}
