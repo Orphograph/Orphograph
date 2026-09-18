@@ -18,6 +18,7 @@ Bitcoin transaction. The upgrade worker had known about the aliases since
 """
 from __future__ import annotations
 
+import html
 import re
 import subprocess
 import sys
@@ -28,13 +29,24 @@ sys.path.insert(0, str(ROOT / "server"))
 
 import engine  # noqa: E402
 
-TEXT_EXT = {"html", "md", "txt", "xml", "json", "svg"}
+# Copy a customer can read lives in page source, in email and PDF builders, in
+# MCP tool descriptions and in YAML page sources, not only in .html.
+TEXT_EXT = {"html", "md", "txt", "xml", "json", "svg", "js", "ts", "py", "yml", "yaml", "toml"}
 
+_COUNT = r"(?:five|5)"
+_CAL = r"calendars?(?! servers?)"          # "five different calendar servers" is true
 FALSE_CLAIMS = re.compile(
-    r"(?:five|5) independent(?:ly)?(?:[ -]operated)? (?:\w+ ){0,3}?(?:calendars?|servers?|operators?|services|timestamps)"
-    r"|calendars? (?:are )?run by (?:independent|different) (?:operators|teams)"
+    # "five independent [up to four words] calendars|servers|...", hyphens allowed
+    rf"{_COUNT} independent(?:ly)?(?:[ -]operated)? (?:[\w-]+ ){{0,4}}?"
+    rf"(?:calendars?|servers?|operators?|services|timestamps|teams)"
+    # "five separate|different|distinct ... calendars|operators|teams" (not servers)
+    rf"|{_COUNT} (?:separate|different|distinct) (?:[\w-]+ ){{0,4}}?(?:{_CAL}|operators?|teams)"
+    # "(the five) calendars ... are run by different teams"
+    rf"|calendars? [^.]{{0,40}}?run by (?:independent|different|separate) (?:operators|teams|organi[sz]ations)"
+    rf"|{_COUNT} (?:[\w-]+ ){{0,3}}?calendars?,? {_COUNT} (?:[\w-]+ )?operators"
     r"|four of the five calendar operators"
     r"|five separate on-chain anchors"
+    r"|anchored five times"
     r"|different calendar's batch and a different bitcoin transaction",
     re.I)
 
@@ -43,11 +55,19 @@ POOL_UPSTREAM = {
     "https://b.pool.opentimestamps.org": "https://bob.btc.calendar.opentimestamps.org",
 }
 
+_READABLE_ATTRS = re.compile(
+    r"""\b(?:content|alt|title|aria-label|placeholder)\s*=\s*(?:"([^"]*)"|'([^']*)')""", re.I)
+
 
 def _flat(text: str) -> str:
-    """Tags out, whitespace collapsed: the claim wraps across lines in HTML,
+    """What a reader (or a search snippet) sees, on one line. Attribute text a
+    person reads — meta/og descriptions, alt, title — is kept: the claim sat in
+    three meta descriptions. Entities are decoded: the built HTML spells an
+    apostrophe &#x27;. Whitespace is collapsed: the claim wraps across lines,
     and a line-by-line grep missed five surfaces the first time."""
-    return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", text))
+    attrs = " ".join(a or b for a, b in _READABLE_ATTRS.findall(text))
+    body = re.sub(r"<[^>]+>", " ", text)
+    return re.sub(r"\s+", " ", html.unescape(body + " " + attrs)).replace("\u00a0", " ")
 
 
 def _public_text_files() -> list[Path]:
@@ -60,14 +80,16 @@ def _public_text_files() -> list[Path]:
 
 def test_no_public_text_claims_five_independent_calendars() -> None:
     files = _public_text_files()
-    assert len(files) > 200, f"only {len(files)} files scanned — the scan is not seeing the tree"
-    hits = []
+    read, hits = 0, []
     for p in files:
-        try:
-            flat = _flat(p.read_text(encoding="utf-8"))
-        except (UnicodeDecodeError, FileNotFoundError):
-            continue
+        if not p.is_file():
+            continue                                  # tracked but deleted in this tree
+        # errors="replace", never skip: a page saved in the wrong encoding is
+        # still a page a customer reads.
+        flat = _flat(p.read_text(encoding="utf-8", errors="replace"))
+        read += 1
         hits += [(str(p.relative_to(ROOT)), m.group(0)) for m in FALSE_CLAIMS.finditer(flat)]
+    assert read > 300, f"only {read} files READ — the scan is not seeing the tree"
     assert not hits, (
         "Five SERVERS, four distinct calendars (a.pool and b.pool feed alice and "
         "bob). These surfaces say otherwise:\n  " + "\n  ".join(f"{f}: {c!r}" for f, c in hits))
@@ -84,9 +106,22 @@ def test_the_scan_can_see_the_claim_it_hunts() -> None:
         "Calendars are run by independent operators with no financial tie",
         "even if four of the five calendar operators vanish",
         "five separate Merkle paths leading to five separate\non-chain anchors",
+        # shapes the first version of this scan could not see (review, 2026-09-18)
+        "<p>Each one references a different calendar&#x27;s batch and a different Bitcoin transaction.</p>",
+        '<meta name="description" content="Anchored via five independent OpenTimestamps calendars.">',
+        '<img src="x.png" alt="5 independent calendars">',
+        "five&nbsp;independent calendars",
+        "The five calendars Orphograph uses are run by different teams, hosted in different jurisdictions",
+        "Five OpenTimestamps calendars, five separate operators",
+        "If five succeed, the proof is anchored five times.",
+        "five independent Bitcoin-timestamp services",
     ):
         assert FALSE_CLAIMS.search(_flat(planted)), planted
     for fine in ("verifiable independently of this office",
+                 "five calendars across three operators",
+                 "five different OpenTimestamps calendar servers, not one",
+                 "four distinct calendars under three separately run domains",
+                 "Any one of the five files verifies independently.",
                  "five OpenTimestamps calendar servers",
                  "Redundancy only works where the calendars are genuinely independent."):
         assert not FALSE_CLAIMS.search(_flat(fine)), fine

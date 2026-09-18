@@ -192,7 +192,7 @@ Each anchor is submitted, in parallel, to five public OpenTimestamps calendar se
 4. `finney.calendar.eternitywall.com`
 5. `btc.calendar.catallaxy.com`
 
-Each acceptance produces its own `.ots` proof. Two of the five, `a.pool` and `b.pool`, are aggregators that feed the alice and bob calendars, so the five submissions reach four distinct calendars (alice, bob, finney, catallaxy) under three separately run domains. The `a.pool` proof and the alice proof end in the same alice commitment. The receipt
+Each acceptance produces its own `.ots` proof. Two of the five, `a.pool` and `b.pool`, are aggregators that feed the alice and bob calendars, so the five submissions reach four distinct calendars (alice, bob, finney, catallaxy) under three separately run domains. The `a.pool` proof and the alice proof both go through the alice calendar and normally end in the same commitment. The receipt
 records `calendars_ok` (acceptances) out of `calendars_total` (five),
 with per-calendar failures listed verbatim.
 

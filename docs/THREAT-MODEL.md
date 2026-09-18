@@ -74,9 +74,7 @@ separate questions live in two separate places:
   may anchor an additional SHA-512 root in parallel as a sidecar in
   future versions.
 - **OpenTimestamps calendar redundancy.** The office submits each root
-  to five public calendar servers. Two of the five, `a.pool` and `b.pool`, are aggregators that feed the alice and bob calendars, so the five submissions reach four distinct calendars (alice, bob, finney, catallaxy) under three separately run domains. A receipt
-  with three or more successful calendar acknowledgements is considered
-  durable. A receipt with fewer is flagged.
+  to five public calendar servers. Two of the five, `a.pool` and `b.pool`, are aggregators that feed the alice and bob calendars, so the five submissions reach four distinct calendars (alice, bob, finney, catallaxy) under three separately run domains. A receipt with three or more successful server acknowledgements is considered durable. A receipt with fewer is flagged. The count is of servers, not of distinct calendars: acknowledgements from `a.pool` and from alice count as two although both reach the alice calendar, so three acknowledgements can rest on as few as two calendars.
 - **Bitcoin liveness.** The receipt's time guarantee depends on the
   Bitcoin chain continuing to produce blocks. If the chain stops, the
   receipts already anchored are still verifiable; new anchors would not

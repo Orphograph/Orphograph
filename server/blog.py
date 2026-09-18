@@ -225,6 +225,7 @@ def _load_post(path: Path) -> dict:
         "slug": slug,
         "title": meta.get("title", slug),
         "date": meta.get("date", ""),
+        "updated": meta.get("updated", ""),
         "author": meta.get("author", "Orphograph"),
         "summary": meta.get("summary", ""),
         "tags": meta.get("tags", []) if isinstance(meta.get("tags"), list) else [],
@@ -396,7 +397,9 @@ def render_post_html(slug: str) -> str | None:
 
 def atom_feed_xml() -> str:
     posts = _all_posts()
-    updated = posts[0].get("date", "") if posts else ""
+    # A corrected post carries `updated:` in its front-matter. Feed readers key
+    # on <updated> to re-fetch; without it a correction never reaches them.
+    updated = max((p.get("updated") or p.get("date", "") for p in posts), default="")
     if updated:
         # Pad bare YYYY-MM-DD to a full timestamp.
         if len(updated) == 10:
@@ -416,7 +419,7 @@ def atom_feed_xml() -> str:
         slug = p["slug"]
         title = html.escape(p["title"])
         summary = html.escape(p.get("summary", ""))
-        post_date = p.get("date", "")
+        post_date = p.get("updated") or p.get("date", "")
         post_updated = post_date + "T00:00:00Z" if len(post_date) == 10 else post_date
         lines += [
             '  <entry>',

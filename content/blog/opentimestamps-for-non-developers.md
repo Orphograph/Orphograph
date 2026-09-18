@@ -2,6 +2,7 @@
 title: OpenTimestamps for non-developers — a 10-minute walkthrough
 slug: opentimestamps-for-non-developers
 date: 2026-05-13
+updated: 2026-09-18
 author: Orphograph
 summary: A practical explainer of what OpenTimestamps is, why it works, and how to use it without ever opening a terminal. Bitcoin without the gas fees, timestamping without the CLI.
 tags: [opentimestamps, bitcoin, non-developers, photographers]
