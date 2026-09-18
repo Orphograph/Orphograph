@@ -150,7 +150,7 @@
   <li>Once per hour, writes the tree&#x27;s root into a Bitcoin transaction.</li>
   <li>Returns a small proof file (the <code>.ots</code>) that includes the steps from the submitted hash to the Merkle root, plus the Bitcoin transaction ID.</li>
   </ul>
-  <p>Calendars are run by independent operators with no financial relationship to OpenTimestamps. The protocol uses 5 of them simultaneously so a single calendar going down doesn&#x27;t lose your proof.</p>
+  <p>Calendars are public servers. Two of them (alice and bob) sit on the OpenTimestamps project&#x27;s own domain; the finney and catallaxy calendars are run under separate domains. Orphograph submits to five servers at once, which reach those four calendars, so a single calendar going down doesn&#x27;t lose your proof.</p>
   <h3>Layer 3 — Bitcoin</h3>
   <p>Bitcoin&#x27;s job here is the simplest: it remembers things. Each block written contains all the transactions from the past 10 minutes, including any OpenTimestamps Merkle roots. Once a block is mined into the chain and has accumulated enough subsequent blocks (called &quot;confirmations&quot;), the data inside is for all practical purposes immutable.</p>
   <p>This is the part that gives OpenTimestamps its strength. The calendar operators could go offline, get hacked, or lie — but the hash is already in Bitcoin&#x27;s chain, which is replicated across tens of thousands of independent nodes globally.</p>

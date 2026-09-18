@@ -104,8 +104,7 @@ Python 3.11+ stdlib only on the server (`http.server`, `urllib`, `hashlib`,
 `json`, `secrets`, `fcntl`) — zero pip dependencies in the anchor engine.
 Vanilla HTML + CSS + JS on the client, hashing via WebCrypto
 `SubtleCrypto.digest` so file bytes never leave the browser. Each anchor
-fans out a single 32-byte POST to five independent OpenTimestamps
-calendars (a.pool, b.pool, alice, finney, btc.catallaxy); the calendars
+fans out a single 32-byte POST to five OpenTimestamps calendar servers (a.pool, b.pool, alice, finney, btc.catallaxy — the two pools are aggregators for alice and bob, so four distinct calendars); the calendars
 batch many users' hashes into a single Merkle root and write the root to
 Bitcoin roughly hourly, which is why our marginal on-chain cost is
 effectively zero. The `.ots` proofs are stored per-receipt and verify

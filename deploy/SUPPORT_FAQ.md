@@ -12,7 +12,7 @@ A: Orphograph creates a timestamp proof that a specific file existed by a specif
 
 1. You drop a file in your browser
 2. We compute its SHA-256 hash (in your browser, not on our server)
-3. We submit that hash to 5 independent Bitcoin timestamp services (OpenTimestamps calendars)
+3. We submit that hash to 5 public Bitcoin timestamp servers (OpenTimestamps calendars)
 4. They include your hash in a Bitcoin transaction (~1 hour)
 5. You get a receipt with your hash, the timestamp, and the Bitcoin proof
 

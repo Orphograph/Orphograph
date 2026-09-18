@@ -115,7 +115,7 @@ const sha512_hex = hex(s512);
   <section>
     <h2>5 · Multi-calendar redundancy</h2>
     <div class="arch-rule"></div>
-    <p>Each anchor is submitted to five independently operated OpenTimestamps calendars: <code>a.pool.opentimestamps.org</code>, <code>b.pool.opentimestamps.org</code>, <code>alice.btc.calendar.opentimestamps.org</code>, <code>finney.calendar.eternitywall.com</code>, and <code>btc.calendar.catallaxy.com</code>. Each calendar produces its own <code>.ots</code> proof path against the calendar's own Bitcoin commitment.</p>
+    <p>Each anchor is submitted to five public OpenTimestamps calendar servers: <code>a.pool.opentimestamps.org</code>, <code>b.pool.opentimestamps.org</code>, <code>alice.btc.calendar.opentimestamps.org</code>, <code>finney.calendar.eternitywall.com</code>, and <code>btc.calendar.catallaxy.com</code>. Each submission returns its own <code>.ots</code> proof path. Two of the five, <code>a.pool</code> and <code>b.pool</code>, are aggregators that feed the alice and bob calendars, so the five submissions reach four distinct calendars (alice, bob, finney, catallaxy) under three separately run domains. The <code>a.pool</code> proof and the alice proof therefore end in the same alice commitment; the other three end in their own.</p>
     <p>The receipt is considered valid when ANY single calendar's proof verifies. Failure of one calendar — whether through transient unreachability, deliberate refusal, or permanent operator exit — does not invalidate the receipt. This is the structural guarantee against calendar-operator hostility.</p>
   </section>
 

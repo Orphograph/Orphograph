@@ -113,7 +113,7 @@
     <ul class="means-bullets">
       <li><strong>Produce a single file from the tree.</strong> The simplest form is a reproducible archive — for example, <code>git archive --format=tar.gz HEAD &gt; snapshot.tar.gz</code>, or a tarball of the working tree with deterministic ordering. Any byte-stable single-file representation works. A commit hash itself is also a valid input: the SHA-1 or SHA-256 of a commit binds to the entire reachable history.</li>
       <li><strong>Drop the file</strong> at <a href="/" class="link-confirm">orphograph.com</a>. The browser computes the SHA-256 fingerprint locally. The archive's contents never leave the device. Only the sixty-four-character fingerprint is submitted.</li>
-      <li><strong>Save the receipt.</strong> The receipt is a sixteen-character ID, a public URL of the form <code>orphograph.com/r/&lt;id&gt;</code>, and five small <code>.ots</code> proof files from five independent calendars. Commit the receipt into the repository, or keep it in the engineering matter folder alongside the archive.</li>
+      <li><strong>Save the receipt.</strong> The receipt is a sixteen-character ID, a public URL of the form <code>orphograph.com/r/&lt;id&gt;</code>, and five small <code>.ots</code> proof files, one from each of five calendar servers. Commit the receipt into the repository, or keep it in the engineering matter folder alongside the archive.</li>
     </ul>
     <p>
       Within about an hour the fingerprint is committed to a Bitcoin block. From that block forward, the receipt is evidence that a tree with this exact fingerprint existed by no later than the block's mined timestamp.

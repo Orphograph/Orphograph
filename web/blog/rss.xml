@@ -111,7 +111,7 @@
       <title>Why Orphograph uses five OpenTimestamps calendars instead of one</title>
       <link>https://orphograph.com/blog/why-5-opentimestamps-calendars-not-1.html</link>
       <guid isPermaLink="true">https://orphograph.com/blog/why-5-opentimestamps-calendars-not-1.html</guid>
-      <description>Why submitting to five OpenTimestamps calendars instead of one matters — independent operators, no single point of failure, receipt survives outages.</description>
+      <description>Why submitting to five OpenTimestamps calendars instead of one matters — separate operators, no single point of failure, receipt survives outages.</description>
       <pubDate>Sun, 17 May 2026 00:00:00 +0000</pubDate>
     </item>
     <item>

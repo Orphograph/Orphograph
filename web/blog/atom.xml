@@ -139,7 +139,7 @@
     <ul class="means-bullets">
       <li><strong>Save</strong> the final contract as a single file — typically the executed PDF, but the method does not care about format. Word, plain text, scanned image, even a zip of the contract and its exhibits — anything that reduces to a stable byte sequence works.</li>
       <li><strong>Drop the file</strong> at <a href="/" style="color:var(--confirm);">orphograph.com</a>. The browser computes the SHA-256 fingerprint locally; the contract's contents never leave the device. Only the sixty-four-character fingerprint is submitted to the calendars.</li>
-      <li><strong>Save the receipt.</strong> The receipt consists of a sixteen-character ID, a public URL of the form <code>orphograph.com/r/&lt;id&gt;</code>, and five small <code>.ots</code> proof files from five independent calendars. Keep them in the matter file alongside the executed contract.</li>
+      <li><strong>Save the receipt.</strong> The receipt consists of a sixteen-character ID, a public URL of the form <code>orphograph.com/r/&lt;id&gt;</code>, and five small <code>.ots</code> proof files, one from each of five calendar servers. Keep them in the matter file alongside the executed contract.</li>
     </ul>
     <p>
       The fingerprint is committed to a Bitcoin block within about an hour. From that block forward, the receipt is evidence that the contract existed by no later than that block's mined timestamp.
@@ -343,7 +343,7 @@
     <ul class="means-bullets">
       <li><strong>Produce a single file from the tree.</strong> The simplest form is a reproducible archive — for example, <code>git archive --format=tar.gz HEAD &gt; snapshot.tar.gz</code>, or a tarball of the working tree with deterministic ordering. Any byte-stable single-file representation works. A commit hash itself is also a valid input: the SHA-1 or SHA-256 of a commit binds to the entire reachable history.</li>
       <li><strong>Drop the file</strong> at <a href="/" style="color:var(--confirm);">orphograph.com</a>. The browser computes the SHA-256 fingerprint locally. The archive's contents never leave the device. Only the sixty-four-character fingerprint is submitted.</li>
-      <li><strong>Save the receipt.</strong> The receipt is a sixteen-character ID, a public URL of the form <code>orphograph.com/r/&lt;id&gt;</code>, and five small <code>.ots</code> proof files from five independent calendars. Commit the receipt into the repository, or keep it in the engineering matter folder alongside the archive.</li>
+      <li><strong>Save the receipt.</strong> The receipt is a sixteen-character ID, a public URL of the form <code>orphograph.com/r/&lt;id&gt;</code>, and five small <code>.ots</code> proof files, one from each of five calendar servers. Commit the receipt into the repository, or keep it in the engineering matter folder alongside the archive.</li>
     </ul>
     <p>
       Within about an hour the fingerprint is committed to a Bitcoin block. From that block forward, the receipt is evidence that a tree with this exact fingerprint existed by no later than the block's mined timestamp.
@@ -793,7 +793,7 @@
     <h2>Try it</h2>
     <div class="arch-rule"></div>
     <p>
-      Open <a href="/" style="color:var(--confirm);">orphograph.com</a>. Drop any file. The browser hashes it on the device; the office anchors the fingerprint through five independent calendars and into the Bitcoin chain. The receipt that comes back satisfies the four properties above and will be verifiable by any third party for as long as the chain is running.
+      Open <a href="/" style="color:var(--confirm);">orphograph.com</a>. Drop any file. The browser hashes it on the device; the office anchors the fingerprint through five calendar servers and into the Bitcoin chain. The receipt that comes back satisfies the four properties above and will be verifiable by any third party for as long as the chain is running.
     </p>
   </section>
 
@@ -1265,7 +1265,7 @@
   <li>Once per hour, writes the tree&#x27;s root into a Bitcoin transaction.</li>
   <li>Returns a small proof file (the <code>.ots</code>) that includes the steps from the submitted hash to the Merkle root, plus the Bitcoin transaction ID.</li>
   </ul>
-  <p>Calendars are run by independent operators with no financial relationship to OpenTimestamps. The protocol uses 5 of them simultaneously so a single calendar going down doesn&#x27;t lose your proof.</p>
+  <p>Calendars are public servers. Two of them (alice and bob) sit on the OpenTimestamps project&#x27;s own domain; the finney and catallaxy calendars are run under separate domains. Orphograph submits to five servers at once, which reach those four calendars, so a single calendar going down doesn&#x27;t lose your proof.</p>
   <h3>Layer 3 — Bitcoin</h3>
   <p>Bitcoin&#x27;s job here is the simplest: it remembers things. Each block written contains all the transactions from the past 10 minutes, including any OpenTimestamps Merkle roots. Once a block is mined into the chain and has accumulated enough subsequent blocks (called &quot;confirmations&quot;), the data inside is for all practical purposes immutable.</p>
   <p>This is the part that gives OpenTimestamps its strength. The calendar operators could go offline, get hacked, or lie — but the hash is already in Bitcoin&#x27;s chain, which is replicated across tens of thousands of independent nodes globally.</p>
@@ -1550,7 +1550,7 @@
     <link href="https://orphograph.com/blog/why-5-opentimestamps-calendars-not-1.html"/>
     <published>2026-05-17T00:00:00Z</published>
     <updated>2026-05-17T00:00:00Z</updated>
-    <summary>Why submitting to five OpenTimestamps calendars instead of one matters — independent operators, no single point of failure, receipt survives outages.</summary>
+    <summary>Why submitting to five OpenTimestamps calendars instead of one matters — separate operators, no single point of failure, receipt survives outages.</summary>
     <content type="html"><![CDATA[<p class="post-meta">Blog · Document timestamping</p>
   <h1>Why Orphograph uses five OpenTimestamps calendars instead of one</h1>
 
@@ -1564,7 +1564,7 @@
   <p><strong>4.</strong> Hold on to the per-user Merkle paths so that any user can later retrieve the proof linking their hash to the on-chain root.</p>
   <p>A calendar does not custody any user&#x27;s file. It does not require identity. It does not authenticate users. It is a stateless batching service in front of a Bitcoin write.</p>
   <p>The calendar&#x27;s value is operational. It runs the equipment that submits to Bitcoin so that individual users do not have to. It keeps the historical Merkle paths so that anyone can come back years later, supply a hash, and receive the chain of proofs back to the on-chain root.</p>
-  <p>Run by independent operators. The OpenTimestamps project lists several public calendars run by different teams — <code>alice.btc.calendar</code>, <code>bob.btc.calendar</code>, <code>finney.calendar.eternitywall.com</code>, <code>pool.opentimestamps.org</code>, and others. Each is a separate operator with separate infrastructure.</p>
+  <p>Run by more than one operator. The public calendars are <code>alice.btc.calendar</code> and <code>bob.btc.calendar</code>, both on the OpenTimestamps project&#x27;s own domain, plus <code>finney.calendar.eternitywall.com</code> and <code>btc.calendar.catallaxy.com</code>. The <code>a.pool</code> and <code>b.pool</code> addresses are aggregators: front doors that batch requests into alice and bob. That is four calendars under three separately run domains.</p>
   <h2>What goes wrong with one calendar</h2>
   <p>Now imagine a service that submits each user&#x27;s hash to exactly one calendar. That receipt has a small list of failure modes that collectively form a single point of failure.</p>
   <p>The calendar goes offline temporarily. Submission fails. The user gets no receipt. This happens regularly. Calendars are run by volunteers and small organizations. Maintenance windows, hardware failures, and brief outages are normal.</p>
@@ -1573,33 +1573,33 @@
   <p>The calendar operator stops maintaining the service. The most common ending. Volunteer-run infrastructure gets neglected. The domain expires. The host migrates. Whatever the reason, three years from now the URL stops resolving.</p>
   <p>Each of these is a survivable event for the Bitcoin chain — the chain does not care that a calendar went away. But it is not survivable for the user whose receipt only points to that calendar&#x27;s Merkle path.</p>
   <h2>How five calendars fix this</h2>
-  <p>If a hash is submitted to five independent calendars, the receipt contains five separate Merkle paths leading to five separate on-chain anchors. The receipt verifies if any one of them still verifies.</p>
-  <p>The math is simple. If each calendar has a 95% probability of being available three years from now — a reasonable working estimate based on the last decade of OpenTimestamps operation — then the probability that all five fail simultaneously is roughly 0.05 to the fifth power, or about one in three million. The probability that at least one survives is essentially 100%.</p>
-  <p>This is the entire redundancy argument. Five independent operators means five independent failure modes. Failures must coincide for the receipt to break. Coincident failures of unrelated infrastructure are rare enough to ignore.</p>
+  <p>Orphograph submits each hash to five servers: the two aggregators, plus alice, finney and catallaxy directly. The receipt carries five proof files that lead to four distinct calendars, each with its own on-chain anchor. The <code>a.pool</code> proof and the alice proof end in the same alice transaction. The receipt verifies if any one of the five still verifies.</p>
+  <p>The math is simple. If each calendar has a 95% probability of being available three years from now — a reasonable working estimate based on the last decade of OpenTimestamps operation — then the probability that all four calendars fail simultaneously is roughly 0.05 to the fourth power, or about one in 160,000. That assumes they fail independently. Alice and bob share an operator, so a cautious reader should count three: about one in 8,000. Either way, the probability that at least one survives is far higher than with a single calendar, where it is 95%.</p>
+  <p>This is the entire redundancy argument. Separate operators mean separate failure modes. Failures must coincide for the receipt to break. Coincident failures of unrelated infrastructure are rare enough to ignore.</p>
   <p>The cost is small. Each calendar accepts the hash for free. Submission is five HTTP POSTs instead of one. The receipt is a few kilobytes larger. There is no per-anchor pricing difference.</p>
   <h2>What &quot;independent&quot; actually means here</h2>
-  <p>Redundancy only works if the five calendars are genuinely independent. Five servers run by one operator in one data center is not redundancy — a single power outage takes all of them down.</p>
-  <p>The five calendars Orphograph uses are run by different teams, hosted in different jurisdictions, on different infrastructure providers, with different funding sources. There is no single event that takes all five down at once short of a full Bitcoin network outage, and a Bitcoin network outage means everyone with a timestamp anchored to that chain has a problem, not just Orphograph users.</p>
-  <p>Five independent operators also means five separate trust assumptions. If one calendar issues a fake proof, the other four will not match. A verifier can compare across calendars and notice the inconsistency immediately. With one calendar, there is no cross-check.</p>
+  <p>Redundancy only works where the calendars are genuinely independent. Five servers run by one operator in one data center is not redundancy — a single power outage takes all of them down.</p>
+  <p>So here is the plain count. Of the five servers Orphograph submits to, two are aggregators for alice and bob, which sit on the OpenTimestamps project&#x27;s own domain. Finney runs under eternitywall.com and the fifth calendar under catallaxy.com. That is four calendars and three separately run domains, not five of each. For every proof to be lost, all three would have to fail together, before the proofs were upgraded. Once a proof is upgraded it carries its full path to a Bitcoin block and no longer needs its calendar at all.</p>
+  <p>Separate operators also mean separate trust assumptions. If one calendar issues a fake proof, the others will not match. A verifier can compare across calendars and notice the inconsistency immediately. With one calendar, there is no cross-check.</p>
   <h2>The point you can check yourself</h2>
-  <p>If you want to confirm that the redundancy is real, the receipt shows it. The receipt zip from any Orphograph anchor contains five separate <code>.ots</code> files. Each one references a different calendar&#x27;s batch and a different Bitcoin transaction. You can verify each one independently with the OpenTimestamps command-line tool:</p>
-  <pre><code>ots verify my_photo.jpg.ots.alice
-  ots verify my_photo.jpg.ots.bob
-  ots verify my_photo.jpg.ots.finney
-  ots verify my_photo.jpg.ots.pool
-  ots verify my_photo.jpg.ots.catallaxy</code></pre>
-  <p>Each verification produces an independent confirmation, anchored to a different transaction in a different block. If two verifications succeed, the proof is already redundantly anchored. If five succeed, the proof is anchored five times.</p>
+  <p>If you want to confirm that the redundancy is real, the receipt shows it. The receipt zip from any Orphograph anchor contains five separate <code>.ots</code> files: <code>a.ots</code>, <code>b.ots</code>, <code>alice.ots</code>, <code>finney.ots</code> and <code>btc.ots</code>. Run <code>ots info</code> on each. A pending proof names the calendar behind it; an upgraded proof shows the Bitcoin transaction it ends in. <code>a.ots</code> and <code>alice.ots</code> name the same calendar and end in the same Bitcoin transaction; the other three each end in their own. You can verify each one with the OpenTimestamps command-line tool:</p>
+  <pre><code>ots verify -f my_photo.jpg alice.ots
+  ots verify -f my_photo.jpg b.ots
+  ots verify -f my_photo.jpg finney.ots
+  ots verify -f my_photo.jpg a.ots
+  ots verify -f my_photo.jpg btc.ots</code></pre>
+  <p>Each verification is a confirmation against Bitcoin, and the five proofs end in four different transactions. If two of those succeed, the proof is already redundantly anchored.</p>
   <p>For a receipt to fail verification entirely, all five would have to fail simultaneously. That is the threshold Orphograph is designed against.</p>
   <h2>Why this matters for long-lived receipts</h2>
   <p>A timestamping receipt is supposed to be good for the working life of Bitcoin — decades, by current estimates. The companies running calendars are not all going to outlive that period. The companies running timestamping services certainly are not. Orphograph, like every software company, may not exist in twenty years.</p>
   <p>The receipt&#x27;s job is to survive all of them. The way it does that is by being self-contained: the original file, plus the receipt zip, plus a Bitcoin node, plus the open-source verifier, is everything required to confirm the anchor. Nothing in that chain depends on Orphograph still being online. Nothing depends on any specific calendar still being online — as long as at least one is.</p>
-  <p>Five calendars is the practical engineering answer to &quot;what would need to be true for this receipt to still work in 2046?&quot; One calendar surviving is enough. Five gives you four redundant ways for that to happen.</p>
+  <p>Five calendars is the practical engineering answer to &quot;what would need to be true for this receipt to still work in 2046?&quot; One calendar surviving is enough. Four calendars give you three redundant ways for that to happen.</p>
   <h2>The trade-off</h2>
-  <p>The cost of five-calendar fan-out is not zero. The browser does five submissions instead of one, the receipt is roughly five times larger, and there is more code to test. The Orphograph receipt format adds about 4 KB per anchor for the additional <code>.ots</code> files.</p>
+  <p>The cost of five-calendar fan-out is not zero. The office makes five submissions instead of one, the receipt is roughly five times larger, and there is more code to test. The Orphograph receipt format adds about 4 KB per anchor for the additional <code>.ots</code> files.</p>
   <p>In exchange, the receipt has no single point of failure on the calendar side. The redundancy is the entire reason for the overhead. For a service whose receipts are supposed to verify indefinitely, that trade-off is the right one.</p>
   <p>There is no version of the product where the holder only gets one calendar&#x27;s proof. The five-calendar receipt is the only receipt Orphograph issues.</p>
   <hr>
-  <p><em>Orphograph is a Bitcoin file-timestamping service. Three free anchors every 24 hours. Pack of Fifty: $29 one-time, credits never expire. Standing Order: $9/month for unlimited. Five OpenTimestamps calendars, five independent operators, no single point of failure. Receipts verify against any Bitcoin node, independent of Orphograph.</em> Related: <a href="/blog/why-domain-dying-doesnt-kill-your-timestamp.html" style="color:var(--confirm);">why the receipt survives if the issuer disappears</a>. Method overview: <a href="/method/evidence-law.html" style="color:var(--confirm);">how evidence law treats these receipts</a>.</p>
+  <p><em>Orphograph is a Bitcoin file-timestamping service. Three free anchors every 24 hours. Pack of Fifty: $29 one-time, credits never expire. Standing Order: $9/month for unlimited. Five calendar servers, four distinct calendars, no single point of failure. Receipts verify against any Bitcoin node, independent of Orphograph.</em> Related: <a href="/blog/why-domain-dying-doesnt-kill-your-timestamp.html" style="color:var(--confirm);">why the receipt survives if the issuer disappears</a>. Method overview: <a href="/method/evidence-law.html" style="color:var(--confirm);">how evidence law treats these receipts</a>.</p>
 
   <p class="post-foot">
     Published 2026-05-17. <a href="/blog/" style="color:var(--muted);">More from the blog</a>.
