@@ -85,7 +85,7 @@ FOLLOWUP_TEMPLATES: dict[str, dict[int, tuple[str, str]]] = {
         10: (
             "How the verifier actually works",
             "If the receipt idea is still on your mind: the method page walks through "
-            "how a contractor computes the fingerprint and what an adjuster sees on "
+            "how a contractor computes the fingerprint and what a third party sees on "
             "the verify link. https://orphograph.com/learn.html",
         ),
         21: (

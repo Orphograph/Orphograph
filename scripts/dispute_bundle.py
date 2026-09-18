@@ -120,7 +120,7 @@ def sha256_of(path: Path) -> str:
 
 # ── plain-language summary (Wedge 04) ───────────────────────────────────────
 # The last mile is a document, not a digest. One page a non-technical reader —
-# an adjuster, a paralegal, a contractor — gets through without help, stating
+# an auditor, a paralegal, a contractor — gets through without help, stating
 # the claim ceiling explicitly. Shipped in English and Spanish: Puerto Rico is
 # the first market, and a sheet nobody can read is not a deliverable.
 

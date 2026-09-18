@@ -1,6 +1,6 @@
 """make_handover_usb.py — build a self-contained handover bundle on a USB drive.
 
-The recipient (client, attorney, adjuster, auditor) plugs the USB into any
+The recipient (client, attorney, auditor) plugs the USB into any
 machine, opens the new subdirectory, reads the README, and runs the verifier
 locally. No contact with this office is required to confirm the receipt is
 authentic.

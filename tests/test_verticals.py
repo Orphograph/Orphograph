@@ -20,7 +20,6 @@ WEB_INDEX = ROOT / "web" / "index.html"
 
 EXPECTED_SLUGS = {
     "construction",
-    "inspection",
     "legal",
     "realestate",
     "healthcare",

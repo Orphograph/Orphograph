@@ -660,7 +660,6 @@ def _build_sitemap() -> str:
         ("/access", "0.6"),
         ("/pack", "0.6"),
         ("/construction/", "0.4"),
-        ("/inspection/", "0.4"),
         ("/listings/", "0.4"),
         ("/matters/", "0.4"),
         ("/practice/", "0.4"),
@@ -1178,6 +1177,12 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):  # noqa: N802
         path = self.path.split("?", 1)[0]
+        # Withdrawn page. It sat in the sitemap and the homepage footer, so say
+        # Gone rather than Not Found: crawlers drop a 410 and its cached snippet
+        # far sooner than a 404.
+        if path in ("/inspection", "/inspection/", "/inspection/index.html"):
+            self.send_error(410, "Gone")
+            return
         # homepage A/B: split "/" between the cream and dark documents
         if path == "/" and _serve_ab_home(self):
             return
