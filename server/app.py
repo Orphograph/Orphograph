@@ -2705,11 +2705,11 @@ class Handler(BaseHTTPRequestHandler):
         _ab_arm = _ab_cookie_variant(self)
         if _ab_arm:
             _ab_log("anchor", _ab_arm)
-        # Distinct upstream calendars, not server acknowledgements. Derived
-        # from `successes` so the same number is produced for a receipt whose
-        # stored `calendars_distinct_ok` predates the field.
-        distinct_ok = engine.distinct_calendars(record["successes"])
-        low_redundancy = distinct_ok < MIN_CALENDARS_OK
+        # Distinct upstream calendars, not server acknowledgements. One
+        # helper for every anchor surface (single, batch, folder) so the pair
+        # of fields and the flag cannot drift between them.
+        distinct = engine.receipt_distinct_counts(record)
+        low_redundancy = distinct["calendars_distinct_ok"] < MIN_CALENDARS_OK
         # Total calendar outage: 0 calendars accepted the hash, so the receipt
         # has no Bitcoin commitment and can never upgrade — it is worthless.
         # Refund the consumed credit (the buyer can re-anchor when calendars
@@ -2760,6 +2760,10 @@ class Handler(BaseHTTPRequestHandler):
                 "client_label": record.get("client_label"),
                 "calendars_ok": record["calendars_ok"],
                 "calendars_total": record["calendars_total"],
+                # A receiver that acts on low_redundancy must also be able to
+                # see WHY it fired, without a second fetch.
+                **distinct,
+                "low_redundancy": low_redundancy,
                 "private": want_private,
                 "receipt_url": f"{os.environ.get('SITE_URL', 'https://orphograph.com').rstrip('/')}/r/{record['receipt_id']}",
             })
@@ -2818,8 +2822,7 @@ class Handler(BaseHTTPRequestHandler):
             "calendars_total": record["calendars_total"],
             # Five servers reach four calendars: both counts are reported so
             # neither number has to carry a meaning it does not have.
-            "calendars_distinct_ok": distinct_ok,
-            "calendars_distinct_total": engine.CALENDARS_DISTINCT_TOTAL,
+            **distinct,
             "low_redundancy": low_redundancy,
             "pack_consumed": pack_consumed,
             "pack_remaining": pack_remaining,
@@ -3056,6 +3059,7 @@ class Handler(BaseHTTPRequestHandler):
                 authenticated=api_key_active or sub_active,
                 paid=demand_auth_path != "free",
             )
+            item_distinct = engine.receipt_distinct_counts(record)
             results.append({
                 "index": idx,
                 "ok": True,
@@ -3064,9 +3068,8 @@ class Handler(BaseHTTPRequestHandler):
                 "client_label": record["client_label"],
                 "calendars_ok": record["calendars_ok"],
                 "calendars_total": record["calendars_total"],
-                "calendars_distinct_ok": engine.distinct_calendars(record["successes"]),
-                "calendars_distinct_total": engine.CALENDARS_DISTINCT_TOTAL,
-                "low_redundancy": (engine.distinct_calendars(record["successes"])
+                **item_distinct,
+                "low_redundancy": (item_distinct["calendars_distinct_ok"]
                                    < MIN_CALENDARS_OK),
                 "receipt_url": f"{site}/r/{rid}",
                 "badge_url": f"{site}/api/badge/{rid}.svg",
@@ -4294,6 +4297,9 @@ class Handler(BaseHTTPRequestHandler):
             except ValueError as e:
                 lineage_out = {**lineage_pre, "committed": False,
                                "error": f"lineage not mirrored: {e}"}
+        folder_distinct = engine.receipt_distinct_counts(record)
+        folder_low_redundancy = (
+            folder_distinct["calendars_distinct_ok"] < MIN_CALENDARS_OK)
         response_body = {
             "receipt_id": rid,
             "root_hex": root_hex,
@@ -4302,8 +4308,11 @@ class Handler(BaseHTTPRequestHandler):
             "merkle_algorithm": merkle.ALGORITHM,
             "calendars_ok": record["calendars_ok"],
             "calendars_total": record["calendars_total"],
-            "calendars_distinct_ok": engine.distinct_calendars(record["successes"]),
-            "calendars_distinct_total": engine.CALENDARS_DISTINCT_TOTAL,
+            **folder_distinct,
+            # The folder path returned the counts but not the verdict, so a
+            # dataset anchored across two calendars looked as healthy as one
+            # across four. Same flag, same threshold, same meaning.
+            "low_redundancy": folder_low_redundancy,
             "created_at": record["created_at"],
             # Always report the privacy state. The folder response omitted it
             # entirely, so a caller who asked for private had no way to learn
@@ -4350,6 +4359,8 @@ class Handler(BaseHTTPRequestHandler):
                 "client_label": record.get("client_label"),
                 "calendars_ok": record["calendars_ok"],
                 "calendars_total": record["calendars_total"],
+                **folder_distinct,
+                "low_redundancy": folder_low_redundancy,
                 "private": want_private,
                 # Folder-specific, so a receiver can tell the two apart
                 # without a follow-up fetch.
@@ -5459,6 +5470,12 @@ def _list_anchors_for_email(
             "private": bool(rec.get("private", False)),
             "calendars_ok": rec.get("calendars_ok"),
             "calendars_total": rec.get("calendars_total"),
+            # Map-based on purpose: a vault page lists many receipts and the
+            # proof-first path would read five .ots files per row. The anchor
+            # and verify surfaces, which already hold the bytes, read the
+            # proofs themselves.
+            "calendars_distinct_ok": engine.distinct_calendars(rec.get("successes")),
+            "calendars_distinct_total": engine.CALENDARS_DISTINCT_TOTAL,
             "status": rec.get("status", "pending"),
             "btc_pinned_at": rec.get("btc_pinned_at"),
         })

@@ -19,6 +19,7 @@ import re
 import secrets
 import socket
 import ssl
+import sys
 import urllib.error
 import urllib.request
 from datetime import datetime, timezone
@@ -53,10 +54,23 @@ CALENDARS = [
 # Which upstream CALENDAR each submitted SERVER actually reaches.
 #
 # `a.pool` and `b.pool` are AGGREGATORS, not calendars of their own: a.pool
-# forwards to alice, b.pool forwards to bob. Evidence (2026-09-18/19): a fresh
-# a.pool proof names alice as its pending attestation, and on one receipt the
-# a.pool and alice proofs were BOTH still pending after 24h — both waiting on
-# alice — while bob, catallaxy and finney had confirmed.
+# forwards to alice, b.pool forwards to bob.
+#
+# Evidence, a.pool -> alice (2026-09-18/19): a fresh a.pool proof names alice
+# as its pending attestation, and on one receipt the a.pool and alice proofs
+# were BOTH still pending after 24h — both waiting on alice — while bob,
+# catallaxy and finney had confirmed.
+#
+# Evidence, b.pool -> bob (2026-09-19): a proof obtained from b.pool, read
+# with the OpenTimestamps library, carries the pending attestation URI
+# https://bob.btc.calendar.opentimestamps.org, and after `ots upgrade` it
+# confirmed in the same Bitcoin block as the bob proof path.
+#
+# This table is the FALLBACK, not the authority. Each pending proof names its
+# own upstream in its attestation URI, so `_resolve_upstream` reads the
+# artifact first and only consults this map when the proof cannot say (an
+# already-upgraded proof carries no pending attestation). A disagreement is
+# logged and the PROOF wins.
 #
 # So the five servers above reach FOUR distinct calendars (alice, bob, finney,
 # catallaxy) across THREE operators (opentimestamps.org, eternitywall.com,
@@ -74,6 +88,23 @@ CALENDAR_UPSTREAM = {
     "https://alice.btc.calendar.opentimestamps.org": "alice",
     "https://finney.calendar.eternitywall.com": "finney",
     "https://btc.calendar.catallaxy.com": "catallaxy",
+}
+
+# Upstream calendars as their HOSTS appear inside a proof's own pending
+# attestation URI. `bob.btc.calendar.opentimestamps.org` is here but not in
+# CALENDARS: we never submit to bob directly, we reach it through b.pool.
+#
+# This is the third hand-kept host list in the tree (the others being
+# CALENDARS/CALENDAR_UPSTREAM above and upgrade_worker.ALLOWED_CALENDAR_HOSTS,
+# which gates the same URIs before the worker fetches them).
+# tests/test_distinct_calendars.py fails if the three drift apart.
+CALENDAR_HOST_UPSTREAM = {
+    "a.pool.opentimestamps.org": "alice",
+    "b.pool.opentimestamps.org": "bob",
+    "alice.btc.calendar.opentimestamps.org": "alice",
+    "bob.btc.calendar.opentimestamps.org": "bob",
+    "finney.calendar.eternitywall.com": "finney",
+    "btc.calendar.catallaxy.com": "catallaxy",
 }
 HTTP_TIMEOUT_SEC = 15
 USER_AGENT = "orphograph/0.1 (stdlib)"
@@ -137,7 +168,7 @@ def distinct_calendar_names(entries: object) -> set:
 
 
 def distinct_calendars(entries: object) -> int:
-    """How many DISTINCT upstream calendars ``entries`` reached.
+    """How many DISTINCT upstream calendars ``entries`` reached, by map alone.
 
     Pure function, no I/O. This is the number a durability threshold must be
     compared against: five server acknowledgements are four calendars, and
@@ -146,12 +177,109 @@ def distinct_calendars(entries: object) -> int:
     Deliberately NOT a redefinition of ``calendars_ok``. That field is
     committed by renewal records for already-issued receipts
     (``server/renewal.py`` CORE_ALWAYS) and its meaning must never change.
+
+    Callers that hold the proof bytes should prefer ``distinct_calendars_of``,
+    which reads each proof's own pending attestation and falls back to here.
     """
     return len(distinct_calendar_names(entries))
 
 
-# Distinct calendars the shipped server list reaches. Four today.
+# Distinct calendars the shipped server list reaches. Four today. This is the
+# ONE meaning of `calendars_distinct_total` on every surface: how many
+# distinct calendars we SUBMIT to, never how many a given receipt happened to
+# reach. A receipt that reached two must read "2 of 4", never "2 of 2".
 CALENDARS_DISTINCT_TOTAL = len(distinct_calendar_names(CALENDARS))
+
+
+def upstream_from_proof(blob: object) -> str | None:
+    """The upstream calendar a stored proof names in its own attestation.
+
+    The artifact is the authority: a.pool writes alice's URL into the pending
+    attestation it returns, b.pool writes bob's. Returns None when the blob is
+    not a well-formed proof, carries no pending attestation (already upgraded)
+    or names a host we do not recognise — in every one of those cases the
+    caller falls back to CALENDAR_UPSTREAM rather than inventing a calendar.
+    """
+    if not isinstance(blob, (bytes, bytearray)):
+        return None
+    try:
+        uris = ots_timestamp.proof_pending_uris(bytes(blob))
+    except (ValueError, IndexError, RecursionError):
+        return None
+    for uri in uris:
+        host = uri[len("https://"):].split("/", 1)[0].lower()
+        upstream = CALENDAR_HOST_UPSTREAM.get(host)
+        if upstream is not None:
+            return upstream
+    return None
+
+
+def _log_upstream_disagreement(key: str, from_map: str, from_proof: str) -> None:
+    """A proof that names a different calendar than the table expects means
+    the table is stale. Loud, and never silently absorbed."""
+    print(
+        f"[orphograph] calendar upstream disagreement for {key!r}: "
+        f"CALENDAR_UPSTREAM says {from_map!r}, the proof names {from_proof!r} "
+        f"— using the proof",
+        file=sys.stderr, flush=True,
+    )
+
+
+def _resolve_upstream(key: object, blob: object = None) -> str | None:
+    """Upstream calendar for one submission: PROOF first, table second."""
+    from_proof = upstream_from_proof(blob)
+    from_map = calendar_upstream(key)
+    if from_proof is not None and from_map is not None and from_proof != from_map:
+        _log_upstream_disagreement(str(key), from_map, from_proof)
+    return from_proof if from_proof is not None else from_map
+
+
+def distinct_calendars_of(pairs: object) -> int:
+    """Distinct upstream calendars for ``(key, proof_bytes)`` pairs.
+
+    ``key`` is the URL, short token or ``.ots`` filename; ``proof_bytes`` may
+    be None when the caller does not hold them, in which case the static map
+    decides on its own.
+    """
+    out: set = set()
+    for key, blob in pairs:
+        upstream = _resolve_upstream(key, blob)
+        if upstream is not None:
+            out.add(upstream)
+    return len(out)
+
+
+def _proof_bytes_for(receipt_id: str, calendar_url: str) -> bytes | None:
+    try:
+        return (RECEIPTS_DIR / receipt_id
+                / f"{_calendar_short(calendar_url)}.ots").read_bytes()
+    except (OSError, IndexError):
+        return None
+
+
+def receipt_distinct_counts(record: dict) -> dict:
+    """The two distinct-calendar fields for an anchor response.
+
+    ONE helper for every anchor surface (single, batch, folder) so the pair
+    cannot drift between them. Reads each success's freshly-written proof so
+    the count comes from the artifact; falls back to CALENDAR_UPSTREAM per
+    proof that cannot be read or cannot say.
+
+    Derived on every call and never stored: a correction to the map or to the
+    calendars themselves then applies to every receipt retroactively, instead
+    of freezing today's belief into a permanent record.
+    """
+    rid = record.get("receipt_id")
+    successes = record.get("successes")
+    pairs = []
+    for item in successes if isinstance(successes, list) else []:
+        cal = item.get("calendar") if isinstance(item, dict) else item
+        blob = _proof_bytes_for(rid, cal) if isinstance(rid, str) and isinstance(cal, str) else None
+        pairs.append((cal, blob))
+    return {
+        "calendars_distinct_ok": distinct_calendars_of(pairs),
+        "calendars_distinct_total": CALENDARS_DISTINCT_TOTAL,
+    }
 
 
 def _submit(calendar_url: str, hash_bytes: bytes) -> tuple[bool, bytes | str]:
@@ -527,12 +655,11 @@ def anchor_hash(
         "metadata": _sanitize_metadata(metadata),
         "calendars_ok": len(successes),
         "calendars_total": len(CALENDARS),
-        # Distinct upstream calendars reached (see CALENDAR_UPSTREAM). Written
-        # at ISSUANCE ONLY and deliberately absent from renewal.CORE_ALWAYS:
-        # adding it there would make every already-issued receipt malformed
-        # and void its renewal chain. Consumers MUST derive it from
-        # `successes` (engine.distinct_calendars) when the key is missing.
-        "calendars_distinct_ok": distinct_calendars(successes),
+        # NOTE: the distinct-calendar count is NOT stored. It is derived on
+        # every read (engine.receipt_distinct_counts / verify_receipt) from
+        # the proofs themselves, so a correction to CALENDAR_UPSTREAM applies
+        # retroactively to every receipt instead of freezing today's table
+        # into a permanent record — and nothing new enters the renewal core.
         "successes": successes,
         "failures": failures,
     }
@@ -903,18 +1030,32 @@ def verify_receipt(receipt_id: str) -> dict:
 
     ots_files = sorted(receipt_dir.glob("*.ots"))
     checks = []
+    # Per-proof facts the published conformance vectors do NOT pin (they pin
+    # exactly file/magic_ok/hash_match/ok), kept alongside `checks` rather
+    # than inside it so adding them cannot break an independent verifier.
+    valid_pairs: list[tuple[str, bytes]] = []
+    pinned_pairs: list[tuple[str, bytes]] = []
     for ots in ots_files:
         data = ots.read_bytes()
         magic_ok = data.startswith(OTS_HEADER_MAGIC)
         offset = len(OTS_HEADER_MAGIC) + 2
         embedded = data[offset:offset + 32] if magic_ok else b""
         hash_match = embedded == expected_hash
+        ok = magic_ok and hash_match
         checks.append({
             "file": ots.name,
             "magic_ok": magic_ok,
             "hash_match": hash_match,
-            "ok": magic_ok and hash_match,
+            "ok": ok,
         })
+        if ok:
+            valid_pairs.append((ots.name, data))
+            # "Confirmed" is a Bitcoin fact, not a file-validity fact. A proof
+            # still waiting on its calendar is a stamp, not a confirmation —
+            # measured today: a.pool and alice pending past 24h while bob,
+            # finney and catallaxy were already in a block.
+            if ots_timestamp.proof_verdict(data, require_bitcoin=True)[0]:
+                pinned_pairs.append((ots.name, data))
     out = {
         "receipt_id": receipt_id,
         "found": True,
@@ -928,15 +1069,32 @@ def verify_receipt(receipt_id: str) -> dict:
         "metadata": record.get("metadata"),
         "calendars_ok": sum(1 for c in checks if c["ok"]),
         "calendars_total": len(checks),
+        # THREE totals live in this payload and they answer three questions.
+        # `calendars_total` — how many .ots files are on disk right now (the
+        #   published conformance vectors pin this; unchanged).
+        # `calendars_submitted_total` — how many calendar SERVERS this
+        #   receipt was submitted to when it was issued, read from the
+        #   receipt's own CORE field. This is the honest denominator for
+        #   "N of M servers": a receipt only three calendars answered must
+        #   read "3 of 5", never "3 of 3".
+        # `calendars_distinct_total` — how many DISTINCT calendars we submit
+        #   to, always 4. Never the number a given receipt happened to reach.
+        "calendars_submitted_total": (
+            record["calendars_total"]
+            if isinstance(record.get("calendars_total"), int)
+            else len(checks)),
         # Distinct upstream calendars, derived HERE from the proofs on disk —
-        # never read from the receipt — so a receipt issued before the field
-        # existed reports the same number as a fresh one. Counted over the
-        # checks that PASSED, matching calendars_ok: a corrupt a.ots next to a
-        # good alice.ots must not add a calendar.
-        "calendars_distinct_ok": distinct_calendars(
-            c["file"] for c in checks if c["ok"]),
-        "calendars_distinct_total": distinct_calendars(
-            c["file"] for c in checks),
+        # never read from the receipt — so a receipt issued before any of
+        # this existed reports the same numbers as a fresh one. Each proof
+        # names its own upstream; the static map is only the fallback.
+        "calendars_distinct_ok": distinct_calendars_of(valid_pairs),
+        "calendars_distinct_total": CALENDARS_DISTINCT_TOTAL,
+        # Bitcoin-CONFIRMED counts, both derived from the same blobs so the
+        # server number and the calendar number can never disagree about the
+        # same receipt (the stored pinned_count below is the upgrade worker's
+        # last snapshot and may lag the files).
+        "calendars_pinned_ok": len(pinned_pairs),
+        "calendars_distinct_pinned": distinct_calendars_of(pinned_pairs),
         "status": record.get("status", "pending"),
         # `status` answers "are ALL calendars Bitcoin-pinned?" — which for every
         # receipt issued so far is permanently "partial", because

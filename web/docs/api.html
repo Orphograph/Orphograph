@@ -407,8 +407,11 @@ X-Orpho-Api-Key: orpho_xxxxxxxxxxxxxxxxxxxxxxxx
   "btc_pinned_at": "2026-05-14T15:10:12+00:00",
   "calendars_ok":  5,
   "calendars_total": 5,
+  "calendars_submitted_total": 5,
   "calendars_distinct_ok":    4,
   "calendars_distinct_total": 4,
+  "calendars_pinned_ok":      3,
+  "calendars_distinct_pinned": 3,
   "checks": [
     {"file": "a.ots",      "magic_ok": true, "hash_match": true, "ok": true},
     {"file": "alice.ots",  "magic_ok": true, "hash_match": true, "ok": true},
@@ -481,6 +484,19 @@ print(receipt["status"], receipt.get("btc_pinned_at"))</pre>
 
   <h3>Response</h3>
   <p>Identical shape to <code>/api/receipt/&lt;id&gt;</code>. The <code>checks[]</code> array reflects a fresh re-read of the proof files; if any <code>.ots</code> file is missing or corrupted, the corresponding entry will have <code>ok: false</code> with the failed sub-check.</p>
+
+  <p>
+    On this endpoint <code>calendars_total</code> is the number of
+    <code>.ots</code> files held right now, <code>calendars_submitted_total</code>
+    is how many calendar servers the receipt was submitted to when it was
+    issued (5), and <code>calendars_distinct_total</code> is how many distinct
+    calendars we submit to (4) — never the number one receipt happened to
+    reach. <code>calendars_pinned_ok</code> and
+    <code>calendars_distinct_pinned</code> count only proofs that carry a
+    Bitcoin attestation, which is a strictly smaller set than the proofs that
+    merely parse and match: a stamped proof still waiting on its calendar is
+    not a confirmation.
+  </p>
 
   <h3>Errors</h3>
   <ul>

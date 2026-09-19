@@ -73,6 +73,23 @@ def _check_attestation_payload(tag: bytes, payload: bytes) -> int | None:
     return None
 
 
+def _pending_uri(payload: bytes) -> str | None:
+    """The URI inside an already-validated pending-attestation payload.
+
+    A pool alias submits on behalf of a real calendar and writes THAT
+    calendar's URL here, which is what makes a proof self-describing about
+    the calendar it will be carried by. Shape has already been checked by
+    _check_attestation_payload; anything non-ASCII is simply not a URI we
+    will act on, so it comes back as None rather than raising.
+    """
+    try:
+        ln, end = read_varint(payload, 0)
+        uri = payload[end:end + ln].decode("ascii")
+    except (ValueError, UnicodeDecodeError):
+        return None
+    return uri if uri.startswith("https://") else None
+
+
 def parse_timestamp(b: bytes, i: int, depth: int = 0) -> tuple[int, dict]:
     """Walk one serialized Timestamp starting at b[i].
 
@@ -84,7 +101,7 @@ def parse_timestamp(b: bytes, i: int, depth: int = 0) -> tuple[int, dict]:
     """
     if depth > _MAX_FORK_DEPTH:
         raise ValueError("fork nesting too deep")
-    counts = {"heights": [], "pending": 0}
+    counts = {"heights": [], "pending": 0, "pending_uris": []}
     while True:
         if i >= len(b):
             raise ValueError("truncated timestamp")
@@ -94,6 +111,7 @@ def parse_timestamp(b: bytes, i: int, depth: int = 0) -> tuple[int, dict]:
             i, sub = parse_timestamp(b, i, depth + 1)
             counts["pending"] += sub["pending"]
             counts["heights"] += sub["heights"]
+            counts["pending_uris"] += sub["pending_uris"]
             continue
         if tag == _ATTESTATION:
             if i + 8 > len(b):
@@ -111,6 +129,9 @@ def parse_timestamp(b: bytes, i: int, depth: int = 0) -> tuple[int, dict]:
                 counts["heights"].append(height)
             elif att_tag == PENDING_ATTESTATION_TAG:
                 counts["pending"] += 1
+                uri = _pending_uri(b[i - ln:i])
+                if uri is not None:
+                    counts["pending_uris"].append(uri)
             return i, counts
         if tag in _OPS_VARBYTES:
             ln, i = read_varint(b, i)
@@ -135,6 +156,25 @@ def proof_bitcoin_heights(blob: bytes) -> list[int]:
     if not ok:
         raise ValueError(why)
     return parse_timestamp(blob, PROOF_PREFIX_LEN)[1]["heights"]
+
+
+def proof_pending_uris(blob: bytes) -> list[str]:
+    """Calendar URIs named by the pending attestations of a stored proof.
+
+    Same one-parse discipline as proof_bitcoin_heights: a caller can never
+    read a URI out of a proof the structural validator refuses. Returns []
+    for an upgraded proof, which has no pending attestation left.
+
+    This is what makes a proof self-describing: `a.pool` writes
+    `https://alice.btc.calendar.opentimestamps.org` here, and `b.pool`
+    writes `https://bob.btc.calendar.opentimestamps.org` (both observed
+    2026-09-19), so the calendar a submission actually reaches can be read
+    off the artifact instead of assumed from a table.
+    """
+    ok, why = proof_verdict(blob, require_bitcoin=False)
+    if not ok:
+        raise ValueError(why)
+    return parse_timestamp(blob, PROOF_PREFIX_LEN)[1]["pending_uris"]
 
 
 def timestamp_verdict(body: bytes, *, require_bitcoin: bool) -> tuple[bool, str]:
