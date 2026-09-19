@@ -4,10 +4,10 @@
 <meta charset="utf-8">
 <title>Stats — Orphograph</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="description" content="Live public metrics for Orphograph: total Bitcoin-anchored receipts, calendar uptime, and current BTC oracle source. No customer data, ever.">
+<meta name="description" content="Live public metrics for Orphograph: total Bitcoin-anchored receipts and calendar uptime. No customer data, ever.">
 <link rel="icon" type="image/png" href="/favicon.png?v=8">
 <meta property="og:title" content="Orphograph — Live Stats">
-<meta property="og:description" content="Receipts anchored, calendars reachable, oracle live. Counts only — no customer data.">
+<meta property="og:description" content="Receipts anchored, calendars reachable. Counts only — no customer data.">
 <meta property="og:image" content="/og-image.png?v=8">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://orphograph.com/stats">
@@ -73,13 +73,6 @@
       <ul class="cal-list" id="cal-list"></ul>
     </div>
     <div class="stat-card">
-      <div class="stat-label">BTC oracle</div>
-      <div class="stat-value">
-        <span id="btc-source" class="mono">…</span>
-      </div>
-      <div class="stat-sub" id="btc-price">…</div>
-    </div>
-    <div class="stat-card">
       <div class="stat-label">Server uptime</div>
       <div class="stat-value" id="uptime">…</div>
       <div class="stat-sub" id="boot-at">booted —</div>
@@ -97,7 +90,7 @@
   <p>
     This page exists to show that the service is live, that anchors are
     being produced, and that the public infrastructure we depend on
-    (OpenTimestamps calendars, the BTC price oracle) is reachable.
+    (the OpenTimestamps calendars) is reachable.
   </p>
   <p>
     It deliberately does <strong>not</strong> show: customer counts,
@@ -125,7 +118,7 @@
   </div>
 </footer>
 
-<script src="/stats.js?v=1"></script>
+<script src="/stats.js?v=2"></script>
 <script src="/assets/event.js?v=1" defer></script>
 </body>
 </html>
