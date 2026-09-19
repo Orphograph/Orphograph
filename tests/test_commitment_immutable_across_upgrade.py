@@ -99,7 +99,11 @@ class TestCommitmentImmutable(unittest.TestCase):
         before = json.loads((rd / "receipt.json").read_text())
         commit, fetch = self._patch_all_pin()
         with commit, fetch, mock.patch("urllib.request.urlopen"):
-            result = self.uw._upgrade_one(rd, dict(before))
+            # The worker gets its OWN parse of the file. `dict(before)` was a
+            # shallow copy: the worker mutating an entry of `successes` also
+            # mutated `before`, so nested changes compared equal to themselves.
+            result = self.uw._upgrade_one(
+                rd, json.loads((rd / "receipt.json").read_text()))
         after = json.loads((rd / "receipt.json").read_text())
         return before, after, result
 
@@ -147,6 +151,87 @@ class TestCommitmentImmutable(unittest.TestCase):
             f"upgrade_worker changed unreviewed field(s) {sorted(unexpected)} on a "
             f"receipt. Confirm they are not part of the commitment, then add them here."
         )
+
+
+class TestRenewalCoreSurvivesTheRealWorker(unittest.TestCase):
+    """The renewal record commits to a 13-field core (renewal.CORE_ALWAYS), not
+    just the four commitment fields above. Until 2026-09-19 the only guards
+    were a hand-copied dict of "what the worker writes" and a regex over the
+    worker's SOURCE for `record["x"] =`. Both are textual proxies: a worker
+    doing `record.update({"calendars_ok": n})`, or `entry["k"] = v` on an item
+    of `successes`, passed all 54 tests (planted and observed) while changing
+    the core digest -- which silently voids every renewal record for that
+    receipt. This drives the REAL `_upgrade_one` against a receipt on disk and
+    compares the digests renewal actually computes.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.receipts = Path(self._tmp.name) / "receipts"
+        self.receipts.mkdir(parents=True)
+        import importlib
+        import engine
+        engine.RECEIPTS_DIR = self.receipts
+        import upgrade_worker
+        importlib.reload(upgrade_worker)
+        upgrade_worker.RECEIPTS_DIR = self.receipts
+        self.uw = upgrade_worker
+        import renewal
+        self.renewal = renewal
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def _drive(self, rid: str, fetch_result):
+        rd = _make_receipt_dir(self.receipts, rid, [
+            "https://a.pool.opentimestamps.org",
+            "https://b.pool.opentimestamps.org"])
+        rpath = rd / "receipt.json"
+        record = json.loads(rpath.read_text())
+        # The shared fixture predates this field; renewal refuses a receipt
+        # without it rather than defaulting, so the fixture must carry it.
+        record["c2pa_manifest_hash"] = None
+        rpath.write_text(json.dumps(record, indent=2))
+        before = json.loads(rpath.read_text())
+        with mock.patch.object(self.uw, "_commitment_for_pending",
+                               return_value=("c" * 64, 100)), \
+                mock.patch.object(self.uw, "_fetch_upgrade",
+                                  return_value=fetch_result), \
+                mock.patch("urllib.request.urlopen"):
+            # An independent parse, never `dict(before)`: a shallow copy shares
+            # the nested `successes` entries with `before`, and a worker that
+            # mutates one would move both sides of the comparison together
+            # (planted 2026-09-19: the nested plant passed until this changed).
+            self.uw._upgrade_one(rd, json.loads(rpath.read_text()))
+        return before, json.loads(rpath.read_text())
+
+    def _assert_core_unmoved(self, before, after):
+        self.assertNotEqual(before, after,
+                            "the worker wrote nothing; this run proves nothing")
+        self.assertEqual(
+            self.renewal.core_digests(before), self.renewal.core_digests(after),
+            "upgrade_worker changed the renewal CORE of a receipt on disk. "
+            "Every renewal record already issued for it no longer verifies, "
+            "and nothing raises. Changed core fields: "
+            f"{[k for k in self.renewal.CORE_ALWAYS + self.renewal.CORE_IF_PRESENT if before.get(k) != after.get(k)]}")
+
+    def test_core_digest_survives_a_real_pin(self):
+        before, after = self._drive("rid_core_pin", (True, _PINNED_BODY))
+        self.assertEqual(after.get("status"), "pinned")
+        self._assert_core_unmoved(before, after)
+
+    def test_core_digest_survives_a_real_stalled_attempt(self):
+        before, after = self._drive("rid_core_stall", (False, "HTTP 404"))
+        self.assertNotEqual(after.get("status"), "pinned")
+        self._assert_core_unmoved(before, after)
+
+    def test_the_fixture_core_is_complete(self):
+        """NEGATIVE CONTROL on the harness: if the fixture lacked a CORE_ALWAYS
+        field, core_digests would raise and the two tests above would error
+        rather than assert -- make that failure mode explicit and named."""
+        before, _ = self._drive("rid_core_fixture", (True, _PINNED_BODY))
+        for key in self.renewal.CORE_ALWAYS:
+            self.assertIn(key, before)
 
 
 if __name__ == "__main__":

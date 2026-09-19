@@ -205,6 +205,6 @@ is the thing Orphograph does well.
 ---
 
 *Orphograph is a Bitcoin file-timestamping service. Three free
-anchors every 24 hours, $29 for a 10-anchor pack, $9/mo for
+anchors every 24 hours, $19 for a 10-anchor pack, $9/mo for
 unlimited. Receipts verify against any Bitcoin node without our
 servers. We are not a notary public.*
