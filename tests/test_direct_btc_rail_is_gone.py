@@ -230,6 +230,38 @@ def test_the_site_still_answers_at_all(base) -> None:
     assert status == 200, ("the hosted crypto checkout must still serve", status)
 
 
+@pytest.mark.parametrize("path", (
+    "/pay/crypto", "/pay/crypto.css", "/pay/crypto.js",
+    "/pay/success", "/pay/success.css", "/pay/success.js",
+))
+def test_the_surviving_checkouts_assets_still_serve(base, path) -> None:
+    """The retirement guard matches /pay/btc* and the /pay/btc/ prefix. Its
+    NEIGHBOURS under the same directory belong to the hosted processor, which
+    is the checkout every retired offer now points at — a guard that swallowed
+    one of its stylesheets would break the working payment path silently."""
+    status, _body, _h = _srv.request(base, path)
+    assert status in (200, 301), (path, status)
+
+
+def test_robots_does_not_hide_the_410_from_crawlers(base) -> None:
+    """`Disallow: /buy/` was removed on purpose. /buy sat in both sitemaps at
+    priority 0.8, so the URL is indexed; a crawler that is told not to fetch it
+    never observes the Gone and keeps the stale entry. The rationale only holds
+    if nothing else in robots.txt blocks it."""
+    status, body, _h = _srv.request(base, "/robots.txt")
+    assert status == 200
+    text = body.decode("utf-8", "replace")
+    disallowed = [ln.split(":", 1)[1].strip()
+                  for ln in text.splitlines()
+                  if ln.lower().startswith("disallow:") and ln.split(":", 1)[1].strip()]
+    for path in ("/buy", "/pay/btc"):
+        blocked = [d for d in disallowed if path.startswith(d)]
+        assert not blocked, f"robots.txt hides the {path} 410 from crawlers via {blocked}"
+    # CONTROL: robots.txt really does disallow things, so the loop above is
+    # reading a populated list rather than an empty one.
+    assert "/api/" in disallowed, f"robots.txt looks empty: {disallowed}"
+
+
 def test_no_order_appears_in_the_generated_sitemap(base) -> None:
     status, body, _h = _srv.request(base, "/sitemap.xml")
     assert status == 200
