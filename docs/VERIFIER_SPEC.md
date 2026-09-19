@@ -106,6 +106,44 @@ Given a `receipt_id`:
      signature fields only when present (shape-stability rule: absent
      fields stay absent).
 
+### 3.4a Server-side annotations — NOT required of a conforming verifier
+
+The Orphograph service adds five further keys to its own `/api/verify`
+response. They are **server-side annotations**: an independent verifier is
+**not** required to emit them, the published conformance vectors do **not**
+pin them, and their absence is **not** a conformance failure. They are
+specified here so a consumer can read them, not so a verifier must produce
+them.
+
+| Key | Meaning |
+|---|---|
+| `calendars_submitted_total` | How many calendar SERVERS the receipt was submitted to when issued — the receipt's own `calendars_total` CORE field (5 today). The honest denominator for "N of M servers": a receipt only three servers answered reads "3 of 5", never "3 of 3". |
+| `calendars_distinct_ok` | DISTINCT upstream calendars among the checks with `ok == true`. |
+| `calendars_distinct_total` | How many distinct calendars the service SUBMITS to (4 today) — never the number one receipt reached. |
+| `calendars_pinned_ok` | Proofs that carry a Bitcoin attestation. A strictly smaller set than `calendars_ok`: a proof that parses and matches but still names a pending calendar is stamped, not confirmed. |
+| `calendars_distinct_pinned` | Distinct upstream calendars among those Bitcoin-attested proofs. |
+
+**The server→calendar mapping, stated rather than delegated.** Two of the
+five submitted servers are aggregators that forward to a calendar run
+elsewhere; the other three are calendars in their own right:
+
+| Submitted server (`.ots` stem) | Upstream calendar |
+|---|---|
+| `a.pool.opentimestamps.org` (`a`) | alice |
+| `b.pool.opentimestamps.org` (`b`) | bob |
+| `alice.btc.calendar.opentimestamps.org` (`alice`) | alice |
+| `finney.calendar.eternitywall.com` (`finney`) | finney |
+| `btc.calendar.catallaxy.com` (`btc`) | catallaxy |
+
+So five servers reach **four** distinct calendars — alice, bob, finney,
+catallaxy — across **three** operators. A verifier that chooses to compute a
+distinct count SHOULD prefer each proof's own pending-attestation URI, which
+names the upstream calendar directly (`a.pool` writes alice's URL, `b.pool`
+writes bob's; both observed 2026-09-19), and fall back to the table above
+only for an upgraded proof that no longer carries a pending attestation. An
+unrecognised stem or host adds **no** calendar — unknown is never counted as
+independent.
+
 ### Pseudocode
 
 ```

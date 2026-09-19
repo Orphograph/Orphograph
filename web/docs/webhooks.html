@@ -72,7 +72,7 @@
         <tr>
           <td>anchor.created</td>
           <td>
-            Issued when the account-holder anchors a file and the calendar attestations are received. The <code>data</code> object contains <code>receipt_id</code>, <code>hash_hex</code>, <code>sha512_hex</code>, <code>created_at</code>, <code>client_label</code>, <code>calendars_ok</code>, <code>calendars_total</code>, <code>private</code> (boolean), and <code>receipt_url</code>.
+            Issued when the account-holder anchors a file and the calendar attestations are received. The <code>data</code> object contains <code>receipt_id</code>, <code>hash_hex</code>, <code>sha512_hex</code>, <code>created_at</code>, <code>client_label</code>, <code>calendars_ok</code>, <code>calendars_total</code>, <code>calendars_distinct_ok</code>, <code>calendars_distinct_total</code>, <code>low_redundancy</code> (boolean), <code>private</code> (boolean), and <code>receipt_url</code>. <code>calendars_ok</code> counts calendar servers; <code>calendars_distinct_ok</code> counts the distinct calendars those servers reach (<code>a.pool</code> and <code>b.pool</code> are aggregators for the alice and bob calendars, so five servers reach four calendars) and is the count <code>low_redundancy</code> is decided on. Folder anchors add <code>kind</code>, <code>leaf_count</code> and <code>root_hex</code>.
           </td>
         </tr>
         <tr>

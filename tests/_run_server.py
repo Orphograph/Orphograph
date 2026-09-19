@@ -20,6 +20,13 @@ sys.path.insert(0, str(ROOT / "tests"))
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--stub-calendars", action="store_true")
+    # Which calendars the stub refuses, as a comma-separated list of the short
+    # tokens engine._calendar_short produces ("a", "b", "alice", "finney",
+    # "btc"). Default: none, so every existing caller of _srv is unaffected.
+    # Needed because the durability threshold now counts DISTINCT upstream
+    # calendars, and "three servers acknowledged" versus "three calendars
+    # reached" can only be told apart by shaping WHICH ones succeed.
+    parser.add_argument("--fail-calendars", default="")
     args = parser.parse_args()
     if not args.stub_calendars:
         parser.error("this launcher requires --stub-calendars")
@@ -29,9 +36,16 @@ def main() -> int:
     # against; a hand copy here drifted from it once.
     from _ots_bodies import PENDING_BODY
 
-    def accepted(_calendar_url: str, hash_bytes: bytes):
+    refused = {t.strip() for t in args.fail_calendars.split(",") if t.strip()}
+    unknown = refused - {engine._calendar_short(c) for c in engine.CALENDARS}
+    if unknown:
+        parser.error(f"--fail-calendars names no shipped calendar: {sorted(unknown)}")
+
+    def accepted(calendar_url: str, hash_bytes: bytes):
         if len(hash_bytes) != 32:
             return False, "hash must be exactly 32 bytes (SHA-256)"
+        if engine._calendar_short(calendar_url) in refused:
+            return False, "HTTP 503: stubbed calendar outage"
         return True, PENDING_BODY
 
     engine._submit = accepted
