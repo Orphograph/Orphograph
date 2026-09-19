@@ -671,7 +671,6 @@ def _build_sitemap() -> str:
         ("/construction/", "0.4"),
         ("/listings/", "0.4"),
         ("/matters/", "0.4"),
-        ("/practice/", "0.4"),
         ("/workpapers/", "0.4"),
         ("/blog/atom.xml", "0.4"),
         ("/blog/rss.xml", "0.4"),
@@ -797,6 +796,38 @@ def _serve_ab_home(handler: BaseHTTPRequestHandler) -> bool:
 # the same document and both must 404.
 _PRIVATE_PATH_PREFIXES = ("_mockups/",)
 _PRIVATE_PATH_EXACT = frozenset({"index-legacy"})
+
+
+# Withdrawn pages, matched by PREFIX so every path under the withdrawn
+# subtree answers Gone -- not just the handful of URLs that were ever
+# directly linked. A hand-typed tuple of three exact strings per withdrawal
+# (the original form of this check, for /inspection on 2026-09-18 and
+# /practice on 2026-09-19) missed the clean-URL siblings _serve_static
+# resolves for any subdirectory: /<prefix>/index (extensionless) and
+# /<prefix>/index.css (or any other asset that lived beside index.html)
+# fell through to the static-file fallback and answered 404, not 410 --
+# live on production for /inspection/index and /inspection/index.css since
+# the day of that withdrawal (code review finding, 2026-09-19, PR #255).
+WITHDRAWN_PATH_PREFIXES = ("/inspection", "/practice")
+
+
+def _is_withdrawn_path(path: str) -> bool:
+    """True if `path` names a withdrawn page or anything under it.
+
+    Exact match OR startswith(prefix + "/"): "/practice", "/practice/",
+    "/practice/index", "/practice/index.css" and "/practice//" (a TRAILING
+    empty segment under the prefix) are all withdrawn. "/practicex" is a
+    different path that merely shares the prefix's characters and is not.
+    `path` is expected pre-normalised the way do_GET already normalises it
+    (query string stripped); no further normalisation happens here.
+
+    A LEADING double slash ("//practice/") is not handled here and does
+    not need to be: stdlib http.server's parse_request() already collapses
+    it to a single "/" before self.path is ever set (gh-87389, an
+    open-redirect mitigation upstream of this function), so this function
+    never sees that shape from a real request.
+    """
+    return any(path == p or path.startswith(p + "/") for p in WITHDRAWN_PATH_PREFIXES)
 
 
 def _is_private_path(rel_path: str) -> bool:
@@ -1186,10 +1217,10 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):  # noqa: N802
         path = self.path.split("?", 1)[0]
-        # Withdrawn page. It sat in the sitemap and the homepage footer, so say
-        # Gone rather than Not Found: crawlers drop a 410 and its cached snippet
-        # far sooner than a 404.
-        if path in ("/inspection", "/inspection/", "/inspection/index.html"):
+        # Withdrawn pages. Each sat in the sitemap (/inspection/ was also in the
+        # homepage footer), so say Gone rather than Not Found: crawlers drop a
+        # 410 and its cached snippet far sooner than a 404.
+        if _is_withdrawn_path(path):
             self.send_error(410, "Gone")
             return
         # homepage A/B: split "/" between the cream and dark documents
