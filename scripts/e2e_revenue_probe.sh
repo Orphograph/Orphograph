@@ -7,7 +7,7 @@
 #   2. Free anchor (rate-limited, no payment)
 #   3. /verify/ landing + verify.py + tarball download
 #   4. Sample receipt round-trip via /api/verify
-#   5. BTC order create + /buy/<id> page renders + status endpoint
+#   5. Direct-BTC order rail is retired — order creation answers 410
 #   6. Waitlist signup
 #   7. Magic-link auth-request flow (no real email send required)
 #   8. GDPR data export endpoint shape
