@@ -9,10 +9,17 @@ This is narrower than tests/test_no_insurance_vertical_on_site.py BY DESIGN.
 That guard scans every tracked text file because "insurance" left the SERVED
 tree too (web/inspection/ was withdrawn and now answers 410). Healthcare and
 medical/clinical/patient vocabulary legitimately remains in served copy —
-web/practice/ is a complete, sitemap-listed healthcare landing page unrelated
-to this scaffold, and several pages' disclaimers state the office is NOT a
-regulated medical-records system. Scanning all tracked text for that
-vocabulary would fail on content the founder has not asked to remove.
+several pages' disclaimers state the office is NOT a regulated medical-records
+system, which stays true (and becomes more true) after this removal. Scanning
+all tracked text for that vocabulary would fail on content the founder has not
+asked to remove.
+
+(web/practice/ WAS a second, separate healthcare-audience landing page —
+unrelated to this config/verticals/ scaffold, no link or slug between them —
+also withdrawn on this branch, same day, once the founder confirmed it was
+live. See tests/test_no_healthcare_practice_page.py for that guard: same
+narrow-source rationale, applied to a served page + sitemap entry + 410
+route instead of a YAML file.)
 
 This guard instead binds ONLY to the vertical-config SOURCE: the file itself,
 plus the identity fields (filename stem, `slug`, `nav_label`, `title`) of
