@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""btc_price.py — current BTC/USD price for order creation.
+"""btc_price.py — current BTC/USD spot price, for the founder dashboard.
 
 Queries three public spot oracles in order of preference:
   1. mempool.space   /api/v1/prices                 (whole-dollar int)
@@ -19,10 +19,12 @@ Public API:
         "mempool" | "coinbase" | "kraken" | "cache" | "none".
     current_price_usd() -> float
         Legacy alias for get_usd_per_btc(). Preserved for existing callers.
-    sats_for_usd(usd_amount, suffix=None) -> int
-        Convert USD → sats at the current BTC/USD price, with optional
-        4-digit deterministic suffix so concurrent orders don't collide
-        on-chain.
+
+The USD→sats conversion (`sats_for_usd`) and the per-order disambiguation tag
+that went with it were deleted on 2026-09-19 with the direct-BTC order rail.
+Nothing quotes a price to a customer any more; the only consumer left is
+health._btc_price_snapshot(), which the founder dashboard renders as an oracle
+tile. This module cannot charge anyone.
 
 Stdlib only. No third-party imports. Loopback-only by virtue of being a
 module: callers run on localhost.
@@ -35,29 +37,6 @@ import threading
 import time
 import urllib.error
 import urllib.request
-
-# ── per-order disambiguation tag ───────────────────────────────────
-# A few sats are added to each order so the settle worker has a unique exact
-# amount to match on. The tag is denominated in SATS but its cost to the
-# customer is in USD, so a fixed sat width silently gets more expensive as BTC
-# appreciates: 999 sats is $0.60 at $60k/BTC but $1.50 at $150k. The width is
-# therefore derived from the live price to hold the tag under a fixed USD
-# ceiling.
-#
-# The tag is only a FALLBACK discriminator — the primary one is the per-order
-# receive address (BIP-32 xpub or the address pool, see
-# btc_payments.address_for_order). That is why a narrow tag is safe.
-TAG_MAX_USD = 0.25      # never charge more than this for the tag itself
-TAG_MIN_SLOTS = 64      # keep some disambiguation even at extreme prices
-TAG_MAX_SLOTS = 1000    # no benefit past this
-
-
-def suffix_modulus_for_price(price_usd: float) -> int:
-    """How many distinct tag values fit under TAG_MAX_USD at this price."""
-    if price_usd <= 0:
-        return TAG_MAX_SLOTS
-    slots = int((TAG_MAX_USD / price_usd) * 100_000_000)
-    return max(TAG_MIN_SLOTS, min(TAG_MAX_SLOTS, slots))
 
 MEMPOOL_URL = "https://mempool.space/api/v1/prices"
 COINBASE_URL = "https://api.coinbase.com/v2/prices/spot?currency=USD"
@@ -189,49 +168,6 @@ def get_usd_per_btc() -> float:
 def current_price_usd() -> float:
     """Legacy name preserved for existing callers in server/app.py."""
     return get_usd_per_btc()
-
-
-def sats_for_usd(usd_amount: float, suffix: int | None = None) -> int:
-    """Convert USD → sats at current BTC/USD price.
-
-    Returns 0 if the price feed is unreachable (caller should reject
-    the order and ask the user to try again in a minute).
-
-    If `suffix` is provided it is ADDED to the true amount as a small
-    per-order tag, so each order has a unique exact amount for the settle
-    worker to match on. Without a suffix, two concurrent orders for the
-    same USD value would be indistinguishable on-chain.
-
-    The tag is only ever added, never subtracted: the customer can never
-    be asked for less than the true price.
-    """
-    if usd_amount <= 0:
-        return 0
-    price = get_usd_per_btc()
-    if price <= 0:
-        return 0
-    # 1 BTC = 100_000_000 sats
-    sats = int(round((usd_amount / price) * 100_000_000))
-    # Floor: 1000 sats minimum (~$0.60 at $60k/BTC) to keep above dust.
-    if sats < 1000:
-        sats = 1000
-    if suffix is not None:
-        # FIXED 2026-07-26 — this previously floored to the nearest 10,000
-        # sats and REPLACED the last four digits:
-        #
-        #     base = (sats // 10000) * 10000
-        #     sats = base + suffix
-        #
-        # That discarded up to 9,999 sats before re-adding an arbitrary
-        # suffix, so the charge landed at random inside a 10,000-sat band
-        # straddling the true price. At $60k/BTC a $19 order (31,667 sats)
-        # could be billed anywhere from 30,000 to 39,999 sats — undercharging
-        # by up to $1.00 or overcharging by up to $5.00, at random.
-        #
-        # The tag is now additive and price-aware, which makes undercharging
-        # arithmetically impossible and holds the tag under TAG_MAX_USD.
-        sats = sats + (int(suffix) % suffix_modulus_for_price(price))
-    return sats
 
 
 def _reset_cache_for_tests() -> None:

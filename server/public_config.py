@@ -83,7 +83,6 @@ def snapshot() -> dict:
             "maintenance_mode": os.environ.get("ORPHO_MAINTENANCE_MODE", "0") == "1",
         },
         "features": {
-            "btc_payments": bool(os.environ.get("BTC_PAYMENTS_ENABLED", "")),
             "creator_tier_live": bool(os.environ.get("CREATOR_TIER_LIVE", "")),
             "private_receipts": True,  # always available to subscribers
             "receipt_vault": True,     # always available to subscribers

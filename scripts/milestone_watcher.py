@@ -6,7 +6,6 @@ have already fired in data/.milestones_fired so each milestone alerts at
 most once.
 
 Milestones watched:
-    - first_btc_settled  : first row in btc_orders.jsonl with event=settled
     - first_pack         : first row in credit_ledger.jsonl with source starting "stripe:"
     - first_subscription : first row in subscriptions.jsonl with status=active
     - five_packs         : 5 cumulative pack purchases
@@ -29,7 +28,6 @@ DATA_DIR = Path(os.environ.get("ORPHO_DATA_DIR", str(ROOT / "data")))
 FIRED_PATH = DATA_DIR / ".milestones_fired"
 NOTIFIER = Path.home() / ".claude" / "notifier.py"
 
-BTC_ORDERS = DATA_DIR / "btc_orders.jsonl"
 CREDIT_LEDGER = DATA_DIR / "credit_ledger.jsonl"
 SUB_LEDGER = DATA_DIR / "subscriptions.jsonl"
 
@@ -83,17 +81,6 @@ def _fire(name: str, text: str) -> None:
         sys.stdout.write(f"[milestone] fired: {name}\n")
 
 
-def check_first_btc_settled() -> None:
-    rows = _read_jsonl(BTC_ORDERS)
-    settled = [r for r in rows if r.get("event") == "settled"]
-    if settled:
-        first = settled[0]
-        sats = first.get("sats_received", first.get("amount_sats", 0))
-        _fire("first_btc_settled",
-              f"🎉 FIRST BTC PAYMENT settled — {sats} sats for order {first.get('order_id','?')}. "
-              f"This is real revenue. Sweep the receive wallet when convenient.")
-
-
 def check_first_pack_stripe() -> None:
     rows = _read_jsonl(CREDIT_LEDGER)
     stripe_packs = [r for r in rows if str(r.get("source", "")).startswith("stripe:")]
@@ -116,6 +103,10 @@ def check_first_subscription() -> None:
 
 def check_cumulative_revenue() -> None:
     rows = _read_jsonl(CREDIT_LEDGER)
+    # "btc:" stays in the prefix list on purpose. The direct rail is retired
+    # and can mint nothing further, but rows it minted while it existed are
+    # history: a cumulative total that silently stopped counting them would
+    # be a rewrite of the ledger by omission.
     pack_count = sum(1 for r in rows if int(r.get("credits_delta", 0)) >= 10 and
                      str(r.get("source", "")).startswith(("stripe:", "btc:")))
     # rough revenue: $19 per Pack
@@ -138,7 +129,6 @@ def main() -> int:
     if not NOTIFIER.exists():
         sys.stderr.write(f"[milestone] notifier missing at {NOTIFIER}; nothing to do\n")
         return 0
-    check_first_btc_settled()
     check_first_pack_stripe()
     check_first_subscription()
     check_cumulative_revenue()

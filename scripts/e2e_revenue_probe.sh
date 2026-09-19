@@ -100,14 +100,14 @@ probe_sample_verify() {
 }
 probe "sample receipt round-trip → found=True" probe_sample_verify
 
-# ─── 5. BTC payment flow ──────────────────────────────────────────────
-# Without BTC_RECEIVE_ADDRESS we expect 503 (correct signal).
-# With it set, expect 200 + a buy_page redirect.
-probe_btc_unconfigured() {
+# ─── 5. retired direct-BTC rail ───────────────────────────────────────
+# The direct on-chain rail was withdrawn 2026-09-19. Order creation must be
+# impossible, and 410 (not 503) is what says so: a 503 invites a retry.
+probe_btc_retired() {
   local code; code=$(http_status "$BASE/api/buy-btc" POST '{"email":"probe@example.com"}')
-  [ "$code" = "503" ] || [ "$code" = "200" ]   # either valid
+  [ "$code" = "410" ]
 }
-probe "BTC: /api/buy-btc returns 503 (unconfigured) or 200 (configured)" probe_btc_unconfigured
+probe "BTC: /api/buy-btc is 410 Gone (rail retired)" probe_btc_retired
 
 # ─── 6. waitlist signup ───────────────────────────────────────────────
 probe_waitlist() {

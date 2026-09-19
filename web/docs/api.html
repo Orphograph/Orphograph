@@ -67,7 +67,6 @@
     <li><a href="#get-api-receipt"><code>GET /api/receipt/&lt;id&gt;</code></a> — fetch a receipt</li>
     <li><a href="#get-api-verify"><code>GET /api/verify/&lt;id&gt;</code></a> — verify a receipt</li>
     <li><a href="#get-api-health"><code>GET /api/health</code></a> — public health snapshot</li>
-    <li><a href="#get-api-btc-qr"><code>GET /api/btc-order/&lt;oid&gt;/qr.svg</code></a> — BIP-21 payment QR</li>
     <li><a href="#get-api-stats"><code>GET /api/stats</code></a> — public counts (privacy-safe)</li>
     <li><a href="#get-api-badge"><code>GET /api/badge/&lt;id&gt;.svg</code></a> — server-rendered verification badge</li>
     <li><a href="#get-api-receipt-zip"><code>GET /api/receipt/&lt;id&gt;.zip</code></a> — download receipt + .ots files as ZIP</li>
@@ -536,9 +535,9 @@ print(receipt["status"], receipt.get("btc_pinned_at"))</pre>
 
   <p>
     The data here is intentionally non-sensitive: counts and timestamps,
-    not contents. The <code>payout</code> block reports only whether BTC
-    checkout is configured and the size of the unused-address pool —
-    actual balances are not exposed on this endpoint.
+    not contents. The <code>payout</code> block reports only that the direct
+    Bitcoin rail is retired — actual balances are not exposed on this
+    endpoint, and never were.
   </p>
 
   <h3>curl</h3>
@@ -549,62 +548,6 @@ print(receipt["status"], receipt.get("btc_pinned_at"))</pre>
 with urllib.request.urlopen("https://orphograph.com/api/health", timeout=10) as r:
     health = json.loads(r.read())
 print(f"{health['counts']['receipts_on_disk']} receipts, uptime {health['uptime_sec']}s")</pre>
-</section>
-
-<!-- ─────────────────────────────────────────────────────────────────── -->
-
-<section class="endpoint" id="get-api-btc-qr">
-  <h2>
-    <span class="method get">GET</span>
-    <span class="path">/api/btc-order/&lt;order_id&gt;/qr.svg</span>
-    <a class="anchor-link" href="#get-api-btc-qr">#</a>
-  </h2>
-  <p class="lede">
-    Server-rendered SVG QR code encoding a BIP-21 payment URI for a
-    previously created Pack purchase order. The QR contains the
-    public BTC address and amount only — no email, no order ID, no
-    customer-identifying data is encoded into the image, so the QR
-    cannot be used downstream to dox the purchaser.
-  </p>
-
-  <h3>Auth</h3>
-  <p>None, but the order ID is unguessable. Anyone with the ID can read the public payment fields — exactly what a wallet app needs.</p>
-
-  <h3>Request</h3>
-<pre>GET /api/btc-order/btc_AbCdEf12345_xyz/qr.svg
-Accept: image/svg+xml</pre>
-
-  <p>
-    Order IDs match <code>^btc_[A-Za-z0-9_-]{1,32}$</code>. Mismatched IDs return <code>400</code>; well-formed IDs that don't exist return <code>404</code>.
-  </p>
-
-  <h3>Response</h3>
-  <p>
-    <code>200 OK</code>, <code>Content-Type: image/svg+xml; charset=utf-8</code>.
-    The SVG renders a square QR encoding a string of the form:
-  </p>
-<pre>bitcoin:bc1q…?amount=0.00010473</pre>
-  <p>The companion JSON endpoint <code>GET /api/btc-order/&lt;order_id&gt;</code> (no <code>/qr.svg</code> suffix) returns the order status:</p>
-<pre>{
-  "order_id":    "btc_AbCdEf12345_xyz",
-  "status":      "awaiting_payment",
-  "address":     "bc1q…",
-  "amount_sats": 10473,
-  "expires_at":  "2026-05-14T15:00:00+00:00",
-  "tx_hash":     null
-}</pre>
-
-  <h3>Errors</h3>
-  <ul>
-    <li><code>400</code> — order ID does not match the allowed pattern.</li>
-    <li><code>404</code> — order not found (typo or expired).</li>
-    <li><code>500</code> — QR encoder rejected the BIP-21 URI (rare; misconfigured address).</li>
-  </ul>
-
-  <h3>Embedding</h3>
-  <p>The SVG is referenced directly from an <code>&lt;img&gt;</code> tag:</p>
-<pre>&lt;img src="https://orphograph.com/api/btc-order/btc_AbCdEf12345_xyz/qr.svg"
-     width="240" height="240" alt="Bitcoin payment QR"&gt;</pre>
 </section>
 
 <!-- ─────────────────────────────────────────────────────────────────── -->
@@ -932,7 +875,7 @@ python3 verify_cli.py receipt.json</code></pre>
   "stripe": { "pack_url": "...", "personal_monthly_url": "...", "personal_annual_url": "...", "creator_monthly_url": "..." },
   "pricing": { "pack_usd": 19, "pack_credits": 10, "pack50_usd": 29, "pack50_credits": 50, "personal_monthly_usd": 9, "personal_annual_usd": 60, "creator_monthly_usd": 19 },
   "toggles": { "checkout_disabled": false, "anchoring_disabled": false, "maintenance_mode": false },
-  "features": { "btc_payments": false, "creator_tier_live": false, "private_receipts": true, "receipt_vault": true }
+  "features": { "creator_tier_live": false, "private_receipts": true, "receipt_vault": true }
 }</code></pre>
 </section>
 
