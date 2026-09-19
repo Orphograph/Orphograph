@@ -92,22 +92,22 @@ def test_inventory_matches_expected_set():
         "anchor_start", "anchor_done", "file_anchored",
         "buy_pack_click", "buy_personal_click", "billing_toggle",
         "pack_waitlist_join", "checkout_clicked", "checkout_error",
-        # "checkout_returned_success" left the CLIENT vocabulary on 2026-09-19.
-        # Its only emitter was web/buy.js:78 — the settled state of the retired
-        # direct-BTC order page — and that file is deleted.
-        #
-        # READ THIS BEFORE ADDING IT BACK. server/app.py:334 still allowlists
-        # the name, commented "returned from Stripe success", and
+        # Emitted by web/buy.js, in showStripeConfirmation — the CARD buyer's
+        # post-Checkout landing page, which is the target of the success_url
+        # that _handle_stripe_checkout builds. It has exactly ONE emitter, and
         # /api/founder/funnel derives BOTH checkout_to_paid and visible_to_paid
-        # from it. But /pay/success.js has never emitted it, so those two rates
-        # were fed exclusively by a rail that was unconfigured in production and
-        # settled zero orders: they have always read 0. Retiring the rail did
-        # not break that measurement, it exposed it.
+        # from it.
         #
-        # The server allowlist entry is deliberately KEPT so a future beacon on
-        # the Stripe/hosted success page is not 400-dropped. Wiring that beacon
-        # is a founder decision about conversion measurement, not part of this
-        # retirement, so it was not done here.
+        # That made it fragile in a way worth recording: the BTC-rail
+        # retirement deleted buy.js as if it were rail code (the same file also
+        # served /buy/<order_id>), which silently zeroed both conversion rates
+        # with no error anywhere. A founder reading 0% would have read it as a
+        # measurement. Restored with the page.
+        #
+        # Named, not line-numbered, on purpose — the previous version of this
+        # comment cited server/app.py:334 and web/buy.js:78 and both had
+        # already drifted.
+        "checkout_returned_success",
         "try_sample_click", "verify_sample_click", "share_link_click",
         "lp_cta_clicked",
         # /lp/agent-receipts demand instrument (2026-08-19). Both outcomes are

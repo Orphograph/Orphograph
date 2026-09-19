@@ -1,0 +1,27 @@
+/* buy.css — /buy, the post-Stripe-Checkout confirmation page.
+   Externalized from buy.html (strict CSP: no inline styles).
+
+   Trimmed on 2026-09-19 with the direct-BTC rail: the amount, address,
+   key-value and pending/expired status rules drove the withdrawn per-order
+   page at /buy/<id> and have no markup left to style. Only the confirmation
+   card and its error state remain. */
+
+.settled-card {
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-stroke);
+  border-radius: 14px;
+  padding: 32px;
+  margin: 24px 0;
+}
+.settled-card h1 { color: var(--accent); }
+
+.pay-note {
+  margin-top: 24px;
+  padding: 18px 22px;
+  border: 1px solid var(--panel-stroke);
+  border-radius: 10px;
+  background: var(--panel);
+}
+.pay-note p { margin: 0 0 12px; color: var(--muted); font-size: 13px; line-height: 1.55; }
+.pay-note p:last-child { margin-bottom: 0; }
+.pay-note strong { color: var(--text); }

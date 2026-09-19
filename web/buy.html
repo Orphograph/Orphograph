@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Payment confirmed — Orphograph</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<link rel="icon" type="image/png" href="/favicon.png?v=8">
+<link rel="stylesheet" href="/css/orpho-tokens.css?v=2">
+<link rel="stylesheet" href="/css/orpho-primitives.css?v=3">
+<link rel="stylesheet" href="/style.css?v=8">
+<link rel="stylesheet" href="/buy.css?v=3">
+<meta name="copyright" content="© 2026 Orphograph. MIT — see /LICENSE">
+</head>
+<body class="orpho">
+
+<header class="orpho-header nav">
+  <a href="/" class="orpho-brand brand">
+    <img class="orpho-brand__mark" src="/seal-display.png?v=8" alt="" width="62" height="62">
+    <span class="orpho-brand__text">
+      <span class="orpho-brand__name">Orphograph</span>
+      <span class="orpho-brand__sub">Empirical Notary</span>
+    </span>
+  </a>
+  <nav class="orpho-nav">
+    <a href="/">home</a>
+  </nav>
+</header>
+
+<main>
+<!-- This is the landing page Stripe redirects a card buyer to: server/app.py
+     builds success_url as /buy?stripe_session=…&status=success. It is NOT the
+     withdrawn direct-BTC order page — that lived at /buy/<order_id> and
+     answers 410 Gone. -->
+<section id="loading" class="muted">confirming your payment…</section>
+
+<section id="settled" hidden class="settled-card">
+  <h1>Payment received.</h1>
+  <p>
+    Your Pack code has been emailed. If it doesn't arrive within a few
+    minutes, check spam — then reply to the welcome email or head to your
+    account.
+  </p>
+  <p><a id="next-link" class="btn" href="/account">Open your account →</a></p>
+</section>
+
+<section id="error" hidden>
+  <h1>Something's off</h1>
+  <p id="error-message">Nothing to confirm here.</p>
+  <p><a class="btn" href="/pricing">See pricing</a></p>
+</section>
+
+<div class="pay-note">
+  <p>
+    <strong>Where's my code?</strong> Credits are issued by Stripe's webhook,
+    not by this page — so they land even if you close the tab. The email is
+    the delivery mechanism; this page is just the receipt.
+  </p>
+</div>
+</main>
+
+<footer>
+  <small><a href="/">home</a> · <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a></small>
+  <!-- legal-disclaimer -->
+  <div class="wrap legal-disclaimer">
+    Orphograph is not a law firm, not a notary, and not a qualified electronic-trust-service provider. A receipt is cryptographic proof that a file existed before a point in time — it is not legal advice.
+  </div>
+</footer>
+
+<script src="/buy.js?v=3"></script>
+<script src="/statusbar.js?v=2" defer></script>
+<script src="/assets/event.js?v=1" defer></script>
+</body>
+</html>

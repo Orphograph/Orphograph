@@ -61,18 +61,32 @@ GONE_GET_PATHS = (
     "/pay/btc",
     "/pay/btc.html",
     "/pay/btc.css",
+    "/pay/btc/",
     "/pay-btc.js",
-    "/buy",
-    "/buy/",
-    "/buy.html",
-    "/buy.js",
-    "/buy.css",
+    # The PER-ORDER pages only. Bare /buy is the card buyer's Stripe landing
+    # and must keep serving — see SERVES_GET_PATHS below.
     "/buy/btc_AbCdEf12345",
     "/api/btc/price",
     "/api/buy-btc",
     "/api/btc/claim",
+    "/api/btc-order",
+    "/api/btc-order/",
     "/api/btc-order/btc_AbCdEf12345",
     "/api/btc-order/btc_AbCdEf12345/qr.svg",
+)
+
+# Paths that must NOT be retired. Each is here because something would break
+# if the guard widened onto it.
+SERVES_GET_PATHS = (
+    "/buy",                 # Stripe success_url target — a 410 here strands
+    "/buy/",                # every customer who just paid by card. normpath
+    "/buy.js",              # folds the trailing slash onto the same page.
+    "/buy.css",
+    "/pay/crypto",          # the hosted processor
+    "/pay/crypto.css",
+    "/pay/crypto.js",
+    "/pay/success",
+    "/pricing",             # the card path the retired offers now point at
 )
 
 GONE_POST_PATHS = ("/api/buy-btc", "/api/btc/claim")
@@ -105,9 +119,6 @@ DELETED_FILES = (
     WEB / "pay" / "btc.html",
     WEB / "pay" / "btc.css",
     WEB / "pay-btc.js",
-    WEB / "buy.html",
-    WEB / "buy.js",
-    WEB / "buy.css",
 )
 
 # Kept on purpose — assert them, so a later sweep deleting one is a decision
@@ -119,6 +130,9 @@ KEPT_FILES = (
     SERVER / "ots_timestamp.py",      # Bitcoin ANCHORING: the product
     WEB / "pay" / "crypto.html",
     WEB / "pay" / "crypto.js",
+    WEB / "buy.html",                 # Stripe's success_url target
+    WEB / "buy.js",
+    WEB / "buy.css",
 )
 
 # bech32 mainnet, the shape every address the rail ever handed out had.
@@ -230,17 +244,92 @@ def test_the_site_still_answers_at_all(base) -> None:
     assert status == 200, ("the hosted crypto checkout must still serve", status)
 
 
-@pytest.mark.parametrize("path", (
-    "/pay/crypto", "/pay/crypto.css", "/pay/crypto.js",
-    "/pay/success", "/pay/success.css", "/pay/success.js",
+@pytest.mark.parametrize("path", SERVES_GET_PATHS + (
+    "/pay/success.css", "/pay/success.js",
 ))
-def test_the_surviving_checkouts_assets_still_serve(base, path) -> None:
-    """The retirement guard matches /pay/btc* and the /pay/btc/ prefix. Its
-    NEIGHBOURS under the same directory belong to the hosted processor, which
-    is the checkout every retired offer now points at — a guard that swallowed
-    one of its stylesheets would break the working payment path silently."""
+def test_the_neighbours_of_the_guard_still_serve(base, path) -> None:
+    """The retirement guard matches /pay/btc*, /buy/<id> and /api/btc-order*.
+    Its NEIGHBOURS are the WORKING payment paths — the card confirmation page
+    and the hosted processor — and a guard that widened onto one of them would
+    break checkout silently. This is the boundary, asserted."""
     status, _body, _h = _srv.request(base, path)
     assert status in (200, 301), (path, status)
+
+
+# ── the card path the retirement must never have touched ────────────────────
+
+def test_the_stripe_success_url_target_serves(base) -> None:
+    """THE REGRESSION THIS FILE MISSED THE FIRST TIME.
+
+    /buy and /buy/<order_id> were two URLs on one document. Only the second
+    belonged to the BTC rail; bare /buy is what _handle_stripe_checkout builds
+    as Stripe's success_url, so retiring it put a 410 in front of every card
+    buyer at the moment their card had already been charged.
+
+    Driven in the exact shape Stripe redirects to."""
+    status, body, _h = _srv.request(
+        base, "/buy?stripe_session=cs_test_abc123&status=success")
+    assert status == 200, ("Stripe's success_url must serve", status)
+    text = body.decode("utf-8", "replace")
+    assert "buy.js" in text, "the confirmation page must load its script"
+    assert 'id="settled"' in text, "the confirmation block must be on the page"
+
+
+def test_the_success_url_shape_is_built_from_a_path_that_is_not_retired() -> None:
+    """Pin the two halves together. A future edit that repoints success_url, or
+    that re-adds the bare path to the retired set, must fail here rather than
+    in production after a customer has paid."""
+    import re as _re
+    app_src = (SERVER / "app.py").read_text(encoding="utf-8")
+    m = _re.search(r'success_url = f"\{site\}(/[^?"]*)', app_src)
+    assert m, "could not find the Stripe success_url construction"
+    target = m.group(1)
+    sys_path_guard = _srv.REPO_ROOT / "server"
+    import sys
+    if str(sys_path_guard) not in sys.path:
+        sys.path.insert(0, str(sys_path_guard))
+    import app as _app
+    assert not _app._is_retired_btc_path(target), (
+        f"Stripe sends paying customers to {target}, which is retired")
+
+
+def test_the_dot_html_form_redirects_and_keeps_the_query(base) -> None:
+    """Old Stripe success URLs are /buy.html?stripe_session=…; the static
+    handler canonicalises to the clean form and must carry the query, or the
+    confirmation page loses the session id it needs."""
+    status, _body, headers = _srv.request(
+        base, "/buy.html?stripe_session=cs_test_abc123&status=success")
+    assert status == 301, status
+    loc = headers.get("Location", "")
+    assert loc.endswith("/buy?stripe_session=cs_test_abc123&status=success"), loc
+
+
+def test_the_confirmation_page_still_emits_the_conversion_beacon() -> None:
+    """checkout_returned_success has exactly one emitter, and it is this page.
+    Deleting the file zeroed checkout_to_paid and visible_to_paid on
+    /api/founder/funnel without any error anywhere."""
+    src = (WEB / "buy.js").read_text(encoding="utf-8")
+    assert 'orphoEvent("checkout_returned_success")' in src
+    assert "/api/stripe/session" in src, "the page must look up the session"
+
+
+def test_the_confirmation_page_carries_no_btc_rail_content() -> None:
+    """Restored card-only. No order polling, no address, no sat amount."""
+    js = (WEB / "buy.js").read_text(encoding="utf-8")
+    html = (WEB / "buy.html").read_text(encoding="utf-8")
+    for banned in ("/api/btc-order", "amount_sats", "bitcoin:", "wallet-link",
+                   "orderIdFromUrl", "POLL_MS"):
+        assert banned not in js, f"buy.js still carries BTC rail code: {banned}"
+        assert banned not in html, f"buy.html still carries BTC rail markup: {banned}"
+
+
+@pytest.mark.parametrize("path", ("/buying-guide", "/buyers", "/pay/cryptocurrency"))
+def test_the_guard_does_not_swallow_lookalike_paths(base, path) -> None:
+    """NEGATIVE CONTROL for the prefix tuple. "/buy/" cannot match
+    /buying-guide — only a bare "/buy" prefix could, which is why the entries
+    are spelled with the slash. These 404 (no such page), never 410."""
+    status, _body, _h = _srv.request(base, path)
+    assert status == 404, (path, status, "a lookalike path must not be retired")
 
 
 def test_robots_does_not_hide_the_410_from_crawlers(base) -> None:
@@ -510,10 +599,25 @@ def _visitor_readable_lines():
             continue
         skip = set()
         for node in ast.walk(tree):
+            # The retirement guard necessarily names every retired path; that
+            # list is what makes them answer 410, so scanning it is circular.
             if isinstance(node, ast.Assign) and any(
                     isinstance(t, ast.Name) and t.id in RETIREMENT_DECLARATIONS
                     for t in node.targets):
                 skip.update(range(node.lineno, (node.end_lineno or node.lineno) + 1))
+            # DOCSTRINGS are documentation, not output. A visitor never reads
+            # one, and the functions that implement the retirement have to be
+            # able to describe what they retired. Only a bare string
+            # EXPRESSION is a docstring; a string passed to a call, assigned,
+            # or interpolated into a template is still scanned.
+            if isinstance(node, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef,
+                                 ast.ClassDef)):
+                body = getattr(node, "body", None)
+                if (body and isinstance(body[0], ast.Expr)
+                        and isinstance(body[0].value, ast.Constant)
+                        and isinstance(body[0].value.value, str)):
+                    d = body[0].value
+                    skip.update(range(d.lineno, (d.end_lineno or d.lineno) + 1))
         for node in ast.walk(tree):
             if isinstance(node, ast.Constant) and isinstance(node.value, str):
                 if node.lineno in skip:
@@ -540,6 +644,40 @@ def test_the_offer_scan_reaches_the_surface() -> None:
     assert any(r.startswith("web/") for r, _n, _t in rows), "web/ not read"
     assert any(r.startswith("server/") for r, _n, _t in rows), "server strings not read"
     assert any("orphograph" in t.lower() for _r, _n, t in rows), "control token absent"
+
+
+def test_the_docstring_exclusion_does_not_blind_the_offer_scan() -> None:
+    """NEGATIVE CONTROL for the docstring skip. Only a bare string EXPRESSION
+    at the top of a module/def/class is a docstring. A string ASSIGNED to a
+    name or PASSED to a call is real output and must still be scanned, or the
+    exclusion becomes a hole to hide retired copy in."""
+    q = '"' * 3
+    probe = "\n".join([
+        q + "Module docstring naming /api/buy-btc - skip me." + q,
+        'LINK = "Pay with Bitcoin"',
+        "def f():",
+        "    " + q + "Function docstring naming /pay/btc - skip me." + q,
+        '    render("<a href=/pay/btc>go</a>")',
+    ])
+    tree = ast.parse(probe)
+    skip = set()
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Module, ast.FunctionDef, ast.ClassDef)):
+            body = getattr(node, "body", None)
+            if (body and isinstance(body[0], ast.Expr)
+                    and isinstance(body[0].value, ast.Constant)
+                    and isinstance(body[0].value.value, str)):
+                d = body[0].value
+                skip.update(range(d.lineno, (d.end_lineno or d.lineno) + 1))
+    seen = [n.value for n in ast.walk(tree)
+            if isinstance(n, ast.Constant) and isinstance(n.value, str)
+            and n.lineno not in skip]
+    assert any("Pay with Bitcoin" in v for v in seen), (
+        "an assigned string was skipped — the docstring exclusion is too wide")
+    assert any("/pay/btc" in v for v in seen), (
+        "a string passed to a call was skipped — the exclusion is too wide")
+    assert not any("skip me" in v for v in seen), (
+        "a docstring was scanned — the exclusion is not working")
 
 
 def test_the_offer_scan_does_not_fire_on_the_product_or_the_kept_rails() -> None:

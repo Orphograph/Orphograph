@@ -8,7 +8,7 @@ that violates one of the founder-declared content rules:
     3. feedback_no_verbatim_safety_contracts → no first-person safety promises
     4. (founder PII) → no rodriguezrivera / /Users/francisco in deploy paths
     5. (link health) → no dead /blog/<slug>.html anchors, no dead /#anchor refs
-    6. (UX) → no alert() calls in web/v2.js
+    6. (UX) → no alert() calls in web/v2.js or web/buy.js
 
 Whitelists are documented inline next to each rule. Pure stdlib + pytest.
 """
@@ -261,9 +261,7 @@ def test_no_dead_hash_anchors_in_nav():
 ALERT_CALL = re.compile(r"\balert\s*\(")
 
 
-# buy.js left this list on 2026-09-19: it drove /buy/<id> on the direct-BTC
-# order rail, which was retired, and the file is deleted.
-@pytest.mark.parametrize("rel", ["v2.js"])
+@pytest.mark.parametrize("rel", ["v2.js", "buy.js"])
 def test_no_alert_in_v2js_or_buyjs(rel):
     p = WEB / rel
     assert p.exists(), f"missing {p}"

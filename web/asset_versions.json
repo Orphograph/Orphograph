@@ -131,6 +131,14 @@
     "version": "2",
     "sha256": "be462434c8396a4c07d3a70ae4106a35f45cab6ae3f202e9ad3418a2de436176"
   },
+  "/buy.css": {
+    "version": "3",
+    "sha256": "8320278272e94dbd095f639df4237fbc81a83a84df088cec5bf7ebd2e5449410"
+  },
+  "/buy.js": {
+    "version": "3",
+    "sha256": "1a306c1fe9ec82827a887a2a27330a1fa08d67109e6a8e258336c5b6e5b209dc"
+  },
   "/certificate.css": {
     "version": "5",
     "sha256": "a831d5740e2c9286873e933dbe85d90756350282fa2a2a670f6a284e2ef3f8df"

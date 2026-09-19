@@ -829,13 +829,24 @@ def _is_private_path(rel_path: str) -> bool:
 # pins the encoding directly.
 _RETIRED_BTC_MESSAGE = "Gone: the direct Bitcoin payment rail was withdrawn"
 
+# NOT RETIRED, and this cost a paying customer a confirmation page once:
+# /buy and /buy/<order_id> were TWO URLs on ONE document (web/buy.html).
+# Bare /buy is the card buyer's post-Checkout landing — _handle_stripe_checkout
+# builds it as Stripe's success_url — and fell through to the static handler.
+# Only /buy/<order_id>, matched by the "/buy/" PREFIX, ever belonged to the BTC
+# rail. Retiring the bare path put a 410 in front of every card buyer who
+# finished paying. Keep /buy, /buy.html, /buy.js and /buy.css out of this set.
 _RETIRED_BTC_EXACT = frozenset({
     "/pay/btc", "/pay/btc.html", "/pay/btc.css", "/pay-btc.js",
-    "/buy", "/buy/", "/buy.html", "/buy.js", "/buy.css",
     "/api/btc/price", "/api/buy-btc", "/api/btc/claim",
+    # No-id forms of the order API. Without these they fall to the static
+    # handler and answer 404, which tells a caller "wrong URL" rather than
+    # "this is gone".
+    "/api/btc-order",
 })
-# Trailing-slash forms of the order pages. `startswith("/buy/")` would also
-# swallow a future /buying-guide, so the prefixes are spelled with the slash.
+# Prefix-matched, so every id under them is covered. Spelled WITH the trailing
+# slash on purpose: "/buy/" cannot match /buying-guide (that would need
+# "/buy"), and it leaves the bare /buy card-confirmation page alone.
 _RETIRED_BTC_PREFIXES = ("/buy/", "/api/btc-order/", "/pay/btc/")
 
 
@@ -845,13 +856,14 @@ def _is_retired_btc_path(path: str) -> bool:
     Normalised the same way _is_private_path normalises, so a dotted or
     doubled-slash spelling of a retired path cannot slip past the guard and
     land on the static handler — /pay/./btc.html resolves to the same document.
+
+    posixpath.normpath STRIPS a trailing slash, so "/buy/" arrives here as
+    "/buy" and "/pay/btc/" as "/pay/btc". That is why there are no slashed
+    entries in the exact set: they would be unreachable. It also means "/buy/"
+    with no id normalises onto the card page and correctly does NOT retire.
     """
     p = posixpath.normpath("/" + path.lstrip("/"))
     if p in _RETIRED_BTC_EXACT:
-        return True
-    # normpath drops a trailing slash, so re-test the slashed form for the
-    # directory-shaped entries (/buy/ and /pay/btc/).
-    if p + "/" in _RETIRED_BTC_EXACT:
         return True
     return any(p.startswith(pre) for pre in _RETIRED_BTC_PREFIXES)
 
