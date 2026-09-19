@@ -16,8 +16,8 @@
     "sha256": "4ae1f0690c6111fd2c4d1c8d8893a8a08b1cc3c08121351fe8c23da5831034ad"
   },
   "/account.js": {
-    "version": "2",
-    "sha256": "abb19968838a1800c21986726a6b1db97021515ad143596858170d07fc22ce5f"
+    "version": "3",
+    "sha256": "2ed7290d18feb13d88f31811c6480d3a2805023591908f4b934170c2d5eb77d8"
   },
   "/anchor-output.css": {
     "version": "1",
@@ -28,8 +28,8 @@
     "sha256": "20b741a9c98ea14402ad72e5543c920ab73d598caa7eac71e39a247067babdda"
   },
   "/app.js": {
-    "version": "2",
-    "sha256": "042cf6a81a59c2645070c85c76ec4316313e2cfe822c5a86a20da5eaa4eb7dd1"
+    "version": "4",
+    "sha256": "98d02efb0908df1251923d1ab7e1c34d94f8e8afb9049f548e8458c023702bb2"
   },
   "/assets/drop-observer.js": {
     "version": "1",
@@ -132,12 +132,12 @@
     "sha256": "be462434c8396a4c07d3a70ae4106a35f45cab6ae3f202e9ad3418a2de436176"
   },
   "/buy.css": {
-    "version": "2",
-    "sha256": "0b2468b27d1abed24027e5da6794fddbf59681d03c0b0baaec8df530d8da0032"
+    "version": "3",
+    "sha256": "8320278272e94dbd095f639df4237fbc81a83a84df088cec5bf7ebd2e5449410"
   },
   "/buy.js": {
-    "version": "2",
-    "sha256": "52894b6097f38c2b738863f7c6917386739a80aaa4eb6addabd04572d06aded4"
+    "version": "3",
+    "sha256": "1a306c1fe9ec82827a887a2a27330a1fa08d67109e6a8e258336c5b6e5b209dc"
   },
   "/certificate.css": {
     "version": "5",
@@ -212,20 +212,20 @@
     "sha256": "e13066c4284f453f2f17b3c56e0d1a7ff389d40119668ee784900eb157a76979"
   },
   "/founder/admin.css": {
-    "version": "2",
-    "sha256": "1f58f0bfc011b0276c387b7a0b689fbeade60b5293cfe62971d3b1a1e9896817"
+    "version": "3",
+    "sha256": "977d0bedb62a2a91c19c1ce8acb5b6076ad0c119bccb4317efe74c09497e445d"
   },
   "/founder/admin.js": {
-    "version": "1",
-    "sha256": "fae92227f1b0a6ac5f4c0f8d81ee6d08348f93c016c4a8391548377a6955ea0c"
+    "version": "2",
+    "sha256": "c96695006d28f20ba8ccc3087b2e0bf538612fec0b30169168b0feb8fd20c125"
   },
   "/founder/funnel.css": {
-    "version": "2",
-    "sha256": "e90cac3192a895190364624ae157aa2def61e93d3e0f980a7d8db19a89508797"
+    "version": "3",
+    "sha256": "c93f12fd6b836f59ad58151941467ebd85e89b185aaa00e2155f1d025e03e977"
   },
   "/founder/funnel.js": {
-    "version": "1",
-    "sha256": "0521584fb78f61a432d0c09e16b7f8174a621623d251f8647d598017498c58da"
+    "version": "2",
+    "sha256": "ddfb29fb0dee23f31c2f72061564e3c20a966347bc4b1dc77b5ed95588e2bb76"
   },
   "/founder/metrics.css": {
     "version": "3",
@@ -383,21 +383,13 @@
     "version": "2",
     "sha256": "ee32756351838f550483722ec2c1c974f096aa7a6209df3247849d8a6200b1c7"
   },
-  "/pay-btc.js": {
-    "version": "2",
-    "sha256": "b7daff662f669fb020fe957bcda498bb340c004d3f657dee10fbfc9e8afef5cc"
-  },
-  "/pay/btc.css": {
-    "version": "3",
-    "sha256": "a4ad898fad18d14476405be1c4359e1150121eb12a907c4481879a861a686dcb"
-  },
   "/pay/crypto.css": {
     "version": "2",
     "sha256": "5c0ea20f7a3c4c686bcb4a67428f8ea4e42403f7a7c572e63f4c3fc52c03e2b5"
   },
   "/pay/crypto.js": {
-    "version": "1",
-    "sha256": "f94d10824b45c47d6459942606e55ee03a17c4d8aff67dca3a11d758a5311a27"
+    "version": "2",
+    "sha256": "3674a6ca1fe44da7f9c33b35c5393c676bf34b7d127a5280e105000f06172639"
   },
   "/pay/success.css": {
     "version": "1",
@@ -460,8 +452,8 @@
     "sha256": "9401d20d9d7e78b479a64fe695d03fc771c49b015f5194538fc8dea10aae1ca7"
   },
   "/stats.js": {
-    "version": "1",
-    "sha256": "1e70a2b11c2672c878d358184c9b1e62a15fd90042cb5576a2c5ddb6a15742fa"
+    "version": "2",
+    "sha256": "68600c586efc0b8a6ca3d090d15a8efc96971ac344c3e4228ae95112ea24b01b"
   },
   "/status-badge.js": {
     "version": "2",
@@ -496,12 +488,12 @@
     "sha256": "ff7095e688f168b6a08fa8b6dc0c2c8ca59eb303cc4a991b1844479e943cba57"
   },
   "/u.css": {
-    "version": "1",
-    "sha256": "6bd02ba7636f2e03d7a82299097d0be93dd9937f5c5cc5242628c34d48820801"
+    "version": "2",
+    "sha256": "42591a6aeb2c7a86c5f01380b4f7fc935fae67b461ce39edb6faf1579df03321"
   },
   "/v2.js": {
-    "version": "7",
-    "sha256": "ad21dabb246cbca8cff5aa664ea7d7065add4fb0eb9ea31b1cd7bb6bd59f48ce"
+    "version": "9",
+    "sha256": "f99ba914d0a8c592c2e70c219c623ace1be827a21b4d244b02ff160a5746a6ba"
   },
   "/v2/app.js": {
     "version": "4",

@@ -82,20 +82,24 @@ def _post(url, body=b"{}", headers=None, timeout=5):
 
 # --------------------------------------------------------------- btc/claim crash
 
-def test_btc_claim_does_not_500(server):
-    """Before the fix, the source_ip kwarg evaluated _truncate_ip(self._client_ip())
-    — both undefined — so every reaching POST crashed with a 500. Now it must
-    degrade to a crisp 4xx/5xx-but-not-500 response."""
-    # Valid JSON, missing fields → submit() should reject cleanly, NOT NameError.
+def test_btc_claim_is_gone_and_still_does_not_500(server):
+    """Was: the source_ip kwarg evaluated _truncate_ip(self._client_ip()) —
+    both undefined — so every reaching POST crashed with a 500.
+
+    The direct-BTC rail was retired on 2026-09-19 and the handler is deleted,
+    so the endpoint now answers 410. The original property is kept and
+    tightened: a retired route must still never 500, and must not fall through
+    to some other handler. Full coverage of the retirement lives in
+    tests/test_direct_btc_rail_is_gone.py."""
     code = _post(f"{server}/api/btc/claim", body=b'{"email":"x@example.com"}')
     assert code != 500, "btc/claim must not 500 (NameError regression)"
-    assert code in (200, 400, 403, 503), f"unexpected status {code}"
+    assert code == 410, f"retired rail must answer 410, got {code}"
 
 
-def test_btc_claim_empty_body_does_not_500(server):
+def test_btc_claim_empty_body_is_gone_and_does_not_500(server):
     code = _post(f"{server}/api/btc/claim", body=b"{}")
     assert code != 500
-    assert code in (200, 400, 403, 503)
+    assert code == 410
 
 
 # --------------------------------------------------------- affiliate payout glue

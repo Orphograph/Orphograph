@@ -15,9 +15,12 @@ Public API:
     persist_snapshot(path: Path, balances: dict, swept: int) -> None
         Append-only ledger so we have a time series of hot-balance evolution.
 
-The watcher does NOT track which payment maps to which customer order — that
-matching lives in btc_payments.py against the order ledger. This module is
-strictly about "how much BTC is currently sitting in our hot wallet".
+The watcher never tracked which payment mapped to which customer order; that
+matching lived in the order rail, which was retired on 2026-09-19 along with
+the collector that called this module on a schedule. What remains is the
+READER: latest_snapshot() serves the final recorded hot-wallet balance to the
+founder-only /api/founder/payout-status. Nothing polls the chain any more, so
+no new snapshot can be written by the server.
 """
 from __future__ import annotations
 

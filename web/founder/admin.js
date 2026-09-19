@@ -106,14 +106,6 @@
       names.push(short + (c.reachable ? ' ok' : ' DOWN'));
     }
     $('calendars-sub').textContent = names.join(' · ') || 'OpenTimestamps pool';
-    var oracle = health.btc_oracle || {};
-    if (oracle.available && typeof oracle.usd_per_btc === 'number') {
-      $('btc-val').textContent = '$' + Math.round(oracle.usd_per_btc).toLocaleString();
-      $('btc-source').textContent = 'source: ' + (oracle.source || 'unknown');
-    } else {
-      $('btc-val').textContent = 'unavailable';
-      $('btc-source').textContent = 'no oracle response';
-    }
   }
 
   function renderStats(stats) {

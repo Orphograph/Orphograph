@@ -4,7 +4,10 @@ in its own format, proven by parsing it, not by serving it.
 
 Class history, one generator at a time:
   * qrcode_svg produced QR-shaped images that no scanner could decode
-    (format bits reversed; found 2026-08-09 when the founder scanned one);
+    (format bits reversed; found 2026-08-09 when the founder scanned one).
+    That generator existed only for the direct-BTC order rail's BIP-21
+    payment QR; both were deleted on 2026-09-19 when the rail was retired,
+    so its case is history rather than a live assertion;
   * badge_svg produced badge-shaped documents that no XML parser accepts —
     `&middot;` is an HTML named entity, undefined in XML, so the embeddable
     badge was ill-formed on every third-party surface that parses it
@@ -25,7 +28,6 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "server"))
 import badge_svg  # noqa: E402
-import qrcode_svg  # noqa: E402
 
 # XML defines exactly five named entities. Anything else is ill-formed.
 UNDEFINED_ENTITY = re.compile(r"&(?!amp;|lt;|gt;|quot;|apos;|#)[A-Za-z]+;")
@@ -61,9 +63,6 @@ class TestGeneratedArtifactsParse(unittest.TestCase):
             hits = UNDEFINED_ENTITY.findall(svg)
             self.assertEqual(hits, [],
                              f"HTML-only entities in badge output: {hits}")
-
-    def test_qr_svg_is_wellformed_xml(self):
-        ET.fromstring(qrcode_svg.make_svg("https://orphograph.com/r/XwTULwlh76PcCst9"))
 
 
 if __name__ == "__main__":

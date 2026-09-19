@@ -42,8 +42,13 @@ STATE_CHANGING = [
     "/api/auth/email-link", "/api/auth/signout", "/api/me/delete",
     "/api/me/api-key", "/api/me/api-key/revoke", "/api/me/logout-all",
     "/api/me/cancel-subscription", "/api/me/refund-request",
-    "/api/btc/claim", "/api/inclusion_proof", "/api/founder/admin/toggles",
+    "/api/inclusion_proof", "/api/founder/admin/toggles",
 ]
+# /api/btc/claim left this list on 2026-09-19: the direct-BTC rail was retired
+# and the handler deleted, so the endpoint changes no state to forge. It is not
+# simply dropped — tests/test_direct_btc_rail_is_gone.py asserts it answers 410
+# to all three CORS-simple content types, which is strictly stronger than the
+# 415 this guard requires.
 
 XSS_MARK = '<svg/onload=alert(1)>xSsPrObE"\'`'
 XSS_ROUTES = ["/", "/account", "/signin", "/pricing", "/docs", "/verify",

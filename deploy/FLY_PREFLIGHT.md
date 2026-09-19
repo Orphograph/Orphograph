@@ -61,11 +61,10 @@ fly secrets set \
   STRIPE_WEBHOOK_SECRET="whsec_..." \
   STRIPE_API_KEY="sk_live_..." \
   RESEND_API_KEY="re_..." \
-  BTC_RECEIVE_ADDRESS="bc1qclvjjmwmr294rydv4x0dc787nx9jd8j4ny4jaz" \
   ORPHO_COOKIE_SECURE="1"
 ```
 
-**Replace placeholders** with the real values. The BTC address is your existing one; the Stripe + Resend keys come from those respective dashboards; the business address is whatever PO box / virtual mailbox you set up per the compliance audit.
+**Replace placeholders** with the real values. The Stripe + Resend keys come from those respective dashboards; the business address is whatever PO box / virtual mailbox you set up per the compliance audit. `BTC_RECEIVE_ADDRESS` is NOT in this list any more — the direct on-chain rail was retired on 2026-09-19 and nothing reads that secret.
 
 Optional but recommended:
 ```bash
@@ -188,15 +187,12 @@ The deploy automatically restarts when secrets change.
 
 ---
 
-## Step 6 — Upload the BTC address file (if not using env var)
+## Step 6 — (removed) BTC receive address
 
-If you prefer the file-based path (per `btc_payments.py:_load_btc_address`):
-
-```bash
-fly ssh console -C 'sh -c "echo bc1qclvjjmwmr294rydv4x0dc787nx9jd8j4ny4jaz > /app/data/btc_address.txt && chmod 600 /app/data/btc_address.txt"'
-```
-
-Either env var or file works. Env var is simpler; file is rotatable without restart.
+The direct on-chain Bitcoin rail was RETIRED on 2026-09-19. There is no receive
+address to set, by env var or by file: the module that read one is deleted and
+every route the rail answered on returns `410 Gone`. Crypto checkout runs
+through the hosted processor, which needs no address of ours.
 
 ---
 

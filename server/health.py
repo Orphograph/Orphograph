@@ -25,14 +25,6 @@ from pathlib import Path
 
 import engine
 try:
-    import btc_price  # type: ignore
-except ImportError:  # pragma: no cover
-    btc_price = None  # type: ignore
-try:
-    import btc_payments  # type: ignore
-except ImportError:  # pragma: no cover
-    btc_payments = None  # type: ignore
-try:
     import mempool_watcher  # type: ignore
 except ImportError:  # pragma: no cover
     mempool_watcher = None  # type: ignore
@@ -115,44 +107,20 @@ def _check_calendars_parallel(urls: list[str]) -> list[dict]:
     return [{"url": u, "reachable": results.get(u, False)} for u in urls]
 
 
-def _btc_price_snapshot() -> dict:
-    """Optional BTC oracle status — last cached price + which source provided it.
-
-    Does NOT trigger a fresh poll; reads whatever the in-process cache holds.
-    Avoids hammering the oracles on every /api/health request.
-    """
-    if btc_price is None:
-        return {"available": False}
-    try:
-        if hasattr(btc_price, "cached_usd_per_btc_source"):
-            price, source = btc_price.cached_usd_per_btc_source()
-            return {"available": bool(price), "usd_per_btc": price, "source": source}
-        # Fallback: just the price.
-        price = 0.0
-        return {"available": True, "usd_per_btc": price, "source": "unknown"}
-    except Exception as e:  # pragma: no cover — defensive
-        return {"available": False, "error": f"{type(e).__name__}"}
-
-
 def _payout_snapshot() -> dict:
-    """Founder-only-relevant info: pool size + cold address configured.
+    """The direct-BTC order rail was retired on 2026-09-19.
 
-    Hot balance is NOT included here because the public /api/health endpoint
-    is not gated. Founder-only details (actual sats balance) live on
-    /api/founder/payout-status which IS token-gated.
+    This block used to report whether that rail was configured (address pool
+    size, xpub set). Those are properties of code that no longer exists, so
+    the key reports the retirement rather than disappearing: /api/health is
+    read by the founder dashboard and by uptime tooling, and a key that
+    silently vanishes reads as a broken probe.
+
+    Historical balances stay readable on the token-gated
+    /api/founder/payout-status. They are not exposed here — /api/health is
+    public and ungated.
     """
-    if btc_payments is None:
-        return {"available": False}
-    try:
-        pool = btc_payments.pool_size() if hasattr(btc_payments, "pool_size") else 0
-        configured = btc_payments.is_configured() if hasattr(btc_payments, "is_configured") else False
-        return {
-            "configured": configured,
-            "address_pool_size": pool,
-            "xpub_set": bool(getattr(btc_payments, "BTC_XPUB", "") or ""),
-        }
-    except Exception as e:  # pragma: no cover — defensive
-        return {"configured": False, "error": f"{type(e).__name__}"}
+    return {"rail": "retired", "configured": False}
 
 
 def _email_snapshot() -> dict:
@@ -197,7 +165,6 @@ def _compute_snapshot() -> dict:
             "expiry_run_at": _last_line_ts(expiry_log),
         },
         "calendars": _check_calendars_parallel(list(engine.CALENDARS)),
-        "btc_oracle": _btc_price_snapshot(),
         "payout": _payout_snapshot(),
         "checkout": _checkout_snapshot(),
         "email": _email_snapshot(),

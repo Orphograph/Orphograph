@@ -83,7 +83,6 @@ def snapshot() -> dict:
             "maintenance_mode": os.environ.get("ORPHO_MAINTENANCE_MODE", "0") == "1",
         },
         "features": {
-            "btc_payments": bool(os.environ.get("BTC_PAYMENTS_ENABLED", "")),
             "creator_tier_live": bool(os.environ.get("CREATOR_TIER_LIVE", "")),
             "private_receipts": True,  # always available to subscribers
             "receipt_vault": True,     # always available to subscribers
@@ -182,12 +181,11 @@ def config_warnings(cfg: dict | None = None) -> list[str]:
             "leads nowhere. Set the real Payment Link URL or clear it."
         )
 
-    # Note on crypto: checkout is served by NOWPayments (multi-coin, incl.
-    # BTC). The native exact-amount BTC flow (BTC_PAYMENTS_ENABLED) is an
-    # OPTIONAL, redundant secondary path. NOWPayments-on + native-BTC-off is
-    # a complete, healthy crypto config — NOT "half-wired" — so it earns no
-    # warning. Card checkout (Stripe) is independent of both. We therefore
-    # do not warn on crypto-flag combinations here; absence of crypto is a
-    # valid card-only configuration.
+    # Note on crypto: checkout is served by the hosted processor (multi-coin,
+    # incl. BTC). There is no second crypto path — the native exact-amount BTC
+    # flow was RETIRED on 2026-09-19 and BTC_PAYMENTS_ENABLED is read by
+    # nothing; setting it does not turn anything on. Card checkout (Stripe) is
+    # independent. We therefore do not warn on crypto-flag combinations here;
+    # absence of crypto is a valid card-only configuration.
 
     return warnings

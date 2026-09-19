@@ -11,11 +11,13 @@ resolve"). Deleting the presence-tests removes the assertion that they exist
 but leaves nothing asserting that they do not. A partial reintroduction --
 one page, one route -- is exactly the shape of change that slips through.
 
-ONE surface is deliberately exempt: `web/docs/api.html`, which documents
-`GET /api/btc-order/<order_id>/qr.svg`. That route is public, documented API
-and was intentionally kept -- removing it would break third-party callers,
-which is a larger change than was asked for. It renders no QR on any page we
-serve.
+The exemption for `web/docs/api.html` is gone as of 2026-09-19. It existed
+because that page documented `GET /api/btc-order/<order_id>/qr.svg`, a kept
+public API route. The direct-BTC order rail was RETIRED that day by founder
+decision -- exactly the "that must be a decision, not a side effect of a QR
+sweep" case the old test_documented_btc_order_route_survives guarded against.
+The route answers 410, its documentation is removed, and the sweep below now
+covers every visitor-facing file with no exemption at all.
 
 The scan ends with a NEGATIVE CONTROL. A grep that finds nothing is
 indistinguishable from a grep that cannot reach its files; the control
@@ -36,8 +38,7 @@ WEB = ROOT / "web"
 # visitor-facing surface and belongs inside the sweep.
 EXCLUDE_DIRS = ("vendor/", "_mockups/", "dist/", "node_modules/")
 
-# The one intentional, documented exception.
-DOCUMENTED_API_PAGE = "docs/api.html"
+# No exemptions. The last one (docs/api.html) went with the retired rail.
 
 # Catches `qr-container`, `.receipt-qr`, `qr.svg`, `QR code`, AND camelCase
 # reintroductions like `qrCanvas` / `renderQrBadge`.
@@ -61,8 +62,6 @@ def _visitor_sources():
         for p in WEB.rglob(ext):
             rel = p.relative_to(WEB).as_posix()
             if any(rel.startswith(d) or f"/{d}" in rel for d in EXCLUDE_DIRS):
-                continue
-            if rel == DOCUMENTED_API_PAGE:
                 continue
             yield rel, p
 
@@ -129,14 +128,23 @@ class TestNoQrOnVisitorSurface(unittest.TestCase):
         self.assertNotIn('"/api/btc/qr.svg"', app_src,
                          "/api/btc/qr.svg was removed with pay/btc.html's QR")
 
-    def test_documented_btc_order_route_survives(self):
-        """The kept route is asserted, not assumed. Removing it would be a
-        public API break -- if a later cleanup deletes it, that must be a
-        decision, not a side effect of a QR sweep."""
+    def test_the_btc_order_qr_route_is_gone_by_decision(self):
+        """This test used to assert the opposite: that the route SURVIVED, so
+        that deleting it could never be collateral damage from a QR sweep.
+        The founder retired the direct-BTC rail on 2026-09-19, so the decision
+        was taken -- and the assertion is inverted rather than deleted, which
+        keeps the route from drifting back in unnoticed. The 410 behaviour is
+        pinned in tests/test_direct_btc_rail_is_gone.py."""
         app_src = (ROOT / "server" / "app.py").read_text(encoding="utf-8")
-        self.assertIn('if sub == "qr.svg":', app_src)
-        docs = (WEB / DOCUMENTED_API_PAGE).read_text(encoding="utf-8")
-        self.assertIn("/api/btc-order/", docs)
+        self.assertNotIn('if sub == "qr.svg":', app_src)
+        # The dispatch, not the string: "/api/btc-order/" still appears in the
+        # retirement guard's prefix list, which is what makes it answer 410.
+        self.assertNotIn('path.startswith("/api/btc-order/")', app_src)
+        docs = (WEB / "docs" / "api.html").read_text(encoding="utf-8")
+        self.assertNotIn("/api/btc-order/", docs)
+        # CONTROL: the docs page is real and still documents the live API, so
+        # the assertions above are not passing over an empty or missing file.
+        self.assertIn("/api/anchor", docs)
 
 
 if __name__ == "__main__":

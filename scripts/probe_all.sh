@@ -129,7 +129,17 @@ probe GET "/blog/"                         200
 probe GET "/blog/atom.xml"                 200
 probe GET "/blog/written-by-an-ai"         200
 probe GET "/verify/"                       200
-probe GET "/buy.html"                      200
+# /buy is the post-Stripe-Checkout confirmation page. The .html form
+# canonicalises to it with a 301 (query preserved), which is what old
+# Stripe success URLs still arrive on.
+probe GET "/buy"                           200
+probe GET "/buy.html"                      301
+# The direct-BTC order rail was retired 2026-09-19. These must stay Gone:
+# a gate that watches the withdrawal is worth more than a deleted line.
+probe GET "/pay/btc"                       410
+probe GET "/buy/btc_AbCdEf12345"           410
+probe GET "/api/btc/price"                 410
+probe GET "/api/btc-order/btc_AbCdEf12345" 410
 probe GET "/docs/api.html"                 200
 probe GET "/terms.html"                    200
 probe GET "/privacy.html"                  200

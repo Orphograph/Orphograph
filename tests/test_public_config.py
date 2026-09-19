@@ -112,9 +112,16 @@ class TestPublicConfig(unittest.TestCase):
 
     def test_features_block_is_present(self):
         snap = self._snapshot()
-        for f in ("btc_payments", "creator_tier_live",
-                  "private_receipts", "receipt_vault"):
+        for f in ("creator_tier_live", "private_receipts", "receipt_vault"):
             self.assertIn(f, snap["features"])
+
+    def test_no_feature_flag_advertises_the_retired_btc_rail(self):
+        """`btc_payments` was served to every visitor in /api/config. The direct
+        rail was retired on 2026-09-19; a flag for it would advertise a checkout
+        that answers 410. The hosted processor's flag stays — it is live."""
+        features = self._snapshot()["features"]
+        self.assertNotIn("btc_payments", features)
+        self.assertIn("nowpayments_enabled", features)   # control: block is real
 
     def test_demand_experiment_is_non_transactional_and_default_off(self):
         os.environ.pop("ORPHO_DEMAND_PACK_V1", None)

@@ -13,6 +13,7 @@ DATA  ?= $(HOME)/orphograph/data
 
 .PHONY: help dev test test-quick smoke safety preflight \
         local-start local-stop local-restart local-status local-logs \
+        local-uninstall-btc \
         first-deploy deploy fly-deploy fly-secrets fly-logs fly-check \
         backup sweep-test e2e revenue-probe \
         health milestone clean
@@ -76,7 +77,11 @@ preflight:
 # local service via launchd
 # ============================================================================
 
-LAUNCHD_AGENTS := server upgrade expire btc_settle health milestone
+# btc_settle left this list on 2026-09-19 with the direct-BTC rail. Its
+# script is deleted, so local-start would have tried to bootstrap a plist
+# pointing at nothing. `make local-uninstall-btc` boots out the leftover
+# agents on a machine that already loaded them.
+LAUNCHD_AGENTS := server upgrade expire health milestone
 UID            := $(shell id -u)
 
 local-start:
@@ -112,8 +117,33 @@ local-logs:
 	@echo "=== health_monitor.log (last 10) ==="
 	@tail -10 $(HOME)/orphograph/logs/health_monitor.log 2>/dev/null || echo "(empty)"
 	@echo ""
-	@echo "=== btc_settle.err.log (last 5) ==="
-	@tail -5 $(HOME)/orphograph/logs/btc_settle.err.log 2>/dev/null || echo "(empty)"
+
+# ----------------------------------------------------------------------------
+# One-time cleanup for the retired direct-BTC rail (2026-09-19).
+#
+# The rail's two launchd agents were installed on the founder's machine by
+# scripts/install_payout_monitor.sh and by hand. Both scripts and both plists
+# are deleted from the repo, which does NOT unload an agent already registered
+# with launchd — it just leaves one pointing at a missing file, re-launching
+# and failing on its schedule forever.
+#
+# Idempotent: each label is booted out only if launchctl already knows it, so
+# running this twice is a no-op and running it on a machine that never had
+# them prints nothing. USER DOMAIN ONLY (gui/$(UID)) — never sudo, never a
+# system domain. Removes no files and touches no ledger.
+#
+# Safe to run at any time; the founder runs it, not CI:
+#   make local-uninstall-btc
+local-uninstall-btc:
+	@for label in com.orphograph.btc_settle com.orphograph.payout; do \
+		if launchctl print gui/$(UID)/$$label >/dev/null 2>&1; then \
+			echo "→ booting out $$label"; \
+			launchctl bootout gui/$(UID)/$$label || true; \
+		else \
+			echo "  $$label not loaded — nothing to do"; \
+		fi; \
+	done
+	@echo "Done. Any leftover plists under ~/Library/LaunchAgents/ can now be deleted by hand."
 
 # ============================================================================
 # production deploy
