@@ -189,6 +189,12 @@
     }, 90 * 1000);
   }
 
+  // Hosted crypto processor availability, from /api/config features.
+  // null = not known yet (config still in flight, or the fetch failed). Only
+  // an explicit true offers the crypto path; everything else falls back to
+  // card, which always works.
+  let NOWPAYMENTS_ENABLED = null;
+
   // ── Ops banner (kill-switch surface) ──────────────────────────────
   async function renderOpsBanner() {
     const banner = document.getElementById("ops-banner");
@@ -197,6 +203,11 @@
       const r = await fetch("/api/config", { credentials: "same-origin" });
       if (!r.ok) return;
       const cfg = await r.json();
+      // Cache the hosted-processor flag. offerWriterPack() must not send a
+      // rate-limited visitor to a checkout that will refuse them.
+      if (cfg && cfg.features) {
+        NOWPAYMENTS_ENABLED = cfg.features.nowpayments_enabled === true;
+      }
       renderDemandExperiment(cfg);
       const t = (cfg && cfg.toggles) || {};
       if (t.maintenance_mode) {
@@ -512,96 +523,49 @@
   }
 
   // Render the frictionless Writer-Pack purchase affordance into the status
-  // area after a free-tier 429. Primary path is the one-call BTC order:
-  // POST /api/buy-btc {email} → redirect to /buy/<id>, a wallet-ready page
-  // showing the exact sat amount + address. If the BTC rail isn't configured
-  // server-side (503), we degrade to the manual /pay/crypto.html flow so the
-  // offer is never a dead end. The manual link also rides along as a safety
-  // net the user can click if the order call errors.
-  const WRITER_PACK_MANUAL_URL = "/pay/crypto.html?plan=writer_pack";
+  // area after a free-tier 429.
+  //
+  // This used to create an order on the direct on-chain Bitcoin rail and send
+  // the visitor to a wallet-ready order page, falling back to the hosted crypto
+  // checkout when the rail was unconfigured (503). That rail was RETIRED on
+  // 2026-09-19 and its routes now answer 410, so the fetch is gone rather than
+  // left to fail: the 503 branch it degraded through does not match a 410, and
+  // the visitor would have read an error instead of reaching a checkout that
+  // works. The hosted checkout was already the degrade path; now it is the path.
+  //
+  // The retired route names are deliberately NOT written out here. This file is
+  // served to every visitor, and tests/test_direct_btc_rail_is_gone.py sweeps
+  // the served surface for them — a comment naming them is indistinguishable,
+  // to that guard, from markup offering them.
+  // Card first, matching how /pricing leads: "Pay with card" is the primary
+  // CTA there and crypto is the secondary `cta-alt`. The card path is also the
+  // one that is always available — Stripe is the working rail.
+  const WRITER_PACK_CARD_URL = "/pricing";
+  const WRITER_PACK_CRYPTO_URL = "/pay/crypto?plan=writer_pack";
 
   function offerWriterPack() {
     if (!status) return;
 
-    const form = document.createElement("form");
-    form.style.marginTop = "10px";
-    form.setAttribute("novalidate", "");
+    const buy = document.createElement("a");
+    buy.className = "cta";
+    buy.href = WRITER_PACK_CARD_URL;
+    buy.textContent = "Get a Writer Pack \u2192";
+    buy.style.display = "inline-block";
+    buy.style.marginTop = "10px";
+    status.appendChild(buy);
 
-    const input = document.createElement("input");
-    input.type = "email";
-    input.required = true;
-    input.placeholder = "you@example.com";
-    input.autocomplete = "email";
-    input.setAttribute("aria-label", "Email for your Writer Pack receipt");
-    input.style.marginRight = "8px";
-
-    const submit = document.createElement("button");
-    submit.type = "submit";
-    submit.className = "cta";
-    submit.textContent = "Get a Writer Pack →";
-
-    const msg = document.createElement("div");
-    msg.style.marginTop = "8px";
-
-    // Always-present manual fallback link (works even if JS fetch fails).
-    const manual = document.createElement("a");
-    manual.href = WRITER_PACK_MANUAL_URL;
-    manual.textContent = "Or pay step-by-step on the crypto page →";
-    manual.style.display = "inline-block";
-    manual.style.marginTop = "8px";
-
-    form.appendChild(input);
-    form.appendChild(submit);
-    status.appendChild(form);
-    status.appendChild(msg);
-    status.appendChild(manual);
-
-    form.addEventListener("submit", async function (ev) {
-      ev.preventDefault();
-      const email = (input.value || "").trim();
-      if (!email) {
-        msg.textContent = "Enter your email so we can send the receipt.";
-        return;
-      }
-      const label = submit.textContent;
-      submit.disabled = true;
-      submit.textContent = "Creating order…";
-      msg.textContent = "";
-      try {
-        const r = await fetch("/api/buy-btc", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: email }),
-        });
-        if (r.ok) {
-          const j = await r.json();
-          const dest =
-            j && j.buy_page
-              ? j.buy_page
-              : "/buy/" + (j && j.order_id ? encodeURIComponent(j.order_id) : "");
-          window.location.href = dest;
-          return;
-        }
-        if (r.status === 503) {
-          // BTC rail not configured — hand off to the manual crypto flow.
-          msg.textContent = "Taking you to the crypto checkout…";
-          window.location.href = WRITER_PACK_MANUAL_URL;
-          return;
-        }
-        let err = "Could not start the order. Use the crypto page below.";
-        try {
-          const j = await r.json();
-          if (j && j.error) err = j.error;
-        } catch (e) {}
-        msg.textContent = err;
-        submit.disabled = false;
-        submit.textContent = label;
-      } catch (e) {
-        msg.textContent = "Network error — use the crypto page below.";
-        submit.disabled = false;
-        submit.textContent = label;
-      }
-    });
+    // Crypto rides along ONLY when the processor is actually enabled. An
+    // ungated link sends a rate-limited visitor to a checkout that refuses,
+    // with no card path in sight; `null` (config unknown) is treated as off.
+    if (NOWPAYMENTS_ENABLED === true) {
+      const alt = document.createElement("a");
+      alt.href = WRITER_PACK_CRYPTO_URL;
+      alt.textContent = "or pay with crypto \u2192";
+      alt.style.display = "inline-block";
+      alt.style.marginTop = "8px";
+      alt.style.marginLeft = "12px";
+      status.appendChild(alt);
+    }
   }
 
   async function hashFile(file, alg) {
@@ -664,7 +628,7 @@
           // path instead of a dead error. (Crypto checkout works today.)
           setStatusSimple(
             "You've used today's free anchors.",
-            "A Writer Pack is 10 anchors for $19 — credits never expire. Enter your email and pay with Bitcoin in under a minute.",
+            "A Writer Pack is 10 anchors for $19 — credits never expire.",
             "info"
           );
           offerWriterPack();

@@ -1,74 +1,31 @@
-"""test_payout_monitor.py — unit tests for the hot-wallet payout monitor.
+"""test_payout_monitor.py — the founder-only historical balance READER.
 
-Stdlib + pytest only. HTTP calls are routed through monkeypatched urlopen,
-Telegram notifier subprocess calls are stubbed.
+The direct-BTC order rail was retired on 2026-09-19. payout_monitor lost its
+COLLECTOR with it: `_watch_addresses()` sourced every address it polled from
+`btc_payments` (the address pool, the single-address fallback, and the
+per-order HD-derived addresses in the orders ledger), and that module is
+deleted. Nothing can issue an address, so there is nothing new to poll, and
+`check_once()` / the Telegram sweep ping went with it.
+
+What this file still covers is what survived and is still reachable:
+`/api/founder/payout-status` renders `payout_status()`, and the founder must
+go on being able to read historical balances. The tests that exercised
+`_watch_addresses` and `check_once` are gone with their subjects — the
+retirement itself is covered by tests/test_direct_btc_rail_is_gone.py.
+
+Ledgers are read-only here. Nothing under data/ is written, deleted or
+rewritten by this module or these tests; every path is redirected to tmp_path.
+
+Stdlib + pytest only.
 """
 from __future__ import annotations
 
 import json
-import subprocess
-import urllib.error
-import urllib.request
 
 import pytest
 
-import btc_payments
 import mempool_watcher
 import payout_monitor
-
-
-# ---------------------------------------------------------------------------
-# Fake urlopen helpers
-# ---------------------------------------------------------------------------
-
-class _FakeResp:
-    def __init__(self, body: bytes):
-        self._body = body
-
-    def read(self):
-        return self._body
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc, tb):
-        return False
-
-
-def _mempool_payload(confirmed_net=0, unconfirmed_net=0, chain_tx=0, mem_tx=0):
-    return {
-        "address": "bc1qfake",
-        "chain_stats": {
-            "funded_txo_sum": confirmed_net,
-            "spent_txo_sum": 0,
-            "tx_count": chain_tx,
-        },
-        "mempool_stats": {
-            "funded_txo_sum": unconfirmed_net,
-            "spent_txo_sum": 0,
-            "tx_count": mem_tx,
-        },
-    }
-
-
-def _payload_urlopen(payload_dict):
-    def _fake(req, timeout=0):
-        # Echo the queried address, as the real explorers do. The watcher now
-        # rejects a response naming a DIFFERENT subject (wire-lens guard,
-        # 2026-08-31); a stub with a hardcoded address was lying to it.
-        body = dict(payload_dict)
-        body["address"] = req.full_url.rstrip("/").rsplit("/", 1)[-1]
-        return _FakeResp(json.dumps(body).encode())
-    return _fake
-
-
-def _stub_subprocess_run(monkeypatch, calls):
-    def fake_run(*args, **kwargs):
-        calls.append({"args": args, "kwargs": kwargs})
-        return subprocess.CompletedProcess(
-            args=args[0] if args else [], returncode=0, stdout="", stderr=""
-        )
-    monkeypatch.setattr(subprocess, "run", fake_run)
 
 
 # ---------------------------------------------------------------------------
@@ -81,56 +38,30 @@ def _isolated_paths(tmp_path, monkeypatch):
     monkeypatch.setattr(mempool_watcher, "BALANCE_LEDGER", tmp_path / "balance_snapshots.jsonl")
     monkeypatch.setattr(payout_monitor, "PING_LEDGER", tmp_path / "payout_pings.jsonl")
     monkeypatch.setattr(payout_monitor, "COLD_ADDRESS_FILE", tmp_path / "cold_wallet_address.txt")
-
-    # Suppress polite sleep in watch_balances.
-    monkeypatch.setattr(mempool_watcher.time, "sleep", lambda *_a, **_k: None)
-
-    # Clear payment env vars so each test can opt in.
-    monkeypatch.delenv("ORPHO_BTC_XPUB", raising=False)
     monkeypatch.delenv("ORPHO_COLD_ADDRESS", raising=False)
-
-    # Clear module-level state on btc_payments — these are bound at import time.
-    monkeypatch.setattr(btc_payments, "BTC_XPUB", "")
-    monkeypatch.setattr(btc_payments, "BTC_RECEIVE_ADDRESS", "")
-    # Point the address-pool file at a tmp location so tests can write to it.
-    monkeypatch.setattr(btc_payments, "POOL_PATH", tmp_path / "btc_address_pool.txt")
-    # Isolate the orders ledger too — _watch_addresses now unions issued
-    # addresses from it, and the machine's real ledger must not leak in.
-    monkeypatch.setattr(btc_payments, "ORDERS_PATH", tmp_path / "btc_orders.jsonl")
-
     yield
 
 
 # ---------------------------------------------------------------------------
-# _watch_addresses
+# the collector is gone
 # ---------------------------------------------------------------------------
 
-def test_watch_addresses_returns_pool_when_xpub_unset(monkeypatch, tmp_path):
-    """Pool file populated + a single BTC_RECEIVE_ADDRESS — both should be included,
-    no duplicates."""
-    pool = ["bc1qaaa" + "0" * 30, "bc1qbbb" + "0" * 30]
-    btc_payments.POOL_PATH.write_text("\n".join(pool) + "\n")
-    monkeypatch.setattr(btc_payments, "BTC_RECEIVE_ADDRESS", "bc1qccc" + "0" * 30)
-
-    addrs = payout_monitor._watch_addresses()
-    assert pool[0] in addrs
-    assert pool[1] in addrs
-    assert ("bc1qccc" + "0" * 30) in addrs
-    assert len(addrs) == 3
+@pytest.mark.parametrize("name", ("_watch_addresses", "check_once",
+                                  "_send_telegram", "_persist_ping"))
+def test_the_collector_is_gone(name) -> None:
+    """Each of these either polled addresses the retired rail issued, or fired
+    a sweep ping about them. Their absence is asserted rather than assumed: a
+    re-added `check_once` would silently start polling mempool.space again."""
+    assert not hasattr(payout_monitor, name), (
+        f"payout_monitor.{name} came back — it belonged to the retired rail")
 
 
-def test_watch_addresses_dedupes_single_address(monkeypatch):
-    """If BTC_RECEIVE_ADDRESS is already in the pool, don't double-list it."""
-    addr = "bc1qaaa" + "0" * 30
-    btc_payments.POOL_PATH.write_text(addr + "\n")
-    monkeypatch.setattr(btc_payments, "BTC_RECEIVE_ADDRESS", addr)
-
-    addrs = payout_monitor._watch_addresses()
-    assert addrs.count(addr) == 1
-
-
-def test_watch_addresses_empty_when_nothing_configured():
-    assert payout_monitor._watch_addresses() == []
+def test_the_module_no_longer_imports_the_deleted_order_ledger() -> None:
+    """NEGATIVE CONTROL for the assertions above: the module imports cleanly
+    and still exposes the reader, so `hasattr` is answering about a real,
+    loaded module rather than about an import that quietly failed."""
+    assert callable(payout_monitor.payout_status)
+    assert not hasattr(payout_monitor, "btc_payments")
 
 
 # ---------------------------------------------------------------------------
@@ -138,16 +69,15 @@ def test_watch_addresses_empty_when_nothing_configured():
 # ---------------------------------------------------------------------------
 
 def test_cold_address_reads_env_var_first(monkeypatch):
-    monkeypatch.setenv("ORPHO_COLD_ADDRESS", "bc1qcoldfromenv" + "0" * 30)
-    # Even if the file exists, env wins.
-    payout_monitor.COLD_ADDRESS_FILE.write_text("bc1qcoldfromfile" + "0" * 30)
-    assert payout_monitor._cold_address() == "bc1qcoldfromenv" + "0" * 30
+    monkeypatch.setenv("ORPHO_COLD_ADDRESS", "bc1qenv" + "0" * 30)
+    payout_monitor.COLD_ADDRESS_FILE.write_text("bc1qfile" + "0" * 30 + "\n")
+    assert payout_monitor._cold_address() == "bc1qenv" + "0" * 30
 
 
 def test_cold_address_falls_back_to_file(monkeypatch):
     monkeypatch.delenv("ORPHO_COLD_ADDRESS", raising=False)
-    payout_monitor.COLD_ADDRESS_FILE.write_text("bc1qcoldfromfile" + "0" * 30 + "\n")
-    assert payout_monitor._cold_address() == "bc1qcoldfromfile" + "0" * 30
+    payout_monitor.COLD_ADDRESS_FILE.write_text("bc1qfile" + "0" * 30 + "\n")
+    assert payout_monitor._cold_address() == "bc1qfile" + "0" * 30
 
 
 def test_cold_address_empty_when_neither_set(monkeypatch):
@@ -183,7 +113,7 @@ def test_last_ping_ts_skips_malformed_lines():
 
 
 # ---------------------------------------------------------------------------
-# payout_status
+# payout_status — the kept founder-only read
 # ---------------------------------------------------------------------------
 
 def test_payout_status_returns_expected_keys(monkeypatch):
@@ -196,143 +126,90 @@ def test_payout_status_returns_expected_keys(monkeypatch):
     monkeypatch.setenv("ORPHO_COLD_ADDRESS", "bc1qcold" + "0" * 30)
 
     status = payout_monitor.payout_status()
-    assert "hot_balance_sats" in status
-    assert "ready_to_sweep" in status
+    assert "last_known_balance_sats" in status
     assert "cold_destination" in status
-    assert status["hot_balance_sats"] == 1234
+    assert status["last_known_balance_sats"] == 1234
     assert status["cold_destination"] == "bc1qcold" + "0" * 30
-    assert status["ready_to_sweep"] is False  # 1234 < default 500_000
-    assert status["last_snapshot_at"] == "2026-05-14T00:00:00+00:00"
+    assert status["observed_at"] == "2026-05-14T00:00:00+00:00"
+    assert status["snapshot_is_final"] is True
 
 
-def test_payout_status_ready_to_sweep_when_above_threshold(monkeypatch):
+def test_payout_status_reads_a_historical_snapshot_written_before_retirement():
+    """The whole reason this endpoint is kept. A snapshot recorded while the
+    rail was live must still be readable afterwards — retiring the rail must
+    not make the founder's own history unreadable."""
+    mempool_watcher.BALANCE_LEDGER.parent.mkdir(parents=True, exist_ok=True)
+    mempool_watcher.BALANCE_LEDGER.write_text(
+        json.dumps({"total_sats": 250_000, "ts": "2026-06-01T00:00:00+00:00",
+                    "addresses_polled": 7, "addresses_error": 1}) + "\n")
+    status = payout_monitor.payout_status()
+    assert status["last_known_balance_sats"] == 250_000
+    assert status["observed_at"] == "2026-06-01T00:00:00+00:00"
+    assert status["addresses_polled"] == 7
+    assert status["addresses_error"] == 1
+
+
+def test_payout_status_says_the_rail_is_retired():
+    status = payout_monitor.payout_status()
+    assert status["rail"] == "retired"
+
+
+def test_payout_status_drops_the_address_pool_size():
+    """`address_pool_size` was a property of the retired order rail, not of the
+    balance history, and it read through the deleted btc_payments module."""
+    assert "pool_size" not in payout_monitor.payout_status()
+    assert "address_pool_size" not in payout_monitor.payout_status()
+
+
+def test_a_stale_snapshot_can_never_produce_an_action_flag():
+    """REPLACES test_payout_status_ready_to_sweep_when_above_threshold, which
+    pinned the stale behaviour instead of catching it.
+
+    `ready_to_sweep` was `total >= SWEEP_THRESHOLD_SATS` over the newest
+    snapshot on disk. The collector is deleted, so that snapshot is frozen: the
+    moment the founder swept the wallet, this endpoint would have gone on
+    saying "ready to sweep: yes" forever against a balance that is really zero.
+
+    A large balance from an old snapshot must therefore produce NO action flag
+    and NO threshold — only the number, when it was observed, and how old that
+    observation is."""
     mempool_watcher.BALANCE_LEDGER.parent.mkdir(parents=True, exist_ok=True)
     snap = {"total_sats": 9_000_000, "ts": "2026-05-14T00:00:00+00:00"}
     mempool_watcher.BALANCE_LEDGER.write_text(json.dumps(snap) + "\n")
 
     status = payout_monitor.payout_status()
-    assert status["ready_to_sweep"] is True
-    assert status["hot_balance_sats"] == 9_000_000
+
+    for banned in ("ready_to_sweep", "threshold_sats", "threshold_btc",
+                   "hot_balance_sats", "hot_balance_btc"):
+        assert banned not in status, (
+            f"{banned} is derived from a snapshot that can never refresh")
+
+    assert status["last_known_balance_sats"] == 9_000_000
+    assert status["observed_at"] == "2026-05-14T00:00:00+00:00"
+    assert status["observation_age_days"] is not None
+    assert status["observation_age_days"] > 0, (
+        "a 2026-05-14 snapshot cannot be zero days old")
+    assert status["rail"] == "retired"
 
 
-# ---------------------------------------------------------------------------
-# check_once
-# ---------------------------------------------------------------------------
-
-def test_check_once_skips_when_no_addresses_configured():
-    result = payout_monitor.check_once(force_ping=False)
-    assert result.get("skipped") == "no addresses configured"
-
-
-def test_check_once_below_threshold_does_not_telegram(monkeypatch):
-    """Hot balance well below threshold — must not invoke the notifier."""
-    addr = "bc1qaaa" + "0" * 30
-    monkeypatch.setattr(btc_payments, "BTC_RECEIVE_ADDRESS", addr)
-
-    payload = _mempool_payload(confirmed_net=1000, unconfirmed_net=0,
-                                chain_tx=1, mem_tx=0)
-    monkeypatch.setattr(urllib.request, "urlopen", _payload_urlopen(payload))
-
-    calls = []
-    _stub_subprocess_run(monkeypatch, calls)
-
-    snap = payout_monitor.check_once(force_ping=False)
-    assert snap["pinged"] is False
-    assert snap.get("reason") == "below_threshold"
-    assert snap["total_sats"] == 1000
-    # subprocess.run MUST NOT have been invoked.
-    assert calls == []
+def test_the_observation_age_is_measured_not_hardcoded():
+    """NEGATIVE CONTROL for observation_age_days. A fresh snapshot must read as
+    0 days old, or the field is a constant rather than a measurement."""
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    mempool_watcher.BALANCE_LEDGER.parent.mkdir(parents=True, exist_ok=True)
+    mempool_watcher.BALANCE_LEDGER.write_text(
+        json.dumps({"total_sats": 5, "ts": now}) + "\n")
+    assert payout_monitor.payout_status()["observation_age_days"] == 0
 
 
-def test_check_once_force_ping_invokes_notifier(monkeypatch):
-    addr = "bc1qaaa" + "0" * 30
-    monkeypatch.setattr(btc_payments, "BTC_RECEIVE_ADDRESS", addr)
-
-    payload = _mempool_payload(confirmed_net=200, unconfirmed_net=0,
-                                chain_tx=1, mem_tx=0)
-    monkeypatch.setattr(urllib.request, "urlopen", _payload_urlopen(payload))
-
-    # Pretend the notifier exists at its expected path.
-    monkeypatch.setattr(payout_monitor.NOTIFIER.__class__, "exists",
-                        lambda self: True)
-
-    calls = []
-    _stub_subprocess_run(monkeypatch, calls)
-
-    snap = payout_monitor.check_once(force_ping=True)
-    assert snap["pinged"] is True
-    assert len(calls) == 1
-    # First positional arg is the subprocess command list.
-    cmd = calls[0]["args"][0]
-    assert "python3" in cmd[0] or cmd[0].endswith("python3")
-    # The message is passed as positional argv (not --text flag).
-    # Confirm by checking one of its phrases appears in the cmd list.
-    assert any("Orphograph hot wallet" in arg for arg in cmd), f"message not in cmd: {cmd}"
-    # Ping ledger should have one row now.
-    assert payout_monitor.PING_LEDGER.exists()
+def test_a_missing_snapshot_reports_no_observation_rather_than_zero():
+    """No ledger at all must not read as "observed zero sats just now"."""
+    status = payout_monitor.payout_status()
+    assert status["observed_at"] is None
+    assert status["observation_age_days"] is None
 
 
-def test_check_once_above_threshold_pings_once(monkeypatch):
-    """Total sats >= threshold + cooldown clear -> notifier fires exactly once."""
-    addr = "bc1qaaa" + "0" * 30
-    monkeypatch.setattr(btc_payments, "BTC_RECEIVE_ADDRESS", addr)
-
-    # 600_000 sats > default 500_000 threshold.
-    payload = _mempool_payload(confirmed_net=600_000, unconfirmed_net=0,
-                                chain_tx=2, mem_tx=0)
-    monkeypatch.setattr(urllib.request, "urlopen", _payload_urlopen(payload))
-
-    monkeypatch.setattr(payout_monitor.NOTIFIER.__class__, "exists",
-                        lambda self: True)
-
-    calls = []
-    _stub_subprocess_run(monkeypatch, calls)
-
-    snap = payout_monitor.check_once(force_ping=False)
-    assert snap["pinged"] is True
-    assert snap["total_sats"] == 600_000
-    assert len(calls) == 1
-
-
-# ---------------------------------------------------------------------------
-# _watch_addresses covers ISSUED addresses, not just the pool (2026-08-31)
-# ---------------------------------------------------------------------------
-
-def test_watch_addresses_includes_recent_order_addresses(monkeypatch, tmp_path):
-    """Wire lens: the monitor polled the POOL while orders issue HD-derived
-    addresses the ledger NAMES — funds arriving on an issued address were
-    invisible to the sweep threshold. The orders ledger already records every
-    issued address; the watch list must union it in."""
-    import json as _json
-    orders = tmp_path / "btc_orders.jsonl"
-    monkeypatch.setattr(btc_payments, "ORDERS_PATH", orders)
-    row = {"ts": btc_payments._iso(), "event": "created", "order_id": "o1",
-           "email": "x@example.invalid", "address": "bc1qissuedbyhd",
-           "amount_sats": 1000, "usd_amount": 1.0, "status": "pending",
-           "expires_unix": btc_payments._now_unix() + 3600}
-    orders.write_text(_json.dumps(row) + "\n")
-    addrs = payout_monitor._watch_addresses()
-    assert "bc1qissuedbyhd" in addrs
-
-
-def test_watch_addresses_keeps_old_unswept_addresses_and_stays_bounded(monkeypatch, tmp_path):
-    """An OLD issued address stays watched — settlement credits the order,
-    not the coins, so age never retires an address (the 30-day window this
-    replaces re-hid funded addresses on day 31). Boundedness comes from the
-    cap alone: newest distinct addresses win."""
-    import json as _json
-    orders = tmp_path / "btc_orders.jsonl"
-    monkeypatch.setattr(btc_payments, "ORDERS_PATH", orders)
-    old = btc_payments._now_unix() - 90 * 86400
-    rows = [{"ts": btc_payments._iso(old), "event": "created", "order_id": "o0",
-             "email": "x@example.invalid", "address": "bc1qancientfunded",
-             "amount_sats": 1000, "usd_amount": 1.0, "status": "pending",
-             "expires_unix": old + 3600}]
-    orders.write_text("\n".join(_json.dumps(r) for r in rows) + "\n")
-    assert "bc1qancientfunded" in payout_monitor._watch_addresses()
-    # cap: with cap+1 distinct addresses the OLDEST drops, never the newest
-    many = [dict(rows[0], order_id=f"o{i}", address=f"bc1qaddr{i}") for i in range(6)]
-    orders.write_text("\n".join(_json.dumps(r) for r in many) + "\n")
-    capped = btc_payments.recent_order_addresses(cap=5)
-    assert len(capped) == 5
-    assert "bc1qaddr5" in capped and "bc1qaddr0" not in capped
+def test_the_sweep_threshold_constant_is_gone():
+    """It existed only to compute the action flag; leaving it invites it back."""
+    assert not hasattr(payout_monitor, "SWEEP_THRESHOLD_SATS")

@@ -108,10 +108,12 @@ fans out a single 32-byte POST to five OpenTimestamps calendar servers (a.pool, 
 batch many users' hashes into a single Merkle root and write the root to
 Bitcoin roughly hourly, which is why our marginal on-chain cost is
 effectively zero. The `.ots` proofs are stored per-receipt and verify
-against the public Bitcoin chain forever, with or without us. Bitcoin
-custody is receive-only: a single watch-only address printed in
-`btc_address.txt` accepts payments; no signing keys live on production
-hosts.
+against the public Bitcoin chain forever, with or without us. Orphograph
+holds no Bitcoin and takes no on-chain payments: the direct receive-only
+rail was retired on 2026-09-19 and its routes answer `410 Gone`. Payment is
+by card (Stripe) or through a hosted crypto processor, which settles to the
+processor and never to an address of ours. No signing keys — and now no
+addresses — live on production hosts.
 
 ---
 

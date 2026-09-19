@@ -7,16 +7,24 @@ This folder is the operational reference. The doc you open most often is `LAUNCH
 - `FLY_PREFLIGHT.md` — Fly.io deploy preflight gate audit + 5-command go-live path.
 - `LAUNCH_DRAFTS.md` — paste-ready Show HN / r/photography / X thread / LinkedIn / PetaPixel drafts.
 - `LAUNCH_WALKTHROUGH.md` — manual step-by-step go-live walkthrough (~90 min active work, ~3 days clock).
-- `2_HOUR_LAUNCH.md` — condensed 5-command "print this" path from registered domain to live BTC site.
+- `2_HOUR_LAUNCH.md` — condensed 5-command "print this" path from registered domain to live site.
 - `GO_LIVE_NOW.md` — shortest path from "domain registered" to "phone loads the site" (~45 min).
 
 ## Payments + Bitcoin
 - `STRIPE_ACTIVATION.md` — individual Stripe signup → 4 products → Payment Links → webhook → live mode.
 - `STRIPE_WEBHOOK_DEV.md` — three webhook URL paths (Stripe CLI / tunnel / production endpoint).
-- `BTC_OPERATOR.md` — receive-only Bitcoin model: server holds public addresses only, keys stay offline.
-- `BTC_PAYOUT_PIPELINE.md` — BTC-only sweep flow: customer → Phantom hot → cold wallet, no fiat hop.
-- `PHANTOM_BTC_SETUP.md` — generate 20–100 fresh Phantom addresses → pool file → server rotation.
-- `WALLET_QUICK.md` — "I need a BTC receive address in 10 min" path (Phoenix / BlueWallet / Sparrow).
+- Crypto checkout runs through the hosted processor (`/pay/crypto`); BTC is one of
+  the coins it accepts. There is no runbook to operate, no address to generate.
+
+> **The direct on-chain BTC rail was RETIRED on 2026-09-19.** Its four operator
+> runbooks (`BTC_OPERATOR.md`, `BTC_PAYOUT_PIPELINE.md`, `PHANTOM_BTC_SETUP.md`,
+> `WALLET_QUICK.md`) were deleted with it rather than left in a public repo
+> telling an operator to generate a receive address and schedule a settle
+> worker that no longer exist. Every route the rail answered on now returns
+> `410 Gone`; see `tests/test_direct_btc_rail_is_gone.py`. Historical balances
+> stay readable on the founder-only `/api/founder/payout-status`, and no ledger
+> under `data/` was deleted or rewritten. Git history has the runbooks.
+
 - `PAYMENT_PII_AUDIT.md` — 2026-05-12 audit of every money/PII surface; HIGH findings shipped.
 
 ## Legal + compliance

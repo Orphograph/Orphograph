@@ -36,11 +36,8 @@ import affiliate  # noqa: E402
 import analytics  # noqa: E402
 import api_keys  # noqa: E402
 import blog  # noqa: E402
-import btc_payments  # noqa: E402
-import btc_price  # noqa: E402
 import og_svg  # noqa: E402
 import public_config  # noqa: E402
-import qrcode_svg  # noqa: E402
 import badge_svg  # noqa: E402
 import credits  # noqa: E402
 import lightning  # noqa: E402
@@ -67,7 +64,6 @@ import teams  # noqa: E402
 import unsubscribe  # noqa: E402
 import waitlist  # noqa: E402
 import webhooks  # noqa: E402
-import btc_claims  # noqa: E402
 # Optional module — vertical landing pages. MUST NOT crash app startup if a
 # YAML backend is missing in the build. None disables /verticals/* routes.
 try:
@@ -623,7 +619,6 @@ def _build_sitemap() -> str:
         ("/integrations", "0.7"),
         ("/accept", "0.7"),
         ("/standing-record", "0.5"),
-        ("/buy", "0.8"),
         ("/lp/", "0.8"),
         ("/about", "0.7"),
         ("/faq", "0.7"),
@@ -846,6 +841,71 @@ def _is_private_path(rel_path: str) -> bool:
         return True
     return any(p == pre.rstrip("/") or p.startswith(pre)
                for pre in _PRIVATE_PATH_PREFIXES)
+
+
+# ─── the retired direct-BTC order rail ──────────────────────────────────────
+#
+# Founder decision 2026-09-19: the direct on-chain rail (customer sends BTC to
+# a per-order address; the office watched mempool.space and minted a claim
+# code) is withdrawn. It was never configured in production and never
+# processed an order. The code that issued addresses and created orders is
+# deleted, not dormant — see tests/test_direct_btc_rail_is_gone.py.
+#
+# 410 and not 404, for the same reason /inspection says Gone: /buy sat in both
+# sitemaps at priority 0.8 and /api/btc-order/<id>/qr.svg was published API
+# documentation, so these URLs are in indexes and in third-party code. A
+# crawler drops a Gone page and its cached snippet far sooner than a Not Found,
+# and a caller reading 410 knows to stop rather than to retry.
+#
+# NOT retired here, and each a separate decision: OpenTimestamps Bitcoin
+# ANCHORING (the product), the L402/Lightning rail (/api/ln/quote — dormant),
+# and the hosted crypto processor (/pay/crypto, /api/nowpayments/* — live).
+# ASCII ONLY, and this is load-bearing. The reason phrase is written into the
+# HTTP status line, which the stdlib encodes latin-1; an em dash here raised
+# UnicodeEncodeError inside send_error and the server closed the connection
+# with no response at all — a retired route that answers nothing, not 410.
+# tests/test_direct_btc_rail_is_gone.py drives every path over the wire, which
+# is how this was caught; test_the_reason_phrase_survives_the_status_line
+# pins the encoding directly.
+_RETIRED_BTC_MESSAGE = "Gone: the direct Bitcoin payment rail was withdrawn"
+
+# NOT RETIRED, and this cost a paying customer a confirmation page once:
+# /buy and /buy/<order_id> were TWO URLs on ONE document (web/buy.html).
+# Bare /buy is the card buyer's post-Checkout landing — _handle_stripe_checkout
+# builds it as Stripe's success_url — and fell through to the static handler.
+# Only /buy/<order_id>, matched by the "/buy/" PREFIX, ever belonged to the BTC
+# rail. Retiring the bare path put a 410 in front of every card buyer who
+# finished paying. Keep /buy, /buy.html, /buy.js and /buy.css out of this set.
+_RETIRED_BTC_EXACT = frozenset({
+    "/pay/btc", "/pay/btc.html", "/pay/btc.css", "/pay-btc.js",
+    "/api/btc/price", "/api/buy-btc", "/api/btc/claim",
+    # No-id forms of the order API. Without these they fall to the static
+    # handler and answer 404, which tells a caller "wrong URL" rather than
+    # "this is gone".
+    "/api/btc-order",
+})
+# Prefix-matched, so every id under them is covered. Spelled WITH the trailing
+# slash on purpose: "/buy/" cannot match /buying-guide (that would need
+# "/buy"), and it leaves the bare /buy card-confirmation page alone.
+_RETIRED_BTC_PREFIXES = ("/buy/", "/api/btc-order/", "/pay/btc/")
+
+
+def _is_retired_btc_path(path: str) -> bool:
+    """True if this path belonged to the withdrawn direct-BTC order rail.
+
+    Normalised the same way _is_private_path normalises, so a dotted or
+    doubled-slash spelling of a retired path cannot slip past the guard and
+    land on the static handler — /pay/./btc.html resolves to the same document.
+
+    posixpath.normpath STRIPS a trailing slash, so "/buy/" arrives here as
+    "/buy" and "/pay/btc/" as "/pay/btc". That is why there are no slashed
+    entries in the exact set: they would be unreachable. It also means "/buy/"
+    with no id normalises onto the card page and correctly does NOT retire.
+    """
+    p = posixpath.normpath("/" + path.lstrip("/"))
+    if p in _RETIRED_BTC_EXACT:
+        return True
+    return any(p.startswith(pre) for pre in _RETIRED_BTC_PREFIXES)
 
 
 def _serve_static(handler: BaseHTTPRequestHandler, rel_path: str) -> None:
@@ -1222,6 +1282,9 @@ class Handler(BaseHTTPRequestHandler):
         # 410 and its cached snippet far sooner than a 404.
         if _is_withdrawn_path(path):
             self.send_error(410, "Gone")
+            return
+        if _is_retired_btc_path(path):
+            self.send_error(410, _RETIRED_BTC_MESSAGE)
             return
         # homepage A/B: split "/" between the cream and dark documents
         if path == "/" and _serve_ab_home(self):
@@ -1608,14 +1671,6 @@ class Handler(BaseHTTPRequestHandler):
             except OSError:
                 _serve_static(self, "/certificate.html")
             return
-        if path.startswith("/buy/"):
-            # BTC payment page — page is static; JS reads order_id from URL.
-            oid = path[len("/buy/"):].rstrip("/")
-            if not re.match(r"^btc_[A-Za-z0-9_-]{1,32}$", oid):
-                self.send_error(400, "invalid order id")
-                return
-            _serve_static(self, "/buy.html")
-            return
         if path in ("/blog", "/blog/"):
             # Serve the curated static index at web/blog/index.html. It
             # lists both the static HTML posts (under /blog/<slug>.html)
@@ -1682,7 +1737,6 @@ class Handler(BaseHTTPRequestHandler):
                 "Disallow: /api/\n"
                 "Disallow: /a/\n"
                 "Disallow: /r/\n"
-                "Disallow: /buy/\n"
                 "Disallow: /account.html\n"
                 "Disallow: /signin.html\n"
                 f"Sitemap: {site}/sitemap.xml\n"
@@ -1695,63 +1749,6 @@ class Handler(BaseHTTPRequestHandler):
             _security_headers(self)
             self.end_headers()
             self.wfile.write(body_bytes)
-            return
-        if path == "/api/btc/price":
-            # Same-origin BTC/USD price for the static /pay/btc.html page.
-            # Proxies the server-side multi-oracle cache (btc_price, 60s
-            # in-process TTL) so the browser needs no connect-src exception
-            # for any third-party host — the strict CSP (connect-src 'self')
-            # stays intact and the page still shows a live price.
-            usd = btc_price.get_usd_per_btc()
-            if usd <= 0:
-                _json_response(self, 503, {"error": "BTC price feed unavailable; try again in a minute"})
-                return
-            _json_response(self, 200, {"usd": usd})
-            return
-        if path.startswith("/api/btc-order/"):
-            # Status lookup for the buy page to poll. Sub-path /qr.svg
-            # returns a server-rendered QR-code SVG for the BIP-21 URI —
-            # public address + amount ONLY, no customer/email data.
-            tail = path[len("/api/btc-order/"):].rstrip("/")
-            if "/" in tail:
-                parts = tail.split("/", 1)
-                oid, sub = parts[0], parts[1]
-            else:
-                oid, sub = tail, ""
-            if not re.match(r"^btc_[A-Za-z0-9_-]{1,32}$", oid):
-                _json_response(self, 400, {"error": "invalid order id"})
-                return
-            order = btc_payments.get_order(oid)
-            if not order:
-                _json_response(self, 404, {"error": "not found"})
-                return
-            if sub == "qr.svg":
-                # Build the BIP-21 URI from on-disk fields only — never the
-                # request — so the QR can't be spoofed via the URL.
-                addr = order.get("address") or ""
-                sats = int(order.get("amount_sats") or 0)
-                if not addr or sats <= 0:
-                    self.send_error(404, "order not ready")
-                    return
-                btc_amount = sats / 100_000_000
-                # NO label, NO email, NO order_id in the QR payload.
-                # The privacy contract: only the public address + amount.
-                bip21 = f"bitcoin:{addr}?amount={btc_amount:.8f}"
-                try:
-                    svg = qrcode_svg.make_svg(bip21)
-                except ValueError as e:
-                    self.send_error(500, f"qr encode failed: {e}")
-                    return
-                _send_xml(self, 200, svg, content_type="image/svg+xml; charset=utf-8")
-                return
-            _json_response(self, 200, {
-                "order_id": oid,
-                "status": btc_payments.status_of(oid),
-                "address": order.get("address"),
-                "amount_sats": order.get("amount_sats"),
-                "expires_at": order.get("expires_at"),
-                "tx_hash": order.get("tx_hash"),
-            })
             return
         if path.startswith("/a/"):
             # Magic-link redemption. One-time consume → set session cookie → redirect.
@@ -2348,22 +2345,46 @@ class Handler(BaseHTTPRequestHandler):
         ctype = (self.headers.get("Content-Type") or "").split(";", 1)[0].strip().lower()
         if ctype == "application/json":
             return False
-        # Drain a bounded amount before answering. This is HTTP/1.0, so the
-        # socket closes after the response; replying while the client is still
-        # uploading gives it a broken pipe instead of the 415, which turns an
-        # actionable "you forgot the header" into an opaque network error.
-        # Bounded by MAX_BODY_BYTES so a large body is not read on our dime.
-        try:
-            to_drain = min(declared, MAX_BODY_BYTES)
-            if to_drain > 0:
-                self.rfile.read(to_drain)
-        except (OSError, ValueError):
-            pass
+        self._drain_request_body()
         _json_response(self, 415, {
             "error": "unsupported media type",
             "detail": "POST bodies must be sent as Content-Type: application/json",
         })
         return True
+
+    def _drain_request_body(self) -> int:
+        """Read and discard a bounded request body before answering an error.
+
+        Returns the number of bytes consumed (for tests; callers ignore it).
+
+        WHY THIS EXISTS, and why it is not optional on any refusal path. This
+        is HTTP/1.0: the socket closes after the response. Closing a socket
+        that still holds UNREAD received data makes the kernel send RST instead
+        of FIN, and an RST can discard the response the client has not read
+        yet. The client then sees ECONNRESET / a broken pipe / a proxy 502
+        instead of the status we actually sent — an actionable refusal turned
+        into an opaque network error.
+
+        SIZE IS IRRELEVANT. A body small enough to already sit in the kernel
+        receive buffer is exactly the case that produces the RST, because those
+        are the bytes that are unread at close. MAX_BODY_BYTES is 4096, so
+        every body we ever accept is in that class.
+
+        Bounded by MAX_BODY_BYTES so a large declared body is not read on our
+        dime; a client that declared more than we will read gets the same RST,
+        but it also gets no service, which is the trade the cap is making.
+        """
+        try:
+            declared = int(self.headers.get("Content-Length") or 0)
+        except (TypeError, ValueError):
+            return 0
+        to_drain = min(max(declared, 0), MAX_BODY_BYTES)
+        if to_drain <= 0:
+            return 0
+        try:
+            return len(self.rfile.read(to_drain) or b"")
+        except (OSError, ValueError):
+            return 0
 
     def _optional_typed(self, payload: dict, field: str, want: type, label: str):
         """Read an OPTIONAL structured field, or 400 if it is present with the
@@ -2393,6 +2414,21 @@ class Handler(BaseHTTPRequestHandler):
         return None, True
 
     def do_POST(self):  # noqa: N802
+        # BEFORE the content-type gate, deliberately. A retired endpoint that
+        # answered 415 to a CORS-simple POST would be saying "wrong type" —
+        # i.e. "send the right one and I will serve you". There is nothing
+        # behind these paths any more, and every spelling must say so.
+        #
+        # The body is drained FIRST, exactly as the 415 path does. Answering a
+        # POST without reading its body closes the socket with unread data,
+        # which makes the kernel send RST and can destroy the 410 before the
+        # client reads it — so the caller sees a connection reset instead of
+        # being told the endpoint is gone. Cached copies of the old v2.js and
+        # app.js still POST here from browsers that have not revalidated.
+        if _is_retired_btc_path(self.path.split("?", 1)[0]):
+            self._drain_request_body()
+            self.send_error(410, _RETIRED_BTC_MESSAGE)
+            return
         if self._reject_non_json_post():
             return
         if self.path == "/api/stripe/webhook":
@@ -2477,17 +2513,11 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/api/waitlist":
             self._handle_waitlist()
             return
-        if self.path == "/api/btc/claim":
-            self._handle_btc_claim()
-            return
         if self.path.startswith("/api/unsubscribe"):
             self._handle_unsubscribe_post()
             return
         if self.path == "/api/event":
             self._handle_event()
-            return
-        if self.path == "/api/buy-btc":
-            self._handle_buy_btc()
             return
         if self.path == "/api/anchor/batch":
             self._handle_anchor_batch()
@@ -2902,64 +2932,6 @@ class Handler(BaseHTTPRequestHandler):
         token, _exp = auth.issue_link_token(email)
         mailer.send_login_link_email(email, token)
         _json_response(self, 200, {"ok": True, "message": "Check your inbox for a sign-in link."})
-
-    def _handle_buy_btc(self) -> None:
-        # Per-IP rate limit so anonymous order creation can't be abused.
-        allowed, retry = _anchor_limiter.check(f"btc:{self._client_key()}")
-        if not allowed:
-            _json_response(self, 429, {"error": "too many requests",
-                                       "retry_after_seconds": int(retry) + 1})
-            return
-        if not btc_payments.is_configured():
-            _json_response(self, 503, {"error": "BTC checkout not configured"})
-            return
-        length = _read_content_length(self)
-        if length <= 0 or length > MAX_BODY_BYTES:
-            _json_response(self, 400, {"error": "invalid body size"})
-            return
-        try:
-            payload = json.loads(self.rfile.read(length).decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError):
-            _json_response(self, 400, {"error": "body must be JSON"})
-            return
-        email = payload.get("email", "")
-        if not isinstance(email, str) or not EMAIL_RE.match(email.strip()):
-            _json_response(self, 400, {"error": "invalid email"})
-            return
-        email = email.strip()
-
-        # USD amount: $19 default Writer Pack. (Tier param is reserved for
-        # future Standing Order subscriptions via BTC — not built yet.)
-        usd_amount = 19.0
-
-        # Use a random 4-digit suffix so the exact sat amount is unique
-        # to this order. The settle worker matches by exact amount.
-        suffix = secrets.randbelow(10000) if "secrets" in globals() else int.from_bytes(os.urandom(2), "big") % 10000
-        sats = btc_price.sats_for_usd(usd_amount, suffix=suffix)
-        if sats <= 0:
-            _json_response(self, 503, {"error": "BTC price feed unavailable; try again in a minute"})
-            return
-
-        try:
-            order = btc_payments.create_order(email=email, usd_amount=usd_amount, sats_amount=sats)
-        except (RuntimeError, ValueError) as e:
-            _json_response(self, 400, {"error": str(e)})
-            return
-
-        # bitcoin: URI — opens in the user's wallet app on click.
-        btc_amount = sats / 100_000_000
-        bitcoin_uri = f"bitcoin:{order['address']}?amount={btc_amount:.8f}&label=Orphograph+Pack"
-        _json_response(self, 200, {
-            "ok": True,
-            "order_id": order["order_id"],
-            "address": order["address"],
-            "amount_sats": sats,
-            "amount_btc": f"{btc_amount:.8f}",
-            "usd_amount": usd_amount,
-            "expires_at": order["expires_at"],
-            "bitcoin_uri": bitcoin_uri,
-            "buy_page": f"/buy/{order['order_id']}",
-        })
 
     def _handle_anchor_batch(self) -> None:
         """Anchor up to 50 hashes in one request. Same auth model as /api/anchor.
@@ -3376,37 +3348,6 @@ class Handler(BaseHTTPRequestHandler):
             except Exception:
                 pass
         _json_response(self, 200, {"ok": True, "message": self._PACK_RECOVER_NEUTRAL})
-
-    def _handle_btc_claim(self) -> None:
-        """Buyer self-reports a Bitcoin payment. Stored for manual fulfillment."""
-        allowed, retry = _anchor_limiter.check(f"btc_claim:{self._client_key()}")
-        if not allowed:
-            _json_response(self, 429, {"error": "too many requests", "retry_after_seconds": int(retry) + 1})
-            return
-        length = _read_content_length(self)
-        if length <= 0 or length > MAX_BODY_BYTES:
-            _json_response(self, 400, {"error": "invalid body size"})
-            return
-        try:
-            payload = json.loads(self.rfile.read(length).decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError):
-            _json_response(self, 400, {"error": "body must be JSON"})
-            return
-        ok, result = btc_claims.submit(
-            email      = payload.get("email", ""),
-            txid       = payload.get("txid", ""),
-            pack_size  = payload.get("pack_size", 0) if isinstance(payload.get("pack_size"), int) else 0,
-            usd        = payload.get("usd"),
-            btc_amount = payload.get("btc_amount"),
-            btc_address= payload.get("btc_address", "") if isinstance(payload.get("btc_address"), str) else "",
-            note       = payload.get("note", "") if isinstance(payload.get("note"), str) else "",
-            source_ip  = self._client_key(),   # already truncated; _client_ip/_truncate_ip never existed
-        )
-        if not ok:
-            _json_response(self, 400, {"error": result})
-            return
-        _json_response(self, 200, {"ok": True, "claim_id": result,
-                                   "message": "Got it. We verify on-chain and email your claim code within ~1 hour."})
 
     def _handle_affiliate_payout(self) -> None:
         """POST /api/me/affiliate/payout.
@@ -3934,14 +3875,41 @@ class Handler(BaseHTTPRequestHandler):
             except OSError:
                 pass
 
-        def _rate(num: int, den: int) -> float:
-            return round(100.0 * num / den, 1) if den else 0.0
+        # NOTHING OBSERVED IS NOT ZERO PERCENT. A rate whose denominator is 0
+        # used to render as 0.0, which a founder reads as "nobody converted" —
+        # a measurement — when the truth is "nothing was measured". The two
+        # are opposite signals: the first says the funnel is broken, the second
+        # says the instrument is. Return null plus a reason instead, and say
+        # which rates could not be computed.
+        #
+        # This was not hypothetical. checkout_to_paid and visible_to_paid are
+        # both driven by checkout_returned_success, whose ONLY emitter is
+        # web/buy.js. When the BTC-rail retirement deleted that file, both
+        # rates sat at 0.0 with no error anywhere.
+        unmeasured: dict[str, str] = {}
+
+        def _rate(name: str, num: int, den: int, den_event: str):
+            if den:
+                return round(100.0 * num / den, 1)
+            unmeasured[name] = (
+                f"no {den_event} events in the window — nothing to measure "
+                f"against, so this is not 0%"
+            )
+            return None
 
         rates_30d = {
-            "visible_to_anchored": _rate(totals["file_anchored"], totals["drop_zone_visible"]),
-            "anchored_to_checkout": _rate(totals["checkout_clicked"], totals["file_anchored"]),
-            "checkout_to_paid": _rate(totals["checkout_returned_success"], totals["checkout_clicked"]),
-            "visible_to_paid": _rate(totals["checkout_returned_success"], totals["drop_zone_visible"]),
+            "visible_to_anchored": _rate(
+                "visible_to_anchored", totals["file_anchored"],
+                totals["drop_zone_visible"], "drop_zone_visible"),
+            "anchored_to_checkout": _rate(
+                "anchored_to_checkout", totals["checkout_clicked"],
+                totals["file_anchored"], "file_anchored"),
+            "checkout_to_paid": _rate(
+                "checkout_to_paid", totals["checkout_returned_success"],
+                totals["checkout_clicked"], "checkout_clicked"),
+            "visible_to_paid": _rate(
+                "visible_to_paid", totals["checkout_returned_success"],
+                totals["drop_zone_visible"], "drop_zone_visible"),
         }
 
         days_sorted = sorted(per_day.keys(), reverse=True)
@@ -3951,6 +3919,8 @@ class Handler(BaseHTTPRequestHandler):
             "timestamp": now_utc.isoformat() + "Z",
             "totals_30d": totals,
             "rates_30d_pct": rates_30d,
+            # Which rates are null, and why. Empty when everything computed.
+            "unmeasured_reason": unmeasured,
             "events_scanned": total_lines,
             "series_by_day": series,
         })

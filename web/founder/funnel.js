@@ -43,10 +43,22 @@
     });
   }
 
-  function paintRates(rates) {
+  function paintRates(rates, unmeasured) {
     var root = $("rates"); clear(root);
     RATES.forEach(function (kv) {
-      var v = (rates && rates[kv[0]]) || 0;
+      var v = rates ? rates[kv[0]] : undefined;
+      // null/undefined means the server could not compute this rate at all.
+      // `|| 0` used to turn that into a confident "0.0%", which reads as a
+      // measured total failure rather than as no measurement.
+      if (typeof v !== "number") {
+        var why = (unmeasured && unmeasured[kv[0]]) || "not measured in this window";
+        root.appendChild(el("div", {class: "rate-row"}, [
+          el("div", {class: "name", text: kv[1]}),
+          el("div", {class: "pct rate-unmeasured", text: "not measured"}),
+          el("div", {class: "sub", text: why})
+        ]));
+        return;
+      }
       root.appendChild(el("div", {class: "rate-row"}, [
         el("div", {class: "name", text: kv[1]}),
         el("div", {class: "pct " + rateClass(v), text: v.toFixed(1) + "%"})
@@ -87,7 +99,7 @@
     var ts = String(data.timestamp || "");
     $("ts").textContent = ts ? ("updated " + ts.replace("T", " ").replace("Z", " UTC").substring(0, 19)) : "";
     paintTotals(data.totals_30d);
-    paintRates(data.rates_30d_pct);
+    paintRates(data.rates_30d_pct, data.unmeasured_reason);
     paintSeries(data.series_by_day);
     $("meta").textContent =
       "events_scanned=" + (data.events_scanned || 0) +

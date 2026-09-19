@@ -92,6 +92,21 @@ def test_inventory_matches_expected_set():
         "anchor_start", "anchor_done", "file_anchored",
         "buy_pack_click", "buy_personal_click", "billing_toggle",
         "pack_waitlist_join", "checkout_clicked", "checkout_error",
+        # Emitted by web/buy.js, in showStripeConfirmation — the CARD buyer's
+        # post-Checkout landing page, which is the target of the success_url
+        # that _handle_stripe_checkout builds. It has exactly ONE emitter, and
+        # /api/founder/funnel derives BOTH checkout_to_paid and visible_to_paid
+        # from it.
+        #
+        # That made it fragile in a way worth recording: the BTC-rail
+        # retirement deleted buy.js as if it were rail code (the same file also
+        # served /buy/<order_id>), which silently zeroed both conversion rates
+        # with no error anywhere. A founder reading 0% would have read it as a
+        # measurement. Restored with the page.
+        #
+        # Named, not line-numbered, on purpose — the previous version of this
+        # comment cited server/app.py:334 and web/buy.js:78 and both had
+        # already drifted.
         "checkout_returned_success",
         "try_sample_click", "verify_sample_click", "share_link_click",
         "lp_cta_clicked",

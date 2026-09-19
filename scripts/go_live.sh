@@ -204,25 +204,14 @@ notify "✅ Orphograph live preflight ran — see deploy output for details"
 # ─── 7. revenue wiring (optional, can defer) ────────────────────────────
 
 step "Step 7/7 — Wire revenue (optional — can defer)"
-echo "The site is live. To accept Bitcoin payments now:"
+echo "The site is live. Checkout runs on Stripe (card) with the hosted crypto"
+echo "processor as the second path; both are configured as Fly secrets."
 echo
-echo "1. Generate a fresh bc1q receive address on a wallet you control."
-echo "   Fastest path: see ${bld}deploy/WALLET_QUICK.md${off}"
+echo "The direct on-chain Bitcoin rail was RETIRED on 2026-09-19. There is no"
+echo "receive address to set and no settle worker to schedule — those routes"
+echo "answer 410 Gone. Do not re-add BTC_RECEIVE_ADDRESS: nothing reads it."
 echo
-echo "2. Set it on Fly:"
-echo "   ${bld}fly secrets set BTC_RECEIVE_ADDRESS=bc1qYOURADDRESS -a orphograph${off}"
-echo
-echo "3. Schedule the BTC settle worker (every 5 min):"
-cat <<'EOF'
-   fly machines run \
-     --schedule "every-5-minutes" \
-     --command "python3 scripts/btc_settle.py" \
-     --env "ORPHO_DATA_DIR=/app/data" \
-     --vm-memory 256 \
-     -a orphograph .
-EOF
-echo
-echo "Stripe + Resend can come later (Stripe needs 1-3 day KYC review)."
+echo "Stripe + Resend need 1-3 day KYC review, so start them early."
 echo "Full walkthrough: ${bld}deploy/LAUNCH_WALKTHROUGH.md${off}"
 
 # ─── done ───────────────────────────────────────────────────────────────
@@ -231,7 +220,7 @@ banner "🎉 LAUNCH COMPLETE — https://orphograph.com is publicly live"
 echo "Next:"
 echo "  • Visit https://orphograph.com from your phone."
 echo "  • Drop a photo. Anchor it. Save the receipt."
-echo "  • Set BTC_RECEIVE_ADDRESS to take real revenue."
+echo "  • Confirm the Stripe payment links on /pricing resolve."
 echo "  • Submit Stripe activation tonight if you want card payments by tomorrow."
 echo
 echo "Re-run this script any time — it's idempotent."

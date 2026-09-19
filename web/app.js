@@ -227,6 +227,9 @@ function wireCryptoPayLink() {
     "#crypto-pay-link",
     "#crypto-pay-link-sub",
     "#crypto-pay-link-wrap",
+    // The tier note claims the processor "covers BTC and seven other coins".
+    // Ungated it asserted a live checkout even when the processor is off.
+    "#crypto-pay-note",
     "#crypto-pay-fineprint",
     "#crypto-pay-sub-fineprint",
   ];
@@ -806,45 +809,6 @@ function wireBillingToggle() {
   setMode("monthly");
 }
 
-function wireBuyPackBtc() {
-  const btn = $("#buy-pack-btc");
-  const form = $("#btc-form");
-  const emailInput = $("#btc-email");
-  const submit = $("#btc-form-submit");
-  const msg = $("#btc-form-msg");
-  if (!btn || !form) return;
-
-  btn.addEventListener("click", () => { form.hidden = !form.hidden; });
-
-  submit.addEventListener("click", async () => {
-    const email = (emailInput.value || "").trim();
-    if (!email || email.indexOf("@") === -1) {
-      msg.hidden = false; msg.textContent = "Enter your email so we can send the claim code."; return;
-    }
-    submit.disabled = true;
-    msg.hidden = false; msg.textContent = "Generating invoice…";
-    try {
-      const r = await fetch("/api/buy-btc", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
-      });
-      const data = await r.json().catch(() => ({}));
-      if (r.ok && data.buy_page) {
-        location.href = data.buy_page;
-      } else if (r.status === 503) {
-        msg.textContent = data.error || "Bitcoin checkout isn't configured yet. Use card checkout above.";
-      } else {
-        msg.textContent = data.error || "Couldn't generate an invoice. Try again in a moment.";
-      }
-    } catch {
-      msg.textContent = "Network error. Try again.";
-    } finally {
-      submit.disabled = false;
-    }
-  });
-}
-
 function wirePersonalCheckout(btn, url) {
   btn.onclick = null;
   const coupon = readCoupon();
@@ -1044,7 +1008,6 @@ ingestPackFromUrl();
 // If config endpoint unreachable, buttons fall back to waitlist mode.
 loadPublicConfig().finally(() => {
   wireBuyPack();
-  wireBuyPackBtc();
   wireCryptoPayLink();
   wireBillingToggle();
 });

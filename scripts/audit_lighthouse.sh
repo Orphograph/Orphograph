@@ -36,7 +36,6 @@ fi
 PAGES=(
     "/"
     "/about.html"
-    "/buy.html"
     "/blog/"
     "/blog/written-by-an-ai"
     "/blog/prove-photo-existed-before-ai"

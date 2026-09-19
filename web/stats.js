@@ -4,11 +4,6 @@
 const $ = (sel) => document.querySelector(sel);
 
 const NUMBER_FMT = new Intl.NumberFormat(undefined);
-const USD_FMT = new Intl.NumberFormat(undefined, {
-  style: "currency",
-  currency: "USD",
-  maximumFractionDigits: 0,
-});
 // Pick a sensible English locale for the RelativeTimeFormat fallback;
 // fall back to whatever the browser exposes if undefined.
 const RTF = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
@@ -88,19 +83,6 @@ async function refresh() {
       li.appendChild(name);
       li.appendChild(status);
       calList.appendChild(li);
-    }
-  }
-
-  const oracle = s.btc_oracle || {};
-  const src = $("#btc-source");
-  if (src) src.textContent = oracle.available ? (oracle.source || "—") : "offline";
-  const price = $("#btc-price");
-  if (price) {
-    const p = oracle.usd_per_btc;
-    if (oracle.available && typeof p === "number" && p > 0) {
-      price.textContent = `${USD_FMT.format(p)} / BTC`;
-    } else {
-      price.textContent = "no live price";
     }
   }
 

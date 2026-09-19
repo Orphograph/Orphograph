@@ -158,18 +158,6 @@ def _calendars_public(h: dict) -> dict:
     }
 
 
-def _btc_oracle_public(h: dict) -> dict:
-    """Reduce btc_oracle to public-safe fields: source name + USD price."""
-    o = h.get("btc_oracle") or {}
-    if not o.get("available"):
-        return {"available": False, "source": None, "usd_per_btc": None}
-    return {
-        "available": True,
-        "source": o.get("source"),
-        "usd_per_btc": o.get("usd_per_btc"),
-    }
-
-
 def _compute_snapshot() -> dict:
     h = health.snapshot()
     counts = _scan_ledger()
@@ -179,7 +167,6 @@ def _compute_snapshot() -> dict:
         "boot_at": h.get("boot_at"),
         "anchors": counts,
         "calendars": _calendars_public(h),
-        "btc_oracle": _btc_oracle_public(h),
         "checked_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
     }
 

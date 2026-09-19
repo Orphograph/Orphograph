@@ -1,44 +1,19 @@
-.pay-card {
-  background: var(--panel);
-  border: 1px solid var(--panel-stroke);
+/* buy.css — /buy, the post-Stripe-Checkout confirmation page.
+   Externalized from buy.html (strict CSP: no inline styles).
+
+   Trimmed on 2026-09-19 with the direct-BTC rail: the amount, address,
+   key-value and pending/expired status rules drove the withdrawn per-order
+   page at /buy/<id> and have no markup left to style. Only the confirmation
+   card and its error state remain. */
+
+.settled-card {
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-stroke);
   border-radius: 14px;
   padding: 32px;
   margin: 24px 0;
 }
-
-.pay-kv { grid-template-columns: 140px 1fr; }
-.pay-kv dt { font-size: 13px; }
-.pay-kv dd { font-size: 15px; }
-
-.amount {
-  font-size: 28px;
-  font-family: var(--mono);
-  color: var(--accent);
-  font-weight: 300;
-  letter-spacing: -0.01em;
-}
-
-.address {
-  font-size: 14px;
-  padding: 10px 14px;
-  background: #f6f0e2;
-  border: 1px solid var(--panel-stroke);
-  border-radius: 8px;
-  word-break: break-all;
-  margin-bottom: 6px;
-  color: var(--text);
-}
-
-.btn-link {
-  background: transparent; color: var(--muted);
-  border: 1px solid var(--panel-stroke); border-radius: 6px;
-  padding: 4px 10px; font: inherit; font-size: 12px; cursor: pointer;
-}
-.btn-link:hover { color: var(--accent); border-color: var(--accent); }
-
-.status-pending { color: var(--warn); }
-.status-settled { color: var(--accent); }
-.status-expired { color: var(--bad); }
+.settled-card h1 { color: var(--accent); }
 
 .pay-note {
   margin-top: 24px;
@@ -50,12 +25,3 @@
 .pay-note p { margin: 0 0 12px; color: var(--muted); font-size: 13px; line-height: 1.55; }
 .pay-note p:last-child { margin-bottom: 0; }
 .pay-note strong { color: var(--text); }
-
-.settled-card {
-  background: var(--accent-soft);
-  border: 1px solid var(--accent-stroke);
-  border-radius: 14px;
-  padding: 32px;
-  margin: 24px 0;
-}
-.settled-card h1 { color: var(--accent); }

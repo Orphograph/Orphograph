@@ -1,81 +1,60 @@
-// buy.js — render the BTC payment page and poll for settlement.
+// buy.js — post-Stripe-Checkout confirmation for /buy.
+//
+// WHAT THIS IS, AND WHY THE NAME IS CONFUSING. Until 2026-09-19 this file and
+// web/buy.html served TWO URLs on one document:
+//
+//   /buy?stripe_session=cs_…   the card buyer's confirmation page, which is
+//                              what server/app.py builds as Stripe's
+//                              success_url, reached from the homepage CTA
+//   /buy/<btc_order_id>        a per-order page on the direct on-chain BTC
+//                              rail, served by a startswith("/buy/") route
+//
+// The BTC rail was retired. Only the SECOND of those was ever part of it: the
+// `/buy/` prefix answers 410 Gone, and every BTC branch is gone from this
+// file — no order polling, no address, no sat amount, no wallet deep link.
+//
+// Deleting the whole file took the card confirmation with it and left paying
+// customers on a 410. Restored deliberately, card-only.
+//
+// textContent only — strict CSP, no innerHTML.
 
-const $ = (sel) => document.querySelector(sel);
-const POLL_MS = 30_000;
+"use strict";
 
-function orderIdFromUrl() {
-  const m = location.pathname.match(/^\/buy\/(btc_[A-Za-z0-9_-]{1,32})\/?$/);
-  return m ? m[1] : "";
-}
+function $(sel) { return document.querySelector(sel); }
 
-function showError(msg) {
-  $("#loading").hidden = true;
-  $("#order").hidden = true;
-  $("#error").hidden = false;
-  $("#error-message").textContent = msg;
-}
-
-function showSettled(order) {
-  $("#loading").hidden = true;
-  $("#order").hidden = true;
-  $("#settled").hidden = false;
-  const tx = order.tx_hash || "";
-  const a = $("#tx-link");
-  if (tx) {
-    a.href = `https://mempool.space/tx/${tx}`;
-    a.textContent = tx.slice(0, 12) + "…" + tx.slice(-6);
-  } else {
-    a.textContent = "(awaiting tx hash)";
-  }
-}
-
-function renderOrder(order) {
-  $("#loading").hidden = true;
-  $("#order").hidden = false;
-  const sats = order.amount_sats;
-  const btc = (sats / 100_000_000).toFixed(8);
-  $("#amount-btc").textContent = btc + " BTC";
-  $("#amount-sats").textContent = sats.toLocaleString();
-  $("#address").textContent = order.address;
-  $("#amount-usd").textContent = "≈ $" + (order.usd_amount || 7).toFixed(2) + " USD at order time";
-  $("#expires").textContent = order.expires_at;
-  const uri = `bitcoin:${order.address}?amount=${btc}&label=Orphograph+Pack`;
-  $("#wallet-link").href = uri;
-  $("#copy-address").addEventListener("click", async () => {
-    try {
-      await navigator.clipboard.writeText(order.address);
-      $("#copy-address").textContent = "Copied ✓";
-      setTimeout(() => { $("#copy-address").textContent = "Copy address"; }, 2500);
-    } catch { /* clipboard blocked — user can still select manually */ }
-  });
-}
-
-async function fetchStatus(orderId) {
-  try {
-    const r = await fetch(`/api/btc-order/${encodeURIComponent(orderId)}`);
-    if (r.status === 404) { showError("Order not found."); return null; }
-    if (!r.ok) { return null; }
-    return await r.json();
-  } catch { return null; }
-}
-
-// Stripe success/cancel branch: when buyers land here from Stripe Checkout,
-// the URL has ?stripe_session=cs_…&status=success (or ?stripe=canceled).
-// We render a confirmation block instead of trying to look up a BTC order.
+// Stripe appends query strings, never path segments:
+//   ?stripe_session=cs_…&status=success   on success
+//   ?stripe=canceled                      on cancel
 function stripeSessionFromUrl() {
   return new URLSearchParams(location.search).get("stripe_session") || "";
 }
+
 function stripeWasCanceled() {
   return new URLSearchParams(location.search).get("stripe") === "canceled";
 }
+
+function showError(message) {
+  const loading = $("#loading");
+  if (loading) loading.hidden = true;
+  const err = $("#error");
+  if (err) err.hidden = false;
+  const msg = $("#error-message");
+  if (msg) msg.textContent = message;
+}
+
 async function showStripeConfirmation(sessionId) {
-  $("#loading").hidden = true;
-  $("#order").hidden = true;
+  const loading = $("#loading");
+  if (loading) loading.hidden = true;
   const settledEl = $("#settled");
   if (!settledEl) return;
   settledEl.hidden = false;
+
+  // THE conversion beacon. /api/founder/funnel derives checkout_to_paid and
+  // visible_to_paid from this event, and this is its only emitter — deleting
+  // this file silently zeroed both rates. See
+  // tests/test_funnel_event_whitelist.py.
   if (typeof window !== "undefined" && typeof window.orphoEvent === "function") {
-    try { window.orphoEvent("checkout_returned_success"); } catch (e) {}
+    try { window.orphoEvent("checkout_returned_success"); } catch (e) { /* no-op */ }
   }
 
   let mode = "";
@@ -89,11 +68,11 @@ async function showStripeConfirmation(sessionId) {
       customerEmail = (j && j.customer_email) || "";
       paymentStatus = (j && j.payment_status) || "";
     }
-  } catch (e) { /* fall back to generic copy below */ }
+  } catch (e) { /* fall back to the generic copy below */ }
 
   const h = settledEl.querySelector("h1, h2");
   const p = settledEl.querySelector("p");
-  const a = $("#tx-link");
+  const a = $("#next-link");
 
   if (paymentStatus && paymentStatus !== "paid") {
     if (h) h.textContent = "Payment pending.";
@@ -142,45 +121,23 @@ async function showStripeConfirmation(sessionId) {
     a.href = "/account";
   }
 }
+
 function showStripeCanceled() {
-  $("#loading").hidden = true;
-  $("#order").hidden = true;
-  $("#error").hidden = false;
-  $("#error-message").textContent =
+  const loading = $("#loading");
+  if (loading) loading.hidden = true;
+  showError(
     "Checkout was canceled. Your card was not charged. " +
-    "Head back to the home page to try again.";
+    "Head back to the home page to try again."
+  );
 }
 
 async function main() {
-  // Stripe branch takes priority — it adds query strings, not path segments.
   if (stripeWasCanceled()) { showStripeCanceled(); return; }
   const ssid = stripeSessionFromUrl();
   if (ssid) { await showStripeConfirmation(ssid); return; }
-
-  const orderId = orderIdFromUrl();
-  if (!orderId) { showError("Bad URL. Start over from the home page."); return; }
-  const order = await fetchStatus(orderId);
-  if (!order) return;
-
-  // Hydrate the bulk fields once. Status updates only.
-  // We need amount_btc + usd_amount for display — also fetch from order.
-  if (!order.usd_amount) {
-    // Older response shape; try to recover.
-    order.usd_amount = 7;
-  }
-  renderOrder(order);
-  if (order.status === "settled") { showSettled(order); return; }
-  if (order.status === "expired") {
-    showError("This order expired before payment was detected. Start a new order from the home page.");
-    return;
-  }
-  // Poll for status changes.
-  setInterval(async () => {
-    const fresh = await fetchStatus(orderId);
-    if (!fresh) return;
-    if (fresh.status === "settled") { showSettled(fresh); }
-    if (fresh.status === "expired") { showError("Order expired."); }
-  }, POLL_MS);
+  // No Stripe parameters at all: someone opened /buy directly. There is no
+  // order to look up any more, so say so instead of spinning on "loading…".
+  showError("Nothing to confirm here. Pick a plan on the pricing page to buy.");
 }
 
 main();
