@@ -99,6 +99,39 @@ class TestCalendarTableParity(unittest.TestCase):
                 "resolves to a prototype member. Use lookup().")
 
 
+class TestLowRedundancyCopyNamesTheReason(unittest.TestCase):
+    """web/app.js is the only customer-facing consumer of `low_redundancy`.
+
+    It used to say "Only 3/5 calendars confirmed", which names the count the
+    flag is NOT decided on and calls a pending proof confirmed. A reader who
+    saw the warning could not learn why it fired.
+    """
+
+    def setUp(self):
+        self.src = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
+        start = self.src.index("record.low_redundancy")
+        self.warning = self.src[start:start + 1400]
+
+    def test_the_warning_names_the_distinct_calendar_count(self):
+        self.assertIn("calendars_distinct_ok", self.warning,
+                      "the low_redundancy warning still reports only the "
+                      "server count, which is not what set the flag")
+
+    def test_the_warning_distinguishes_servers_from_calendars(self):
+        self.assertIn("calendar servers", self.warning)
+        self.assertRegex(self.warning, r"aggregator")
+
+    def test_the_warning_never_claims_independence(self):
+        """Three of the five servers reach calendars under one operator, so
+        "independent" is the one word this copy may never use."""
+        self.assertNotIn("independent", self.src.lower())
+
+    def test_the_old_confirmed_wording_is_gone(self):
+        """`low_redundancy` fires at anchor time, when nothing is confirmed
+        yet — every proof is still pending its calendar."""
+        self.assertNotIn("calendars confirmed", self.warning)
+
+
 class TestReceiptJsBehaviour(unittest.TestCase):
     def test_node_suite_calendar_counts(self):
         node = shutil.which("node")
