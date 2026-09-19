@@ -28,8 +28,8 @@
     "sha256": "20b741a9c98ea14402ad72e5543c920ab73d598caa7eac71e39a247067babdda"
   },
   "/app.js": {
-    "version": "3",
-    "sha256": "285ed15216c07e7566c070dd1af270bd0a7bdc4084cb894979609845254dcd79"
+    "version": "4",
+    "sha256": "98d02efb0908df1251923d1ab7e1c34d94f8e8afb9049f548e8458c023702bb2"
   },
   "/assets/drop-observer.js": {
     "version": "1",
@@ -399,10 +399,6 @@
     "version": "1",
     "sha256": "9be7897bcf58354de68a70b12e8adc84b505cc333126ba63a63cfc6d63db5bdc"
   },
-  "/practice/index.css": {
-    "version": "1",
-    "sha256": "9c2f71e3ab73f70f454ce30acf8ef5400c1991341522782e4fac2cdc86c36e03"
-  },
   "/press-kit.css": {
     "version": "1",
     "sha256": "cd1ec800113b9cbb3d038e6323985a375c4b0681f543fddc32b0e93c996fcea3"
@@ -420,8 +416,8 @@
     "sha256": "b4ec3bb15e88b287a225d760a08f594c81fcb58bdacee4317bfd1419000f2094"
   },
   "/receipt.js": {
-    "version": "7",
-    "sha256": "94e164e07e34bb954ef0d5bff908c45011b69ac36c2a02e9ffe0185be81dd2cf"
+    "version": "9",
+    "sha256": "8d092c7d21c7d9f251df6d8d1b01e7f9630ec5cde2cad3c4694f95547694dbb9"
   },
   "/recover.css": {
     "version": "2",

@@ -12,7 +12,7 @@ This document is the operational contract the product holds itself to. It is del
 | # | SLO | Target | Window | Measured by |
 |---|-----|--------|--------|-------------|
 | 1 | **Availability** — `GET /api/health` returns `200` with `ok:true` | **99.5%** | rolling 30 days | External monitor (`uptime.yml`, every 5 min on GitHub infra); run history is the record |
-| 2 | **Anchor success** — `POST /api/anchor` reaches **≥ 3 of 5** OTS calendars (`MIN_CALENDARS_OK=3`) | **99.9%** | rolling 30 days | Anchor ledger / `calendars_ok` field; spot-probes |
+| 2 | **Anchor success** — `POST /api/anchor` reaches **≥ 3 of 4 distinct** OTS calendars (`MIN_CALENDARS_OK=3`, counted in distinct upstream calendars: five servers reach four calendars, because `a.pool`/`b.pool` are aggregators for alice/bob) | **99.9%** | rolling 30 days | Anchor ledger / `calendars_distinct_ok` field, derivable from `successes` on older rows; spot-probes |
 | 3 | **BTC pin latency** — a receipt transitions `pending → pinned` | **≥ 99% within 36 h** | rolling 30 days | `upgrade_worker` logs; BTC median confirmation ≈ 1 h, 36 h is deep into the tail. Stuck-partial receipts freeze (guard) rather than spin |
 | 4 | **Verification integrity** — a valid issued receipt verifies **offline** via `server/verify_cli.py` (no Orphograph service) | **100%** (non-negotiable) | every receipt | `verifier_roundtrip` CI job + standalone `verify_cli.py` |
 | 5 | **Read latency** — p95 of `/api/health` and `/api/verify/<id>` | **< 1 s** | rolling 7 days | Monitor timing / Fly metrics |

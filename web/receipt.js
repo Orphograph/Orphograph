@@ -14,12 +14,75 @@ const CALENDAR_HOSTS = {
   "btc": "https://btc.calendar.catallaxy.com",
 };
 
+// Calendar short-name → the upstream CALENDAR that server reaches. Mirrors
+// server/engine.py CALENDAR_UPSTREAM. a.pool and b.pool are aggregators that
+// feed alice and bob, so five servers reach four distinct calendars across
+// three operators — and three server acknowledgements can be as few as two
+// calendars. Both numbers are shown; neither is asked to mean the other.
+const CALENDAR_UPSTREAM = {
+  "a": "alice",
+  "b": "bob",
+  "alice": "alice",
+  "finney": "finney",
+  "btc": "catallaxy",
+};
+
+// Distinct calendars we submit to. One meaning everywhere: the denominator
+// is what we aim at, never what one receipt happened to reach — a receipt on
+// two calendars must read "2 of 4", never a full-looking "2 of 2".
+const CALENDARS_DISTINCT_TOTAL = 4;
+const CALENDARS_SUBMITTED_TOTAL = 5;
+
+// Own-property lookup only. A plain object inherits `constructor`,
+// `toString`, `__proto__` and friends, so a file literally named
+// "constructor.ots" resolved to a truthy function and was counted as a
+// calendar (and, in calendarUrlFromFile, reached `new URL(aFunction)`).
+function lookup(map, key) {
+  return Object.hasOwn(map, key) ? map[key] : null;
+}
+
 function calendarUrlFromFile(filename, hashHex) {
   // filename example: "alice.ots" → look up "alice" in CALENDAR_HOSTS
-  const stem = filename.replace(/\.ots$/i, "");
-  const host = CALENDAR_HOSTS[stem];
+  const stem = String(filename).replace(/\.ots$/i, "");
+  const host = lookup(CALENDAR_HOSTS, stem);
   if (!host || !hashHex) return null;
   return `${host}/timestamp/${hashHex}`;
+}
+
+function distinctFromFiles(files) {
+  const seen = {};
+  let n = 0;
+  (files || []).forEach((f) => {
+    const up = lookup(CALENDAR_UPSTREAM, String(f).replace(/\.ots$/i, ""));
+    if (up && !Object.hasOwn(seen, up)) { seen[up] = true; n += 1; }
+  });
+  return n;
+}
+
+// The four numbers the page renders, each with the right denominator.
+// Server counts prefer the payload and fall back to deriving from `checks`,
+// so a page served by an older build still renders truthfully.
+//
+// "stamped"/"valid" is a file fact: the proof parses and carries this hash.
+// "confirmed" is a BITCOIN fact and a strictly smaller set — today a.pool and
+// alice sat pending past 24h while bob, finney and catallaxy were already in
+// a block, so wording the two alike would have claimed a confirmation that
+// had not happened.
+function calendarCounts(rec) {
+  const checks = Array.isArray(rec.checks) ? rec.checks : [];
+  const okFiles = checks.filter((c) => c && c.ok).map((c) => c.file);
+  const num = (v, fallback) => (typeof v === "number" ? v : fallback);
+  return {
+    serversOk: num(rec.calendars_ok, okFiles.length),
+    serversTotal: num(rec.calendars_submitted_total, CALENDARS_SUBMITTED_TOTAL),
+    distinctOk: num(rec.calendars_distinct_ok, distinctFromFiles(okFiles)),
+    distinctTotal: num(rec.calendars_distinct_total, CALENDARS_DISTINCT_TOTAL),
+    // Confirmed counts come from the server, which reads the proof bytes.
+    // Absent them the page says nothing about confirmation rather than
+    // guessing from file validity.
+    serversPinned: num(rec.calendars_pinned_ok, null),
+    distinctPinned: num(rec.calendars_distinct_pinned, null),
+  };
 }
 
 function el(tag, attrs, ...children) {
@@ -237,7 +300,12 @@ function renderFacts(rec) {
     }
   }
   const cals = $("#fact-cals");
-  if (cals) cals.textContent = `${rec.calendars_ok || 0} of ${rec.calendars_total || 5} confirmed`;
+  if (cals) {
+    const c = calendarCounts(rec);
+    cals.textContent =
+      `${c.serversOk} of ${c.serversTotal} servers · ` +
+      `${c.distinctOk} of ${c.distinctTotal} calendars`;
+  }
   const rid = $("#fact-rid");
   if (rid) rid.textContent = rec.receipt_id || "—";
 }
@@ -302,24 +370,38 @@ async function main() {
   $("#sha256").textContent = rec.hash_hex;
   $("#sha512").textContent = rec.sha512_hex || "(none — receipt predates SHA-512 sibling)";
   $("#label").textContent = rec.client_label || "(none)";
-  // Friendly status copy. "partial" with 3/5 still meets MIN_CALENDARS_OK=3
-  // (cryptographically anchored to Bitcoin via 3 independent calendars), but
-  // the bare word "partial" reads as broken — replace with clearer text.
+  // Friendly status copy. The bare word "partial" reads as broken, so it is
+  // replaced with counts. Two denominators, because the five calendar servers
+  // reach four distinct calendars (a.pool and b.pool are aggregators for alice
+  // and bob) and it is the DISTINCT count the durability threshold measures —
+  // three server acknowledgements can rest on two calendars under one
+  // operator's domain.
+  //
+  // CONFIRMED is driven by the Bitcoin-pinned counts, never by proof validity:
+  // a stamped-but-pending proof is not a confirmation.
   const _rawStatus = rec.status || "pending";
-  const _cok = rec.calendars_ok || 0;
-  const _ctot = rec.calendars_total || 5;
+  const _c = calendarCounts(rec);
+  const _stamped =
+    `${_c.serversOk} of ${_c.serversTotal} calendar servers · ` +
+    `${_c.distinctOk} of ${_c.distinctTotal} calendars`;
+  const _confirmed = _c.serversPinned === null
+    ? null
+    : `${_c.serversPinned} of ${_c.serversTotal} calendar servers · ` +
+      `${_c.distinctPinned} of ${_c.distinctTotal} calendars`;
   let _friendly;
-  if (_rawStatus === "pinned") {
-    _friendly = `Anchored to Bitcoin · all ${_ctot} calendars confirmed`;
-  } else if (_rawStatus === "partial") {
-    _friendly = `Anchored to Bitcoin · ${_cok} of ${_ctot} calendars confirmed`;
+  if (_rawStatus === "pinned" || _rawStatus === "partial") {
+    _friendly = _confirmed === null
+      ? `Anchored to Bitcoin · ${_stamped} stamped`
+      : `Anchored to Bitcoin · ${_confirmed} confirmed`;
   } else if (_rawStatus === "pending") {
-    _friendly = `Pending Bitcoin confirmation · ${_cok} of ${_ctot} calendars stamped`;
+    _friendly = `Pending Bitcoin confirmation · ${_stamped} stamped`;
   } else {
-    _friendly = `${_rawStatus} (${_cok}/${_ctot} calendars)`;
+    _friendly = `${_rawStatus} (${_stamped} stamped)`;
   }
   $("#status").textContent = _friendly;
-  $("#cals").textContent = `${rec.calendars_ok} of ${rec.calendars_total} OTS proofs valid`;
+  $("#cals").textContent =
+    `${_c.serversOk} of ${_c.serversTotal} OTS proofs valid · ` +
+    `${_c.distinctOk} of ${_c.distinctTotal} distinct calendars`;
   if (rec.btc_pinned_at) {
     renderTimeInto($("#btc"), rec.btc_pinned_at);
   } else {

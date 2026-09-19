@@ -255,6 +255,15 @@ else:
 ANCHOR_RATE_CAPACITY = int(os.environ.get("RATE_LIMIT_PER_DAY", _per_day_default))
 ANCHOR_RATE_REFILL = ANCHOR_RATE_CAPACITY / 86400.0
 ANCHOR_RATE_WINDOW_LABEL = "24h"
+# Durability threshold for the `low_redundancy` flag. Counted in DISTINCT
+# upstream calendars (engine.distinct_calendars), NOT in server
+# acknowledgements: a.pool and b.pool are aggregators for alice and bob, so
+# a.pool + alice + b.pool is three acknowledgements resting on two calendars
+# under one operator. Default 3 is unchanged in value and stricter in meaning
+# — with four distinct calendars of which two (alice, bob) share an operator,
+# any three distinct calendars necessarily span at least two operators.
+# Maximum meaningful value is engine.CALENDARS_DISTINCT_TOTAL (4); a higher
+# setting flags every receipt.
 MIN_CALENDARS_OK = int(os.environ.get("MIN_CALENDARS_OK", "3"))
 STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
 NOWPAYMENTS_IPN_SECRET = os.environ.get("NOWPAYMENTS_IPN_SECRET", "")
@@ -657,7 +666,6 @@ def _build_sitemap() -> str:
         ("/construction/", "0.4"),
         ("/listings/", "0.4"),
         ("/matters/", "0.4"),
-        ("/practice/", "0.4"),
         ("/workpapers/", "0.4"),
         ("/blog/atom.xml", "0.4"),
         ("/blog/rss.xml", "0.4"),
@@ -783,6 +791,38 @@ def _serve_ab_home(handler: BaseHTTPRequestHandler) -> bool:
 # the same document and both must 404.
 _PRIVATE_PATH_PREFIXES = ("_mockups/",)
 _PRIVATE_PATH_EXACT = frozenset({"index-legacy"})
+
+
+# Withdrawn pages, matched by PREFIX so every path under the withdrawn
+# subtree answers Gone -- not just the handful of URLs that were ever
+# directly linked. A hand-typed tuple of three exact strings per withdrawal
+# (the original form of this check, for /inspection on 2026-09-18 and
+# /practice on 2026-09-19) missed the clean-URL siblings _serve_static
+# resolves for any subdirectory: /<prefix>/index (extensionless) and
+# /<prefix>/index.css (or any other asset that lived beside index.html)
+# fell through to the static-file fallback and answered 404, not 410 --
+# live on production for /inspection/index and /inspection/index.css since
+# the day of that withdrawal (code review finding, 2026-09-19, PR #255).
+WITHDRAWN_PATH_PREFIXES = ("/inspection", "/practice")
+
+
+def _is_withdrawn_path(path: str) -> bool:
+    """True if `path` names a withdrawn page or anything under it.
+
+    Exact match OR startswith(prefix + "/"): "/practice", "/practice/",
+    "/practice/index", "/practice/index.css" and "/practice//" (a TRAILING
+    empty segment under the prefix) are all withdrawn. "/practicex" is a
+    different path that merely shares the prefix's characters and is not.
+    `path` is expected pre-normalised the way do_GET already normalises it
+    (query string stripped); no further normalisation happens here.
+
+    A LEADING double slash ("//practice/") is not handled here and does
+    not need to be: stdlib http.server's parse_request() already collapses
+    it to a single "/" before self.path is ever set (gh-87389, an
+    open-redirect mitigation upstream of this function), so this function
+    never sees that shape from a real request.
+    """
+    return any(path == p or path.startswith(p + "/") for p in WITHDRAWN_PATH_PREFIXES)
 
 
 def _is_private_path(rel_path: str) -> bool:
@@ -1237,10 +1277,10 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):  # noqa: N802
         path = self.path.split("?", 1)[0]
-        # Withdrawn page. It sat in the sitemap and the homepage footer, so say
-        # Gone rather than Not Found: crawlers drop a 410 and its cached snippet
-        # far sooner than a 404.
-        if path in ("/inspection", "/inspection/", "/inspection/index.html"):
+        # Withdrawn pages. Each sat in the sitemap (/inspection/ was also in the
+        # homepage footer), so say Gone rather than Not Found: crawlers drop a
+        # 410 and its cached snippet far sooner than a 404.
+        if _is_withdrawn_path(path):
             self.send_error(410, "Gone")
             return
         if _is_retired_btc_path(path):
@@ -2726,7 +2766,11 @@ class Handler(BaseHTTPRequestHandler):
         _ab_arm = _ab_cookie_variant(self)
         if _ab_arm:
             _ab_log("anchor", _ab_arm)
-        low_redundancy = record["calendars_ok"] < MIN_CALENDARS_OK
+        # Distinct upstream calendars, not server acknowledgements. One
+        # helper for every anchor surface (single, batch, folder) so the pair
+        # of fields and the flag cannot drift between them.
+        distinct = engine.receipt_distinct_counts(record)
+        low_redundancy = distinct["calendars_distinct_ok"] < MIN_CALENDARS_OK
         # Total calendar outage: 0 calendars accepted the hash, so the receipt
         # has no Bitcoin commitment and can never upgrade — it is worthless.
         # Refund the consumed credit (the buyer can re-anchor when calendars
@@ -2777,6 +2821,10 @@ class Handler(BaseHTTPRequestHandler):
                 "client_label": record.get("client_label"),
                 "calendars_ok": record["calendars_ok"],
                 "calendars_total": record["calendars_total"],
+                # A receiver that acts on low_redundancy must also be able to
+                # see WHY it fired, without a second fetch.
+                **distinct,
+                "low_redundancy": low_redundancy,
                 "private": want_private,
                 "receipt_url": f"{os.environ.get('SITE_URL', 'https://orphograph.com').rstrip('/')}/r/{record['receipt_id']}",
             })
@@ -2833,6 +2881,9 @@ class Handler(BaseHTTPRequestHandler):
             "client_label": record["client_label"],
             "calendars_ok": record["calendars_ok"],
             "calendars_total": record["calendars_total"],
+            # Five servers reach four calendars: both counts are reported so
+            # neither number has to carry a meaning it does not have.
+            **distinct,
             "low_redundancy": low_redundancy,
             "pack_consumed": pack_consumed,
             "pack_remaining": pack_remaining,
@@ -3011,6 +3062,7 @@ class Handler(BaseHTTPRequestHandler):
                 authenticated=api_key_active or sub_active,
                 paid=demand_auth_path != "free",
             )
+            item_distinct = engine.receipt_distinct_counts(record)
             results.append({
                 "index": idx,
                 "ok": True,
@@ -3019,7 +3071,9 @@ class Handler(BaseHTTPRequestHandler):
                 "client_label": record["client_label"],
                 "calendars_ok": record["calendars_ok"],
                 "calendars_total": record["calendars_total"],
-                "low_redundancy": record["calendars_ok"] < MIN_CALENDARS_OK,
+                **item_distinct,
+                "low_redundancy": (item_distinct["calendars_distinct_ok"]
+                                   < MIN_CALENDARS_OK),
                 "receipt_url": f"{site}/r/{rid}",
                 "badge_url": f"{site}/api/badge/{rid}.svg",
             })
@@ -4244,6 +4298,9 @@ class Handler(BaseHTTPRequestHandler):
             except ValueError as e:
                 lineage_out = {**lineage_pre, "committed": False,
                                "error": f"lineage not mirrored: {e}"}
+        folder_distinct = engine.receipt_distinct_counts(record)
+        folder_low_redundancy = (
+            folder_distinct["calendars_distinct_ok"] < MIN_CALENDARS_OK)
         response_body = {
             "receipt_id": rid,
             "root_hex": root_hex,
@@ -4252,6 +4309,11 @@ class Handler(BaseHTTPRequestHandler):
             "merkle_algorithm": merkle.ALGORITHM,
             "calendars_ok": record["calendars_ok"],
             "calendars_total": record["calendars_total"],
+            **folder_distinct,
+            # The folder path returned the counts but not the verdict, so a
+            # dataset anchored across two calendars looked as healthy as one
+            # across four. Same flag, same threshold, same meaning.
+            "low_redundancy": folder_low_redundancy,
             "created_at": record["created_at"],
             # Always report the privacy state. The folder response omitted it
             # entirely, so a caller who asked for private had no way to learn
@@ -4298,6 +4360,8 @@ class Handler(BaseHTTPRequestHandler):
                 "client_label": record.get("client_label"),
                 "calendars_ok": record["calendars_ok"],
                 "calendars_total": record["calendars_total"],
+                **folder_distinct,
+                "low_redundancy": folder_low_redundancy,
                 "private": want_private,
                 # Folder-specific, so a receiver can tell the two apart
                 # without a follow-up fetch.
@@ -5407,6 +5471,12 @@ def _list_anchors_for_email(
             "private": bool(rec.get("private", False)),
             "calendars_ok": rec.get("calendars_ok"),
             "calendars_total": rec.get("calendars_total"),
+            # Map-based on purpose: a vault page lists many receipts and the
+            # proof-first path would read five .ots files per row. The anchor
+            # and verify surfaces, which already hold the bytes, read the
+            # proofs themselves.
+            "calendars_distinct_ok": engine.distinct_calendars(rec.get("successes")),
+            "calendars_distinct_total": engine.CALENDARS_DISTINCT_TOTAL,
             "status": rec.get("status", "pending"),
             "btc_pinned_at": rec.get("btc_pinned_at"),
         })

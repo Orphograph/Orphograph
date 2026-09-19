@@ -354,7 +354,9 @@ function showReceipt(record) {
   if (warn) {
     if (record.low_redundancy) {
       warn.hidden = false;
-      warn.textContent = `Only ${record.calendars_ok}/${record.calendars_total} calendars confirmed. Receipt is still valid against the calendars that succeeded — for full redundancy, re-anchor when the network recovers.`;
+      const dOk = typeof record.calendars_distinct_ok === "number" ? record.calendars_distinct_ok : "?";
+      const dTot = typeof record.calendars_distinct_total === "number" ? record.calendars_distinct_total : 4;
+      warn.textContent = `${record.calendars_ok} of ${record.calendars_total} calendar servers accepted this hash, reaching ${dOk} of ${dTot} calendars — two of the five servers are aggregators for the same calendars, so the servers are not the count that matters. The receipt is valid against the calendars that succeeded; re-anchor when the network recovers for full redundancy.`;
     } else {
       warn.hidden = true;
     }

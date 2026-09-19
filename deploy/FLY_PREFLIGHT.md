@@ -74,6 +74,12 @@ fly secrets set \
   MIN_CALENDARS_OK="3"
 ```
 
+`MIN_CALENDARS_OK` counts DISTINCT upstream calendars, not calendar
+servers: `a.pool` and `b.pool` are aggregators for alice and bob, so the
+five servers submitted to reach four calendars. The maximum meaningful
+value is therefore `4`; anything higher flags every receipt
+`low_redundancy`. The flag is informational and never rejects an anchor.
+
 ---
 
 ## Step 2 — Bump memory (soft-block remediation)
