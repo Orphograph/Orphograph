@@ -254,8 +254,13 @@ def test_robots_does_not_hide_the_410_from_crawlers(base) -> None:
     disallowed = [ln.split(":", 1)[1].strip()
                   for ln in text.splitlines()
                   if ln.lower().startswith("disallow:") and ln.split(":", 1)[1].strip()]
-    for path in ("/buy", "/pay/btc"):
-        blocked = [d for d in disallowed if path.startswith(d)]
+    # Every retired path, not just the bare prefixes. `Disallow: /buy/` — which
+    # this commit removes — does NOT block "/buy" but DOES block "/buy/<id>",
+    # and the per-order pages are the ones a crawler actually has indexed. A
+    # check written only against "/buy" passes on the pre-cut tree and proves
+    # nothing.
+    for path in GONE_GET_PATHS:
+        blocked = [d for d in disallowed if path.startswith(d) and not d.startswith("/api/")]
         assert not blocked, f"robots.txt hides the {path} 410 from crawlers via {blocked}"
     # CONTROL: robots.txt really does disallow things, so the loop above is
     # reading a populated list rather than an empty one.
