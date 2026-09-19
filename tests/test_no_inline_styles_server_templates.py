@@ -32,11 +32,15 @@ KNOWN_VIOLATORS = {
 # clients, which in practice REQUIRE inline styles. Exempt by category, named.
 EMAIL_MODULES = {
     "mailer.py": "builds email bodies, never an HTTP response",
+    "newsletter.py": "its only styled HTML is the double-opt-in confirmation "
+                     "EMAIL body; its HTTP endpoints answer JSON",
 }
 
 _STYLE_BLOCK = re.compile(r"<style\b", re.I)
 # an HTML attribute inside a Python string: preceded by whitespace, inside a tag
-_STYLE_ATTR = re.compile(r"<[a-zA-Z][^<>]*\sstyle\s*=\s*[\"'{]", re.I)
+# `\\?` because this reads Python SOURCE: inside a "..." literal the attribute
+# is written style=\"...\". Without it the gate missed its own first plant.
+_STYLE_ATTR = re.compile(r"<[a-zA-Z][^<>]*\sstyle\s*=\s*\\?[\"'{]", re.I)
 
 
 def _violations(text: str) -> int:
@@ -68,6 +72,8 @@ class TestServerTemplatesCarryNoInlineStyles(unittest.TestCase):
     def test_the_patterns_discriminate(self):
         self.assertEqual(_violations('<p style="color:red">x</p>'), 1)
         self.assertEqual(_violations("<style>p{}</style>"), 1)
+        # as it appears in Python source, quote escaped
+        self.assertEqual(_violations('"<div style=\\"color:red\\">x</div>"'), 1)
         self.assertEqual(_violations('<link rel="stylesheet" href="/u.css">'), 0)
         self.assertEqual(_violations('style = compute_style()'), 0)
 
