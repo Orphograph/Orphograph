@@ -56,7 +56,10 @@ def _cold_address() -> str:
         return ""
 
 
-SWEEP_THRESHOLD_SATS = int(os.environ.get("ORPHO_SWEEP_THRESHOLD_SATS", "500000"))
+# The sweep threshold went with the action flag it fed. There is nothing left
+# to compare a frozen balance against, and publishing a threshold next to a
+# number that can never move invites exactly the misreading this avoids.
+# ORPHO_SWEEP_THRESHOLD_SATS is no longer read by anything.
 
 
 def _last_ping_ts() -> float:
@@ -82,11 +85,24 @@ def _last_ping_ts() -> float:
 
 
 def payout_status() -> dict:
-    """The founder-only historical readout behind /api/founder/payout-status.
+    """The founder-only HISTORICAL readout behind /api/founder/payout-status.
 
-    `address_pool_size` is deliberately absent: the pool was a property of the
-    retired order rail, not of the balance history. Every other field reads
-    from a ledger that still exists.
+    Presents history AS history. The collector is deleted, so the newest
+    snapshot on disk is the last one that will ever exist: it cannot refresh,
+    and it goes staler every day.
+
+    That is why there is no `ready_to_sweep` flag any more. It was computed as
+    `total >= SWEEP_THRESHOLD_SATS` from that frozen snapshot, so once the
+    founder actually swept the wallet the endpoint would have gone on saying
+    "ready to sweep: yes" forever, against a balance of zero. An action flag
+    derived from a value that can never update is not a reading — it is a
+    standing instruction to do something already done.
+
+    `hot_balance_sats` becomes `last_known_balance_sats` for the same reason,
+    and is never served without the moment it was observed.
+
+    `address_pool_size` is absent: the pool was a property of the retired order
+    rail, not of the balance history, and it read through a deleted module.
     """
     snap = mempool_watcher.latest_snapshot() or {}
     total = snap.get("total_sats", 0)
@@ -95,16 +111,29 @@ def payout_status() -> dict:
         datetime.fromtimestamp(last_ping_unix, timezone.utc).isoformat(timespec="seconds")
         if last_ping_unix else None
     )
+    observed_at = snap.get("ts")
+    age_days = None
+    if observed_at:
+        try:
+            seen = datetime.fromisoformat(observed_at)
+            if seen.tzinfo is None:
+                seen = seen.replace(tzinfo=timezone.utc)
+            age_days = max(
+                0, int((datetime.now(timezone.utc) - seen).total_seconds() // 86400))
+        except (TypeError, ValueError):
+            age_days = None
     return {
         "rail": "retired",
-        "hot_balance_sats": total,
-        "hot_balance_btc": round(total / 100_000_000, 8),
-        "threshold_sats": SWEEP_THRESHOLD_SATS,
-        "threshold_btc": round(SWEEP_THRESHOLD_SATS / 100_000_000, 8),
-        "ready_to_sweep": total >= SWEEP_THRESHOLD_SATS,
+        "retired_on": "2026-09-19",
+        # Named so it cannot be mistaken for a live balance, and never served
+        # without the moment it was observed.
+        "last_known_balance_sats": total,
+        "last_known_balance_btc": round(total / 100_000_000, 8),
+        "observed_at": observed_at,
+        "observation_age_days": age_days,
+        "snapshot_is_final": True,
         "cold_destination": _cold_address(),
         "last_ping_at": last_ping_iso,
-        "last_snapshot_at": snap.get("ts"),
         "addresses_polled": snap.get("addresses_polled", 0),
         "addresses_error": snap.get("addresses_error", 0),
     }

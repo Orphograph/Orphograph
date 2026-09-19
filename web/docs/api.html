@@ -528,8 +528,7 @@ print(receipt["status"], receipt.get("btc_pinned_at"))</pre>
     {"url": "https://finney.calendar.eternitywall.com",      "reachable": true},
     {"url": "https://btc.calendar.catallaxy.com", "reachable": true}
   ],
-  "btc_oracle": {"available": true, "usd_per_btc": 67500.0, "source": "coingecko"},
-  "payout":     {"configured": true, "address_pool_size": 100, "xpub_set": true},
+  "payout":     {"rail": "retired", "configured": false},
   "checked_at": "2026-05-14T14:00:30+00:00"
 }</pre>
 
@@ -537,7 +536,10 @@ print(receipt["status"], receipt.get("btc_pinned_at"))</pre>
     The data here is intentionally non-sensitive: counts and timestamps,
     not contents. The <code>payout</code> block reports only that the direct
     Bitcoin rail is retired — actual balances are not exposed on this
-    endpoint, and never were.
+    endpoint, and never were. There is no <code>btc_oracle</code> block: the
+    price feed existed to quote BTC orders, so it was removed with the rail
+    on 2026-09-19 rather than left reporting <code>available: false</code>
+    on every request forever.
   </p>
 
   <h3>curl</h3>
@@ -593,11 +595,6 @@ print(f"{health['counts']['receipts_on_disk']} receipts, uptime {health['uptime_
       {"name": "finney", "reachable": true},
       {"name": "btc",    "reachable": true}
     ]
-  },
-  "btc_oracle": {
-    "available":   true,
-    "source":      "coingecko",
-    "usd_per_btc": 67500.0
   },
   "checked_at": "2026-05-14T14:00:30+00:00"
 }</pre>

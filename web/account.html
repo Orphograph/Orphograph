@@ -195,20 +195,20 @@
 </section>
 
 <section id="founder-section" class="founder-only" hidden>
-  <h2>Payouts <span class="founder-badge">founder</span></h2>
+  <h2>Payouts — history <span class="founder-badge">founder</span></h2>
   <p class="hint">
-    Hot-wallet balance across all addresses in the receive pool. Visible
-    only when a valid founder token is stored locally. Customers don't
-    see this panel.
+    The direct on-chain BTC rail was retired on 2026-09-19. Nothing polls the
+    chain any more, so these figures are a FINAL RECORD, not a live balance —
+    the observation date below is when they were last true. Visible only when
+    a valid founder token is stored locally; customers don't see this panel.
   </p>
   <dl class="kv">
-    <dt>Hot balance</dt><dd id="fp-balance" class="mono">…</dd>
-    <dt>Sweep threshold</dt><dd id="fp-threshold" class="mono">…</dd>
-    <dt>Ready to sweep?</dt><dd id="fp-ready">…</dd>
+    <dt>Rail</dt><dd id="fp-rail">…</dd>
+    <dt>Last known balance</dt><dd id="fp-balance" class="mono">…</dd>
+    <dt>Observed at</dt><dd id="fp-observed" class="mono">…</dd>
+    <dt>Observation age</dt><dd id="fp-age" class="mono">…</dd>
     <dt>Cold destination</dt><dd id="fp-cold" class="mono">…</dd>
-    <dt>Address pool size</dt><dd id="fp-pool" class="mono">…</dd>
-    <dt>Last ping</dt><dd id="fp-last-ping" class="mono">…</dd>
-    <dt>Last snapshot</dt><dd id="fp-last-snap" class="mono">…</dd>
+    <dt>Last sweep ping</dt><dd id="fp-last-ping" class="mono">…</dd>
   </dl>
   <div class="sub-actions">
     <button id="fp-refresh">Refresh</button>
@@ -230,7 +230,7 @@
   </div>
 </footer>
 
-<script src="/account.js?v=2"></script>
+<script src="/account.js?v=3"></script>
 <script src="/statusbar.js?v=2" defer></script>
 <script src="/assets/event.js?v=1" defer></script>
 </body>

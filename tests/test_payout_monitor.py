@@ -126,13 +126,12 @@ def test_payout_status_returns_expected_keys(monkeypatch):
     monkeypatch.setenv("ORPHO_COLD_ADDRESS", "bc1qcold" + "0" * 30)
 
     status = payout_monitor.payout_status()
-    assert "hot_balance_sats" in status
-    assert "ready_to_sweep" in status
+    assert "last_known_balance_sats" in status
     assert "cold_destination" in status
-    assert status["hot_balance_sats"] == 1234
+    assert status["last_known_balance_sats"] == 1234
     assert status["cold_destination"] == "bc1qcold" + "0" * 30
-    assert status["ready_to_sweep"] is False  # 1234 < default 500_000
-    assert status["last_snapshot_at"] == "2026-05-14T00:00:00+00:00"
+    assert status["observed_at"] == "2026-05-14T00:00:00+00:00"
+    assert status["snapshot_is_final"] is True
 
 
 def test_payout_status_reads_a_historical_snapshot_written_before_retirement():
@@ -144,8 +143,8 @@ def test_payout_status_reads_a_historical_snapshot_written_before_retirement():
         json.dumps({"total_sats": 250_000, "ts": "2026-06-01T00:00:00+00:00",
                     "addresses_polled": 7, "addresses_error": 1}) + "\n")
     status = payout_monitor.payout_status()
-    assert status["hot_balance_sats"] == 250_000
-    assert status["last_snapshot_at"] == "2026-06-01T00:00:00+00:00"
+    assert status["last_known_balance_sats"] == 250_000
+    assert status["observed_at"] == "2026-06-01T00:00:00+00:00"
     assert status["addresses_polled"] == 7
     assert status["addresses_error"] == 1
 
@@ -162,11 +161,55 @@ def test_payout_status_drops_the_address_pool_size():
     assert "address_pool_size" not in payout_monitor.payout_status()
 
 
-def test_payout_status_ready_to_sweep_when_above_threshold(monkeypatch):
+def test_a_stale_snapshot_can_never_produce_an_action_flag():
+    """REPLACES test_payout_status_ready_to_sweep_when_above_threshold, which
+    pinned the stale behaviour instead of catching it.
+
+    `ready_to_sweep` was `total >= SWEEP_THRESHOLD_SATS` over the newest
+    snapshot on disk. The collector is deleted, so that snapshot is frozen: the
+    moment the founder swept the wallet, this endpoint would have gone on
+    saying "ready to sweep: yes" forever against a balance that is really zero.
+
+    A large balance from an old snapshot must therefore produce NO action flag
+    and NO threshold — only the number, when it was observed, and how old that
+    observation is."""
     mempool_watcher.BALANCE_LEDGER.parent.mkdir(parents=True, exist_ok=True)
     snap = {"total_sats": 9_000_000, "ts": "2026-05-14T00:00:00+00:00"}
     mempool_watcher.BALANCE_LEDGER.write_text(json.dumps(snap) + "\n")
 
     status = payout_monitor.payout_status()
-    assert status["ready_to_sweep"] is True
-    assert status["hot_balance_sats"] == 9_000_000
+
+    for banned in ("ready_to_sweep", "threshold_sats", "threshold_btc",
+                   "hot_balance_sats", "hot_balance_btc"):
+        assert banned not in status, (
+            f"{banned} is derived from a snapshot that can never refresh")
+
+    assert status["last_known_balance_sats"] == 9_000_000
+    assert status["observed_at"] == "2026-05-14T00:00:00+00:00"
+    assert status["observation_age_days"] is not None
+    assert status["observation_age_days"] > 0, (
+        "a 2026-05-14 snapshot cannot be zero days old")
+    assert status["rail"] == "retired"
+
+
+def test_the_observation_age_is_measured_not_hardcoded():
+    """NEGATIVE CONTROL for observation_age_days. A fresh snapshot must read as
+    0 days old, or the field is a constant rather than a measurement."""
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    mempool_watcher.BALANCE_LEDGER.parent.mkdir(parents=True, exist_ok=True)
+    mempool_watcher.BALANCE_LEDGER.write_text(
+        json.dumps({"total_sats": 5, "ts": now}) + "\n")
+    assert payout_monitor.payout_status()["observation_age_days"] == 0
+
+
+def test_a_missing_snapshot_reports_no_observation_rather_than_zero():
+    """No ledger at all must not read as "observed zero sats just now"."""
+    status = payout_monitor.payout_status()
+    assert status["observed_at"] is None
+    assert status["observation_age_days"] is None
+
+
+def test_the_sweep_threshold_constant_is_gone():
+    """It existed only to compute the action flag; leaving it invites it back."""
+    assert not hasattr(payout_monitor, "SWEEP_THRESHOLD_SATS")

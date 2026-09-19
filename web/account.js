@@ -752,14 +752,23 @@ async function setupFounderPanel() {
 
   const data = await resp.json();
 
-  $("#fp-balance").textContent = formatSats(data.hot_balance_sats);
-  $("#fp-threshold").textContent = formatSats(data.threshold_sats);
-  $("#fp-ready").textContent = data.ready_to_sweep ? "✓ yes — tap Phantom" : "no";
-  $("#fp-ready").className = data.ready_to_sweep ? "ready-yes" : "ready-no";
+  // History, not a live reading. The collector is deleted, so the snapshot
+  // behind these numbers is the last one that will ever exist — the panel
+  // must not render an action ("tap Phantom") off a value that cannot move,
+  // and `pool_size` no longer exists at all (it used to render as a
+  // confident "0" through `?? 0`, which reads as a measurement).
+  $("#fp-rail").textContent =
+    data.rail === "retired"
+      ? `retired${data.retired_on ? " " + data.retired_on : ""} — final record, not live`
+      : String(data.rail || "unknown");
+  $("#fp-balance").textContent = formatSats(data.last_known_balance_sats);
+  $("#fp-observed").textContent = formatTs(data.observed_at);
+  $("#fp-age").textContent =
+    typeof data.observation_age_days === "number"
+      ? `${data.observation_age_days} day${data.observation_age_days === 1 ? "" : "s"} ago`
+      : "never observed";
   $("#fp-cold").textContent = data.cold_destination || "(not configured)";
-  $("#fp-pool").textContent = String(data.pool_size ?? 0);
   $("#fp-last-ping").textContent = formatTs(data.last_ping_at);
-  $("#fp-last-snap").textContent = formatTs(data.last_snapshot_at);
 
   if (data.cold_destination) {
     const link = $("#fp-cold-explorer");
