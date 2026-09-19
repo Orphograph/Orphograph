@@ -3382,12 +3382,12 @@ class Handler(BaseHTTPRequestHandler):
         e = (qs.get("e") or [""])[0].strip()
         if not e or not EMAIL_RE.match(e):
             return ""
-        # EMAIL_RE is a SHAPE check: it accepts `<svg/onload=x>@x.co`. Angle
-        # brackets are never valid in an unquoted address, and this value is
-        # both stored and shown back, so refuse them here. Output is escaped
-        # as well — this is the second guard, not the only one.
-        if "<" in e or ">" in e:
-            return ""
+        # Deliberately NO tighter than EMAIL_RE, the check every intake path
+        # uses. An address we accepted and may mail must always be able to
+        # unsubscribe (CAN-SPAM, RFC 8058); refusing odd-looking ones here
+        # would strand exactly those. EMAIL_RE is only a shape check and does
+        # admit markup characters, so every place this value is SHOWN escapes
+        # it — that is the guard, not rejection.
         return e
 
     def _handle_unsubscribe_get(self) -> None:
@@ -3401,31 +3401,34 @@ class Handler(BaseHTTPRequestHandler):
         if not email:
             self.send_error(400, "invalid email")
             return
-        added = unsubscribe.add(email, source="link_get")
+        try:
+            added = unsubscribe.add(email, source="link_get")
+        except unsubscribe.SuppressionUnavailable:
+            # Without this the socket just closed: the visitor could not tell
+            # whether the unsubscribe was recorded. It was not. Say so.
+            self.send_error(503, "We could not record this just now. "
+                                 "Please try the link again in a few minutes.")
+            return
         from html import escape as _h
-        # Stylesheets come from the error template, the one place the site's
-        # head links are pinned. This page used an inline style block, which the
-        # CSP (style-src 'self') drops, so it rendered unstyled; and copying
-        # the pins here would be a second list to drift.
-        head_links = "\n".join(re.findall(
-            r'<link rel="stylesheet"[^>]+>', Handler.error_message_format))
         body = (
             "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
             "<title>Unsubscribed — Orphograph</title>"
             "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
             "<meta name=\"robots\" content=\"noindex\">"
-            f"{head_links}</head><body class=\"orpho\">"
+            f"{_SITE_STYLESHEET_LINKS}</head><body class=\"orpho\">"
             "<main class=\"blog-post\"><article class=\"post-header\">"
-            "<h1>Done — you're unsubscribed.</h1></article>"
-            "<section class=\"post-body\">"
+            "<h1>Done — you're unsubscribed.</h1>"
+            # In the header, not .post-body: `.post-body p` out-specifies
+            # `.muted`, and the error page places its muted line here too.
+            "<p class=\"post-meta muted\">If this was a mistake, just sign in "
+            "again or buy a pack and you'll be re-enrolled per your action.</p>"
+            "</article><section class=\"post-body\">"
             # The address arrives in a URL anyone can craft. Escape on output.
             f"<p>We've removed <strong>{_h(email)}</strong> from all marketing "
             "email. You will still receive <em>transactional</em> mail "
             "tied to actions you take on the site (receipts, sign-in "
             "links, pack codes) — those are required by the service "
             "itself, not promotional.</p>"
-            "<p class=\"muted\">If this was a mistake, just sign in again "
-            "or buy a pack and you'll be re-enrolled per your action.</p>"
             f"<p>{'Confirmed.' if added else 'Already on the suppression list — no action needed.'}</p>"
             "<p><a href=\"/\">Back to Orphograph</a></p>"
             "</section></main></body></html>"
@@ -3916,7 +3919,14 @@ class Handler(BaseHTTPRequestHandler):
                 self.rfile.read(length)
             except OSError:
                 pass
-        unsubscribe.add(email, source="link_post")
+        try:
+            unsubscribe.add(email, source="link_post")
+        except unsubscribe.SuppressionUnavailable:
+            # A mailbox provider's one-click POST must get an answer it can
+            # retry on, never a dropped connection read as success or failure
+            # at the provider's discretion.
+            _json_response(self, 503, {"error": "suppression ledger unavailable; retry"})
+            return
         _json_response(self, 200, {"ok": True})
 
     def _handle_issue_api_key(self) -> None:
@@ -5238,6 +5248,16 @@ class Handler(BaseHTTPRequestHandler):
             "plan": plan,
             "currency": currency,
         })
+
+
+# The site's stylesheet links, taken ONCE from the error template — the single
+# place those ?v= pins live. Server-built pages reuse them instead of carrying
+# a second list to drift. Empty would mean an unstyled page with no error, so
+# fail at import, loudly, if the template ever stops yielding any.
+_SITE_STYLESHEET_LINKS = "\n".join(re.findall(
+    r'<link\b[^>]*\brel="stylesheet"[^>]*>', Handler.error_message_format))
+if not _SITE_STYLESHEET_LINKS:
+    raise RuntimeError("error_message_format yields no stylesheet links")
 
 
 def _owned_sources_for_email(email: str) -> set[str]:
