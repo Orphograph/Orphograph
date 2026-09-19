@@ -99,6 +99,14 @@ Given a `receipt_id`:
    - `calendars_ok` — count of checks with `ok == true`,
    - `calendars_total` — count of `.ots` files (MAY be 0; zero proofs is
      NOT an error — the receipt is found, with `calendars_total: 0`),
+   - `calendars_distinct_ok` — count of DISTINCT upstream calendars among
+     the checks with `ok == true`. `a.ots` and `alice.ots` both reach the
+     alice calendar and `b.ots` reaches bob, so the five shipped servers
+     reach four calendars; the mapping lives in `engine.CALENDAR_UPSTREAM`.
+     Derived HERE from the files on disk and never read from receipt.json,
+     so a receipt issued before the field existed reports the same number.
+     An unrecognised filename adds no calendar.
+   - `calendars_distinct_total` — the same count over ALL checks,
    - `checks` — the per-file list,
    - the surfaced receipt fields (`created_at`, `hash_hex`, `sha512_hex`,
      `client_label`, `private`, `attestation`, `metadata`, `status`
@@ -271,7 +279,8 @@ by `/api/verify_folder/<rid>`:
 | `.ots` bad magic | check `{magic_ok: false, hash_match: false, ok: false}`; receipt still found |
 | `.ots` truncated mid-digest | `{magic_ok: true, hash_match: false, ok: false}` |
 | `.ots` digest ≠ hash_hex | `{magic_ok: true, hash_match: false, ok: false}` |
-| No `.ots` files | found, `calendars_total: 0` |
+| No `.ots` files | found, `calendars_total: 0`, `calendars_distinct_ok: 0`, `calendars_distinct_total: 0` |
+| `.ots` filename not a known calendar | counted in `calendars_total`, adds no distinct calendar |
 | Supplied hash wrong / malformed / empty | found, `supplied_matches_receipt: false` (never an exception) |
 | Inclusion proof malformed in any way | `false` (never an exception) |
 

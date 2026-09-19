@@ -199,10 +199,21 @@ with per-calendar failures listed verbatim.
 **Acceptance is not confirmation.** The two are kept as distinct
 states, measured by distinct counters:
 
-- **Acceptance at anchor time** — `calendars_ok`. The service's
-  acceptance threshold is `MIN_CALENDARS_OK` (default 3, operator-
-  configurable): a receipt issued with fewer acceptances is returned to
-  the customer flagged `low_redundancy`. A receipt with zero
+- **Acceptance at anchor time** — `calendars_ok` counts calendar
+  SERVERS that acknowledged; `calendars_distinct_ok` counts the
+  distinct CALENDARS those servers reach. The service's acceptance
+  threshold is `MIN_CALENDARS_OK` (default 3, operator-configurable)
+  and is measured against the DISTINCT count, because three
+  acknowledgements can rest on as few as two calendars: `a.pool +
+  alice + b.pool` is alice twice and bob once, all inside one
+  operator's domain. A receipt issued below the threshold is returned
+  to the customer flagged `low_redundancy` — a flag, not a refusal; the
+  receipt is issued either way. `calendars_distinct_ok` is written at
+  issuance only and is absent from receipts issued before it existed;
+  a consumer must derive it from `successes` when the key is missing,
+  and it is deliberately NOT part of the renewal commitment core, so
+  no already-issued receipt's renewal chain is disturbed. A receipt
+  with zero
   acceptances holds no commitment path at all, can never upgrade, and
   is treated as worthless — a consumed paid credit is refunded, and the
   receipt is returned only for transparency.

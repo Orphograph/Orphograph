@@ -49,12 +49,109 @@ CALENDARS = [
     "https://finney.calendar.eternitywall.com",
     "https://btc.calendar.catallaxy.com",
 ]
+
+# Which upstream CALENDAR each submitted SERVER actually reaches.
+#
+# `a.pool` and `b.pool` are AGGREGATORS, not calendars of their own: a.pool
+# forwards to alice, b.pool forwards to bob. Evidence (2026-09-18/19): a fresh
+# a.pool proof names alice as its pending attestation, and on one receipt the
+# a.pool and alice proofs were BOTH still pending after 24h — both waiting on
+# alice — while bob, catallaxy and finney had confirmed.
+#
+# So the five servers above reach FOUR distinct calendars (alice, bob, finney,
+# catallaxy) across THREE operators (opentimestamps.org, eternitywall.com,
+# catallaxy.com). Counting server acknowledgements OVERSTATES durability:
+# a.pool + alice + b.pool reads as "3 OK" while resting on two calendars, one
+# of them counted twice, and both under one operator's domain.
+#
+# Every entry of CALENDARS must appear here; tests/test_distinct_calendars.py
+# fails if a server is added without a mapping. This map does NOT change which
+# servers are submitted to — DOCTRINE.md's five-calendar code invariant is
+# untouched. It only changes how the reached calendars are COUNTED.
+CALENDAR_UPSTREAM = {
+    "https://a.pool.opentimestamps.org": "alice",
+    "https://b.pool.opentimestamps.org": "bob",
+    "https://alice.btc.calendar.opentimestamps.org": "alice",
+    "https://finney.calendar.eternitywall.com": "finney",
+    "https://btc.calendar.catallaxy.com": "catallaxy",
+}
 HTTP_TIMEOUT_SEC = 15
 USER_AGENT = "orphograph/0.1 (stdlib)"
 
 
 def _calendar_short(url: str) -> str:
     return url.split("//", 1)[1].split(".", 1)[0]
+
+
+# Lookup index over every form a receipt actually carries a calendar in: the
+# full URL (`successes[].calendar`) and the short token used for the `.ots`
+# filename. Derived from CALENDAR_UPSTREAM so there is one source of truth.
+_UPSTREAM_BY_KEY = {}
+for _url, _upstream in CALENDAR_UPSTREAM.items():
+    _UPSTREAM_BY_KEY[_url.rstrip("/")] = _upstream
+    _UPSTREAM_BY_KEY[_calendar_short(_url)] = _upstream
+del _url, _upstream
+
+
+def calendar_upstream(server: object) -> str | None:
+    """The upstream calendar a submitted server reaches, or None if unknown.
+
+    Accepts the three forms a receipt carries a calendar in: the full URL
+    from ``successes[].calendar``, the short token used for the ``.ots``
+    filename (``"a"``, ``"alice"``), or that filename itself (``"a.ots"``).
+
+    An UNMAPPED server returns None and therefore contributes NOTHING to the
+    distinct count. Unknown is never promoted to "independent" — that is the
+    exact error this module is correcting. The completeness test makes an
+    unmapped CALENDARS entry unreachable in a shipped build, so the fallback
+    under-counts loudly rather than overstating durability quietly.
+    """
+    if not isinstance(server, str):
+        return None
+    key = server.strip()
+    if key.endswith(".ots"):
+        key = key[:-4]
+    key = key.rstrip("/")
+    if not key:
+        return None
+    return _UPSTREAM_BY_KEY.get(key)
+
+
+def distinct_calendar_names(entries: object) -> set:
+    """The set of upstream calendars reached by ``entries``.
+
+    ``entries`` is any iterable of success records (``{"calendar": url, ...}``),
+    plain URLs, short tokens, or ``.ots`` filenames — the forms the receipt,
+    the response body and the receipt directory each use.
+    """
+    out: set = set()
+    if isinstance(entries, (str, bytes)) or not hasattr(entries, "__iter__"):
+        return out
+    for item in entries:
+        if isinstance(item, dict):
+            item = item.get("calendar")
+        upstream = calendar_upstream(item)
+        if upstream is not None:
+            out.add(upstream)
+    return out
+
+
+def distinct_calendars(entries: object) -> int:
+    """How many DISTINCT upstream calendars ``entries`` reached.
+
+    Pure function, no I/O. This is the number a durability threshold must be
+    compared against: five server acknowledgements are four calendars, and
+    three acknowledgements can be as few as two calendars under one operator.
+
+    Deliberately NOT a redefinition of ``calendars_ok``. That field is
+    committed by renewal records for already-issued receipts
+    (``server/renewal.py`` CORE_ALWAYS) and its meaning must never change.
+    """
+    return len(distinct_calendar_names(entries))
+
+
+# Distinct calendars the shipped server list reaches. Four today.
+CALENDARS_DISTINCT_TOTAL = len(distinct_calendar_names(CALENDARS))
 
 
 def _submit(calendar_url: str, hash_bytes: bytes) -> tuple[bool, bytes | str]:
@@ -430,6 +527,12 @@ def anchor_hash(
         "metadata": _sanitize_metadata(metadata),
         "calendars_ok": len(successes),
         "calendars_total": len(CALENDARS),
+        # Distinct upstream calendars reached (see CALENDAR_UPSTREAM). Written
+        # at ISSUANCE ONLY and deliberately absent from renewal.CORE_ALWAYS:
+        # adding it there would make every already-issued receipt malformed
+        # and void its renewal chain. Consumers MUST derive it from
+        # `successes` (engine.distinct_calendars) when the key is missing.
+        "calendars_distinct_ok": distinct_calendars(successes),
         "successes": successes,
         "failures": failures,
     }
@@ -825,6 +928,15 @@ def verify_receipt(receipt_id: str) -> dict:
         "metadata": record.get("metadata"),
         "calendars_ok": sum(1 for c in checks if c["ok"]),
         "calendars_total": len(checks),
+        # Distinct upstream calendars, derived HERE from the proofs on disk —
+        # never read from the receipt — so a receipt issued before the field
+        # existed reports the same number as a fresh one. Counted over the
+        # checks that PASSED, matching calendars_ok: a corrupt a.ots next to a
+        # good alice.ots must not add a calendar.
+        "calendars_distinct_ok": distinct_calendars(
+            c["file"] for c in checks if c["ok"]),
+        "calendars_distinct_total": distinct_calendars(
+            c["file"] for c in checks),
         "status": record.get("status", "pending"),
         # `status` answers "are ALL calendars Bitcoin-pinned?" — which for every
         # receipt issued so far is permanently "partial", because

@@ -259,6 +259,15 @@ else:
 ANCHOR_RATE_CAPACITY = int(os.environ.get("RATE_LIMIT_PER_DAY", _per_day_default))
 ANCHOR_RATE_REFILL = ANCHOR_RATE_CAPACITY / 86400.0
 ANCHOR_RATE_WINDOW_LABEL = "24h"
+# Durability threshold for the `low_redundancy` flag. Counted in DISTINCT
+# upstream calendars (engine.distinct_calendars), NOT in server
+# acknowledgements: a.pool and b.pool are aggregators for alice and bob, so
+# a.pool + alice + b.pool is three acknowledgements resting on two calendars
+# under one operator. Default 3 is unchanged in value and stricter in meaning
+# — with four distinct calendars of which two (alice, bob) share an operator,
+# any three distinct calendars necessarily span at least two operators.
+# Maximum meaningful value is engine.CALENDARS_DISTINCT_TOTAL (4); a higher
+# setting flags every receipt.
 MIN_CALENDARS_OK = int(os.environ.get("MIN_CALENDARS_OK", "3"))
 STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
 NOWPAYMENTS_IPN_SECRET = os.environ.get("NOWPAYMENTS_IPN_SECRET", "")
@@ -2696,7 +2705,11 @@ class Handler(BaseHTTPRequestHandler):
         _ab_arm = _ab_cookie_variant(self)
         if _ab_arm:
             _ab_log("anchor", _ab_arm)
-        low_redundancy = record["calendars_ok"] < MIN_CALENDARS_OK
+        # Distinct upstream calendars, not server acknowledgements. Derived
+        # from `successes` so the same number is produced for a receipt whose
+        # stored `calendars_distinct_ok` predates the field.
+        distinct_ok = engine.distinct_calendars(record["successes"])
+        low_redundancy = distinct_ok < MIN_CALENDARS_OK
         # Total calendar outage: 0 calendars accepted the hash, so the receipt
         # has no Bitcoin commitment and can never upgrade — it is worthless.
         # Refund the consumed credit (the buyer can re-anchor when calendars
@@ -2803,6 +2816,10 @@ class Handler(BaseHTTPRequestHandler):
             "client_label": record["client_label"],
             "calendars_ok": record["calendars_ok"],
             "calendars_total": record["calendars_total"],
+            # Five servers reach four calendars: both counts are reported so
+            # neither number has to carry a meaning it does not have.
+            "calendars_distinct_ok": distinct_ok,
+            "calendars_distinct_total": engine.CALENDARS_DISTINCT_TOTAL,
             "low_redundancy": low_redundancy,
             "pack_consumed": pack_consumed,
             "pack_remaining": pack_remaining,
@@ -3047,7 +3064,10 @@ class Handler(BaseHTTPRequestHandler):
                 "client_label": record["client_label"],
                 "calendars_ok": record["calendars_ok"],
                 "calendars_total": record["calendars_total"],
-                "low_redundancy": record["calendars_ok"] < MIN_CALENDARS_OK,
+                "calendars_distinct_ok": engine.distinct_calendars(record["successes"]),
+                "calendars_distinct_total": engine.CALENDARS_DISTINCT_TOTAL,
+                "low_redundancy": (engine.distinct_calendars(record["successes"])
+                                   < MIN_CALENDARS_OK),
                 "receipt_url": f"{site}/r/{rid}",
                 "badge_url": f"{site}/api/badge/{rid}.svg",
             })
@@ -4282,6 +4302,8 @@ class Handler(BaseHTTPRequestHandler):
             "merkle_algorithm": merkle.ALGORITHM,
             "calendars_ok": record["calendars_ok"],
             "calendars_total": record["calendars_total"],
+            "calendars_distinct_ok": engine.distinct_calendars(record["successes"]),
+            "calendars_distinct_total": engine.CALENDARS_DISTINCT_TOTAL,
             "created_at": record["created_at"],
             # Always report the privacy state. The folder response omitted it
             # entirely, so a caller who asked for private had no way to learn

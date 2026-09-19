@@ -94,10 +94,16 @@ def base_env(data_dir: str | os.PathLike, port: int, **extra: str) -> dict:
 
 
 def spin(data_dir: str | os.PathLike, n: int = 1, *,
-         stub_calendars: bool = False, **env_extra: str):
+         stub_calendars: bool = False, fail_calendars: str = "",
+         **env_extra: str):
     """Start n server processes on one data dir. Yields (bases, procs, logs).
 
     Caller is responsible for stopping them; `server_processes` below does it.
+
+    `fail_calendars` (only meaningful with `stub_calendars`) is a
+    comma-separated list of short calendar tokens — "a", "b", "alice",
+    "finney", "btc" — the stub refuses. Default "" keeps every existing
+    caller's behaviour: all five accept.
     """
     ports = reserve_ports(n)
     procs, bases, logs = [], [], []
@@ -112,6 +118,11 @@ def spin(data_dir: str | os.PathLike, n: int = 1, *,
             # serialization remain real; only third-party calendar I/O is
             # replaced with a valid deterministic acceptance body.
             command = [sys.executable, str(TEST_SERVER), "--stub-calendars"]
+            if fail_calendars:
+                command += ["--fail-calendars", fail_calendars]
+        elif fail_calendars:
+            raise ValueError("fail_calendars requires stub_calendars=True — "
+                             "the real calendars cannot be shaped")
         procs.append(subprocess.Popen(
             command,
             env=base_env(data_dir, port, **env_extra),
@@ -169,7 +180,8 @@ def _kill_all(procs, logs) -> None:
 
 
 def server_processes(data_dir, n: int = 1, *,
-                     stub_calendars: bool = False, **env_extra: str):
+                     stub_calendars: bool = False, fail_calendars: str = "",
+                     **env_extra: str):
     """Context-manager-ish generator for a pytest fixture:
 
         @pytest.fixture(scope="module")
@@ -177,7 +189,8 @@ def server_processes(data_dir, n: int = 1, *,
             yield from _srv.server_processes(tmp_path_factory.mktemp("x"))
     """
     bases, procs, logs = spin(
-        data_dir, n=n, stub_calendars=stub_calendars, **env_extra)
+        data_dir, n=n, stub_calendars=stub_calendars,
+        fail_calendars=fail_calendars, **env_extra)
     wait_ready(bases, procs, logs)
     try:
         yield bases[0] if n == 1 else bases

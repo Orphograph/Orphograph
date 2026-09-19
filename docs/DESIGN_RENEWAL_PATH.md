@@ -36,8 +36,8 @@ taken from the brief rather than verified here, it is labelled as such.
 | Component | File:line | Facts used |
 |---|---|---|
 | Anchor submission | `server/engine.py:33-35,52-75` | `OTS_TAG_SHA256 = b"\x08"`. `_submit` posts exactly 32 bytes; `_build_ots` frames `MAGIC ‖ VERSION ‖ 0x08 ‖ hash_bytes ‖ calendar_body`. **Only SHA-256 leaves the process.** |
-| Calendars | `server/engine.py:37-43` | Five endpoints: `a.pool.opentimestamps.org`, `b.pool.opentimestamps.org`, `alice.btc.calendar.opentimestamps.org`, `finney.calendar.eternitywall.com`, `btc.calendar.catallaxy.com`. Three distinct operators, one chain. |
-| Receipt record | `server/engine.py:382-451` | Fields written at anchor time: `receipt_id, created_at, hash_hex, sha512_hex, client_label, source, private, owner_id, attestation, c2pa_manifest_hash, metadata, calendars_ok, calendars_total, successes, failures`; plus `zk_provenance`, `hardware_attestation`, `lineage` when present (shape-stability rule: written only when set). |
+| Calendars | `server/engine.py` `CALENDARS` / `CALENDAR_UPSTREAM` | Five endpoints: `a.pool.opentimestamps.org`, `b.pool.opentimestamps.org`, `alice.btc.calendar.opentimestamps.org`, `finney.calendar.eternitywall.com`, `btc.calendar.catallaxy.com`. `a.pool` and `b.pool` are aggregators feeding alice and bob, so five servers reach **four** distinct calendars across three operators, one chain. |
+| Receipt record | `server/engine.py:382-451` | Fields written at anchor time: `receipt_id, created_at, hash_hex, sha512_hex, client_label, source, private, owner_id, attestation, c2pa_manifest_hash, metadata, calendars_ok, calendars_total, calendars_distinct_ok, successes, failures`; plus `zk_provenance`, `hardware_attestation`, `lineage` when present (shape-stability rule: written only when set). `calendars_distinct_ok` (added 2026-09-19) is **not** in `CORE_ALWAYS` and is absent from every receipt issued before that date — derive it from `successes` via `engine.distinct_calendars`, never fail on its absence. |
 | `sha512_hex` today | `server/engine.py:283,297-310,386`; `server/app.py:2236,2265-2266` | Optional keyword; validated for shape only; **client-supplied, never independently derived, never anchored.** `app.py` silently drops it when it is not a string. Confirmed by `docs/QUANTUM_EXPOSURE_AUDIT.md` §2.1. |
 | Folder anchors | `server/merkle.py:37,98-111` | `ALGORITHM = "orphograph-merkle-v1-rfc6962"`, `VERSION = 1`. Leaf `SHA-256(0x00 ‖ rel_path ‖ 0x00 ‖ file_sha256)`; internal `SHA-256(0x01 ‖ L ‖ R)`; lone node promoted (no CVE-2012-2459 duplication). Folder receipts carry **no** `sha512_hex` at all — the anchored value is a root, not a file digest. |
 | Reserved-leaf lineage | `server/engine.py:106,123-132,135-226,229-277` | `RESERVED_PARENT_PATH = ".orphograph/parent"`. `derive_lineage_from_manifest` re-derives the leaf and re-folds the tree via `merkle.MerkleTree.from_manifest`; hints are never authoritative. `attach_lineage` **rewrites `receipt.json`** post-anchor (`:271-272`). |
@@ -601,6 +601,33 @@ authorities". Anything stronger is inaccurate.
 > distinct calendars. The operator count (three) stands. The public sentence
 > becomes: *five calendar servers reach four calendars across three operators,
 > giving route and operator redundancy over a single chain.*
+
+> **Threshold correction, 2026-09-19.** The durability threshold
+> (`MIN_CALENDARS_OK`, default 3) used to compare against `calendars_ok`,
+> which counts server acknowledgements. `a.pool + alice + b.pool` therefore
+> read as "3 OK" while resting on **two** calendars, one of them counted
+> twice, both inside one operator's domain. The threshold now compares
+> against `engine.distinct_calendars(successes)` — the count of distinct
+> upstream calendars, using the explicit `engine.CALENDAR_UPSTREAM` map
+> (a.pool→alice, b.pool→bob, others→themselves). The value stays 3: with
+> four distinct calendars of which only alice and bob share an operator,
+> any three distinct calendars necessarily span at least two operators,
+> which three acknowledgements did not guarantee.
+>
+> `calendars_ok` is **not** redefined — it is committed by renewal records
+> for issued receipts (§2.3, `CORE_ALWAYS`) and its meaning for those
+> receipts may never change. A new field `calendars_distinct_ok` is written
+> at issuance only, is deliberately **absent** from `CORE_ALWAYS` (adding it
+> would make every already-issued receipt malformed), and every consumer
+> must derive the count from `successes` when the key is missing. The list
+> of servers submitted to is unchanged, so DOCTRINE.md §3's five-calendar
+> code invariant is untouched.
+>
+> The threshold has never rejected an anchor: it sets the `low_redundancy`
+> flag on the response and nothing else (`server/app.py`). The change
+> therefore cannot make anchoring fail more often — it can only move some
+> receipts from `low_redundancy: false` to `true`, which is precisely the
+> set of receipts whose old flag was misleading.
 
 ### 4.2 What a genuinely independent second authority looks like
 

@@ -251,6 +251,8 @@ X-Orpho-Api-Key: orpho_xxxxxxxxxxxxxxxxxxxxxxxx
   "client_label":    "photo.jpg",
   "calendars_ok":    5,
   "calendars_total": 5,
+  "calendars_distinct_ok":    4,
+  "calendars_distinct_total": 4,
   "low_redundancy":  false,
   "pack_consumed":   false,
   "pack_remaining":  0,
@@ -266,9 +268,15 @@ X-Orpho-Api-Key: orpho_xxxxxxxxxxxxxxxxxxxxxxxx
 }</pre>
 
   <p>
-    <code>low_redundancy</code> is <code>true</code> when fewer than 3 calendars
-    accepted the submission — usually transient. Retry in a minute; the
-    failed calendars will likely succeed.
+    <code>calendars_ok</code> counts calendar <em>servers</em> that accepted the
+    submission. <code>calendars_distinct_ok</code> counts the distinct
+    <em>calendars</em> those servers reach: <code>a.pool</code> and
+    <code>b.pool</code> are aggregators feeding the alice and bob calendars, so
+    five calendar servers reach four calendars across three operators.
+    <code>low_redundancy</code> is <code>true</code> when fewer than 3
+    <em>distinct calendars</em> accepted the submission — usually transient.
+    Retry in a minute; the failed calendars will likely succeed. The flag is
+    informational: a flagged anchor is still issued and still verifiable.
   </p>
 
   <h3>Errors</h3>
@@ -353,8 +361,8 @@ X-Orpho-Api-Key: orpho_xxxxxxxxxxxxxxxxxxxxxxxx
   "succeeded": 2,
   "failed": 0,
   "results": [
-    {"index": 0, "ok": true,  "receipt_id": "abc...", "created_at": "...", "calendars_ok": 5, "calendars_total": 5, "low_redundancy": false, "client_label": "img_001.jpg"},
-    {"index": 1, "ok": true,  "receipt_id": "def...", "created_at": "...", "calendars_ok": 5, "calendars_total": 5, "low_redundancy": false, "client_label": "img_002.jpg"}
+    {"index": 0, "ok": true,  "receipt_id": "abc...", "created_at": "...", "calendars_ok": 5, "calendars_total": 5, "calendars_distinct_ok": 4, "calendars_distinct_total": 4, "low_redundancy": false, "client_label": "img_001.jpg"},
+    {"index": 1, "ok": true,  "receipt_id": "def...", "created_at": "...", "calendars_ok": 5, "calendars_total": 5, "calendars_distinct_ok": 4, "calendars_distinct_total": 4, "low_redundancy": false, "client_label": "img_002.jpg"}
   ]
 }</pre>
 
@@ -399,6 +407,8 @@ X-Orpho-Api-Key: orpho_xxxxxxxxxxxxxxxxxxxxxxxx
   "btc_pinned_at": "2026-05-14T15:10:12+00:00",
   "calendars_ok":  5,
   "calendars_total": 5,
+  "calendars_distinct_ok":    4,
+  "calendars_distinct_total": 4,
   "checks": [
     {"file": "a.ots",      "magic_ok": true, "hash_match": true, "ok": true},
     {"file": "alice.ots",  "magic_ok": true, "hash_match": true, "ok": true},
@@ -783,7 +793,8 @@ Accept: image/svg+xml</pre>
   reporting at <a href="/status">/status.html</a> and structured
   liveness at <a href="#get-api-health"><code>/api/health</code></a>.
   Calendar reachability is reported per-calendar — your client should
-  treat 3-of-5 calendars succeeding as a healthy anchor (the
+  treat 3 distinct calendars succeeding as a healthy anchor, which the
+  <code>calendars_distinct_ok</code> field reports directly (the
   <code>low_redundancy</code> flag fires below that threshold).
 </p>
 <p>
