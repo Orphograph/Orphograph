@@ -458,11 +458,21 @@ def test_robots_does_not_hide_the_410_from_crawlers(base) -> None:
 def test_no_order_appears_in_the_generated_sitemap(base) -> None:
     status, body, _h = _srv.request(base, "/sitemap.xml")
     assert status == 200
-    text = body.decode("utf-8", "replace")
-    for gone in ("orphograph.com/buy<", "orphograph.com/pay/btc<"):
-        assert gone not in text, f"sitemap still lists {gone}"
-    # Control: the sitemap is a real sitemap, not an empty or error body.
-    assert "orphograph.com/" in text and "<urlset" in text
+    # Read the sitemap as a sitemap: parse every <loc> and compare parsed hosts
+    # and paths. A substring test over the raw body would also pass on a URL
+    # that merely CONTAINS the text somewhere, which is not what is meant.
+    from urllib.parse import urlparse
+    from xml.etree import ElementTree
+
+    root = ElementTree.fromstring(body)
+    locs = [el.text.strip() for el in root.iter() if el.tag.endswith("}loc") and el.text]
+    paths = {urlparse(u).path.rstrip("/") or "/" for u in locs}
+    for gone in ("/buy", "/pay/btc"):
+        assert gone not in paths, f"sitemap still lists {gone}"
+    # Control: a real, populated sitemap for this site, not an empty or error body.
+    assert len(locs) > 20, f"sitemap has only {len(locs)} entries"
+    assert {urlparse(u).hostname for u in locs} == {"orphograph.com"}
+    assert "/" in paths and "/about" in paths
 
 
 # ── the deploy gate agrees with the server ──────────────────────────────────
