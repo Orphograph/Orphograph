@@ -1,0 +1,11 @@
+{
+  "_doc": "Drift pin for explainer/HOW_IT_WORKS.{html,pdf}. The sha256 values here must match the tracked files byte-for-byte or tests/test_explainer_pdf_drift.py fails CI (hard fail, never a skip). Regenerate this file with 'python3 scripts/update_explainer_manifest.py' after re-rendering the PDF from the HTML \u2014 see this script's docstring for the full procedure. No PDF text parsing is involved anywhere in this pin.",
+  "html": {
+    "path": "explainer/HOW_IT_WORKS.html",
+    "sha256": "69bc00e68253929b416c9fc291fa0c33f418f9ad8fca0f671487289ad078a81c"
+  },
+  "pdf": {
+    "path": "explainer/HOW_IT_WORKS.pdf",
+    "sha256": "89c621f5453c71d70fefc1ea278816942d0c7ac5bf969f1383c8370337a3a085"
+  }
+}
