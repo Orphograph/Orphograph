@@ -48,6 +48,8 @@
   .rate-row .pct.low { color: var(--bad); }
   .rate-row .pct.mid { color: var(--warn); }
   .rate-row .pct.high { color: var(--good); }
+  /* Not a value on the same scale: the rate could not be computed. */
+  .rate-row .pct.rate-unmeasured { color: var(--muted); font-style: italic; font-size: 1rem; }
   table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
   th, td { text-align: right; padding: 0.4rem 0.8rem; border-bottom: 1px solid var(--border); }
   th:first-child, td:first-child { text-align: left; }

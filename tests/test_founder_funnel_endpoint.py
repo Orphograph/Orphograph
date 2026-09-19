@@ -239,9 +239,57 @@ class TestFunnelEndpointTokenSet(unittest.TestCase):
         for k in ("visible_to_anchored", "anchored_to_checkout",
                   "checkout_to_paid", "visible_to_paid"):
             self.assertIn(k, rates)
-            self.assertIsInstance(rates[k], (int, float))
+            # A rate WITH observations is still a number. The stub plants all
+            # four funnel events, so every denominator here is non-zero.
+            self.assertIsInstance(rates[k], (int, float), f"{k} = {rates[k]!r}")
+
+        self.assertIn("unmeasured_reason", data)
+        self.assertEqual(data["unmeasured_reason"], {},
+                         "nothing should be unmeasured when all events are present")
 
         self.assertIsInstance(data["series_by_day"], list)
+
+    def test_a_rate_with_no_observations_is_null_not_zero(self):
+        """NOTHING OBSERVED IS NOT ZERO PERCENT.
+
+        A rate whose denominator is 0 used to render as 0.0. A founder reads
+        0% as "nobody converted" — a measurement — when the truth is "nothing
+        was measured". The two are opposite signals: one says the funnel is
+        broken, the other says the instrument is.
+
+        Not hypothetical: checkout_to_paid and visible_to_paid are both driven
+        by checkout_returned_success, whose only emitter is web/buy.js. When
+        the BTC-rail retirement deleted that file, both rates sat at 0.0 with
+        no error anywhere.
+        """
+        # An events file with NO funnel events at all — every denominator 0.
+        path = _events_path_from_app()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        original = path.read_text(encoding="utf-8") if path.exists() else None
+        try:
+            path.write_text(
+                json.dumps({"event": "some_other_event",
+                            "ts": datetime.now(timezone.utc).isoformat()}) + "\n",
+                encoding="utf-8")
+            status, body, _ = _get(self._base, "/api/founder/funnel",
+                                   headers={"X-Orpho-Founder": self.TOKEN})
+            self.assertEqual(status, 200)
+            data = json.loads(body)
+            rates = data["rates_30d_pct"]
+            for k in ("visible_to_anchored", "anchored_to_checkout",
+                      "checkout_to_paid", "visible_to_paid"):
+                self.assertIsNone(
+                    rates[k],
+                    f"{k} reported {rates[k]!r} with nothing observed — a "
+                    "founder reads that as a measured zero")
+                self.assertIn(k, data["unmeasured_reason"],
+                              f"{k} is null with no reason given")
+                self.assertIn("not 0%", data["unmeasured_reason"][k])
+        finally:
+            if original is None:
+                path.unlink(missing_ok=True)
+            else:
+                path.write_text(original, encoding="utf-8")
 
 
 if __name__ == "__main__":

@@ -311,52 +311,20 @@ def test_the_415_path_still_drains(base) -> None:
     assert raw, "the 415 response body was lost"
 
 
-@pytest.mark.parametrize("path", GONE_POST_PATHS)
-def test_the_410_survives_a_body_over_a_raw_socket(base, path) -> None:
-    """Integration half. Sends headers, then the body, then reads to EOF over a
-    raw socket, 50 times — a response truncated by an RST shows up here as a
-    short read or ECONNRESET rather than as a clean 410.
-
-    Honest about its limits: loopback rarely reproduces the reset, so a green
-    run here is NOT what proves the drain. The in-process test above is.
-    """
-    import socket as _socket
-    from urllib.parse import urlsplit
-    parts = urlsplit(base)
-    body = b'{"email":"buyer@example.com","pad":"' + b"x" * 600 + b'"}'
-    head = (
-        f"POST {path} HTTP/1.0\r\n"
-        f"Host: {parts.hostname}:{parts.port}\r\n"
-        "Content-Type: application/json\r\n"
-        f"Content-Length: {len(body)}\r\n"
-        "\r\n"
-    ).encode()
-    for i in range(50):
-        sock = _socket.create_connection((parts.hostname, parts.port), timeout=10)
-        try:
-            sock.sendall(head)
-            sock.sendall(body)
-            chunks = []
-            while True:
-                try:
-                    b = sock.recv(8192)
-                except ConnectionResetError as e:  # the failure this hunts
-                    pytest.fail(f"iteration {i}: connection reset reading the 410 ({e})")
-                if not b:
-                    break
-                chunks.append(b)
-        finally:
-            sock.close()
-        raw = b"".join(chunks)
-        assert raw.startswith(b"HTTP/1.0 410"), (i, raw[:80])
-        assert b"\r\n\r\n" in raw, (i, "headers were truncated")
-        head_blob, _, body_blob = raw.partition(b"\r\n\r\n")
-        for line in head_blob.split(b"\r\n"):
-            if line.lower().startswith(b"content-length:"):
-                want = int(line.split(b":", 1)[1])
-                assert len(body_blob) == want, (
-                    i, f"short read: {len(body_blob)} of {want} body bytes")
-                break
+# NO RAW-SOCKET TEST HERE, deliberately.
+#
+# The obvious integration half — open a socket, send headers, send the body,
+# read to EOF, and fail on ConnectionResetError — cannot live in this module:
+# tests/test_server_fixture_hygiene.py forbids a module that imports _srv from
+# opening its own connections, because hand-rolled clients follow redirects,
+# lose duplicated headers, and report a dead server as an empty body.
+#
+# That guard is worth more than the test it blocks. By this file's own
+# reasoning the raw-socket version was never what proved the drain anyway —
+# loopback rarely reproduces the RST, so a green run there is compatible with
+# no drain at all. test_the_410_drains_the_request_body_before_answering is
+# the real gate: it asserts the bytes were consumed, and it goes red the
+# moment the drain is removed.
 
 
 def test_the_site_still_answers_at_all(base) -> None:
@@ -495,6 +463,161 @@ def test_no_order_appears_in_the_generated_sitemap(base) -> None:
         assert gone not in text, f"sitemap still lists {gone}"
     # Control: the sitemap is a real sitemap, not an empty or error body.
     assert "orphograph.com/" in text and "<urlset" in text
+
+
+# ── the deploy gate agrees with the server ──────────────────────────────────
+
+PROBE_SH = SCRIPTS / "probe_all.sh"
+_PROBE_LINE = re.compile(r'^probe\s+GET\s+"([^"]+)"\s+(\d{3})\s*$', re.MULTILINE)
+
+# The paths this retirement moved. Scoped deliberately: probe_all.sh also
+# covers auth and prod-config routes whose local status legitimately differs,
+# and a test that swept all of them would be flaky rather than strict.
+_PROBE_PATHS_UNDER_TEST = frozenset({
+    "/buy", "/buy.html", "/pay/btc", "/buy/btc_AbCdEf12345",
+    "/api/btc/price", "/api/btc-order/btc_AbCdEf12345",
+})
+
+
+def _declared_probes() -> dict:
+    text = PROBE_SH.read_text(encoding="utf-8")
+    return {m.group(1): int(m.group(2)) for m in _PROBE_LINE.finditer(text)}
+
+
+def test_the_deploy_probe_expects_what_the_server_actually_answers(base) -> None:
+    """scripts/probe_all.sh is the deploy readiness gate. It declared
+    `GET /buy.html 200` while the branch was answering 410, which would have
+    turned the gate red on EVERY deploy — a gate that cannot go green stops
+    meaning anything, and gets ignored or deleted.
+
+    Each declared status is driven against a real server here, so the script
+    and the handler cannot drift apart again silently."""
+    declared = _declared_probes()
+    covered = _PROBE_PATHS_UNDER_TEST & set(declared)
+    assert covered == _PROBE_PATHS_UNDER_TEST, (
+        "probe_all.sh no longer declares: "
+        f"{sorted(_PROBE_PATHS_UNDER_TEST - covered)}")
+    wrong = []
+    for path in sorted(covered):
+        want = declared[path]
+        got, _body, _h = _srv.request(base, path)
+        if got != want:
+            wrong.append(f"{path}: script says {want}, server answers {got}")
+    assert wrong == [], "probe_all.sh disagrees with the server:\n  " + "\n  ".join(wrong)
+
+
+def test_the_probe_parser_reads_the_file() -> None:
+    """NEGATIVE CONTROL. An empty parse would make the test above vacuous."""
+    declared = _declared_probes()
+    assert len(declared) > 20, f"probe_all.sh parse found {len(declared)} probes"
+    assert declared.get("/api/health") == 200, "control probe missing"
+
+
+def test_lighthouse_does_not_audit_the_confirmation_page() -> None:
+    """/buy is noindex and only reachable mid-checkout with a session id.
+    Auditing it produces a permanent SEO complaint about a page that must not
+    be indexed."""
+    text = (SCRIPTS / "audit_lighthouse.sh").read_text(encoding="utf-8")
+    assert '"/buy.html"' not in text
+    assert '"/"' in text, "control: the PAGES array is still populated"
+
+
+def test_the_makefile_no_longer_manages_the_retired_agent() -> None:
+    """`make local-start` bootstrapped a launchd plist for btc_settle whose
+    script this branch deletes, and `make local-logs` tailed its log. Both
+    would fail forever on a founder machine."""
+    mk = (ROOT / "Makefile").read_text(encoding="utf-8")
+    agents_line = [ln for ln in mk.splitlines() if ln.startswith("LAUNCHD_AGENTS :=")]
+    assert len(agents_line) == 1, agents_line
+    assert "btc_settle" not in agents_line[0], agents_line[0]
+    assert "server" in agents_line[0], "control: the agent list is still populated"
+    assert "btc_settle.err.log" not in mk, "local-logs still tails the deleted agent"
+
+
+def test_the_makefile_offers_an_idempotent_user_domain_uninstall() -> None:
+    """Deleting a plist from the repo does NOT unload an agent launchd already
+    registered — it leaves one re-launching against a missing file on its
+    schedule. The founder runs this target; nothing in CI does.
+
+    User domain only, and guarded: asserted here so a later edit cannot
+    quietly add sudo or a system domain to something that boots out agents."""
+    mk = (ROOT / "Makefile").read_text(encoding="utf-8")
+    assert "local-uninstall-btc:" in mk, "no uninstall target"
+    body = mk.split("local-uninstall-btc:", 1)[1].split("\n\n", 1)[0]
+    for label in ("com.orphograph.btc_settle", "com.orphograph.payout"):
+        assert label in body, f"{label} is not booted out"
+    assert "launchctl print" in body, "not guarded — must check before bootout"
+    assert "gui/$(UID)" in body, "must act in the user domain"
+    assert "sudo" not in body, "an uninstall target must never use sudo"
+    assert "system/" not in body, "must never touch the system domain"
+    assert "local-uninstall-btc" in mk.split("help:", 1)[0], "not declared .PHONY"
+
+
+# ── the dead price oracle ───────────────────────────────────────────────────
+
+def test_the_health_endpoint_has_no_permanently_false_oracle(base) -> None:
+    """btc_price.cached_usd_per_btc_source() is CACHE-ONLY by design, and the
+    only two callers that ever filled that cache were GET /api/btc/price and
+    the order-creation handler. Both are deleted, so the field could only ever
+    report available: false — on /api/health, and on the PUBLIC /api/stats.
+
+    A field that is structurally always false is worse than an absent one: it
+    reads as "our price feed is down" rather than "we do not have one". Read
+    twice, seconds apart, because a cache that could warm would warm."""
+    import json as _json
+    for _ in range(2):
+        status, body, _h = _srv.request(base, "/api/health")
+        assert status == 200
+        payload = _json.loads(body)
+        assert "btc_oracle" not in payload, (
+            "btc_oracle is back and can never be populated: " 
+            + repr(payload.get("btc_oracle")))
+    status, body, _h = _srv.request(base, "/api/stats")
+    assert status == 200
+    public = _json.loads(body)
+    assert "btc_oracle" not in public, "the PUBLIC stats endpoint advertises a dead oracle"
+    # CONTROL: both payloads are real, so the absences above mean something.
+    assert "calendars" in public and "anchors" in public, sorted(public)
+
+
+def test_the_price_module_is_gone() -> None:
+    """Nothing reads it once the oracle field is removed. Left on disk it is an
+    outbound-HTTP helper with no caller, which is how a later change
+    accidentally puts a third-party request back on the health path."""
+    assert not (SERVER / "btc_price.py").exists()
+
+
+def test_no_page_renders_a_price_oracle_tile() -> None:
+    """The public /stats page and the founder dashboard both rendered the
+    field. Left in place they would show "offline" / "no live price" forever."""
+    for rel in ("stats.html", "stats.js", "founder/admin.html",
+                "founder/admin.js", "founder/admin.css"):
+        text = (WEB / rel).read_text(encoding="utf-8")
+        for token in ("btc_oracle", "btc-source", "btc-val", "btc-price"):
+            assert token not in text, f"{rel} still renders the dead oracle ({token})"
+    # CONTROL: the stats page still renders the metrics that DO exist.
+    stats_html = (WEB / "stats.html").read_text(encoding="utf-8")
+    assert 'id="cal-list"' in stats_html and 'id="uptime"' in stats_html
+
+
+def test_the_published_health_example_matches_the_server(base) -> None:
+    """web/docs/api.html publishes an /api/health example. It showed a live
+    oracle and a configured payout block with an address pool, none of which
+    the server can return any more. Compared against the real response."""
+    import json as _json
+    import re as _re
+    status, body, _h = _srv.request(base, "/api/health")
+    live = set(_json.loads(body))
+    docs = (WEB / "docs" / "api.html").read_text(encoding="utf-8")
+    documented = set(_re.findall(r'^\s*"([a-z_]+)":', docs, _re.MULTILINE))
+    # As a JSON KEY, not as prose — the page explains in words WHY the oracle
+    # is absent, and that sentence must not trip its own guard.
+    for stale in ("btc_oracle", "address_pool_size", "xpub_set"):
+        assert stale not in documented, f"docs still publish a {stale} field"
+    assert "payout" in live and "payout" in documented
+    assert "calendars" in live
+    # CONTROL: the parse really found the example's keys.
+    assert {"version", "uptime_sec"} <= documented, sorted(documented)[:20]
 
 
 # ── the tree ────────────────────────────────────────────────────────────────

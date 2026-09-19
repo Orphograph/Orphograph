@@ -3821,14 +3821,41 @@ class Handler(BaseHTTPRequestHandler):
             except OSError:
                 pass
 
-        def _rate(num: int, den: int) -> float:
-            return round(100.0 * num / den, 1) if den else 0.0
+        # NOTHING OBSERVED IS NOT ZERO PERCENT. A rate whose denominator is 0
+        # used to render as 0.0, which a founder reads as "nobody converted" —
+        # a measurement — when the truth is "nothing was measured". The two
+        # are opposite signals: the first says the funnel is broken, the second
+        # says the instrument is. Return null plus a reason instead, and say
+        # which rates could not be computed.
+        #
+        # This was not hypothetical. checkout_to_paid and visible_to_paid are
+        # both driven by checkout_returned_success, whose ONLY emitter is
+        # web/buy.js. When the BTC-rail retirement deleted that file, both
+        # rates sat at 0.0 with no error anywhere.
+        unmeasured: dict[str, str] = {}
+
+        def _rate(name: str, num: int, den: int, den_event: str):
+            if den:
+                return round(100.0 * num / den, 1)
+            unmeasured[name] = (
+                f"no {den_event} events in the window — nothing to measure "
+                f"against, so this is not 0%"
+            )
+            return None
 
         rates_30d = {
-            "visible_to_anchored": _rate(totals["file_anchored"], totals["drop_zone_visible"]),
-            "anchored_to_checkout": _rate(totals["checkout_clicked"], totals["file_anchored"]),
-            "checkout_to_paid": _rate(totals["checkout_returned_success"], totals["checkout_clicked"]),
-            "visible_to_paid": _rate(totals["checkout_returned_success"], totals["drop_zone_visible"]),
+            "visible_to_anchored": _rate(
+                "visible_to_anchored", totals["file_anchored"],
+                totals["drop_zone_visible"], "drop_zone_visible"),
+            "anchored_to_checkout": _rate(
+                "anchored_to_checkout", totals["checkout_clicked"],
+                totals["file_anchored"], "file_anchored"),
+            "checkout_to_paid": _rate(
+                "checkout_to_paid", totals["checkout_returned_success"],
+                totals["checkout_clicked"], "checkout_clicked"),
+            "visible_to_paid": _rate(
+                "visible_to_paid", totals["checkout_returned_success"],
+                totals["drop_zone_visible"], "drop_zone_visible"),
         }
 
         days_sorted = sorted(per_day.keys(), reverse=True)
@@ -3838,6 +3865,8 @@ class Handler(BaseHTTPRequestHandler):
             "timestamp": now_utc.isoformat() + "Z",
             "totals_30d": totals,
             "rates_30d_pct": rates_30d,
+            # Which rates are null, and why. Empty when everything computed.
+            "unmeasured_reason": unmeasured,
             "events_scanned": total_lines,
             "series_by_day": series,
         })
