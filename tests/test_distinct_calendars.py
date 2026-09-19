@@ -479,6 +479,23 @@ class TestOldReceiptWithoutTheField(unittest.TestCase):
         self.assertNotEqual(out["calendars_distinct_ok"],
                             out["calendars_distinct_total"])
 
+    def test_a_malformed_receipt_falls_back_to_the_honest_denominator(self):
+        """`calendars_total` is CORE_ALWAYS, so a receipt without it is
+        malformed and renewal refuses it outright — this branch is
+        unreachable in a well-formed corpus. It is pinned anyway because the
+        WRONG fallback (files on disk) would quietly rebuild the "3 of 3
+        servers" full score that calendars_submitted_total exists to end."""
+        rd = Path(self._tmp.name) / "old9"
+        rec = self._old_receipt(Path(self._tmp.name), "old9", [A, ALICE, B])
+        rec.pop("calendars_total")
+        (rd / "receipt.json").write_text(json.dumps(rec, indent=2))
+        out = engine.verify_receipt("old9")
+        self.assertEqual(out["calendars_total"], 3, "files on disk")
+        self.assertEqual(out["calendars_submitted_total"], 5,
+                         "the fallback must not report the count of files")
+        with self.assertRaises(renewal.RenewalError):
+            renewal.receipt_core(rec)
+
     def test_a_corrupt_proof_does_not_add_a_calendar(self):
         rd = Path(self._tmp.name) / "old4"
         self._old_receipt(Path(self._tmp.name), "old4", [A, FINNEY])

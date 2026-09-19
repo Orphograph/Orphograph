@@ -1079,10 +1079,15 @@ def verify_receipt(receipt_id: str) -> dict:
         #   read "3 of 5", never "3 of 3".
         # `calendars_distinct_total` — how many DISTINCT calendars we submit
         #   to, always 4. Never the number a given receipt happened to reach.
+        # A receipt without `calendars_total` is MALFORMED (it is CORE_ALWAYS
+        # and renewal.receipt_core refuses one that lacks it), so the fallback
+        # is unreachable in a well-formed corpus. It still errs toward the
+        # honest denominator rather than the flattering one: len(checks) would
+        # regenerate the "3 of 3 servers" full score this field exists to end.
         "calendars_submitted_total": (
             record["calendars_total"]
             if isinstance(record.get("calendars_total"), int)
-            else len(checks)),
+            else len(CALENDARS)),
         # Distinct upstream calendars, derived HERE from the proofs on disk —
         # never read from the receipt — so a receipt issued before any of
         # this existed reports the same numbers as a fresh one. Each proof
