@@ -3382,6 +3382,12 @@ class Handler(BaseHTTPRequestHandler):
         e = (qs.get("e") or [""])[0].strip()
         if not e or not EMAIL_RE.match(e):
             return ""
+        # EMAIL_RE is a SHAPE check: it accepts `<svg/onload=x>@x.co`. Angle
+        # brackets are never valid in an unquoted address, and this value is
+        # both stored and shown back, so refuse them here. Output is escaped
+        # as well — this is the second guard, not the only one.
+        if "<" in e or ">" in e:
+            return ""
         return e
 
     def _handle_unsubscribe_get(self) -> None:
@@ -3396,26 +3402,33 @@ class Handler(BaseHTTPRequestHandler):
             self.send_error(400, "invalid email")
             return
         added = unsubscribe.add(email, source="link_get")
+        from html import escape as _h
+        # Stylesheets come from the error template, the one place the site's
+        # head links are pinned. This page used an inline <style>, which the
+        # CSP (style-src 'self') drops, so it rendered unstyled; and copying
+        # the pins here would be a second list to drift.
+        head_links = "\n".join(re.findall(
+            r'<link rel="stylesheet"[^>]+>', Handler.error_message_format))
         body = (
-            "<!doctype html><meta charset=utf-8>"
+            "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
             "<title>Unsubscribed — Orphograph</title>"
-            "<style>"
-            "body{font:14px/1.6 system-ui;background:#fdfaf3;color:#1f1d1a;"
-            "max-width:520px;margin:80px auto;padding:0 20px;}"
-            "h1{color:#4a9a73;font-weight:500;}"
-            ".muted{color:#837e75;}"
-            "a{color:#4a9a73;}"
-            "</style>"
-            "<h1>Done — you're unsubscribed.</h1>"
-            f"<p>We've removed <strong>{email}</strong> from all marketing "
+            "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
+            "<meta name=\"robots\" content=\"noindex\">"
+            f"{head_links}</head><body class=\"orpho\">"
+            "<main class=\"blog-post\"><article class=\"post-header\">"
+            "<h1>Done — you're unsubscribed.</h1></article>"
+            "<section class=\"post-body\">"
+            # The address arrives in a URL anyone can craft. Escape on output.
+            f"<p>We've removed <strong>{_h(email)}</strong> from all marketing "
             "email. You will still receive <em>transactional</em> mail "
             "tied to actions you take on the site (receipts, sign-in "
             "links, pack codes) — those are required by the service "
             "itself, not promotional.</p>"
-            "<p class=muted>If this was a mistake, just sign in again "
+            "<p class=\"muted\">If this was a mistake, just sign in again "
             "or buy a pack and you'll be re-enrolled per your action.</p>"
             f"<p>{'Confirmed.' if added else 'Already on the suppression list — no action needed.'}</p>"
-            "<p><a href='/'>Back to Orphograph</a></p>"
+            "<p><a href=\"/\">Back to Orphograph</a></p>"
+            "</section></main></body></html>"
         ).encode("utf-8")
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
