@@ -114,7 +114,7 @@
       if (res.status === 503) {
         setMsg(
           data.error ||
-          "Crypto checkout isn't enabled right now. Pay in BTC at /pay/btc.html, or email hello@orphograph.com.",
+          "Crypto checkout isn't enabled right now. Use card checkout on /pricing, or email hello@orphograph.com.",
           true
         );
       } else if (res.status === 429) {

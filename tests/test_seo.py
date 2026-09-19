@@ -27,7 +27,6 @@ EXPECTED_URLS = [
     "https://orphograph.com/accept",
     "https://orphograph.com/standing-record",
     "https://orphograph.com/blog/prove-what-was-in-your-training-set",
-    "https://orphograph.com/buy",
     "https://orphograph.com/lp/",
     "https://orphograph.com/about",
     "https://orphograph.com/faq",
@@ -278,8 +277,12 @@ CSP_CLEAN_PAY = sorted((WEB / "pay").glob("*.html"))
 
 
 def test_pay_dir_has_pages() -> None:
-    """Guard the glob above: an empty list would silently skip enforcement."""
-    assert len(CSP_CLEAN_PAY) >= 3, "web/pay/*.html glob came back near-empty"
+    """Guard the glob above: an empty list would silently skip enforcement.
+
+    Was >= 3 while web/pay/ held btc.html, crypto.html and success.html. The
+    direct-BTC rail was retired on 2026-09-19 and btc.html deleted, so the
+    floor drops with it — the guard still fails on an empty or broken glob."""
+    assert len(CSP_CLEAN_PAY) >= 2, "web/pay/*.html glob came back near-empty"
 
 
 @pytest.mark.parametrize("html_path", CSP_CLEAN_PAY, ids=lambda p: p.name)
@@ -315,7 +318,6 @@ CSP_CLEAN_SCRIPT = [
     "founder/funnel.html",
     "founder/metrics.html",
     "founder/support.html",
-    "pay/btc.html",
     "pay/crypto.html",
 ]
 
