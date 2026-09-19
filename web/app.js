@@ -227,6 +227,9 @@ function wireCryptoPayLink() {
     "#crypto-pay-link",
     "#crypto-pay-link-sub",
     "#crypto-pay-link-wrap",
+    // The tier note claims the processor "covers BTC and seven other coins".
+    // Ungated it asserted a live checkout even when the processor is off.
+    "#crypto-pay-note",
     "#crypto-pay-fineprint",
     "#crypto-pay-sub-fineprint",
   ];

@@ -16,8 +16,8 @@
     "sha256": "4ae1f0690c6111fd2c4d1c8d8893a8a08b1cc3c08121351fe8c23da5831034ad"
   },
   "/account.js": {
-    "version": "2",
-    "sha256": "abb19968838a1800c21986726a6b1db97021515ad143596858170d07fc22ce5f"
+    "version": "3",
+    "sha256": "2ed7290d18feb13d88f31811c6480d3a2805023591908f4b934170c2d5eb77d8"
   },
   "/anchor-output.css": {
     "version": "1",
@@ -28,8 +28,8 @@
     "sha256": "20b741a9c98ea14402ad72e5543c920ab73d598caa7eac71e39a247067babdda"
   },
   "/app.js": {
-    "version": "2",
-    "sha256": "f0a7f59698243b7e1606c6c2fb59dd95658054d1af77183ea3454fb077c1e4cc"
+    "version": "3",
+    "sha256": "285ed15216c07e7566c070dd1af270bd0a7bdc4084cb894979609845254dcd79"
   },
   "/assets/drop-observer.js": {
     "version": "1",
@@ -212,20 +212,20 @@
     "sha256": "e13066c4284f453f2f17b3c56e0d1a7ff389d40119668ee784900eb157a76979"
   },
   "/founder/admin.css": {
-    "version": "2",
-    "sha256": "1f58f0bfc011b0276c387b7a0b689fbeade60b5293cfe62971d3b1a1e9896817"
+    "version": "3",
+    "sha256": "977d0bedb62a2a91c19c1ce8acb5b6076ad0c119bccb4317efe74c09497e445d"
   },
   "/founder/admin.js": {
-    "version": "1",
-    "sha256": "fae92227f1b0a6ac5f4c0f8d81ee6d08348f93c016c4a8391548377a6955ea0c"
+    "version": "2",
+    "sha256": "c96695006d28f20ba8ccc3087b2e0bf538612fec0b30169168b0feb8fd20c125"
   },
   "/founder/funnel.css": {
-    "version": "2",
-    "sha256": "e90cac3192a895190364624ae157aa2def61e93d3e0f980a7d8db19a89508797"
+    "version": "3",
+    "sha256": "c93f12fd6b836f59ad58151941467ebd85e89b185aaa00e2155f1d025e03e977"
   },
   "/founder/funnel.js": {
-    "version": "1",
-    "sha256": "0521584fb78f61a432d0c09e16b7f8174a621623d251f8647d598017498c58da"
+    "version": "2",
+    "sha256": "ddfb29fb0dee23f31c2f72061564e3c20a966347bc4b1dc77b5ed95588e2bb76"
   },
   "/founder/metrics.css": {
     "version": "3",
@@ -456,8 +456,8 @@
     "sha256": "9401d20d9d7e78b479a64fe695d03fc771c49b015f5194538fc8dea10aae1ca7"
   },
   "/stats.js": {
-    "version": "1",
-    "sha256": "1e70a2b11c2672c878d358184c9b1e62a15fd90042cb5576a2c5ddb6a15742fa"
+    "version": "2",
+    "sha256": "68600c586efc0b8a6ca3d090d15a8efc96971ac344c3e4228ae95112ea24b01b"
   },
   "/status-badge.js": {
     "version": "2",
@@ -496,8 +496,8 @@
     "sha256": "42591a6aeb2c7a86c5f01380b4f7fc935fae67b461ce39edb6faf1579df03321"
   },
   "/v2.js": {
-    "version": "8",
-    "sha256": "bc8770b369553bdf9e9c6220002077a292040a0eb3fc0ce3006269107f216f65"
+    "version": "9",
+    "sha256": "f99ba914d0a8c592c2e70c219c623ace1be827a21b4d244b02ff160a5746a6ba"
   },
   "/v2/app.js": {
     "version": "4",

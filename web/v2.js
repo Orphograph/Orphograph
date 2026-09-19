@@ -189,6 +189,12 @@
     }, 90 * 1000);
   }
 
+  // Hosted crypto processor availability, from /api/config features.
+  // null = not known yet (config still in flight, or the fetch failed). Only
+  // an explicit true offers the crypto path; everything else falls back to
+  // card, which always works.
+  let NOWPAYMENTS_ENABLED = null;
+
   // ── Ops banner (kill-switch surface) ──────────────────────────────
   async function renderOpsBanner() {
     const banner = document.getElementById("ops-banner");
@@ -197,6 +203,11 @@
       const r = await fetch("/api/config", { credentials: "same-origin" });
       if (!r.ok) return;
       const cfg = await r.json();
+      // Cache the hosted-processor flag. offerWriterPack() must not send a
+      // rate-limited visitor to a checkout that will refuse them.
+      if (cfg && cfg.features) {
+        NOWPAYMENTS_ENABLED = cfg.features.nowpayments_enabled === true;
+      }
       renderDemandExperiment(cfg);
       const t = (cfg && cfg.toggles) || {};
       if (t.maintenance_mode) {
@@ -526,19 +537,35 @@
   // served to every visitor, and tests/test_direct_btc_rail_is_gone.py sweeps
   // the served surface for them — a comment naming them is indistinguishable,
   // to that guard, from markup offering them.
-  const WRITER_PACK_URL = "/pay/crypto?plan=writer_pack";
+  // Card first, matching how /pricing leads: "Pay with card" is the primary
+  // CTA there and crypto is the secondary `cta-alt`. The card path is also the
+  // one that is always available — Stripe is the working rail.
+  const WRITER_PACK_CARD_URL = "/pricing";
+  const WRITER_PACK_CRYPTO_URL = "/pay/crypto?plan=writer_pack";
 
   function offerWriterPack() {
     if (!status) return;
 
     const buy = document.createElement("a");
     buy.className = "cta";
-    buy.href = WRITER_PACK_URL;
+    buy.href = WRITER_PACK_CARD_URL;
     buy.textContent = "Get a Writer Pack \u2192";
     buy.style.display = "inline-block";
     buy.style.marginTop = "10px";
-
     status.appendChild(buy);
+
+    // Crypto rides along ONLY when the processor is actually enabled. An
+    // ungated link sends a rate-limited visitor to a checkout that refuses,
+    // with no card path in sight; `null` (config unknown) is treated as off.
+    if (NOWPAYMENTS_ENABLED === true) {
+      const alt = document.createElement("a");
+      alt.href = WRITER_PACK_CRYPTO_URL;
+      alt.textContent = "or pay with crypto \u2192";
+      alt.style.display = "inline-block";
+      alt.style.marginTop = "8px";
+      alt.style.marginLeft = "12px";
+      status.appendChild(alt);
+    }
   }
 
   async function hashFile(file, alg) {
