@@ -2305,22 +2305,46 @@ class Handler(BaseHTTPRequestHandler):
         ctype = (self.headers.get("Content-Type") or "").split(";", 1)[0].strip().lower()
         if ctype == "application/json":
             return False
-        # Drain a bounded amount before answering. This is HTTP/1.0, so the
-        # socket closes after the response; replying while the client is still
-        # uploading gives it a broken pipe instead of the 415, which turns an
-        # actionable "you forgot the header" into an opaque network error.
-        # Bounded by MAX_BODY_BYTES so a large body is not read on our dime.
-        try:
-            to_drain = min(declared, MAX_BODY_BYTES)
-            if to_drain > 0:
-                self.rfile.read(to_drain)
-        except (OSError, ValueError):
-            pass
+        self._drain_request_body()
         _json_response(self, 415, {
             "error": "unsupported media type",
             "detail": "POST bodies must be sent as Content-Type: application/json",
         })
         return True
+
+    def _drain_request_body(self) -> int:
+        """Read and discard a bounded request body before answering an error.
+
+        Returns the number of bytes consumed (for tests; callers ignore it).
+
+        WHY THIS EXISTS, and why it is not optional on any refusal path. This
+        is HTTP/1.0: the socket closes after the response. Closing a socket
+        that still holds UNREAD received data makes the kernel send RST instead
+        of FIN, and an RST can discard the response the client has not read
+        yet. The client then sees ECONNRESET / a broken pipe / a proxy 502
+        instead of the status we actually sent — an actionable refusal turned
+        into an opaque network error.
+
+        SIZE IS IRRELEVANT. A body small enough to already sit in the kernel
+        receive buffer is exactly the case that produces the RST, because those
+        are the bytes that are unread at close. MAX_BODY_BYTES is 4096, so
+        every body we ever accept is in that class.
+
+        Bounded by MAX_BODY_BYTES so a large declared body is not read on our
+        dime; a client that declared more than we will read gets the same RST,
+        but it also gets no service, which is the trade the cap is making.
+        """
+        try:
+            declared = int(self.headers.get("Content-Length") or 0)
+        except (TypeError, ValueError):
+            return 0
+        to_drain = min(max(declared, 0), MAX_BODY_BYTES)
+        if to_drain <= 0:
+            return 0
+        try:
+            return len(self.rfile.read(to_drain) or b"")
+        except (OSError, ValueError):
+            return 0
 
     def _optional_typed(self, payload: dict, field: str, want: type, label: str):
         """Read an OPTIONAL structured field, or 400 if it is present with the
@@ -2354,7 +2378,15 @@ class Handler(BaseHTTPRequestHandler):
         # answered 415 to a CORS-simple POST would be saying "wrong type" —
         # i.e. "send the right one and I will serve you". There is nothing
         # behind these paths any more, and every spelling must say so.
+        #
+        # The body is drained FIRST, exactly as the 415 path does. Answering a
+        # POST without reading its body closes the socket with unread data,
+        # which makes the kernel send RST and can destroy the 410 before the
+        # client reads it — so the caller sees a connection reset instead of
+        # being told the endpoint is gone. Cached copies of the old v2.js and
+        # app.js still POST here from browsers that have not revalidated.
         if _is_retired_btc_path(self.path.split("?", 1)[0]):
+            self._drain_request_body()
             self.send_error(410, _RETIRED_BTC_MESSAGE)
             return
         if self._reject_non_json_post():

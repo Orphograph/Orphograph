@@ -228,6 +228,137 @@ def test_the_reason_phrase_survives_the_status_line() -> None:
     assert "\r" not in phrase and "\n" not in phrase, "reason phrase splits the response"
 
 
+def _handler_for_post(path: str, body: bytes, ctype: str = "application/json"):
+    """A Handler instance wired to in-memory streams, with send_error stubbed.
+
+    BaseHTTPRequestHandler.__init__ runs the whole request cycle, so the
+    instance is built with __new__ and the four attributes do_POST touches are
+    set by hand. Nothing but the dispatch and the drain is exercised.
+    """
+    import email.message
+    import io
+    import sys as _sys
+    _sys.path.insert(0, str(_srv.REPO_ROOT / "server"))
+    import app as _app
+
+    h = _app.Handler.__new__(_app.Handler)
+    h.path = path
+    h.command = "POST"
+    h.request_version = "HTTP/1.0"
+    h.client_address = ("127.0.0.1", 40000)
+    h.rfile = io.BytesIO(body)
+    h.wfile = io.BytesIO()
+    msg = email.message.Message()
+    msg["Content-Type"] = ctype
+    msg["Content-Length"] = str(len(body))
+    h.headers = msg
+    sent = {}
+
+    def _send_error(code, message=None, explain=None):
+        sent["code"] = code
+        sent["message"] = message
+    h.send_error = _send_error
+    return _app, h, sent
+
+
+@pytest.mark.parametrize("path", GONE_POST_PATHS)
+def test_the_410_drains_the_request_body_before_answering(path) -> None:
+    """THE DRAIN, pinned by a means that CAN fail.
+
+    This is HTTP/1.0: the socket closes after the response. Closing it while
+    received bytes are still unread makes the kernel send RST rather than FIN,
+    and an RST can discard the response before the client reads it — so a
+    caller POSTing to a retired endpoint sees ECONNRESET or a proxy 502
+    instead of the 410. Cached copies of the previous v2.js and app.js still
+    POST here from browsers that have not revalidated.
+
+    Loopback usually does NOT reproduce the RST, so a wire test that merely
+    gets a 410 proves nothing about the drain. This one asserts the handler
+    actually CONSUMED Content-Length bytes: it fails if the drain is removed.
+
+    Body size is irrelevant to the hazard and deliberately small — a body that
+    already sits in the kernel receive buffer is exactly the unread-at-close
+    case. MAX_BODY_BYTES is 4096, so every body the server accepts is in it.
+    """
+    body = b'{"email":"buyer@example.com","pad":"' + b"x" * 900 + b'"}'
+    _app, h, sent = _handler_for_post(path, body)
+    _app.Handler.do_POST(h)
+    assert sent.get("code") == 410, sent
+    assert h.rfile.tell() == len(body), (
+        f"{path}: handler answered 410 having consumed {h.rfile.tell()} of "
+        f"{len(body)} body bytes — the socket would close with unread data")
+
+
+def test_the_drain_assertion_can_fail() -> None:
+    """NEGATIVE CONTROL for the test above. A handler that answers WITHOUT
+    draining must leave the stream unconsumed — otherwise the assertion is
+    measuring something that is true either way."""
+    import io
+    _app, h, sent = _handler_for_post("/api/buy-btc", b'{"a":1}')
+    h.rfile = io.BytesIO(b'{"a":1}')
+    h.send_error(410, "stub")          # answer without draining
+    assert h.rfile.tell() == 0, "an undrained stream must read as unconsumed"
+
+
+def test_the_415_path_still_drains(base) -> None:
+    """The drain helper is shared with the content-type gate; a refactor that
+    breaks one breaks both. Wire-level: a CORS-simple POST to a LIVE endpoint
+    still answers 415 with a complete body."""
+    status, raw, _h = _srv.request(
+        base, "/api/anchor", "POST", b"hash_hex=" + b"a" * 64,
+        {"Content-Type": "text/plain"})
+    assert status == 415, status
+    assert raw, "the 415 response body was lost"
+
+
+@pytest.mark.parametrize("path", GONE_POST_PATHS)
+def test_the_410_survives_a_body_over_a_raw_socket(base, path) -> None:
+    """Integration half. Sends headers, then the body, then reads to EOF over a
+    raw socket, 50 times — a response truncated by an RST shows up here as a
+    short read or ECONNRESET rather than as a clean 410.
+
+    Honest about its limits: loopback rarely reproduces the reset, so a green
+    run here is NOT what proves the drain. The in-process test above is.
+    """
+    import socket as _socket
+    from urllib.parse import urlsplit
+    parts = urlsplit(base)
+    body = b'{"email":"buyer@example.com","pad":"' + b"x" * 600 + b'"}'
+    head = (
+        f"POST {path} HTTP/1.0\r\n"
+        f"Host: {parts.hostname}:{parts.port}\r\n"
+        "Content-Type: application/json\r\n"
+        f"Content-Length: {len(body)}\r\n"
+        "\r\n"
+    ).encode()
+    for i in range(50):
+        sock = _socket.create_connection((parts.hostname, parts.port), timeout=10)
+        try:
+            sock.sendall(head)
+            sock.sendall(body)
+            chunks = []
+            while True:
+                try:
+                    b = sock.recv(8192)
+                except ConnectionResetError as e:  # the failure this hunts
+                    pytest.fail(f"iteration {i}: connection reset reading the 410 ({e})")
+                if not b:
+                    break
+                chunks.append(b)
+        finally:
+            sock.close()
+        raw = b"".join(chunks)
+        assert raw.startswith(b"HTTP/1.0 410"), (i, raw[:80])
+        assert b"\r\n\r\n" in raw, (i, "headers were truncated")
+        head_blob, _, body_blob = raw.partition(b"\r\n\r\n")
+        for line in head_blob.split(b"\r\n"):
+            if line.lower().startswith(b"content-length:"):
+                want = int(line.split(b":", 1)[1])
+                assert len(body_blob) == want, (
+                    i, f"short read: {len(body_blob)} of {want} body bytes")
+                break
+
+
 def test_the_site_still_answers_at_all(base) -> None:
     """NEGATIVE CONTROL for the wire tests. If every path 410'd, or the server
     were wedged, the parametrised tests above would pass while proving nothing."""
