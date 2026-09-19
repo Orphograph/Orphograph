@@ -211,7 +211,7 @@ unchanged.*
 ---
 
 *Orphograph is a Bitcoin file-timestamping service. Three free
-anchors every 24 hours, $29 for a 10-anchor pack, $9/mo for
+anchors every 24 hours, $19 for a 10-anchor pack, $9/mo for
 unlimited. Five calendar servers, four distinct calendars, no single point of
 failure. Receipts verify against any
 Bitcoin node without our servers.*
