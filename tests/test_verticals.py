@@ -1,8 +1,11 @@
 """Tests for the vertical-packaging scaffold.
 
-The six YAMLs at ``config/verticals/`` are loaded by ``server/verticals.py``
+The four YAMLs at ``config/verticals/`` are loaded by ``server/verticals.py``
 and rendered into landing pages under ``/verticals/<slug>.html``. The pages
 are NOT linked from the homepage; they are reachable by direct URL only.
+
+(Was six; insurance/inspection left 2026-09-18, healthcare left 2026-09-19 —
+see tests/test_no_healthcare_vertical_source.py for the healthcare guard.)
 """
 from __future__ import annotations
 
@@ -22,7 +25,6 @@ EXPECTED_SLUGS = {
     "construction",
     "legal",
     "realestate",
-    "healthcare",
     "accounting",
 }
 
@@ -42,12 +44,12 @@ DOLLAR_PATTERN = re.compile(
 # Module-level
 # ---------------------------------------------------------------------------
 
-def test_all_six_yamls_present_on_disk():
+def test_all_expected_yamls_present_on_disk():
     files = sorted(p.stem for p in CONFIG_DIR.glob("*.yml"))
     assert set(files) == EXPECTED_SLUGS, files
 
 
-def test_module_loads_all_six_slugs():
+def test_module_loads_all_expected_slugs():
     verticals.reload()
     assert set(verticals.all_slugs()) == EXPECTED_SLUGS
 

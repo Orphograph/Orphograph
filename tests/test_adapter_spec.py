@@ -18,7 +18,7 @@ def test_landing_only_verticals_load_without_errors():
     # The other shipped verticals have no attestation_profile yet — they must load
     # as landing-only (functional False) but carry NO errors (valid landing pages).
     specs = adapter_spec.load_specs()
-    for slug in ("accounting", "construction", "healthcare", "realestate"):
+    for slug in ("accounting", "construction", "realestate"):
         assert slug in specs, f"{slug} must load"
         assert specs[slug].errors == [], f"{slug} landing-only must have no errors"
 
