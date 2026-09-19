@@ -3404,7 +3404,7 @@ class Handler(BaseHTTPRequestHandler):
         added = unsubscribe.add(email, source="link_get")
         from html import escape as _h
         # Stylesheets come from the error template, the one place the site's
-        # head links are pinned. This page used an inline <style>, which the
+        # head links are pinned. This page used an inline style block, which the
         # CSP (style-src 'self') drops, so it rendered unstyled; and copying
         # the pins here would be a second list to drift.
         head_links = "\n".join(re.findall(
