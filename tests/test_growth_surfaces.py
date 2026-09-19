@@ -88,7 +88,13 @@ class ReceiptShareHash(unittest.TestCase):
         # (the block's contents are not rendered yet then).
         self.assertNotIn('DOMContentLoaded", openShareFromHash', js)
         self.assertIn("  openShareFromHash();\n", js)
-        self.assertIn('/receipt.js?v=7', (WEB / "receipt.html").read_text())
+        # The page must load the script WITH a cache-bust, or an edit ships
+        # under a key that never changes. The version NUMBER is deliberately
+        # not pinned here: tests/test_versioned_asset_bump.py pins it
+        # content-addressed (sha256 vs ?v=), so a literal copy in this file
+        # only turns every future bump into an unrelated red.
+        self.assertRegex((WEB / "receipt.html").read_text(),
+                         r'/receipt\.js\?v=\d+')
 
 
 if __name__ == "__main__":
