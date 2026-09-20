@@ -102,6 +102,19 @@ EXPECTED_URLS = [
     "https://orphograph.com/blog/what-makes-a-digital-timestamp-legally-defensible",
     "https://orphograph.com/blog/why-5-opentimestamps-calendars-not-1",
     "https://orphograph.com/blog/why-domain-dying-doesnt-kill-your-timestamp",
+    "https://orphograph.com/pricing",
+    "https://orphograph.com/about-the-office",
+    "https://orphograph.com/writers",
+    "https://orphograph.com/what-is-this",
+    "https://orphograph.com/anchor-output",
+    "https://orphograph.com/method",
+    "https://orphograph.com/docs/quickstart",
+    "https://orphograph.com/docs/install",
+    "https://orphograph.com/docs/verify",
+    "https://orphograph.com/legal/aup",
+    "https://orphograph.com/legal/contact-policy",
+    "https://orphograph.com/legal/dmca",
+    "https://orphograph.com/legal/trademark",
 ]
 
 SITEMAP_NS = "{http://www.sitemaps.org/schemas/sitemap/0.9}"

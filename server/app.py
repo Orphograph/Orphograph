@@ -610,9 +610,13 @@ def _build_sitemap() -> str:
     site = os.environ.get("SITE_URL", "https://orphograph.com").rstrip("/")
     # Canonical public-URL set — reconciled 2026-07-03 with the (previously
     # drifted) static web/sitemap.xml; a test pins the two in lockstep.
+    # Lockstep between lists is not coverage: /pricing and 12 other indexable
+    # pages were missing from all of them at once. The list is now also checked
+    # against the pages themselves (test_sitemap_covers_every_indexable_page).
     urls: list[tuple[str, str]] = [
         ("/", "1.0"),
         ("/verify/", "0.9"),
+        ("/pricing", "0.9"),
         ("/blog/", "0.8"),
         ("/learn", "0.8"),
         ("/dataset-provenance", "0.8"),
@@ -621,7 +625,11 @@ def _build_sitemap() -> str:
         ("/standing-record", "0.5"),
         ("/lp/", "0.8"),
         ("/about", "0.7"),
+        ("/about-the-office", "0.5"),
         ("/faq", "0.7"),
+        ("/writers", "0.7"),
+        ("/what-is-this", "0.6"),
+        ("/anchor-output", "0.6"),
         ("/verify-js", "0.7"),
         ("/lp/prove-photo-pre-ai", "0.7"),
         ("/lp/bitcoin-timestamp-file", "0.7"),
@@ -633,6 +641,7 @@ def _build_sitemap() -> str:
         ("/lp/ai-image-detector-vs-provenance", "0.7"),
         ("/lp/eu-ai-act-training-data", "0.7"),
         ("/lp/agent-receipts", "0.7"),
+        ("/method", "0.6"),
         ("/method/architecture", "0.6"),
         ("/method/bitcoin-attestation", "0.6"),
         ("/method/evidence-law", "0.6"),
@@ -647,6 +656,9 @@ def _build_sitemap() -> str:
         ("/docs/webhooks", "0.6"),
         ("/docs/cli", "0.6"),
         ("/docs/sdk", "0.6"),
+        ("/docs/quickstart", "0.6"),
+        ("/docs/install", "0.6"),
+        ("/docs/verify", "0.6"),
         ("/stats", "0.6"),
         ("/gift", "0.6"),
         ("/status", "0.5"),
@@ -674,6 +686,10 @@ def _build_sitemap() -> str:
         ("/terms", "0.3"),
         ("/privacy", "0.3"),
         ("/legal/", "0.3"),
+        ("/legal/aup", "0.3"),
+        ("/legal/contact-policy", "0.3"),
+        ("/legal/dmca", "0.3"),
+        ("/legal/trademark", "0.3"),
         ("/.well-known/security.txt", "0.3"),
         ("/humans.txt", "0.3"),
         ("/sitemap-image.xml", "0.3"),
