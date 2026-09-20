@@ -262,20 +262,33 @@ def handle_event(payload: bytes) -> dict:
             _mark_processed(event_id, result)
             return result
 
-        if event_type != "checkout.session.completed":
+        # `completed` means the buyer finished the form; with a delayed payment
+        # method the money lands later and arrives as `async_payment_succeeded`.
+        # Both deliver, through the same path below.
+        if event_type not in {"checkout.session.completed",
+                              "checkout.session.async_payment_succeeded"}:
             result = {"ok": True, "ignored": event_type}
             _mark_processed(event_id, result)
             return result
 
-        # Admin toggle: disable checkout if payment system is down
-        ORPHO_DISABLE_CHECKOUT = os.environ.get("ORPHO_DISABLE_CHECKOUT", "0") == "1"
-        if ORPHO_DISABLE_CHECKOUT:
-            sys.stderr.write(f"[stripe_webhook] checkout disabled; discarding session event {event.get('id')}\n")
-            result = {"ok": True, "disabled": "checkout temporarily disabled"}
-            _mark_processed(event_id, result)
-            return result
+        # ORPHO_DISABLE_CHECKOUT is deliberately NOT consulted here. The freeze
+        # stops new checkouts being created; this is a payment already taken.
+        # Hosted payment links stay payable whatever our environment says, so
+        # discarding here charged the buyer for nothing, and the processed
+        # marker closed the replay path.
 
         session = event.get("data", {}).get("object", {}) or {}
+        if session.get("payment_status") == "unpaid":
+            # Not money yet. Nothing to deliver and nothing to retry: the
+            # settlement has its own event. Absent / "paid" /
+            # "no_payment_required" all proceed.
+            sys.stderr.write(
+                f"[stripe_webhook] session {session.get('id', '')} completed UNPAID; "
+                f"waiting for async_payment_succeeded\n"
+            )
+            result = {"ok": True, "awaiting_payment": True}
+            _mark_processed(event_id, result)
+            return result
         customer_email = (
             session.get("customer_email")
             or session.get("customer_details", {}).get("email")
@@ -360,6 +373,15 @@ def handle_event(payload: bytes) -> dict:
             credit_amount = PACK_CREDITS
         if credit_amount <= 0:
             credit_amount = PACK_CREDITS
+        # One paid session is delivered once, whichever events describe it.
+        # Event-id dedupe cannot see two different events about one session.
+        # Exact source match: a lookalike id must never cost a buyer their pack.
+        already = credits.find_claim_code_by_source(session_id) if session_id else None
+        if already and already.get("source") in {f"stripe:{session_id}",
+                                                 f"stripe-gift:{session_id}"}:
+            result = {"ok": True, "already_delivered": True}
+            _mark_processed(event_id, result)
+            return result
         claim_code = credits.new_claim_code()
         credits.add_credits(
             claim_code=claim_code,
