@@ -44,13 +44,20 @@ def _norm(email: str) -> str:
     return (email or "").strip().lower()
 
 
-def add(email: str, source: str = "user") -> bool:
-    """Mark an email as unsubscribed. Idempotent — second call returns False."""
+def would_add(email: str) -> bool:
+    """What `add` would return right now, without writing. For HEAD on the
+    unsubscribe link: a scanner that only looked must not unsubscribe anyone."""
     email = _norm(email)
     if "@" not in email or len(email) > 320:
         return False
-    if is_unsubscribed(email):
+    return not is_unsubscribed(email)
+
+
+def add(email: str, source: str = "user") -> bool:
+    """Mark an email as unsubscribed. Idempotent — second call returns False."""
+    if not would_add(email):
         return False
+    email = _norm(email)
     with locked(SUPPRESS_PATH, mode="a", exclusive=True) as f:
         f.write(json.dumps({
             "ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),

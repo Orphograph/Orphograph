@@ -1756,11 +1756,20 @@ class Handler(BaseHTTPRequestHandler):
             if not TOKEN_RE.match(token):
                 self.send_error(400, "invalid login token")
                 return
-            redeemed = auth.redeem_link_token(token)
-            if not redeemed:
-                self.send_error(404, "link expired or already used")
-                return
-            sid, _exp = auth.create_session(redeemed["email"])
+            sid = None
+            if self._is_head():
+                # Mail gateways and link checkers probe this link with HEAD
+                # before the person clicks it. Report what GET would answer;
+                # spend nothing, mint nothing.
+                if not auth.link_token_is_redeemable(token):
+                    self.send_error(404, "link expired or already used")
+                    return
+            else:
+                redeemed = auth.redeem_link_token(token)
+                if not redeemed:
+                    self.send_error(404, "link expired or already used")
+                    return
+                sid, _exp = auth.create_session(redeemed["email"])
             # `?next=…` lets the caller pick the landing page after sign-in
             # so a welcome email can drop the user directly on the home
             # anchoring UI instead of forcing them through /account.html.
@@ -1791,7 +1800,8 @@ class Handler(BaseHTTPRequestHandler):
                 location = next_raw
             self.send_response(303)
             self.send_header("Location", location)
-            self.send_header("Set-Cookie", auth.build_session_cookie(sid, secure=COOKIE_SECURE))
+            if sid is not None:
+                self.send_header("Set-Cookie", auth.build_session_cookie(sid, secure=COOKIE_SECURE))
             self.send_header("Cache-Control", "no-store")
             _security_headers(self)
             self.end_headers()
@@ -3100,6 +3110,9 @@ class Handler(BaseHTTPRequestHandler):
         _security_headers(self)
         self.end_headers()
 
+    def _is_head(self) -> bool:
+        return self.command == "HEAD"
+
     def do_HEAD(self):  # noqa: N802
         """HEAD is GET without a body — RFC 9110 §9.3.2.
 
@@ -3119,6 +3132,9 @@ class Handler(BaseHTTPRequestHandler):
             self._event_method_not_allowed()
             return
 
+        # Running the GET routing also runs its side effects. HEAD is a safe
+        # method (RFC 9110 §9.2.1), so a GET handler that writes must ask
+        # `_is_head()` and answer from a read-only lookup instead.
         real_wfile = self.wfile
         shim = _HeadBodySuppressor(real_wfile)
         inherited_end_headers = self.end_headers
@@ -3397,7 +3413,12 @@ class Handler(BaseHTTPRequestHandler):
             self.send_error(400, "invalid email")
             return
         try:
-            added = unsubscribe.add(email, source="link_get")
+            if self._is_head():
+                # A scanner that only looked at the link must not unsubscribe
+                # the recipient. Describe the page GET would serve.
+                added = unsubscribe.would_add(email)
+            else:
+                added = unsubscribe.add(email, source="link_get")
         except unsubscribe.SuppressionUnavailable:
             # Without this the socket just closed: the visitor could not tell
             # whether the unsubscribe was recorded. It was not. Say so.

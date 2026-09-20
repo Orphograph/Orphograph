@@ -191,6 +191,35 @@ def issue_link_token(email: str) -> tuple[str, float]:
     return token, expires
 
 
+def _redeemable_state(h: str) -> dict | None:
+    """The token's `issued` row if it could be redeemed right now, else None.
+    Reads only. The one rule both redeem and peek answer from."""
+    # Latest-wins per token: scan in order, track state.
+    state: dict | None = None
+    for row in _read_all(TOKEN_LEDGER):
+        if row.get("token_hash") != h:
+            continue
+        state = row  # overwrites with latest event for this hash
+    if state is None:
+        return None
+    if state.get("event") != "issued":
+        # redeemed / superseded / any non-issued state — refuse
+        return None
+    if _now() > float(state.get("expires_unix", 0)):
+        return None
+    return state
+
+
+def link_token_is_redeemable(token: str) -> bool:
+    """Would `redeem_link_token` succeed right now? Consumes nothing.
+
+    For HEAD on the sign-in link: mail gateways and link checkers probe with
+    HEAD, and a probe must not spend the person's one-time token."""
+    if not token:
+        return False
+    return _redeemable_state(_hash(token)) is not None
+
+
 def redeem_link_token(token: str) -> dict | None:
     """One-time consume. Returns {email, issued_at} on success, None on failure
     (unknown, expired, already redeemed)."""
@@ -200,19 +229,8 @@ def redeem_link_token(token: str) -> dict | None:
     # Cross-process atomicity: hold a sentinel lock during scan+append.
     lockfile = TOKEN_LEDGER.with_suffix(TOKEN_LEDGER.suffix + ".lock")
     with locked(lockfile, mode="a", exclusive=True):
-        rows = _read_all(TOKEN_LEDGER)
-        # Latest-wins per token: scan in order, track state.
-        state: dict | None = None
-        for row in rows:
-            if row.get("token_hash") != h:
-                continue
-            state = row  # overwrites with latest event for this hash
+        state = _redeemable_state(h)
         if state is None:
-            return None
-        if state.get("event") != "issued":
-            # redeemed / superseded / any non-issued state — refuse
-            return None
-        if _now() > float(state.get("expires_unix", 0)):
             return None
         _append(TOKEN_LEDGER, {
             "ts": _iso(_now()),
