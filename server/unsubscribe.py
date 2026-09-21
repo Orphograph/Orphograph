@@ -21,7 +21,7 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 
-from file_lock import locked
+from file_lock import can_append, locked
 
 
 class SuppressionUnavailable(RuntimeError):
@@ -44,25 +44,33 @@ def _norm(email: str) -> str:
     return (email or "").strip().lower()
 
 
-def would_add(email: str) -> bool:
-    """What `add` would return right now, without writing. For HEAD on the
-    unsubscribe link: a scanner that only looked must not unsubscribe anyone."""
+def _is_new(email: str) -> bool:
+    """A well-formed address that is not already suppressed."""
     email = _norm(email)
     if "@" not in email or len(email) > 320:
         return False
-    if is_unsubscribed(email):
+    return not is_unsubscribed(email)
+
+
+def would_add(email: str) -> bool:
+    """What `add` would return right now, without writing. For HEAD on the
+    unsubscribe link: a scanner that only looked must not unsubscribe anyone."""
+    if not _is_new(email):
         return False
     # "Would add" includes "could add". A ledger we can read and not write
     # used to answer HEAD with the success page while GET got no answer at all.
-    target = SUPPRESS_PATH if SUPPRESS_PATH.exists() else SUPPRESS_PATH.parent
-    if not os.access(target, os.W_OK):
-        raise SuppressionUnavailable(f"suppression ledger is not writable: {target.name}")
+    # Only HEAD asks: `add` itself writes, and maps a failed write below, so it
+    # does not also pre-check (a pre-check there refused a ledger whose parent
+    # directory did not exist yet, which the real write creates).
+    if not can_append(SUPPRESS_PATH):
+        raise SuppressionUnavailable(
+            f"suppression ledger is not writable: {SUPPRESS_PATH.name}")
     return True
 
 
 def add(email: str, source: str = "user") -> bool:
     """Mark an email as unsubscribed. Idempotent — second call returns False."""
-    if not would_add(email):
+    if not _is_new(email):
         return False
     email = _norm(email)
     try:

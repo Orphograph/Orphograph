@@ -214,7 +214,7 @@ def _snapshot(data_dir: Path) -> dict[str, tuple[int, str]]:
             and not accounting.match(p.name)}
 
 
-def test_head_on_every_get_route_leaves_the_data_dir_untouched(server):
+def test_head_on_every_get_route_leaves_the_data_dir_untouched(server, monkeypatch):
     """Observed, not inferred: HEAD each enumerated GET route on a real server
     (plus the two known writers with VALID input, which a synthesized probe
     path never supplies) and compare the server's data directory byte for byte.
@@ -226,11 +226,14 @@ def test_head_on_every_get_route_leaves_the_data_dir_untouched(server):
     def load(name):
         spec = importlib.util.spec_from_file_location(name, REPO_ROOT / "scripts" / f"{name}.py")
         mod = importlib.util.module_from_spec(spec)
-        sys.modules[name] = mod
+        # monkeypatch, not a bare assignment: this suite runs in ONE pytest
+        # process, and a leaked `sys.modules` entry or a scripts/ directory
+        # left at the front of sys.path changes what every later test imports.
+        monkeypatch.setitem(sys.modules, name, mod)
         spec.loader.exec_module(mod)
         return mod
 
-    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    monkeypatch.syspath_prepend(str(REPO_ROOT / "scripts"))
     es, rs = load("enumerate_surface"), load("route_sweep")
     tracked = {str(p.relative_to(REPO_ROOT)) for p in (REPO_ROOT / "web").rglob("*") if p.is_file()}
     report = es.routes_report((REPO_ROOT / "server" / "app.py").read_text(),
@@ -362,17 +365,35 @@ def _unguarded_writer_calls(src: str, writers=frozenset(_KNOWN_GET_WRITERS)):
     """(seen, offenders) over do_GET, the Handler methods it calls on self, and
     the module-level functions it calls by name.
 
-    A writer call is guarded only if THAT CALL is: an enclosing `if` whose test
-    mentions `_is_head`, or an argument that does (`register=not
-    self._is_head()`). One mention somewhere else in a 1000-line do_GET covers
-    nothing."""
+    A writer call is guarded only if THAT CALL is, in the right direction (see
+    `guarded`). One mention somewhere else in a 1000-line do_GET covers
+    nothing, and neither does a mention with the polarity backwards."""
     import ast
 
     tree = ast.parse(src)
     parent = {child: node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
 
-    def mentions_head(node):
-        return any(isinstance(n, ast.Attribute) and n.attr == "_is_head" for n in ast.walk(node))
+    def is_head_call(n):
+        return (isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+                and n.func.attr == "_is_head")
+
+    def not_head(n):
+        """`not self._is_head()`."""
+        return isinstance(n, ast.UnaryOp) and isinstance(n.op, ast.Not) and is_head_call(n.operand)
+
+    def true_implies_not_head(test):
+        """When `test` is True the request is certainly not HEAD."""
+        if not_head(test):
+            return True
+        return (isinstance(test, ast.BoolOp) and isinstance(test.op, ast.And)
+                and any(true_implies_not_head(v) for v in test.values))
+
+    def false_implies_not_head(test):
+        """When `test` is False the request is certainly not HEAD."""
+        if is_head_call(test):
+            return True
+        return (isinstance(test, ast.BoolOp) and isinstance(test.op, ast.Or)
+                and any(false_implies_not_head(v) for v in test.values))
 
     def writer_name(call):
         f = call.func
@@ -385,13 +406,22 @@ def _unguarded_writer_calls(src: str, writers=frozenset(_KNOWN_GET_WRITERS)):
         return ".".join(filter(None, key)) if key in writers else None
 
     def guarded(call, fn):
-        if any(mentions_head(a) for a in list(call.args) + [k.value for k in call.keywords]):
+        # A guard has to say "not HEAD" about THIS call: an argument that is
+        # `not self._is_head()` (`register=not self._is_head()`), the body of
+        # an `if` that requires `not self._is_head()`, or the else-branch of an
+        # `if` that tests `self._is_head()`. A bare mention is not enough: a
+        # writer in the HEAD branch, or `register=self._is_head()` with the flag
+        # inverted, mentions `_is_head` and does the opposite.
+        if any(not_head(a) for a in list(call.args) + [k.value for k in call.keywords]):
             return True
-        node = call
+        child, node = call, call
         while node is not fn:
-            node = parent[node]
-            if isinstance(node, ast.If) and mentions_head(node.test):
-                return True
+            child, node = node, parent[node]
+            if isinstance(node, ast.If):
+                if child in node.body and true_implies_not_head(node.test):
+                    return True
+                if child in node.orelse and false_implies_not_head(node.test):
+                    return True
         return False
 
     handler = next(n for n in ast.walk(tree)
@@ -451,3 +481,150 @@ class Handler:
     seen, offenders = _unguarded_writer_calls(planted)
     assert seen == {"unsubscribe.add", "affiliate.code_for_email"}
     assert offenders == ["do_GET:10 unsubscribe.add"], offenders
+
+
+def test_control_a_guard_with_the_wrong_polarity_does_not_count():
+    """The check as first written accepted ANY enclosing `if` that mentioned
+    `_is_head`, so a writer placed in the HEAD branch, or given the flag
+    inverted, passed. Plant both, plus the shapes that must stay accepted."""
+    planted = '''
+class Handler:
+    def do_GET(self):
+        if path == "/head-branch":
+            if self._is_head():
+                unsubscribe.add(email)
+        if path == "/inverted":
+            affiliate.code_for_email(email, register=self._is_head())
+        if path == "/not-head":
+            if not self._is_head():
+                unsubscribe.add(email)
+        if path == "/not-head-and-more":
+            if refusal is None and not self._is_head():
+                unsubscribe.add(email)
+        if path == "/else-of-or":
+            if other or self._is_head():
+                pass
+            else:
+                unsubscribe.add(email)
+        if path == "/else-of-not":
+            if not self._is_head():
+                pass
+            else:
+                unsubscribe.add(email)
+'''
+    seen, offenders = _unguarded_writer_calls(planted)
+    assert seen == {"unsubscribe.add", "affiliate.code_for_email"}
+    # Line 6: the writer sits in the HEAD branch. Line 8: the flag is inverted.
+    # Line 24: the writer sits in the else-branch of `not _is_head()`, which is
+    # the HEAD case. The other three shapes are accepted.
+    assert sorted(offenders) == sorted(["do_GET:6 unsubscribe.add",
+                                        "do_GET:8 affiliate.code_for_email",
+                                        "do_GET:24 unsubscribe.add"]), offenders
+
+
+# --- review round 2 (2026-09-20) ---------------------------------------------
+
+def test_an_unwritable_session_ledger_keeps_the_link_on_get(server, read_only):
+    """GET redeemed the link (spending it) and only THEN found it could not
+    record the session, and answered "try the link again" about a link that no
+    longer worked. HEAD already checked both ledgers. GET now checks first."""
+    base, data_dir = server
+    seed = _mint_token(data_dir, "session-ledger-seed@example.test")
+    assert _srv.request(base, f"/a/{seed}", timeout=15)[0] == 303, "control: sign-in works"
+    token = _mint_token(data_dir, "session-ledger-blocked@example.test")
+    read_only("auth_sessions.jsonl")
+    assert _srv.request(base, f"/a/{token}", timeout=15)[0] == 503
+    assert _srv.request(base, f"/a/{token}", method="HEAD", timeout=15)[0] == 503
+    (data_dir / "auth_sessions.jsonl").chmod(0o600)
+    status, _b, headers = _srv.request(base, f"/a/{token}", timeout=15)
+    assert status == 303 and "orpho_sid=" in headers.get("Set-Cookie", ""), (
+        "the failed attempt spent the link")
+    assert _events_for(data_dir, "session-ledger-blocked@example.test",
+                       "auth_tokens.jsonl").count("redeemed") == 1
+
+
+def test_unsubscribe_creates_a_ledger_directory_that_does_not_exist_yet(tmp_path, monkeypatch):
+    """`locked()` creates missing parent directories. The writability pre-check
+    inside `add()` did not know that, so a valid unsubscribe was refused where it
+    used to be recorded."""
+    import unsubscribe
+
+    ledger = tmp_path / "not-yet" / "deeper" / "suppressions.jsonl"
+    monkeypatch.setattr(unsubscribe, "SUPPRESS_PATH", ledger)
+    assert unsubscribe.would_add("fresh@example.test") is True, "HEAD must agree with GET"
+    assert unsubscribe.add("fresh@example.test", source="test") is True
+    assert ledger.exists() and "fresh@example.test" in ledger.read_text()
+    assert unsubscribe.add("fresh@example.test", source="test") is False, "idempotent"
+
+
+def test_unsubscribe_still_refuses_a_ledger_it_cannot_write(tmp_path, monkeypatch):
+    """Control for the test above: relaxing the pre-check must not turn an
+    unwritable location into a silent success."""
+    import os
+    import unsubscribe
+
+    assert os.geteuid() != 0, "run this suite as a non-root user"
+    # A read-only FILE, as in the server tests above. (A read-only directory the
+    # process owns is repaired by `locked()`, which chmods it 0700, so it is not
+    # an unwritable location to the real writer.)
+    ledger = tmp_path / "suppressions.jsonl"
+    ledger.write_text("")
+    ledger.chmod(0o400)
+    try:
+        assert not os.access(ledger, os.W_OK), "control: the ledger is read-only"
+        monkeypatch.setattr(unsubscribe, "SUPPRESS_PATH", ledger)
+        with pytest.raises(unsubscribe.SuppressionUnavailable):
+            unsubscribe.would_add("blocked@example.test")
+        with pytest.raises(unsubscribe.SuppressionUnavailable):
+            unsubscribe.add("blocked@example.test", source="test")
+        assert ledger.read_text() == "", "nothing may have been recorded"
+    finally:
+        ledger.chmod(0o600)
+
+
+def test_can_append_follows_what_the_real_writer_does(tmp_path):
+    from file_lock import can_append
+    assert can_append(tmp_path / "new" / "a" / "b.jsonl") is True, "parents are created"
+    existing = tmp_path / "there.jsonl"
+    existing.write_text("")
+    assert can_append(existing) is True
+    existing.chmod(0o400)
+    try:
+        assert can_append(existing) is False
+    finally:
+        existing.chmod(0o600)
+    a_file = tmp_path / "plain-file"
+    a_file.write_text("x")
+    assert can_append(a_file / "child.jsonl") is False, "a file is not a directory"
+
+
+def test_a_stripe_session_id_in_a_url_does_not_reach_the_access_log(server):
+    """`/api/stripe/session?id=cs_…` answers with the buyer's email to anyone
+    who holds the id, and the post-checkout landing carries it as
+    `?stripe_session=`. The log already dropped tokens, claim codes and
+    addresses; it still kept these."""
+    base, data_dir = server
+    secret = "cs_test_a1B2c3D4e5F6g7H8logcanary"
+    _srv.request(base, f"/api/stripe/session?id={secret}", timeout=15)
+    _srv.request(base, f"/buy?stripe_session={secret}&status=success", timeout=15)
+    # An unrelated `id=` must stay readable, or the rule is redacting too much.
+    _srv.request(base, "/api/health?id=harmless-id-canary", timeout=15)
+    logs = list(data_dir.glob("server-*.log"))
+    assert len(logs) == 1, logs
+    text = logs[0].read_text(errors="replace")
+    assert "/api/stripe/session" in text and "stripe_session=" in text, (
+        "control: both requests reached the log at all")
+    assert secret not in text, "a Stripe session id was written to the access log"
+    assert "harmless-id-canary" in text, "the rule redacted an id it should not"
+
+
+def test_a_cookieless_head_on_the_experiment_homepage_is_uncacheable_like_get(experiment_server):
+    """It is not a visitor and gets no arm, but it must not advertise a plain,
+    cacheable page while GET answers per-arm with no-store and Vary: Cookie."""
+    base, _data_dir = experiment_server
+    ua = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) real-browser-shaped-agent"}
+    _s, _b, head = _srv.request(base, "/", method="HEAD", headers=ua, timeout=15)
+    _s, _b, get = _srv.request(base, "/", headers=ua, timeout=15)
+    assert head.get("Cache-Control") == get.get("Cache-Control") == "no-store"
+    assert "Cookie" in head.get("Vary", "") and "Cookie" in get.get("Vary", "")
+    assert "Set-Cookie" not in head

@@ -49,6 +49,29 @@ def locked(path: Path, *, mode: str = "a", exclusive: bool = True) -> Iterator[I
         f.close()
 
 
+def can_append(path: Path) -> bool:
+    """Could `locked(path, mode="a")` open `path` for appending right now?
+    Opens nothing and writes nothing.
+
+    Mirrors what `locked` does, not a simpler rule: an existing file must be
+    writable; a missing one needs its nearest existing ancestor to be a
+    writable directory, because `locked` creates the missing parents. Testing
+    only the immediate parent called a not-yet-created data directory
+    unwritable, which refused a write the real writer would have made.
+
+    A pre-check, so a race remains; callers that cannot tolerate one must also
+    handle the OSError from the real write. One known difference: `locked` also
+    chmods the parent to 0700 when it owns it, so a read-only directory this
+    process owns is repaired by the real write while this reports False.
+    """
+    if path.exists():
+        return os.access(path, os.W_OK)
+    for parent in path.parents:
+        if parent.exists():
+            return parent.is_dir() and os.access(parent, os.W_OK | os.X_OK)
+    return False
+
+
 @contextlib.contextmanager
 def try_locked(path: Path, *, mode: str = "a") -> Iterator[IO | None]:
     """Non-blocking exclusive lock: yields the open file, or None when another

@@ -752,9 +752,25 @@ def _serve_ab_home(handler: BaseHTTPRequestHandler) -> bool:
     newly_assigned = variant is None
     if newly_assigned and handler._is_head():
         # A cookieless HEAD is a probe, not a visitor: no arm, no view, no
-        # cookie. It gets the plain homepage, as bots do. A returning
-        # visitor's HEAD is described from their arm below, unlogged.
-        return False
+        # cookie. It is described with the plain homepage, as bots get. It
+        # still carries the headers that make GET uncacheable across arms,
+        # so a cache or link checker revalidating from HEAD does not learn a
+        # single-representation story that GET contradicts. (Content-Length
+        # is the plain page's: which arm a later GET draws is not knowable.)
+        # A returning visitor's HEAD is described from their arm below.
+        try:
+            plain = (WEB_DIR / "index.html").read_bytes()
+        except OSError:
+            return False
+        handler.send_response(200)
+        handler.send_header("Content-Type", "text/html; charset=utf-8")
+        handler.send_header("Content-Length", str(len(plain)))
+        handler.send_header("Cache-Control", "no-store")
+        handler.send_header("Vary", "Cookie")
+        _security_headers(handler)
+        handler.end_headers()
+        handler.wfile.write(plain)
+        return True
     if newly_assigned:
         variant = "dark" if secrets.randbelow(10_000) < int(fraction * 10_000) else "cream"
     # Dark is now the canonical homepage (served as the static index.html); the
@@ -1124,6 +1140,11 @@ class Handler(BaseHTTPRequestHandler):
         (re.compile(r"(\s/a/)[^\s?\"]+"), r"\1[redacted]"),
         (re.compile(r"(\s/api/pack/balance/)[^\s?\"]+"), r"\1[redacted]"),
         (re.compile(r"([?&](?:e|email)=)[^&\s\"]+"), r"\1[redacted]"),
+        # A Stripe checkout-session id: /api/stripe/session?id=cs_… answers with
+        # the buyer's email to anyone holding it, and the post-checkout landing
+        # carries it as ?stripe_session=cs_…. Only a value that IS a session id
+        # goes, so an unrelated `id=` parameter stays readable.
+        (re.compile(r"([?&](?:stripe_session|session_id|id)=)cs_[^&\s\"]+"), r"\1[redacted]"),
     )
 
     def log_message(self, fmt, *args):
@@ -1778,25 +1799,40 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_error(400, "invalid login token")
                 return
             sid = None
+            # The verdict is sent AFTER the try, never inside it: `OSError` also
+            # covers a client that hung up mid-response, and answering that
+            # with a second status line on a dead socket hides the real error.
+            refusal: tuple[int, str] | None = None
+            redeemed = None
             try:
                 if self._is_head():
                     # Mail gateways and link checkers probe this link with
                     # HEAD before the person clicks it. Report what GET would
                     # answer; spend nothing, mint nothing.
                     if not auth.link_token_is_redeemable(token):
-                        self.send_error(404, "link expired or already used")
-                        return
+                        refusal = (404, "link expired or already used")
                 else:
+                    # Find out that we cannot record a sign-in BEFORE the link
+                    # is spent, so "try the link again" is true when we say it.
+                    auth.require_sign_in_writable()
                     redeemed = auth.redeem_link_token(token)
                     if not redeemed:
-                        self.send_error(404, "link expired or already used")
-                        return
-                    sid, _exp = auth.create_session(redeemed["email"])
+                        refusal = (404, "link expired or already used")
             except OSError:
                 # A ledger we could not write. Answer, rather than drop the
-                # connection: the click deserves "try again".
-                self.send_error(503, "We could not sign you in just now. "
-                                     "Please try the link again in a few minutes.")
+                # connection: the click deserves "try again". Nothing was spent.
+                refusal = (503, "We could not sign you in just now. "
+                                "Please try the link again in a few minutes.")
+            if not self._is_head() and refusal is None and redeemed is not None:
+                try:
+                    sid, _exp = auth.create_session(redeemed["email"])
+                except OSError:
+                    # The link IS spent by now, so do not say to try it again.
+                    refusal = (503, "Your sign-in link was used, but we could not "
+                                    "finish signing you in. Please request a new "
+                                    "sign-in link.")
+            if refusal is not None:
+                self.send_error(*refusal)
                 return
             # `?next=…` lets the caller pick the landing page after sign-in
             # so a welcome email can drop the user directly on the home

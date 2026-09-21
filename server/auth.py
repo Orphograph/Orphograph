@@ -35,7 +35,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from file_lock import locked  # noqa: E402
+from file_lock import can_append, locked  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = Path(os.environ.get("ORPHO_DATA_DIR", str(ROOT / "data") if (ROOT / "data").is_dir() else str(ROOT)))
@@ -221,11 +221,24 @@ def link_token_is_redeemable(token: str) -> bool:
         return False
     # "Redeemable" includes "recordable": redeeming appends to both ledgers.
     # Raise what the real attempt would raise, so HEAD and GET answer alike.
-    for ledger in (TOKEN_LEDGER, SESSION_LEDGER):
-        target = ledger if ledger.exists() else ledger.parent
-        if not os.access(target, os.W_OK):
-            raise PermissionError(f"{ledger.name} is not writable")
+    require_sign_in_writable()
     return True
+
+
+def require_sign_in_writable() -> None:
+    """Raise PermissionError when signing in could not be recorded.
+
+    Redeeming a link appends to the token ledger and THEN creating the session
+    appends to the session ledger. A session ledger that cannot be written was
+    only discovered after the link had been spent, so the person was told to
+    "try the link again" about a link that no longer worked. GET calls this
+    BEFORE redeeming, so a ledger we already know is unwritable costs nothing.
+    A write that fails between the check and the append is still possible and
+    is answered separately by the caller.
+    """
+    for ledger in (TOKEN_LEDGER, SESSION_LEDGER):
+        if not can_append(ledger):
+            raise PermissionError(f"{ledger.name} is not writable")
 
 
 def redeem_link_token(token: str) -> dict | None:
