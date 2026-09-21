@@ -5118,20 +5118,11 @@ class Handler(BaseHTTPRequestHandler):
             _json_response(self, 400, {"error": "invalid signature"})
             return
         result = stripe_webhook.handle_event(payload)
-        if (result.get("ok") and not result.get("duplicate")
-                and (result.get("claim_code_minted")
-                     or result.get("subscription_checkout"))):
-            demand_auth_path = (
-                "subscription" if result.get("subscription_checkout") else "pack"
-            )
+        for demand_event, demand_auth_path, demand_paid in stripe_webhook.demand_events(result):
             Handler._record_demand(self,
-                "payment_confirmed", auth_path=demand_auth_path,
+                demand_event, auth_path=demand_auth_path,
                 surface="stripe", outcome="success", authenticated=True,
-                paid=True)
-            Handler._record_demand(self,
-                "entitlement_activated", auth_path=demand_auth_path,
-                surface="stripe", outcome="success", authenticated=True,
-                paid=True)
+                paid=demand_paid)
         _json_response(self, 200, result)
 
     # ---------- NOWPayments (non-custodial crypto checkout) ----------

@@ -39,7 +39,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 
 # A credited order seeded into the ledger before the server starts. The source
 # mirrors the real webhook format ("nowpayments:<invoice_id>:<order_id>"), which
-# find_claim_code_by_source() substring-matches on the order_id.
+# find_claim_code_by_source() matches on the order_id as a whole part.
 CREDITED_ORDER = "np_pack_50_Ab12Cd34"
 CREDITED_CREDITS = 50
 SEED_CLAIM_CODE = "pk_SECRETcodeMustNeverLeak"

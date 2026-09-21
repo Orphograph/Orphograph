@@ -158,6 +158,11 @@ def _session_delivered(session_id: str, kind: str) -> bool:
     return False
 
 
+def _settlement_failed(session_id: str) -> bool:
+    """Has a failed settlement already been recorded for exactly this session?"""
+    return _session_delivered(session_id, "settlement_failed")
+
+
 def _mark_processed(event_id: str, result: dict) -> None:
     if not event_id:
         return
@@ -167,6 +172,36 @@ def _mark_processed(event_id: str, result: dict) -> None:
             "event_id": event_id,
             "result": result,
         }, separators=(",", ":")) + "\n")
+
+
+def demand_events(result: dict) -> list[tuple[str, str, bool]]:
+    """(event, auth_path, paid) for each server-side demand event a handled
+    result earns.
+
+    `payment_confirmed` is a claim that money settled. Delivery happens at
+    `completed`, which for a delayed payment method arrives `unpaid`; recording
+    a confirmed payment then counted sessions whose bank debit later failed
+    into the paid-demand instrument. So: an unpaid delivery earns only the
+    entitlement, and the payment is confirmed when the settlement event lands.
+    A result from before the status was recorded reads as settled, which is
+    what every card payment is.
+    """
+    if not result.get("ok") or result.get("duplicate"):
+        return []
+    subscription = bool(result.get("subscription_checkout")
+                        or result.get("mode") == "subscription")
+    auth_path = "subscription" if subscription else "pack"
+    delivered_now = bool(result.get("claim_code_minted")
+                         or result.get("subscription_checkout"))
+    settled = result.get("payment_status") != "unpaid"
+    events: list[tuple[str, str, bool]] = []
+    if delivered_now:
+        if settled:
+            events.append(("payment_confirmed", auth_path, True))
+        events.append(("entitlement_activated", auth_path, settled))
+    elif result.get("payment_settled"):
+        events.append(("payment_confirmed", auth_path, True))
+    return events
 
 
 def handle_event(payload: bytes) -> dict:
@@ -268,7 +303,7 @@ def handle_event(payload: bytes) -> dict:
             )
             revoke_source = f"{prefix}:{session_id}"
             revoked = credits.revoke_credits_by_source(
-                source_substring=session_id, revoke_source=revoke_source,
+                source_token=session_id, revoke_source=revoke_source,
             )
             sys.stderr.write(
                 f"[stripe_webhook] {event_type} session={session_id}: "
@@ -295,15 +330,19 @@ def handle_event(payload: bytes) -> dict:
             failed = event.get("data", {}).get("object", {}) or {}
             failed_sid = failed.get("id", "")
             revoked = credits.revoke_credits_by_source(
-                source_substring=failed_sid,
+                source_token=failed_sid,
                 revoke_source=f"stripe-async-failed:{failed_sid}",
             ) if failed_sid else []
             sys.stderr.write(
                 f"[stripe_webhook] async payment FAILED session={failed_sid}: "
                 f"revoked={revoked}\n"
             )
+            # `settlement_failed` rides in the marker: Stripe does not order
+            # events, so this can arrive BEFORE the `completed` it belongs to,
+            # and that one must then refuse to deliver (see below).
             result = {"ok": True, "event_type": event_type,
-                      "session_id": failed_sid, "revoked": revoked}
+                      "session_id": failed_sid, "revoked": revoked,
+                      "settlement_failed": True}
             _mark_processed(event_id, result)
             return result
 
@@ -336,6 +375,19 @@ def handle_event(payload: bytes) -> dict:
         )
         session_id = session.get("id", "")
 
+        if session_id and _settlement_failed(session_id):
+            # The failure arrived first (events are not ordered). Delivering
+            # now would mint a pack for a payment already known not to have
+            # settled, and nothing would ever take it back.
+            sys.stderr.write(
+                f"[stripe_webhook] session {session_id} was already reported "
+                f"FAILED; not delivering\n"
+            )
+            result = {"ok": True, "settlement_failed": True,
+                      "session_id": session_id, "delivered": False}
+            _mark_processed(event_id, result)
+            return result
+
         if not customer_email:
             # A paid session with no resolvable email. Do NOT mark the event
             # processed: marking it would dedupe every Stripe retry into a
@@ -364,7 +416,10 @@ def handle_event(payload: bytes) -> dict:
         if session.get("mode") == "subscription":
             if _session_delivered(session_id, "subscription_checkout"):
                 # A second event about a session already welcomed.
-                result = {"ok": True, "already_delivered": True, "session_id": session_id}
+                result = {"ok": True, "already_delivered": True, "session_id": session_id,
+                          "mode": "subscription"}
+                if event_type == "checkout.session.async_payment_succeeded":
+                    result["payment_settled"] = True
                 _mark_processed(event_id, result)
                 return result
             # Plan label: best-effort read of the line item's price metadata.
@@ -383,7 +438,8 @@ def handle_event(payload: bytes) -> dict:
                 f"({masked}) plan={plan_label} (email_sent={sent})\n"
             )
             result = {"ok": True, "subscription_checkout": True,
-                      "welcome_email_sent": sent, "session_id": session_id}
+                      "welcome_email_sent": sent, "session_id": session_id,
+                      "payment_status": session.get("payment_status") or ""}
             _mark_processed(event_id, result)
             return result
 
@@ -427,6 +483,8 @@ def handle_event(payload: bytes) -> dict:
             {f"stripe:{session_id}", f"stripe-gift:{session_id}"}) if session_id else None
         if already and _session_delivered(session_id, "claim_code_minted"):
             result = {"ok": True, "already_delivered": True, "session_id": session_id}
+            if event_type == "checkout.session.async_payment_succeeded":
+                result["payment_settled"] = True
             _mark_processed(event_id, result)
             return result
         resumed = bool(already)
@@ -500,7 +558,8 @@ def handle_event(payload: bytes) -> dict:
         # session_id rides in the marker so the once-only guard can tell a
         # FINISHED delivery from credits left behind by one that died.
         result = {"ok": True, "claim_code_minted": True, "gift": is_gift,
-                  "session_id": session_id}
+                  "session_id": session_id,
+                  "payment_status": session.get("payment_status") or ""}
         if resumed:
             result["resumed"] = True
         if ref_credit_result is not None:

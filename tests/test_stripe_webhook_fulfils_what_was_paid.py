@@ -320,3 +320,125 @@ def test_the_reconciler_reads_the_same_world_the_webhook_writes():
     assert out["ghost"] == []
     assert "checkout.session.async_payment_failed" in rec.EVENT_TYPES, (
         "the reconciler never asks for the event it now reasons about")
+
+
+# --- review round 2 (2026-09-20): the reconciler and the demand instrument ------
+
+def test_the_reconciler_treats_the_settlement_event_as_a_delivery_event():
+    """The webhook delivers from `async_payment_succeeded` when `completed` was
+    missed. If the reconciler never asks Stripe for that event it reports the
+    grant as GHOST ("granted, no payment, possible fraud")."""
+    rec = _reconciler()
+    events = [_ev("e1", "checkout.session.async_payment_succeeded",
+                  id="cs_late", mode="payment")]
+    ledger = [{"source": "stripe:cs_late", "credits_delta": 10, "claim_code": "pk_late"}]
+    out = rec.correlate(events, ledger)
+    assert out["ghost"] == [], out["ghost"]
+    assert out["lost"] == [], out["lost"]
+    assert "checkout.session.async_payment_succeeded" in rec.EVENT_TYPES
+
+
+def _spent_ledger(unspent: int) -> list[dict]:
+    rows = [{"source": "stripe:cs_spent", "credits_delta": 10, "claim_code": "pk_spent"}]
+    if unspent < 10:
+        rows.append({"source": "anchor", "credits_delta": -(10 - unspent),
+                     "claim_code": "pk_spent"})
+    return rows
+
+
+@pytest.mark.parametrize("event_type,extra", [
+    ("checkout.session.async_payment_failed", {"id": "cs_spent"}),
+    ("charge.refunded", {"id": "ch_1", "metadata": {"checkout_session_id": "cs_spent"}}),
+    ("charge.dispute.created", {"id": "dp_1", "metadata": {"checkout_session_id": "cs_spent"}}),
+])
+def test_a_pack_already_spent_is_not_a_leak(event_type, extra):
+    """The webhook writes NO revoke row when nothing is left to revoke, so
+    "no row" was reported as a leak on every run for as long as the event stayed
+    in the window: a report that can never go green."""
+    rec = _reconciler()
+    ev = [_ev("e1", event_type, **extra)]
+    spent = rec.correlate(ev, _spent_ledger(unspent=0))
+    assert spent["leak"] == [], spent["leak"]
+    assert [c["session_id"] for c in spent["consumed"]] == ["cs_spent"]
+
+    # Controls. Credits still unspent with no revoke row IS the leak, and rows
+    # that carry no claim code cannot prove anything was spent.
+    kept = rec.correlate(ev, _spent_ledger(unspent=4))
+    assert [l["session_id"] for l in kept["leak"]] == ["cs_spent"], kept
+    assert kept["consumed"] == []
+    blind = rec.correlate(ev, [{"source": "stripe:cs_spent", "credits_delta": 10}])
+    assert [l["session_id"] for l in blind["leak"]] == ["cs_spent"], blind
+
+
+def test_a_spent_pack_shows_in_the_report_but_is_not_drift():
+    from datetime import datetime, timezone
+    rec = _reconciler()
+    out = rec.correlate(
+        [_ev("e0", "checkout.session.completed", id="cs_spent", mode="payment"),
+         _ev("e1", "checkout.session.async_payment_failed", id="cs_spent")],
+        _spent_ledger(unspent=0))
+    assert out["ghost"] == [] and out["lost"] == [], "control: the only finding is the spent pack"
+    text = rec.render_report(out, 7, datetime(2026, 9, 20, tzinfo=timezone.utc))
+    assert "OK — no drift" in text
+    assert "cs_spent" in text and "nothing to revoke" in text, "the loss must stay visible"
+
+
+def test_the_paid_demand_events_follow_the_money():
+    import stripe_webhook
+    paid = {"ok": True, "claim_code_minted": True, "payment_status": "paid"}
+    assert stripe_webhook.demand_events(paid) == [
+        ("payment_confirmed", "pack", True), ("entitlement_activated", "pack", True)]
+    unpaid = {"ok": True, "claim_code_minted": True, "payment_status": "unpaid"}
+    assert stripe_webhook.demand_events(unpaid) == [("entitlement_activated", "pack", False)]
+    settled = {"ok": True, "already_delivered": True, "payment_settled": True}
+    assert stripe_webhook.demand_events(settled) == [("payment_confirmed", "pack", True)]
+    sub_settled = {"ok": True, "already_delivered": True, "payment_settled": True,
+                   "mode": "subscription"}
+    assert stripe_webhook.demand_events(sub_settled) == [
+        ("payment_confirmed", "subscription", True)]
+    # No status recorded (an older result) reads as settled; a repeat says nothing.
+    assert [e for e, *_ in stripe_webhook.demand_events(
+        {"ok": True, "subscription_checkout": True})] == [
+        "payment_confirmed", "entitlement_activated"]
+    assert stripe_webhook.demand_events({"ok": True, "already_delivered": True}) == []
+    assert stripe_webhook.demand_events({"ok": True, "duplicate": "evt", "claim_code_minted": True}) == []
+    assert stripe_webhook.demand_events({"ok": False, "claim_code_minted": True}) == []
+
+
+@pytest.fixture(scope="module")
+def measured(tmp_path_factory):
+    d = tmp_path_factory.mktemp("stripe_measured")
+    for base in _srv.server_processes(d, stub_calendars=True,
+                                      STRIPE_WEBHOOK_SECRET=SECRET,
+                                      ORPHO_ANALYTICS_HMAC_SECRET="x" * 32):
+        yield base, d
+
+
+def _demand(data_dir: Path) -> list[str]:
+    p = data_dir / "demand_events.jsonl"
+    if not p.exists():
+        return []
+    return [json.loads(l)["event"] for l in p.read_text().splitlines() if l.strip()]
+
+
+def test_an_unpaid_delivery_is_not_counted_as_a_confirmed_payment(measured):
+    """Through the real webhook route, reading the instrument's own file. The
+    control (a card payment records both events) proves the instrument is on."""
+    base, data_dir = measured
+    _deliver(base, _event("evt_m_paid", "cs_m_paid", payment_status="paid"))
+    assert _demand(data_dir).count("payment_confirmed") == 1, (
+        "control: with the instrument on, a paid card session must record it")
+    assert _demand(data_dir).count("entitlement_activated") == 1
+
+    _deliver(base, _event("evt_m_unpaid", "cs_m_unpaid", payment_status="unpaid"))
+    events = _demand(data_dir)
+    assert events.count("entitlement_activated") == 2, "the pack WAS delivered"
+    assert events.count("payment_confirmed") == 1, (
+        "an unpaid session was counted as a confirmed payment")
+
+    _deliver(base, _event("evt_m_settled", "cs_m_unpaid",
+                          type_="checkout.session.async_payment_succeeded",
+                          payment_status="paid"))
+    events = _demand(data_dir)
+    assert events.count("payment_confirmed") == 2, "the settlement never confirmed the payment"
+    assert events.count("entitlement_activated") == 2, "settlement is not a second activation"

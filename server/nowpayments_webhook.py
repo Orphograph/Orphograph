@@ -334,7 +334,7 @@ def _decide_and_mint_locked(
         if payment_status == "refunded":
             revoke_source = f"nowpayments-refund:{order_id}"
             revoked = credits.revoke_credits_by_source(
-                source_substring=order_id,
+                source_token=order_id,
                 revoke_source=revoke_source,
             )
             sys.stderr.write(
