@@ -50,6 +50,8 @@ HTTP_TIMEOUT = 15
 WINDOW_DAYS = int(os.environ.get("ORPHO_RECONCILE_WINDOW_DAYS", "7"))
 EVENT_TYPES = (
     "checkout.session.completed",
+    "checkout.session.async_payment_succeeded",
+    "checkout.session.async_payment_failed",
     "charge.refunded",
     "charge.dispute.created",
 )
@@ -147,33 +149,54 @@ def correlate(events: list[dict], ledger_rows: list[dict]) -> dict:
     # Index ledger by source.
     grant_sources: set[str] = set()         # "stripe:<sid>" / "stripe-gift:<sid>"
     revoke_sources: set[str] = set()        # "stripe-refund:<sid>" / "stripe-dispute:<sid>"
+    codes_by_grant: dict[str, set[str]] = {}   # grant source -> claim codes it minted
+    balance_by_code: dict[str, int] = {}       # claim code -> credits still unspent
     for row in ledger_rows:
         src = row.get("source", "") or ""
-        delta = int(row.get("credits_delta", 0))
+        delta = int(row.get("credits_delta") or 0)
+        code = row.get("claim_code") or ""
+        if code:
+            balance_by_code[code] = balance_by_code.get(code, 0) + delta
         if delta > 0 and (src.startswith("stripe:") or src.startswith("stripe-gift:")):
             grant_sources.add(src)
+            if code:
+                codes_by_grant.setdefault(src, set()).add(code)
         if delta < 0 and (
             src.startswith("stripe-refund:") or src.startswith("stripe-dispute:")
+            or src.startswith("stripe-async-failed:")
         ):
             revoke_sources.add(src)
 
     stripe_session_ids: set[str] = set()
+    # Sessions that are never owed Pack credits, so their absence from the
+    # ledger is not LOST: a subscription delivers through the account (every
+    # subscriber used to be reported as "PAID but did NOT receive credits"),
+    # and a delayed payment that FAILED was never paid at all.
+    not_owed_credits: set[str] = set()
     refunds_disputes: list[tuple[str, str, str]] = []  # (event_type, session_id, event_id)
 
     for ev in events:
         et = ev.get("type", "")
         obj = ev.get("data", {}).get("object", {}) or {}
-        if et == "checkout.session.completed":
+        if et in {"checkout.session.completed",
+                  "checkout.session.async_payment_succeeded"}:
             sid = obj.get("id", "")
             if sid:
                 stripe_session_ids.add(sid)
+                if obj.get("mode") == "subscription":
+                    not_owed_credits.add(sid)
+        elif et == "checkout.session.async_payment_failed":
+            sid = obj.get("id", "")
+            if sid:
+                not_owed_credits.add(sid)
+                refunds_disputes.append((et, sid, ev.get("id", "")))
         elif et in {"charge.refunded", "charge.dispute.created"}:
             sid = _extract_session_id_from_charge(obj)
             refunds_disputes.append((et, sid, ev.get("id", "")))
 
     # LOST: stripe session has no matching ledger grant (either prefix).
     lost: list[str] = []
-    for sid in sorted(stripe_session_ids):
+    for sid in sorted(stripe_session_ids - not_owed_credits):
         if (
             f"stripe:{sid}" not in grant_sources
             and f"stripe-gift:{sid}" not in grant_sources
@@ -193,8 +216,19 @@ def correlate(events: list[dict], ledger_rows: list[dict]) -> dict:
         if sid not in stripe_session_ids:
             ghost.append(src)
 
+    def _fully_spent(sid: str) -> bool:
+        """Every pack this session minted is already spent. The webhook then has
+        nothing to revoke and writes no row, so the missing row is correct, not
+        drift. Unknown (no claim codes in the rows) reads as NOT spent, which
+        keeps the finding rather than hiding it."""
+        codes: set[str] = set()
+        for src in (f"stripe:{sid}", f"stripe-gift:{sid}"):
+            codes |= codes_by_grant.get(src, set())
+        return bool(codes) and all(balance_by_code.get(c, 0) <= 0 for c in codes)
+
     # LEAK: refund/dispute event with no matching revoke entry.
     leak: list[dict] = []
+    consumed: list[dict] = []
     for et, sid, eid in refunds_disputes:
         if not sid:
             # Can't correlate — surface as a special case so the operator
@@ -206,17 +240,27 @@ def correlate(events: list[dict], ledger_rows: list[dict]) -> dict:
                 "note": "no recoverable session_id on event",
             })
             continue
-        expected = (
-            f"stripe-refund:{sid}" if et == "charge.refunded"
-            else f"stripe-dispute:{sid}"
-        )
+        if et == "checkout.session.async_payment_failed":
+            # Delivery happens at `completed`, before a delayed payment
+            # settles. If it then fails, what was granted must come back.
+            # Nothing granted means nothing to take back.
+            if (f"stripe:{sid}" not in grant_sources
+                    and f"stripe-gift:{sid}" not in grant_sources):
+                continue
+            expected = f"stripe-async-failed:{sid}"
+        else:
+            expected = (
+                f"stripe-refund:{sid}" if et == "charge.refunded"
+                else f"stripe-dispute:{sid}"
+            )
         if expected not in revoke_sources:
-            leak.append({
+            item = {
                 "event_type": et,
                 "event_id": eid,
                 "session_id": sid,
                 "expected_source": expected,
-            })
+            }
+            (consumed if _fully_spent(sid) else leak).append(item)
 
     return {
         "stripe_session_ids": sorted(stripe_session_ids),
@@ -224,6 +268,7 @@ def correlate(events: list[dict], ledger_rows: list[dict]) -> dict:
         "lost": lost,
         "ghost": ghost,
         "leak": leak,
+        "consumed": consumed,
         "refund_dispute_count": len(refunds_disputes),
     }
 
@@ -251,6 +296,9 @@ def render_report(result: dict, window_days: int, generated_at: datetime) -> str
     lines.append(f"- LOST credits (paid, no grant): {len(lost)}")
     lines.append(f"- GHOST credits (granted, no payment): {len(ghost)}")
     lines.append(f"- LEAK credits (refund/dispute, no revoke): {len(leak)}")
+    consumed = result.get("consumed", [])
+    lines.append(f"- Refund/dispute/failed payment after the pack was fully spent "
+                 f"(nothing left to revoke): {len(consumed)}")
     lines.append("")
 
     lines.append("## Stripe events without ledger entry (LOST)")
@@ -288,6 +336,21 @@ def render_report(result: dict, window_days: int, generated_at: datetime) -> str
             lines.append(
                 f"- `{item['event_type']}` event=`{item['event_id']}` session=`{sid}` "
                 f"expected=`{item.get('expected_source', '—')}` {item.get('note', '')}".rstrip()
+            )
+    lines.append("")
+
+    lines.append("## Refunds / disputes / failed payments after the pack was spent (INFO)")
+    lines.append("")
+    if not consumed:
+        lines.append("_None._")
+    else:
+        lines.append("Not drift: the credits were already used, so there was nothing to revoke.")
+        lines.append("The value was delivered and the money did not arrive or came back.")
+        lines.append("")
+        for item in consumed:
+            lines.append(
+                f"- `{item['event_type']}` event=`{item['event_id']}` "
+                f"session=`{item['session_id']}`"
             )
     lines.append("")
     return "\n".join(lines)

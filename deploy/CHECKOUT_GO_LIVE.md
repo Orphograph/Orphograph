@@ -39,7 +39,17 @@ In the Stripe Dashboard (test mode first):
 ## Step 2 — Stripe: configure the fulfillment webhook
 1. **Developers → Webhooks → Add endpoint:**
    `https://orphograph.com/api/stripe/webhook`
-2. Subscribe to event **`checkout.session.completed`**.
+2. Subscribe to these events. Each one is acted on by the webhook; one left
+   out is a path that silently never runs (a refund that is never revoked, a
+   failed bank debit that keeps its credits):
+   - `checkout.session.completed`
+   - `checkout.session.async_payment_succeeded`
+   - `checkout.session.async_payment_failed`
+   - `customer.subscription.created`
+   - `customer.subscription.updated`
+   - `customer.subscription.deleted`
+   - `charge.refunded`
+   - `charge.dispute.created`
 3. Copy the endpoint's **Signing secret** (`whsec_...`) → feeds `STRIPE_WEBHOOK_SECRET`.
 
 ## Step 3 — Fly: set the secrets

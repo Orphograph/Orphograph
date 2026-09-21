@@ -4793,10 +4793,11 @@ class Handler(BaseHTTPRequestHandler):
 
         # 2. Look up the EXISTING claim code by source. Never mint.
         ledger_row = credits.find_claim_code_by_source(order_id)
-        # Harden against find_claim_code_by_source's SUBSTRING match: require
-        # order_id to be the EXACT final ":"-segment of the mint source
-        # ("nowpayments:<invoice>:<order_id>"), so a short/prefix order_id cannot
-        # resolve to a DIFFERENT customer's row. This closes the 200-vs-400
+        # find_claim_code_by_source matches order_id as a WHOLE colon-delimited
+        # part of the mint source, so a short/prefix order_id cannot resolve to a
+        # DIFFERENT customer's row. It also matches the invoice part, so still
+        # require order_id to be the EXACT final ":"-segment of the mint source
+        # ("nowpayments:<invoice>:<order_id>"). This closes the 200-vs-400
         # enumeration oracle and the unsolicited-resend vector, on top of the
         # email guard below.
         row_source = ((ledger_row or {}).get("source") or "")
@@ -5221,20 +5222,11 @@ class Handler(BaseHTTPRequestHandler):
             _json_response(self, 400, {"error": "invalid signature"})
             return
         result = stripe_webhook.handle_event(payload)
-        if (result.get("ok") and not result.get("duplicate")
-                and (result.get("claim_code_minted")
-                     or result.get("subscription_checkout"))):
-            demand_auth_path = (
-                "subscription" if result.get("subscription_checkout") else "pack"
-            )
+        for demand_event, demand_auth_path, demand_paid in stripe_webhook.demand_events(result):
             Handler._record_demand(self,
-                "payment_confirmed", auth_path=demand_auth_path,
+                demand_event, auth_path=demand_auth_path,
                 surface="stripe", outcome="success", authenticated=True,
-                paid=True)
-            Handler._record_demand(self,
-                "entitlement_activated", auth_path=demand_auth_path,
-                surface="stripe", outcome="success", authenticated=True,
-                paid=True)
+                paid=demand_paid)
         _json_response(self, 200, result)
 
     # ---------- NOWPayments (non-custodial crypto checkout) ----------

@@ -52,4 +52,4 @@ echo "${MUTED}Ctrl-C to stop.${RESET}"
 echo
 
 exec stripe listen --forward-to "localhost:${LOCAL_PORT}/api/stripe/webhook" \
-  --events checkout.session.completed,customer.subscription.created,customer.subscription.updated,customer.subscription.deleted,invoice.payment_succeeded,invoice.payment_failed
+  --events checkout.session.completed,checkout.session.async_payment_succeeded,checkout.session.async_payment_failed,charge.refunded,charge.dispute.created,customer.subscription.created,customer.subscription.updated,customer.subscription.deleted,invoice.payment_succeeded,invoice.payment_failed

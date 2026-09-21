@@ -15,7 +15,7 @@ Public API:
     balance(claim_code) -> int
     new_claim_code() -> str
     find_claim_codes_by_email(email) -> list[str]  # read-only recovery lookup
-    revoke_credits_by_source(source_substring, revoke_source) -> list[dict]
+    revoke_credits_by_source(source_token, revoke_source) -> list[dict]
 """
 from __future__ import annotations
 
@@ -120,16 +120,17 @@ def balance(claim_code: str) -> int:
         return _scan().get(claim_code, 0)
 
 
-def find_claim_code_by_source(source_substring: str) -> dict | None:
+def find_claim_code_by_source(source_token: str) -> dict | None:
     """Return the most recent {claim_code, email, source, ts} row whose
-    `source` contains `source_substring`, or None.
+    `source` carries `source_token` as a whole colon-delimited part, or None.
 
     Used by the /api/recover endpoint to look up an already-minted claim
     code for a paid Stripe session — idempotent recovery without
-    minting a second code. Substring match so both `stripe:cs_abc...`
-    and `stripe-gift:cs_abc...` are found.
+    minting a second code. A bare session id finds both `stripe:cs_abc`
+    and `stripe-gift:cs_abc`; a fragment of one finds nothing (a substring
+    match let a partial order id confirm that a real order existed).
     """
-    if not source_substring or not LEDGER_PATH.exists():
+    if not source_token or not LEDGER_PATH.exists():
         return None
     latest = None
     with LEDGER_PATH.open() as f:
@@ -142,7 +143,7 @@ def find_claim_code_by_source(source_substring: str) -> dict | None:
             except json.JSONDecodeError:
                 continue
             src = row.get("source") or ""
-            if source_substring in src and int(row.get("credits_delta", 0)) > 0:
+            if _source_has_token(src, source_token) and int(row.get("credits_delta") or 0) > 0:
                 # First positive (mint) row wins per claim_code; keep most recent
                 # overall in case of unusual ledger interleavings.
                 latest = row
@@ -153,8 +154,38 @@ def find_claim_code_by_source(source_substring: str) -> dict | None:
         "email": latest.get("email"),
         "source": latest.get("source"),
         "ts": latest.get("ts"),
-        "credits_delta": int(latest.get("credits_delta", 0)),
+        "credits_delta": int(latest.get("credits_delta") or 0),
     }
+
+
+def find_mint_by_exact_source(sources: set[str]) -> dict | None:
+    """The first mint row whose `source` IS one of `sources`, or None.
+
+    For "has this exact purchase been delivered?": the WHOLE source string,
+    prefix included, so a gift delivery and a card delivery of one session are
+    named separately. `find_claim_code_by_source` above answers the looser
+    "is there a mint carrying this id" and returns the most recent one.
+    """
+    if not sources or not LEDGER_PATH.exists():
+        return None
+    with LEDGER_PATH.open() as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if row.get("source") in sources and int(row.get("credits_delta") or 0) > 0:
+                return {
+                    "claim_code": row.get("claim_code"),
+                    "email": row.get("email"),
+                    "source": row.get("source"),
+                    "ts": row.get("ts"),
+                    "credits_delta": int(row.get("credits_delta") or 0),
+                }
+    return None
 
 
 def find_claim_codes_by_email(email: str) -> list[str]:
@@ -194,12 +225,26 @@ def find_claim_codes_by_email(email: str) -> list[str]:
     return list(seen.keys())
 
 
-def revoke_credits_by_source(source_substring: str, revoke_source: str) -> list[dict]:
+def _source_has_token(source: str, token: str) -> bool:
+    """Is `token` one whole colon-delimited part of `source`?
+
+    Sources are `<kind>:<id>` (`stripe:cs_abc`, `stripe-gift:cs_abc`) or
+    `<kind>:<invoice>:<order>` (`nowpayments:inv_7:ord_7`). A substring test
+    answers "does this id appear inside that one", so `cs_1` matched the pack
+    `cs_12` paid for and a refund or a failed settlement for the short id took
+    the long id's credits. A token can only match itself; a token that itself
+    contains colons (`stripe:cs_abc`) matches the same run of whole parts.
+    """
+    return bool(token) and f":{token}:" in f":{source}:"
+
+
+def revoke_credits_by_source(source_token: str, revoke_source: str) -> list[dict]:
     """Revoke unused credits for every claim_code minted with a matching source.
 
-    `source_substring` is matched against the `source` field of original
-    add_credits rows (e.g. "stripe:cs_abc" matches both
-    `stripe:cs_abc` and `stripe-gift:cs_abc`). For each claim_code touched
+    `source_token` is matched as a WHOLE colon-delimited part of the `source`
+    field of original add_credits rows: "cs_abc" matches both `stripe:cs_abc`
+    and `stripe-gift:cs_abc`, and "ord_7" matches `nowpayments:inv_7:ord_7`,
+    but "cs_ab" matches none of them. For each claim_code touched
     we compute (issued_for_source - already_consumed) and append a single
     negative ledger entry tagged with `revoke_source`.
 
@@ -209,7 +254,7 @@ def revoke_credits_by_source(source_substring: str, revoke_source: str) -> list[
 
     Returns a list of {claim_code, revoked} dicts describing what changed.
     """
-    if not source_substring or not revoke_source:
+    if not source_token or not revoke_source:
         return []
     if not LEDGER_PATH.exists():
         return []
@@ -220,7 +265,7 @@ def revoke_credits_by_source(source_substring: str, revoke_source: str) -> list[
         lockfile = LEDGER_PATH.with_suffix(LEDGER_PATH.suffix + ".lock")
         with locked(lockfile, mode="a", exclusive=True):
             # First pass: find claim_codes whose ORIGINAL minting source
-            # contains source_substring, and collect per-code totals.
+            # carries source_token as a whole part, and collect per-code totals.
             matching_codes: set[str] = set()
             balances: dict[str, int] = {}
             already_revoked: set[str] = set()
@@ -237,10 +282,10 @@ def revoke_credits_by_source(source_substring: str, revoke_source: str) -> list[
                     if not code:
                         continue
                     src = row.get("source", "") or ""
-                    delta = int(row.get("credits_delta", 0))
+                    delta = int(row.get("credits_delta") or 0)
                     # A positive delta whose source contains the substring
                     # marks this code as originating from the refunded session.
-                    if delta > 0 and source_substring in src:
+                    if delta > 0 and _source_has_token(src, source_token):
                         matching_codes.add(code)
                     # If the same revoke_source has already been written for
                     # this code, mark it so we skip (idempotency).
