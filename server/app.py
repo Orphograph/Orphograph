@@ -765,6 +765,27 @@ def _serve_ab_home(handler: BaseHTTPRequestHandler) -> bool:
         return False
     variant = _ab_cookie_variant(handler)
     newly_assigned = variant is None
+    if newly_assigned and handler._is_head():
+        # A cookieless HEAD is a probe, not a visitor: no arm, no view, no
+        # cookie. It is described with the plain homepage, as bots get. It
+        # still carries the headers that make GET uncacheable across arms,
+        # so a cache or link checker revalidating from HEAD does not learn a
+        # single-representation story that GET contradicts. (Content-Length
+        # is the plain page's: which arm a later GET draws is not knowable.)
+        # A returning visitor's HEAD is described from their arm below.
+        try:
+            plain = (WEB_DIR / "index.html").read_bytes()
+        except OSError:
+            return False
+        handler.send_response(200)
+        handler.send_header("Content-Type", "text/html; charset=utf-8")
+        handler.send_header("Content-Length", str(len(plain)))
+        handler.send_header("Cache-Control", "no-store")
+        handler.send_header("Vary", "Cookie")
+        _security_headers(handler)
+        handler.end_headers()
+        handler.wfile.write(plain)
+        return True
     if newly_assigned:
         variant = "dark" if secrets.randbelow(10_000) < int(fraction * 10_000) else "cream"
     # Dark is now the canonical homepage (served as the static index.html); the
@@ -777,7 +798,8 @@ def _serve_ab_home(handler: BaseHTTPRequestHandler) -> bool:
         return False
     # Log before any response bytes go out, so a client that has received
     # the body can rely on the view record existing (mirrors checkout_view).
-    _ab_log("home_view", variant, {"new": newly_assigned})
+    if not handler._is_head():
+        _ab_log("home_view", variant, {"new": newly_assigned})
     handler.send_response(200)
     handler.send_header("Content-Type", "text/html; charset=utf-8")
     handler.send_header("Content-Length", str(len(body)))
@@ -1124,9 +1146,31 @@ class Handler(BaseHTTPRequestHandler):
 </html>
 """
 
+    # What must not reach the log although it travels in a URL: the bearer
+    # sign-in token, a claim code (it is what spends credits), and a person's
+    # address. Only the value goes; the route and the other parameters stay,
+    # so the line is still useful. The sign-in token matters most: HEAD does
+    # not spend it, so a probed link would otherwise sit in the log live.
+    _LOG_REDACTIONS = (
+        (re.compile(r"(\s/a/)[^\s?\"]+"), r"\1[redacted]"),
+        (re.compile(r"(\s/api/pack/balance/)[^\s?\"]+"), r"\1[redacted]"),
+        (re.compile(r"([?&](?:e|email)=)[^&\s\"]+"), r"\1[redacted]"),
+        # A Stripe checkout-session id: /api/stripe/session?id=cs_… answers with
+        # the buyer's email to anyone holding it, and the post-checkout landing
+        # carries it as ?stripe_session=cs_…. Only a value that IS a session id
+        # goes, so an unrelated `id=` parameter stays readable.
+        (re.compile(r"([?&](?:stripe_session|session_id|id)=)cs_[^&\s\"]+"), r"\1[redacted]"),
+        # A team invite code: the share link is /team/join?code=…, and the code
+        # is what admits a person to the team.
+        (re.compile(r"([?&]code=)[^&\s\"]+"), r"\1[redacted]"),
+    )
+
     def log_message(self, fmt, *args):
         truncated = truncate_ip(self.client_address[0] if self.client_address else "")
-        sys.stderr.write(f"[{self.log_date_time_string()}] {truncated} - {fmt % args}\n")
+        line = fmt % args
+        for pattern, replacement in self._LOG_REDACTIONS:
+            line = pattern.sub(replacement, line)
+        sys.stderr.write(f"[{self.log_date_time_string()}] {truncated} - {line}\n")
 
     # BaseHTTPRequestHandler.send_error() never calls _security_headers(), so every
     # error answer — unknown paths, GET on POST-only API routes, a malformed login
@@ -1307,7 +1351,8 @@ class Handler(BaseHTTPRequestHandler):
         # homepage A/B: attribute checkout-page reach to the visitor's arm
         if path.startswith("/pay/crypto"):
             _ab_arm = _ab_cookie_variant(self)
-            if _ab_arm:
+            # A view is a person seeing the page; HEAD shows nobody anything.
+            if _ab_arm and not self._is_head():
                 _ab_log("checkout_view", _ab_arm)
         # /api/event is POST-only. Reject any other method (incl. GET) with
         # 405 so we don't leak internal state via inadvertent GET-as-probe.
@@ -1771,11 +1816,42 @@ class Handler(BaseHTTPRequestHandler):
             if not TOKEN_RE.match(token):
                 self.send_error(400, "invalid login token")
                 return
-            redeemed = auth.redeem_link_token(token)
-            if not redeemed:
-                self.send_error(404, "link expired or already used")
+            sid = None
+            # The verdict is sent AFTER the try, never inside it: `OSError` also
+            # covers a client that hung up mid-response, and answering that
+            # with a second status line on a dead socket hides the real error.
+            refusal: tuple[int, str] | None = None
+            redeemed = None
+            try:
+                if self._is_head():
+                    # Mail gateways and link checkers probe this link with
+                    # HEAD before the person clicks it. Report what GET would
+                    # answer; spend nothing, mint nothing.
+                    if not auth.link_token_is_redeemable(token):
+                        refusal = (404, "link expired or already used")
+                else:
+                    # Find out that we cannot record a sign-in BEFORE the link
+                    # is spent, so "try the link again" is true when we say it.
+                    auth.require_sign_in_writable()
+                    redeemed = auth.redeem_link_token(token)
+                    if not redeemed:
+                        refusal = (404, "link expired or already used")
+            except OSError:
+                # A ledger we could not write. Answer, rather than drop the
+                # connection: the click deserves "try again". Nothing was spent.
+                refusal = (503, "We could not sign you in just now. "
+                                "Please try the link again in a few minutes.")
+            if not self._is_head() and refusal is None and redeemed is not None:
+                try:
+                    sid, _exp = auth.create_session(redeemed["email"])
+                except OSError:
+                    # The link IS spent by now, so do not say to try it again.
+                    refusal = (503, "Your sign-in link was used, but we could not "
+                                    "finish signing you in. Please request a new "
+                                    "sign-in link.")
+            if refusal is not None:
+                self.send_error(*refusal)
                 return
-            sid, _exp = auth.create_session(redeemed["email"])
             # `?next=…` lets the caller pick the landing page after sign-in
             # so a welcome email can drop the user directly on the home
             # anchoring UI instead of forcing them through /account.html.
@@ -1806,7 +1882,8 @@ class Handler(BaseHTTPRequestHandler):
                 location = next_raw
             self.send_response(303)
             self.send_header("Location", location)
-            self.send_header("Set-Cookie", auth.build_session_cookie(sid, secure=COOKIE_SECURE))
+            if sid is not None:
+                self.send_header("Set-Cookie", auth.build_session_cookie(sid, secure=COOKIE_SECURE))
             self.send_header("Cache-Control", "no-store")
             _security_headers(self)
             self.end_headers()
@@ -1893,7 +1970,7 @@ class Handler(BaseHTTPRequestHandler):
             if not email:
                 _json_response(self, 401, {"error": "not authenticated"})
                 return
-            code = affiliate.code_for_email(email)
+            code = affiliate.code_for_email(email, register=not self._is_head())
             site = os.environ.get("SITE_URL", "").rstrip("/")
             share_url = f"{site}/?ref={code}" if (site and code) else (
                 f"/?ref={code}" if code else ""
@@ -1908,7 +1985,7 @@ class Handler(BaseHTTPRequestHandler):
             if not email:
                 _json_response(self, 401, {"error": "not authenticated"})
                 return
-            s = affiliate.stats(email)
+            s = affiliate.stats(email, register=not self._is_head())
             # Privacy: stats() returns aggregate counters + masked history;
             # never an email or referee identifier. Pass through as-is.
             _json_response(self, 200, s)
@@ -3115,6 +3192,9 @@ class Handler(BaseHTTPRequestHandler):
         _security_headers(self)
         self.end_headers()
 
+    def _is_head(self) -> bool:
+        return self.command == "HEAD"
+
     def do_HEAD(self):  # noqa: N802
         """HEAD is GET without a body — RFC 9110 §9.3.2.
 
@@ -3134,6 +3214,9 @@ class Handler(BaseHTTPRequestHandler):
             self._event_method_not_allowed()
             return
 
+        # Running the GET routing also runs its side effects. HEAD is a safe
+        # method (RFC 9110 §9.2.1), so a GET handler that writes must ask
+        # `_is_head()` and answer from a read-only lookup instead.
         real_wfile = self.wfile
         shim = _HeadBodySuppressor(real_wfile)
         inherited_end_headers = self.end_headers
@@ -3412,7 +3495,12 @@ class Handler(BaseHTTPRequestHandler):
             self.send_error(400, "invalid email")
             return
         try:
-            added = unsubscribe.add(email, source="link_get")
+            if self._is_head():
+                # A scanner that only looked at the link must not unsubscribe
+                # the recipient. Describe the page GET would serve.
+                added = unsubscribe.would_add(email)
+            else:
+                added = unsubscribe.add(email, source="link_get")
         except unsubscribe.SuppressionUnavailable:
             # Without this the socket just closed: the visitor could not tell
             # whether the unsubscribe was recorded. It was not. Say so.

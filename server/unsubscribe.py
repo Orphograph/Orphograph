@@ -21,7 +21,7 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 
-from file_lock import locked
+from file_lock import can_append, locked
 
 
 class SuppressionUnavailable(RuntimeError):
@@ -44,19 +44,47 @@ def _norm(email: str) -> str:
     return (email or "").strip().lower()
 
 
-def add(email: str, source: str = "user") -> bool:
-    """Mark an email as unsubscribed. Idempotent — second call returns False."""
+def _is_new(email: str) -> bool:
+    """A well-formed address that is not already suppressed."""
     email = _norm(email)
     if "@" not in email or len(email) > 320:
         return False
-    if is_unsubscribed(email):
+    return not is_unsubscribed(email)
+
+
+def would_add(email: str) -> bool:
+    """What `add` would return right now, without writing. For HEAD on the
+    unsubscribe link: a scanner that only looked must not unsubscribe anyone."""
+    if not _is_new(email):
         return False
-    with locked(SUPPRESS_PATH, mode="a", exclusive=True) as f:
-        f.write(json.dumps({
-            "ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-            "email": email,
-            "source": source,
-        }, separators=(",", ":")) + "\n")
+    # "Would add" includes "could add". A ledger we can read and not write
+    # used to answer HEAD with the success page while GET got no answer at all.
+    # Only HEAD asks: `add` itself writes, and maps a failed write below, so it
+    # does not also pre-check (a pre-check there refused a ledger whose parent
+    # directory did not exist yet, which the real write creates).
+    if not can_append(SUPPRESS_PATH):
+        raise SuppressionUnavailable(
+            f"suppression ledger is not writable: {SUPPRESS_PATH.name}")
+    return True
+
+
+def add(email: str, source: str = "user") -> bool:
+    """Mark an email as unsubscribed. Idempotent — second call returns False."""
+    if not _is_new(email):
+        return False
+    email = _norm(email)
+    try:
+        with locked(SUPPRESS_PATH, mode="a", exclusive=True) as f:
+            f.write(json.dumps({
+                "ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                "email": email,
+                "source": source,
+            }, separators=(",", ":")) + "\n")
+    except OSError as e:
+        # Not recorded. The caller must be able to SAY so: an OSError escaping
+        # here closed the socket with no response, and someone unsubscribing
+        # could not tell whether it had worked.
+        raise SuppressionUnavailable(f"could not record the unsubscribe: {e}") from e
     return True
 
 
