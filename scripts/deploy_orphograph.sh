@@ -155,7 +155,9 @@ if ! grep -q "^STRIPE_SECRET_KEY=" "$SECRETS_VAULT"; then
   echo "  Then create a webhook endpoint at"
   echo "    https://dashboard.stripe.com/webhooks → Add endpoint"
   echo "    URL: https://$DOMAIN/api/stripe/webhook"
-  echo "    Events: checkout.session.completed, customer.subscription.{created,updated,deleted}"
+  echo "    Events: checkout.session.completed, checkout.session.async_payment_succeeded,"
+  echo "            checkout.session.async_payment_failed, charge.refunded, charge.dispute.created,"
+  echo "            customer.subscription.created, customer.subscription.updated, customer.subscription.deleted"
   echo "    Copy the signing secret (whsec_...)"
   echo ""
   read -r -p "Paste STRIPE_SECRET_KEY (sk_live_...) — press Enter to skip and use TEST keys: " SK

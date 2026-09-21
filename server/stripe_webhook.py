@@ -137,6 +137,27 @@ def _has_been_processed(event_id: str) -> bool:
     return False
 
 
+def _session_delivered(session_id: str, kind: str) -> bool:
+    """Has a delivery of `kind` ("claim_code_minted" / "subscription_checkout")
+    for this session been marked FINISHED? Read from the processed-event
+    markers, which are written last: credits on the ledger with no such marker
+    mean an attempt died part-way, and that one must be resumed, not skipped."""
+    if not session_id or not PROCESSED_EVENTS_PATH.exists():
+        return False
+    with PROCESSED_EVENTS_PATH.open() as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                result = json.loads(line).get("result") or {}
+            except (json.JSONDecodeError, AttributeError):
+                continue
+            if result.get("session_id") == session_id and result.get(kind):
+                return True
+    return False
+
+
 def _mark_processed(event_id: str, result: dict) -> None:
     if not event_id:
         return
@@ -262,9 +283,33 @@ def handle_event(payload: bytes) -> dict:
             _mark_processed(event_id, result)
             return result
 
-        # `completed` means the buyer finished the form; with a delayed payment
-        # method the money lands later and arrives as `async_payment_succeeded`.
-        # Both deliver, through the same path below.
+        # A delayed payment method (bank debit and the like) completes the
+        # form first and settles days later. `completed` then arrives with
+        # payment_status "unpaid", and the outcome arrives as one of the two
+        # async events. Delivery stays at `completed`, as it always has: making
+        # it wait for `async_payment_succeeded` would hand a paying buyer
+        # nothing whenever this endpoint is not subscribed to that event, which
+        # is worse than the risk it removes. What was missing is the other half:
+        # when the settlement FAILS, take back what is still unused.
+        if event_type == "checkout.session.async_payment_failed":
+            failed = event.get("data", {}).get("object", {}) or {}
+            failed_sid = failed.get("id", "")
+            revoked = credits.revoke_credits_by_source(
+                source_substring=failed_sid,
+                revoke_source=f"stripe-async-failed:{failed_sid}",
+            ) if failed_sid else []
+            sys.stderr.write(
+                f"[stripe_webhook] async payment FAILED session={failed_sid}: "
+                f"revoked={revoked}\n"
+            )
+            result = {"ok": True, "event_type": event_type,
+                      "session_id": failed_sid, "revoked": revoked}
+            _mark_processed(event_id, result)
+            return result
+
+        # `async_payment_succeeded` is accepted as a delivery trigger so a
+        # missed `completed` still gets delivered; the once-only guard below
+        # makes it a no-op for a session that already was.
         if event_type not in {"checkout.session.completed",
                               "checkout.session.async_payment_succeeded"}:
             result = {"ok": True, "ignored": event_type}
@@ -279,16 +324,11 @@ def handle_event(payload: bytes) -> dict:
 
         session = event.get("data", {}).get("object", {}) or {}
         if session.get("payment_status") == "unpaid":
-            # Not money yet. Nothing to deliver and nothing to retry: the
-            # settlement has its own event. Absent / "paid" /
-            # "no_payment_required" all proceed.
             sys.stderr.write(
-                f"[stripe_webhook] session {session.get('id', '')} completed UNPAID; "
-                f"waiting for async_payment_succeeded\n"
+                f"[stripe_webhook] WARNING session {session.get('id', '')} completed "
+                f"UNPAID (delayed payment method): delivering now; a failed "
+                f"settlement revokes what is unused\n"
             )
-            result = {"ok": True, "awaiting_payment": True}
-            _mark_processed(event_id, result)
-            return result
         customer_email = (
             session.get("customer_email")
             or session.get("customer_details", {}).get("email")
@@ -322,6 +362,11 @@ def handle_event(payload: bytes) -> dict:
         # has no obvious path to reach their account (they didn't create one
         # — they just paid Stripe), so this send is load-bearing for UX.
         if session.get("mode") == "subscription":
+            if _session_delivered(session_id, "subscription_checkout"):
+                # A second event about a session already welcomed.
+                result = {"ok": True, "already_delivered": True, "session_id": session_id}
+                _mark_processed(event_id, result)
+                return result
             # Plan label: best-effort read of the line item's price metadata.
             plan_label = "Standing Order"
             try:
@@ -337,7 +382,8 @@ def handle_event(payload: bytes) -> dict:
                 f"[stripe_webhook] subscription welcome sent for session {session_id} "
                 f"({masked}) plan={plan_label} (email_sent={sent})\n"
             )
-            result = {"ok": True, "subscription_checkout": True, "welcome_email_sent": sent}
+            result = {"ok": True, "subscription_checkout": True,
+                      "welcome_email_sent": sent, "session_id": session_id}
             _mark_processed(event_id, result)
             return result
 
@@ -375,22 +421,37 @@ def handle_event(payload: bytes) -> dict:
             credit_amount = PACK_CREDITS
         # One paid session is delivered once, whichever events describe it.
         # Event-id dedupe cannot see two different events about one session.
-        # Exact source match: a lookalike id must never cost a buyer their pack.
-        already = credits.find_claim_code_by_source(session_id) if session_id else None
-        if already and already.get("source") in {f"stripe:{session_id}",
-                                                 f"stripe-gift:{session_id}"}:
-            result = {"ok": True, "already_delivered": True}
+        # Exact source match: a lookalike id must neither cost a buyer their
+        # pack nor hide an earlier delivery.
+        already = credits.find_mint_by_exact_source(
+            {f"stripe:{session_id}", f"stripe-gift:{session_id}"}) if session_id else None
+        if already and _session_delivered(session_id, "claim_code_minted"):
+            result = {"ok": True, "already_delivered": True, "session_id": session_id}
             _mark_processed(event_id, result)
             return result
-        claim_code = credits.new_claim_code()
-        credits.add_credits(
-            claim_code=claim_code,
-            email=recipient_email,
-            amount=credit_amount,
-            source=(
-                f"stripe-gift:{session_id}" if is_gift else f"stripe:{session_id}"
-            ),
-        )
+        resumed = bool(already)
+        if resumed:
+            # Credits are on the ledger and no delivery was ever marked
+            # finished: an earlier attempt died between the mint and the
+            # marker. Mint nothing, and FINISH it with the code already issued.
+            # Everything below is safe to repeat (the map is last-write-wins,
+            # a referral is credited once), and a second claim email is a far
+            # better outcome than none.
+            claim_code = already["claim_code"]
+            credit_amount = int(already.get("credits_delta") or credit_amount)
+            sys.stderr.write(
+                f"[stripe_webhook] resuming an unfinished delivery for session {session_id}\n"
+            )
+        else:
+            claim_code = credits.new_claim_code()
+            credits.add_credits(
+                claim_code=claim_code,
+                email=recipient_email,
+                amount=credit_amount,
+                source=(
+                    f"stripe-gift:{session_id}" if is_gift else f"stripe:{session_id}"
+                ),
+            )
         # Map payment_intent -> session_id so a later refund/dispute (whose
         # charge carries only the bare payment_intent id) can find and revoke
         # exactly these credits. mode==payment sessions carry a string PI id.
@@ -436,7 +497,12 @@ def handle_event(payload: bytes) -> dict:
                 f"[stripe_webhook] minted claim_code for session {session_id} ({masked}): "
                 f"{credit_amount} credits (email_sent={sent})\n"
             )
-        result = {"ok": True, "claim_code_minted": True, "gift": is_gift}
+        # session_id rides in the marker so the once-only guard can tell a
+        # FINISHED delivery from credits left behind by one that died.
+        result = {"ok": True, "claim_code_minted": True, "gift": is_gift,
+                  "session_id": session_id}
+        if resumed:
+            result["resumed"] = True
         if ref_credit_result is not None:
             result["referral"] = ref_credit_result
         _mark_processed(event_id, result)

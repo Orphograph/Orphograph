@@ -157,6 +157,35 @@ def find_claim_code_by_source(source_substring: str) -> dict | None:
     }
 
 
+def find_mint_by_exact_source(sources: set[str]) -> dict | None:
+    """The first mint row whose `source` IS one of `sources`, or None.
+
+    For "has this exact purchase been delivered?". The substring lookup above
+    answers a different question and cannot be used for that: an id contained
+    in a later id (`cs_1` in `cs_12`) makes the later row the match.
+    """
+    if not sources or not LEDGER_PATH.exists():
+        return None
+    with LEDGER_PATH.open() as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if row.get("source") in sources and int(row.get("credits_delta", 0)) > 0:
+                return {
+                    "claim_code": row.get("claim_code"),
+                    "email": row.get("email"),
+                    "source": row.get("source"),
+                    "ts": row.get("ts"),
+                    "credits_delta": int(row.get("credits_delta", 0)),
+                }
+    return None
+
+
 def find_claim_codes_by_email(email: str) -> list[str]:
     """Return the distinct claim_codes ever minted against `email`, in
     first-seen order.

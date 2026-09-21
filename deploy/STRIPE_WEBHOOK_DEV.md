@@ -86,6 +86,10 @@ In Stripe Dashboard:
 4. Description: `Orphograph anchor + subscription events`
 5. Listen to events:
    - `checkout.session.completed`
+   - `checkout.session.async_payment_succeeded`
+   - `checkout.session.async_payment_failed`
+   - `charge.refunded`
+   - `charge.dispute.created`
    - `customer.subscription.created`
    - `customer.subscription.updated`
    - `customer.subscription.deleted`

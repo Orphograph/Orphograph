@@ -50,6 +50,7 @@ HTTP_TIMEOUT = 15
 WINDOW_DAYS = int(os.environ.get("ORPHO_RECONCILE_WINDOW_DAYS", "7"))
 EVENT_TYPES = (
     "checkout.session.completed",
+    "checkout.session.async_payment_failed",
     "charge.refunded",
     "charge.dispute.created",
 )
@@ -154,10 +155,16 @@ def correlate(events: list[dict], ledger_rows: list[dict]) -> dict:
             grant_sources.add(src)
         if delta < 0 and (
             src.startswith("stripe-refund:") or src.startswith("stripe-dispute:")
+            or src.startswith("stripe-async-failed:")
         ):
             revoke_sources.add(src)
 
     stripe_session_ids: set[str] = set()
+    # Sessions that are never owed Pack credits, so their absence from the
+    # ledger is not LOST: a subscription delivers through the account (every
+    # subscriber used to be reported as "PAID but did NOT receive credits"),
+    # and a delayed payment that FAILED was never paid at all.
+    not_owed_credits: set[str] = set()
     refunds_disputes: list[tuple[str, str, str]] = []  # (event_type, session_id, event_id)
 
     for ev in events:
@@ -167,13 +174,20 @@ def correlate(events: list[dict], ledger_rows: list[dict]) -> dict:
             sid = obj.get("id", "")
             if sid:
                 stripe_session_ids.add(sid)
+                if obj.get("mode") == "subscription":
+                    not_owed_credits.add(sid)
+        elif et == "checkout.session.async_payment_failed":
+            sid = obj.get("id", "")
+            if sid:
+                not_owed_credits.add(sid)
+                refunds_disputes.append((et, sid, ev.get("id", "")))
         elif et in {"charge.refunded", "charge.dispute.created"}:
             sid = _extract_session_id_from_charge(obj)
             refunds_disputes.append((et, sid, ev.get("id", "")))
 
     # LOST: stripe session has no matching ledger grant (either prefix).
     lost: list[str] = []
-    for sid in sorted(stripe_session_ids):
+    for sid in sorted(stripe_session_ids - not_owed_credits):
         if (
             f"stripe:{sid}" not in grant_sources
             and f"stripe-gift:{sid}" not in grant_sources
@@ -206,10 +220,19 @@ def correlate(events: list[dict], ledger_rows: list[dict]) -> dict:
                 "note": "no recoverable session_id on event",
             })
             continue
-        expected = (
-            f"stripe-refund:{sid}" if et == "charge.refunded"
-            else f"stripe-dispute:{sid}"
-        )
+        if et == "checkout.session.async_payment_failed":
+            # Delivery happens at `completed`, before a delayed payment
+            # settles. If it then fails, what was granted must come back.
+            # Nothing granted means nothing to take back.
+            if (f"stripe:{sid}" not in grant_sources
+                    and f"stripe-gift:{sid}" not in grant_sources):
+                continue
+            expected = f"stripe-async-failed:{sid}"
+        else:
+            expected = (
+                f"stripe-refund:{sid}" if et == "charge.refunded"
+                else f"stripe-dispute:{sid}"
+            )
         if expected not in revoke_sources:
             leak.append({
                 "event_type": et,
