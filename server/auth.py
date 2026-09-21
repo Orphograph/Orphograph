@@ -217,7 +217,15 @@ def link_token_is_redeemable(token: str) -> bool:
     HEAD, and a probe must not spend the person's one-time token."""
     if not token:
         return False
-    return _redeemable_state(_hash(token)) is not None
+    if _redeemable_state(_hash(token)) is None:
+        return False
+    # "Redeemable" includes "recordable": redeeming appends to both ledgers.
+    # Raise what the real attempt would raise, so HEAD and GET answer alike.
+    for ledger in (TOKEN_LEDGER, SESSION_LEDGER):
+        target = ledger if ledger.exists() else ledger.parent
+        if not os.access(target, os.W_OK):
+            raise PermissionError(f"{ledger.name} is not writable")
+    return True
 
 
 def redeem_link_token(token: str) -> dict | None:

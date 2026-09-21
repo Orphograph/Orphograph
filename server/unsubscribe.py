@@ -50,7 +50,14 @@ def would_add(email: str) -> bool:
     email = _norm(email)
     if "@" not in email or len(email) > 320:
         return False
-    return not is_unsubscribed(email)
+    if is_unsubscribed(email):
+        return False
+    # "Would add" includes "could add". A ledger we can read and not write
+    # used to answer HEAD with the success page while GET got no answer at all.
+    target = SUPPRESS_PATH if SUPPRESS_PATH.exists() else SUPPRESS_PATH.parent
+    if not os.access(target, os.W_OK):
+        raise SuppressionUnavailable(f"suppression ledger is not writable: {target.name}")
+    return True
 
 
 def add(email: str, source: str = "user") -> bool:
@@ -58,12 +65,18 @@ def add(email: str, source: str = "user") -> bool:
     if not would_add(email):
         return False
     email = _norm(email)
-    with locked(SUPPRESS_PATH, mode="a", exclusive=True) as f:
-        f.write(json.dumps({
-            "ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-            "email": email,
-            "source": source,
-        }, separators=(",", ":")) + "\n")
+    try:
+        with locked(SUPPRESS_PATH, mode="a", exclusive=True) as f:
+            f.write(json.dumps({
+                "ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                "email": email,
+                "source": source,
+            }, separators=(",", ":")) + "\n")
+    except OSError as e:
+        # Not recorded. The caller must be able to SAY so: an OSError escaping
+        # here closed the socket with no response, and someone unsubscribing
+        # could not tell whether it had worked.
+        raise SuppressionUnavailable(f"could not record the unsubscribe: {e}") from e
     return True
 
 

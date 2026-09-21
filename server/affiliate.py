@@ -95,12 +95,15 @@ def _ref_code_from_email_id(email_id_hex: str) -> str:
     return "ref_" + email_id_hex[:8]
 
 
-def code_for_email(email: str) -> str:
+def code_for_email(email: str, *, register: bool = True) -> str:
     """Return the stable ref code for this email. Persists across sessions.
 
     Side effect: the (ref_code, email_id) mapping is recorded the first
     time it's looked up so the webhook can reverse it later. We do NOT
     record plaintext email anywhere — only the email_id hash.
+
+    `register=False` reports the same code without recording it (the code is
+    a pure function of the email id). For HEAD, which must not write.
     """
     if not email:
         return ""
@@ -108,7 +111,8 @@ def code_for_email(email: str) -> str:
     if not eid:
         return ""
     code = _ref_code_from_email_id(eid)
-    _ensure_registered(code, eid)
+    if register:
+        _ensure_registered(code, eid)
     return code
 
 
@@ -234,8 +238,10 @@ def register_signup(
     return {"ok": True, "bounty_usd": bounty, "tier": tier}
 
 
-def stats(email: str) -> dict:
+def stats(email: str, *, register: bool = True) -> dict:
     """Aggregate stats for an affiliate (the signed-in user).
+
+    `register=False` reads without recording the ref code (see code_for_email).
 
     Returns dict with:
         ref_code:           the user's own code
@@ -258,7 +264,7 @@ def stats(email: str) -> dict:
             "payout_min_usd": PAYOUT_MIN_USD,
             "payout_eligible": False,
         }
-    ref_code = code_for_email(email)
+    ref_code = code_for_email(email, register=register)
     rows = _scan()
 
     signup_events = []

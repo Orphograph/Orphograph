@@ -147,6 +147,57 @@ def test_head_on_a_refused_address_answers_like_get(server):
                         timeout=15)[0] == 400
 
 
+# --- a ledger we can read and not write --------------------------------------
+
+@pytest.fixture()
+def read_only(server):
+    """Make named ledgers read-only for one test, and always restore them."""
+    import os
+    _base, data_dir = server
+    touched: list[Path] = []
+
+    def make(*names: str) -> None:
+        # Not meaningful as root, where permission bits do not bind. Fail
+        # loudly rather than pass having tested nothing.
+        assert os.geteuid() != 0, "run this suite as a non-root user"
+        for name in names:
+            path = data_dir / name
+            assert path.exists(), f"{name} must exist before it can be made read-only"
+            path.chmod(0o400)
+            touched.append(path)
+            assert not os.access(path, os.W_OK), f"control: {name} is still writable"
+
+    yield make
+    for path in touched:
+        path.chmod(0o600)
+
+
+def test_an_unwritable_suppression_ledger_is_answered_not_dropped(server, read_only):
+    """GET used to get NO response (an OSError escaped the handler and the
+    socket closed) while HEAD showed the success page."""
+    base, data_dir = server
+    _srv.request(base, "/api/unsubscribe?e=seed-the-ledger@example.test", timeout=15)
+    read_only("suppressions.jsonl")
+    path = "/api/unsubscribe?e=cannot-record@example.test"
+    get_status, get_body, _h = _srv.request(base, path, timeout=15)
+    head_status, _b, _h = _srv.request(base, path, method="HEAD", timeout=15)
+    assert (get_status, head_status) == (503, 503)
+    assert b"could not record" in get_body, "the person must be told it did not work"
+    assert b"Done" not in get_body
+
+
+def test_an_unwritable_sign_in_ledger_is_answered_and_keeps_the_link(server, read_only):
+    base, data_dir = server
+    token = _mint_token(data_dir, "cannot-sign-in@example.test")
+    read_only("auth_tokens.jsonl")
+    assert _srv.request(base, f"/a/{token}", timeout=15)[0] == 503
+    assert _srv.request(base, f"/a/{token}", method="HEAD", timeout=15)[0] == 503
+    (data_dir / "auth_tokens.jsonl").chmod(0o600)
+    status, _b, headers = _srv.request(base, f"/a/{token}", timeout=15)
+    assert status == 303 and "orpho_sid=" in headers.get("Set-Cookie", ""), (
+        "the failed attempt must not have spent the link")
+
+
 # --- the class, not the two instances ---------------------------------------
 
 def _snapshot(data_dir: Path) -> dict[str, tuple[int, str]]:
@@ -192,66 +243,211 @@ def test_head_on_every_get_route_leaves_the_data_dir_untouched(server):
     token = _mint_token(data_dir, "class-guard@example.test")
     paths += [f"/a/{token}", "/api/unsubscribe?e=class-guard@example.test"]
 
+    # Some GET writes only happen for a visitor the server recognises: a
+    # signed-in account (first read of an affiliate code registers it) or an
+    # experiment cookie (a checkout view is attributed to its arm). An
+    # anonymous sweep never reaches those branches, so sweep as both.
+    sid = _sign_in(base, data_dir, "class-guard-member@example.test")
+    # One-time bootstrap, not request state: the first email-id computation in
+    # a data dir creates its HMAC key. Production has had one since day one, so
+    # let a GET create it here rather than blame HEAD for initialising a dir.
+    _srv.request(base, "/api/me/team", headers={"Cookie": f"orpho_sid={sid}"}, timeout=15)
+    _srv.request(base, "/api/me/anchors", headers={"Cookie": f"orpho_sid={sid}"}, timeout=15)
+    assert (data_dir / ".hmac_secret").exists(), "bootstrap did not happen before the snapshot"
+    visitors = {
+        "anonymous": {},
+        "signed in, with an experiment cookie": {
+            "Cookie": f"orpho_sid={sid}; orpho_ab_home=dark"},
+    }
+
     before = _snapshot(data_dir)
     answered = 0
-    for path in paths:
-        status, _body, _headers = _srv.request(base, path, method="HEAD", timeout=15)
-        answered += status != 429
+    for headers in visitors.values():
+        for path in paths:
+            status, _body, _headers = _srv.request(base, path, method="HEAD",
+                                                   headers=headers, timeout=15)
+            answered += status != 429
     after = _snapshot(data_dir)
     # A rate limiter answering for the routes would make "nothing changed" vacuous.
-    assert answered == len(paths), f"only {answered}/{len(paths)} HEADs reached a handler"
+    total = len(paths) * len(visitors)
+    assert answered == total, f"only {answered}/{total} HEADs reached a handler"
     changed = sorted(k for k in before.keys() | after.keys() if before.get(k) != after.get(k))
     assert changed == [], f"HEAD changed server state: {changed}"
 
-    _srv.request(base, "/api/unsubscribe?e=class-guard@example.test", timeout=15)
-    assert _snapshot(data_dir) != after, "control: the snapshot cannot see a write"
+    # Controls: the session is real (or the signed-in sweep was anonymous in
+    # disguise), and the same snapshot sees the same routes write under GET.
+    member = visitors["signed in, with an experiment cookie"]
+    assert _srv.request(base, "/api/me", headers=member, timeout=15)[0] == 200
+    _srv.request(base, "/api/me/referral-code", headers=member, timeout=15)
+    _srv.request(base, "/pay/crypto", headers=member, timeout=15)
+    seen = _snapshot(data_dir)
+    wrote = sorted(k for k in seen.keys() | after.keys() if seen.get(k) != after.get(k))
+    assert "affiliate_codes.jsonl" in wrote and "ab_home.jsonl" in wrote, (
+        f"control: GET on the writer routes changed only {wrote}")
 
 
-def test_no_get_handler_writes_without_asking_which_method_it_is():
-    """Every state-changing call reachable from do_GET must sit behind the
-    HEAD check. Reads app.py's AST: a call to one of the known writers inside
-    do_GET, or inside a handler do_GET dispatches to by name, fails unless the
-    enclosing function also consults `_is_head()`.
+def _sign_in(base: str, data_dir: Path, email: str) -> str:
+    token = _mint_token(data_dir, email)
+    _s, _b, headers = _srv.request(base, f"/a/{token}", timeout=15)
+    cookie = headers.get("Set-Cookie", "")
+    assert "orpho_sid=" in cookie, f"could not sign in: {cookie!r}"
+    return cookie.split("orpho_sid=", 1)[1].split(";", 1)[0]
 
-    The writer list is the set of cross-module mutators do_GET can reach
-    today. A new one belongs here in the change that adds it."""
+
+def test_head_reports_the_same_affiliate_code_without_registering_it(server):
+    base, data_dir = server
+    member = {"Cookie": f"orpho_sid={_sign_in(base, data_dir, 'affiliate-head@example.test')}"}
+    registry = data_dir / "affiliate_codes.jsonl"
+    before = len(_rows(registry))
+    for path in ("/api/me/referral-code", "/api/me/affiliate"):
+        status, _b, _h = _srv.request(base, path, method="HEAD", headers=member, timeout=15)
+        assert status == 200, f"HEAD {path} never reached the signed-in branch ({status})"
+    assert len(_rows(registry)) == before, "HEAD registered an affiliate code"
+
+    _s, _b, head = _srv.request(base, "/api/me/referral-code", method="HEAD",
+                                headers=member, timeout=15)
+    status, body, _h = _srv.request(base, "/api/me/referral-code", headers=member, timeout=15)
+    code = json.loads(body)["ref_code"]
+    assert status == 200 and code.startswith("ref_")
+    assert head.get("Content-Length") == str(len(body)), "HEAD described a different code"
+    # Control: the ledger stores a hash, never the email, so the only honest
+    # observation is the row itself. GET must have written exactly this one.
+    assert [r["ref_code"] for r in _rows(registry)][before:] == [code]
+
+
+@pytest.fixture(scope="module")
+def experiment_server(tmp_path_factory):
+    data_dir = tmp_path_factory.mktemp("head_safe_ab")
+    for base in _srv.server_processes(data_dir, stub_calendars=True, ORPHO_AB_HOME="0.5"):
+        yield base, data_dir
+
+
+def test_head_is_not_a_visitor_to_the_homepage_experiment(experiment_server):
+    """A cookieless HEAD is a probe. It must not be assigned an arm, logged as
+    a view, or handed the arm cookie; a returning visitor's HEAD is described
+    from their arm and still logs nothing."""
+    base, data_dir = experiment_server
+    ua = {"User-Agent": "uptime-check/1.0"}
+    status, _b, headers = _srv.request(base, "/", method="HEAD", headers=ua, timeout=15)
+    assert status == 200
+    assert not headers.get("Set-Cookie"), "HEAD was assigned an experiment arm"
+    assert not (data_dir / "ab_home.jsonl").exists(), "HEAD was logged as a homepage view"
+
+    returning = {**ua, "Cookie": "orpho_ab_home=dark"}
+    _s, _b, head = _srv.request(base, "/", method="HEAD", headers=returning, timeout=15)
+    assert not (data_dir / "ab_home.jsonl").exists(), "a returning visitor's HEAD was logged"
+    _s, body, get = _srv.request(base, "/", headers=returning, timeout=15)
+    assert head.get("Content-Length") == get.get("Content-Length") == str(len(body))
+    assert head.get("Cache-Control") == get.get("Cache-Control") == "no-store"
+
+    # Control: the experiment is really on in this server, and GET is a visitor.
+    _s, _b, first = _srv.request(base, "/", headers=ua, timeout=15)
+    assert "orpho_ab_home=" in first.get("Set-Cookie", "")
+    events = [json.loads(l)["event"] for l in (data_dir / "ab_home.jsonl").read_text().splitlines()]
+    assert events.count("home_view") == 2, events
+
+
+# Cross-module mutators do_GET can reach today ("" = a module-level function in
+# app.py). A new one belongs here in the change that adds it. The behavioural
+# sweep above is what finds a writer nobody listed; this pins the listed ones.
+_KNOWN_GET_WRITERS = {
+    ("auth", "redeem_link_token"), ("auth", "create_session"),
+    ("unsubscribe", "add"),
+    ("affiliate", "code_for_email"), ("affiliate", "stats"),
+    ("", "_ab_log"),
+}
+
+
+def _unguarded_writer_calls(src: str, writers=frozenset(_KNOWN_GET_WRITERS)):
+    """(seen, offenders) over do_GET, the Handler methods it calls on self, and
+    the module-level functions it calls by name.
+
+    A writer call is guarded only if THAT CALL is: an enclosing `if` whose test
+    mentions `_is_head`, or an argument that does (`register=not
+    self._is_head()`). One mention somewhere else in a 1000-line do_GET covers
+    nothing."""
     import ast
 
-    src = (REPO_ROOT / "server" / "app.py").read_text()
     tree = ast.parse(src)
-    writers = {("auth", "redeem_link_token"), ("auth", "create_session"),
-               ("unsubscribe", "add")}
+    parent = {child: node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
 
-    def calls(fn, want):
-        found = []
-        for node in ast.walk(fn):
-            if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
-                    and isinstance(node.func.value, ast.Name)
-                    and (node.func.value.id, node.func.attr) in want):
-                found.append(f"{node.func.value.id}.{node.func.attr}")
-        return found
+    def mentions_head(node):
+        return any(isinstance(n, ast.Attribute) and n.attr == "_is_head" for n in ast.walk(node))
 
-    def consults_head(fn):
-        return any(isinstance(n, ast.Attribute) and n.attr == "_is_head"
-                   for n in ast.walk(fn))
+    def writer_name(call):
+        f = call.func
+        if isinstance(f, ast.Attribute) and isinstance(f.value, ast.Name):
+            key = (f.value.id, f.attr)
+        elif isinstance(f, ast.Name):
+            key = ("", f.id)
+        else:
+            return None
+        return ".".join(filter(None, key)) if key in writers else None
+
+    def guarded(call, fn):
+        if any(mentions_head(a) for a in list(call.args) + [k.value for k in call.keywords]):
+            return True
+        node = call
+        while node is not fn:
+            node = parent[node]
+            if isinstance(node, ast.If) and mentions_head(node.test):
+                return True
+        return False
 
     handler = next(n for n in ast.walk(tree)
                    if isinstance(n, ast.ClassDef) and any(
                        isinstance(m, ast.FunctionDef) and m.name == "do_GET" for m in n.body))
     methods = {m.name: m for m in handler.body if isinstance(m, ast.FunctionDef)}
+    module_fns = {n.name: n for n in tree.body if isinstance(n, ast.FunctionDef)}
     do_get = methods["do_GET"]
-    dispatched = {n.func.attr for n in ast.walk(do_get)
-                  if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
-                  and isinstance(n.func.value, ast.Name) and n.func.value.id == "self"
-                  and n.func.attr in methods}
+    reachable = [do_get]
+    for n in ast.walk(do_get):
+        if not isinstance(n, ast.Call):
+            continue
+        f = n.func
+        if (isinstance(f, ast.Attribute) and isinstance(f.value, ast.Name)
+                and f.value.id == "self" and f.attr in methods):
+            reachable.append(methods[f.attr])
+        elif isinstance(f, ast.Name) and f.id in module_fns:
+            reachable.append(module_fns[f.id])
 
-    # Control: the scan must be able to see the writers at all, or "no
-    # offenders" would mean "looked at nothing".
-    reachable = [do_get] + [methods[name] for name in sorted(dispatched)]
-    seen = {c for fn in reachable for c in calls(fn, writers)}
-    assert seen == {f"{m}.{f}" for m, f in writers}, (
-        f"the scan no longer reaches every known writer (saw {sorted(seen)})")
+    seen, offenders = set(), []
+    for fn in dict.fromkeys(reachable):
+        for node in ast.walk(fn):
+            name = isinstance(node, ast.Call) and writer_name(node)
+            if not name:
+                continue
+            seen.add(name)
+            if not guarded(node, fn):
+                offenders.append(f"{fn.name}:{node.lineno} {name}")
+    return seen, offenders
 
-    offenders = [f"{fn.name}: {', '.join(calls(fn, writers))}"
-                 for fn in reachable if calls(fn, writers) and not consults_head(fn)]
-    assert offenders == [], f"GET-reachable writers with no HEAD check: {offenders}"
+
+def test_every_known_get_writer_call_is_itself_behind_the_head_check():
+    seen, offenders = _unguarded_writer_calls((REPO_ROOT / "server" / "app.py").read_text())
+    # The scan must reach every listed writer, or "no offenders" means "looked
+    # at nothing".
+    expected = {".".join(filter(None, w)) for w in _KNOWN_GET_WRITERS}
+    assert seen == expected, f"the scan no longer reaches {sorted(expected - seen)}"
+    assert offenders == [], f"GET-reachable writer calls with no HEAD check: {offenders}"
+
+
+def test_control_a_guard_elsewhere_in_do_get_does_not_cover_a_new_writer():
+    """The first version of this check accepted any `_is_head` mention inside
+    do_GET as covering every writer in it. Plant exactly that."""
+    planted = '''
+class Handler:
+    def do_GET(self):
+        if path == "/guarded":
+            if self._is_head():
+                pass
+            else:
+                unsubscribe.add(email)
+        if path == "/forgotten":
+            unsubscribe.add(email)
+        if path == "/by-argument":
+            affiliate.code_for_email(email, register=not self._is_head())
+'''
+    seen, offenders = _unguarded_writer_calls(planted)
+    assert seen == {"unsubscribe.add", "affiliate.code_for_email"}
+    assert offenders == ["do_GET:10 unsubscribe.add"], offenders
