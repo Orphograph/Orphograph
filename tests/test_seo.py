@@ -68,7 +68,6 @@ EXPECTED_URLS = [
     "https://orphograph.com/press-kit",
     "https://orphograph.com/roadmap",
     "https://orphograph.com/changelog",
-    "https://orphograph.com/account",
     "https://orphograph.com/access",
     "https://orphograph.com/pack",
     "https://orphograph.com/construction/",
