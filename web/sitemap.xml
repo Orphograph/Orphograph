@@ -11,6 +11,11 @@
     <priority>0.9</priority>
   </url>
   <url>
+    <loc>https://orphograph.com/pricing</loc>
+    <lastmod>2026-09-13</lastmod>
+    <priority>0.9</priority>
+  </url>
+  <url>
     <loc>https://orphograph.com/blog/</loc>
     <lastmod>2026-08-31</lastmod>
     <priority>0.8</priority>
@@ -51,9 +56,29 @@
     <priority>0.7</priority>
   </url>
   <url>
+    <loc>https://orphograph.com/about-the-office</loc>
+    <lastmod>2026-09-18</lastmod>
+    <priority>0.5</priority>
+  </url>
+  <url>
     <loc>https://orphograph.com/faq</loc>
     <lastmod>2026-08-31</lastmod>
     <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://orphograph.com/writers</loc>
+    <lastmod>2026-09-18</lastmod>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://orphograph.com/what-is-this</loc>
+    <lastmod>2026-09-18</lastmod>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://orphograph.com/anchor-output</loc>
+    <lastmod>2026-09-13</lastmod>
+    <priority>0.6</priority>
   </url>
   <url>
     <loc>https://orphograph.com/verify-js</loc>
@@ -109,6 +134,11 @@
     <loc>https://orphograph.com/lp/agent-receipts</loc>
     <lastmod>2026-08-31</lastmod>
     <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://orphograph.com/method</loc>
+    <lastmod>2026-09-13</lastmod>
+    <priority>0.6</priority>
   </url>
   <url>
     <loc>https://orphograph.com/method/architecture</loc>
@@ -181,6 +211,21 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://orphograph.com/docs/quickstart</loc>
+    <lastmod>2026-09-19</lastmod>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://orphograph.com/docs/install</loc>
+    <lastmod>2026-09-19</lastmod>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://orphograph.com/docs/verify</loc>
+    <lastmod>2026-09-19</lastmod>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://orphograph.com/stats</loc>
     <lastmod>2026-08-31</lastmod>
     <priority>0.6</priority>
@@ -242,11 +287,6 @@
   </url>
   <url>
     <loc>https://orphograph.com/changelog</loc>
-    <lastmod>2026-08-31</lastmod>
-    <priority>0.4</priority>
-  </url>
-  <url>
-    <loc>https://orphograph.com/account</loc>
     <lastmod>2026-08-31</lastmod>
     <priority>0.4</priority>
   </url>
@@ -313,6 +353,26 @@
   <url>
     <loc>https://orphograph.com/legal/</loc>
     <lastmod>2026-08-31</lastmod>
+    <priority>0.3</priority>
+  </url>
+  <url>
+    <loc>https://orphograph.com/legal/aup</loc>
+    <lastmod>2026-09-19</lastmod>
+    <priority>0.3</priority>
+  </url>
+  <url>
+    <loc>https://orphograph.com/legal/contact-policy</loc>
+    <lastmod>2026-09-19</lastmod>
+    <priority>0.3</priority>
+  </url>
+  <url>
+    <loc>https://orphograph.com/legal/dmca</loc>
+    <lastmod>2026-09-19</lastmod>
+    <priority>0.3</priority>
+  </url>
+  <url>
+    <loc>https://orphograph.com/legal/trademark</loc>
+    <lastmod>2026-09-19</lastmod>
     <priority>0.3</priority>
   </url>
   <url>
