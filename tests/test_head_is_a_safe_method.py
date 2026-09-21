@@ -622,7 +622,7 @@ def test_a_cookieless_head_on_the_experiment_homepage_is_uncacheable_like_get(ex
     """It is not a visitor and gets no arm, but it must not advertise a plain,
     cacheable page while GET answers per-arm with no-store and Vary: Cookie."""
     base, _data_dir = experiment_server
-    ua = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) real-browser-shaped-agent"}
+    ua = {"User-Agent": "uptime-check/1.0"}  # an honest client that is not a bot the experiment skips
     _s, _b, head = _srv.request(base, "/", method="HEAD", headers=ua, timeout=15)
     _s, _b, get = _srv.request(base, "/", headers=ua, timeout=15)
     assert head.get("Cache-Control") == get.get("Cache-Control") == "no-store"
