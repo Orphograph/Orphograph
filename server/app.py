@@ -1145,6 +1145,9 @@ class Handler(BaseHTTPRequestHandler):
         # carries it as ?stripe_session=cs_…. Only a value that IS a session id
         # goes, so an unrelated `id=` parameter stays readable.
         (re.compile(r"([?&](?:stripe_session|session_id|id)=)cs_[^&\s\"]+"), r"\1[redacted]"),
+        # A team invite code: the share link is /team/join?code=…, and the code
+        # is what admits a person to the team.
+        (re.compile(r"([?&]code=)[^&\s\"]+"), r"\1[redacted]"),
     )
 
     def log_message(self, fmt, *args):

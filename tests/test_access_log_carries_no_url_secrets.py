@@ -96,3 +96,16 @@ def test_ordinary_request_lines_are_left_alone(server):
                  "GET /lp/agent-receipts "):
         assert line in log, f"{line!r} was altered or never logged"
     assert not re.search(r"GET /api/\[redacted\]", log)
+
+
+def test_a_team_invite_code_in_a_share_link_does_not_reach_the_log(server):
+    """The share link is `/team/join?code=<code>`; the code admits a person to
+    the team, and every click wrote it to the access log."""
+    base, data_dir = server
+    code = "inv_LogCanary0123456789"
+    _srv.request(base, f"/team/join?code={code}", timeout=15)
+    _srv.request(base, "/team/join?plan=harmless-canary", timeout=15)
+    text = _log(data_dir)
+    assert "/team/join" in text, "control: the request reached the log at all"
+    assert code not in text, "a team invite code was written to the access log"
+    assert "plan=harmless-canary" in text, "the rule redacted a parameter it should not"
