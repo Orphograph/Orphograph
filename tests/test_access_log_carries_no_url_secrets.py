@@ -222,3 +222,18 @@ def test_shapes_the_third_review_found(server):
     assert "ref=abc" in text, "a referral code is made to be shared; it stays readable"
     assert '"GET /x?e=[redacted]" 400' in text or '"GET /x?e=[redacted]"' in text, \
         "the request line's closing quote was eaten with the redacted value"
+
+
+def test_a_kept_key_is_not_a_licence_for_its_value(server):
+    """Round four: only `id` and `next` had their values checked, so a kept
+    key (ref, v, plan…) carried `;e=<address>` or an encoded sign-in path."""
+    base, data_dir = server
+    token = _mint_token(data_dir, "log-round4@example.test")
+    _srv.raw_request(base, "/x?ref=a;e=kept-key-canary%40example.test")
+    _srv.raw_request(base, "/x?v=v-canary%40example.test")
+    _srv.raw_request(base, f"/x?ref=%2Fa%2F{token}")
+    _srv.raw_request(base, "/pricing?plan=pack_50&ref=partner-7")
+    text = _log(data_dir)
+    assert token not in text, "a sign-in path rode in on a kept key"
+    assert "kept-key-canary" not in text and "v-canary" not in text
+    assert "plan=pack_50&ref=partner-7" in text, "plain values on kept keys stay readable"

@@ -120,13 +120,14 @@ def balance(claim_code: str) -> int:
         return _scan().get(claim_code, 0)
 
 
-def _latest_mint(matches) -> dict | None:
-    """The most recent positive (mint) row whose `source` satisfies
-    `matches(source)`, projected to {claim_code, email, source, ts,
-    credits_delta}, or None. Refund rows are negative and never match."""
+def _mint_rows():
+    """Every well-formed positive (mint) row in ledger order, as
+    (row, source, credits_delta). A torn line, a non-object row, a
+    non-integer delta or a non-string source is skipped, never raised on:
+    one bad row must not stop every lookup (the webhook's exactly-once
+    check runs inside its dedup lock)."""
     if not LEDGER_PATH.exists():
-        return None
-    latest = None
+        return
     with LEDGER_PATH.open() as f:
         for line in f:
             line = line.strip()
@@ -138,21 +139,34 @@ def _latest_mint(matches) -> dict | None:
                 continue
             if not isinstance(row, dict):
                 continue
+            source = row.get("source") or ""
+            if not isinstance(source, str):
+                continue
             try:
                 delta = int(row.get("credits_delta") or 0)
             except (TypeError, ValueError):
                 continue
-            if delta > 0 and matches(row.get("source") or ""):
-                latest = row
-    if latest is None:
-        return None
+            if delta > 0:
+                yield row, source, delta
+
+
+def _mint_projection(row: dict, source: str, delta: int) -> dict:
     return {
-        "claim_code": latest.get("claim_code"),
-        "email": latest.get("email"),
-        "source": latest.get("source"),
-        "ts": latest.get("ts"),
-        "credits_delta": int(latest.get("credits_delta") or 0),
+        "claim_code": row.get("claim_code"),
+        "email": row.get("email"),
+        "source": source,
+        "ts": row.get("ts"),
+        "credits_delta": delta,
     }
+
+
+def _latest_mint(matches) -> dict | None:
+    """The most recent mint row whose `source` satisfies `matches(source)`."""
+    latest = None
+    for row, source, delta in _mint_rows():
+        if matches(source):
+            latest = (row, source, delta)
+    return _mint_projection(*latest) if latest else None
 
 
 def find_claim_code_by_source(source_token: str) -> dict | None:
@@ -203,25 +217,11 @@ def find_mint_by_exact_source(sources: set[str]) -> dict | None:
     named separately. `find_claim_code_by_source` above answers the looser
     "is there a mint carrying this id" and returns the most recent one.
     """
-    if not sources or not LEDGER_PATH.exists():
+    if not sources:
         return None
-    with LEDGER_PATH.open() as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                row = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if row.get("source") in sources and int(row.get("credits_delta") or 0) > 0:
-                return {
-                    "claim_code": row.get("claim_code"),
-                    "email": row.get("email"),
-                    "source": row.get("source"),
-                    "ts": row.get("ts"),
-                    "credits_delta": int(row.get("credits_delta") or 0),
-                }
+    for row, source, delta in _mint_rows():
+        if source in sources:
+            return _mint_projection(row, source, delta)
     return None
 
 

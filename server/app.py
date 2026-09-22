@@ -291,8 +291,10 @@ _anchor_limiter = TokenBucket(
 # showed as confirmed (measured in production 2026-09-22: 200,200,200,429).
 # The ids are unguessable, so this bucket only has to stop a tight loop, not
 # ration a day. In-memory: a restart refilling it is harmless.
-STATUS_RATE_CAPACITY = 30
-STATUS_RATE_REFILL = 30 / 3600.0  # burst 30, then one every 2 minutes
+# Keyed per IP prefix (a /24), so buyers behind one shared mobile NAT share it:
+# 60 covers ten success pages polling 6 times each.
+STATUS_RATE_CAPACITY = 60
+STATUS_RATE_REFILL = 60 / 3600.0  # burst 60, then one a minute
 _status_limiter = TokenBucket(STATUS_RATE_CAPACITY, STATUS_RATE_REFILL)
 # /api/stripe/session makes one live Stripe read per well-formed id, and the
 # account's Stripe read limit (100/s) is shared with checkout and the webhook.
@@ -1193,6 +1195,9 @@ class Handler(BaseHTTPRequestHandler):
         "id", "next",
     })
     _LOG_QUERY = re.compile(r"\?(\S*)")
+    # A kept key keeps its value only when the value itself is plain: a kept
+    # key is not a licence to carry `;e=<address>` or `%2Fa%2F<token>`.
+    _LOG_PLAIN_VALUE = re.compile(r"[A-Za-z0-9_.,:-]{0,128}")
     _LOG_PLAIN_PATH = re.compile(r"/[A-Za-z0-9/_.-]*")
     # The bearer sign-in token and a claim code (it is what spends credits),
     # wherever the segment sits: `//a/…`, `/./a/…`, `http://host/a/…`,
@@ -1244,9 +1249,11 @@ class Handler(BaseHTTPRequestHandler):
             keep = key in cls._LOG_KEEP_PARAMS
             if key == "id" and value.lower().startswith("cs_"):
                 keep = False  # a Stripe checkout session answers with the buyer's email
-            elif key == "next" and (not cls._LOG_PLAIN_PATH.fullmatch(value)
-                                    or cls._names_bearer_segment(value)):
-                keep = False  # a redirect target carrying a query, encoding or a bearer
+            elif key == "next":
+                if not cls._LOG_PLAIN_PATH.fullmatch(value) or cls._names_bearer_segment(value):
+                    keep = False  # a redirect target carrying a query, encoding or a bearer
+            elif keep and not cls._LOG_PLAIN_VALUE.fullmatch(value):
+                keep = False
             parts.append(part if keep else f"{raw_key}=[redacted]")
         return "?" + "&".join(parts) + tail
 
@@ -1255,6 +1262,9 @@ class Handler(BaseHTTPRequestHandler):
         if "/" not in token:
             return token
         body = token.strip(cls._LOG_EDGE_PUNCT)
+        # Only a request target can name a route: skip `HTTP/1.1` and friends.
+        if body.upper().startswith("HTTP/"):
+            return token
         start = token.find(body) if body else 0
         path, sep, query = body.partition("?")
         # Judge what is left once the literal rule's own redactions are taken
@@ -1262,7 +1272,8 @@ class Handler(BaseHTTPRequestHandler):
         probe = cls._LOG_LITERAL_REDACTED.sub("/", path)
         # Fast path: nothing that could hide a bearer segment from the literal
         # rule (encoding, backslash, upper case, dot segments).
-        if not any(c in probe for c in "%\\.") and probe == probe.lower():
+        if (not any(c in probe for c in "%\\") and "/." not in probe
+                and probe == probe.lower()):
             return token
         if cls._names_bearer_segment(probe):
             return token[:start] + "[redacted-path]" + sep + query + token[start + len(body):]
@@ -5171,11 +5182,6 @@ class Handler(BaseHTTPRequestHandler):
         if not stripe_api.is_configured():
             _json_response(self, 503, {"error": "Stripe not configured"})
             return
-        # Light rate-limit so this can't be used as a session-id oracle
-        allowed, _ = _session_lookup_limiter.check(f"stripe-session:{self._client_key()}")
-        if not allowed:
-            _json_response(self, 429, {"error": "rate limit exceeded"})
-            return
         from urllib.parse import parse_qs, urlparse
         query = parse_qs(urlparse(self.path).query)
         sid_list = query.get("id", [])
@@ -5183,6 +5189,13 @@ class Handler(BaseHTTPRequestHandler):
         # Stripe session IDs are cs_test_… or cs_live_… plus alphanumerics
         if not sid or not sid.startswith("cs_") or len(sid) > 256 or not all(c.isalnum() or c == "_" for c in sid):
             _json_response(self, 400, {"error": "invalid session id"})
+            return
+        # Light rate-limit so this can't be used as a session-id oracle. After
+        # the shape check: a malformed id costs nothing, so a page that sent a
+        # bad value does not spend the buyer's budget for a real lookup.
+        allowed, _ = _session_lookup_limiter.check(f"stripe-session:{self._client_key()}")
+        if not allowed:
+            _json_response(self, 429, {"error": "rate limit exceeded"})
             return
         result = stripe_api._request("GET", f"/checkout/sessions/{sid}")
         if not result.get("ok"):

@@ -178,3 +178,20 @@ def test_a_later_row_sharing_a_part_does_not_hide_the_orders_mint():
     # The loose lookup still answers with the later row; that is why the
     # strict one exists.
     assert credits.find_claim_code_by_source("np_pack_50_x")["claim_code"] == "pk_other"
+
+
+def test_one_malformed_row_does_not_stop_the_lookups():
+    """A non-string source, a non-integer delta or a non-object row used to
+    raise inside the scan; the webhook's exactly-once check runs it under its
+    dedup lock, so one bad row would block every crypto mint."""
+    import json
+    credits.LEDGER_PATH.write_text("".join(json.dumps(r) + "\n" for r in [
+        {"claim_code": "pk_bad", "credits_delta": 5, "source": 123},
+        {"claim_code": "pk_bad2", "credits_delta": "lots", "source": "stripe:cs_z"},
+        ["not", "an", "object"],
+        {"claim_code": "pk_ok", "email": "o@x.test", "credits_delta": 20,
+         "source": "nowpayments:77:np_pack_20_ok"},
+    ]))
+    assert credits.find_nowpayments_mint("np_pack_20_ok")["claim_code"] == "pk_ok"
+    assert credits.find_claim_code_by_source("cs_z") is None
+    assert credits.find_mint_by_exact_source({"nowpayments:77:np_pack_20_ok"})["claim_code"] == "pk_ok"

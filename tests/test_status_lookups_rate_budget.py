@@ -29,9 +29,12 @@ def server(tmp_path):
     yield from _srv.server_processes(
         tmp_path,
         RATE_LIMIT_PER_DAY="3",
-        # Configured, so /api/stripe/session reaches its limiter; the ids
-        # below are malformed, so nothing is ever sent to Stripe.
+        # Configured, so /api/stripe/session reaches its limiter. Every
+        # outbound call goes to a proxy on a closed local port, so a
+        # well-formed id is refused locally and nothing reaches Stripe.
         STRIPE_SECRET_KEY="sk_test_not_a_real_key",
+        HTTPS_PROXY="http://127.0.0.1:9", https_proxy="http://127.0.0.1:9",
+        NO_PROXY="", no_proxy="",
     )
 
 
@@ -54,20 +57,33 @@ def test_every_poll_the_success_page_makes_is_answered(server):
 
 
 def test_session_lookup_survives_reloads(server):
-    # Malformed id: 400 comes from validation AFTER the limiter, so a 429 here
-    # can only be the budget.
-    codes = [_status(server, "/api/stripe/session?id=bad") for _ in range(5)]
-    assert codes == [400] * 5, codes
+    # 502 is the refused proxy answering for Stripe: the handler got past its
+    # limiter. A 429 here can only be the budget.
+    status, body, _h = _srv.request(server, "/api/stripe/session?id=cs_test_reload0")
+    # Control on the FIRST lookup (a later one could be a 429 and prove
+    # nothing): the 502 is the local refusal, not Stripe, whose 401 for the
+    # fake key would also map to 502.
+    assert status == 502, (status, body)
+    assert b"could not reach payment provider" in body.lower(), body
+    codes = [_status(server, f"/api/stripe/session?id=cs_test_reload{i}") for i in range(1, 5)]
+    assert codes == [502] * 4, codes
 
 
 def test_session_lookups_stay_small_per_prefix(server):
     """Each well-formed id is one live Stripe read, and Stripe's read limit is
     shared with checkout and the webhook, so this burst stays small."""
-    codes = [_status(server, "/api/stripe/session?id=bad") for _ in range(8)]
-    assert codes[:5] == [400] * 5 and 429 in codes[5:], codes
+    codes = [_status(server, f"/api/stripe/session?id=cs_test_burst{i}") for i in range(8)]
+    assert codes[:5] == [502] * 5 and codes[5:] == [429] * 3, codes
+
+
+def test_a_malformed_session_id_costs_no_budget(server):
+    """The shape check runs before the limiter: a page that sent a bad value
+    must not spend the buyer's budget for their real lookup."""
+    assert [_status(server, "/api/stripe/session?id=bad") for _ in range(10)] == [400] * 10
+    assert _status(server, "/api/stripe/session?id=cs_test_after_bad") == 502
 
 
 def test_the_lookups_are_still_bounded(server):
     codes = [_status(server, f"/api/nowpayments/order/np_unknown_{i}")
-             for i in range(40)]
+             for i in range(80)]
     assert 429 in codes, "status lookups lost their rate limit entirely"
