@@ -14,9 +14,12 @@ never by file.
 from __future__ import annotations
 
 import importlib.util
+import io
 import re
 import subprocess
 import sys
+import tarfile
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -27,25 +30,48 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 # (`_`, `-`, and for base64 secrets `+ / =`), and never ended with `\b`: a
 # key ending in `-` or `_` has no word boundary after it.
 _END = r"(?![A-Za-z0-9_-])"
+# A key may follow a word character when it sits inside escaped or encoded
+# text (`\nsk_live_…`, `Bearer%20sk-…`), where `\b` finds no boundary.
+_PRE = r"(?:(?<![A-Za-z0-9])|(?<=\\[nrt])|(?<=%[0-9A-Fa-f]{2}))"
 SHAPES = {
-    "stripe_live_key": r"\b[sr]k_live_[A-Za-z0-9]{16,}",
+    "stripe_live_key": _PRE + r"[sr]k_live_[A-Za-z0-9]{16,}",
     # Stripe, Svix and Resend webhook secrets; also inside orpho_whsec_.
     "webhook_signing_secret": r"whsec_[A-Za-z0-9+/=_-]{24,}",
     "orphograph_api_key": r"\borpho_[A-Za-z0-9_-]{32}" + _END,
     "aws_access_key_id": r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b",
     "aws_secret_access_key": r"(?i)aws_secret_access_key\s*[=:]\s*[\"']?[A-Za-z0-9/+=]{40}",
     "private_key_block": r"-----BEGIN (?:RSA |EC |DSA |OPENSSH |PGP |ENCRYPTED )?PRIVATE KEY(?: BLOCK)?-----",
-    "github_token": r"\bgh[pousr]_[A-Za-z0-9]{36,}|\bgithub_pat_[A-Za-z0-9_]{60,}",
+    "github_token": _PRE + r"(?:gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{60,})",
     "npm_token": r"\bnpm_[A-Za-z0-9]{36}" + _END,
     "pypi_token": r"\bpypi-AgEIcHlwaS5vcmc[A-Za-z0-9_-]{40,}",
     # Fly macaroons, with or without the `FlyV1 ` header prefix.
     "fly_token": r"\bfm[12][ra]?_[A-Za-z0-9_+/=-]{40,}",
     "slack_token": r"\bxox[abprs]-[A-Za-z0-9-]{10,}",
-    "telegram_bot_token": r"\b\d{8,10}:AA[A-Za-z0-9_-]{33}" + _END,
+    # Often inside a URL: api.telegram.org/bot<token>/sendMessage.
+    "telegram_bot_token": r"(?<![0-9])\d{8,10}:AA[A-Za-z0-9_-]{33}" + _END,
+    # NOWPayments API keys are four dash-joined groups of seven.
+    "nowpayments_api_key": r"\b[A-Z0-9]{7}-[A-Z0-9]{7}-[A-Z0-9]{7}-[A-Z0-9]{7}\b",
     "resend_key": r"\bre_[A-Za-z0-9]{8}_[A-Za-z0-9_-]{20,}",
-    "anthropic_key": r"\bsk-ant-[A-Za-z0-9_-]{20,}",
-    "openai_key": r"\bsk-(?:proj-|svcacct-|admin-)?(?!ant-)[A-Za-z0-9_-]{32,}",
+    "anthropic_key": _PRE + r"sk-ant-[A-Za-z0-9_-]{20,}",
+    "openai_key": _PRE + r"sk-(?:proj-|svcacct-|admin-)?(?!ant-)[A-Za-z0-9_-]{32,}",
 }
+
+# The server's own secrets have no recognisable shape, so they are matched by
+# NAME on one line, and only when the value looks random (placeholders like
+# `whsec_xxxxxxxxxx` or `PASTE_HERE` in setup docs are not secrets).
+NAMED = {
+    "server_secret_by_name": re.compile(
+        r"\b(?:ORPHO_[A-Z0-9_]*(?:SECRET|TOKEN|KEY)|NOWPAYMENTS_IPN_SECRET|NOWPAYMENTS_API_KEY"
+        r"|STRIPE_WEBHOOK_SECRET|STRIPE_SECRET_KEY|FLY_API_TOKEN|RESEND_API_KEY)"
+        r"[ \t]*[=:][ \t]*[\"']?([A-Za-z0-9+/=_.-]{16,})"),
+}
+_PLACEHOLDER_WORDS = re.compile(r"(?i)paste|here|example|your|dummy|fake|placeholder|changeme|test")
+
+
+def _looks_random(value: str) -> bool:
+    return (any(c.isdigit() for c in value) and any(c.isalpha() for c in value)
+            and not re.search(r"(.)\1\1\1", value)
+            and not _PLACEHOLDER_WORDS.search(value))
 
 
 def _audit_patterns() -> dict[str, re.Pattern]:
@@ -56,7 +82,10 @@ def _audit_patterns() -> dict[str, re.Pattern]:
     mod = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = mod
     spec.loader.exec_module(mod)
-    return {f"audit:{name}": rx for name, rx in mod._KEY_PATTERNS.items()}
+    # Stripe and Resend by name are covered by SHAPES / NAMED (the audit's
+    # Stripe pattern also matches sk_test_ placeholders in docs).
+    return {f"audit:{name}": rx for name, rx in mod._KEY_PATTERNS.items()
+            if name not in ("STRIPE_SECRET_KEY", "RESEND_API_KEY")}
 
 
 COMPILED = {name: re.compile(p) for name, p in SHAPES.items()}
@@ -91,17 +120,22 @@ PLANTED = {
     "resend_key": "re_" + "Ab3dEf9h" + "_" + "Kq2w-Er7tY_uI9oP1aS3d",
     "anthropic_key": "sk-ant-" + "api03-Ab3_dEf-Gh1jKl2mNo3p",
     "openai_key": "sk-proj-" + "Ab3_dEf-Gh1jKl2mNo3pQr4sTu5vWx6_yZ",
+    "nowpayments_api_key": "A1B2C3D" + "-E4F5G6H-J7K8L9M-N0P1Q2R",
 }
 
 
 def scan_text(text: str) -> list[tuple[str, int]]:
-    """(pattern name, line number) for every credential shape in `text`."""
+    """(pattern name, line number) for every credential in `text`."""
     hits = []
     for name, rx in COMPILED.items():
         for m in rx.finditer(text):
             if m.group(0) in KNOWN_FAKES or (m.groups() and m.group(1) in KNOWN_FAKES):
                 continue
             hits.append((name, text.count("\n", 0, m.start()) + 1))
+    for name, rx in NAMED.items():
+        for m in rx.finditer(text):
+            if m.group(1) not in KNOWN_FAKES and _looks_random(m.group(1)):
+                hits.append((name, text.count("\n", 0, m.start()) + 1))
     return hits
 
 
@@ -113,6 +147,27 @@ def _decode(data: bytes) -> str | None:
     if b"\0" in data[:8192]:
         return None
     return data.decode("utf-8", "ignore")
+
+
+def _archive_members(path: Path, data: bytes):
+    """(member name, bytes) of a tracked zip or tar archive: the verify kit and
+    press kit are served to the public, so what is packed inside them ships."""
+    name = path.name.lower()
+    try:
+        if name.endswith(".zip"):
+            with zipfile.ZipFile(io.BytesIO(data)) as z:
+                for info in z.infolist():
+                    if not info.is_dir() and info.file_size < 5_000_000:
+                        yield info.filename, z.read(info)
+        elif name.endswith((".tar.gz", ".tgz", ".tar")):
+            with tarfile.open(fileobj=io.BytesIO(data)) as t:
+                for member in t.getmembers():
+                    if member.isfile() and member.size < 5_000_000:
+                        f = t.extractfile(member)
+                        if f is not None:
+                            yield member.name, f.read()
+    except (zipfile.BadZipFile, tarfile.TarError) as e:
+        raise AssertionError(f"{path}: tracked archive cannot be opened ({e})") from e
 
 
 def _tracked_files() -> list[Path]:
@@ -152,24 +207,59 @@ def test_a_utf16_file_is_read_not_skipped():
     assert ("github_token", 1) in scan_text(_decode(data))
 
 
+def test_an_archive_member_is_scanned(tmp_path):
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("kit/.env", "KEY='" + PLANTED["github_token"] + "'\n")
+    members = dict(_archive_members(tmp_path / "kit.zip", buf.getvalue()))
+    assert ("github_token", 1) in scan_text(_decode(members["kit/.env"]))
+
+
+def test_the_servers_own_secrets_are_caught_by_name_but_placeholders_are_not():
+    real = "ORPHO_HMAC_SECRET=" + "a3f9c2e1b7d04f6a9e8c3b2a1d0f9e8c"
+    assert ("server_secret_by_name", 1) in scan_text(real + "\n")
+    for placeholder in ('STRIPE_WEBHOOK_SECRET="whsec_xxxxxxxxxx"',
+                        'STRIPE_WEBHOOK_SECRET="whsec_PASTE_HERE"',
+                        "RESEND_API_KEY=\nNEXT=1", "if not NOWPAYMENTS_IPN_SECRET:\n    sys.stderr"):
+        assert scan_text(placeholder + "\n") == [], placeholder
+
+
+def test_keys_inside_urls_and_escaped_text_are_caught():
+    tg = "curl https://api.telegram.org/bot" + PLANTED["telegram_bot_token"] + "/sendMessage"
+    assert "telegram_bot_token" in {n for n, _l in scan_text(tg)}
+    assert "stripe_live_key" in {n for n, _l in scan_text("k=\\n" + PLANTED["stripe_live_key"])}
+    assert "openai_key" in {n for n, _l in scan_text("Bearer%20" + PLANTED["openai_key"])}
+
+
 def test_no_tracked_file_carries_a_credential():
     files = _tracked_files()
-    # Control: the scan read the whole tree (a known file is in it).
     assert len(files) > 500, f"only {len(files)} tracked files: git ls-files failed?"
-    assert any(p.name == "index.html" and p.parent.name == "web" for p in files)
-    leaks, binaries = [], []
+    leaks, binaries, unreadable, scanned = [], [], [], set()
+    archive_members = 0
     for path in files:
         try:
             data = path.read_bytes()
         except OSError:
+            unreadable.append(path)
             continue
+        rel = path.relative_to(REPO_ROOT)
+        members = list(_archive_members(path, data))
+        archive_members += len(members)
+        for member, content in members:
+            text = _decode(content)
+            if text is not None:
+                leaks += [f"{rel}!{member}:{line} {name}" for name, line in scan_text(text)]
         text = _decode(data)
         if text is None:
-            binaries.append(path)
+            if not members:
+                binaries.append(path)
             continue
-        for name, line in scan_text(text):
-            leaks.append(f"{path.relative_to(REPO_ROOT)}:{line} {name}")
-    # Binaries are skipped, and the count is bounded so a text file that
-    # starts looking binary cannot quietly leave the scan.
+        scanned.add(rel.as_posix())
+        leaks += [f"{rel}:{line} {name}" for name, line in scan_text(text)]
+    # Controls: known files were READ and decoded (not just listed), nothing
+    # tracked was silently unreadable, and binaries stay a minority.
+    assert {"web/index.html", "server/credits.py"} <= scanned, "the scan did not read the tree"
+    assert not unreadable, f"tracked files could not be read: {unreadable[:5]}"
+    assert archive_members > 0, "no tracked archive was opened (the verify/press kits ship publicly)"
     assert len(binaries) < len(files) // 4, f"{len(binaries)} files skipped as binary"
     assert not leaks, "credential-shaped values in tracked files (values not shown):\n" + "\n".join(leaks)
