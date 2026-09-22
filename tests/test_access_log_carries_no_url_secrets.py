@@ -194,3 +194,31 @@ def test_shapes_the_second_review_found(server):
                    "PrivateLabelCanary", "9f86d081cafe"):
         assert leaked not in text, f"{leaked} reached the access log"
     assert "&limit=5" in text, "a harmless parameter stays readable"
+
+
+def test_shapes_the_third_review_found(server):
+    """Round three: the path scan was a backtracking regex that went quadratic
+    on a long run with no slash (a 60 KB line held the GIL for ~30 s); a path
+    whose FIRST bearer segment the literal rule caught kept a second, encoded
+    one; the closing quote of a request line was eaten with the last redacted
+    value; and restricted promotion codes were on the keep list."""
+    import time
+    base, data_dir = server
+    token = _mint_token(data_dir, "log-round3@example.test")
+
+    started = time.monotonic()
+    _srv.raw_request(base, "", line="GET " + "x" * 60000 + " HTTP/1.1")
+    _srv.raw_request(base, "", line="GET /x?q=(" + "y" * 60000 + " HTTP/1.1")
+    elapsed = time.monotonic() - started
+    assert elapsed < 3, f"two 60 KB request lines took {elapsed:.1f}s to answer and log"
+
+    _srv.raw_request(base, f"/a/decoy/%61/{token}")
+    _srv.raw_request(base, "", line="GET /x?e=quote-canary%40example.test")
+    _srv.raw_request(base, "/pricing?prefilled_promo_code=PromoCanary&coupon=CouponCanary&ref=abc")
+
+    text = _log(data_dir)
+    assert token not in text, "a second, encoded bearer segment kept a live token"
+    assert "PromoCanary" not in text and "CouponCanary" not in text
+    assert "ref=abc" in text, "a referral code is made to be shared; it stays readable"
+    assert '"GET /x?e=[redacted]" 400' in text or '"GET /x?e=[redacted]"' in text, \
+        "the request line's closing quote was eaten with the redacted value"

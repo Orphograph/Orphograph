@@ -120,6 +120,41 @@ def balance(claim_code: str) -> int:
         return _scan().get(claim_code, 0)
 
 
+def _latest_mint(matches) -> dict | None:
+    """The most recent positive (mint) row whose `source` satisfies
+    `matches(source)`, projected to {claim_code, email, source, ts,
+    credits_delta}, or None. Refund rows are negative and never match."""
+    if not LEDGER_PATH.exists():
+        return None
+    latest = None
+    with LEDGER_PATH.open() as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(row, dict):
+                continue
+            try:
+                delta = int(row.get("credits_delta") or 0)
+            except (TypeError, ValueError):
+                continue
+            if delta > 0 and matches(row.get("source") or ""):
+                latest = row
+    if latest is None:
+        return None
+    return {
+        "claim_code": latest.get("claim_code"),
+        "email": latest.get("email"),
+        "source": latest.get("source"),
+        "ts": latest.get("ts"),
+        "credits_delta": int(latest.get("credits_delta") or 0),
+    }
+
+
 def find_claim_code_by_source(source_token: str) -> dict | None:
     """Return the most recent {claim_code, email, source, ts} row whose
     `source` carries `source_token` as a whole colon-delimited part, or None.
@@ -130,74 +165,34 @@ def find_claim_code_by_source(source_token: str) -> dict | None:
     and `stripe-gift:cs_abc`; a fragment of one finds nothing (a substring
     match let a partial order id confirm that a real order existed).
     """
-    if not source_token or not LEDGER_PATH.exists():
+    if not source_token:
         return None
-    latest = None
-    with LEDGER_PATH.open() as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                row = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            src = row.get("source") or ""
-            if _source_has_token(src, source_token) and int(row.get("credits_delta") or 0) > 0:
-                # First positive (mint) row wins per claim_code; keep most recent
-                # overall in case of unusual ledger interleavings.
-                latest = row
-    if latest is None:
-        return None
-    return {
-        "claim_code": latest.get("claim_code"),
-        "email": latest.get("email"),
-        "source": latest.get("source"),
-        "ts": latest.get("ts"),
-        "credits_delta": int(latest.get("credits_delta") or 0),
-    }
+    return _latest_mint(lambda src: _source_has_token(src, source_token))
 
 
 def find_nowpayments_mint(order_id: str) -> dict | None:
     """The most recent crypto mint for exactly this order, or None.
 
-    The NOWPayments webhook mints with source "nowpayments:<invoice>:<order_id>"
-    (nowpayments_webhook.py), so the kind is the first part and the order id
-    the LAST. `find_claim_code_by_source` matches any whole part of any source
-    and keeps the latest match, so a kind word, a referral code or an invoice id
-    answered for somebody else's sale, and a later unrelated row sharing a part
-    could hide the order's own mint. The predicate is applied inside the scan.
+    The NOWPayments webhook has minted with source
+    "nowpayments:<invoice or order>:<order_id>" since it shipped (8af61f2), so
+    the kind is the first part and the order id the LAST. The any-part lookup
+    above keeps the latest row carrying the id ANYWHERE, so a kind word, a
+    referral code or an invoice id answered for somebody else's sale, and a
+    later unrelated row sharing a part could hide the order's own mint. Here
+    the predicate is applied inside the scan.
 
-    Not used by the webhook's exactly-once check on purpose: legacy two-part
-    sources ("nowpayments:<invoice>") end in the invoice, so a strict match
-    would miss them and a replayed IPN could mint twice. There the loose
-    lookup errs toward "already minted", which is the safe direction.
+    Used by the order-status route, crypto recover and the webhook's
+    exactly-once check. Not by refund revocation (revoke_credits_by_source):
+    that one also has to find mints by the invoice part a refund IPN may carry.
     """
-    if not order_id or not LEDGER_PATH.exists():
+    if not order_id:
         return None
-    latest = None
-    with LEDGER_PATH.open() as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                row = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            parts = (row.get("source") or "").split(":")
-            if (len(parts) >= 3 and parts[0] == "nowpayments" and parts[-1] == order_id
-                    and int(row.get("credits_delta") or 0) > 0):
-                latest = row
-    if latest is None:
-        return None
-    return {
-        "claim_code": latest.get("claim_code"),
-        "email": latest.get("email"),
-        "source": latest.get("source"),
-        "ts": latest.get("ts"),
-        "credits_delta": int(latest.get("credits_delta") or 0),
-    }
+
+    def matches(src: str) -> bool:
+        parts = src.split(":")
+        return len(parts) >= 3 and parts[0] == "nowpayments" and parts[-1] == order_id
+
+    return _latest_mint(matches)
 
 
 def find_mint_by_exact_source(sources: set[str]) -> dict | None:

@@ -294,6 +294,15 @@ _anchor_limiter = TokenBucket(
 STATUS_RATE_CAPACITY = 30
 STATUS_RATE_REFILL = 30 / 3600.0  # burst 30, then one every 2 minutes
 _status_limiter = TokenBucket(STATUS_RATE_CAPACITY, STATUS_RATE_REFILL)
+# /api/stripe/session makes one live Stripe read per well-formed id, and the
+# account's Stripe read limit (100/s) is shared with checkout and the webhook.
+# A buyer loads the page a handful of times, so the burst stays small: at 5,
+# twenty prefixes are needed to reach Stripe's per-second limit even briefly
+# (the old 3/day bucket needed 34). No ceiling shared across callers: one
+# would let a few prefixes lock every buyer out.
+SESSION_LOOKUP_CAPACITY = 5
+SESSION_LOOKUP_REFILL = 5 / 3600.0
+_session_lookup_limiter = TokenBucket(SESSION_LOOKUP_CAPACITY, SESSION_LOOKUP_REFILL)
 
 # Funnel-event limiter: 60 events / IP / minute. Separate bucket so noisy
 # analytics traffic can't burn the anchor-rate budget (and vice versa).
@@ -1174,11 +1183,12 @@ class Handler(BaseHTTPRequestHandler):
     # parse_qs splits it, so `;`, `?` or `"` inside a value stay in that value
     # and are redacted with it; a part with no `=` is redacted too. `q` and
     # `label` are NOT here: on /api/me/anchors they are a person's private
-    # vault search (a hash prefix, a label fragment).
+    # vault search (a hash prefix, a label fragment). Nor are `coupon`,
+    # `promo` and `prefilled_promo_code`: a restricted promotion code is
+    # spendable. `ref` stays: a referral code is made to be shared in links.
     _LOG_KEEP_PARAMS = frozenset({
         "v", "plan", "variant", "ref", "status", "size", "receipt_id", "pack",
-        "limit", "before", "stripe", "print", "coupon", "promo",
-        "prefilled_promo_code", "nolenis", "private", "probe",
+        "limit", "before", "stripe", "print", "nolenis", "private", "probe",
         # Kept only when the value is harmless; see _redact_log_query.
         "id", "next",
     })
@@ -1193,7 +1203,11 @@ class Handler(BaseHTTPRequestHandler):
     # Anything the literal rule cannot see (`/A/…`, `/%61/…`, `/a%2F…`,
     # `/api/pack%2Fbalance/…`) is judged decoded and case-folded, and the
     # whole path goes when it names a bearer segment.
-    _LOG_PATHLIKE = re.compile(r"[^\s\"'()]*/[^\s\"'()]*")
+    _LOG_SPACE_SPLIT = re.compile(r"(\s+)")
+    _LOG_EDGE_PUNCT = "\"'()"
+    _LOG_LITERAL_REDACTED = re.compile(r"(/a/+|/pack/balance/+)\[redacted\]")
+    _LOG_DOT_SEGMENTS = re.compile(r"/(?:\.{1,2}/)+")
+    _LOG_SLASH_RUNS = re.compile(r"/{2,}")
     _LOG_CONTROL_TABLE = {c: f"\\x{c:02x}" for c in (*range(0x20), *range(0x7f, 0xa0))}
 
     @staticmethod
@@ -1207,14 +1221,20 @@ class Handler(BaseHTTPRequestHandler):
                 break
             decoded = once
         decoded = decoded.lower().replace("\\", "/")
-        decoded = re.sub(r"/(?:\.{1,2}/)+", "/", decoded)
-        decoded = re.sub(r"/{2,}", "/", decoded)
+        decoded = Handler._LOG_DOT_SEGMENTS.sub("/", decoded)
+        decoded = Handler._LOG_SLASH_RUNS.sub("/", decoded)
         return "/a/" in decoded or "/pack/balance/" in decoded
 
     @classmethod
     def _redact_log_query(cls, m: "re.Match") -> str:
+        # `\S*` runs to whitespace, so the request line's closing `"` (or a
+        # log_error's `')`) rides on the last value; set it aside and put it
+        # back, or redacting that value would eat it.
+        query = m.group(1)
+        body = query.rstrip(cls._LOG_EDGE_PUNCT)
+        tail = query[len(body):]
         parts = []
-        for part in m.group(1).split("&"):
+        for part in body.split("&"):
             if "=" not in part:
                 parts.append(part if part == "" else "[redacted]")
                 continue
@@ -1228,22 +1248,34 @@ class Handler(BaseHTTPRequestHandler):
                                     or cls._names_bearer_segment(value)):
                 keep = False  # a redirect target carrying a query, encoding or a bearer
             parts.append(part if keep else f"{raw_key}=[redacted]")
-        return "?" + "&".join(parts)
+        return "?" + "&".join(parts) + tail
 
     @classmethod
-    def _redact_hidden_bearer_path(cls, m: "re.Match") -> str:
-        target = m.group(0)
-        path, sep, query = target.partition("?")
-        if "[redacted]" in path:
-            return target
-        if cls._names_bearer_segment(path):
-            return "[redacted-path]" + sep + query
-        return target
+    def _redact_hidden_bearer_token(cls, token: str) -> str:
+        if "/" not in token:
+            return token
+        body = token.strip(cls._LOG_EDGE_PUNCT)
+        start = token.find(body) if body else 0
+        path, sep, query = body.partition("?")
+        # Judge what is left once the literal rule's own redactions are taken
+        # out, so `/a/[redacted]/%61/<token>` is still caught.
+        probe = cls._LOG_LITERAL_REDACTED.sub("/", path)
+        # Fast path: nothing that could hide a bearer segment from the literal
+        # rule (encoding, backslash, upper case, dot segments).
+        if not any(c in probe for c in "%\\.") and probe == probe.lower():
+            return token
+        if cls._names_bearer_segment(probe):
+            return token[:start] + "[redacted-path]" + sep + query + token[start + len(body):]
+        return token
 
     @classmethod
     def _redact_log_line(cls, line: str) -> str:
         line = cls._LOG_BEARER_PATH.sub(r"\1[redacted]", line)
-        line = cls._LOG_PATHLIKE.sub(cls._redact_hidden_bearer_path, line)
+        # Split on whitespace, never a backtracking regex: this runs on every
+        # log line, and `[^…]*/[^…]*` went quadratic on a long run without a
+        # slash (a 60 KB request line held the GIL for ~30 s).
+        line = "".join(cls._redact_hidden_bearer_token(t)
+                       for t in cls._LOG_SPACE_SPLIT.split(line))
         return cls._LOG_QUERY.sub(cls._redact_log_query, line)
 
     def log_message(self, fmt, *args):
@@ -4884,14 +4916,13 @@ class Handler(BaseHTTPRequestHandler):
         # 200-vs-400 enumeration oracle and the unsolicited-resend vector, on
         # top of the email guard below.
         ledger_row = credits.find_nowpayments_mint(order_id)
-        order_id_exact = ledger_row is not None
 
         # 3. CROSS-CUSTOMER-LEAK GUARD (load-bearing): the request email must
         #    equal the ledger-row email exactly (case-insensitive, stripped).
-        #    Not-found, prefix-only match, and email mismatch all collapse to the
-        #    SAME generic 400 — no enumeration, no confirmation of which differed.
+        #    Not-found (including any id that is not this order's own) and
+        #    email mismatch collapse to the SAME generic 400 — no enumeration, no confirmation of which differed.
         row_email = ((ledger_row or {}).get("email") or "").strip().lower()
-        if not ledger_row or not order_id_exact or not row_email or row_email != provided_email:
+        if not ledger_row or not row_email or row_email != provided_email:
             sys.stderr.write(
                 f"[recover] crypto recovery DENIED order={order_id} "
                 f"email={auth.mask_email(provided_email)} "
@@ -5141,7 +5172,7 @@ class Handler(BaseHTTPRequestHandler):
             _json_response(self, 503, {"error": "Stripe not configured"})
             return
         # Light rate-limit so this can't be used as a session-id oracle
-        allowed, _ = _status_limiter.check(f"stripe-session:{self._client_key()}")
+        allowed, _ = _session_lookup_limiter.check(f"stripe-session:{self._client_key()}")
         if not allowed:
             _json_response(self, 429, {"error": "rate limit exceeded"})
             return
@@ -5153,10 +5184,6 @@ class Handler(BaseHTTPRequestHandler):
         if not sid or not sid.startswith("cs_") or len(sid) > 256 or not all(c.isalnum() or c == "_" for c in sid):
             _json_response(self, 400, {"error": "invalid session id"})
             return
-        # No ceiling shared across callers: one would let a handful of
-        # prefixes lock every buyer out of this page. Per prefix it is 30, then
-        # one every 2 minutes; reaching Stripe's own read limit (100/s) that
-        # way takes on the order of ten thousand prefixes.
         result = stripe_api._request("GET", f"/checkout/sessions/{sid}")
         if not result.get("ok"):
             status = result.get("status", 502)

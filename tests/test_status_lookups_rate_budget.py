@@ -56,8 +56,15 @@ def test_every_poll_the_success_page_makes_is_answered(server):
 def test_session_lookup_survives_reloads(server):
     # Malformed id: 400 comes from validation AFTER the limiter, so a 429 here
     # can only be the budget.
-    codes = [_status(server, "/api/stripe/session?id=bad") for _ in range(6)]
-    assert codes == [400] * 6, codes
+    codes = [_status(server, "/api/stripe/session?id=bad") for _ in range(5)]
+    assert codes == [400] * 5, codes
+
+
+def test_session_lookups_stay_small_per_prefix(server):
+    """Each well-formed id is one live Stripe read, and Stripe's read limit is
+    shared with checkout and the webhook, so this burst stays small."""
+    codes = [_status(server, "/api/stripe/session?id=bad") for _ in range(8)]
+    assert codes[:5] == [400] * 5 and 429 in codes[5:], codes
 
 
 def test_the_lookups_are_still_bounded(server):

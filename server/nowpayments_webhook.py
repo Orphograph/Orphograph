@@ -236,9 +236,12 @@ def _decide_and_mint_locked(
             # ALSO cross-check the credit ledger (the money source of truth) by
             # order_id, so even if the marker write was lost to a crash AFTER a
             # prior successful mint, a retried/duplicate IPN will not double-mint.
-            # find_claim_code_by_source returns the positive mint row; refund
-            # rows are negative and ignored.
-            already_minted = credits.find_claim_code_by_source(order_id) is not None
+            # find_nowpayments_mint returns this order's own positive mint row
+            # (order id as the LAST part of a nowpayments source); refund rows
+            # are negative and ignored. The any-part lookup it replaced would
+            # also count a row carrying the id elsewhere, and paid-but-no-credit
+            # is the worse error (see the underpayment guard below).
+            already_minted = credits.find_nowpayments_mint(order_id) is not None
             if _has_been_processed(mint_marker) or already_minted:
                 result = {"ok": True, "duplicate_mint": order_id,
                           "status": payment_status}
