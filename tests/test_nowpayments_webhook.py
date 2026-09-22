@@ -566,9 +566,8 @@ def test_a_refund_revokes_only_the_orders_own_mint():
 
 
 def test_a_colon_in_the_invoice_still_finds_the_mint_on_a_lost_marker(monkeypatch):
-    """With ':' inside the invoice id the strict match cannot split the source,
-    so the any-part lookup is consulted too: a crash-lost marker must not
-    mint twice."""
+    """With ':' inside the invoice id (escaped when the source is written), a
+    crash-lost marker must still read as minted: no second mint."""
     body = {"order_id": "np_order_colon", "payment_status": "finished",
             "invoice_id": "inv:with:colons", "customer_email": "buyer@example.com",
             "plan": "writer_pack"}
@@ -631,3 +630,29 @@ def test_a_non_string_source_elsewhere_does_not_break_a_refund():
     assert nowpayments_webhook.handle_event(_sign(body)[0]).get("claim_code_minted") is True
     refund = nowpayments_webhook.handle_event(_sign({**body, "payment_status": "refunded"})[0])
     assert refund.get("refunded") is True and refund["revoked"][0]["revoked"] == 10
+
+
+def test_a_legacy_row_with_a_raw_colon_invoice_is_still_found_and_refunded(monkeypatch):
+    """Rows written before the invoice part was escaped may carry ':' in it.
+    The order's own mint must still be found (exactly-once) and refunded."""
+    credits.add_credits(claim_code="pk_legacy", email="buyer@example.com", amount=10,
+                        source="nowpayments:a:b:np_order_legacy")
+    monkeypatch.setattr(nowpayments_webhook, "_has_been_processed", lambda _eid: False)
+    body = {"order_id": "np_order_legacy", "payment_status": "finished",
+            "invoice_id": "a:b", "customer_email": "buyer@example.com",
+            "plan": "writer_pack"}
+    again = nowpayments_webhook.handle_event(_sign(body)[0])
+    assert again.get("duplicate_mint") == "np_order_legacy", again
+    refund = nowpayments_webhook.handle_event(_sign({**body, "payment_status": "refunded"})[0])
+    assert refund["revoked"] == [{"claim_code": "pk_legacy", "revoked": 10}], refund
+
+
+def test_a_list_claim_code_elsewhere_does_not_break_a_refund():
+    with credits.LEDGER_PATH.open("a") as f:
+        f.write(json.dumps({"claim_code": ["x"], "credits_delta": 1, "source": "y:1"}) + "\n")
+    body = {"order_id": "np_order_listcode", "payment_status": "finished",
+            "invoice_id": "inv_lc", "customer_email": "buyer@example.com",
+            "plan": "writer_pack"}
+    assert nowpayments_webhook.handle_event(_sign(body)[0]).get("claim_code_minted") is True
+    refund = nowpayments_webhook.handle_event(_sign({**body, "payment_status": "refunded"})[0])
+    assert refund["revoked"][0]["revoked"] == 10, refund

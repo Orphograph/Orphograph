@@ -109,7 +109,9 @@ def _ledger_rows(f):
             row = json.loads(line)
         except json.JSONDecodeError:
             continue
-        if isinstance(row, dict):
+        # A claim code is a string; a row whose claim_code is a list or an
+        # object is corrupt and would crash a set lookup in every scan.
+        if isinstance(row, dict) and isinstance(row.get("claim_code", ""), str):
             yield row
 
 
@@ -254,7 +256,15 @@ def nowpayments_mint_matcher(order_id: str):
         if kind != "nowpayments":
             return False
         if sep:
-            return tail == order_id
+            if tail == order_id:
+                return True
+            # A row written before the invoice part was escaped may carry ":"
+            # inside the invoice. For an order id the server minted (np_…,
+            # never containing ":") its LAST part is still unambiguous. Only
+            # for those: for any other query a last-part match would let a
+            # fragment of someone else's order id ("7" of "shop:ord:7") answer.
+            return (order_id.startswith("np_") and ":" not in order_id
+                    and src.rpartition(":")[2] == order_id)
         # Two-part scaffold row "nowpayments:<invoice or order>" (abc1d14):
         # it answers only when that part is a server-minted order id (np_…);
         # NOWPayments invoice ids are numeric and must never answer.
@@ -326,8 +336,11 @@ def revoke_credits_by_source(source_token: str, revoke_source: str,
                              mint_matches=None) -> list[dict]:
     """Revoke unused credits for every claim_code minted with a matching source.
 
-    `source_token` is matched as a WHOLE colon-delimited part of the `source`
-    field of original add_credits rows: "cs_abc" matches both `stripe:cs_abc`
+    With `mint_matches`, a mint row belongs to the purchase when
+    mint_matches(source) is true (crypto refunds pass
+    nowpayments_mint_matcher(order_id)) and `source_token` is only required to
+    be non-empty. Otherwise `source_token` is matched as a WHOLE
+    colon-delimited part of the `source` field of original add_credits rows: "cs_abc" matches both `stripe:cs_abc`
     and `stripe-gift:cs_abc`, and "ord_7" matches `nowpayments:inv_7:ord_7`,
     but "cs_ab" matches none of them. For each claim_code touched
     we compute (issued_for_source - already_consumed) and append a single
@@ -354,28 +367,30 @@ def revoke_credits_by_source(source_token: str, revoke_source: str,
             matching_codes: set[str] = set()
             balances: dict[str, int] = {}
             already_revoked: set[str] = set()
-            with LEDGER_PATH.open() as f:
-                rows = [r for r in _ledger_rows(f) if r.get("claim_code")]
             # Pass 1: which codes did the refunded purchase mint? Only rows
-            # whose (string) source matches are parsed.
-            for row in rows:
-                src = row.get("source", "") or ""
-                if not isinstance(src, str):
-                    continue
-                is_mint_of_it = (mint_matches(src) if mint_matches is not None
-                                 else _source_has_token(src, source_token))
-                if is_mint_of_it and parse_delta(row) > 0:
-                    matching_codes.add(row["claim_code"])
-                # If the same revoke_source has already been written for
-                # this code, mark it so we skip (idempotency).
-                if src == revoke_source:
-                    already_revoked.add(row["claim_code"])
+            # whose (string) source matches are parsed. The file is streamed
+            # twice rather than held in memory under the ledger lock.
+            with LEDGER_PATH.open() as f:
+                rows = (r for r in _ledger_rows(f) if r.get("claim_code"))
+                for row in rows:
+                    src = row.get("source", "") or ""
+                    if not isinstance(src, str):
+                        continue
+                    is_mint_of_it = (mint_matches(src) if mint_matches is not None
+                                     else _source_has_token(src, source_token))
+                    if is_mint_of_it and parse_delta(row) > 0:
+                        matching_codes.add(row["claim_code"])
+                    # If the same revoke_source has already been written for
+                    # this code, mark it so we skip (idempotency).
+                    if src == revoke_source:
+                        already_revoked.add(row["claim_code"])
             # Pass 2: balances of THOSE codes only, so a bad row belonging to
             # another customer cannot stop this refund.
-            for row in rows:
-                code = row["claim_code"]
-                if code in matching_codes:
-                    balances[code] = balances.get(code, 0) + parse_delta(row)
+            with LEDGER_PATH.open() as f:
+                for row in _ledger_rows(f):
+                    code = row.get("claim_code")
+                    if code and code in matching_codes:
+                        balances[code] = balances.get(code, 0) + parse_delta(row)
 
             results: list[dict] = []
             for code in sorted(matching_codes):
