@@ -20,6 +20,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import credits
 import subscriptions
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -126,9 +127,9 @@ def lookup_customer(email: str) -> dict | None:
             if not isinstance(row, dict) or row.get("email") != email:
                 continue
             try:
-                delta = int(row.get("credits_delta", 0))
-            except (TypeError, ValueError):
-                continue  # tolerate a hand-corrupted ledger row
+                delta = credits.parse_delta(row)  # "10.0" counts, as in balance()
+            except ValueError:
+                continue  # tolerate a hand-corrupted ledger row (display only)
             if delta > 0:
                 pack_claims.append({
                     "claim_code": row.get("claim_code", ""),

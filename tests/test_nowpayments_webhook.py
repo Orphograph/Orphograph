@@ -546,3 +546,47 @@ def test_a_row_sharing_a_part_does_not_block_a_paid_order():
     # Control: the SAME order again is still exactly-once.
     again = nowpayments_webhook.handle_event(_sign({**body, "payment_status": "confirmed"})[0])
     assert again.get("duplicate_mint") == "np_order_collide", again
+
+
+def test_a_refund_revokes_only_the_orders_own_mint():
+    """The refund used the any-part match: an unrelated row carrying the order
+    id as another part (here a payout row) lost its unused credits too."""
+    credits.add_credits(claim_code="pk_bystander", email="", amount=5,
+                        source="affiliate_payout:np_order_refund")
+    body = {"order_id": "np_order_refund", "payment_status": "finished",
+            "invoice_id": "inv_refund", "customer_email": "buyer@example.com",
+            "plan": "writer_pack"}
+    minted = nowpayments_webhook.handle_event(_sign(body)[0])
+    assert minted.get("claim_code_minted") is True
+    refund = nowpayments_webhook.handle_event(_sign({**body, "payment_status": "refunded"})[0])
+    assert refund.get("refunded") is True
+    assert credits.balance("pk_bystander") == 5, "an unrelated row was revoked"
+    buyer_code = credits.find_nowpayments_mint("np_order_refund")["claim_code"]
+    assert credits.balance(buyer_code) == 0, "control: the buyer's own credits were revoked"
+
+
+def test_a_colon_in_the_invoice_still_finds_the_mint_on_a_lost_marker(monkeypatch):
+    """With ':' inside the invoice id the strict match cannot split the source,
+    so the any-part lookup is consulted too: a crash-lost marker must not
+    mint twice."""
+    body = {"order_id": "np_order_colon", "payment_status": "finished",
+            "invoice_id": "inv:with:colons", "customer_email": "buyer@example.com",
+            "plan": "writer_pack"}
+    first = nowpayments_webhook.handle_event(_sign(body)[0])
+    assert first.get("claim_code_minted") is True
+    monkeypatch.setattr(nowpayments_webhook, "_has_been_processed", lambda _eid: False)
+    again = nowpayments_webhook.handle_event(_sign({**body, "payment_status": "confirmed"})[0])
+    assert again.get("duplicate_mint") == "np_order_colon", again
+
+
+def test_the_marker_answers_before_the_ledger_is_scanned(monkeypatch):
+    body = {"order_id": "np_order_marker", "payment_status": "finished",
+            "invoice_id": "inv_marker", "customer_email": "buyer@example.com",
+            "plan": "writer_pack"}
+    assert nowpayments_webhook.handle_event(_sign(body)[0]).get("claim_code_minted") is True
+
+    def must_not_scan(_order_id):
+        raise AssertionError("the ledger was scanned although the mint marker exists")
+    monkeypatch.setattr(credits, "find_nowpayments_mint", must_not_scan)
+    again = nowpayments_webhook.handle_event(_sign({**body, "payment_status": "confirmed"})[0])
+    assert again.get("duplicate_mint") == "np_order_marker"

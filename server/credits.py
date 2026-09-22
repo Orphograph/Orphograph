@@ -96,8 +96,10 @@ def refund_credit(claim_code: str, reason: str = "anchor-refund") -> None:
 def _ledger_rows(f):
     """Every ledger row as a dict, in order. Blank and torn lines (a crash
     mid-append) and non-object JSON are skipped: none of them can carry a
-    claim code. One reader for every scan in this module, so they cannot
-    disagree about what the ledger says."""
+    claim code. One reader for every scan of the ledger, so they cannot
+    disagree about what it says. A row's delta is parsed only when the row
+    matters to the question being asked, so one bad row fails the lookups
+    that touch it, not every customer's."""
     for line in f:
         line = line.strip()
         if not line:
@@ -110,21 +112,47 @@ def _ledger_rows(f):
             yield row
 
 
-def _delta(row: dict) -> int:
-    """A row's credits_delta. "10.0" is 10. A value that is not a number
-    RAISES: a balance, a revocation or an exactly-once check must stop rather
-    than read a real movement of credits as zero."""
-    return int(float(row.get("credits_delta") or 0))
+def iter_ledger_rows(path: Path | None = None):
+    """Public form of the one reader, for modules outside this one."""
+    path = LEDGER_PATH if path is None else Path(path)
+    if not path.exists():
+        return
+    with path.open() as f:
+        yield from _ledger_rows(f)
 
 
-def _scan() -> dict[str, int]:
+def parse_delta(row: dict) -> int:
+    """A row's credits_delta as a whole number of credits. "10" and "10.0" are
+    10. Anything else (a fraction, a bool, text, nan, inf, a list) RAISES
+    ValueError: a balance, a revocation or an exactly-once check must stop
+    rather than read a real movement of credits as zero or as a rounded value."""
+    raw = row.get("credits_delta")
+    if raw is None or raw == "":
+        return 0
+    if isinstance(raw, bool):
+        raise ValueError("credits_delta is a boolean")
+    try:
+        value = float(raw)
+    except (TypeError, ValueError) as e:
+        raise ValueError(f"credits_delta is not a number: {type(raw).__name__}") from e
+    if value != value or value in (float("inf"), float("-inf")) or value != int(value):
+        raise ValueError("credits_delta is not a whole number")
+    return int(value)
+
+
+_delta = parse_delta
+
+
+def _scan(only: str | None = None) -> dict[str, int]:
+    """Balances by claim code; with `only`, just that code's rows are parsed,
+    so a bad row belonging to someone else cannot stop this code's balance."""
     if not LEDGER_PATH.exists():
         return {}
     balances: dict[str, int] = {}
     with LEDGER_PATH.open() as f:
         for row in _ledger_rows(f):
             code = row.get("claim_code")
-            if code:
+            if code and (only is None or code == only):
                 balances[code] = balances.get(code, 0) + _delta(row)
     return balances
 
@@ -133,10 +161,10 @@ def balance(claim_code: str) -> int:
     if not claim_code:
         return 0
     with _lock:
-        return _scan().get(claim_code, 0)
+        return _scan(only=claim_code).get(claim_code, 0)
 
 
-def _mint_rows():
+def _mint_rows(matches=lambda source: True):
     """Every well-formed positive (mint) row in ledger order, as
     (row, source, credits_delta). A torn line, a non-object row or a
     non-string source is skipped (none of them can be a mint of a string
@@ -147,7 +175,7 @@ def _mint_rows():
     with LEDGER_PATH.open() as f:
         for row in _ledger_rows(f):
             source = row.get("source") or ""
-            if not isinstance(source, str):
+            if not isinstance(source, str) or not matches(source):
                 continue
             delta = _delta(row)
             if delta > 0:
@@ -167,9 +195,8 @@ def _mint_projection(row: dict, source: str, delta: int) -> dict:
 def _latest_mint(matches) -> dict | None:
     """The most recent mint row whose `source` satisfies `matches(source)`."""
     latest = None
-    for row, source, delta in _mint_rows():
-        if matches(source):
-            latest = (row, source, delta)
+    for row, source, delta in _mint_rows(matches):
+        latest = (row, source, delta)
     return _mint_projection(*latest) if latest else None
 
 
@@ -200,12 +227,19 @@ def find_nowpayments_mint(order_id: str) -> dict | None:
     the predicate is applied inside the scan.
 
     Used by the order-status route, crypto recover and the NOWPayments
-    webhook's exactly-once check. Not by refund revocation (revoke_credits_by_source):
+    webhook's exactly-once check; refund revocation uses the same predicate
+    (nowpayments_mint_matcher). Not revoke_credits_by_source's default:
     that one also has to find mints by the invoice part a refund IPN may carry.
     """
     if not order_id:
         return None
+    return _latest_mint(nowpayments_mint_matcher(order_id))
 
+
+def nowpayments_mint_matcher(order_id: str):
+    """Predicate: is a mint source THIS crypto order's own mint? Shared by the
+    lookups and by refund revocation, so a refund reaches exactly the rows the
+    exactly-once check would count."""
     def matches(src: str) -> bool:
         # "nowpayments:<invoice>:<order_id>": the kind, ONE colon-free invoice
         # part, and then everything left must BE the order id. Anchored at the
@@ -222,7 +256,7 @@ def find_nowpayments_mint(order_id: str) -> dict | None:
         # NOWPayments invoice ids are numeric and must never answer.
         return rest == order_id and order_id.startswith("np_")
 
-    return _latest_mint(matches)
+    return matches
 
 
 def find_mint_by_exact_source(sources: set[str]) -> dict | None:
@@ -235,9 +269,8 @@ def find_mint_by_exact_source(sources: set[str]) -> dict | None:
     """
     if not sources:
         return None
-    for row, source, delta in _mint_rows():
-        if source in sources:
-            return _mint_projection(row, source, delta)
+    for row, source, delta in _mint_rows(lambda source: source in sources):
+        return _mint_projection(row, source, delta)
     return None
 
 
@@ -285,7 +318,8 @@ def _source_has_token(source: str, token: str) -> bool:
     return bool(token) and f":{token}:" in f":{source}:"
 
 
-def revoke_credits_by_source(source_token: str, revoke_source: str) -> list[dict]:
+def revoke_credits_by_source(source_token: str, revoke_source: str,
+                             mint_matches=None) -> list[dict]:
     """Revoke unused credits for every claim_code minted with a matching source.
 
     `source_token` is matched as a WHOLE colon-delimited part of the `source`
@@ -323,9 +357,12 @@ def revoke_credits_by_source(source_token: str, revoke_source: str) -> list[dict
                         continue
                     src = row.get("source", "") or ""
                     delta = _delta(row)
-                    # A positive delta whose source contains the substring
-                    # marks this code as originating from the refunded session.
-                    if delta > 0 and _source_has_token(src, source_token):
+                    # A positive delta whose source carries the token as a
+                    # whole part (or, with `mint_matches`, satisfies it) marks
+                    # this code as originating from the refunded purchase.
+                    is_mint_of_it = (mint_matches(src) if mint_matches is not None
+                                     else _source_has_token(src, source_token))
+                    if delta > 0 and isinstance(src, str) and is_mint_of_it:
                         matching_codes.add(code)
                     # If the same revoke_source has already been written for
                     # this code, mark it so we skip (idempotency).
@@ -368,7 +405,7 @@ def consume_credit(claim_code: str) -> tuple[bool, int]:
         # nest fcntl on the same file descriptor.
         lockfile = LEDGER_PATH.with_suffix(LEDGER_PATH.suffix + ".lock")
         with locked(lockfile, mode="a", exclusive=True):
-            current = _scan().get(claim_code, 0)
+            current = _scan(only=claim_code).get(claim_code, 0)
             if current <= 0:
                 return False, current
             _append({

@@ -166,18 +166,9 @@ def zero_by_email(email: str, reason: str, dry_run: bool) -> int:
     """
     import credits
     codes_seen: set[str] = set()
-    if credits.LEDGER_PATH.exists():
-        with credits.LEDGER_PATH.open() as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    row = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                if row.get("email") == email and row.get("claim_code"):
-                    codes_seen.add(row["claim_code"])
+    for row in credits.iter_ledger_rows():
+        if row.get("email") == email and row.get("claim_code"):
+            codes_seen.add(row["claim_code"])
     if not codes_seen:
         print(dim(f"No claim codes found for {email}"))
         return 2
