@@ -187,13 +187,11 @@ def test_one_malformed_row_does_not_stop_the_lookups():
     import json
     credits.LEDGER_PATH.write_text("".join(json.dumps(r) + "\n" for r in [
         {"claim_code": "pk_bad", "credits_delta": 5, "source": 123},
-        {"claim_code": "pk_bad2", "credits_delta": "lots", "source": "stripe:cs_z"},
         ["not", "an", "object"],
         {"claim_code": "pk_ok", "email": "o@x.test", "credits_delta": 20,
          "source": "nowpayments:77:np_pack_20_ok"},
     ]))
     assert credits.find_nowpayments_mint("np_pack_20_ok")["claim_code"] == "pk_ok"
-    assert credits.find_claim_code_by_source("cs_z") is None
     assert credits.find_mint_by_exact_source({"nowpayments:77:np_pack_20_ok"})["claim_code"] == "pk_ok"
 
 
@@ -228,3 +226,26 @@ def test_only_the_whole_order_id_answers_never_a_fragment():
     assert credits.find_nowpayments_mint("shop:ord:7")["claim_code"] == "pk_colon"
     for fragment in ("ord:7", "7", "inv9", "inv9:shop:ord:7"):
         assert credits.find_nowpayments_mint(fragment) is None, fragment
+
+
+def test_a_non_numeric_delta_fails_closed():
+    """Skipping it would make an exactly-once check (the NOWPayments webhook
+    uses find_claim_code_by_source) read a real mint as absent and mint again;
+    it raises, as it did before the shared scan, so no mint happens."""
+    import json
+    credits.LEDGER_PATH.write_text(json.dumps(
+        {"claim_code": "pk_lots", "credits_delta": "lots", "source": "nowpayments:1:np_a_b"}) + "\n")
+    with pytest.raises(ValueError):
+        credits.find_claim_code_by_source("np_a_b")
+
+
+def test_a_two_part_row_answers_only_for_a_server_order_id():
+    import json
+    credits.LEDGER_PATH.write_text("".join(json.dumps(r) + "\n" for r in [
+        {"claim_code": "pk_ord", "email": "o@x.test", "credits_delta": 5,
+         "source": "nowpayments:np_pack_5_scaffold"},
+        {"claim_code": "pk_inv", "email": "i@x.test", "credits_delta": 5,
+         "source": "nowpayments:4401"},
+    ]))
+    assert credits.find_nowpayments_mint("np_pack_5_scaffold")["claim_code"] == "pk_ord"
+    assert credits.find_nowpayments_mint("4401") is None

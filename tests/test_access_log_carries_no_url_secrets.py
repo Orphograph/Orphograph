@@ -272,3 +272,15 @@ def test_shapes_the_sixth_review_found(server):
     text = _log(data_dir)
     assert code not in text, "a claim code in ?pack= reached the access log"
     assert "plan=pack_50" in text, "control: a plain kept value stays readable"
+
+
+def test_the_final_review_shapes(server):
+    """An unknown query KEY is request data too (`/?pk_<code>=1`), and an
+    error message is the claim-code alphabet: neither may carry a token."""
+    base, data_dir = server
+    code = "pk_KeyPositionCanary01234567"
+    _srv.raw_request(base, f"/?{code}=1")
+    _srv.raw_request(base, "/api/unsubscribe?someone%40example.test=")
+    text = _log(data_dir)
+    assert code not in text and "someone" not in text
+    assert "/?[redacted]=[redacted]" in text, "control: the unknown key was logged, redacted"

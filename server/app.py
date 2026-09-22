@@ -1194,6 +1194,14 @@ class Handler(BaseHTTPRequestHandler):
         "limit", "before", "stripe", "print", "nolenis", "private", "probe",
         "next",
     })
+    # Parameter NAMES the log may show (their values still go): the kept keys
+    # plus the ones whose values are redacted by design.
+    _LOG_KNOWN_KEYS = _LOG_KEEP_PARAMS | frozenset({
+        "e", "email", "code", "token", "id", "stripe_session", "session_id",
+        "pack", "q", "label", "coupon", "promo", "prefilled_promo_code",
+        "path", "order", "from", "to", "subject",
+    })
+    _LOG_TOKEN_LIKE = re.compile(r"[A-Za-z0-9_-]{16,}")
     _LOG_PLAIN_PATH = re.compile(r"/[A-Za-z0-9/_.,~-]*")
     _LOG_PLAIN_VALUE = re.compile(r"[A-Za-z0-9_.,:-]{0,128}")
     _LOG_PLAIN_MESSAGE = re.compile(r"[A-Za-z0-9 ,.'_-]{0,200}")
@@ -1240,9 +1248,10 @@ class Handler(BaseHTTPRequestHandler):
                         and cls._log_bearer_route(value) is None)
             else:
                 keep = key in cls._LOG_KEEP_PARAMS and bool(cls._LOG_PLAIN_VALUE.fullmatch(value))
-                if key == "id" and value.lower().startswith("cs_"):
-                    keep = False  # a Stripe checkout session answers with the buyer's email
-            parts.append(part if keep else f"{raw_key}=[redacted]")
+            # The KEY is request data too (`/?pk_<code>=1`): it is shown only
+            # when it names a parameter this server knows.
+            shown_key = raw_key if key in cls._LOG_KNOWN_KEYS else "[redacted]"
+            parts.append(part if keep else f"{shown_key}=[redacted]")
         return "&".join(parts)
 
     @classmethod
@@ -1278,7 +1287,10 @@ class Handler(BaseHTTPRequestHandler):
         # syntax ('GET /a/<token>')"). Keep the words before `(`, if plain.
         if format == "code %d, message %s" and len(args) == 2:
             message = str(args[1]).split("(", 1)[0].strip()
-            if not self._LOG_PLAIN_MESSAGE.fullmatch(message):
+            # Plain words only, and no token-shaped run: a message is the
+            # claim-code / sign-in-token alphabet too.
+            if (not self._LOG_PLAIN_MESSAGE.fullmatch(message)
+                    or self._LOG_TOKEN_LIKE.search(message)):
                 message = "[redacted]"
             self.log_message("code %d, message %s", args[0], message)
             return

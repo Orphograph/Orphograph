@@ -122,10 +122,10 @@ def balance(claim_code: str) -> int:
 
 def _mint_rows():
     """Every well-formed positive (mint) row in ledger order, as
-    (row, source, credits_delta). A torn line, a non-object row, a
-    non-numeric delta or a non-string source is skipped, never raised on:
-    one bad row must not stop every lookup (the webhook's exactly-once
-    check runs inside its dedup lock)."""
+    (row, source, credits_delta). A torn line, a non-object row or a
+    non-string source is skipped (none of them can be a mint of a string
+    source). A delta that is not a number raises: an exactly-once check must
+    fail closed rather than read a real mint as absent."""
     if not LEDGER_PATH.exists():
         return
     with LEDGER_PATH.open() as f:
@@ -142,12 +142,10 @@ def _mint_rows():
             source = row.get("source") or ""
             if not isinstance(source, str):
                 continue
-            # "10.0" is still a mint of 10: skipping it would make an
-            # exactly-once check read "not minted" and mint again.
-            try:
-                delta = int(float(row.get("credits_delta") or 0))
-            except (TypeError, ValueError, OverflowError):
-                continue
+            # "10.0" is still a mint of 10. A delta that is not a number at all
+            # RAISES, as it always did: skipping it would make an exactly-once
+            # check read "not minted" and mint again.
+            delta = int(float(row.get("credits_delta") or 0))
             if delta > 0:
                 yield row, source, delta
 
@@ -209,12 +207,17 @@ def find_nowpayments_mint(order_id: str) -> dict | None:
         # "nowpayments:<invoice>:<order_id>": the kind, ONE colon-free invoice
         # part, and then everything left must BE the order id. Anchored at the
         # front, so a trailing fragment of someone else's order id never
-        # answers (a suffix match let "7" find "shop:ord:7"). The two-part
-        # scaffold shape (abc1d14) is not accepted: it usually carried the
-        # invoice id, which would then answer as an order.
+        # answers (a suffix match let "7" find "shop:ord:7").
         kind, _, rest = src.partition(":")
         _invoice, sep, tail = rest.partition(":")
-        return kind == "nowpayments" and bool(sep) and tail == order_id
+        if kind != "nowpayments":
+            return False
+        if sep:
+            return tail == order_id
+        # Two-part scaffold row "nowpayments:<invoice or order>" (abc1d14):
+        # it answers only when that part is a server-minted order id (np_…);
+        # NOWPayments invoice ids are numeric and must never answer.
+        return rest == order_id and order_id.startswith("np_")
 
     return _latest_mint(matches)
 
