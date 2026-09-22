@@ -1192,7 +1192,7 @@ class Handler(BaseHTTPRequestHandler):
     _LOG_KEEP_PARAMS = frozenset({
         "v", "plan", "variant", "ref", "status", "size", "receipt_id",
         "limit", "before", "stripe", "print", "nolenis", "private", "probe",
-        "id", "next",
+        "next",
     })
     _LOG_PLAIN_PATH = re.compile(r"/[A-Za-z0-9/_.,~-]*")
     _LOG_PLAIN_VALUE = re.compile(r"[A-Za-z0-9_.,:-]{0,128}")

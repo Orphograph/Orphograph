@@ -136,7 +136,8 @@ def test_secrets_in_shapes_the_server_still_acts_on_are_not_logged(server):
     for leaked in ("shape-upper", "shape-encoded", "ShapeCanary0123", "ShapeCanary4567"):
         assert leaked not in text, f"{leaked} reached the access log"
     assert "limit=1&E=[redacted]" in text, "only the value is removed"
-    assert "id=plain-id-canary" in text, "an ordinary id= must stay readable"
+    # Fail closed: nothing but the session lookup reads ?id=, so no id= value is kept.
+    assert "/pricing?id=[redacted]" in text and "plain-id-canary" not in text
 
 
 def test_shapes_the_first_widening_still_missed(server):

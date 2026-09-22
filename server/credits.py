@@ -197,21 +197,24 @@ def find_nowpayments_mint(order_id: str) -> dict | None:
     later unrelated row sharing a part could hide the order's own mint. Here
     the predicate is applied inside the scan.
 
-    Used by the order-status route, crypto recover and the webhook's
-    exactly-once check. Not by refund revocation (revoke_credits_by_source):
+    Used by the order-status route and crypto recover. The webhook's
+    exactly-once check still uses the any-part lookup; moving it is its own
+    change with its own webhook-level test. Not by refund revocation (revoke_credits_by_source):
     that one also has to find mints by the invoice part a refund IPN may carry.
     """
     if not order_id:
         return None
 
     def matches(src: str) -> bool:
-        parts = src.split(":")
-        # "nowpayments:<invoice>:<order_id>", matched as a suffix so an order
-        # id that itself contains ":" (a dashboard-made invoice) still matches
-        # as a run of whole parts. The two-part scaffold shape (abc1d14) is NOT
-        # accepted: it usually carried the invoice id, which would answer here.
-        return (src.startswith("nowpayments:") and src.endswith(":" + order_id)
-                and len(parts) >= 3 + order_id.count(":"))
+        # "nowpayments:<invoice>:<order_id>": the kind, ONE colon-free invoice
+        # part, and then everything left must BE the order id. Anchored at the
+        # front, so a trailing fragment of someone else's order id never
+        # answers (a suffix match let "7" find "shop:ord:7"). The two-part
+        # scaffold shape (abc1d14) is not accepted: it usually carried the
+        # invoice id, which would then answer as an order.
+        kind, _, rest = src.partition(":")
+        _invoice, sep, tail = rest.partition(":")
+        return kind == "nowpayments" and bool(sep) and tail == order_id
 
     return _latest_mint(matches)
 

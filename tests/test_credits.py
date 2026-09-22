@@ -217,14 +217,14 @@ def test_a_two_part_scaffold_row_does_not_answer_for_its_invoice_id():
     assert credits.find_nowpayments_mint("4401") is None
 
 
-def test_an_order_id_containing_a_colon_still_finds_its_mint():
-    """A dashboard-made invoice may carry an order id with ":"; the
-    exactly-once check must still find it, or a lost marker mints twice."""
+def test_only_the_whole_order_id_answers_never_a_fragment():
+    """Anchored at the invoice part: the remainder must BE the order id. A
+    suffix match (tried in review round six) let a trailing fragment of
+    someone else's order id answer, which is the oracle this lookup closes."""
     import json
     credits.LEDGER_PATH.write_text(json.dumps(
         {"claim_code": "pk_colon", "email": "c@x.test", "credits_delta": 5,
          "source": "nowpayments:inv9:shop:ord:7"}) + "\n")
     assert credits.find_nowpayments_mint("shop:ord:7")["claim_code"] == "pk_colon"
-    assert credits.find_nowpayments_mint("ord:7")["claim_code"] == "pk_colon"
-    assert credits.find_nowpayments_mint("7")["claim_code"] == "pk_colon"
-    assert credits.find_nowpayments_mint("inv9") is None
+    for fragment in ("ord:7", "7", "inv9", "inv9:shop:ord:7"):
+        assert credits.find_nowpayments_mint(fragment) is None, fragment
