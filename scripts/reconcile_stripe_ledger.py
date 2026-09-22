@@ -122,9 +122,11 @@ def load_ledger_rows(path: Path) -> list[dict]:
             if not line:
                 continue
             try:
-                rows.append(json.loads(line))
-            except json.JSONDecodeError:
+                row = json.loads(line)
+            except (json.JSONDecodeError, ValueError):
                 continue
+            if isinstance(row, dict):  # a non-object line carries no claim
+                rows.append(row)
     return rows
 
 

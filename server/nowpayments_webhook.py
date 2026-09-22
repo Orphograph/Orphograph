@@ -243,13 +243,9 @@ def _decide_and_mint_locked(
             # as already minted and was never credited; paid-but-no-credit is
             # the worse error (see the underpayment guard below).
             # The marker answers first (cheap); the ledger is scanned only when
-            # it is absent. An id with ":" in it cannot be split by the strict
-            # match, so there the any-part lookup is consulted as well: never
-            # a double mint on a crash-lost marker.
-            already_minted = _has_been_processed(mint_marker) or (
-                credits.find_nowpayments_mint(order_id) is not None
-                or (":" in f"{order_id}{invoice_id}"
-                    and credits.find_claim_code_by_source(order_id) is not None))
+            # it is absent (a crash lost the marker after the mint).
+            already_minted = (_has_been_processed(mint_marker)
+                              or credits.find_nowpayments_mint(order_id) is not None)
             if already_minted:
                 result = {"ok": True, "duplicate_mint": order_id,
                           "status": payment_status}
@@ -301,7 +297,11 @@ def _decide_and_mint_locked(
             # Include BOTH invoice_id and order_id in the source; the order id
             # is the LAST part, which is how the exactly-once check and a later
             # refund IPN (credits.nowpayments_mint_matcher) find this row.
-            source = f"nowpayments:{invoice_id or order_id}:{order_id}"
+            # The invoice part never carries ":" (escaped to "%3A"), so the
+            # order id is always everything after the second ":", whatever
+            # characters either id uses.
+            invoice_part = (invoice_id or order_id).replace(":", "%3A")
+            source = f"nowpayments:{invoice_part}:{order_id}"
             credits.add_credits(
                 claim_code=claim_code,
                 email=customer_email,

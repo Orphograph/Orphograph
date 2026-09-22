@@ -268,14 +268,18 @@ def test_every_reader_agrees_on_a_decimal_delta_and_fails_closed_on_junk():
                             "source": "nowpayments:9:np_junk"}) + "\n")
     assert credits.balance("pk_d") == 10, "someone else's junk row stopped this balance"
     assert credits.find_mint_by_exact_source({"stripe:cs_dd"})["claim_code"] == "pk_d"
+    # An unrelated refund still runs past someone else's bad row.
+    assert credits.revoke_credits_by_source("cs_dd", "stripe-refund:cs_dd") == [
+        {"claim_code": "pk_d", "revoked": 10}]
     for call in (lambda: credits.balance("pk_j"),
                  lambda: credits.find_nowpayments_mint("np_junk"),
-                 lambda: credits.revoke_credits_by_source("cs_dd", "stripe-refund:cs_dd")):
+                 lambda: credits.revoke_credits_by_source("np_junk", "nowpayments-refund:np_junk")):
         with pytest.raises(ValueError):
             call()
 
 
-@pytest.mark.parametrize("raw", ["10.5", "-0.9", True, "inf", "nan", "lots", [], {}])
+@pytest.mark.parametrize("raw", ["10.5", "-0.9", True, "inf", "nan", "lots", [], {},
+                                 "1e2", "1_000", 1e300, 2.0 ** 60])
 def test_a_delta_that_is_not_a_whole_number_raises_value_error(raw):
     """int(float(x)) truncated "-0.9" to 0 and "10.9" to 10 silently, and
     junk raised three different exception types."""
@@ -283,6 +287,7 @@ def test_a_delta_that_is_not_a_whole_number_raises_value_error(raw):
         credits.parse_delta({"credits_delta": raw})
 
 
-@pytest.mark.parametrize("raw,expected", [(10, 10), ("10", 10), ("10.0", 10), (-3, -3), (None, 0), ("", 0)])
+@pytest.mark.parametrize("raw,expected", [(10, 10), ("10", 10), ("10.0", 10), (-3, -3), (None, 0), ("", 0),
+                                          ("9007199254740993", 9007199254740993), (10.0, 10)])
 def test_whole_number_deltas_parse(raw, expected):
     assert credits.parse_delta({"credits_delta": raw}) == expected

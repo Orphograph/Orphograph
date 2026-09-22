@@ -20,6 +20,7 @@ Public API:
 from __future__ import annotations
 
 import json
+import re
 import os
 import secrets
 import threading
@@ -121,39 +122,42 @@ def iter_ledger_rows(path: Path | None = None):
         yield from _ledger_rows(f)
 
 
+_WHOLE_NUMBER = re.compile(r"-?[0-9]+(?:\.0+)?")
+
+
 def parse_delta(row: dict) -> int:
-    """A row's credits_delta as a whole number of credits. "10" and "10.0" are
-    10. Anything else (a fraction, a bool, text, nan, inf, a list) RAISES
-    ValueError: a balance, a revocation or an exactly-once check must stop
-    rather than read a real movement of credits as zero or as a rounded value."""
+    """A row's credits_delta as a whole number of credits, exactly. 10, "10"
+    and "10.0" are 10. Anything else (a fraction, a bool, text, "1e2", "1_000",
+    nan, inf, a list, a float too large to be exact) RAISES ValueError: a
+    balance, a revocation or an exactly-once check must stop rather than read
+    a real movement of credits as zero or as a rounded value."""
     raw = row.get("credits_delta")
     if raw is None or raw == "":
         return 0
     if isinstance(raw, bool):
         raise ValueError("credits_delta is a boolean")
-    try:
-        value = float(raw)
-    except (TypeError, ValueError) as e:
-        raise ValueError(f"credits_delta is not a number: {type(raw).__name__}") from e
-    if value != value or value in (float("inf"), float("-inf")) or value != int(value):
-        raise ValueError("credits_delta is not a whole number")
-    return int(value)
+    if isinstance(raw, int):
+        return raw
+    if isinstance(raw, float):
+        if raw != raw or abs(raw) > 2 ** 53 or raw != int(raw):
+            raise ValueError("credits_delta is not an exact whole number")
+        return int(raw)
+    if isinstance(raw, str) and _WHOLE_NUMBER.fullmatch(raw.strip()):
+        return int(raw.strip().split(".", 1)[0])
+    raise ValueError(f"credits_delta is not a whole number: {type(raw).__name__}")
 
 
-_delta = parse_delta
-
-
-def _scan(only: str | None = None) -> dict[str, int]:
-    """Balances by claim code; with `only`, just that code's rows are parsed,
-    so a bad row belonging to someone else cannot stop this code's balance."""
+def _scan(only: str) -> dict[str, int]:
+    """`only`'s balance. Only that code's rows are parsed, so a bad row
+    belonging to someone else cannot stop this code's balance."""
     if not LEDGER_PATH.exists():
         return {}
     balances: dict[str, int] = {}
     with LEDGER_PATH.open() as f:
         for row in _ledger_rows(f):
             code = row.get("claim_code")
-            if code and (only is None or code == only):
-                balances[code] = balances.get(code, 0) + _delta(row)
+            if code and code == only:
+                balances[code] = balances.get(code, 0) + parse_delta(row)
     return balances
 
 
@@ -164,7 +168,7 @@ def balance(claim_code: str) -> int:
         return _scan(only=claim_code).get(claim_code, 0)
 
 
-def _mint_rows(matches=lambda source: True):
+def _mint_rows(matches):
     """Every well-formed positive (mint) row in ledger order, as
     (row, source, credits_delta). A torn line, a non-object row or a
     non-string source is skipped (none of them can be a mint of a string
@@ -177,7 +181,7 @@ def _mint_rows(matches=lambda source: True):
             source = row.get("source") or ""
             if not isinstance(source, str) or not matches(source):
                 continue
-            delta = _delta(row)
+            delta = parse_delta(row)
             if delta > 0:
                 yield row, source, delta
 
@@ -351,24 +355,27 @@ def revoke_credits_by_source(source_token: str, revoke_source: str,
             balances: dict[str, int] = {}
             already_revoked: set[str] = set()
             with LEDGER_PATH.open() as f:
-                for row in _ledger_rows(f):
-                    code = row.get("claim_code")
-                    if not code:
-                        continue
-                    src = row.get("source", "") or ""
-                    delta = _delta(row)
-                    # A positive delta whose source carries the token as a
-                    # whole part (or, with `mint_matches`, satisfies it) marks
-                    # this code as originating from the refunded purchase.
-                    is_mint_of_it = (mint_matches(src) if mint_matches is not None
-                                     else _source_has_token(src, source_token))
-                    if delta > 0 and isinstance(src, str) and is_mint_of_it:
-                        matching_codes.add(code)
-                    # If the same revoke_source has already been written for
-                    # this code, mark it so we skip (idempotency).
-                    if src == revoke_source:
-                        already_revoked.add(code)
-                    balances[code] = balances.get(code, 0) + delta
+                rows = [r for r in _ledger_rows(f) if r.get("claim_code")]
+            # Pass 1: which codes did the refunded purchase mint? Only rows
+            # whose (string) source matches are parsed.
+            for row in rows:
+                src = row.get("source", "") or ""
+                if not isinstance(src, str):
+                    continue
+                is_mint_of_it = (mint_matches(src) if mint_matches is not None
+                                 else _source_has_token(src, source_token))
+                if is_mint_of_it and parse_delta(row) > 0:
+                    matching_codes.add(row["claim_code"])
+                # If the same revoke_source has already been written for
+                # this code, mark it so we skip (idempotency).
+                if src == revoke_source:
+                    already_revoked.add(row["claim_code"])
+            # Pass 2: balances of THOSE codes only, so a bad row belonging to
+            # another customer cannot stop this refund.
+            for row in rows:
+                code = row["claim_code"]
+                if code in matching_codes:
+                    balances[code] = balances.get(code, 0) + parse_delta(row)
 
             results: list[dict] = []
             for code in sorted(matching_codes):

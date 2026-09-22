@@ -134,7 +134,9 @@ def test_support_lookup_surfaces_crypto_claim_codes(tmp_path, monkeypatch):
     """A crypto buyer's minted claim code must be visible to founder support
     via the credit ledger — with cross-customer isolation and no spend rows."""
     import support_tools
+    import credits
     monkeypatch.setattr(support_tools, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(credits, "LEDGER_PATH", tmp_path / "credit_ledger.jsonl")
     rows = [
         {"ts": "2026-06-01T00:00:00+00:00", "claim_code": "pk_cryptoBuyer",
          "email": "buyer@example.com", "credits_delta": 10,

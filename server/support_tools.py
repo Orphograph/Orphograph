@@ -121,22 +121,22 @@ def lookup_customer(email: str) -> dict | None:
     # Without this a crypto buyer's claim code is invisible to support and a
     # "paid but never got my code" ticket cannot be resolved from the dashboard.
     pack_claims = []
-    ledger_path = DATA_DIR / "credit_ledger.jsonl"
-    if ledger_path.exists():
-        for row in _read_jsonl(ledger_path):
-            if not isinstance(row, dict) or row.get("email") != email:
-                continue
-            try:
-                delta = credits.parse_delta(row)  # "10.0" counts, as in balance()
-            except ValueError:
-                continue  # tolerate a hand-corrupted ledger row (display only)
-            if delta > 0:
-                pack_claims.append({
-                    "claim_code": row.get("claim_code", ""),
-                    "credits": delta,
-                    "source": row.get("source", ""),
-                    "ts": row.get("ts", ""),
-                })
+    # The canonical ledger (credits.LEDGER_PATH honours ORPHO_CREDIT_LEDGER),
+    # read by the one reader balance() uses.
+    for row in credits.iter_ledger_rows():
+        if row.get("email") != email:
+            continue
+        try:
+            delta = credits.parse_delta(row)  # "10.0" counts, as in balance()
+        except ValueError:
+            continue  # tolerate a hand-corrupted ledger row (display only)
+        if delta > 0:
+            pack_claims.append({
+                "claim_code": row.get("claim_code", ""),
+                "credits": delta,
+                "source": row.get("source", ""),
+                "ts": row.get("ts", ""),
+            })
 
     return {
         "email": email,
