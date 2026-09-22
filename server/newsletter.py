@@ -6,6 +6,9 @@ Resend Audiences is a sync target so the founder can send broadcasts
 through Resend's deliverability/UI instead of hand-rolling SMTP.
 
 Double opt-in flow (CASL + CAN-SPAM friendly):
+    NOT WIRED as of 2026-09-22: _handle_waitlist never calls
+    send_confirmation_email and no route answers /api/waitlist/confirm
+    (production: 404). The steps below are the intended flow.
     1. POST /api/waitlist (server/app.py::_handle_waitlist):
          append to local ledger + email a confirmation link with a
          24h HMAC token.

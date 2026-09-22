@@ -28,6 +28,7 @@ import time
 from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import unquote_plus
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import engine  # noqa: E402
@@ -281,6 +282,29 @@ _anchor_limiter = TokenBucket(
     ANCHOR_RATE_REFILL,
     snapshot_path=RATE_LIMIT_SNAPSHOT,
 )
+
+# Read-only status lookups the buyer's own page makes after paying:
+# web/pay/success.js polls /api/nowpayments/order/<id> up to 6 times, and
+# web/buy.js asks /api/stripe/session once per load. Both used to draw on
+# _anchor_limiter, whose budget is 3 per day per IP prefix, so the 4th poll
+# answered 429 for ~8 hours and a payment credited after the 3rd poll never
+# showed as confirmed (measured in production 2026-09-22: 200,200,200,429).
+# The ids are unguessable, so this bucket only has to stop a tight loop, not
+# ration a day. In-memory: a restart refilling it is harmless.
+# Keyed per IP prefix (a /24), so buyers behind one shared mobile NAT share it:
+# 60 covers ten success pages polling 6 times each.
+STATUS_RATE_CAPACITY = 60
+STATUS_RATE_REFILL = 60 / 3600.0  # burst 60, then one a minute
+_status_limiter = TokenBucket(STATUS_RATE_CAPACITY, STATUS_RATE_REFILL)
+# /api/stripe/session makes one live Stripe read per well-formed id, and the
+# account's Stripe read limit (100/s) is shared with checkout and the webhook.
+# A buyer loads the page a handful of times, so the burst stays small: at 5,
+# twenty prefixes are needed to reach Stripe's per-second limit even briefly
+# (the old 3/day bucket needed 34). No ceiling shared across callers: one
+# would let a few prefixes lock every buyer out.
+SESSION_LOOKUP_CAPACITY = 5
+SESSION_LOOKUP_REFILL = 5 / 3600.0
+_session_lookup_limiter = TokenBucket(SESSION_LOOKUP_CAPACITY, SESSION_LOOKUP_REFILL)
 
 # Funnel-event limiter: 60 events / IP / minute. Separate bucket so noisy
 # analytics traffic can't burn the anchor-rate budget (and vice versa).
@@ -1146,30 +1170,143 @@ class Handler(BaseHTTPRequestHandler):
 </html>
 """
 
-    # What must not reach the log although it travels in a URL: the bearer
-    # sign-in token, a claim code (it is what spends credits), and a person's
-    # address. Only the value goes; the route and the other parameters stay,
-    # so the line is still useful. The sign-in token matters most: HEAD does
-    # not spend it, so a probed link would otherwise sit in the log live.
-    _LOG_REDACTIONS = (
-        (re.compile(r"(\s/a/)[^\s?\"]+"), r"\1[redacted]"),
-        (re.compile(r"(\s/api/pack/balance/)[^\s?\"]+"), r"\1[redacted]"),
-        (re.compile(r"([?&](?:e|email)=)[^&\s\"]+"), r"\1[redacted]"),
-        # A Stripe checkout-session id: /api/stripe/session?id=cs_… answers with
-        # the buyer's email to anyone holding it, and the post-checkout landing
-        # carries it as ?stripe_session=cs_…. Only a value that IS a session id
-        # goes, so an unrelated `id=` parameter stays readable.
-        (re.compile(r"([?&](?:stripe_session|session_id|id)=)cs_[^&\s\"]+"), r"\1[redacted]"),
-        # A team invite code: the share link is /team/join?code=…, and the code
-        # is what admits a person to the team.
-        (re.compile(r"([?&]code=)[^&\s\"]+"), r"\1[redacted]"),
-    )
+    # The access log is REBUILT from the request, never pattern-matched over
+    # the raw line. Four review rounds of #261 each found a URL shape the
+    # pattern rules missed (`//a/`, `/A/`, `%61`, `/./`, `/../`, a nested
+    # `?e=`, `;`, a vertical tab, `?token=` that no rule named) while the
+    # server itself acted on the value, so a live sign-in token, claim code,
+    # address, invite code or checkout-session id reached the log. Now:
+    #   * the request line is split exactly as the stdlib splits it;
+    #   * a path is kept only if it is plain characters and, resolved with
+    #     posixpath.normpath and case-folded, names no bearer route; a bearer
+    #     route keeps its name (`/a/[redacted]`) and nothing else survives;
+    #   * a query value is kept only for a listed key AND a plain value;
+    #   * an error message keeps only the text before `(`, where the stdlib
+    #     echoes the raw request line;
+    #   * control characters AND the backslash are escaped, as the stdlib does.
+    # `q` and `label` are not listed (a private vault search on
+    # /api/me/anchors), nor coupon/promo codes (spendable). `ref` is: a
+    # referral code is made to be shared in links. NOT `pack`: the legacy
+    # `/?pack=pk_…` link (web/app.js, web/assets/pack.js) carries the claim
+    # code itself.
+    _LOG_KEEP_PARAMS = frozenset({
+        "v", "plan", "variant", "ref", "status", "size", "receipt_id",
+        "limit", "before", "stripe", "print", "nolenis", "private", "probe",
+        "next",
+    })
+    # Parameter NAMES the log may show (their values still go): the kept keys
+    # plus the ones whose values are redacted by design.
+    _LOG_KNOWN_KEYS = _LOG_KEEP_PARAMS | frozenset({
+        "e", "email", "code", "token", "id", "stripe_session", "session_id",
+        "pack", "q", "label", "coupon", "promo", "prefilled_promo_code",
+        "path", "order", "from", "to", "subject",
+    })
+    _LOG_TOKEN_LIKE = re.compile(r"[A-Za-z0-9_-]{16,}")
+    _LOG_PLAIN_PATH = re.compile(r"/[A-Za-z0-9/_.,~-]*")
+    _LOG_PLAIN_VALUE = re.compile(r"[A-Za-z0-9_.,:-]{0,128}")
+    _LOG_PLAIN_MESSAGE = re.compile(r"[A-Za-z0-9 ,.'_-]{0,200}")
+    _LOG_BEARER_ROUTES = ("/a/", "/api/pack/balance/")
+    _LOG_CONTROL_TABLE = {
+        **{c: f"\\x{c:02x}" for c in (*range(0x20), *range(0x7f, 0xa0))},
+        ord("\\"): "\\\\",
+    }
+
+    @classmethod
+    def _log_bearer_route(cls, path: str) -> str | None:
+        """The bearer route `path` resolves to, or None. Resolved the way a
+        client or proxy might: slashes collapsed, dot segments applied,
+        case folded."""
+        folded = posixpath.normpath("/" + path.lower().lstrip("/")) + "/"
+        for route in cls._LOG_BEARER_ROUTES:
+            if route in folded:
+                return route
+        return None
+
+    @classmethod
+    def _log_path(cls, path: str) -> str:
+        if not cls._LOG_PLAIN_PATH.fullmatch(path):
+            return "[redacted-path]"
+        route = cls._log_bearer_route(path)
+        if route is None:
+            return path
+        if posixpath.normpath("/" + path.lower().lstrip("/")).startswith(route):
+            return route + "[redacted]"
+        return "[redacted-path]"
+
+    @classmethod
+    def _log_query(cls, query: str) -> str:
+        parts = []
+        for part in query.split("&"):
+            if "=" not in part:
+                parts.append(part if part == "" else "[redacted]")
+                continue
+            raw_key, raw_value = part.split("=", 1)
+            key = unquote_plus(raw_key).strip().lower()
+            value = unquote_plus(raw_value)
+            if key == "next":
+                keep = (bool(cls._LOG_PLAIN_PATH.fullmatch(value))
+                        and cls._log_bearer_route(value) is None)
+            else:
+                keep = key in cls._LOG_KEEP_PARAMS and bool(cls._LOG_PLAIN_VALUE.fullmatch(value))
+            # The KEY is request data too (`/?pk_<code>=1`): it is shown only
+            # when it names a parameter this server knows.
+            shown_key = raw_key if key in cls._LOG_KNOWN_KEYS else "[redacted]"
+            parts.append(part if keep else f"{shown_key}=[redacted]")
+        return "&".join(parts)
+
+    @classmethod
+    def _log_target(cls, target: str) -> str:
+        path, sep, query = target.partition("?")
+        if "://" in path:  # absolute form: keep the scheme and host, judge the path
+            scheme, _, rest = path.partition("://")
+            host, slash, tail = rest.partition("/")
+            if not re.fullmatch(r"[A-Za-z][A-Za-z0-9+.-]*", scheme) or not re.fullmatch(r"[A-Za-z0-9.:-]*", host):
+                return "[redacted-target]"
+            path = f"{scheme}://{host}" + cls._log_path(slash + tail) if slash else f"{scheme}://{host}"
+        else:
+            path = cls._log_path(path)
+        return path + (sep + cls._log_query(query) if sep else "")
+
+    def _log_requestline(self) -> str:
+        words = str(getattr(self, "requestline", "") or "").split()
+        if len(words) == 3:
+            method, target, version = words
+            if re.fullmatch(r"[A-Z]{1,16}", method) and re.fullmatch(r"HTTP/\d(\.\d)?", version):
+                return f"{method} {self._log_target(target)} {version}"
+        elif len(words) == 2 and re.fullmatch(r"[A-Z]{1,16}", words[0]):
+            return f"{words[0]} {self._log_target(words[1])}"
+        return "[unparsed request line]"
+
+    def log_request(self, code="-", size="-"):
+        code = getattr(code, "value", code)
+        self.log_message('"%s" %s %s', self._log_requestline(), str(code), str(size))
+
+    def log_error(self, format, *args):  # noqa: A002 (stdlib signature)
+        # Every stdlib and app error message is "code %d, message %s"; the
+        # message is where the stdlib echoes the raw line ("Bad request
+        # syntax ('GET /a/<token>')"). Keep the words before `(`, if plain.
+        if format == "code %d, message %s" and len(args) == 2:
+            message = str(args[1]).split("(", 1)[0].strip()
+            # Plain words only, and no token-shaped run: a message is the
+            # claim-code / sign-in-token alphabet too.
+            if (not self._LOG_PLAIN_MESSAGE.fullmatch(message)
+                    or self._LOG_TOKEN_LIKE.search(message)):
+                message = "[redacted]"
+            self.log_message("code %d, message %s", args[0], message)
+            return
+        # Anything else (the stdlib's "Request timed out: %r") keeps its own
+        # words and the TYPE of each argument, never the value.
+        words = format.replace("%r", "%s").replace("%d", "%s")
+        try:
+            text = words % tuple(f"<{type(a).__name__}>" for a in args)
+        except (TypeError, ValueError):
+            text = "[error message redacted]"
+        self.log_message("%s", text if self._LOG_PLAIN_MESSAGE.fullmatch(
+            text.replace("<", "").replace(">", "").replace(":", "")) else "[error message redacted]")
 
     def log_message(self, fmt, *args):
         truncated = truncate_ip(self.client_address[0] if self.client_address else "")
-        line = fmt % args
-        for pattern, replacement in self._LOG_REDACTIONS:
-            line = pattern.sub(replacement, line)
+        line = (fmt % args).translate(self._LOG_CONTROL_TABLE)
         sys.stderr.write(f"[{self.log_date_time_string()}] {truncated} - {line}\n")
 
     # BaseHTTPRequestHandler.send_error() never calls _security_headers(), so every
@@ -1939,14 +2076,16 @@ class Handler(BaseHTTPRequestHandler):
             if not RECEIPT_ID_RE.match(order_id):
                 _json_response(self, 400, {"error": "invalid order id"})
                 return
-            allowed, retry = _anchor_limiter.check(f"orderstat:{self._client_key()}")
+            allowed, retry = _status_limiter.check(f"orderstat:{self._client_key()}")
             if not allowed:
                 _json_response(self, 429, {
                     "error": "too many requests",
                     "retry_after_seconds": int(retry) + 1,
                 })
                 return
-            ledger_row = credits.find_claim_code_by_source(order_id)
+            # Only a crypto order answers, and only by its own order id: see
+            # credits.find_nowpayments_mint for what the looser lookup allowed.
+            ledger_row = credits.find_nowpayments_mint(order_id)
             credited = ledger_row is not None
             # NOTE: ledger_row contains claim_code + email + source — do NOT
             # spread it into the response. Only the int delta is safe to echo.
@@ -4702,7 +4841,7 @@ class Handler(BaseHTTPRequestHandler):
                 signin_token=token,
             )
             sys.stderr.write(
-                f"[recover] subscription path session={sid} "
+                f"[recover] subscription path session={stripe_api.mask_session_ids(sid)} "
                 f"email={auth.mask_email(provided_email)} email_sent={sent}\n"
             )
             _json_response(self, 200, {
@@ -4723,7 +4862,7 @@ class Handler(BaseHTTPRequestHandler):
             # way: do NOT mint speculatively. Log for founder + ask
             # customer to retry in a few minutes.
             sys.stderr.write(
-                f"[recover] NO CLAIM FOUND for paid session {sid} "
+                f"[recover] NO CLAIM FOUND for paid session {stripe_api.mask_session_ids(sid)} "
                 f"email={auth.mask_email(provided_email)} — likely webhook race or fulfillment gap\n"
             )
             try:
@@ -4756,7 +4895,7 @@ class Handler(BaseHTTPRequestHandler):
         credit_count = ledger_row.get("credits_delta", 0)
         sent = mailer.send_pack_claim_email(provided_email, claim_code, credit_count)
         sys.stderr.write(
-            f"[recover] resent claim_code for session={sid} "
+            f"[recover] resent claim_code for session={stripe_api.mask_session_ids(sid)} "
             f"email={auth.mask_email(provided_email)} email_sent={sent}\n"
         )
         _json_response(self, 200, {
@@ -4792,23 +4931,19 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         # 2. Look up the EXISTING claim code by source. Never mint.
-        ledger_row = credits.find_claim_code_by_source(order_id)
-        # find_claim_code_by_source matches order_id as a WHOLE colon-delimited
-        # part of the mint source, so a short/prefix order_id cannot resolve to a
-        # DIFFERENT customer's row. It also matches the invoice part, so still
-        # require order_id to be the EXACT final ":"-segment of the mint source
-        # ("nowpayments:<invoice>:<order_id>"). This closes the 200-vs-400
-        # enumeration oracle and the unsolicited-resend vector, on top of the
-        # email guard below.
-        row_source = ((ledger_row or {}).get("source") or "")
-        order_id_exact = row_source.rsplit(":", 1)[-1] == order_id
+        # Only this order's own crypto mint ("nowpayments:<invoice>:<order_id>",
+        # order id LAST), matched inside the scan so a later row sharing some
+        # other part cannot stand in for it or hide it. This closes the
+        # 200-vs-400 enumeration oracle and the unsolicited-resend vector, on
+        # top of the email guard below.
+        ledger_row = credits.find_nowpayments_mint(order_id)
 
         # 3. CROSS-CUSTOMER-LEAK GUARD (load-bearing): the request email must
         #    equal the ledger-row email exactly (case-insensitive, stripped).
-        #    Not-found, prefix-only match, and email mismatch all collapse to the
-        #    SAME generic 400 — no enumeration, no confirmation of which differed.
+        #    Not-found (including any id that is not this order's own) and
+        #    email mismatch collapse to the SAME generic 400 — no enumeration, no confirmation of which differed.
         row_email = ((ledger_row or {}).get("email") or "").strip().lower()
-        if not ledger_row or not order_id_exact or not row_email or row_email != provided_email:
+        if not ledger_row or not row_email or row_email != provided_email:
             sys.stderr.write(
                 f"[recover] crypto recovery DENIED order={order_id} "
                 f"email={auth.mask_email(provided_email)} "
@@ -5057,11 +5192,6 @@ class Handler(BaseHTTPRequestHandler):
         if not stripe_api.is_configured():
             _json_response(self, 503, {"error": "Stripe not configured"})
             return
-        # Light rate-limit so this can't be used as a session-id oracle
-        allowed, _ = _anchor_limiter.check(f"stripe-session:{self._client_key()}")
-        if not allowed:
-            _json_response(self, 429, {"error": "rate limit exceeded"})
-            return
         from urllib.parse import parse_qs, urlparse
         query = parse_qs(urlparse(self.path).query)
         sid_list = query.get("id", [])
@@ -5069,6 +5199,13 @@ class Handler(BaseHTTPRequestHandler):
         # Stripe session IDs are cs_test_… or cs_live_… plus alphanumerics
         if not sid or not sid.startswith("cs_") or len(sid) > 256 or not all(c.isalnum() or c == "_" for c in sid):
             _json_response(self, 400, {"error": "invalid session id"})
+            return
+        # Light rate-limit so this can't be used as a session-id oracle. After
+        # the shape check: a malformed id costs nothing, so a page that sent a
+        # bad value does not spend the buyer's budget for a real lookup.
+        allowed, _ = _session_lookup_limiter.check(f"stripe-session:{self._client_key()}")
+        if not allowed:
+            _json_response(self, 429, {"error": "rate limit exceeded"})
             return
         result = stripe_api._request("GET", f"/checkout/sessions/{sid}")
         if not result.get("ok"):

@@ -120,6 +120,55 @@ def balance(claim_code: str) -> int:
         return _scan().get(claim_code, 0)
 
 
+def _mint_rows():
+    """Every well-formed positive (mint) row in ledger order, as
+    (row, source, credits_delta). A torn line, a non-object row or a
+    non-string source is skipped (none of them can be a mint of a string
+    source). A delta that is not a number raises: an exactly-once check must
+    fail closed rather than read a real mint as absent."""
+    if not LEDGER_PATH.exists():
+        return
+    with LEDGER_PATH.open() as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(row, dict):
+                continue
+            source = row.get("source") or ""
+            if not isinstance(source, str):
+                continue
+            # "10.0" is still a mint of 10. A delta that is not a number at all
+            # RAISES, as it always did: skipping it would make an exactly-once
+            # check read "not minted" and mint again.
+            delta = int(float(row.get("credits_delta") or 0))
+            if delta > 0:
+                yield row, source, delta
+
+
+def _mint_projection(row: dict, source: str, delta: int) -> dict:
+    return {
+        "claim_code": row.get("claim_code"),
+        "email": row.get("email"),
+        "source": source,
+        "ts": row.get("ts"),
+        "credits_delta": delta,
+    }
+
+
+def _latest_mint(matches) -> dict | None:
+    """The most recent mint row whose `source` satisfies `matches(source)`."""
+    latest = None
+    for row, source, delta in _mint_rows():
+        if matches(source):
+            latest = (row, source, delta)
+    return _mint_projection(*latest) if latest else None
+
+
 def find_claim_code_by_source(source_token: str) -> dict | None:
     """Return the most recent {claim_code, email, source, ts} row whose
     `source` carries `source_token` as a whole colon-delimited part, or None.
@@ -130,32 +179,47 @@ def find_claim_code_by_source(source_token: str) -> dict | None:
     and `stripe-gift:cs_abc`; a fragment of one finds nothing (a substring
     match let a partial order id confirm that a real order existed).
     """
-    if not source_token or not LEDGER_PATH.exists():
+    if not source_token:
         return None
-    latest = None
-    with LEDGER_PATH.open() as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                row = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            src = row.get("source") or ""
-            if _source_has_token(src, source_token) and int(row.get("credits_delta") or 0) > 0:
-                # First positive (mint) row wins per claim_code; keep most recent
-                # overall in case of unusual ledger interleavings.
-                latest = row
-    if latest is None:
+    return _latest_mint(lambda src: _source_has_token(src, source_token))
+
+
+def find_nowpayments_mint(order_id: str) -> dict | None:
+    """The most recent crypto mint for exactly this order, or None.
+
+    The NOWPayments webhook has minted with source
+    "nowpayments:<invoice or order>:<order_id>" since it shipped (8af61f2), so
+    the kind is the first part and the order id the LAST. The any-part lookup
+    above keeps the latest row carrying the id ANYWHERE, so a kind word, a
+    referral code or an invoice id answered for somebody else's sale, and a
+    later unrelated row sharing a part could hide the order's own mint. Here
+    the predicate is applied inside the scan.
+
+    Used by the order-status route and crypto recover. The webhook's
+    exactly-once check still uses the any-part lookup; moving it is its own
+    change with its own webhook-level test. Not by refund revocation (revoke_credits_by_source):
+    that one also has to find mints by the invoice part a refund IPN may carry.
+    """
+    if not order_id:
         return None
-    return {
-        "claim_code": latest.get("claim_code"),
-        "email": latest.get("email"),
-        "source": latest.get("source"),
-        "ts": latest.get("ts"),
-        "credits_delta": int(latest.get("credits_delta") or 0),
-    }
+
+    def matches(src: str) -> bool:
+        # "nowpayments:<invoice>:<order_id>": the kind, ONE colon-free invoice
+        # part, and then everything left must BE the order id. Anchored at the
+        # front, so a trailing fragment of someone else's order id never
+        # answers (a suffix match let "7" find "shop:ord:7").
+        kind, _, rest = src.partition(":")
+        _invoice, sep, tail = rest.partition(":")
+        if kind != "nowpayments":
+            return False
+        if sep:
+            return tail == order_id
+        # Two-part scaffold row "nowpayments:<invoice or order>" (abc1d14):
+        # it answers only when that part is a server-minted order id (np_…);
+        # NOWPayments invoice ids are numeric and must never answer.
+        return rest == order_id and order_id.startswith("np_")
+
+    return _latest_mint(matches)
 
 
 def find_mint_by_exact_source(sources: set[str]) -> dict | None:
@@ -166,25 +230,11 @@ def find_mint_by_exact_source(sources: set[str]) -> dict | None:
     named separately. `find_claim_code_by_source` above answers the looser
     "is there a mint carrying this id" and returns the most recent one.
     """
-    if not sources or not LEDGER_PATH.exists():
+    if not sources:
         return None
-    with LEDGER_PATH.open() as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                row = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if row.get("source") in sources and int(row.get("credits_delta") or 0) > 0:
-                return {
-                    "claim_code": row.get("claim_code"),
-                    "email": row.get("email"),
-                    "source": row.get("source"),
-                    "ts": row.get("ts"),
-                    "credits_delta": int(row.get("credits_delta") or 0),
-                }
+    for row, source, delta in _mint_rows():
+        if source in sources:
+            return _mint_projection(row, source, delta)
     return None
 
 

@@ -33,6 +33,14 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+from stripe_api import mask_session_ids
+
+
+def _stderr(text: str) -> None:
+    """Every line this module writes goes out with Checkout Session ids masked:
+    a full id answers /api/stripe/session with the buyer's email."""
+    sys.stderr.write(mask_session_ids(text))
+
 import auth
 import credits
 import mailer
@@ -290,7 +298,7 @@ def handle_event(payload: bytes) -> dict:
                 if not session_id and isinstance(pi, str) and pi:
                     session_id = _lookup_session_by_pi(pi)
             if not session_id:
-                sys.stderr.write(
+                _stderr(
                     f"[stripe_webhook] {event_type} event {event_id} had no "
                     f"recoverable session_id; cannot revoke credits\n"
                 )
@@ -305,7 +313,7 @@ def handle_event(payload: bytes) -> dict:
             revoked = credits.revoke_credits_by_source(
                 source_token=session_id, revoke_source=revoke_source,
             )
-            sys.stderr.write(
+            _stderr(
                 f"[stripe_webhook] {event_type} session={session_id}: "
                 f"revoked={revoked}\n"
             )
@@ -333,7 +341,7 @@ def handle_event(payload: bytes) -> dict:
                 source_token=failed_sid,
                 revoke_source=f"stripe-async-failed:{failed_sid}",
             ) if failed_sid else []
-            sys.stderr.write(
+            _stderr(
                 f"[stripe_webhook] async payment FAILED session={failed_sid}: "
                 f"revoked={revoked}\n"
             )
@@ -363,7 +371,7 @@ def handle_event(payload: bytes) -> dict:
 
         session = event.get("data", {}).get("object", {}) or {}
         if session.get("payment_status") == "unpaid":
-            sys.stderr.write(
+            _stderr(
                 f"[stripe_webhook] WARNING session {session.get('id', '')} completed "
                 f"UNPAID (delayed payment method): delivering now; a failed "
                 f"settlement revokes what is unused\n"
@@ -379,7 +387,7 @@ def handle_event(payload: bytes) -> dict:
             # The failure arrived first (events are not ordered). Delivering
             # now would mint a pack for a payment already known not to have
             # settled, and nothing would ever take it back.
-            sys.stderr.write(
+            _stderr(
                 f"[stripe_webhook] session {session_id} was already reported "
                 f"FAILED; not delivering\n"
             )
@@ -394,7 +402,7 @@ def handle_event(payload: bytes) -> dict:
             # permanent "paid-but-nothing" dead end. Leaving it unmarked lets a
             # corrected redelivery (or manual replay) still deliver the pack.
             # Alert loudly so the founder can reconcile from the Stripe session.
-            sys.stderr.write(
+            _stderr(
                 f"[stripe_webhook] WARNING session {session_id} completed with NO "
                 f"customer email — credits NOT minted; event left unprocessed for "
                 f"retry/manual recovery. RECONCILE from Stripe dashboard\n"
@@ -433,7 +441,7 @@ def handle_event(payload: bytes) -> dict:
             except (TypeError, ValueError):
                 pass
             sent = mailer.send_subscription_welcome_email(customer_email, plan_label=plan_label)
-            sys.stderr.write(
+            _stderr(
                 f"[stripe_webhook] subscription welcome sent for session {session_id} "
                 f"({masked}) plan={plan_label} (email_sent={sent})\n"
             )
@@ -461,7 +469,7 @@ def handle_event(payload: bytes) -> dict:
             # Falling back to buyer-as-recipient is the right behavior (don't
             # eat the money), but the founder must see this in logs so they
             # can manually contact the buyer to fix the typo.
-            sys.stderr.write(
+            _stderr(
                 f"[stripe_webhook] session {session_id} had malformed gift_to_email "
                 f"({auth.mask_email(gift_to_raw)!r}); delivering pack to buyer instead\n"
             )
@@ -497,7 +505,7 @@ def handle_event(payload: bytes) -> dict:
             # better outcome than none.
             claim_code = already["claim_code"]
             credit_amount = int(already.get("credits_delta") or credit_amount)
-            sys.stderr.write(
+            _stderr(
                 f"[stripe_webhook] resuming an unfinished delivery for session {session_id}\n"
             )
         else:
@@ -536,7 +544,7 @@ def handle_event(payload: bytes) -> dict:
                 credit_count=credit_amount,
                 message=gift_message,
             )
-            sys.stderr.write(
+            _stderr(
                 f"[stripe_webhook] gifted Pack for session {session_id}: "
                 f"buyer={masked} → recipient={auth.mask_email(recipient_email)}, "
                 f"{credit_amount} credits (email_sent={sent})\n"
@@ -545,13 +553,13 @@ def handle_event(payload: bytes) -> dict:
                 # Credits are minted; recipient won't get the code by email.
                 # Founder can recover by querying the credits ledger for the
                 # recipient's email and re-sending manually.
-                sys.stderr.write(
+                _stderr(
                     f"[stripe_webhook] WARNING gift email failed for session {session_id}; "
                     f"claim code minted but recipient not notified\n"
                 )
         else:
             sent = mailer.send_pack_claim_email(customer_email, claim_code, credit_amount)
-            sys.stderr.write(
+            _stderr(
                 f"[stripe_webhook] minted claim_code for session {session_id} ({masked}): "
                 f"{credit_amount} credits (email_sent={sent})\n"
             )

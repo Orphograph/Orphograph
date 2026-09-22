@@ -608,14 +608,16 @@ def test_a_stripe_session_id_in_a_url_does_not_reach_the_access_log(server):
     _srv.request(base, f"/api/stripe/session?id={secret}", timeout=15)
     _srv.request(base, f"/buy?stripe_session={secret}&status=success", timeout=15)
     # An unrelated `id=` must stay readable, or the rule is redacting too much.
-    _srv.request(base, "/api/health?id=harmless-id-canary", timeout=15)
+    # Nothing but the session lookup reads ?id=, so the log keeps no id=
+    # value (fail closed, PR #261); over-redaction is checked on a kept key.
+    _srv.request(base, "/api/health?limit=harmless-id-canary", timeout=15)
     logs = list(data_dir.glob("server-*.log"))
     assert len(logs) == 1, logs
     text = logs[0].read_text(errors="replace")
     assert "/api/stripe/session" in text and "stripe_session=" in text, (
         "control: both requests reached the log at all")
     assert secret not in text, "a Stripe session id was written to the access log"
-    assert "harmless-id-canary" in text, "the rule redacted an id it should not"
+    assert "limit=harmless-id-canary" in text, "the rule redacted a value it should not"
 
 
 def test_a_cookieless_head_on_the_experiment_homepage_is_uncacheable_like_get(experiment_server):

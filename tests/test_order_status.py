@@ -180,3 +180,17 @@ def test_overlong_order_id_returns_400(server):
     long_id = "a" * 65  # len 65 > 64 -> rejected
     status, body = _get(f"{server}/api/nowpayments/order/{long_id}")
     assert status == 400, body
+
+
+def test_other_parts_of_a_mint_source_do_not_answer_for_the_order(server):
+    """The lookup matches any whole part of any mint source, so the kind word,
+    the invoice id (numeric and near-sequential at NOWPayments) or any other
+    part answered `credited:true` with the credit count of somebody's sale.
+    Only the order's own id may answer."""
+    for probe in ("nowpayments", "inv_test_001"):
+        status, body = _get(f"{server}/api/nowpayments/order/{probe}")
+        assert status == 200, (probe, status)
+        rec = json.loads(body)
+        assert rec["credited"] is False and rec["credits"] is None, (probe, rec)
+    status, body = _get(f"{server}/api/nowpayments/order/{CREDITED_ORDER}")
+    assert json.loads(body)["credited"] is True, "control: the real order must still answer"

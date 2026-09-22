@@ -234,6 +234,39 @@ def request(base: str, path: str, method: str = "GET", body: bytes | None = None
                          f"--- server output ---\n{_tail(log_path)}") from e
 
 
+def raw_request(base: str, target: str, method: str = "GET", *,
+                line: str | None = None, timeout: float = 15) -> bytes:
+    """Send one request line EXACTLY as written and return the raw response.
+
+    urllib normalises the target, so it cannot send `//a/<token>`, `/./a/…` or
+    the absolute form `http://host/a/<token>`, and those are shapes the server
+    and its access log both see from real clients. `line` replaces the whole
+    request line (a one-word line, a control character). A server that has
+    stopped answering raises ServerGone with its output, like request()."""
+    import socket
+    from urllib.parse import urlparse
+    u = urlparse(base)
+    first = line if line is not None else f"{method} {target} HTTP/1.1"
+    chunks = []
+    try:
+        with socket.create_connection((u.hostname, u.port), timeout=timeout) as s:
+            s.sendall(f"{first}\r\nHost: {u.netloc}\r\n"
+                      "User-Agent: uptime-check/1.0\r\nConnection: close\r\n\r\n"
+                      .encode("latin-1"))
+            while True:
+                chunk = s.recv(65536)
+                if not chunk:
+                    break
+                chunks.append(chunk)
+    except OSError as e:
+        log_path = _LOG_BY_BASE.get(base)
+        if log_path is None:
+            raise
+        raise ServerGone(f"{first!r} to {base} got no answer ({e!r})\n"
+                         f"--- server output ---\n{_tail(log_path)}") from e
+    return b"".join(chunks)
+
+
 def _json_object(raw: bytes) -> dict:
     try:
         parsed = json.loads(raw)

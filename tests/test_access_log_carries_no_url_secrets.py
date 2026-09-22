@@ -77,12 +77,12 @@ def test_claim_codes_and_addresses_are_not_logged(server):
     code = "pk_0123456789abcdef0123456789abcdef"
     _srv.request(base, f"/api/pack/balance/{code}", timeout=15)
     _srv.request(base, "/api/unsubscribe?e=log-address%40example.test", timeout=15)
-    _srv.request(base, "/api/founder/customer?email=log-lookup%40example.test&x=1", timeout=15)
+    _srv.request(base, "/api/founder/customer?email=log-lookup%40example.test&limit=1", timeout=15)
 
     log = _log(data_dir)
     assert "/api/pack/balance/[redacted]" in log and code not in log
     assert "/api/unsubscribe?e=[redacted]" in log
-    assert "/api/founder/customer?email=[redacted]&x=1" in log, "only the value is removed"
+    assert "/api/founder/customer?email=[redacted]&limit=1" in log, "only the value is removed"
     assert "log-address" not in log and "log-lookup" not in log
 
 
@@ -109,3 +109,178 @@ def test_a_team_invite_code_in_a_share_link_does_not_reach_the_log(server):
     assert "/team/join" in text, "control: the request reached the log at all"
     assert code not in text, "a team invite code was written to the access log"
     assert "plan=harmless-canary" in text, "the rule redacted a parameter it should not"
+
+
+def test_secrets_in_shapes_the_server_still_acts_on_are_not_logged(server):
+    """The rules used to match the literal text: `\\s/a/`, `[?&]e=`. The server
+    acts on more than that. `//a/<token>` and the absolute form
+    `http://host/a/<token>` reach the log with the token still live (the server
+    answers them 404, so it is never spent), and a query key is decoded before
+    it is read, so `E=` and `%65=` carry the same address as `e=`."""
+    base, data_dir = server
+    token = _mint_token(data_dir, "log-shapes@example.test")
+    code = "pk_fedcba9876543210fedcba9876543210"
+    _srv.raw_request(base, f"//a/{token}", "HEAD")
+    _srv.raw_request(base, f"http://orphograph.test/a/{token}")
+    _srv.raw_request(base, f"//api/pack/balance/{code}")
+    _srv.raw_request(base, "/api/unsubscribe?limit=1&E=shape-upper%40example.test")
+    _srv.raw_request(base, "/api/unsubscribe?%65=shape-encoded%40example.test")
+    _srv.raw_request(base, "/buy?stripe%5Fsession=cs_live_ShapeCanary0123")
+    _srv.raw_request(base, "/api/stripe/session?id=CS_live_ShapeCanary4567")
+    _srv.raw_request(base, "/pricing?id=plain-id-canary")
+
+    text = _log(data_dir)
+    assert token not in text, "a live sign-in token is sitting in the access log"
+    assert '"HEAD /a/[redacted] HTTP/1.1"' in text, "control: the raw request was logged"
+    assert code not in text
+    for leaked in ("shape-upper", "shape-encoded", "ShapeCanary0123", "ShapeCanary4567"):
+        assert leaked not in text, f"{leaked} reached the access log"
+    assert "limit=1&E=[redacted]" in text, "only the value is removed"
+    # Fail closed: nothing but the session lookup reads ?id=, so no id= value is kept.
+    assert "/pricing?id=[redacted]" in text and "plain-id-canary" not in text
+
+
+def test_shapes_the_first_widening_still_missed(server):
+    """Found by review of the widening itself: a key nested in another value,
+    `/./a/`, a doubled segment, a one-word request line, a parameter no rule
+    named (`?token=` on the newsletter confirm link), and control characters
+    the stdlib would have escaped. The query rule now fails closed."""
+    base, data_dir = server
+    token = _mint_token(data_dir, "log-nested@example.test")
+    code = "pk_00112233445566778899aabbccddeeff"
+    _srv.raw_request(base, f"/a/{token}?next=/api/unsubscribe?e=nested-plain%40example.test")
+    _srv.raw_request(base, "/login?next=%2Fapi%2Funsubscribe%3Fe%3Dnested-encoded%40example.test")
+    _srv.raw_request(base, f"/./a/{token}", "HEAD")
+    _srv.raw_request(base, f"/api//pack/balance/{code}")
+    _srv.raw_request(base, "", line=f"/a/{token}")
+    _srv.raw_request(base, "/api/waitlist/confirm?token=ConfirmCanary0123")
+    _srv.raw_request(base, "/pricing?unlisted=UnlistedCanary", "GET")
+    _srv.raw_request(base, "", line="GET /about\x1b[2J HTTP/1.1")
+
+    text = _log(data_dir)
+    assert text.count("/a/[redacted]") >= 2, "control: the raw shapes were logged"
+    assert "/api/pack/balance/[redacted]" in text
+    assert token not in text, "a live sign-in token is sitting in the access log"
+    assert code not in text, "a claim code is sitting in the access log"
+    for leaked in ("nested-plain", "nested-encoded", "ConfirmCanary", "UnlistedCanary"):
+        assert leaked not in text, f"{leaked} reached the access log"
+    assert "?next=[redacted]" in text, "a next carrying its own query is redacted whole"
+    assert "\x1b" not in text, "a raw control character reached the log"
+    assert '"GET [redacted-path] HTTP/1.1"' in text, "control: a path with a control character is blanked"
+
+
+def test_shapes_the_second_review_found(server):
+    """Round two: the query was split on `?` `;` `"` where parse_qs splits only
+    on `&`, so a tail after one of them was logged; the bearer path rule was
+    literal, so `/A/`, `/%61/` and encoded slashes kept a live token; and the
+    keep list named `q` and `label`, which on /api/me/anchors are a person's
+    private vault search."""
+    base, data_dir = server
+    token = _mint_token(data_dir, "log-round2@example.test")
+    code = "pk_99887766554433221100ffeeddccbbaa"
+    for target in (f"/A/{token}", f"/%61/{token}", f"/a%2F{token}",
+                   f"/api/pack%2Fbalance/{code}", f"/login?next=%2Fa%2F{token}"):
+        _srv.raw_request(base, target)
+    _srv.raw_request(base, "/x?token=AAAA;SemiTailCanary")
+    _srv.raw_request(base, "/x?token=ab?QmarkTailCanary")
+    _srv.raw_request(base, '/api/unsubscribe?e="quoted-canary%40example.test')
+    _srv.raw_request(base, "/x?NoEqualsCanary")
+    _srv.raw_request(base, "/api/me/anchors?label=PrivateLabelCanary&q=9f86d081cafe&limit=5")
+
+    text = _log(data_dir)
+    assert token not in text, "a live sign-in token is sitting in the access log"
+    assert "[redacted-path]" in text, "control: an encoded bearer path was logged and judged"
+    assert code not in text, "a claim code is sitting in the access log"
+    for leaked in ("SemiTailCanary", "QmarkTailCanary", "quoted-canary", "NoEqualsCanary",
+                   "PrivateLabelCanary", "9f86d081cafe"):
+        assert leaked not in text, f"{leaked} reached the access log"
+    assert "&limit=5" in text, "a harmless parameter stays readable"
+
+
+def test_shapes_the_third_review_found(server):
+    """Round three: the path scan was a backtracking regex that went quadratic
+    on a long run with no slash (a 60 KB line held the GIL for ~30 s); a path
+    whose FIRST bearer segment the literal rule caught kept a second, encoded
+    one; the closing quote of a request line was eaten with the last redacted
+    value; and restricted promotion codes were on the keep list."""
+    import time
+    base, data_dir = server
+    token = _mint_token(data_dir, "log-round3@example.test")
+
+    started = time.monotonic()
+    _srv.raw_request(base, "", line="GET " + "x" * 60000 + " HTTP/1.1")
+    _srv.raw_request(base, "", line="GET /x?q=(" + "y" * 60000 + " HTTP/1.1")
+    elapsed = time.monotonic() - started
+    assert elapsed < 3, f"two 60 KB request lines took {elapsed:.1f}s to answer and log"
+
+    _srv.raw_request(base, f"/a/decoy/%61/{token}")
+    _srv.raw_request(base, "", line="GET /x?e=quote-canary%40example.test")
+    _srv.raw_request(base, "/pricing?prefilled_promo_code=PromoCanary&coupon=CouponCanary&ref=abc")
+
+    text = _log(data_dir)
+    assert token not in text, "a second, encoded bearer segment kept a live token"
+    assert "PromoCanary" not in text and "CouponCanary" not in text
+    assert "ref=abc" in text, "a referral code is made to be shared; it stays readable"
+    assert '"GET /x?e=[redacted]" 400' in text or '"GET /x?e=[redacted]"' in text, \
+        "the request line's closing quote was eaten with the redacted value"
+
+
+def test_a_kept_key_is_not_a_licence_for_its_value(server):
+    """Round four: only `id` and `next` had their values checked, so a kept
+    key (ref, v, plan…) carried `;e=<address>` or an encoded sign-in path."""
+    base, data_dir = server
+    token = _mint_token(data_dir, "log-round4@example.test")
+    _srv.raw_request(base, "/x?ref=a;e=kept-key-canary%40example.test")
+    _srv.raw_request(base, "/x?v=v-canary%40example.test")
+    _srv.raw_request(base, f"/x?ref=%2Fa%2F{token}")
+    _srv.raw_request(base, "/pricing?plan=pack_50&ref=partner-7")
+    text = _log(data_dir)
+    assert token not in text, "a sign-in path rode in on a kept key"
+    assert "kept-key-canary" not in text and "v-canary" not in text
+    assert "plan=pack_50&ref=partner-7" in text, "plain values on kept keys stay readable"
+
+
+def test_shapes_the_fifth_review_found(server):
+    """Round five found three more shapes the pattern rules missed, so the
+    line is now rebuilt from the parsed request instead: a `..` segment
+    (`/api/pack/x/../balance/<code>`), a slash run inside the route
+    (`/api/pack//balance/<code>`), whitespace-class control characters that
+    ended a pattern's token early, and literal text that looks like an escape."""
+    base, data_dir = server
+    token = _mint_token(data_dir, "log-round5@example.test")
+    lower_code = "pk_0123abcdef0123abcdef"
+    _srv.raw_request(base, "/api/pack/x/../balance/pk_DotDotCanary01")
+    _srv.raw_request(base, f"/api/pack//balance/{lower_code}")
+    _srv.raw_request(base, "", line="GET /x?v=1\x0be=vt-canary%40example.test HTTP/1.1")
+    _srv.raw_request(base, "", line=f"GET /a/\x85{token} HTTP/1.1")
+    _srv.raw_request(base, "/x\\x0d\\x0aFORGED")
+
+    text = _log(data_dir)
+    assert "DotDotCanary" not in text and lower_code not in text, "a claim code reached the log"
+    assert token not in text and "vt-canary" not in text
+    assert "\\x0d\\x0aFORGED" not in text, "literal escape-looking text was logged as if escaped"
+    assert "/api/pack/balance/[redacted]" in text, "control: the claim-code shapes were logged"
+
+
+def test_shapes_the_sixth_review_found(server):
+    """Round six: `pack` was on the keep list, but the legacy `/?pack=pk_…`
+    link carries the claim code itself."""
+    base, data_dir = server
+    code = "pk_PackParamCanary0123456789"
+    _srv.raw_request(base, f"/?pack={code}")
+    _srv.raw_request(base, "/?plan=pack_50")
+    text = _log(data_dir)
+    assert code not in text, "a claim code in ?pack= reached the access log"
+    assert "plan=pack_50" in text, "control: a plain kept value stays readable"
+
+
+def test_the_final_review_shapes(server):
+    """An unknown query KEY is request data too (`/?pk_<code>=1`), and an
+    error message is the claim-code alphabet: neither may carry a token."""
+    base, data_dir = server
+    code = "pk_KeyPositionCanary01234567"
+    _srv.raw_request(base, f"/?{code}=1")
+    _srv.raw_request(base, "/api/unsubscribe?someone%40example.test=")
+    text = _log(data_dir)
+    assert code not in text and "someone" not in text
+    assert "/?[redacted]=[redacted]" in text, "control: the unknown key was logged, redacted"
