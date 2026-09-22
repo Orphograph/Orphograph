@@ -1186,9 +1186,11 @@ class Handler(BaseHTTPRequestHandler):
     #   * control characters AND the backslash are escaped, as the stdlib does.
     # `q` and `label` are not listed (a private vault search on
     # /api/me/anchors), nor coupon/promo codes (spendable). `ref` is: a
-    # referral code is made to be shared in links.
+    # referral code is made to be shared in links. NOT `pack`: the legacy
+    # `/?pack=pk_…` link (web/app.js, web/assets/pack.js) carries the claim
+    # code itself.
     _LOG_KEEP_PARAMS = frozenset({
-        "v", "plan", "variant", "ref", "status", "size", "receipt_id", "pack",
+        "v", "plan", "variant", "ref", "status", "size", "receipt_id",
         "limit", "before", "stripe", "print", "nolenis", "private", "probe",
         "id", "next",
     })
@@ -1208,7 +1210,7 @@ class Handler(BaseHTTPRequestHandler):
         case folded."""
         folded = posixpath.normpath("/" + path.lower().lstrip("/")) + "/"
         for route in cls._LOG_BEARER_ROUTES:
-            if folded.startswith(route) or ("/" + route.strip("/") + "/") in folded:
+            if route in folded:
                 return route
         return None
 
@@ -1219,7 +1221,7 @@ class Handler(BaseHTTPRequestHandler):
         route = cls._log_bearer_route(path)
         if route is None:
             return path
-        if posixpath.normpath("/" + path.lstrip("/")).startswith(route):
+        if posixpath.normpath("/" + path.lower().lstrip("/")).startswith(route):
             return route + "[redacted]"
         return "[redacted-path]"
 
@@ -1280,7 +1282,15 @@ class Handler(BaseHTTPRequestHandler):
                 message = "[redacted]"
             self.log_message("code %d, message %s", args[0], message)
             return
-        self.log_message("%s", "[error message redacted]")
+        # Anything else (the stdlib's "Request timed out: %r") keeps its own
+        # words and the TYPE of each argument, never the value.
+        words = format.replace("%r", "%s").replace("%d", "%s")
+        try:
+            text = words % tuple(f"<{type(a).__name__}>" for a in args)
+        except (TypeError, ValueError):
+            text = "[error message redacted]"
+        self.log_message("%s", text if self._LOG_PLAIN_MESSAGE.fullmatch(
+            text.replace("<", "").replace(">", "").replace(":", "")) else "[error message redacted]")
 
     def log_message(self, fmt, *args):
         truncated = truncate_ip(self.client_address[0] if self.client_address else "")
@@ -4819,7 +4829,7 @@ class Handler(BaseHTTPRequestHandler):
                 signin_token=token,
             )
             sys.stderr.write(
-                f"[recover] subscription path session={sid} "
+                f"[recover] subscription path session={stripe_api.mask_session_ids(sid)} "
                 f"email={auth.mask_email(provided_email)} email_sent={sent}\n"
             )
             _json_response(self, 200, {
@@ -4840,7 +4850,7 @@ class Handler(BaseHTTPRequestHandler):
             # way: do NOT mint speculatively. Log for founder + ask
             # customer to retry in a few minutes.
             sys.stderr.write(
-                f"[recover] NO CLAIM FOUND for paid session {sid} "
+                f"[recover] NO CLAIM FOUND for paid session {stripe_api.mask_session_ids(sid)} "
                 f"email={auth.mask_email(provided_email)} — likely webhook race or fulfillment gap\n"
             )
             try:
@@ -4873,7 +4883,7 @@ class Handler(BaseHTTPRequestHandler):
         credit_count = ledger_row.get("credits_delta", 0)
         sent = mailer.send_pack_claim_email(provided_email, claim_code, credit_count)
         sys.stderr.write(
-            f"[recover] resent claim_code for session={sid} "
+            f"[recover] resent claim_code for session={stripe_api.mask_session_ids(sid)} "
             f"email={auth.mask_email(provided_email)} email_sent={sent}\n"
         )
         _json_response(self, 200, {

@@ -207,9 +207,24 @@ def test_a_decimal_string_delta_is_still_a_mint():
     assert credits.find_mint_by_exact_source({"stripe:cs_dec"})["credits_delta"] == 10
 
 
-def test_the_two_part_scaffold_source_still_counts_as_the_orders_mint():
+def test_a_two_part_scaffold_row_does_not_answer_for_its_invoice_id():
+    """The scaffold wrote "nowpayments:<invoice or order>", usually the
+    numeric invoice id; accepting two parts let that id answer as an order."""
     import json
     credits.LEDGER_PATH.write_text(json.dumps(
         {"claim_code": "pk_two", "email": "t@x.test", "credits_delta": 5,
-         "source": "nowpayments:np_pack_5_two"}) + "\n")
-    assert credits.find_nowpayments_mint("np_pack_5_two")["claim_code"] == "pk_two"
+         "source": "nowpayments:4401"}) + "\n")
+    assert credits.find_nowpayments_mint("4401") is None
+
+
+def test_an_order_id_containing_a_colon_still_finds_its_mint():
+    """A dashboard-made invoice may carry an order id with ":"; the
+    exactly-once check must still find it, or a lost marker mints twice."""
+    import json
+    credits.LEDGER_PATH.write_text(json.dumps(
+        {"claim_code": "pk_colon", "email": "c@x.test", "credits_delta": 5,
+         "source": "nowpayments:inv9:shop:ord:7"}) + "\n")
+    assert credits.find_nowpayments_mint("shop:ord:7")["claim_code"] == "pk_colon"
+    assert credits.find_nowpayments_mint("ord:7")["claim_code"] == "pk_colon"
+    assert credits.find_nowpayments_mint("7")["claim_code"] == "pk_colon"
+    assert credits.find_nowpayments_mint("inv9") is None

@@ -259,3 +259,15 @@ def test_shapes_the_fifth_review_found(server):
     assert token not in text and "vt-canary" not in text
     assert "\\x0d\\x0aFORGED" not in text, "literal escape-looking text was logged as if escaped"
     assert "/api/pack/balance/[redacted]" in text, "control: the claim-code shapes were logged"
+
+
+def test_shapes_the_sixth_review_found(server):
+    """Round six: `pack` was on the keep list, but the legacy `/?pack=pk_…`
+    link carries the claim code itself."""
+    base, data_dir = server
+    code = "pk_PackParamCanary0123456789"
+    _srv.raw_request(base, f"/?pack={code}")
+    _srv.raw_request(base, "/?plan=pack_50")
+    text = _log(data_dir)
+    assert code not in text, "a claim code in ?pack= reached the access log"
+    assert "plan=pack_50" in text, "control: a plain kept value stays readable"

@@ -198,9 +198,7 @@ def find_nowpayments_mint(order_id: str) -> dict | None:
     the predicate is applied inside the scan.
 
     Used by the order-status route, crypto recover and the webhook's
-    exactly-once check. An order id never contains ":" (the server mints
-    np_<plan>_<token_urlsafe>, and NOWPayments echoes it in an HMAC-signed
-    IPN), so "last part" is unambiguous. Not by refund revocation (revoke_credits_by_source):
+    exactly-once check. Not by refund revocation (revoke_credits_by_source):
     that one also has to find mints by the invoice part a refund IPN may carry.
     """
     if not order_id:
@@ -208,9 +206,12 @@ def find_nowpayments_mint(order_id: str) -> dict | None:
 
     def matches(src: str) -> bool:
         parts = src.split(":")
-        # len 2 is the scaffold shape of 2026-05-17 (abc1d14), replaced the
-        # same day; when it carried the order id it is still this order's mint.
-        return len(parts) >= 2 and parts[0] == "nowpayments" and parts[-1] == order_id
+        # "nowpayments:<invoice>:<order_id>", matched as a suffix so an order
+        # id that itself contains ":" (a dashboard-made invoice) still matches
+        # as a run of whole parts. The two-part scaffold shape (abc1d14) is NOT
+        # accepted: it usually carried the invoice id, which would answer here.
+        return (src.startswith("nowpayments:") and src.endswith(":" + order_id)
+                and len(parts) >= 3 + order_id.count(":"))
 
     return _latest_mint(matches)
 

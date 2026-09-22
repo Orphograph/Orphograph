@@ -87,3 +87,17 @@ def test_the_lookups_are_still_bounded(server):
     codes = [_status(server, f"/api/nowpayments/order/np_unknown_{i}")
              for i in range(80)]
     assert 429 in codes, "status lookups lost their rate limit entirely"
+
+
+def test_no_full_session_id_reaches_the_server_output(server, tmp_path):
+    """The access line hides a checkout-session id, and so must every other
+    line on the same stream: stripe_api's network-error line printed the
+    request path, which carries the id."""
+    sid = "cs_test_FullSessionCanary0123456789"
+    assert _status(server, f"/api/stripe/session?id={sid}") == 502
+    logs = list(tmp_path.glob("server-*.log"))
+    assert len(logs) == 1, logs
+    text = logs[0].read_text(errors="replace")
+    assert "URLError path=/checkout/sessions/cs_test_…456789" in text, \
+        "control: the network-error line was written, masked"
+    assert sid not in text, "a full checkout-session id reached the server output"

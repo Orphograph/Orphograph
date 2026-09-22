@@ -18,6 +18,7 @@ Public API:
 from __future__ import annotations
 
 import json
+import re
 import os
 import sys
 import time
@@ -95,6 +96,17 @@ def _categorize_http_error(code: int) -> tuple[str, bool, bool]:
     return ("http_error", False, False)
 
 
+_SESSION_ID_RE = re.compile(r"\b(cs_(?:live|test)_)[A-Za-z0-9]+([A-Za-z0-9]{6})\b")
+
+
+def mask_session_ids(text: str) -> str:
+    """Replace every Checkout Session id in `text` with its mode and last six
+    characters (`cs_live_…a1b2c3`). A full id answers /api/stripe/session with
+    the buyer's email to whoever holds it, so it must not sit in the log; the
+    tail is enough to find the session in the Stripe dashboard."""
+    return _SESSION_ID_RE.sub(r"\1…\2", str(text))
+
+
 def _request(method: str, path: str, form: dict | None = None) -> dict:
     if not STRIPE_SECRET_KEY:
         return {
@@ -131,11 +143,13 @@ def _request(method: str, path: str, form: dict | None = None) -> dict:
         # Auth errors page the operator — STRIPE_SECRET_KEY may be rotated/revoked.
         if operator_alert:
             sys.stderr.write(
-                f"[stripe_api] ALERT: auth failure ({e.code}) — STRIPE_SECRET_KEY may be invalid. path={path}\n"
+                f"[stripe_api] ALERT: auth failure ({e.code}) — STRIPE_SECRET_KEY may be invalid. "
+                f"path={mask_session_ids(path)}\n"
             )
         else:
             sys.stderr.write(
-                f"[stripe_api] HTTP {e.code} ({category}) path={path} body={body[:200]}\n"
+                f"[stripe_api] HTTP {e.code} ({category}) path={mask_session_ids(path)} "
+                f"body={mask_session_ids(body[:200])}\n"
             )
         # Customer-facing message — never leak our internal Stripe error verbatim
         # for auth/server errors. Card-declined we DO want the buyer to see.
@@ -164,7 +178,7 @@ def _request(method: str, path: str, form: dict | None = None) -> dict:
     except urllib.error.URLError as e:
         # DNS failure, connection-refused, TLS handshake — Stripe unreachable
         sys.stderr.write(
-            f"[stripe_api] URLError path={path} reason={getattr(e, 'reason', e)}\n"
+            f"[stripe_api] URLError path={mask_session_ids(path)} reason={getattr(e, 'reason', e)}\n"
         )
         return {
             "ok": False,
@@ -173,7 +187,7 @@ def _request(method: str, path: str, form: dict | None = None) -> dict:
             "retryable": True,
         }
     except TimeoutError:
-        sys.stderr.write(f"[stripe_api] timeout path={path}\n")
+        sys.stderr.write(f"[stripe_api] timeout path={mask_session_ids(path)}\n")
         return {
             "ok": False,
             "category": "timeout",
@@ -181,7 +195,8 @@ def _request(method: str, path: str, form: dict | None = None) -> dict:
             "retryable": True,
         }
     except OSError as e:
-        sys.stderr.write(f"[stripe_api] OSError path={path} {type(e).__name__}: {e}\n")
+        sys.stderr.write(f"[stripe_api] OSError path={mask_session_ids(path)} "
+                         f"{type(e).__name__}: {mask_session_ids(e)}\n")
         return {
             "ok": False,
             "category": "network_error",
