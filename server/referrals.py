@@ -83,15 +83,10 @@ def _claim_code_from_ref(ref_code: str) -> str:
     if not credits.LEDGER_PATH.exists():
         return ""
     needle = ref_code[len("ref_"):]
-    with credits.LEDGER_PATH.open() as f:
-        for line in f:
-            try:
-                row = json.loads(line)
-            except (json.JSONDecodeError, ValueError):
-                continue
-            claim = row.get("claim_code", "")
-            if claim.startswith("pk_") and claim[3:3 + len(needle)] == needle:
-                return claim
+    for row in credits.iter_ledger_rows():
+        claim = row.get("claim_code", "")
+        if isinstance(claim, str) and claim.startswith("pk_") and claim[3:3 + len(needle)] == needle:
+            return claim
     return ""
 
 

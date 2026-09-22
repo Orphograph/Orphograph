@@ -522,3 +522,137 @@ def test_claim_email_sent_once_outside_lock(monkeypatch):
     assert calls[0][0] == "mail@example.com" and calls[0][2] == 10
     nowpayments_webhook.handle_event(payload)  # duplicate
     assert len(calls) == 1, "duplicate IPN must not re-send the claim-code email"
+
+
+def test_a_row_sharing_a_part_does_not_block_a_paid_order():
+    """The exactly-once check used the any-part lookup, so any earlier mint
+    carrying this order id as SOME part (here a payout row) made a paid order
+    read as already minted: no claim code, no credits. Only the order's own
+    mint counts now."""
+    credits.add_credits(claim_code="pk_other", email="", amount=5,
+                        source="affiliate_payout:np_order_collide")
+    body = {
+        "order_id": "np_order_collide",
+        "payment_status": "finished",
+        "invoice_id": "inv_collide",
+        "customer_email": "buyer@example.com",
+        "plan": "writer_pack",
+    }
+    payload, _sig = _sign(body)
+    result = nowpayments_webhook.handle_event(payload)
+    assert result.get("claim_code_minted") is True, result
+    assert credits.find_nowpayments_mint("np_order_collide") is not None
+
+    # Control: the SAME order again is still exactly-once.
+    again = nowpayments_webhook.handle_event(_sign({**body, "payment_status": "confirmed"})[0])
+    assert again.get("duplicate_mint") == "np_order_collide", again
+
+
+def test_a_refund_revokes_only_the_orders_own_mint():
+    """The refund used the any-part match: an unrelated row carrying the order
+    id as another part (here a payout row) lost its unused credits too."""
+    credits.add_credits(claim_code="pk_bystander", email="", amount=5,
+                        source="affiliate_payout:np_order_refund")
+    body = {"order_id": "np_order_refund", "payment_status": "finished",
+            "invoice_id": "inv_refund", "customer_email": "buyer@example.com",
+            "plan": "writer_pack"}
+    minted = nowpayments_webhook.handle_event(_sign(body)[0])
+    assert minted.get("claim_code_minted") is True
+    refund = nowpayments_webhook.handle_event(_sign({**body, "payment_status": "refunded"})[0])
+    assert refund.get("refunded") is True
+    assert credits.balance("pk_bystander") == 5, "an unrelated row was revoked"
+    buyer_code = credits.find_nowpayments_mint("np_order_refund")["claim_code"]
+    assert credits.balance(buyer_code) == 0, "control: the buyer's own credits were revoked"
+
+
+def test_a_colon_in_the_invoice_still_finds_the_mint_on_a_lost_marker(monkeypatch):
+    """With ':' inside the invoice id (escaped when the source is written), a
+    crash-lost marker must still read as minted: no second mint."""
+    body = {"order_id": "np_order_colon", "payment_status": "finished",
+            "invoice_id": "inv:with:colons", "customer_email": "buyer@example.com",
+            "plan": "writer_pack"}
+    first = nowpayments_webhook.handle_event(_sign(body)[0])
+    assert first.get("claim_code_minted") is True
+    monkeypatch.setattr(nowpayments_webhook, "_has_been_processed", lambda _eid: False)
+    again = nowpayments_webhook.handle_event(_sign({**body, "payment_status": "confirmed"})[0])
+    assert again.get("duplicate_mint") == "np_order_colon", again
+
+
+def test_the_marker_answers_before_the_ledger_is_scanned(monkeypatch):
+    body = {"order_id": "np_order_marker", "payment_status": "finished",
+            "invoice_id": "inv_marker", "customer_email": "buyer@example.com",
+            "plan": "writer_pack"}
+    assert nowpayments_webhook.handle_event(_sign(body)[0]).get("claim_code_minted") is True
+
+    def must_not_scan(_order_id):
+        raise AssertionError("the ledger was scanned although the mint marker exists")
+    monkeypatch.setattr(credits, "find_nowpayments_mint", must_not_scan)
+    again = nowpayments_webhook.handle_event(_sign({**body, "payment_status": "confirmed"})[0])
+    assert again.get("duplicate_mint") == "np_order_marker"
+
+
+def test_a_colon_in_the_invoice_is_escaped_so_every_lookup_finds_the_mint():
+    """The invoice part was stored raw, so ':' inside it hid the order's own
+    mint from the strict match: order status, recover and REFUND all missed it
+    (a refunded buyer kept spendable credits)."""
+    body = {"order_id": "np_order_esc", "payment_status": "finished",
+            "invoice_id": "inv:with:colons", "customer_email": "buyer@example.com",
+            "plan": "writer_pack"}
+    assert nowpayments_webhook.handle_event(_sign(body)[0]).get("claim_code_minted") is True
+    row = credits.find_nowpayments_mint("np_order_esc")
+    assert row is not None and row["source"] == "nowpayments:inv%3Awith%3Acolons:np_order_esc"
+    refund = nowpayments_webhook.handle_event(_sign({**body, "payment_status": "refunded"})[0])
+    assert refund["revoked"] == [{"claim_code": row["claim_code"], "revoked": 10}], refund
+
+
+def test_a_retry_with_a_different_invoice_id_is_still_exactly_once(monkeypatch):
+    """The stored source comes from the FIRST IPN's invoice; a retry may carry
+    another id (payment_id instead of invoice_id). The match ignores the
+    invoice part, so a lost marker still reads as minted."""
+    body = {"order_id": "np_order_retry", "payment_status": "confirmed",
+            "invoice_id": "a:b", "customer_email": "buyer@example.com",
+            "plan": "writer_pack"}
+    assert nowpayments_webhook.handle_event(_sign(body)[0]).get("claim_code_minted") is True
+    monkeypatch.setattr(nowpayments_webhook, "_has_been_processed", lambda _eid: False)
+    retry = {k: v for k, v in body.items() if k != "invoice_id"}
+    retry.update(payment_status="finished", payment_id="123")
+    again = nowpayments_webhook.handle_event(_sign(retry)[0])
+    assert again.get("duplicate_mint") == "np_order_retry", again
+
+
+def test_a_non_string_source_elsewhere_does_not_break_a_refund():
+    credits.add_credits(claim_code="pk_weird", email="", amount=1, source="placeholder")
+    with credits.LEDGER_PATH.open("a") as f:
+        f.write(json.dumps({"claim_code": "pk_weird2", "credits_delta": 1, "source": 5}) + "\n")
+    body = {"order_id": "np_order_nsrc", "payment_status": "finished",
+            "invoice_id": "inv_nsrc", "customer_email": "buyer@example.com",
+            "plan": "writer_pack"}
+    assert nowpayments_webhook.handle_event(_sign(body)[0]).get("claim_code_minted") is True
+    refund = nowpayments_webhook.handle_event(_sign({**body, "payment_status": "refunded"})[0])
+    assert refund.get("refunded") is True and refund["revoked"][0]["revoked"] == 10
+
+
+def test_a_legacy_row_with_a_raw_colon_invoice_is_still_found_and_refunded(monkeypatch):
+    """Rows written before the invoice part was escaped may carry ':' in it.
+    The order's own mint must still be found (exactly-once) and refunded."""
+    credits.add_credits(claim_code="pk_legacy", email="buyer@example.com", amount=10,
+                        source="nowpayments:a:b:np_order_legacy")
+    monkeypatch.setattr(nowpayments_webhook, "_has_been_processed", lambda _eid: False)
+    body = {"order_id": "np_order_legacy", "payment_status": "finished",
+            "invoice_id": "a:b", "customer_email": "buyer@example.com",
+            "plan": "writer_pack"}
+    again = nowpayments_webhook.handle_event(_sign(body)[0])
+    assert again.get("duplicate_mint") == "np_order_legacy", again
+    refund = nowpayments_webhook.handle_event(_sign({**body, "payment_status": "refunded"})[0])
+    assert refund["revoked"] == [{"claim_code": "pk_legacy", "revoked": 10}], refund
+
+
+def test_a_list_claim_code_elsewhere_does_not_break_a_refund():
+    with credits.LEDGER_PATH.open("a") as f:
+        f.write(json.dumps({"claim_code": ["x"], "credits_delta": 1, "source": "y:1"}) + "\n")
+    body = {"order_id": "np_order_listcode", "payment_status": "finished",
+            "invoice_id": "inv_lc", "customer_email": "buyer@example.com",
+            "plan": "writer_pack"}
+    assert nowpayments_webhook.handle_event(_sign(body)[0]).get("claim_code_minted") is True
+    refund = nowpayments_webhook.handle_event(_sign({**body, "payment_status": "refunded"})[0])
+    assert refund["revoked"][0]["revoked"] == 10, refund

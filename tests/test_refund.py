@@ -88,3 +88,17 @@ def test_refund_already_zero_is_noop(isolated_ledger):
     proc = _run(["--claim-code", "pk_zero", "--reason", "manual"], ledger)
     assert proc.returncode == 0
     assert '"noop"' in proc.stdout
+
+
+def test_refund_by_email_matches_like_recovery_does(isolated_ledger):
+    """The refund tool matched the email case-sensitively while the recovery
+    lookup does not, so `--email Alice@B.com` found nothing and the refunded
+    buyer kept their credits."""
+    ledger = isolated_ledger / "credit_ledger.jsonl"
+    credits.add_credits("pk_case", "alice@b.com", 10, "stripe:cs_case")
+    proc = _run(["--email", "Alice@B.com", "--reason", "refund"], ledger)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    import importlib
+    importlib.reload(credits)
+    credits.LEDGER_PATH = ledger
+    assert credits.balance("pk_case") == 0

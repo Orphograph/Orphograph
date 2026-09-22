@@ -166,18 +166,9 @@ def zero_by_email(email: str, reason: str, dry_run: bool) -> int:
     """
     import credits
     codes_seen: set[str] = set()
-    if credits.LEDGER_PATH.exists():
-        with credits.LEDGER_PATH.open() as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    row = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                if row.get("email") == email and row.get("claim_code"):
-                    codes_seen.add(row["claim_code"])
+    # The recovery lookup's match (case-insensitive, stripped), so the refund
+    # tool finds the same codes a customer's recover request would.
+    codes_seen.update(credits.find_claim_codes_by_email(email))
     if not codes_seen:
         print(dim(f"No claim codes found for {email}"))
         return 2

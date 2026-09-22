@@ -111,21 +111,10 @@ def fetch_events(secret_key: str, since_unix: int) -> list[dict]:
 
 
 def load_ledger_rows(path: Path) -> list[dict]:
-    """Read every JSONL row. Tolerate blank / malformed lines (the live
-    ledger has been observed to carry trailing newlines)."""
-    if not path.exists():
-        return []
-    rows: list[dict] = []
-    with path.open() as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                rows.append(json.loads(line))
-            except json.JSONDecodeError:
-                continue
-    return rows
+    """Every ledger row, through the server's one reader (blank, torn and
+    non-object lines skipped), so this report and balance() agree."""
+    import credits
+    return list(credits.iter_ledger_rows(path))
 
 
 # ---------------------------------------------------------------- correlate
@@ -151,9 +140,15 @@ def correlate(events: list[dict], ledger_rows: list[dict]) -> dict:
     revoke_sources: set[str] = set()        # "stripe-refund:<sid>" / "stripe-dispute:<sid>"
     codes_by_grant: dict[str, set[str]] = {}   # grant source -> claim codes it minted
     balance_by_code: dict[str, int] = {}       # claim code -> credits still unspent
+    import credits
     for row in ledger_rows:
         src = row.get("source", "") or ""
-        delta = int(row.get("credits_delta") or 0)
+        if not isinstance(src, str):
+            src = ""
+        try:
+            delta = credits.parse_delta(row)  # "10.0" is 10, as in balance()
+        except ValueError:
+            continue  # a hand-corrupted row: the report must still run
         code = row.get("claim_code") or ""
         if code:
             balance_by_code[code] = balance_by_code.get(code, 0) + delta
