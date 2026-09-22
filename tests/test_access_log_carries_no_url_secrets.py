@@ -109,3 +109,32 @@ def test_a_team_invite_code_in_a_share_link_does_not_reach_the_log(server):
     assert "/team/join" in text, "control: the request reached the log at all"
     assert code not in text, "a team invite code was written to the access log"
     assert "plan=harmless-canary" in text, "the rule redacted a parameter it should not"
+
+
+def test_secrets_in_shapes_the_server_still_acts_on_are_not_logged(server):
+    """The rules used to match the literal text: `\\s/a/`, `[?&]e=`. The server
+    acts on more than that. `//a/<token>` and the absolute form
+    `http://host/a/<token>` reach the log with the token still live (the server
+    answers them 404, so it is never spent), and a query key is decoded before
+    it is read, so `E=` and `%65=` carry the same address as `e=`."""
+    base, data_dir = server
+    token = _mint_token(data_dir, "log-shapes@example.test")
+    code = "pk_fedcba9876543210fedcba9876543210"
+    _srv.raw_request(base, f"//a/{token}", "HEAD")
+    _srv.raw_request(base, f"http://orphograph.test/a/{token}")
+    _srv.raw_request(base, f"//api/pack/balance/{code}")
+    _srv.raw_request(base, "/api/unsubscribe?x=1&E=shape-upper%40example.test")
+    _srv.raw_request(base, "/api/unsubscribe?%65=shape-encoded%40example.test")
+    _srv.raw_request(base, "/buy?stripe%5Fsession=cs_live_ShapeCanary0123")
+    _srv.raw_request(base, "/api/stripe/session?id=CS_live_ShapeCanary4567")
+    _srv.raw_request(base, "/pricing?id=plain-id-canary")
+
+    text = _log(data_dir)
+    assert '"HEAD //a/' in text, "control: the raw request was not logged"
+    assert token not in text, "a live sign-in token is sitting in the access log"
+    assert "HEAD //a/[redacted]" in text
+    assert code not in text
+    for leaked in ("shape-upper", "shape-encoded", "ShapeCanary0123", "ShapeCanary4567"):
+        assert leaked not in text, f"{leaked} reached the access log"
+    assert "x=1&E=[redacted]" in text, "only the value is removed"
+    assert "id=plain-id-canary" in text, "an ordinary id= must stay readable"

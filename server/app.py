@@ -282,6 +282,18 @@ _anchor_limiter = TokenBucket(
     snapshot_path=RATE_LIMIT_SNAPSHOT,
 )
 
+# Read-only status lookups the buyer's own page makes after paying:
+# web/pay/success.js polls /api/nowpayments/order/<id> up to 6 times, and
+# web/buy.js asks /api/stripe/session once per load. Both used to draw on
+# _anchor_limiter, whose budget is 3 per day per IP prefix, so the 4th poll
+# answered 429 for ~8 hours and a payment credited after the 3rd poll never
+# showed as confirmed (measured in production 2026-09-22: 200,200,200,429).
+# The ids are unguessable, so this bucket only has to stop a tight loop, not
+# ration a day. In-memory: a restart refilling it is harmless.
+STATUS_RATE_CAPACITY = 30
+STATUS_RATE_REFILL = 30 / 3600.0  # burst 30, then one every 2 minutes
+_status_limiter = TokenBucket(STATUS_RATE_CAPACITY, STATUS_RATE_REFILL)
+
 # Funnel-event limiter: 60 events / IP / minute. Separate bucket so noisy
 # analytics traffic can't burn the anchor-rate budget (and vice versa).
 # Cookieless: keyed by truncated IP only. In-memory only (no snapshot) —
@@ -1151,25 +1163,42 @@ class Handler(BaseHTTPRequestHandler):
     # address. Only the value goes; the route and the other parameters stay,
     # so the line is still useful. The sign-in token matters most: HEAD does
     # not spend it, so a probed link would otherwise sit in the log live.
+    # Matched on what the server ACTS on, not on the literal text: a path may
+    # arrive as //a/<token> or in absolute form (http://host/a/<token>), and a
+    # query key may arrive as E= or %65=. The server answers those 404 or
+    # decodes the key, so the value is still live and must still go.
+    _LOG_SECRET_PARAMS = frozenset({"e", "email", "code"})
+    _LOG_SESSION_PARAMS = frozenset({"stripe_session", "session_id", "id"})
+
+    @classmethod
+    def _redact_query_param(cls, m: "re.Match") -> str:
+        from urllib.parse import unquote_plus
+        key = unquote_plus(m.group(2)).strip().lower()
+        value = m.group(3)
+        if key in cls._LOG_SECRET_PARAMS or (
+            key in cls._LOG_SESSION_PARAMS
+            and unquote_plus(value).strip().lower().startswith("cs_")
+        ):
+            return f"{m.group(1)}{m.group(2)}=[redacted]"
+        return m.group(0)
+
     _LOG_REDACTIONS = (
-        (re.compile(r"(\s/a/)[^\s?\"]+"), r"\1[redacted]"),
-        (re.compile(r"(\s/api/pack/balance/)[^\s?\"]+"), r"\1[redacted]"),
-        (re.compile(r"([?&](?:e|email)=)[^&\s\"]+"), r"\1[redacted]"),
-        # A Stripe checkout-session id: /api/stripe/session?id=cs_… answers with
-        # the buyer's email to anyone holding it, and the post-checkout landing
-        # carries it as ?stripe_session=cs_…. Only a value that IS a session id
-        # goes, so an unrelated `id=` parameter stays readable.
-        (re.compile(r"([?&](?:stripe_session|session_id|id)=)cs_[^&\s\"]+"), r"\1[redacted]"),
-        # A team invite code: the share link is /team/join?code=…, and the code
-        # is what admits a person to the team.
-        (re.compile(r"([?&]code=)[^&\s\"]+"), r"\1[redacted]"),
+        # The bearer sign-in token and a claim code (it is what spends credits).
+        (re.compile(r"(\s(?:[A-Za-z][A-Za-z0-9+.-]*://[^/\s\"]*)?/+(?:a|api/pack/balance)/+)[^\s?\"]+"),
+         r"\1[redacted]"),
+        # A person's address (?e=, ?email=), a team invite code (?code= admits
+        # a person to the team), and a Stripe checkout-session id
+        # (/api/stripe/session?id=cs_… answers with the buyer's email to anyone
+        # holding it; the landing carries ?stripe_session=cs_…). Only a value
+        # that IS a session id goes, so an unrelated `id=` stays readable.
+        (re.compile(r"([?&;])([^=&\s\"?]+)=([^&\s\"]*)"), None),
     )
 
     def log_message(self, fmt, *args):
         truncated = truncate_ip(self.client_address[0] if self.client_address else "")
         line = fmt % args
         for pattern, replacement in self._LOG_REDACTIONS:
-            line = pattern.sub(replacement, line)
+            line = pattern.sub(replacement or self._redact_query_param, line)
         sys.stderr.write(f"[{self.log_date_time_string()}] {truncated} - {line}\n")
 
     # BaseHTTPRequestHandler.send_error() never calls _security_headers(), so every
@@ -1939,7 +1968,7 @@ class Handler(BaseHTTPRequestHandler):
             if not RECEIPT_ID_RE.match(order_id):
                 _json_response(self, 400, {"error": "invalid order id"})
                 return
-            allowed, retry = _anchor_limiter.check(f"orderstat:{self._client_key()}")
+            allowed, retry = _status_limiter.check(f"orderstat:{self._client_key()}")
             if not allowed:
                 _json_response(self, 429, {
                     "error": "too many requests",
@@ -5058,7 +5087,7 @@ class Handler(BaseHTTPRequestHandler):
             _json_response(self, 503, {"error": "Stripe not configured"})
             return
         # Light rate-limit so this can't be used as a session-id oracle
-        allowed, _ = _anchor_limiter.check(f"stripe-session:{self._client_key()}")
+        allowed, _ = _status_limiter.check(f"stripe-session:{self._client_key()}")
         if not allowed:
             _json_response(self, 429, {"error": "rate limit exceeded"})
             return

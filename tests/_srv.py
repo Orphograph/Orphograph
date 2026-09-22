@@ -234,6 +234,28 @@ def request(base: str, path: str, method: str = "GET", body: bytes | None = None
                          f"--- server output ---\n{_tail(log_path)}") from e
 
 
+def raw_request(base: str, target: str, method: str = "GET",
+                timeout: float = 15) -> bytes:
+    """Send one request line EXACTLY as written and return the raw response.
+
+    urllib normalises the target, so it cannot send `//a/<token>` or the
+    absolute form `http://host/a/<token>`, and those are shapes the server and
+    its access log both see from real clients."""
+    import socket
+    from urllib.parse import urlparse
+    u = urlparse(base)
+    chunks = []
+    with socket.create_connection((u.hostname, u.port), timeout=timeout) as s:
+        s.sendall(f"{method} {target} HTTP/1.1\r\nHost: {u.netloc}\r\n"
+                  "User-Agent: uptime-check/1.0\r\nConnection: close\r\n\r\n".encode())
+        while True:
+            chunk = s.recv(65536)
+            if not chunk:
+                break
+            chunks.append(chunk)
+    return b"".join(chunks)
+
+
 def _json_object(raw: bytes) -> dict:
     try:
         parsed = json.loads(raw)
