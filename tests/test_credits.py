@@ -249,3 +249,45 @@ def test_a_two_part_row_answers_only_for_a_server_order_id():
     ]))
     assert credits.find_nowpayments_mint("np_pack_5_scaffold")["claim_code"] == "pk_ord"
     assert credits.find_nowpayments_mint("4401") is None
+
+
+def test_every_reader_agrees_on_a_decimal_delta_and_fails_closed_on_junk():
+    """One reader and one delta parser: balance, the mint lookups, email
+    lookup and revocation all read "10.0" as 10. A junk delta RAISES, but only
+    for the lookups its row matters to: another customer's bad row must not
+    stop this customer's balance (before, one bad row failed everyone)."""
+    import json
+    credits.LEDGER_PATH.write_text(json.dumps(
+        {"claim_code": "pk_d", "email": "d@x.test", "credits_delta": "10.0",
+         "source": "stripe:cs_dd"}) + "\n" + json.dumps(["not", "a", "row"]) + "\n")
+    assert credits.balance("pk_d") == 10
+    assert credits.find_mint_by_exact_source({"stripe:cs_dd"})["credits_delta"] == 10
+    assert credits.find_claim_codes_by_email("d@x.test") == ["pk_d"]
+    with credits.LEDGER_PATH.open("a") as f:
+        f.write(json.dumps({"claim_code": "pk_j", "credits_delta": "lots",
+                            "source": "nowpayments:9:np_junk"}) + "\n")
+    assert credits.balance("pk_d") == 10, "someone else's junk row stopped this balance"
+    assert credits.find_mint_by_exact_source({"stripe:cs_dd"})["claim_code"] == "pk_d"
+    # An unrelated refund still runs past someone else's bad row.
+    assert credits.revoke_credits_by_source("cs_dd", "stripe-refund:cs_dd") == [
+        {"claim_code": "pk_d", "revoked": 10}]
+    for call in (lambda: credits.balance("pk_j"),
+                 lambda: credits.find_nowpayments_mint("np_junk"),
+                 lambda: credits.revoke_credits_by_source("np_junk", "nowpayments-refund:np_junk")):
+        with pytest.raises(ValueError):
+            call()
+
+
+@pytest.mark.parametrize("raw", ["10.5", "-0.9", True, "inf", "nan", "lots", [], {},
+                                 "1e2", "1_000", 1e300, 2.0 ** 60])
+def test_a_delta_that_is_not_a_whole_number_raises_value_error(raw):
+    """int(float(x)) truncated "-0.9" to 0 and "10.9" to 10 silently, and
+    junk raised three different exception types."""
+    with pytest.raises(ValueError):
+        credits.parse_delta({"credits_delta": raw})
+
+
+@pytest.mark.parametrize("raw,expected", [(10, 10), ("10", 10), ("10.0", 10), (-3, -3), (None, 0), ("", 0),
+                                          ("9007199254740993", 9007199254740993), (10.0, 10)])
+def test_whole_number_deltas_parse(raw, expected):
+    assert credits.parse_delta({"credits_delta": raw}) == expected

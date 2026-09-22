@@ -241,3 +241,18 @@ def test_refund_with_revocation_clean(tmp_path: Path) -> None:
         )
 
     assert code == 0
+
+
+def test_the_report_reads_the_ledger_like_balance_does(tmp_path: Path) -> None:
+    """correlate() parsed deltas itself: "10.0" (which balance() reads as 10)
+    and a non-string source crashed the whole drift report."""
+    ledger = tmp_path / "credit_ledger.jsonl"
+    ledger.write_text("\n".join(json.dumps(r) for r in [
+        {"claim_code": "pk_a", "credits_delta": "10.0", "source": "stripe:cs_ok"},
+        {"claim_code": "pk_b", "credits_delta": 1, "source": 5},
+        ["not", "a", "row"],
+    ]) + "\n")
+    rows = reconcile.load_ledger_rows(ledger)
+    assert len(rows) == 2
+    result = reconcile.correlate([], rows)
+    assert isinstance(result, dict)

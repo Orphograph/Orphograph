@@ -236,10 +236,17 @@ def _decide_and_mint_locked(
             # ALSO cross-check the credit ledger (the money source of truth) by
             # order_id, so even if the marker write was lost to a crash AFTER a
             # prior successful mint, a retried/duplicate IPN will not double-mint.
-            # find_claim_code_by_source returns the positive mint row; refund
-            # rows are negative and ignored.
-            already_minted = credits.find_claim_code_by_source(order_id) is not None
-            if _has_been_processed(mint_marker) or already_minted:
+            # find_nowpayments_mint returns THIS order's own positive mint row
+            # ("nowpayments:<invoice>:<order_id>"); refund rows are negative
+            # and ignored. The any-part lookup it replaced also counted a row
+            # carrying the id as some other part, and a paid order then read
+            # as already minted and was never credited; paid-but-no-credit is
+            # the worse error (see the underpayment guard below).
+            # The marker answers first (cheap); the ledger is scanned only when
+            # it is absent (a crash lost the marker after the mint).
+            already_minted = (_has_been_processed(mint_marker)
+                              or credits.find_nowpayments_mint(order_id) is not None)
+            if already_minted:
                 result = {"ok": True, "duplicate_mint": order_id,
                           "status": payment_status}
                 # Re-assert the marker so a crash-lost marker self-heals.
@@ -287,10 +294,14 @@ def _decide_and_mint_locked(
                         return result, None
 
             claim_code = credits.new_claim_code()
-            # Include BOTH invoice_id and order_id in the source so that
-            # later refund IPNs (which arrive with the order_id we issued)
-            # can locate this row via substring match.
-            source = f"nowpayments:{invoice_id or order_id}:{order_id}"
+            # Include BOTH invoice_id and order_id in the source; the order id
+            # is the LAST part, which is how the exactly-once check and a later
+            # refund IPN (credits.nowpayments_mint_matcher) find this row.
+            # The invoice part never carries ":" (escaped to "%3A"), so the
+            # order id is always everything after the second ":", whatever
+            # characters either id uses.
+            invoice_part = (invoice_id or order_id).replace(":", "%3A")
+            source = f"nowpayments:{invoice_part}:{order_id}"
             credits.add_credits(
                 claim_code=claim_code,
                 email=customer_email,
@@ -329,13 +340,16 @@ def _decide_and_mint_locked(
             _mark_processed(event_id, result)
             return result, None
 
-        # Refund (after we already minted). Revoke any unused credits whose
-        # source mentions this order_id. Already-spent anchors stay valid.
+        # Refund (after we already minted). Revoke the unused credits of THIS
+        # order's own mint (the same predicate the exactly-once check uses):
+        # the any-part match also zeroed an unrelated row carrying the id.
+        # Already-spent anchors stay valid.
         if payment_status == "refunded":
             revoke_source = f"nowpayments-refund:{order_id}"
             revoked = credits.revoke_credits_by_source(
                 source_token=order_id,
                 revoke_source=revoke_source,
+                mint_matches=credits.nowpayments_mint_matcher(order_id),
             )
             sys.stderr.write(
                 f"[nowpayments_webhook] order {order_id} refunded — revoked={revoked}\n"
