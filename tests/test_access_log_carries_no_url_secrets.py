@@ -155,7 +155,7 @@ def test_shapes_the_first_widening_still_missed(server):
     _srv.raw_request(base, "", line=f"/a/{token}")
     _srv.raw_request(base, "/api/waitlist/confirm?token=ConfirmCanary0123")
     _srv.raw_request(base, "/pricing?unlisted=UnlistedCanary", "GET")
-    _srv.raw_request(base, "", line="GET /about?q=ok\x1b[2J HTTP/1.1")
+    _srv.raw_request(base, "", line="GET /about\x1b[2J HTTP/1.1")
 
     text = _log(data_dir)
     assert "/./a/" in text and "/api//pack/balance/" in text, "control: raw shapes were logged"
@@ -163,6 +163,34 @@ def test_shapes_the_first_widening_still_missed(server):
     assert code not in text, "a claim code is sitting in the access log"
     for leaked in ("nested-plain", "nested-encoded", "ConfirmCanary", "UnlistedCanary"):
         assert leaked not in text, f"{leaked} reached the access log"
-    assert "next=/api/unsubscribe?e=[redacted]" in text, "a plain next path stays readable"
+    assert "?next=[redacted]" in text, "a next carrying its own query is redacted whole"
     assert "\x1b" not in text, "a raw control character reached the log"
     assert "\\x1b" in text, "control: the escaped form is what should be logged"
+
+
+def test_shapes_the_second_review_found(server):
+    """Round two: the query was split on `?` `;` `"` where parse_qs splits only
+    on `&`, so a tail after one of them was logged; the bearer path rule was
+    literal, so `/A/`, `/%61/` and encoded slashes kept a live token; and the
+    keep list named `q` and `label`, which on /api/me/anchors are a person's
+    private vault search."""
+    base, data_dir = server
+    token = _mint_token(data_dir, "log-round2@example.test")
+    code = "pk_99887766554433221100ffeeddccbbaa"
+    for target in (f"/A/{token}", f"/%61/{token}", f"/a%2F{token}",
+                   f"/api/pack%2Fbalance/{code}", f"/login?next=%2Fa%2F{token}"):
+        _srv.raw_request(base, target)
+    _srv.raw_request(base, "/x?token=AAAA;SemiTailCanary")
+    _srv.raw_request(base, "/x?token=ab?QmarkTailCanary")
+    _srv.raw_request(base, '/api/unsubscribe?e="quoted-canary%40example.test')
+    _srv.raw_request(base, "/x?NoEqualsCanary")
+    _srv.raw_request(base, "/api/me/anchors?label=PrivateLabelCanary&q=9f86d081cafe&limit=5")
+
+    text = _log(data_dir)
+    assert token not in text, "a live sign-in token is sitting in the access log"
+    assert "[redacted-path]" in text, "control: an encoded bearer path was logged and judged"
+    assert code not in text, "a claim code is sitting in the access log"
+    for leaked in ("SemiTailCanary", "QmarkTailCanary", "quoted-canary", "NoEqualsCanary",
+                   "PrivateLabelCanary", "9f86d081cafe"):
+        assert leaked not in text, f"{leaked} reached the access log"
+    assert "&limit=5" in text, "a harmless parameter stays readable"

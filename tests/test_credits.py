@@ -144,3 +144,37 @@ def test_concurrent_processes_cannot_double_spend(tmp_path):
     )
     _os.environ.pop("ORPHO_CREDIT_LEDGER", None)
     importlib.reload(credits)
+
+
+def _write_rows(rows):
+    import json
+    credits.LEDGER_PATH.write_text("".join(json.dumps(r) + "\n" for r in rows))
+
+
+def test_nowpayments_mint_is_found_by_its_own_order_id_only():
+    _write_rows([
+        {"claim_code": "pk_real", "email": "a@x.test", "credits_delta": 50,
+         "source": "nowpayments:4401:np_pack_50_real"},
+        {"claim_code": "pk_card", "email": "b@x.test", "credits_delta": 10,
+         "source": "stripe:cs_live_abc"},
+    ])
+    assert credits.find_nowpayments_mint("np_pack_50_real")["claim_code"] == "pk_real"
+    for probe in ("nowpayments", "4401", "stripe", "cs_live_abc", "np_pack_50"):
+        assert credits.find_nowpayments_mint(probe) is None, probe
+
+
+def test_a_later_row_sharing_a_part_does_not_hide_the_orders_mint():
+    """The status route used to take the LATEST any-part match and then filter
+    it, so a later unrelated row carrying the order id as another part made a
+    credited order read as not credited."""
+    _write_rows([
+        {"claim_code": "pk_real", "email": "a@x.test", "credits_delta": 50,
+         "source": "nowpayments:4402:np_pack_50_x"},
+        {"claim_code": "pk_other", "email": "c@x.test", "credits_delta": 5,
+         "source": "affiliate:np_pack_50_x:payout"},
+    ])
+    row = credits.find_nowpayments_mint("np_pack_50_x")
+    assert row is not None and row["claim_code"] == "pk_real"
+    # The loose lookup still answers with the later row; that is why the
+    # strict one exists.
+    assert credits.find_claim_code_by_source("np_pack_50_x")["claim_code"] == "pk_other"

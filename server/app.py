@@ -294,12 +294,6 @@ _anchor_limiter = TokenBucket(
 STATUS_RATE_CAPACITY = 30
 STATUS_RATE_REFILL = 30 / 3600.0  # burst 30, then one every 2 minutes
 _status_limiter = TokenBucket(STATUS_RATE_CAPACITY, STATUS_RATE_REFILL)
-# One ceiling across ALL callers on /api/stripe/session's outbound Stripe
-# reads, so many prefixes each spending their own 30 cannot run the
-# account's Stripe quota down under checkout and the webhook.
-STRIPE_READ_CAPACITY = 300
-STRIPE_READ_REFILL = 300 / 3600.0
-_stripe_read_limiter = TokenBucket(STRIPE_READ_CAPACITY, STRIPE_READ_REFILL)
 
 # Funnel-event limiter: 60 events / IP / minute. Separate bucket so noisy
 # analytics traffic can't burn the anchor-rate budget (and vice versa).
@@ -1176,48 +1170,90 @@ class Handler(BaseHTTPRequestHandler):
     # named the secret keys instead, and each new shape leaked until someone
     # wrote one more rule: `E=`, `%65=`, a key nested in another value
     # (`?next=/unsubscribe?e=…`), and `?token=` on the newsletter confirm link,
-    # which no rule ever named. `?` separates pairs here, so a nested key is
-    # judged on its own.
+    # which no rule ever named. The query is split on `&` only, exactly as
+    # parse_qs splits it, so `;`, `?` or `"` inside a value stay in that value
+    # and are redacted with it; a part with no `=` is redacted too. `q` and
+    # `label` are NOT here: on /api/me/anchors they are a person's private
+    # vault search (a hash prefix, a label fragment).
     _LOG_KEEP_PARAMS = frozenset({
         "v", "plan", "variant", "ref", "status", "size", "receipt_id", "pack",
         "limit", "before", "stripe", "print", "coupon", "promo",
-        "prefilled_promo_code", "nolenis", "private", "label", "q", "probe",
-        # Kept only when the value is harmless; see _redact_log_param.
+        "prefilled_promo_code", "nolenis", "private", "probe",
+        # Kept only when the value is harmless; see _redact_log_query.
         "id", "next",
     })
-    _LOG_PARAM = re.compile(r"([?&;])([^=&;?\s\"]*)=([^&;?\s\"]*)")
+    _LOG_QUERY = re.compile(r"\?(\S*)")
     _LOG_PLAIN_PATH = re.compile(r"/[A-Za-z0-9/_.-]*")
     # The bearer sign-in token and a claim code (it is what spends credits),
     # wherever the segment sits: `//a/…`, `/./a/…`, `http://host/a/…`,
     # `/api//pack/balance/…` and a bare one-word request line are all answered
-    # without spending the value, so it would sit in the log live.
+    # without spending the value, so it would sit in the log live. This keeps
+    # the common shape readable (`/a/[redacted]`).
     _LOG_BEARER_PATH = re.compile(r"(/a/+|/pack/balance/+)[^\s?\"/]+")
+    # Anything the literal rule cannot see (`/A/…`, `/%61/…`, `/a%2F…`,
+    # `/api/pack%2Fbalance/…`) is judged decoded and case-folded, and the
+    # whole path goes when it names a bearer segment.
+    _LOG_PATHLIKE = re.compile(r"[^\s\"'()]*/[^\s\"'()]*")
+    _LOG_CONTROL_TABLE = {c: f"\\x{c:02x}" for c in (*range(0x20), *range(0x7f, 0xa0))}
+
+    @staticmethod
+    def _names_bearer_segment(path: str) -> bool:
+        """Does `path`, decoded, case-folded and with `//`, `/./`, `/../` and
+        backslashes collapsed, contain a sign-in or claim-code segment?"""
+        decoded = path
+        for _ in range(3):
+            once = unquote_plus(decoded)
+            if once == decoded:
+                break
+            decoded = once
+        decoded = decoded.lower().replace("\\", "/")
+        decoded = re.sub(r"/(?:\.{1,2}/)+", "/", decoded)
+        decoded = re.sub(r"/{2,}", "/", decoded)
+        return "/a/" in decoded or "/pack/balance/" in decoded
 
     @classmethod
-    def _redact_log_param(cls, m: "re.Match") -> str:
-        key = unquote_plus(m.group(2)).strip().lower()
-        if key in cls._LOG_KEEP_PARAMS:
-            value = unquote_plus(m.group(3)).strip()
+    def _redact_log_query(cls, m: "re.Match") -> str:
+        parts = []
+        for part in m.group(1).split("&"):
+            if "=" not in part:
+                parts.append(part if part == "" else "[redacted]")
+                continue
+            raw_key, raw_value = part.split("=", 1)
+            key = unquote_plus(raw_key).strip().lower()
+            value = unquote_plus(raw_value).strip()
+            keep = key in cls._LOG_KEEP_PARAMS
             if key == "id" and value.lower().startswith("cs_"):
-                pass  # a Stripe checkout session: it answers with the buyer's email
-            elif key == "next" and not cls._LOG_PLAIN_PATH.fullmatch(value):
-                pass  # a redirect target carrying its own query or encoding
-            else:
-                return m.group(0)
-        return f"{m.group(1)}{m.group(2)}=[redacted]"
+                keep = False  # a Stripe checkout session answers with the buyer's email
+            elif key == "next" and (not cls._LOG_PLAIN_PATH.fullmatch(value)
+                                    or cls._names_bearer_segment(value)):
+                keep = False  # a redirect target carrying a query, encoding or a bearer
+            parts.append(part if keep else f"{raw_key}=[redacted]")
+        return "?" + "&".join(parts)
+
+    @classmethod
+    def _redact_hidden_bearer_path(cls, m: "re.Match") -> str:
+        target = m.group(0)
+        path, sep, query = target.partition("?")
+        if "[redacted]" in path:
+            return target
+        if cls._names_bearer_segment(path):
+            return "[redacted-path]" + sep + query
+        return target
 
     @classmethod
     def _redact_log_line(cls, line: str) -> str:
         line = cls._LOG_BEARER_PATH.sub(r"\1[redacted]", line)
-        return cls._LOG_PARAM.sub(cls._redact_log_param, line)
+        line = cls._LOG_PATHLIKE.sub(cls._redact_hidden_bearer_path, line)
+        return cls._LOG_QUERY.sub(cls._redact_log_query, line)
 
     def log_message(self, fmt, *args):
         truncated = truncate_ip(self.client_address[0] if self.client_address else "")
         line = self._redact_log_line(fmt % args)
         # The stdlib escapes control characters in the request line before it
         # writes it; this override skipped that, so `\x1b[2J` or a bare `\r`
-        # plus a fake entry went to the log raw.
-        line = line.translate(self._control_char_table)
+        # plus a fake entry went to the log raw. Own table: the stdlib's is a
+        # private attribute some interpreters do not have.
+        line = line.translate(self._LOG_CONTROL_TABLE)
         sys.stderr.write(f"[{self.log_date_time_string()}] {truncated} - {line}\n")
 
     # BaseHTTPRequestHandler.send_error() never calls _security_headers(), so every
@@ -1994,16 +2030,9 @@ class Handler(BaseHTTPRequestHandler):
                     "retry_after_seconds": int(retry) + 1,
                 })
                 return
-            ledger_row = credits.find_claim_code_by_source(order_id)
-            # Only a crypto order answers, and only by its own order id. The
-            # lookup matches ANY whole part of ANY mint source, so `stripe`,
-            # a referral code or a NOWPayments invoice id (numeric, near
-            # sequential) each reported `credited:true` and a credit count for
-            # somebody else's sale. The mint source is
-            # "nowpayments:<invoice>:<order_id>" (nowpayments_webhook.py).
-            src = ((ledger_row or {}).get("source") or "").split(":")
-            if not (len(src) >= 2 and src[0] == "nowpayments" and src[-1] == order_id):
-                ledger_row = None
+            # Only a crypto order answers, and only by its own order id: see
+            # credits.find_nowpayments_mint for what the looser lookup allowed.
+            ledger_row = credits.find_nowpayments_mint(order_id)
             credited = ledger_row is not None
             # NOTE: ledger_row contains claim_code + email + source — do NOT
             # spread it into the response. Only the int delta is safe to echo.
@@ -4849,16 +4878,13 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         # 2. Look up the EXISTING claim code by source. Never mint.
-        ledger_row = credits.find_claim_code_by_source(order_id)
-        # find_claim_code_by_source matches order_id as a WHOLE colon-delimited
-        # part of the mint source, so a short/prefix order_id cannot resolve to a
-        # DIFFERENT customer's row. It also matches the invoice part, so still
-        # require order_id to be the EXACT final ":"-segment of the mint source
-        # ("nowpayments:<invoice>:<order_id>"). This closes the 200-vs-400
-        # enumeration oracle and the unsolicited-resend vector, on top of the
-        # email guard below.
-        row_source = ((ledger_row or {}).get("source") or "")
-        order_id_exact = row_source.rsplit(":", 1)[-1] == order_id
+        # Only this order's own crypto mint ("nowpayments:<invoice>:<order_id>",
+        # order id LAST), matched inside the scan so a later row sharing some
+        # other part cannot stand in for it or hide it. This closes the
+        # 200-vs-400 enumeration oracle and the unsolicited-resend vector, on
+        # top of the email guard below.
+        ledger_row = credits.find_nowpayments_mint(order_id)
+        order_id_exact = ledger_row is not None
 
         # 3. CROSS-CUSTOMER-LEAK GUARD (load-bearing): the request email must
         #    equal the ledger-row email exactly (case-insensitive, stripped).
@@ -5127,13 +5153,10 @@ class Handler(BaseHTTPRequestHandler):
         if not sid or not sid.startswith("cs_") or len(sid) > 256 or not all(c.isalnum() or c == "_" for c in sid):
             _json_response(self, 400, {"error": "invalid session id"})
             return
-        # Every well-formed id costs one live Stripe API read, and the
-        # per-prefix bucket above is sized for a buyer's reloads, not for the
-        # account's Stripe quota across many prefixes. One shared ceiling.
-        allowed, _ = _stripe_read_limiter.check("all-callers")
-        if not allowed:
-            _json_response(self, 429, {"error": "rate limit exceeded"})
-            return
+        # No ceiling shared across callers: one would let a handful of
+        # prefixes lock every buyer out of this page. Per prefix it is 30, then
+        # one every 2 minutes; reaching Stripe's own read limit (100/s) that
+        # way takes on the order of ten thousand prefixes.
         result = stripe_api._request("GET", f"/checkout/sessions/{sid}")
         if not result.get("ok"):
             status = result.get("status", 502)

@@ -158,6 +158,48 @@ def find_claim_code_by_source(source_token: str) -> dict | None:
     }
 
 
+def find_nowpayments_mint(order_id: str) -> dict | None:
+    """The most recent crypto mint for exactly this order, or None.
+
+    The NOWPayments webhook mints with source "nowpayments:<invoice>:<order_id>"
+    (nowpayments_webhook.py), so the kind is the first part and the order id
+    the LAST. `find_claim_code_by_source` matches any whole part of any source
+    and keeps the latest match, so a kind word, a referral code or an invoice id
+    answered for somebody else's sale, and a later unrelated row sharing a part
+    could hide the order's own mint. The predicate is applied inside the scan.
+
+    Not used by the webhook's exactly-once check on purpose: legacy two-part
+    sources ("nowpayments:<invoice>") end in the invoice, so a strict match
+    would miss them and a replayed IPN could mint twice. There the loose
+    lookup errs toward "already minted", which is the safe direction.
+    """
+    if not order_id or not LEDGER_PATH.exists():
+        return None
+    latest = None
+    with LEDGER_PATH.open() as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            parts = (row.get("source") or "").split(":")
+            if (len(parts) >= 3 and parts[0] == "nowpayments" and parts[-1] == order_id
+                    and int(row.get("credits_delta") or 0) > 0):
+                latest = row
+    if latest is None:
+        return None
+    return {
+        "claim_code": latest.get("claim_code"),
+        "email": latest.get("email"),
+        "source": latest.get("source"),
+        "ts": latest.get("ts"),
+        "credits_delta": int(latest.get("credits_delta") or 0),
+    }
+
+
 def find_mint_by_exact_source(sources: set[str]) -> dict | None:
     """The first mint row whose `source` IS one of `sources`, or None.
 
