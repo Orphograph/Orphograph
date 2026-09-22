@@ -93,23 +93,39 @@ def refund_credit(claim_code: str, reason: str = "anchor-refund") -> None:
     })
 
 
+def _ledger_rows(f):
+    """Every ledger row as a dict, in order. Blank and torn lines (a crash
+    mid-append) and non-object JSON are skipped: none of them can carry a
+    claim code. One reader for every scan in this module, so they cannot
+    disagree about what the ledger says."""
+    for line in f:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(row, dict):
+            yield row
+
+
+def _delta(row: dict) -> int:
+    """A row's credits_delta. "10.0" is 10. A value that is not a number
+    RAISES: a balance, a revocation or an exactly-once check must stop rather
+    than read a real movement of credits as zero."""
+    return int(float(row.get("credits_delta") or 0))
+
+
 def _scan() -> dict[str, int]:
     if not LEDGER_PATH.exists():
         return {}
     balances: dict[str, int] = {}
     with LEDGER_PATH.open() as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                row = json.loads(line)
-            except json.JSONDecodeError:
-                continue
+        for row in _ledger_rows(f):
             code = row.get("claim_code")
-            delta = int(row.get("credits_delta", 0))
             if code:
-                balances[code] = balances.get(code, 0) + delta
+                balances[code] = balances.get(code, 0) + _delta(row)
     return balances
 
 
@@ -129,23 +145,11 @@ def _mint_rows():
     if not LEDGER_PATH.exists():
         return
     with LEDGER_PATH.open() as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                row = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if not isinstance(row, dict):
-                continue
+        for row in _ledger_rows(f):
             source = row.get("source") or ""
             if not isinstance(source, str):
                 continue
-            # "10.0" is still a mint of 10. A delta that is not a number at all
-            # RAISES, as it always did: skipping it would make an exactly-once
-            # check read "not minted" and mint again.
-            delta = int(float(row.get("credits_delta") or 0))
+            delta = _delta(row)
             if delta > 0:
                 yield row, source, delta
 
@@ -195,9 +199,8 @@ def find_nowpayments_mint(order_id: str) -> dict | None:
     later unrelated row sharing a part could hide the order's own mint. Here
     the predicate is applied inside the scan.
 
-    Used by the order-status route and crypto recover. The webhook's
-    exactly-once check still uses the any-part lookup; moving it is its own
-    change with its own webhook-level test. Not by refund revocation (revoke_credits_by_source):
+    Used by the order-status route, crypto recover and the NOWPayments
+    webhook's exactly-once check. Not by refund revocation (revoke_credits_by_source):
     that one also has to find mints by the invoice part a refund IPN may carry.
     """
     if not order_id:
@@ -259,15 +262,9 @@ def find_claim_codes_by_email(email: str) -> list[str]:
     seen: dict[str, None] = {}
     with _lock:
         with LEDGER_PATH.open() as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    row = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                row_email = (row.get("email") or "").strip().lower()
+            for row in _ledger_rows(f):
+                email_value = row.get("email") or ""
+                row_email = email_value.strip().lower() if isinstance(email_value, str) else ""
                 if row_email and row_email == needle:
                     code = row.get("claim_code")
                     if code and code not in seen:
@@ -320,19 +317,12 @@ def revoke_credits_by_source(source_token: str, revoke_source: str) -> list[dict
             balances: dict[str, int] = {}
             already_revoked: set[str] = set()
             with LEDGER_PATH.open() as f:
-                for line in f:
-                    line = line.strip()
-                    if not line:
-                        continue
-                    try:
-                        row = json.loads(line)
-                    except json.JSONDecodeError:
-                        continue
+                for row in _ledger_rows(f):
                     code = row.get("claim_code")
                     if not code:
                         continue
                     src = row.get("source", "") or ""
-                    delta = int(row.get("credits_delta") or 0)
+                    delta = _delta(row)
                     # A positive delta whose source contains the substring
                     # marks this code as originating from the refunded session.
                     if delta > 0 and _source_has_token(src, source_token):

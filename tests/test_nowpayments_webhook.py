@@ -522,3 +522,27 @@ def test_claim_email_sent_once_outside_lock(monkeypatch):
     assert calls[0][0] == "mail@example.com" and calls[0][2] == 10
     nowpayments_webhook.handle_event(payload)  # duplicate
     assert len(calls) == 1, "duplicate IPN must not re-send the claim-code email"
+
+
+def test_a_row_sharing_a_part_does_not_block_a_paid_order():
+    """The exactly-once check used the any-part lookup, so any earlier mint
+    carrying this order id as SOME part (here a payout row) made a paid order
+    read as already minted: no claim code, no credits. Only the order's own
+    mint counts now."""
+    credits.add_credits(claim_code="pk_other", email="", amount=5,
+                        source="affiliate_payout:np_order_collide")
+    body = {
+        "order_id": "np_order_collide",
+        "payment_status": "finished",
+        "invoice_id": "inv_collide",
+        "customer_email": "buyer@example.com",
+        "plan": "writer_pack",
+    }
+    payload, _sig = _sign(body)
+    result = nowpayments_webhook.handle_event(payload)
+    assert result.get("claim_code_minted") is True, result
+    assert credits.find_nowpayments_mint("np_order_collide") is not None
+
+    # Control: the SAME order again is still exactly-once.
+    again = nowpayments_webhook.handle_event(_sign({**body, "payment_status": "confirmed"})[0])
+    assert again.get("duplicate_mint") == "np_order_collide", again

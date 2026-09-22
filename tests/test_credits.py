@@ -249,3 +249,22 @@ def test_a_two_part_row_answers_only_for_a_server_order_id():
     ]))
     assert credits.find_nowpayments_mint("np_pack_5_scaffold")["claim_code"] == "pk_ord"
     assert credits.find_nowpayments_mint("4401") is None
+
+
+def test_every_reader_agrees_on_a_decimal_delta_and_fails_closed_on_junk():
+    """One row reader: balance, revocation and the mint lookups all read
+    "10.0" as 10 and all RAISE on a delta that is not a number (before, the
+    lookups read 10 while balance() raised)."""
+    import json
+    credits.LEDGER_PATH.write_text(json.dumps(
+        {"claim_code": "pk_d", "email": "d@x.test", "credits_delta": "10.0",
+         "source": "stripe:cs_dd"}) + "\n" + json.dumps(["not", "a", "row"]) + "\n")
+    assert credits.balance("pk_d") == 10
+    assert credits.find_mint_by_exact_source({"stripe:cs_dd"})["credits_delta"] == 10
+    assert credits.find_claim_codes_by_email("d@x.test") == ["pk_d"]
+    with credits.LEDGER_PATH.open("a") as f:
+        f.write(json.dumps({"claim_code": "pk_j", "credits_delta": "lots", "source": "x:1"}) + "\n")
+    for call in (lambda: credits.balance("pk_d"),
+                 lambda: credits.find_claim_code_by_source("cs_dd")):
+        with pytest.raises(ValueError):
+            call()
