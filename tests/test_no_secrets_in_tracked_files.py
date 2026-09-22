@@ -102,9 +102,10 @@ def test_a_known_fake_is_skipped_but_a_real_key_beside_it_is_not():
 
 def test_no_tracked_file_carries_a_credential():
     files = _tracked_text_files()
-    # Control: the scan read the whole tree, not an empty or partial list.
+    # Control: the scan read the whole tree (a known file is in it), not an
+    # empty or partial list.
     assert len(files) > 500, f"only {len(files)} tracked text files: git ls-files failed?"
-    assert any(p.name == "app.py" and p.parent.name == "server" for p in files)
+    assert any(p.name == "index.html" and p.parent.name == "web" for p in files)
     leaks = []
     for path in files:
         text = path.read_text(encoding="utf-8", errors="ignore")
