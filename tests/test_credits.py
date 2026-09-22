@@ -195,3 +195,21 @@ def test_one_malformed_row_does_not_stop_the_lookups():
     assert credits.find_nowpayments_mint("np_pack_20_ok")["claim_code"] == "pk_ok"
     assert credits.find_claim_code_by_source("cs_z") is None
     assert credits.find_mint_by_exact_source({"nowpayments:77:np_pack_20_ok"})["claim_code"] == "pk_ok"
+
+
+def test_a_decimal_string_delta_is_still_a_mint():
+    """Skipping a "10.0" delta made an exactly-once check read "not minted"
+    and would have minted again; it is parsed as 10 instead."""
+    import json
+    credits.LEDGER_PATH.write_text(json.dumps(
+        {"claim_code": "pk_dec", "email": "d@x.test", "credits_delta": "10.0",
+         "source": "stripe:cs_dec"}) + "\n")
+    assert credits.find_mint_by_exact_source({"stripe:cs_dec"})["credits_delta"] == 10
+
+
+def test_the_two_part_scaffold_source_still_counts_as_the_orders_mint():
+    import json
+    credits.LEDGER_PATH.write_text(json.dumps(
+        {"claim_code": "pk_two", "email": "t@x.test", "credits_delta": 5,
+         "source": "nowpayments:np_pack_5_two"}) + "\n")
+    assert credits.find_nowpayments_mint("np_pack_5_two")["claim_code"] == "pk_two"

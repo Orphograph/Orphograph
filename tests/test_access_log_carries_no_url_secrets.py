@@ -130,9 +130,8 @@ def test_secrets_in_shapes_the_server_still_acts_on_are_not_logged(server):
     _srv.raw_request(base, "/pricing?id=plain-id-canary")
 
     text = _log(data_dir)
-    assert '"HEAD //a/' in text, "control: the raw request was not logged"
     assert token not in text, "a live sign-in token is sitting in the access log"
-    assert "HEAD //a/[redacted]" in text
+    assert '"HEAD /a/[redacted] HTTP/1.1"' in text, "control: the raw request was logged"
     assert code not in text
     for leaked in ("shape-upper", "shape-encoded", "ShapeCanary0123", "ShapeCanary4567"):
         assert leaked not in text, f"{leaked} reached the access log"
@@ -158,14 +157,15 @@ def test_shapes_the_first_widening_still_missed(server):
     _srv.raw_request(base, "", line="GET /about\x1b[2J HTTP/1.1")
 
     text = _log(data_dir)
-    assert "/./a/" in text and "/api//pack/balance/" in text, "control: raw shapes were logged"
+    assert text.count("/a/[redacted]") >= 2, "control: the raw shapes were logged"
+    assert "/api/pack/balance/[redacted]" in text
     assert token not in text, "a live sign-in token is sitting in the access log"
     assert code not in text, "a claim code is sitting in the access log"
     for leaked in ("nested-plain", "nested-encoded", "ConfirmCanary", "UnlistedCanary"):
         assert leaked not in text, f"{leaked} reached the access log"
     assert "?next=[redacted]" in text, "a next carrying its own query is redacted whole"
     assert "\x1b" not in text, "a raw control character reached the log"
-    assert "\\x1b" in text, "control: the escaped form is what should be logged"
+    assert '"GET [redacted-path] HTTP/1.1"' in text, "control: a path with a control character is blanked"
 
 
 def test_shapes_the_second_review_found(server):
@@ -237,3 +237,25 @@ def test_a_kept_key_is_not_a_licence_for_its_value(server):
     assert token not in text, "a sign-in path rode in on a kept key"
     assert "kept-key-canary" not in text and "v-canary" not in text
     assert "plan=pack_50&ref=partner-7" in text, "plain values on kept keys stay readable"
+
+
+def test_shapes_the_fifth_review_found(server):
+    """Round five found three more shapes the pattern rules missed, so the
+    line is now rebuilt from the parsed request instead: a `..` segment
+    (`/api/pack/x/../balance/<code>`), a slash run inside the route
+    (`/api/pack//balance/<code>`), whitespace-class control characters that
+    ended a pattern's token early, and literal text that looks like an escape."""
+    base, data_dir = server
+    token = _mint_token(data_dir, "log-round5@example.test")
+    lower_code = "pk_0123abcdef0123abcdef"
+    _srv.raw_request(base, "/api/pack/x/../balance/pk_DotDotCanary01")
+    _srv.raw_request(base, f"/api/pack//balance/{lower_code}")
+    _srv.raw_request(base, "", line="GET /x?v=1\x0be=vt-canary%40example.test HTTP/1.1")
+    _srv.raw_request(base, "", line=f"GET /a/\x85{token} HTTP/1.1")
+    _srv.raw_request(base, "/x\\x0d\\x0aFORGED")
+
+    text = _log(data_dir)
+    assert "DotDotCanary" not in text and lower_code not in text, "a claim code reached the log"
+    assert token not in text and "vt-canary" not in text
+    assert "\\x0d\\x0aFORGED" not in text, "literal escape-looking text was logged as if escaped"
+    assert "/api/pack/balance/[redacted]" in text, "control: the claim-code shapes were logged"

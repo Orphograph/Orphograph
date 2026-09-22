@@ -1170,133 +1170,121 @@ class Handler(BaseHTTPRequestHandler):
 </html>
 """
 
-    # What must not reach the log although it travels in a URL: the bearer
-    # sign-in token, a claim code (it is what spends credits), a person's
-    # address, an invite code, a checkout-session id. The route and the
-    # harmless parameters stay, so the line is still useful. The sign-in token
-    # matters most: HEAD does not spend it, so a probed link would otherwise
-    # sit in the log live.
-    # Fail closed. A query value is kept only when its (decoded, lower-cased)
-    # key is on this list; every other value is replaced. The previous rules
-    # named the secret keys instead, and each new shape leaked until someone
-    # wrote one more rule: `E=`, `%65=`, a key nested in another value
-    # (`?next=/unsubscribe?e=…`), and `?token=` on the newsletter confirm link,
-    # which no rule ever named. The query is split on `&` only, exactly as
-    # parse_qs splits it, so `;`, `?` or `"` inside a value stay in that value
-    # and are redacted with it; a part with no `=` is redacted too. `q` and
-    # `label` are NOT here: on /api/me/anchors they are a person's private
-    # vault search (a hash prefix, a label fragment). Nor are `coupon`,
-    # `promo` and `prefilled_promo_code`: a restricted promotion code is
-    # spendable. `ref` stays: a referral code is made to be shared in links.
+    # The access log is REBUILT from the request, never pattern-matched over
+    # the raw line. Four review rounds of #261 each found a URL shape the
+    # pattern rules missed (`//a/`, `/A/`, `%61`, `/./`, `/../`, a nested
+    # `?e=`, `;`, a vertical tab, `?token=` that no rule named) while the
+    # server itself acted on the value, so a live sign-in token, claim code,
+    # address, invite code or checkout-session id reached the log. Now:
+    #   * the request line is split exactly as the stdlib splits it;
+    #   * a path is kept only if it is plain characters and, resolved with
+    #     posixpath.normpath and case-folded, names no bearer route; a bearer
+    #     route keeps its name (`/a/[redacted]`) and nothing else survives;
+    #   * a query value is kept only for a listed key AND a plain value;
+    #   * an error message keeps only the text before `(`, where the stdlib
+    #     echoes the raw request line;
+    #   * control characters AND the backslash are escaped, as the stdlib does.
+    # `q` and `label` are not listed (a private vault search on
+    # /api/me/anchors), nor coupon/promo codes (spendable). `ref` is: a
+    # referral code is made to be shared in links.
     _LOG_KEEP_PARAMS = frozenset({
         "v", "plan", "variant", "ref", "status", "size", "receipt_id", "pack",
         "limit", "before", "stripe", "print", "nolenis", "private", "probe",
-        # Kept only when the value is harmless; see _redact_log_query.
         "id", "next",
     })
-    _LOG_QUERY = re.compile(r"\?(\S*)")
-    # A kept key keeps its value only when the value itself is plain: a kept
-    # key is not a licence to carry `;e=<address>` or `%2Fa%2F<token>`.
+    _LOG_PLAIN_PATH = re.compile(r"/[A-Za-z0-9/_.,~-]*")
     _LOG_PLAIN_VALUE = re.compile(r"[A-Za-z0-9_.,:-]{0,128}")
-    _LOG_PLAIN_PATH = re.compile(r"/[A-Za-z0-9/_.-]*")
-    # The bearer sign-in token and a claim code (it is what spends credits),
-    # wherever the segment sits: `//a/…`, `/./a/…`, `http://host/a/…`,
-    # `/api//pack/balance/…` and a bare one-word request line are all answered
-    # without spending the value, so it would sit in the log live. This keeps
-    # the common shape readable (`/a/[redacted]`).
-    _LOG_BEARER_PATH = re.compile(r"(/a/+|/pack/balance/+)[^\s?\"/]+")
-    # Anything the literal rule cannot see (`/A/…`, `/%61/…`, `/a%2F…`,
-    # `/api/pack%2Fbalance/…`) is judged decoded and case-folded, and the
-    # whole path goes when it names a bearer segment.
-    _LOG_SPACE_SPLIT = re.compile(r"(\s+)")
-    _LOG_EDGE_PUNCT = "\"'()"
-    _LOG_LITERAL_REDACTED = re.compile(r"(/a/+|/pack/balance/+)\[redacted\]")
-    _LOG_DOT_SEGMENTS = re.compile(r"/(?:\.{1,2}/)+")
-    _LOG_SLASH_RUNS = re.compile(r"/{2,}")
-    _LOG_CONTROL_TABLE = {c: f"\\x{c:02x}" for c in (*range(0x20), *range(0x7f, 0xa0))}
-
-    @staticmethod
-    def _names_bearer_segment(path: str) -> bool:
-        """Does `path`, decoded, case-folded and with `//`, `/./`, `/../` and
-        backslashes collapsed, contain a sign-in or claim-code segment?"""
-        decoded = path
-        for _ in range(3):
-            once = unquote_plus(decoded)
-            if once == decoded:
-                break
-            decoded = once
-        decoded = decoded.lower().replace("\\", "/")
-        decoded = Handler._LOG_DOT_SEGMENTS.sub("/", decoded)
-        decoded = Handler._LOG_SLASH_RUNS.sub("/", decoded)
-        return "/a/" in decoded or "/pack/balance/" in decoded
+    _LOG_PLAIN_MESSAGE = re.compile(r"[A-Za-z0-9 ,.'_-]{0,200}")
+    _LOG_BEARER_ROUTES = ("/a/", "/api/pack/balance/")
+    _LOG_CONTROL_TABLE = {
+        **{c: f"\\x{c:02x}" for c in (*range(0x20), *range(0x7f, 0xa0))},
+        ord("\\"): "\\\\",
+    }
 
     @classmethod
-    def _redact_log_query(cls, m: "re.Match") -> str:
-        # `\S*` runs to whitespace, so the request line's closing `"` (or a
-        # log_error's `')`) rides on the last value; set it aside and put it
-        # back, or redacting that value would eat it.
-        query = m.group(1)
-        body = query.rstrip(cls._LOG_EDGE_PUNCT)
-        tail = query[len(body):]
+    def _log_bearer_route(cls, path: str) -> str | None:
+        """The bearer route `path` resolves to, or None. Resolved the way a
+        client or proxy might: slashes collapsed, dot segments applied,
+        case folded."""
+        folded = posixpath.normpath("/" + path.lower().lstrip("/")) + "/"
+        for route in cls._LOG_BEARER_ROUTES:
+            if folded.startswith(route) or ("/" + route.strip("/") + "/") in folded:
+                return route
+        return None
+
+    @classmethod
+    def _log_path(cls, path: str) -> str:
+        if not cls._LOG_PLAIN_PATH.fullmatch(path):
+            return "[redacted-path]"
+        route = cls._log_bearer_route(path)
+        if route is None:
+            return path
+        if posixpath.normpath("/" + path.lstrip("/")).startswith(route):
+            return route + "[redacted]"
+        return "[redacted-path]"
+
+    @classmethod
+    def _log_query(cls, query: str) -> str:
         parts = []
-        for part in body.split("&"):
+        for part in query.split("&"):
             if "=" not in part:
                 parts.append(part if part == "" else "[redacted]")
                 continue
             raw_key, raw_value = part.split("=", 1)
             key = unquote_plus(raw_key).strip().lower()
-            value = unquote_plus(raw_value).strip()
-            keep = key in cls._LOG_KEEP_PARAMS
-            if key == "id" and value.lower().startswith("cs_"):
-                keep = False  # a Stripe checkout session answers with the buyer's email
-            elif key == "next":
-                if not cls._LOG_PLAIN_PATH.fullmatch(value) or cls._names_bearer_segment(value):
-                    keep = False  # a redirect target carrying a query, encoding or a bearer
-            elif keep and not cls._LOG_PLAIN_VALUE.fullmatch(value):
-                keep = False
+            value = unquote_plus(raw_value)
+            if key == "next":
+                keep = (bool(cls._LOG_PLAIN_PATH.fullmatch(value))
+                        and cls._log_bearer_route(value) is None)
+            else:
+                keep = key in cls._LOG_KEEP_PARAMS and bool(cls._LOG_PLAIN_VALUE.fullmatch(value))
+                if key == "id" and value.lower().startswith("cs_"):
+                    keep = False  # a Stripe checkout session answers with the buyer's email
             parts.append(part if keep else f"{raw_key}=[redacted]")
-        return "?" + "&".join(parts) + tail
+        return "&".join(parts)
 
     @classmethod
-    def _redact_hidden_bearer_token(cls, token: str) -> str:
-        if "/" not in token:
-            return token
-        body = token.strip(cls._LOG_EDGE_PUNCT)
-        # Only a request target can name a route: skip `HTTP/1.1` and friends.
-        if body.upper().startswith("HTTP/"):
-            return token
-        start = token.find(body) if body else 0
-        path, sep, query = body.partition("?")
-        # Judge what is left once the literal rule's own redactions are taken
-        # out, so `/a/[redacted]/%61/<token>` is still caught.
-        probe = cls._LOG_LITERAL_REDACTED.sub("/", path)
-        # Fast path: nothing that could hide a bearer segment from the literal
-        # rule (encoding, backslash, upper case, dot segments).
-        if (not any(c in probe for c in "%\\") and "/." not in probe
-                and probe == probe.lower()):
-            return token
-        if cls._names_bearer_segment(probe):
-            return token[:start] + "[redacted-path]" + sep + query + token[start + len(body):]
-        return token
+    def _log_target(cls, target: str) -> str:
+        path, sep, query = target.partition("?")
+        if "://" in path:  # absolute form: keep the scheme and host, judge the path
+            scheme, _, rest = path.partition("://")
+            host, slash, tail = rest.partition("/")
+            if not re.fullmatch(r"[A-Za-z][A-Za-z0-9+.-]*", scheme) or not re.fullmatch(r"[A-Za-z0-9.:-]*", host):
+                return "[redacted-target]"
+            path = f"{scheme}://{host}" + cls._log_path(slash + tail) if slash else f"{scheme}://{host}"
+        else:
+            path = cls._log_path(path)
+        return path + (sep + cls._log_query(query) if sep else "")
 
-    @classmethod
-    def _redact_log_line(cls, line: str) -> str:
-        line = cls._LOG_BEARER_PATH.sub(r"\1[redacted]", line)
-        # Split on whitespace, never a backtracking regex: this runs on every
-        # log line, and `[^…]*/[^…]*` went quadratic on a long run without a
-        # slash (a 60 KB request line held the GIL for ~30 s).
-        line = "".join(cls._redact_hidden_bearer_token(t)
-                       for t in cls._LOG_SPACE_SPLIT.split(line))
-        return cls._LOG_QUERY.sub(cls._redact_log_query, line)
+    def _log_requestline(self) -> str:
+        words = str(getattr(self, "requestline", "") or "").split()
+        if len(words) == 3:
+            method, target, version = words
+            if re.fullmatch(r"[A-Z]{1,16}", method) and re.fullmatch(r"HTTP/\d(\.\d)?", version):
+                return f"{method} {self._log_target(target)} {version}"
+        elif len(words) == 2 and re.fullmatch(r"[A-Z]{1,16}", words[0]):
+            return f"{words[0]} {self._log_target(words[1])}"
+        return "[unparsed request line]"
+
+    def log_request(self, code="-", size="-"):
+        code = getattr(code, "value", code)
+        self.log_message('"%s" %s %s', self._log_requestline(), str(code), str(size))
+
+    def log_error(self, format, *args):  # noqa: A002 (stdlib signature)
+        # Every stdlib and app error message is "code %d, message %s"; the
+        # message is where the stdlib echoes the raw line ("Bad request
+        # syntax ('GET /a/<token>')"). Keep the words before `(`, if plain.
+        if format == "code %d, message %s" and len(args) == 2:
+            message = str(args[1]).split("(", 1)[0].strip()
+            if not self._LOG_PLAIN_MESSAGE.fullmatch(message):
+                message = "[redacted]"
+            self.log_message("code %d, message %s", args[0], message)
+            return
+        self.log_message("%s", "[error message redacted]")
 
     def log_message(self, fmt, *args):
         truncated = truncate_ip(self.client_address[0] if self.client_address else "")
-        line = self._redact_log_line(fmt % args)
-        # The stdlib escapes control characters in the request line before it
-        # writes it; this override skipped that, so `\x1b[2J` or a bare `\r`
-        # plus a fake entry went to the log raw. Own table: the stdlib's is a
-        # private attribute some interpreters do not have.
-        line = line.translate(self._LOG_CONTROL_TABLE)
+        line = (fmt % args).translate(self._LOG_CONTROL_TABLE)
         sys.stderr.write(f"[{self.log_date_time_string()}] {truncated} - {line}\n")
 
     # BaseHTTPRequestHandler.send_error() never calls _security_headers(), so every

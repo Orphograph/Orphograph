@@ -123,7 +123,7 @@ def balance(claim_code: str) -> int:
 def _mint_rows():
     """Every well-formed positive (mint) row in ledger order, as
     (row, source, credits_delta). A torn line, a non-object row, a
-    non-integer delta or a non-string source is skipped, never raised on:
+    non-numeric delta or a non-string source is skipped, never raised on:
     one bad row must not stop every lookup (the webhook's exactly-once
     check runs inside its dedup lock)."""
     if not LEDGER_PATH.exists():
@@ -142,9 +142,11 @@ def _mint_rows():
             source = row.get("source") or ""
             if not isinstance(source, str):
                 continue
+            # "10.0" is still a mint of 10: skipping it would make an
+            # exactly-once check read "not minted" and mint again.
             try:
-                delta = int(row.get("credits_delta") or 0)
-            except (TypeError, ValueError):
+                delta = int(float(row.get("credits_delta") or 0))
+            except (TypeError, ValueError, OverflowError):
                 continue
             if delta > 0:
                 yield row, source, delta
@@ -196,7 +198,9 @@ def find_nowpayments_mint(order_id: str) -> dict | None:
     the predicate is applied inside the scan.
 
     Used by the order-status route, crypto recover and the webhook's
-    exactly-once check. Not by refund revocation (revoke_credits_by_source):
+    exactly-once check. An order id never contains ":" (the server mints
+    np_<plan>_<token_urlsafe>, and NOWPayments echoes it in an HMAC-signed
+    IPN), so "last part" is unambiguous. Not by refund revocation (revoke_credits_by_source):
     that one also has to find mints by the invoice part a refund IPN may carry.
     """
     if not order_id:
@@ -204,7 +208,9 @@ def find_nowpayments_mint(order_id: str) -> dict | None:
 
     def matches(src: str) -> bool:
         parts = src.split(":")
-        return len(parts) >= 3 and parts[0] == "nowpayments" and parts[-1] == order_id
+        # len 2 is the scaffold shape of 2026-05-17 (abc1d14), replaced the
+        # same day; when it carried the order id it is still this order's mint.
+        return len(parts) >= 2 and parts[0] == "nowpayments" and parts[-1] == order_id
 
     return _latest_mint(matches)
 
