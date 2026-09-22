@@ -77,12 +77,12 @@ def test_claim_codes_and_addresses_are_not_logged(server):
     code = "pk_0123456789abcdef0123456789abcdef"
     _srv.request(base, f"/api/pack/balance/{code}", timeout=15)
     _srv.request(base, "/api/unsubscribe?e=log-address%40example.test", timeout=15)
-    _srv.request(base, "/api/founder/customer?email=log-lookup%40example.test&x=1", timeout=15)
+    _srv.request(base, "/api/founder/customer?email=log-lookup%40example.test&limit=1", timeout=15)
 
     log = _log(data_dir)
     assert "/api/pack/balance/[redacted]" in log and code not in log
     assert "/api/unsubscribe?e=[redacted]" in log
-    assert "/api/founder/customer?email=[redacted]&x=1" in log, "only the value is removed"
+    assert "/api/founder/customer?email=[redacted]&limit=1" in log, "only the value is removed"
     assert "log-address" not in log and "log-lookup" not in log
 
 
@@ -123,7 +123,7 @@ def test_secrets_in_shapes_the_server_still_acts_on_are_not_logged(server):
     _srv.raw_request(base, f"//a/{token}", "HEAD")
     _srv.raw_request(base, f"http://orphograph.test/a/{token}")
     _srv.raw_request(base, f"//api/pack/balance/{code}")
-    _srv.raw_request(base, "/api/unsubscribe?x=1&E=shape-upper%40example.test")
+    _srv.raw_request(base, "/api/unsubscribe?limit=1&E=shape-upper%40example.test")
     _srv.raw_request(base, "/api/unsubscribe?%65=shape-encoded%40example.test")
     _srv.raw_request(base, "/buy?stripe%5Fsession=cs_live_ShapeCanary0123")
     _srv.raw_request(base, "/api/stripe/session?id=CS_live_ShapeCanary4567")
@@ -136,5 +136,33 @@ def test_secrets_in_shapes_the_server_still_acts_on_are_not_logged(server):
     assert code not in text
     for leaked in ("shape-upper", "shape-encoded", "ShapeCanary0123", "ShapeCanary4567"):
         assert leaked not in text, f"{leaked} reached the access log"
-    assert "x=1&E=[redacted]" in text, "only the value is removed"
+    assert "limit=1&E=[redacted]" in text, "only the value is removed"
     assert "id=plain-id-canary" in text, "an ordinary id= must stay readable"
+
+
+def test_shapes_the_first_widening_still_missed(server):
+    """Found by review of the widening itself: a key nested in another value,
+    `/./a/`, a doubled segment, a one-word request line, a parameter no rule
+    named (`?token=` on the newsletter confirm link), and control characters
+    the stdlib would have escaped. The query rule now fails closed."""
+    base, data_dir = server
+    token = _mint_token(data_dir, "log-nested@example.test")
+    code = "pk_00112233445566778899aabbccddeeff"
+    _srv.raw_request(base, f"/a/{token}?next=/api/unsubscribe?e=nested-plain%40example.test")
+    _srv.raw_request(base, "/login?next=%2Fapi%2Funsubscribe%3Fe%3Dnested-encoded%40example.test")
+    _srv.raw_request(base, f"/./a/{token}", "HEAD")
+    _srv.raw_request(base, f"/api//pack/balance/{code}")
+    _srv.raw_request(base, "", line=f"/a/{token}")
+    _srv.raw_request(base, "/api/waitlist/confirm?token=ConfirmCanary0123")
+    _srv.raw_request(base, "/pricing?unlisted=UnlistedCanary", "GET")
+    _srv.raw_request(base, "", line="GET /about?q=ok\x1b[2J HTTP/1.1")
+
+    text = _log(data_dir)
+    assert "/./a/" in text and "/api//pack/balance/" in text, "control: raw shapes were logged"
+    assert token not in text, "a live sign-in token is sitting in the access log"
+    assert code not in text, "a claim code is sitting in the access log"
+    for leaked in ("nested-plain", "nested-encoded", "ConfirmCanary", "UnlistedCanary"):
+        assert leaked not in text, f"{leaked} reached the access log"
+    assert "next=/api/unsubscribe?e=[redacted]" in text, "a plain next path stays readable"
+    assert "\x1b" not in text, "a raw control character reached the log"
+    assert "\\x1b" in text, "control: the escaped form is what should be logged"

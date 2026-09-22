@@ -28,6 +28,7 @@ import time
 from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import unquote_plus
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import engine  # noqa: E402
@@ -293,6 +294,12 @@ _anchor_limiter = TokenBucket(
 STATUS_RATE_CAPACITY = 30
 STATUS_RATE_REFILL = 30 / 3600.0  # burst 30, then one every 2 minutes
 _status_limiter = TokenBucket(STATUS_RATE_CAPACITY, STATUS_RATE_REFILL)
+# One ceiling across ALL callers on /api/stripe/session's outbound Stripe
+# reads, so many prefixes each spending their own 30 cannot run the
+# account's Stripe quota down under checkout and the webhook.
+STRIPE_READ_CAPACITY = 300
+STRIPE_READ_REFILL = 300 / 3600.0
+_stripe_read_limiter = TokenBucket(STRIPE_READ_CAPACITY, STRIPE_READ_REFILL)
 
 # Funnel-event limiter: 60 events / IP / minute. Separate bucket so noisy
 # analytics traffic can't burn the anchor-rate budget (and vice versa).
@@ -1159,46 +1166,58 @@ class Handler(BaseHTTPRequestHandler):
 """
 
     # What must not reach the log although it travels in a URL: the bearer
-    # sign-in token, a claim code (it is what spends credits), and a person's
-    # address. Only the value goes; the route and the other parameters stay,
-    # so the line is still useful. The sign-in token matters most: HEAD does
-    # not spend it, so a probed link would otherwise sit in the log live.
-    # Matched on what the server ACTS on, not on the literal text: a path may
-    # arrive as //a/<token> or in absolute form (http://host/a/<token>), and a
-    # query key may arrive as E= or %65=. The server answers those 404 or
-    # decodes the key, so the value is still live and must still go.
-    _LOG_SECRET_PARAMS = frozenset({"e", "email", "code"})
-    _LOG_SESSION_PARAMS = frozenset({"stripe_session", "session_id", "id"})
+    # sign-in token, a claim code (it is what spends credits), a person's
+    # address, an invite code, a checkout-session id. The route and the
+    # harmless parameters stay, so the line is still useful. The sign-in token
+    # matters most: HEAD does not spend it, so a probed link would otherwise
+    # sit in the log live.
+    # Fail closed. A query value is kept only when its (decoded, lower-cased)
+    # key is on this list; every other value is replaced. The previous rules
+    # named the secret keys instead, and each new shape leaked until someone
+    # wrote one more rule: `E=`, `%65=`, a key nested in another value
+    # (`?next=/unsubscribe?e=…`), and `?token=` on the newsletter confirm link,
+    # which no rule ever named. `?` separates pairs here, so a nested key is
+    # judged on its own.
+    _LOG_KEEP_PARAMS = frozenset({
+        "v", "plan", "variant", "ref", "status", "size", "receipt_id", "pack",
+        "limit", "before", "stripe", "print", "coupon", "promo",
+        "prefilled_promo_code", "nolenis", "private", "label", "q", "probe",
+        # Kept only when the value is harmless; see _redact_log_param.
+        "id", "next",
+    })
+    _LOG_PARAM = re.compile(r"([?&;])([^=&;?\s\"]*)=([^&;?\s\"]*)")
+    _LOG_PLAIN_PATH = re.compile(r"/[A-Za-z0-9/_.-]*")
+    # The bearer sign-in token and a claim code (it is what spends credits),
+    # wherever the segment sits: `//a/…`, `/./a/…`, `http://host/a/…`,
+    # `/api//pack/balance/…` and a bare one-word request line are all answered
+    # without spending the value, so it would sit in the log live.
+    _LOG_BEARER_PATH = re.compile(r"(/a/+|/pack/balance/+)[^\s?\"/]+")
 
     @classmethod
-    def _redact_query_param(cls, m: "re.Match") -> str:
-        from urllib.parse import unquote_plus
+    def _redact_log_param(cls, m: "re.Match") -> str:
         key = unquote_plus(m.group(2)).strip().lower()
-        value = m.group(3)
-        if key in cls._LOG_SECRET_PARAMS or (
-            key in cls._LOG_SESSION_PARAMS
-            and unquote_plus(value).strip().lower().startswith("cs_")
-        ):
-            return f"{m.group(1)}{m.group(2)}=[redacted]"
-        return m.group(0)
+        if key in cls._LOG_KEEP_PARAMS:
+            value = unquote_plus(m.group(3)).strip()
+            if key == "id" and value.lower().startswith("cs_"):
+                pass  # a Stripe checkout session: it answers with the buyer's email
+            elif key == "next" and not cls._LOG_PLAIN_PATH.fullmatch(value):
+                pass  # a redirect target carrying its own query or encoding
+            else:
+                return m.group(0)
+        return f"{m.group(1)}{m.group(2)}=[redacted]"
 
-    _LOG_REDACTIONS = (
-        # The bearer sign-in token and a claim code (it is what spends credits).
-        (re.compile(r"(\s(?:[A-Za-z][A-Za-z0-9+.-]*://[^/\s\"]*)?/+(?:a|api/pack/balance)/+)[^\s?\"]+"),
-         r"\1[redacted]"),
-        # A person's address (?e=, ?email=), a team invite code (?code= admits
-        # a person to the team), and a Stripe checkout-session id
-        # (/api/stripe/session?id=cs_… answers with the buyer's email to anyone
-        # holding it; the landing carries ?stripe_session=cs_…). Only a value
-        # that IS a session id goes, so an unrelated `id=` stays readable.
-        (re.compile(r"([?&;])([^=&\s\"?]+)=([^&\s\"]*)"), None),
-    )
+    @classmethod
+    def _redact_log_line(cls, line: str) -> str:
+        line = cls._LOG_BEARER_PATH.sub(r"\1[redacted]", line)
+        return cls._LOG_PARAM.sub(cls._redact_log_param, line)
 
     def log_message(self, fmt, *args):
         truncated = truncate_ip(self.client_address[0] if self.client_address else "")
-        line = fmt % args
-        for pattern, replacement in self._LOG_REDACTIONS:
-            line = pattern.sub(replacement or self._redact_query_param, line)
+        line = self._redact_log_line(fmt % args)
+        # The stdlib escapes control characters in the request line before it
+        # writes it; this override skipped that, so `\x1b[2J` or a bare `\r`
+        # plus a fake entry went to the log raw.
+        line = line.translate(self._control_char_table)
         sys.stderr.write(f"[{self.log_date_time_string()}] {truncated} - {line}\n")
 
     # BaseHTTPRequestHandler.send_error() never calls _security_headers(), so every
@@ -1976,6 +1995,15 @@ class Handler(BaseHTTPRequestHandler):
                 })
                 return
             ledger_row = credits.find_claim_code_by_source(order_id)
+            # Only a crypto order answers, and only by its own order id. The
+            # lookup matches ANY whole part of ANY mint source, so `stripe`,
+            # a referral code or a NOWPayments invoice id (numeric, near
+            # sequential) each reported `credited:true` and a credit count for
+            # somebody else's sale. The mint source is
+            # "nowpayments:<invoice>:<order_id>" (nowpayments_webhook.py).
+            src = ((ledger_row or {}).get("source") or "").split(":")
+            if not (len(src) >= 2 and src[0] == "nowpayments" and src[-1] == order_id):
+                ledger_row = None
             credited = ledger_row is not None
             # NOTE: ledger_row contains claim_code + email + source — do NOT
             # spread it into the response. Only the int delta is safe to echo.
@@ -5098,6 +5126,13 @@ class Handler(BaseHTTPRequestHandler):
         # Stripe session IDs are cs_test_… or cs_live_… plus alphanumerics
         if not sid or not sid.startswith("cs_") or len(sid) > 256 or not all(c.isalnum() or c == "_" for c in sid):
             _json_response(self, 400, {"error": "invalid session id"})
+            return
+        # Every well-formed id costs one live Stripe API read, and the
+        # per-prefix bucket above is sized for a buyer's reloads, not for the
+        # account's Stripe quota across many prefixes. One shared ceiling.
+        allowed, _ = _stripe_read_limiter.check("all-callers")
+        if not allowed:
+            _json_response(self, 429, {"error": "rate limit exceeded"})
             return
         result = stripe_api._request("GET", f"/checkout/sessions/{sid}")
         if not result.get("ok"):
