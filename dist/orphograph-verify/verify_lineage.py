@@ -73,6 +73,31 @@ import merkle  # noqa: E402
 import otscheck  # noqa: E402
 
 RESERVED_PARENT_PATH = ".orphograph/parent"
+
+
+def _fold_redacted_manifest(manifest: dict) -> str | None:
+    """Root check for a path-redacted manifest. Returns why it fails, or None."""
+    if manifest.get("algorithm") != merkle.ALGORITHM:
+        return f"unsupported algorithm: {manifest.get('algorithm')!r}"
+    if manifest.get("version") != merkle.VERSION:
+        return f"unsupported version: {manifest.get('version')!r}"
+    leaves = manifest.get("leaves")
+    if not isinstance(leaves, list) or not leaves:
+        return "manifest leaves must be a non-empty list"
+    hashes = []
+    for i, leaf in enumerate(leaves):
+        if not isinstance(leaf, dict) or not _is_lower_hex(leaf.get("leaf_hex")):
+            return f"leaf {i}: leaf_hex is not 64 lowercase hex characters"
+        if "path" in leaf:
+            if not _is_lower_hex(leaf.get("file_sha256_hex")) or not isinstance(leaf["path"], str):
+                return f"leaf {i}: a leaf with a path needs a 64-hex file_sha256_hex"
+            got = merkle._leaf_hash(leaf["path"], bytes.fromhex(leaf["file_sha256_hex"])).hex()
+            if got != leaf["leaf_hex"]:
+                return f"leaf {i} ({leaf['path']!r}): leaf_hex does not derive from its path and file hash"
+        hashes.append(bytes.fromhex(leaf["leaf_hex"]))
+    if merkle._build_levels(hashes)[-1][0].hex() != manifest.get("root_hex"):
+        return "manifest root_hex does not match the root folded from its leaf hashes"
+    return None
 OTS_HEADER_MAGIC = b"\x00OpenTimestamps\x00\x00Proof\x00\xbf\x89\xe2\xe8\x84\xe8\x92\x94"
 
 NOTE = (
@@ -225,26 +250,40 @@ def _check_link(rid: str, entry: dict) -> tuple[int, str | None, list[str]]:
             "anchors (folder-anchor parents only)"
         ]
 
+    # ROOT, public bundle with paths withheld: the office ships a folder's
+    # leaf paths only to its owner (unless published), so a public bundle's
+    # leaves carry no path and cannot be re-derived from files here. Fold the
+    # root from the published leaf hashes, still recompute any leaf that does
+    # carry its path (the reserved lineage leaf always does), and say plainly
+    # what was not checked.
+    if manifest.get("paths_redacted") is True:
+        why = _fold_redacted_manifest(manifest)
+        if why:
+            return EXIT_LINK, None, [f"manifest recomputation failed: {why}"]
+        msgs.append("[NOTE] leaf paths are withheld in this public bundle (owner-only): "
+                    "each leaf's link to its file is not re-derivable offline; "
+                    "the root folds from the published leaf hashes: OK")
     # ROOT — recompute every leaf and the root, exactly as the server does
     # at anchor time. Also enforces the supported algorithm/version tags.
-    try:
+    else:
+      try:
         merkle.MerkleTree.from_manifest(manifest)
-    except ValueError as e:
-        if "scope_hex" in str(e):
-            # Same policy as verify.py folder: an edited scope block is a
-            # WARNING, not a verdict — the anchored value is root_hex alone.
-            # Re-derive the leaves without the scope so the root still decides.
-            msgs.append("[WARN] manifest scope_hex does not match its scope block "
-                        "(edited after anchoring); root comparison still decides")
-            try:
-                merkle.MerkleTree.from_manifest({k: v for k, v in manifest.items() if k != "scope"})
-            except (KeyError, TypeError, ValueError) as e2:
-                return EXIT_LINK, None, [f"manifest recomputation failed: {e2}"]
-        else:
-            return EXIT_LINK, None, [f"manifest recomputation failed: {e}"]
-    except (KeyError, TypeError) as e:
-        return EXIT_LINK, None, [f"manifest recomputation failed: {e}"]
-    msgs.append("manifest leaves re-derive and fold to root_hex: OK")
+      except ValueError as e:
+          if "scope_hex" in str(e):
+              # Same policy as verify.py folder: an edited scope block is a
+              # WARNING, not a verdict — the anchored value is root_hex alone.
+              # Re-derive the leaves without the scope so the root still decides.
+              msgs.append("[WARN] manifest scope_hex does not match its scope block "
+                          "(edited after anchoring); root comparison still decides")
+              try:
+                  merkle.MerkleTree.from_manifest({k: v for k, v in manifest.items() if k != "scope"})
+              except (KeyError, TypeError, ValueError) as e2:
+                  return EXIT_LINK, None, [f"manifest recomputation failed: {e2}"]
+          else:
+              return EXIT_LINK, None, [f"manifest recomputation failed: {e}"]
+      except (KeyError, TypeError) as e:
+          return EXIT_LINK, None, [f"manifest recomputation failed: {e}"]
+      msgs.append("manifest leaves re-derive and fold to root_hex: OK")
 
     # BIND — VERBATIM string compare of stored hex (D1 rule parity).
     manifest_root = manifest.get("root_hex")

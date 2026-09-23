@@ -27,25 +27,65 @@ RECEIPTS_DIR = Path(os.environ.get("ORPHO_RECEIPTS_DIR", str(DATA_DIR / "receipt
 NOT_FOUND = "not_found"
 BROKEN = "broken"
 
-# receipt.json also carries OPERATIONAL fields that are not proof data:
-# `notify_email` (where upgrade notices go, written by the anchor route) and
-# `owner_id` (an HMAC of the owner's email, which lets anyone cluster every
-# receipt one person made). The JSON route has always projected these out of
-# public answers; the /summary and .zip exports spread the raw file, so a
-# public receipt served the buyer's email address to anyone (found
-# 2026-09-23: 23 public receipts in production carried one).
+# receipt.json holds proof data AND operational fields: `notify_email` (where
+# upgrade notices go), `owner_id` (an HMAC of the owner's email), a `source`
+# tag that can carry the same HMAC ("sub:<id>") or a key/code prefix, and the
+# upgrade worker's bookkeeping. The JSON route answers from an ALLOW-list
+# (engine.verify_receipt); the /summary and .zip exports spread the raw file,
+# so a public receipt served the buyer's email address to anyone (found
+# 2026-09-23: 23 public receipts in production carried one). Public exports
+# are now an allow-list too: a field added to receipt.json later stays out of
+# them until someone decides it is proof data.
+EXPORT_FIELDS = frozenset({
+    # identity and the anchored digests
+    "receipt_id", "created_at", "hash_hex", "sha512_hex", "client_label",
+    # what the anchor carried
+    "attestation", "c2pa_manifest_hash", "metadata", "zk_provenance",
+    "hardware_attestation", "lineage",
+    # the calendar/Bitcoin evidence and its public status
+    "calendars_ok", "calendars_total", "successes", "failures",
+    "status", "btc_pinned_at", "pinned_count", "pinned_total",
+    # folder receipts
+    "kind", "leaf_count", "merkle_algorithm", "paths_public",
+    "private",
+})
+# `source` is renewal CORE (renewal.CORE_ALWAYS): an offline renewal check
+# re-hashes it, so a bundle whose receipt carries renewal records must ship
+# it. Otherwise it stays out: "sub:<id>" links every receipt one subscriber
+# made, "api:"/"pack:" leak a key or claim-code prefix.
+SOURCE_FIELD = "source"
 _NEVER_EXPORTED = frozenset({"notify_email"})
 
 
-def public_receipt_view(data: dict, *, owner_view: bool) -> dict:
-    """receipt.json as an export may show it. `notify_email` never leaves;
-    `owner_id` leaves only in the owner's own view of a private receipt,
-    exactly as the JSON route decides."""
-    out = {k: v for k, v in data.items() if k not in _NEVER_EXPORTED}
-    if not (owner_view and data.get("private")):
-        out.pop("owner_id", None)
+def public_receipt_view(data: dict, *, owner_view: bool, keep_source: bool = False) -> dict:
+    """receipt.json as an export may show it.
+
+    The owner's view of a PRIVATE receipt is the whole record minus
+    `notify_email`. Everyone else gets EXPORT_FIELDS only, plus `source` when
+    `keep_source` (the bundle carries renewal records that re-hash it)."""
+    if owner_view and data.get("private"):
+        return {k: v for k, v in data.items() if k not in _NEVER_EXPORTED}
+    out = {k: data[k] for k in EXPORT_FIELDS if k in data}
+    if keep_source and SOURCE_FIELD in data:
+        out[SOURCE_FIELD] = data[SOURCE_FIELD]
     return out
 
+
+def _has_renewal_records(receipt_dir: Path) -> bool:
+    rd = receipt_dir / "renewal"
+    return rd.is_dir() and any(rd.glob("*.json"))
+
+
+# A folder manifest's own schema (merkle.MerkleTree.manifest() plus the two
+# keys the anchor route adds and the lineage hint). /api/anchor_folder used to
+# persist the whole request body as manifest.json, so request fields could sit
+# in it; both the stored copy and every export are projected to these.
+MANIFEST_FIELDS = frozenset({"algorithm", "version", "root_hex", "leaves",
+                             "scope", "receipt_id", "kind", "parent"})
+LEAF_FIELDS = ("path", "file_sha256_hex", "leaf_hex", "size_bytes")
+# The reserved lineage leaf (engine.RESERVED_PARENT_PATH) is structure, not a
+# customer's file: redacting it would break every offline lineage walk.
+RESERVED_PATH_PREFIX = ".orphograph/"
 
 PATHS_REDACTION_REASON = (
     "Leaf paths are visible only to the receipt owner. Each "
@@ -57,25 +97,30 @@ PATHS_REDACTION_REASON = (
 )
 
 
-def redact_manifest_paths(manifest: dict) -> dict:
-    """A folder manifest with every leaf's path withheld: index, leaf hash,
-    file digest and size stay. The one implementation both the folder
-    verify route and the public .zip use, so they cannot drift apart."""
-    redacted_leaves = []
+def manifest_view(manifest: dict, *, redact_paths: bool) -> dict:
+    """A folder manifest projected to its own schema; with `redact_paths`,
+    every customer path withheld (index, leaf hash, file digest and size stay;
+    the reserved lineage leaf keeps its path). The one implementation the
+    anchor route, the folder verify route and the .zip all use."""
+    out = {k: manifest[k] for k in MANIFEST_FIELDS if k in manifest and k != "leaves"}
+    leaves = []
     for i, leaf in enumerate(manifest.get("leaves", []) or []):
         leaf = leaf if isinstance(leaf, dict) else {}
-        redacted_leaves.append({
-            "index": i,
-            "leaf_hex": leaf.get("leaf_hex"),
-            "file_sha256_hex": leaf.get("file_sha256_hex"),
-            "size_bytes": leaf.get("size_bytes"),
-        })
-    return {
-        **{k: v for k, v in manifest.items() if k != "leaves"},
-        "leaves": redacted_leaves,
-        "paths_redacted": True,
-        "paths_redaction_reason": PATHS_REDACTION_REASON,
-    }
+        view = {k: leaf.get(k) for k in LEAF_FIELDS if k in leaf}
+        if redact_paths:
+            path = leaf.get("path")
+            keep = isinstance(path, str) and path.startswith(RESERVED_PATH_PREFIX)
+            view = {"index": i, **{k: v for k, v in view.items() if keep or k != "path"}}
+        leaves.append(view)
+    out["leaves"] = leaves
+    if redact_paths:
+        out["paths_redacted"] = True
+        out["paths_redaction_reason"] = PATHS_REDACTION_REASON
+    return out
+
+
+def redact_manifest_paths(manifest: dict) -> dict:
+    return manifest_view(manifest, redact_paths=True)
 
 
 def export_zip(receipt_id: str, *, owner_view: bool = False) -> tuple[bytes | None, str | None]:
@@ -103,7 +148,8 @@ def export_zip(receipt_id: str, *, owner_view: bool = False) -> tuple[bytes | No
     buf = io.BytesIO()
     try:
         with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-            view = public_receipt_view(data, owner_view=owner_view)
+            view = public_receipt_view(data, owner_view=owner_view,
+                                       keep_source=_has_renewal_records(receipt_dir))
             zf.writestr("receipt.json", json.dumps(view, indent=2))
             # Folder/lineage anchors: the manifest is part of the verifiable
             # bundle (offline lineage walking needs it — design §3). Absent
@@ -112,12 +158,10 @@ def export_zip(receipt_id: str, *, owner_view: bool = False) -> tuple[bytes | No
             # the same rule the folder verify route applies.
             manifest_json = receipt_dir / "manifest.json"
             if manifest_json.exists():
-                if owner_view or data.get("paths_public"):
-                    zf.write(manifest_json, arcname="manifest.json")
-                else:
-                    manifest = json.loads(manifest_json.read_text())
-                    zf.writestr("manifest.json",
-                                json.dumps(redact_manifest_paths(manifest), indent=2))
+                manifest = json.loads(manifest_json.read_text())
+                redact = not (owner_view or data.get("paths_public"))
+                zf.writestr("manifest.json",
+                            json.dumps(manifest_view(manifest, redact_paths=redact), indent=2))
             for ots_file in sorted(receipt_dir.glob("*.ots")):
                 zf.write(ots_file, arcname=ots_file.name)
             # Renewal records. Without these the bundle is NOT self-sufficient:
@@ -159,7 +203,7 @@ def export_readable_json(receipt_id: str, *, owner_view: bool = False) -> tuple[
         return None, BROKEN
 
     return {
-        **public_receipt_view(data, owner_view=owner_view),
+        **public_receipt_view(data, owner_view=owner_view),  # no `source`: not a verifier input
         "what_this_proves": "This file hash existed on the specified date, anchored to the Bitcoin blockchain.",
         "what_this_does_not_prove": [
             "Does not prove you created the file",

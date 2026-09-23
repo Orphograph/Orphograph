@@ -1612,8 +1612,10 @@ class Handler(BaseHTTPRequestHandler):
             if not record.get("private"):
                 record.pop("owner_id", None)
             # Past the gate above, a private receipt is only ever seen by its
-            # owner, and a public one records no owner at all: so this IS the
-            # owner's view exactly when the receipt is private.
+            # owner; a public receipt is served as a public document to
+            # everyone, its owner included (the owner's full record is their
+            # vault export, /api/me/anchors.zip). So this is the owner's view
+            # exactly when the receipt is private.
             owner_view = bool(record.get("private"))
             # OPTIONAL acceptance block — null unless a value-layer resolver is
             # configured via ORPHO_ACCEPTANCE_RESOLVER. Additive + standalone-safe:
@@ -4489,7 +4491,11 @@ class Handler(BaseHTTPRequestHandler):
         # leaf transitively: tamper with a single path or file digest, the
         # root changes, the anchor no longer verifies.
         rid = record["receipt_id"]
-        manifest_to_store = dict(manifest)
+        # The request body doubles as the manifest; store only the manifest's
+        # own schema so request fields (notify_email, private, ...) never
+        # land in manifest.json.
+        import receipt_export
+        manifest_to_store = receipt_export.manifest_view(manifest, redact_paths=False)
         manifest_to_store["receipt_id"] = rid
         manifest_to_store["kind"] = "folder"
         try:
@@ -4671,9 +4677,9 @@ class Handler(BaseHTTPRequestHandler):
         # owner. The full manifest is required to construct inclusion proofs,
         # but inclusion-proof requests already require the caller to KNOW the
         # path — so withholding the index is the right default.
-        if not is_owner and not record.get("paths_public"):
-            import receipt_export
-            manifest = receipt_export.redact_manifest_paths(manifest)
+        import receipt_export
+        manifest = receipt_export.manifest_view(
+            manifest, redact_paths=not is_owner and not record.get("paths_public"))
         _json_response(self, 200, {"receipt": record, "manifest": manifest})
 
     def _handle_inclusion_proof(self) -> None:
