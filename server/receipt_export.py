@@ -27,8 +27,58 @@ RECEIPTS_DIR = Path(os.environ.get("ORPHO_RECEIPTS_DIR", str(DATA_DIR / "receipt
 NOT_FOUND = "not_found"
 BROKEN = "broken"
 
+# receipt.json also carries OPERATIONAL fields that are not proof data:
+# `notify_email` (where upgrade notices go, written by the anchor route) and
+# `owner_id` (an HMAC of the owner's email, which lets anyone cluster every
+# receipt one person made). The JSON route has always projected these out of
+# public answers; the /summary and .zip exports spread the raw file, so a
+# public receipt served the buyer's email address to anyone (found
+# 2026-09-23: 23 public receipts in production carried one).
+_NEVER_EXPORTED = frozenset({"notify_email"})
 
-def export_zip(receipt_id: str) -> tuple[bytes | None, str | None]:
+
+def public_receipt_view(data: dict, *, owner_view: bool) -> dict:
+    """receipt.json as an export may show it. `notify_email` never leaves;
+    `owner_id` leaves only in the owner's own view of a private receipt,
+    exactly as the JSON route decides."""
+    out = {k: v for k, v in data.items() if k not in _NEVER_EXPORTED}
+    if not (owner_view and data.get("private")):
+        out.pop("owner_id", None)
+    return out
+
+
+PATHS_REDACTION_REASON = (
+    "Leaf paths are visible only to the receipt owner. Each "
+    "file's SHA-256 digest and size remain public, so anyone "
+    "holding a candidate file can confirm its membership; only "
+    "the human-readable paths are withheld. Inclusion proofs "
+    "remain available to anyone who already knows the path of "
+    "the file they wish to prove."
+)
+
+
+def redact_manifest_paths(manifest: dict) -> dict:
+    """A folder manifest with every leaf's path withheld: index, leaf hash,
+    file digest and size stay. The one implementation both the folder
+    verify route and the public .zip use, so they cannot drift apart."""
+    redacted_leaves = []
+    for i, leaf in enumerate(manifest.get("leaves", []) or []):
+        leaf = leaf if isinstance(leaf, dict) else {}
+        redacted_leaves.append({
+            "index": i,
+            "leaf_hex": leaf.get("leaf_hex"),
+            "file_sha256_hex": leaf.get("file_sha256_hex"),
+            "size_bytes": leaf.get("size_bytes"),
+        })
+    return {
+        **{k: v for k, v in manifest.items() if k != "leaves"},
+        "leaves": redacted_leaves,
+        "paths_redacted": True,
+        "paths_redaction_reason": PATHS_REDACTION_REASON,
+    }
+
+
+def export_zip(receipt_id: str, *, owner_view: bool = False) -> tuple[bytes | None, str | None]:
     """Export a receipt as a ZIP file containing receipt.json + 5 .ots proofs.
 
     Returns (zip_bytes, None) on success.
@@ -45,16 +95,29 @@ def export_zip(receipt_id: str) -> tuple[bytes | None, str | None]:
     if not receipt_json.exists():
         return None, NOT_FOUND
 
+    try:
+        data = json.loads(receipt_json.read_text())
+    except (OSError, json.JSONDecodeError) as e:
+        sys.stderr.write(f"[receipt_export] corrupt receipt {receipt_id}: {e}\n")
+        return None, BROKEN
     buf = io.BytesIO()
     try:
         with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-            zf.write(receipt_json, arcname="receipt.json")
+            view = public_receipt_view(data, owner_view=owner_view)
+            zf.writestr("receipt.json", json.dumps(view, indent=2))
             # Folder/lineage anchors: the manifest is part of the verifiable
             # bundle (offline lineage walking needs it — design §3). Absent
-            # for single-file receipts; included only when present.
+            # for single-file receipts; included only when present. Paths are
+            # owner-only unless the owner published them (`paths_public`),
+            # the same rule the folder verify route applies.
             manifest_json = receipt_dir / "manifest.json"
             if manifest_json.exists():
-                zf.write(manifest_json, arcname="manifest.json")
+                if owner_view or data.get("paths_public"):
+                    zf.write(manifest_json, arcname="manifest.json")
+                else:
+                    manifest = json.loads(manifest_json.read_text())
+                    zf.writestr("manifest.json",
+                                json.dumps(redact_manifest_paths(manifest), indent=2))
             for ots_file in sorted(receipt_dir.glob("*.ots")):
                 zf.write(ots_file, arcname=ots_file.name)
             # Renewal records. Without these the bundle is NOT self-sufficient:
@@ -67,14 +130,14 @@ def export_zip(receipt_id: str) -> tuple[bytes | None, str | None]:
             if renewal_dir.is_dir():
                 for rec in sorted(renewal_dir.glob("*.json")):
                     zf.write(rec, arcname=f"renewal/{rec.name}")
-    except (OSError, zipfile.BadZipFile) as e:
+    except (OSError, zipfile.BadZipFile, json.JSONDecodeError) as e:
         sys.stderr.write(f"[receipt_export] could not build zip for {receipt_id}: {e}\n")
         return None, BROKEN
 
     return buf.getvalue(), None
 
 
-def export_readable_json(receipt_id: str) -> tuple[dict | None, str | None]:
+def export_readable_json(receipt_id: str, *, owner_view: bool = False) -> tuple[dict | None, str | None]:
     """Export receipt as a human-readable summary dict.
 
     Returns (summary_dict, None) on success.
@@ -96,7 +159,7 @@ def export_readable_json(receipt_id: str) -> tuple[dict | None, str | None]:
         return None, BROKEN
 
     return {
-        **data,
+        **public_receipt_view(data, owner_view=owner_view),
         "what_this_proves": "This file hash existed on the specified date, anchored to the Bitcoin blockchain.",
         "what_this_does_not_prove": [
             "Does not prove you created the file",
