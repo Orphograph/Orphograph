@@ -1633,6 +1633,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_response(200)
                 self.send_header("Content-Type", "application/zip")
                 self.send_header("Content-Length", str(len(zipped)))
+                self.send_header("Cache-Control", "no-store")
                 self.send_header("Content-Disposition", f"attachment; filename=\"receipt_{rid}.zip\"")
                 _security_headers(self)
                 self.end_headers()
@@ -4433,6 +4434,13 @@ class Handler(BaseHTTPRequestHandler):
                     "error": "manifest signature invalid",
                     "detail": reason,
                 })
+                return
+            import receipt_export
+            projected = receipt_export.manifest_view(manifest, redact_paths=False)
+            if (manifest_signature.canonical_manifest_bytes(projected) !=
+                    manifest_signature.canonical_manifest_bytes(manifest)):
+                _reject(400, {"error": "signed manifest contains unsupported fields",
+                              "detail": "Sign only manifest schema fields; place request options outside the manifest."})
                 return
             sig_verified = True
             signer_kid = manifest["signature"].get("kid")

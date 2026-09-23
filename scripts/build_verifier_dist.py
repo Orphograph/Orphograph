@@ -57,6 +57,8 @@ ZIP_MEMBERS: list[tuple[str, str]] = [
     # bundle that dies on `import otscheck` before doing any work.
     ("otscheck.py", "otscheck.py"),
     ("verify.py", "verify.py"),
+    ("verify_lineage.py", "verify_lineage.py"),
+    ("verify_renewal.py", "verify_renewal.py"),
 ]
 
 # Files/dirs under web/verify/ that go into the tarball (archive-root relative).

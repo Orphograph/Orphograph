@@ -11,6 +11,7 @@ from __future__ import annotations
 import io
 import json
 import os
+import re
 import sys
 import zipfile
 from pathlib import Path
@@ -81,11 +82,11 @@ def _has_renewal_records(receipt_dir: Path) -> bool:
 # persist the whole request body as manifest.json, so request fields could sit
 # in it; both the stored copy and every export are projected to these.
 MANIFEST_FIELDS = frozenset({"algorithm", "version", "root_hex", "leaves",
-                             "scope", "receipt_id", "kind", "parent"})
+                             "scope", "receipt_id", "kind", "parent", "signature"})
 LEAF_FIELDS = ("path", "file_sha256_hex", "leaf_hex", "size_bytes")
 # The reserved lineage leaf (engine.RESERVED_PARENT_PATH) is structure, not a
 # customer's file: redacting it would break every offline lineage walk.
-RESERVED_PATH_PREFIX = ".orphograph/"
+RESERVED_PARENT_PATH = ".orphograph/parent"
 
 PATHS_REDACTION_REASON = (
     "Leaf paths are visible only to the receipt owner. Each "
@@ -93,7 +94,8 @@ PATHS_REDACTION_REASON = (
     "holding a candidate file can confirm its membership; only "
     "the human-readable paths are withheld. Inclusion proofs "
     "remain available to anyone who already knows the path of "
-    "the file they wish to prove."
+    "the file they wish to prove. This projected manifest cannot reproduce a "
+    "renewal commitment to the original manifest bytes."
 )
 
 
@@ -109,13 +111,27 @@ def manifest_view(manifest: dict, *, redact_paths: bool) -> dict:
         view = {k: leaf.get(k) for k in LEAF_FIELDS if k in leaf}
         if redact_paths:
             path = leaf.get("path")
-            keep = isinstance(path, str) and path.startswith(RESERVED_PATH_PREFIX)
+            keep = path == RESERVED_PARENT_PATH
             view = {"index": i, **{k: v for k, v in view.items() if keep or k != "path"}}
         leaves.append(view)
     out["leaves"] = leaves
     if redact_paths:
         out["paths_redacted"] = True
         out["paths_redaction_reason"] = PATHS_REDACTION_REASON
+    if "signature" in manifest:
+        # Signature bytes bind the complete pre-anchor manifest, including paths.
+        # Never present a signature as usable over a changed projection.
+        signed_keys = set(manifest) - {"signature", "receipt_id", "kind"}
+        projected_keys = set(out) - {"signature", "receipt_id", "kind"}
+        unchanged = signed_keys == projected_keys and all(
+            manifest[k] == out[k] for k in signed_keys)
+        sig = manifest["signature"]
+        if unchanged and isinstance(sig, dict):
+            out["signature"] = {k: sig[k] for k in
+                                ("alg", "curve", "kid", "signature_b64") if k in sig}
+        else:
+            out.pop("signature", None)
+            out["signature_unavailable_reason"] = "Manifest projection changed signed fields; obtain the original owner manifest to verify its signature."
     return out
 
 
@@ -132,7 +148,11 @@ def export_zip(receipt_id: str, *, owner_view: bool = False) -> tuple[bytes | No
     Returns (None, "broken") if the receipt exists but we couldn't build
     the zip (disk error, malformed file, etc.) — caller should surface 500.
     """
-    receipt_dir = RECEIPTS_DIR / receipt_id
+    if not isinstance(receipt_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", receipt_id):
+        return None, NOT_FOUND
+    # basename is defense in depth at this filesystem boundary, independent
+    # of the HTTP route's validation (and visible to static path analysis).
+    receipt_dir = RECEIPTS_DIR / os.path.basename(receipt_id)
 
     if not receipt_dir.is_dir():
         return None, NOT_FOUND
@@ -160,8 +180,12 @@ def export_zip(receipt_id: str, *, owner_view: bool = False) -> tuple[bytes | No
             if manifest_json.exists():
                 manifest = json.loads(manifest_json.read_text())
                 redact = not (owner_view or data.get("paths_public"))
-                zf.writestr("manifest.json",
-                            json.dumps(manifest_view(manifest, redact_paths=redact), indent=2))
+                projected = manifest_view(manifest, redact_paths=redact)
+                # Preserve the original bytes when projection changes nothing:
+                # renewal records may commit the raw manifest digest.
+                payload = (manifest_json.read_bytes() if projected == manifest else
+                           json.dumps(projected, indent=2).encode("utf-8"))
+                zf.writestr("manifest.json", payload)
             for ots_file in sorted(receipt_dir.glob("*.ots")):
                 zf.write(ots_file, arcname=ots_file.name)
             # Renewal records. Without these the bundle is NOT self-sufficient:
@@ -189,7 +213,11 @@ def export_readable_json(receipt_id: str, *, owner_view: bool = False) -> tuple[
     Returns (None, "broken") if receipt exists but is corrupt — caller
     should surface 500 + log so the founder sees the data-integrity event.
     """
-    receipt_dir = RECEIPTS_DIR / receipt_id
+    if not isinstance(receipt_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", receipt_id):
+        return None, NOT_FOUND
+    # basename is defense in depth at this filesystem boundary, independent
+    # of the HTTP route's validation (and visible to static path analysis).
+    receipt_dir = RECEIPTS_DIR / os.path.basename(receipt_id)
     receipt_json = receipt_dir / "receipt.json"
 
     if not receipt_json.exists():
