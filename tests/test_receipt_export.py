@@ -95,16 +95,16 @@ class TestReceiptExport(unittest.TestCase):
         """The whole point of the (data, err) refactor: a missing receipt
         returns NOT_FOUND; a corrupted one returns BROKEN. They must NOT
         collapse to the same return value."""
-        # The broken receipt has a directory + receipt.json so export_zip's
-        # existence checks pass; the broken file passes through zf.write
-        # without breaking the zip itself (zf.write reads raw bytes, no
-        # JSON parse). For the zip path, NOT_FOUND vs success is the
-        # main distinction. Verify success here for a valid-on-disk
-        # but JSON-malformed receipt — the zip path doesn't parse JSON.
+        # Since 2026-09-23 the zip parses receipt.json so it can project out
+        # the operational fields (notify_email, a public owner_id) that must
+        # never ship in a public bundle. A file that cannot be parsed cannot
+        # be checked for what it holds, so serving its raw bytes would fail
+        # OPEN: the zip now answers BROKEN (a 500), like the summary does.
         zipped, err = self.rx.export_zip(self.rid_broken)
-        # zip doesn't parse JSON; it'll succeed
-        self.assertIsNone(err)
-        self.assertIsNotNone(zipped)
+        self.assertEqual(err, self.rx.BROKEN)
+        self.assertIsNone(zipped)
+        zipped, err = self.rx.export_zip("does_not_exist_0000")
+        self.assertEqual(err, self.rx.NOT_FOUND)
 
     # ── export_readable_json ────────────────────────────────────────────
 

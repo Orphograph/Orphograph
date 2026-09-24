@@ -1611,13 +1611,19 @@ class Handler(BaseHTTPRequestHandler):
             # the receipt is private).
             if not record.get("private"):
                 record.pop("owner_id", None)
+            # Past the gate above, a private receipt is only ever seen by its
+            # owner; a public receipt is served as a public document to
+            # everyone, its owner included (the owner's full record is their
+            # vault export, /api/me/anchors.zip). So this is the owner's view
+            # exactly when the receipt is private.
+            owner_view = bool(record.get("private"))
             # OPTIONAL acceptance block — null unless a value-layer resolver is
             # configured via ORPHO_ACCEPTANCE_RESOLVER. Additive + standalone-safe:
             # acceptance_hook.resolve never raises and never imports a closed layer.
             record["acceptance"] = acceptance_hook.resolve(rid, record)
             if response_shape == "zip":
                 import receipt_export
-                zipped, err = receipt_export.export_zip(rid)
+                zipped, err = receipt_export.export_zip(rid, owner_view=owner_view)
                 if err == receipt_export.NOT_FOUND or zipped is None and err is None:
                     _json_response(self, 404, {"error": "receipt not found"})
                     return
@@ -1627,6 +1633,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_response(200)
                 self.send_header("Content-Type", "application/zip")
                 self.send_header("Content-Length", str(len(zipped)))
+                self.send_header("Cache-Control", "no-store")
                 self.send_header("Content-Disposition", f"attachment; filename=\"receipt_{rid}.zip\"")
                 _security_headers(self)
                 self.end_headers()
@@ -1634,16 +1641,13 @@ class Handler(BaseHTTPRequestHandler):
                 return
             if response_shape == "summary":
                 import receipt_export
-                summary, err = receipt_export.export_readable_json(rid)
+                summary, err = receipt_export.export_readable_json(rid, owner_view=owner_view)
                 if err == receipt_export.NOT_FOUND or summary is None and err is None:
                     _json_response(self, 404, {"error": "receipt not found"})
                     return
                 if err == receipt_export.BROKEN:
                     _json_response(self, 500, {"error": "could not build receipt summary"})
                     return
-                # Re-apply the owner_id redaction on the summary path too
-                if not summary.get("private"):
-                    summary.pop("owner_id", None)
                 summary["acceptance"] = acceptance_hook.resolve(rid, summary)
                 _json_response(self, 200, summary)
                 return
@@ -4436,6 +4440,13 @@ class Handler(BaseHTTPRequestHandler):
                     "detail": reason,
                 })
                 return
+            import receipt_export
+            projected = receipt_export.manifest_view(manifest, redact_paths=False)
+            if (manifest_signature.canonical_manifest_bytes(projected) !=
+                    manifest_signature.canonical_manifest_bytes(manifest)):
+                _reject(400, {"error": "signed manifest contains unsupported fields",
+                              "detail": "Sign only manifest schema fields; place request options outside the manifest."})
+                return
             sig_verified = True
             signer_kid = manifest["signature"].get("kid")
         root_hex = tree.root_hex()
@@ -4494,7 +4505,11 @@ class Handler(BaseHTTPRequestHandler):
         # leaf transitively: tamper with a single path or file digest, the
         # root changes, the anchor no longer verifies.
         rid = record["receipt_id"]
-        manifest_to_store = dict(manifest)
+        # The request body doubles as the manifest; store only the manifest's
+        # own schema so request fields (notify_email, private, ...) never
+        # land in manifest.json.
+        import receipt_export
+        manifest_to_store = receipt_export.manifest_view(manifest, redact_paths=False)
         manifest_to_store["receipt_id"] = rid
         manifest_to_store["kind"] = "folder"
         try:
@@ -4676,29 +4691,9 @@ class Handler(BaseHTTPRequestHandler):
         # owner. The full manifest is required to construct inclusion proofs,
         # but inclusion-proof requests already require the caller to KNOW the
         # path — so withholding the index is the right default.
-        if not is_owner and not record.get("paths_public"):
-            redacted_leaves = []
-            for i, leaf in enumerate(manifest.get("leaves", [])):
-                redacted_leaves.append({
-                    "index": i,
-                    "leaf_hex": leaf.get("leaf_hex"),
-                    "file_sha256_hex": leaf.get("file_sha256_hex"),
-                    "size_bytes": leaf.get("size_bytes"),
-                    # path intentionally withheld
-                })
-            manifest = {
-                **{k: v for k, v in manifest.items() if k != "leaves"},
-                "leaves": redacted_leaves,
-                "paths_redacted": True,
-                "paths_redaction_reason": (
-                    "Leaf paths are visible only to the receipt owner. Each "
-                    "file's SHA-256 digest and size remain public, so anyone "
-                    "holding a candidate file can confirm its membership; only "
-                    "the human-readable paths are withheld. Inclusion proofs "
-                    "remain available to anyone who already knows the path of "
-                    "the file they wish to prove."
-                ),
-            }
+        import receipt_export
+        manifest = receipt_export.manifest_view(
+            manifest, redact_paths=not is_owner and not record.get("paths_public"))
         _json_response(self, 200, {"receipt": record, "manifest": manifest})
 
     def _handle_inclusion_proof(self) -> None:
