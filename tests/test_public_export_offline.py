@@ -160,3 +160,13 @@ def test_export_boundary_rejects_unsafe_ids(tmp_path, monkeypatch, rid):
     monkeypatch.setattr(receipt_export, 'RECEIPTS_DIR', receipts)
     assert receipt_export.export_zip(rid) == (None, receipt_export.NOT_FOUND)
     assert receipt_export.export_readable_json(rid) == (None, receipt_export.NOT_FOUND)
+
+
+def test_export_boundary_rejects_receipt_symlink_escape(tmp_path, monkeypatch):
+    receipts = tmp_path / 'receipts'; receipts.mkdir()
+    outside = tmp_path / 'outside'; outside.mkdir()
+    (outside / 'receipt.json').write_text('{"receipt_id":"outside"}')
+    (receipts / 'LinkedReceipt01').symlink_to(outside, target_is_directory=True)
+    monkeypatch.setattr(receipt_export, 'RECEIPTS_DIR', receipts)
+    assert receipt_export.export_zip('LinkedReceipt01') == (None, receipt_export.NOT_FOUND)
+    assert receipt_export.export_readable_json('LinkedReceipt01') == (None, receipt_export.NOT_FOUND)

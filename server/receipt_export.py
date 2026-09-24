@@ -150,9 +150,13 @@ def export_zip(receipt_id: str, *, owner_view: bool = False) -> tuple[bytes | No
     """
     if not isinstance(receipt_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", receipt_id):
         return None, NOT_FOUND
-    # basename is defense in depth at this filesystem boundary, independent
-    # of the HTTP route's validation (and visible to static path analysis).
-    receipt_dir = RECEIPTS_DIR / os.path.basename(receipt_id)
+    # Check the resolved path as well as the identifier: a valid-looking
+    # receipt directory must not be a symlink escaping the receipt store.
+    base_path = os.path.realpath(RECEIPTS_DIR)
+    fullpath = os.path.realpath(os.path.join(base_path, receipt_id))
+    if not fullpath.startswith(base_path + os.sep):
+        return None, NOT_FOUND
+    receipt_dir = Path(fullpath)
 
     if not receipt_dir.is_dir():
         return None, NOT_FOUND
@@ -215,9 +219,13 @@ def export_readable_json(receipt_id: str, *, owner_view: bool = False) -> tuple[
     """
     if not isinstance(receipt_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", receipt_id):
         return None, NOT_FOUND
-    # basename is defense in depth at this filesystem boundary, independent
-    # of the HTTP route's validation (and visible to static path analysis).
-    receipt_dir = RECEIPTS_DIR / os.path.basename(receipt_id)
+    # Check the resolved path as well as the identifier: a valid-looking
+    # receipt directory must not be a symlink escaping the receipt store.
+    base_path = os.path.realpath(RECEIPTS_DIR)
+    fullpath = os.path.realpath(os.path.join(base_path, receipt_id))
+    if not fullpath.startswith(base_path + os.sep):
+        return None, NOT_FOUND
+    receipt_dir = Path(fullpath)
     receipt_json = receipt_dir / "receipt.json"
 
     if not receipt_json.exists():
