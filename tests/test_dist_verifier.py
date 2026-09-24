@@ -324,6 +324,8 @@ class TestShippedBundlesInSync(unittest.TestCase):
     def test_zip_members_match_sources(self):
         expectations = {
             "verify.py": DIST_DIR / "verify.py",
+            "verify_lineage.py": DIST_DIR / "verify_lineage.py",
+            "verify_renewal.py": DIST_DIR / "verify_renewal.py",
             "merkle.py": DIST_DIR / "merkle.py",
             # verify.py imports it at module scope — a zip without it is
             # dead on arrival.
