@@ -73,12 +73,38 @@ import merkle  # noqa: E402
 import otscheck  # noqa: E402
 
 RESERVED_PARENT_PATH = ".orphograph/parent"
+
+
+def _fold_redacted_manifest(manifest: dict) -> str | None:
+    """Root check for a path-redacted manifest. Returns why it fails, or None."""
+    if manifest.get("algorithm") != merkle.ALGORITHM:
+        return f"unsupported algorithm: {manifest.get('algorithm')!r}"
+    if manifest.get("version") != merkle.VERSION:
+        return f"unsupported version: {manifest.get('version')!r}"
+    leaves = manifest.get("leaves")
+    if not isinstance(leaves, list) or not leaves:
+        return "manifest leaves must be a non-empty list"
+    hashes = []
+    for i, leaf in enumerate(leaves):
+        if not isinstance(leaf, dict) or not _is_lower_hex(leaf.get("leaf_hex")):
+            return f"leaf {i}: leaf_hex is not 64 lowercase hex characters"
+        if "path" in leaf:
+            if not _is_lower_hex(leaf.get("file_sha256_hex")) or not isinstance(leaf["path"], str):
+                return f"leaf {i}: a leaf with a path needs a 64-hex file_sha256_hex"
+            got = merkle._leaf_hash(leaf["path"], bytes.fromhex(leaf["file_sha256_hex"])).hex()
+            if got != leaf["leaf_hex"]:
+                return f"leaf {i} ({leaf['path']!r}): leaf_hex does not derive from its path and file hash"
+        hashes.append(bytes.fromhex(leaf["leaf_hex"]))
+    if merkle._build_levels(hashes)[-1][0].hex() != manifest.get("root_hex"):
+        return "manifest root_hex does not match the root folded from its leaf hashes"
+    return None
 OTS_HEADER_MAGIC = b"\x00OpenTimestamps\x00\x00Proof\x00\xbf\x89\xe2\xe8\x84\xe8\x92\x94"
 
 NOTE = (
-    "NOTE: a green chain verifies anchor-time ordering only — each child root\n"
+    "NOTE: structural checks verify disclosed parent commitments — each child root\n"
     "cryptographically commits to its parent root, and each root carries OTS\n"
-    "attestations. It does NOT establish that any draft is a derivative of\n"
+    "attestations. Only --ots-check tests Bitcoin anchor-time ordering.\n"
+    "It does NOT establish that any draft is a derivative of\n"
     "another, does NOT establish authorship, and does NOT establish that no\n"
     "other versions or parallel children exist."
 )
@@ -134,7 +160,13 @@ def _reserved_leaves(manifest: dict) -> list[dict]:
         return []
     return [
         leaf for leaf in leaves
-        if isinstance(leaf, dict) and leaf.get("path") == RESERVED_PARENT_PATH
+        if isinstance(leaf, dict) and (
+            leaf.get("path") == RESERVED_PARENT_PATH or (
+                manifest.get("paths_redacted") is True
+                and _is_lower_hex(leaf.get("file_sha256_hex"))
+                and _lineage_leaf_hex(leaf["file_sha256_hex"]) == leaf.get("leaf_hex")
+            )
+        )
     ]
 
 
@@ -204,6 +236,10 @@ def _ots_binary_check(link_dir: Path, hash_hex: str) -> tuple[bool, int | None, 
     return otscheck.check_dir(link_dir, hash_hex)
 
 
+def manifest_redacted(entry: dict) -> bool:
+    return (entry.get("manifest") or {}).get("paths_redacted") is True
+
+
 def _check_link(rid: str, entry: dict) -> tuple[int, str | None, list[str]]:
     """Run STRUCT/ROOT/BIND/PARENT/OTS(static) for one link.
 
@@ -225,26 +261,40 @@ def _check_link(rid: str, entry: dict) -> tuple[int, str | None, list[str]]:
             "anchors (folder-anchor parents only)"
         ]
 
+    # ROOT, public bundle with paths withheld: the office ships a folder's
+    # leaf paths only to its owner (unless published), so a public bundle's
+    # leaves carry no path and cannot be re-derived from files here. Fold the
+    # root from the published leaf hashes, still recompute any leaf that does
+    # carry its path (the reserved lineage leaf always does), and say plainly
+    # what was not checked.
+    if manifest.get("paths_redacted") is True:
+        why = _fold_redacted_manifest(manifest)
+        if why:
+            return EXIT_LINK, None, [f"manifest recomputation failed: {why}"]
+        msgs.append("[NOTE] leaf paths are withheld in this public bundle (owner-only): "
+                    "each leaf's link to its file is not re-derivable offline; "
+                    "the root folds from the published leaf hashes: OK")
     # ROOT — recompute every leaf and the root, exactly as the server does
     # at anchor time. Also enforces the supported algorithm/version tags.
-    try:
-        merkle.MerkleTree.from_manifest(manifest)
-    except ValueError as e:
-        if "scope_hex" in str(e):
-            # Same policy as verify.py folder: an edited scope block is a
-            # WARNING, not a verdict — the anchored value is root_hex alone.
-            # Re-derive the leaves without the scope so the root still decides.
-            msgs.append("[WARN] manifest scope_hex does not match its scope block "
-                        "(edited after anchoring); root comparison still decides")
-            try:
-                merkle.MerkleTree.from_manifest({k: v for k, v in manifest.items() if k != "scope"})
-            except (KeyError, TypeError, ValueError) as e2:
-                return EXIT_LINK, None, [f"manifest recomputation failed: {e2}"]
-        else:
+    else:
+        try:
+            merkle.MerkleTree.from_manifest(manifest)
+        except ValueError as e:
+            if "scope_hex" in str(e):
+                # Same policy as verify.py folder: an edited scope block is a
+                # WARNING, not a verdict — the anchored value is root_hex alone.
+                # Re-derive the leaves without the scope so the root still decides.
+                msgs.append("[WARN] manifest scope_hex does not match its scope block "
+                            "(edited after anchoring); root comparison still decides")
+                try:
+                    merkle.MerkleTree.from_manifest({k: v for k, v in manifest.items() if k != "scope"})
+                except (KeyError, TypeError, ValueError) as e2:
+                    return EXIT_LINK, None, [f"manifest recomputation failed: {e2}"]
+            else:
+                return EXIT_LINK, None, [f"manifest recomputation failed: {e}"]
+        except (KeyError, TypeError) as e:
             return EXIT_LINK, None, [f"manifest recomputation failed: {e}"]
-    except (KeyError, TypeError) as e:
-        return EXIT_LINK, None, [f"manifest recomputation failed: {e}"]
-    msgs.append("manifest leaves re-derive and fold to root_hex: OK")
+        msgs.append("manifest leaves re-derive and fold to root_hex: OK")
 
     # BIND — VERBATIM string compare of stored hex (D1 rule parity).
     manifest_root = manifest.get("root_hex")
@@ -299,7 +349,11 @@ def _check_link(rid: str, entry: dict) -> tuple[int, str | None, list[str]]:
                 "receipt claims committed lineage but the manifest has no "
                 "reserved parent leaf: FAIL"
             ]
-        msgs.append("no reserved parent leaf — genesis link")
+        if manifest.get("paths_redacted") is True:
+            msgs.append("[NOTE] no disclosed parent commitment; hidden paths prevent "
+                        "proving this is genesis or that the presented chain is complete")
+        else:
+            msgs.append("no reserved parent leaf — genesis link")
 
     # OTS (static) — magic + embedded hash.
     ots_ok, ots_msgs = _ots_static_check(entry["dir"], hash_hex)
@@ -485,7 +539,8 @@ def main(argv: list[str] | None = None) -> int:
             "btc_pinned_at": receipt.get("btc_pinned_at"),
             "status": receipt.get("status", "pending"),
             "ok": code == EXIT_OK,
-            "genesis": parent_root is None and code == EXIT_OK,
+            "genesis": parent_root is None and code == EXIT_OK and not manifest_redacted(entry),
+            "undisclosed": parent_root is None and manifest_redacted(entry),
         }
         walked.append(info)
         if code != EXIT_OK:
@@ -522,7 +577,7 @@ def main(argv: list[str] | None = None) -> int:
             if height is not None:
                 prev_height = height
 
-        print(f"    [OK]   link {current} verifies" + ("  (genesis)" if parent_root is None else ""))
+        print(f"    [OK]   link {current} verifies" + ("  (genesis)" if info["genesis"] else ""))
 
         if parent_root is None:
             current = None  # genesis reached
@@ -569,7 +624,8 @@ def main(argv: list[str] | None = None) -> int:
     print("\n  chain (oldest anchor → newest):")
     for info in reversed(walked):
         mark = "OK " if info["ok"] else "FAIL"
-        tag = "genesis" if info.get("genesis") else "committed"
+        tag = ("undisclosed predecessor" if info.get("undisclosed") else
+               "genesis" if info.get("genesis") else "committed")
         print(
             f"    [{mark}] {info['rid']}  root {str(info['root'])[:16]}…  "
             f"{tag}  created_at={info['created_at']}  "
@@ -582,7 +638,10 @@ def main(argv: list[str] | None = None) -> int:
         return exit_code
     if ots_exit != EXIT_OK:
         return ots_exit
-    print("\n  [OK] all presented links verify; anchor-time ordering holds.")
+    if any(info.get("undisclosed") for info in walked):
+        print("[NOTE] chain completeness is unproven because paths are withheld.")
+    print("\n  [OK] all presented links verify; disclosed parent commitments match. "
+          "Bitcoin timing requires --ots-check.")
     return EXIT_OK
 
 
