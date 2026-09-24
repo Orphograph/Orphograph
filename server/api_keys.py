@@ -121,18 +121,24 @@ def revoke(email: str) -> bool:
 
 
 def source_prefixes_for_email(email: str) -> set[str]:
-    """10-char plaintext prefixes of every key ever issued to this email —
-    the form receipts are tagged with at anchor time (`api:<key[:10]>`).
-    Rotated-away keys are included so their receipts stay reachable."""
+    """Unambiguous legacy receipt prefixes belonging only to this account.
+    Include rotated/revoked keys, but deny prefixes shared by any historical
+    issued key from another account (even when that key was revoked)."""
     if not email:
         return set()
-    out: set[str] = set()
+    # Historical keys remain relevant after rotation/revocation. A truncated
+    # display prefix cannot establish ownership when any other account has
+    # ever received the same prefix. Scan once for the caller's context.
+    owners: dict[str, set[str]] = {}
     for row in _read_rows():
-        if row.get("email") == email and row.get("event") == "issued":
-            kp = row.get("key_prefix") or ""
-            if len(kp) >= 10:
-                out.add(kp[:10])
-    return out
+        if row.get("event") != "issued":
+            continue
+        kp = row.get("key_prefix") or ""
+        owner = row.get("email") or ""
+        if isinstance(kp, str) and len(kp) >= 10:
+            owners.setdefault(kp[:10], set()).add(owner.lower())
+    return {prefix for prefix, accounts in owners.items()
+            if accounts == {email.lower()}}
 
 
 def email_for_key(key: str) -> str | None:
