@@ -98,6 +98,19 @@ def test_new_api_receipts_store_internal_owner(server,route):
     assert rec['account_id']==account(EMAILS[0])
     assert b'account_id' not in body
     assert b'account_id' not in request(base,'/api/receipt/'+rid)[1]
+    for prefix in ['/api/receipt/', '/api/verify/']:
+        status, exported, _ = _srv.request(base, prefix + rid + '/summary')
+        assert status == 200
+        assert b'account_id' not in exported
+        status, exported, _ = _srv.request(base, prefix + rid + '.zip')
+        assert status == 200
+        with zipfile.ZipFile(io.BytesIO(exported)) as bundle:
+            assert 'account_id' not in json.loads(bundle.read('receipt.json'))
+    if route.endswith('_folder'):
+        status, exported, _ = _srv.request(base, '/api/verify_folder/' + rid)
+        assert status == 200 and b'account_id' not in exported
+    import renewal
+    assert 'account_id' not in renewal.receipt_core(rec)
     assert rid.encode() in request(base,'/api/me/anchors')[1]
     assert rid.encode() not in request(base,'/api/me/anchors',1)[1]
 
