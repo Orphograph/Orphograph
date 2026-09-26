@@ -94,7 +94,11 @@ def test_public_addresses_unwraps_literals_and_reports_dns_errors(monkeypatch):
     monkeypatch.setattr(socket, "getaddrinfo", lambda *_a, **_k: (_ for _ in ()).throw(socket.gaierror("nope")))
     addresses, reason = webhooks._public_addresses("missing.example")
     assert addresses == []
-    assert reason.startswith("dns_error:")
+    # Exactly the code since 2026-09-26: the reason reaches the registering
+    # customer, and it used to carry the resolver's error text after the
+    # colon. The detail now goes to the log only
+    # (tests/test_payment_and_outbound_hardening.py).
+    assert reason == "dns_error"
 
 
 class _Response:

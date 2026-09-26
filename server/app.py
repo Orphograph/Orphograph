@@ -330,6 +330,25 @@ _status_limiter = TokenBucket(STATUS_RATE_CAPACITY, STATUS_RATE_REFILL)
 SESSION_LOOKUP_CAPACITY = 5
 SESSION_LOOKUP_REFILL = 5 / 3600.0
 _session_lookup_limiter = TokenBucket(SESSION_LOOKUP_CAPACITY, SESSION_LOOKUP_REFILL)
+# /api/me/cancel-subscription and /reactivate-subscription each make one live
+# Stripe write, and had no limit: 20 requests from one session made 20 Stripe
+# calls (measured 2026-09-26). Keyed per ACCOUNT, and one bucket for both
+# routes so alternating them does not double the budget. Not _anchor_limiter:
+# its production budget is 3 a day, and a customer who cancels, changes their
+# mind and tries again must not be locked out of their own subscription for
+# hours. In-memory: a restart refilling it only restores a few Stripe calls.
+SUB_CHANGE_CAPACITY = 10
+SUB_CHANGE_REFILL = 10 / 3600.0  # burst 10, then one every 6 minutes
+_sub_change_limiter = TokenBucket(SUB_CHANGE_CAPACITY, SUB_CHANGE_REFILL)
+# Lightning invoices. Each one is an upstream create at the Lightning backend,
+# and both /api/ln/quote and a free /api/anchor past its allowance minted a
+# fresh one per request with no limit (25 requests, 25 upstream invoices,
+# measured 2026-09-26). One bucket per client for both paths; past it the
+# anchor path answers the plain 429 and the quote path answers 429.
+# In-memory like the buckets above.
+LN_INVOICE_CAPACITY = 20
+LN_INVOICE_REFILL = 20 / 3600.0  # burst 20, then one every 3 minutes
+_ln_invoice_limiter = TokenBucket(LN_INVOICE_CAPACITY, LN_INVOICE_REFILL)
 
 # Funnel-event limiter: 60 events / IP / minute. Separate bucket so noisy
 # analytics traffic can't burn the anchor-rate budget (and vice versa).
@@ -596,6 +615,24 @@ def _reject_private(handler: BaseHTTPRequestHandler, pack_consumed: bool,
         "private_granted": False,
         "credit_refunded": bool(pack_consumed),
     })
+
+
+def _pack_recover_resend(addr: str) -> None:
+    """Re-send `addr`'s claim codes that still hold anchors. Runs on its own
+    thread after /api/pack/recover has answered, so nothing the caller can
+    time depends on whether the address owns a pack."""
+    try:
+        for code in credits.find_claim_codes_by_email(addr):
+            remaining = credits.balance(code)
+            # Only re-send codes with anchors still on them — a fully spent
+            # pack has nothing to reuse, and a "Pack of 0" notice would be
+            # misleading.
+            if remaining > 0:
+                mailer.send_pack_claim_email(addr, code, remaining)
+    except Exception as e:  # noqa: BLE001
+        # The caller already has its answer; a failure here reaches only the
+        # log, and the address stays out of it.
+        sys.stderr.write(f"[pack-recover] resend failed: {type(e).__name__}\n")
 
 
 def _json_response(handler: BaseHTTPRequestHandler, status: int, payload: dict) -> None:
@@ -2982,13 +3019,21 @@ class Handler(BaseHTTPRequestHandler):
         want_private = bool(payload.get("private", False))
         if not pack_consumed and not subscription_active and ln_payment_hash is None:
             allowed, retry_after = _anchor_limiter.check(self._client_key())
-            if not allowed and lightning.configured():
+            if (not allowed and lightning.configured()
+                    and _ln_invoice_limiter.check(f"ln-invoice:{self._client_key()}")[0]):
                 # L402 challenge: agents past the free tier can pay sats for
                 # one anchor, no account. Falls back to the classic 429 when
-                # Lightning isn't armed, so behavior is unchanged until then.
+                # Lightning isn't armed, so behavior is unchanged until then,
+                # and also once this client has used its invoice budget: each
+                # challenge is a fresh upstream invoice, so it must not be
+                # free to ask for one per request.
                 ok, inv = lightning.create_invoice(
                     lightning.PRICE_SATS, "orphograph anchor")
-                if ok:
+                if not ok:
+                    # Falls through to the plain 429 below, which used to
+                    # happen silently; the backend's words are for the log.
+                    sys.stderr.write(f"[ln] invoice creation failed (anchor challenge): {inv}\n")
+                else:
                     macaroon = lightning.mint_macaroon(
                         inv["payment_hash"], lightning.PRICE_SATS)
                     self.send_response(402)
@@ -3705,10 +3750,11 @@ class Handler(BaseHTTPRequestHandler):
         Rate-limited per IP with the shared _anchor_limiter (same pattern as
         /api/waitlist and /api/recover) to blunt enumeration/mail-flood abuse.
 
-        Residual side-channel (accepted for this threat model): a hit performs
-        a ledger scan + mail send while a miss returns almost immediately, so
-        response timing weakly distinguishes the two. The rate limit bounds how
-        much an attacker can sample this.
+        The lookup and the resend run on a background thread started AFTER the
+        response is written. They used to run first, so a hit waited for the
+        mail round trip (about 150 ms per code) and a miss did not: every hit
+        was slower than every miss in a 25-pair sample, which turned the neutral
+        wording into a yes/no answer anyway.
         """
         allowed, retry = _anchor_limiter.check(f"pack_recover:{self._client_key()}")
         if not allowed:
@@ -3729,25 +3775,10 @@ class Handler(BaseHTTPRequestHandler):
         email = payload.get("email", "")
         # A malformed address returns the SAME neutral response as a valid one
         # with no pack — never a distinguishing 400 (mirrors _handle_waitlist).
-        if isinstance(email, str) and EMAIL_RE.match(email.strip()):
-            addr = email.strip()
-            try:
-                codes = credits.find_claim_codes_by_email(addr)
-                for code in codes:
-                    remaining = credits.balance(code)
-                    # Only re-send codes with anchors still on them — a fully
-                    # spent pack has nothing to reuse, and a "Pack of 0" notice
-                    # would be misleading. The neutral response is unchanged.
-                    if remaining > 0:
-                        try:
-                            mailer.send_pack_claim_email(addr, code, remaining)
-                        except Exception:
-                            # Never surface a mailer failure — it would turn the
-                            # neutral response into an oracle.
-                            pass
-            except Exception:
-                pass
         _json_response(self, 200, {"ok": True, "message": self._PACK_RECOVER_NEUTRAL})
+        if isinstance(email, str) and EMAIL_RE.match(email.strip()):
+            threading.Thread(target=_pack_recover_resend, args=(email.strip(),),
+                             name="pack-recover", daemon=True).start()
 
     def _handle_affiliate_payout(self) -> None:
         """POST /api/me/affiliate/payout.
@@ -4089,7 +4120,14 @@ class Handler(BaseHTTPRequestHandler):
         if not isinstance(payload, dict):
             _json_response(self, 400, {"error": "body must be JSON"})
             return
-        want_private = bool(payload.get("private", False))
+        # JSON true or false only; an absent key keeps the old default (public).
+        # This was bool(payload.get("private")), so the STRING "false" — and
+        # "0", "no" — made the receipt private and its public verify URL
+        # started answering 404. null is refused too: it says neither.
+        want_private = payload.get("private", False)
+        if not isinstance(want_private, bool):
+            _json_response(self, 400, {"error": "private must be true or false"})
+            return
         # Load receipt + verify ownership
         rfile = engine.RECEIPTS_DIR / rid / "receipt.json"
         if not rfile.exists():
@@ -4474,10 +4512,29 @@ class Handler(BaseHTTPRequestHandler):
                 "error": "lightning payments not configured",
                 "hint": "card packs and subscriptions remain available"})
             return
+        # Every quote is an upstream invoice at the Lightning backend; the
+        # same per-client budget as the anchor challenge (_ln_invoice_limiter).
+        allowed, retry_after = _ln_invoice_limiter.check(f"ln-invoice:{self._client_key()}")
+        if not allowed:
+            retry = int(retry_after) + 1
+            body = json.dumps({"error": "too many invoice requests",
+                               "retry_after_seconds": retry}).encode("utf-8")
+            self.send_response(429)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Retry-After", str(retry))
+            self.send_header("Content-Length", str(len(body)))
+            _security_headers(self)
+            self.end_headers()
+            self.wfile.write(body)
+            return
         ok, inv = lightning.create_invoice(lightning.PRICE_SATS,
                                            "orphograph anchor")
         if not ok:
-            _json_response(self, 503, {"error": f"invoice creation failed: {inv}"})
+            # The backend's own words (HTTP status line, connection error,
+            # sometimes wallet details) go to the log only.
+            sys.stderr.write(f"[ln] invoice creation failed (quote): {inv}\n")
+            _json_response(self, 503, {"error": "invoice creation failed",
+                                       "hint": "try again shortly"})
             return
         macaroon = lightning.mint_macaroon(inv["payment_hash"], lightning.PRICE_SATS)
         _json_response(self, 200, {
@@ -5363,10 +5420,37 @@ class Handler(BaseHTTPRequestHandler):
         ok = webhooks.delete(email=email, url=url)
         _json_response(self, 200 if ok else 404, {"ok": ok})
 
+    def _sub_change_limited(self, email: str) -> bool:
+        """Spend one token of the account's cancel/reactivate budget, or
+        answer 429 and return True. Checked before any Stripe call.
+
+        There is deliberately no "already in that state, skip the call"
+        shortcut: the only recorded cancel_at_period_end comes from Stripe
+        webhooks, which lag the live state and miss changes made in the
+        Customer Portal. A stale "already cancelled" would answer 200 while
+        Stripe keeps billing, which is worse than the call it saves."""
+        allowed, retry_after = _sub_change_limiter.check(
+            f"sub-change:{auth.email_id(email)}")
+        if allowed:
+            return False
+        retry = int(retry_after) + 1
+        body = json.dumps({"error": "too many subscription changes",
+                           "retry_after_seconds": retry}).encode("utf-8")
+        self.send_response(429)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Retry-After", str(retry))
+        self.send_header("Content-Length", str(len(body)))
+        _security_headers(self)
+        self.end_headers()
+        self.wfile.write(body)
+        return True
+
     def _handle_cancel_subscription(self) -> None:
         email = self._session_email()
         if not email:
             _json_response(self, 401, {"error": "not authenticated"})
+            return
+        if self._sub_change_limited(email):
             return
         sub_id = subscriptions.stripe_subscription_id_for(email)
         if not sub_id:
@@ -5385,6 +5469,8 @@ class Handler(BaseHTTPRequestHandler):
         email = self._session_email()
         if not email:
             _json_response(self, 401, {"error": "not authenticated"})
+            return
+        if self._sub_change_limited(email):
             return
         sub_id = subscriptions.stripe_subscription_id_for(email)
         if not sub_id:
