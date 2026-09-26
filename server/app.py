@@ -64,6 +64,7 @@ import nowpayments_api  # noqa: E402
 import nowpayments_webhook  # noqa: E402
 import subscriptions  # noqa: E402
 import teams  # noqa: E402
+from email_fold import fold_email  # noqa: E402
 import unsubscribe  # noqa: E402
 import waitlist  # noqa: E402
 import webhooks  # noqa: E402
@@ -353,6 +354,19 @@ _sub_change_limiter = TokenBucket(SUB_CHANGE_CAPACITY, SUB_CHANGE_REFILL)
 LN_INVOICE_CAPACITY = 20
 LN_INVOICE_REFILL = 20 / 3600.0  # burst 20, then one every 3 minutes
 _ln_invoice_limiter = TokenBucket(LN_INVOICE_CAPACITY, LN_INVOICE_REFILL)
+
+# API key issuance, per account. Every POST /api/me/api-key appends to the
+# key ledger that each keyed anchor and vault request reads, and nothing
+# bounded it: 150 issuances in a row all answered 200 (2026-09-25). A person
+# rotates a key a handful of times, so 5 at once and then one every 12
+# minutes. Keyed on fold_email(session email) so spellings of one mailbox
+# share it, the same fold the key ledger counts live keys by. str.lower()
+# here put a U+212A KELVIN SIGN spelling of "karl@x" in karl@x's bucket, so
+# one account could spend another's. A double click spends 2. In-memory: a
+# restart refilling it is harmless.
+API_KEY_ISSUE_CAPACITY = 5
+API_KEY_ISSUE_REFILL = 5 / 3600.0
+_api_key_issue_limiter = TokenBucket(API_KEY_ISSUE_CAPACITY, API_KEY_ISSUE_REFILL)
 
 # Funnel-event limiter: 60 events / IP / minute. Separate bucket so noisy
 # analytics traffic can't burn the anchor-rate budget (and vice versa).
@@ -2194,7 +2208,7 @@ class Handler(BaseHTTPRequestHandler):
             team = teams.team_for_member(email)
             team_role = None
             if team:
-                team_role = "owner" if team.get("owner") == email else "member"
+                team_role = "owner" if teams.is_owner(team, email) else "member"
             sub_status = subscriptions.status_for(email) or {}
             sub_active = _subscription_active_for(email)
             # Anchor count under this subscription. Uses the count-only
@@ -2299,7 +2313,7 @@ class Handler(BaseHTTPRequestHandler):
             if not t:
                 _json_response(self, 200, {"team": None})
                 return
-            _json_response(self, 200, {"team": t, "role": "owner" if t.get("owner") == email else "member"})
+            _json_response(self, 200, {"team": t, "role": "owner" if teams.is_owner(t, email) else "member"})
             return
         if path == "/api/me/anchors":
             email = self._vault_email()
@@ -4025,32 +4039,41 @@ class Handler(BaseHTTPRequestHandler):
         if not email:
             _json_response(self, 401, {"error": "not authenticated"})
             return
-        t = teams.team_for_member(email)
-        if not t or t.get("owner") != email:
-            _json_response(self, 403, {"error": "only the team owner can issue invites"})
-            return
-        if not subscriptions.is_active(email):
-            _json_response(self, 402, {"error": "active subscription required to issue invites"})
-            return
-        code = teams.issue_invite_code(t["team_id"], email)
-        if not code:
-            _json_response(self, 500, {"error": "could not issue invite"})
-            return
-        # Body may be empty; we don't need anything from it.
+        # Body may be empty; we don't need anything from it. Drained before
+        # any answer, so a refusal leaves the connection as clean as a 200.
         length = _read_content_length(self)
         if 0 < length <= MAX_BODY_BYTES:
             try:
                 self.rfile.read(length)
             except OSError:
                 pass
+        t = teams.team_for_member(email)
+        if not teams.is_owner(t, email):
+            _json_response(self, 403, {"error": "only the team owner can issue invites"})
+            return
+        if not subscriptions.is_active(email):
+            _json_response(self, 402, {"error": "active subscription required to issue invites"})
+            return
+        try:
+            issued = teams.issue_invite(t["team_id"], email)
+        except teams.InviteLimitReached as e:
+            _json_response(self, 409, {"error": str(e)})
+            return
+        if not issued:
+            _json_response(self, 500, {"error": "could not issue invite"})
+            return
+        code = issued["invite_code"]
         site = os.environ.get("SITE_URL", "").rstrip("/")
         share_url = f"{site}/team/join?code={code}" if site else f"/team/join?code={code}"
+        days = teams.INVITE_TTL_SECONDS // 86400
         _json_response(self, 200, {
             "ok": True,
             "invite_code": code,
             "share_url": share_url,
-            "expires_at": None,
-            "note": "Single-use. Share with the person you want to add.",
+            # The instant redeem enforces, read from the row just written.
+            "expires_at": datetime.fromtimestamp(issued["expires_at"], timezone.utc)
+                                  .isoformat(timespec="seconds"),
+            "note": f"Single-use, expires in {days} days. Share with the person you want to add.",
         })
 
     def _handle_team_redeem(self) -> None:
@@ -4085,7 +4108,7 @@ class Handler(BaseHTTPRequestHandler):
             _json_response(self, 401, {"error": "not authenticated"})
             return
         t = teams.team_for_member(email)
-        if not t or t.get("owner") != email:
+        if not teams.is_owner(t, email):
             _json_response(self, 403, {"error": "only the team owner can remove members"})
             return
         length = _read_content_length(self)
@@ -4104,7 +4127,10 @@ class Handler(BaseHTTPRequestHandler):
         if wrong:
             _json_response(self, 400, {"error": f"{wrong} must be a string"})
             return
-        member_email = _json_str(payload, "member_email").strip().lower()
+        # Not lowercased here: remove_member folds both sides itself, and
+        # str.lower() would turn a U+212A KELVIN SIGN spelling into another
+        # member's plain-"k" address.
+        member_email = _json_str(payload, "member_email").strip()
         if not member_email:
             _json_response(self, 400, {"error": "member_email required"})
             return
@@ -4491,6 +4517,21 @@ class Handler(BaseHTTPRequestHandler):
             return
         if not subscriptions.is_active(email):
             _json_response(self, 402, {"error": "API access requires an active subscription"})
+            return
+        allowed, retry_after = _api_key_issue_limiter.check(f"apikey-issue:{fold_email(email)}")
+        if not allowed:
+            self.send_response(429)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Retry-After", str(int(retry_after) + 1))
+            self.send_header("Cache-Control", "no-store")
+            body = json.dumps({
+                "error": "too many new keys; try again later",
+                "retry_after_seconds": int(retry_after) + 1,
+            }).encode("utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            _security_headers(self)
+            self.end_headers()
+            self.wfile.write(body)
             return
         key = api_keys.issue(email)
         _json_response(self, 200, {
