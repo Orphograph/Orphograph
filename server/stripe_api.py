@@ -17,6 +17,7 @@ Public API:
 """
 from __future__ import annotations
 
+import http.client
 import json
 import re
 import os
@@ -39,8 +40,13 @@ def is_configured() -> bool:
 # account lookup must not become a per-request Stripe round-trip. Stale-if-error:
 # a transient API failure serves the last known answer instead of flapping the
 # card buttons.
-_ACCOUNT_CACHE: dict = {"ts": 0.0, "enabled": None}
+_ACCOUNT_CACHE: dict = {"ts": 0.0, "enabled": None, "tried": 0.0}
 ACCOUNT_CACHE_TTL_SEC = 600
+# A failed lookup is not cached as an answer, but it is cached as an attempt:
+# no new lookup for this long. Without it a failing Stripe (revoked key, 429,
+# 5xx, timeout) was asked again on every /api/config load, each call spending
+# the read budget checkout shares and each 401 writing an ALERT line.
+ACCOUNT_RETRY_SEC = 60
 
 
 def charges_enabled() -> bool | None:
@@ -61,6 +67,11 @@ def charges_enabled() -> bool | None:
     now = time.time()
     if _ACCOUNT_CACHE["enabled"] is not None and now - _ACCOUNT_CACHE["ts"] < ACCOUNT_CACHE_TTL_SEC:
         return _ACCOUNT_CACHE["enabled"]
+    # Stamped before the call, so requests that arrive while it is in flight
+    # serve the cached answer instead of each starting their own lookup.
+    if now - _ACCOUNT_CACHE.get("tried", 0.0) < ACCOUNT_RETRY_SEC:
+        return _ACCOUNT_CACHE["enabled"]
+    _ACCOUNT_CACHE["tried"] = now
     res = _request("GET", "/account")
     if res.get("ok"):
         _ACCOUNT_CACHE["ts"] = now
@@ -202,6 +213,19 @@ def _request(method: str, path: str, form: dict | None = None) -> dict:
             "category": "network_error",
             "error": "Network error reaching payment provider.",
             "retryable": True,
+        }
+    except (UnicodeError, http.client.InvalidURL) as e:
+        # A path the HTTP client cannot put on the wire (a non-ASCII or control
+        # character). Nothing was sent. Callers validate ids first; this keeps
+        # one that slips through from escaping the handler with no response.
+        sys.stderr.write(f"[stripe_api] unsendable path={mask_session_ids(path)} "
+                         f"{type(e).__name__}\n")
+        return {
+            "ok": False,
+            "category": "invalid_request",
+            "error": "Request rejected (invalid parameters).",
+            "status": 400,
+            "retryable": False,
         }
 
 

@@ -235,13 +235,16 @@ def request(base: str, path: str, method: str = "GET", body: bytes | None = None
 
 
 def raw_request(base: str, target: str, method: str = "GET", *,
-                line: str | None = None, timeout: float = 15) -> bytes:
+                line: str | None = None, headers: str = "",
+                timeout: float = 15) -> bytes:
     """Send one request line EXACTLY as written and return the raw response.
 
     urllib normalises the target, so it cannot send `//a/<token>`, `/./a/…` or
     the absolute form `http://host/a/<token>`, and those are shapes the server
     and its access log both see from real clients. `line` replaces the whole
-    request line (a one-word line, a control character). A server that has
+    request line (a one-word line, a control character). `headers` is extra
+    header lines, each ending in CRLF, sent as latin-1: a char 0x80-0xFF goes
+    out as that one byte, which urllib refuses to send. A server that has
     stopped answering raises ServerGone with its output, like request()."""
     import socket
     from urllib.parse import urlparse
@@ -250,7 +253,7 @@ def raw_request(base: str, target: str, method: str = "GET", *,
     chunks = []
     try:
         with socket.create_connection((u.hostname, u.port), timeout=timeout) as s:
-            s.sendall(f"{first}\r\nHost: {u.netloc}\r\n"
+            s.sendall(f"{first}\r\nHost: {u.netloc}\r\n{headers}"
                       "User-Agent: uptime-check/1.0\r\nConnection: close\r\n\r\n"
                       .encode("latin-1"))
             while True:
