@@ -144,18 +144,25 @@ def list_for_email(email: str) -> list[dict]:
 
 _METADATA_IPS = {"169.254.169.254", "fd00:ec2::254"}
 
+# The one reason a caller is given for any refusal about where a URL points.
+ADDRESS_NOT_ALLOWED = "address_not_allowed"
+
 
 def _refused(code: str, detail: str) -> str:
-    """Log what a refusal was about and return only its fixed code.
+    """Log the specific refusal and return the one code the caller sees.
 
     The reason travels back to the registering customer as the 400 body of
     POST /api/me/webhooks. It used to carry the resolved address and the
     resolver's own error text, so a subscriber could register names and read
     back which private address each one resolved to from inside our network
-    (an internal hostname answered with its fdaa:/10.x address). The detail
-    is for the founder's log, not the caller."""
+    (an internal hostname answered with its fdaa:/10.x address). Fixed codes
+    were not enough either: non_public_address, cloud_metadata_address,
+    dns_error, dns_no_records and bad_ip against a 200 still told a
+    subscriber, name by name, whether it resolved and to what kind of
+    address. So every refusal about the address is ADDRESS_NOT_ALLOWED to
+    the caller, and `code` and `detail` are for the founder's log only."""
     sys.stderr.write(f"[webhooks] refused {code}: {detail}\n")
-    return code
+    return ADDRESS_NOT_ALLOWED
 
 
 def _ip_is_disallowed(ip_str: str) -> tuple[bool, str | None]:
@@ -163,7 +170,7 @@ def _ip_is_disallowed(ip_str: str) -> tuple[bool, str | None]:
     if "%" in ip_str:  # strip IPv6 scope id
         ip_str = ip_str.split("%", 1)[0]
     if ip_str in _METADATA_IPS:
-        return True, "cloud_metadata_address"
+        return True, _refused("cloud_metadata_address", ip_str)
     try:
         ip = ipaddress.ip_address(ip_str)
     except ValueError:
@@ -217,7 +224,7 @@ def _is_public_address(host: str) -> tuple[bool, str | None]:
     except (socket.gaierror, OSError) as e:
         return False, _refused("dns_error", f"{host}: {e}")
     if not infos:
-        return False, "dns_no_records"
+        return False, _refused("dns_no_records", host)
     for fam, _typ, _proto, _canon, sockaddr in infos:
         disallowed, reason = _ip_is_disallowed(sockaddr[0])
         if disallowed:
@@ -246,7 +253,7 @@ def _public_addresses(host: str) -> tuple[list[str], str | None]:
     except (socket.gaierror, OSError) as e:
         return [], _refused("dns_error", f"{host}: {e}")
     if not infos:
-        return [], "dns_no_records"
+        return [], _refused("dns_no_records", host)
     addresses: list[str] = []
     for _fam, _typ, _proto, _canon, sockaddr in infos:
         address = sockaddr[0]
@@ -287,9 +294,9 @@ def _validate_webhook_url(url: str) -> tuple[bool, str | None]:
     # the intent of pointing a webhook at "localhost" is never legitimate.
     lower_host = host.lower()
     if lower_host in {"localhost", "localhost.localdomain", "ip6-localhost"}:
-        return False, "non_public_address"
+        return False, _refused("internal_hostname", host)
     if lower_host.endswith(".internal") or lower_host.endswith(".local"):
-        return False, "non_public_address"
+        return False, _refused("internal_hostname", host)
     return _is_public_address(host)
 
 

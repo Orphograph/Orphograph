@@ -123,8 +123,22 @@ def lookup_customer(email: str) -> dict | None:
     pack_claims = []
     # The canonical ledger (credits.LEDGER_PATH honours ORPHO_CREDIT_LEDGER),
     # read by the one reader balance() uses.
-    for row in credits.iter_ledger_rows():
-        if row.get("email") != email:
+    rows = list(credits.iter_ledger_rows())
+    # Referral bonus rows are joined by claim code, never by their email.
+    # Since 2026-09-26 they are written with email="", so matching on email
+    # dropped a referred buyer's own +10 from this view. The ones written
+    # before carry the BUYER's email even when the code is a gift
+    # RECIPIENT's, and matching on it listed the recipient's bearer code
+    # under the buyer. The codes this customer holds are the ones on their
+    # own mint rows; a bonus shows here only when it credits one of those.
+    own_codes = {row.get("claim_code") for row in rows
+                 if row.get("email") == email and row.get("claim_code")
+                 and not credits.is_referral_bonus_row(row)}
+    for row in rows:
+        if credits.is_referral_bonus_row(row):
+            if row.get("claim_code") not in own_codes:
+                continue
+        elif row.get("email") != email:
             continue
         try:
             delta = credits.parse_delta(row)  # "10.0" counts, as in balance()

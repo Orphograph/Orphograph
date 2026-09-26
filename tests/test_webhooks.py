@@ -62,6 +62,10 @@ def test_registration_rejections_and_limit(monkeypatch):
     }
 
 
+# The two internal names answer address_not_allowed since 2026-09-26, like
+# every other refusal about where a URL points: the caller gets one code, so
+# the reason cannot say whether or how a name resolved. The shape codes above
+# them describe only the text the caller sent, so they stay specific.
 @pytest.mark.parametrize(("url", "reason"), [
     ("", "bad_url"),
     ("http://example.com/hook", "url_must_be_https"),
@@ -70,8 +74,8 @@ def test_registration_rejections_and_limit(monkeypatch):
     ("https://example.com:bad/hook", "bad_port"),
     ("https://example.com/\\evil", "bad_url"),
     ("https://example.com/a\tb", "bad_url"),
-    ("https://localhost/hook", "non_public_address"),
-    ("https://service.internal/hook", "non_public_address"),
+    ("https://localhost/hook", "address_not_allowed"),
+    ("https://service.internal/hook", "address_not_allowed"),
 ])
 def test_url_policy_rejects_ambiguous_or_internal_shapes(url, reason, monkeypatch):
     monkeypatch.setattr(webhooks, "_is_public_address", lambda _host: (True, None))
@@ -85,7 +89,9 @@ def test_url_policy_requires_every_dns_answer_to_be_public(monkeypatch):
     ])
     ok, reason = webhooks._validate_webhook_url("https://mixed.example/hook")
     assert ok is False
-    assert reason.startswith("non_public_address")
+    # One code for every address refusal since 2026-09-26 (see
+    # test_registration_gives_one_code_for_every_address_refusal).
+    assert reason == "address_not_allowed"
 
 
 def test_public_addresses_unwraps_literals_and_reports_dns_errors(monkeypatch):
@@ -94,11 +100,53 @@ def test_public_addresses_unwraps_literals_and_reports_dns_errors(monkeypatch):
     monkeypatch.setattr(socket, "getaddrinfo", lambda *_a, **_k: (_ for _ in ()).throw(socket.gaierror("nope")))
     addresses, reason = webhooks._public_addresses("missing.example")
     assert addresses == []
-    # Exactly the code since 2026-09-26: the reason reaches the registering
-    # customer, and it used to carry the resolver's error text after the
-    # colon. The detail now goes to the log only
-    # (tests/test_payment_and_outbound_hardening.py).
-    assert reason == "dns_error"
+    # The reason reaches the registering customer. It used to be
+    # "dns_error: <the resolver's text>", then the bare "dns_error"; since
+    # 2026-09-26 it is the one code every address refusal gives, because a
+    # code of its own for a name that does not resolve still told the caller
+    # which names exist. "dns_error" and the detail go to the log only.
+    assert reason == "address_not_allowed"
+
+
+def _answers(*addresses):
+    return lambda *_a, **_k: [
+        (socket.AF_INET6 if ":" in a else socket.AF_INET, socket.SOCK_STREAM, 6, "", (a, 0))
+        for a in addresses]
+
+
+def _gaierror(*_a, **_k):
+    raise socket.gaierror(8, "nodename nor servname provided, or not known")
+
+
+@pytest.mark.parametrize(("url", "resolver", "logged"), [
+    ("https://db.flycast/h", _answers("fdaa:0:1234:a7b:1::2"), "non_public_address"),
+    ("https://rfc1918.example/h", _answers("10.20.30.40"), "non_public_address"),
+    ("https://meta.example/h", _answers("169.254.169.254"), "cloud_metadata_address"),
+    ("https://missing.example/h", _gaierror, "dns_error"),
+    ("https://empty.example/h", _answers(), "dns_no_records"),
+    ("https://odd.example/h", _answers("not-an-address"), "bad_ip"),
+    ("https://service.internal/h", _answers("93.184.216.34"), "internal_hostname"),
+])
+def test_registration_gives_one_code_for_every_address_refusal(url, resolver, logged,
+                                                                monkeypatch, capsys):
+    """Found 2026-09-26: registration answered non_public_address,
+    cloud_metadata_address, dns_error, dns_no_records or bad_ip, against 200
+    for a public name. A subscriber could register names one by one and learn
+    which exist and what kind of address each resolves to from inside our
+    network. Every one of them is now the same body; which one it was is in
+    the server log only."""
+    monkeypatch.setattr(socket, "getaddrinfo", resolver)
+    assert webhooks.register("owner@example.test", url) == {
+        "ok": False, "reason": "address_not_allowed"}
+    assert f"[webhooks] refused {logged}:" in capsys.readouterr().err
+    assert webhooks.list_for_email("owner@example.test") == []
+
+
+def test_registration_of_a_public_name_still_succeeds(monkeypatch):
+    """The control for the test above: the resolver stub does reach the
+    check, and a public answer registers."""
+    monkeypatch.setattr(socket, "getaddrinfo", _answers("93.184.216.34"))
+    assert webhooks.register("owner@example.test", "https://public.example/h")["ok"] is True
 
 
 class _Response:

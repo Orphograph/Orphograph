@@ -372,7 +372,13 @@ def test_anchor_routes_already_refuse_string_booleans(main_server):
     assert status == 400 and b"paths_public must be bool" in raw, raw
 
 
-# ── 6 + 7. webhook registration: fixed codes, is_global ────────────────────
+# ── 6 + 7. webhook registration: one code, is_global ───────────────────────
+#
+# The refusal codes below were non_public_address / dns_error / bad_ip when
+# this file was written. Since the follow-up review (2026-09-26) every
+# refusal about the address is address_not_allowed to the caller: distinct
+# codes against a 200 still said, name by name, whether a name resolved and
+# to what kind of address. The specific code stays in the server log.
 
 def _register(base: str, url: str):
     status, raw, _ = _post(base, "/api/me/webhooks", {"url": url}, _as(HOOKS))
@@ -389,9 +395,9 @@ def test_refusal_names_no_address(main_server, url, detail):
     since = len(_log(data))
     status, raw = _register(base, url)
     assert status == 400, raw
-    assert json.loads(raw) == {"error": "non_public_address"}, raw
+    assert json.loads(raw) == {"error": "address_not_allowed"}, raw
     assert detail.encode() not in raw
-    assert detail in _wait_for(data, since, detail)
+    assert f"refused non_public_address: {detail}" in _wait_for(data, since, detail)
 
 
 @pytest.mark.parametrize("url", [
@@ -400,7 +406,7 @@ def test_refusal_names_no_address(main_server, url, detail):
 def test_cgnat_shared_address_space_is_refused(main_server, url):
     status, raw = _register(main_server[0], url)
     assert status == 400, raw
-    assert json.loads(raw) == {"error": "non_public_address"}, raw
+    assert json.loads(raw) == {"error": "address_not_allowed"}, raw
 
 
 @pytest.mark.parametrize("url", ["https://224.0.0.1/h", "https://[64:ff9b::a00:1]/h"])
@@ -427,18 +433,20 @@ def test_dns_failure_returns_the_code_and_logs_the_detail(monkeypatch, capsys):
         raise socket.gaierror(8, "nodename nor servname provided, or not known")
 
     monkeypatch.setattr(socket, "getaddrinfo", fail)
-    assert webhooks._validate_webhook_url("https://missing.example/h") == (False, "dns_error")
-    assert webhooks._public_addresses("missing.example") == ([], "dns_error")
+    assert webhooks._validate_webhook_url("https://missing.example/h") == (
+        False, "address_not_allowed")
+    assert webhooks._public_addresses("missing.example") == ([], "address_not_allowed")
     err = capsys.readouterr().err
-    assert "missing.example" in err and "nodename nor servname" in err
+    assert "refused dns_error: missing.example" in err and "nodename nor servname" in err
 
 
 def test_unparsable_resolver_answer_returns_the_code_and_logs_the_detail(monkeypatch, capsys):
     import webhooks
     monkeypatch.setattr(socket, "getaddrinfo", lambda *_a, **_k: [
         (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("not-an-ip-from-resolver", 0))])
-    assert webhooks._validate_webhook_url("https://odd.example/h") == (False, "bad_ip")
-    assert "not-an-ip-from-resolver" in capsys.readouterr().err
+    assert webhooks._validate_webhook_url("https://odd.example/h") == (
+        False, "address_not_allowed")
+    assert "refused bad_ip: not-an-ip-from-resolver" in capsys.readouterr().err
 
 
 # ── 8. Lightning invoices ──────────────────────────────────────────────────
@@ -505,3 +513,213 @@ def test_failed_invoice_says_so_without_the_backends_words(tmp_path):
         assert status == 429, raw
         assert "[ln] invoice creation failed (anchor challenge)" in _wait_for(
             tmp_path, since, "[ln] invoice creation failed (anchor challenge)")
+
+
+# ── follow-up review, 2026-09-26 ───────────────────────────────────────────
+#
+# F1. The referral fix above changed the WRITER only. Bonus rows written
+#     before it still carry email=<gift buyer> on the gift RECIPIENT's code,
+#     and the readers key credit rows by email.
+# F2. support_tools' lookup, keyed by email too, lost a referred buyer's own
+#     +10 once the writer stopped naming them.
+# F5. The cancel/reactivate budget is per ACCOUNT; nothing proved it did not
+#     follow the client address instead.
+# F6. Stripe's decoded message went to the log raw, newlines included.
+# (F3 and F4 need an in-process server; they live in
+# tests/test_payment_outbound_followups.py, which opens its own sockets and
+# so does not import _srv.)
+
+LEGACY_GIFT_CODE = "pk_LEGACYGIFTrecip01"   # the gift recipient's code
+BUYER_OWN_CODE = "pk_BUYEROWNpack000001"    # the buyer's own pack
+LEGACY_BONUS_SOURCE = "referral_bonus:from_ref_REFERRERabcd"
+
+
+def _legacy_ledger_rows() -> list[dict]:
+    """The recipient's gift mint, the bonus row origin/master wrote for it
+    (buyer's email, recipient's code), and the buyer's own pack with 3 of 10
+    spent. In this order on purpose: recovery sends codes in first-seen
+    order, so a server that still honours the bonus row mails the buyer
+    "Pack of 20" BEFORE their own "Pack of 7", and waiting for the 7 is
+    enough to have seen the 20 if it was sent."""
+    return [
+        {"ts": "2026-09-01T00:00:00+00:00", "claim_code": LEGACY_GIFT_CODE,
+         "email": RECIPIENT, "credits_delta": 10,
+         "source": "stripe-gift:cs_test_legacyGift0000000001"},
+        {"ts": "2026-09-01T00:00:01+00:00", "claim_code": LEGACY_GIFT_CODE,
+         "email": BUYER, "credits_delta": 10, "source": LEGACY_BONUS_SOURCE},
+        {"ts": "2026-09-02T00:00:00+00:00", "claim_code": BUYER_OWN_CODE,
+         "email": BUYER, "credits_delta": 10, "source": "stripe:cs_test_buyerOwnPack00000001"},
+        *({"ts": "2026-09-02T00:01:00+00:00", "claim_code": BUYER_OWN_CODE,
+           "email": "", "credits_delta": -1, "source": "anchor"} for _ in range(3)),
+    ]
+
+
+def test_legacy_referral_bonus_row_is_not_recovered_or_exported_to_the_buyer(tmp_path):
+    _write_jsonl(tmp_path / "credit_ledger.jsonl", _legacy_ledger_rows())
+    _write_jsonl(tmp_path / "auth_sessions.jsonl", [dict(
+        event="created", session_hash=hashlib.sha256(b"session-0").hexdigest(),
+        email=BUYER, expires_unix=time.time() + 3600)])
+    closed = _srv.reserve_ports(1)[0]
+    for base in _srv.server_processes(tmp_path, stub_calendars=True, **_no_egress(closed)):
+        since = len(_log(tmp_path))
+        for who in (BUYER, RECIPIENT):
+            status, body, _ = _post(base, "/api/pack/recover", {"email": who})
+            assert status == 200 and b"we've sent the code" in body, body
+        _wait_for(tmp_path, since, "would send to=r***@recipient.test")
+        text = _wait_for(tmp_path, since, "Pack of 7 ")
+        buyer_sends = [line for line in text.splitlines()
+                       if "would send to=g***@buyer.test" in line]
+        # The buyer's own pack still recovers (a normal pack is unaffected)...
+        assert any("Pack of 7 " in line for line in buyer_sends), text[-2000:]
+        # ...and it is the only thing the buyer is sent: the recipient's code
+        # (10 + the 10 bonus = "Pack of 20") is not.
+        assert len(buyer_sends) == 1, buyer_sends
+        # The recipient still gets their own code, bonus included.
+        recipient_sends = [line for line in text.splitlines()
+                           if "would send to=r***@recipient.test" in line]
+        assert len(recipient_sends) == 1 and "Pack of 20 " in recipient_sends[0], text[-2000:]
+
+        status, raw, _ = _srv.request(base, "/api/me/export", "GET", None,
+                                      {"Cookie": "orpho_sid=session-0"})
+        assert status == 200, raw
+        assert LEGACY_GIFT_CODE.encode() not in raw, raw
+        rows = json.loads(raw)["items"]["credit_ledger"]
+        bonus = [r for r in rows if r.get("source") == LEGACY_BONUS_SOURCE]
+        # The row is the buyer's data and stays in their export, code withheld.
+        assert len(bonus) == 1 and bonus[0]["claim_code"] == "pk_…", rows
+        assert bonus[0]["credits_delta"] == 10 and bonus[0]["email"] == BUYER
+        # The buyer's own code is exported as it is.
+        assert any(r.get("claim_code") == BUYER_OWN_CODE for r in rows), rows
+
+
+def test_recovery_skips_only_referral_bonus_rows(tmp_path, monkeypatch):
+    """A denylist, not an allowlist: a mint kind this code has never heard of
+    still recovers, and so does a row whose source is not even a string."""
+    import credits
+    monkeypatch.setattr(credits, "LEDGER_PATH", tmp_path / "credit_ledger.jsonl")
+    _write_jsonl(credits.LEDGER_PATH, [
+        {"claim_code": "pk_futureRailMint01", "email": BUYER, "credits_delta": 10,
+         "source": "future-rail:abc"},
+        {"claim_code": "pk_cryptoMint000001", "email": BUYER, "credits_delta": 10,
+         "source": "nowpayments:inv_1:np_ord_1"},
+        {"claim_code": "pk_oddSourceMint001", "email": BUYER, "credits_delta": 10,
+         "source": None},
+        {"claim_code": "pk_giftForSomeone01", "email": BUYER, "credits_delta": 10,
+         "source": LEGACY_BONUS_SOURCE},
+        # Only the prefix counts: this is not a bonus row.
+        {"claim_code": "pk_notQuiteABonus01", "email": BUYER, "credits_delta": 10,
+         "source": "stripe:referral_bonus:x"},
+    ])
+    assert credits.find_claim_codes_by_email(BUYER.upper()) == [
+        "pk_futureRailMint01", "pk_cryptoMint000001", "pk_oddSourceMint001",
+        "pk_notQuiteABonus01"]
+
+
+def test_support_lookup_joins_referral_bonus_rows_by_claim_code(tmp_path, monkeypatch):
+    """F2. Bonus rows show under whoever HOLDS the code they credit: the
+    new-style row (email="") on the buyer's own code shows under the buyer,
+    and a legacy row naming the buyer on a gift code shows under the
+    recipient, not the buyer."""
+    import credits
+    import subscriptions
+    import support_tools
+    monkeypatch.setattr(credits, "LEDGER_PATH", tmp_path / "credit_ledger.jsonl")
+    monkeypatch.setattr(support_tools, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(subscriptions, "status_for", lambda _email: None)
+    new_bonus = "referral_bonus:from_ref_NEWSTYLEabcd"
+    _write_jsonl(credits.LEDGER_PATH, [
+        *_legacy_ledger_rows(),
+        # What referrals.apply writes since the writer fix, for a buyer who
+        # bought their own pack with a referral code.
+        {"ts": "2026-09-02T00:00:02+00:00", "claim_code": BUYER_OWN_CODE, "email": "",
+         "credits_delta": 10, "source": new_bonus},
+        # Someone else's bonus must not join anyone else's lookup.
+        {"ts": "2026-09-02T00:00:03+00:00", "claim_code": REFERRER_CODE, "email": "",
+         "credits_delta": 10, "source": "referral_bonus:from_ref_SOMEONEELSE1"},
+    ])
+
+    claims = support_tools.lookup_customer(BUYER)["pack_claims"]
+    assert sorted((c["claim_code"], c["source"]) for c in claims) == sorted([
+        (BUYER_OWN_CODE, "stripe:cs_test_buyerOwnPack00000001"),
+        (BUYER_OWN_CODE, new_bonus),
+    ]), claims
+
+    claims = support_tools.lookup_customer(RECIPIENT)["pack_claims"]
+    assert sorted((c["claim_code"], c["source"]) for c in claims) == sorted([
+        (LEGACY_GIFT_CODE, "stripe-gift:cs_test_legacyGift0000000001"),
+        (LEGACY_GIFT_CODE, LEGACY_BONUS_SOURCE),
+    ]), claims
+
+
+def test_subscription_change_budget_follows_the_account_not_the_address(tmp_path):
+    """F5. With the Fly edge header trusted, spend the budget from one client
+    address, then come back with the same session from another /24: still
+    429, and no Stripe call. Keyed on the address, the second one would have
+    a fresh budget."""
+    emails = [SUBSCRIBER]
+    _seed_accounts(tmp_path, emails)
+    closed = _srv.reserve_ports(1)[0]
+    stripe_calls = re.compile(r"\[stripe_api\] URLError path=/subscriptions/")
+    first_ip, second_ip = "203.0.113.7", "198.51.100.9"
+    for base in _srv.server_processes(tmp_path, stub_calendars=True,
+                                      STRIPE_SECRET_KEY="sk_test_unit_only",
+                                      ORPHO_TRUST_PROXY_HEADERS="1",
+                                      RATE_LIMIT_PER_DAY="1",
+                                      **_no_egress(closed)):
+        # Control: this server really keys limits on Fly-Client-IP, so the
+        # two addresses below are two different clients to it. One free
+        # anchor per address per day: the second from the first address is
+        # refused, the first from the second address is not.
+        def anchor_from(ip, digest):
+            return _srv.anchor(base, {"hash_hex": digest}, {"Fly-Client-IP": ip})[0]
+        assert anchor_from(first_ip, "0a" * 32) == 200
+        assert anchor_from(first_ip, "0b" * 32) == 429
+        assert anchor_from(second_ip, "0c" * 32) == 200
+
+        since = len(_log(tmp_path))
+        session = {**_as(SUBSCRIBER, emails), "Fly-Client-IP": first_ip}
+        statuses = [_post(base, "/api/me/cancel-subscription", {}, session)[0]
+                    for _ in range(30)]
+        assert 429 in statuses, statuses
+        calls = len(stripe_calls.findall(_log(tmp_path)[since:]))
+        assert calls == statuses.index(429) and calls > 0, (calls, statuses)
+
+        moved = {**_as(SUBSCRIBER, emails), "Fly-Client-IP": second_ip}
+        for route in ("/api/me/cancel-subscription", "/api/me/reactivate-subscription"):
+            status, body, _ = _post(base, route, {}, moved)
+            assert status == 429, (route, status, body)
+        assert len(stripe_calls.findall(_log(tmp_path)[since:])) == calls
+
+
+def test_stripe_message_with_a_newline_stays_on_one_log_line(monkeypatch, capsys):
+    """F6. Stripe echoes the caller's input in its message. A newline in that
+    input used to reach the log as a real one, so the caller could write a
+    line of their own that read like ours. The body is pretty-printed JSON,
+    as Stripe sends it, so it has line breaks of its own too."""
+    import stripe_api
+    monkeypatch.setattr(stripe_api, "STRIPE_SECRET_KEY", "sk_test_unit_only")
+    forged = "[stripe_api] ALERT: auth failure (401) - forged by caller"
+    email = f"a\n{forged}\r\n@b.test\u2028x"
+    body = json.dumps({"error": {"type": "invalid_request_error", "code": "email_invalid",
+                                 "message": f"Invalid email address: {email}"}},
+                      indent=2).encode()
+    assert b"\n" in body
+
+    def answer(req, timeout=None):
+        raise urllib.error.HTTPError(req.full_url, 400, "stub", {}, io.BytesIO(body))
+
+    monkeypatch.setattr(urllib.request, "urlopen", answer)
+    result = stripe_api.create_checkout_session(
+        price_id="price_1RealConfiguredPackPriceId", mode="payment",
+        success_url="https://example.test/s", cancel_url="https://example.test/c",
+        customer_email=email)
+    assert result["error"] == "Request rejected by Stripe (invalid parameters).", result
+    err = capsys.readouterr().err
+    lines = err.splitlines()
+    # Two lines, the HTTP line and the message line, and nothing else.
+    assert len(lines) == 2, lines
+    assert lines[0].startswith("[stripe_api] HTTP 400 (invalid_request) "), lines
+    assert lines[1].startswith("[stripe_api] stripe message (invalid_request, "), lines
+    assert not any(line.startswith("[stripe_api] ALERT") for line in lines), lines
+    # The message is still all there, escaped.
+    assert "Invalid email address: a\\n[stripe_api] ALERT" in lines[1], lines[1]

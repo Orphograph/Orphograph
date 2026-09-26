@@ -161,9 +161,17 @@ def _request(method: str, path: str, form: dict | None = None) -> dict:
                 f"path={mask_session_ids(path)}\n"
             )
         else:
+            # Both the body and Stripe's message are written with repr(), so
+            # each stays on its one line. Stripe echoes the caller's input
+            # back ("Invalid email address: <what they sent>"), and the
+            # decoded message kept a newline in that input as a real one: a
+            # caller could start a second log line that read like ours (an
+            # "ALERT" line, say). Stripe also pretty-prints its JSON bodies
+            # over several lines. repr() escapes every line break, including
+            # \r, \x85 and \u2028, and keeps the "…" that masking leaves.
             sys.stderr.write(
                 f"[stripe_api] HTTP {e.code} ({category}) path={mask_session_ids(path)} "
-                f"body={mask_session_ids(body[:200])}\n"
+                f"body={mask_session_ids(body[:200])!r}\n"
             )
             if stripe_msg:
                 # The body above is cut at 200 characters. Stripe's own
@@ -171,7 +179,7 @@ def _request(method: str, path: str, form: dict | None = None) -> dict:
                 # line is the only place it is kept whole.
                 sys.stderr.write(
                     f"[stripe_api] stripe message ({category}, code={stripe_code or '-'}): "
-                    f"{mask_session_ids(stripe_msg)}\n"
+                    f"{mask_session_ids(stripe_msg)!r}\n"
                 )
         # Customer-facing message — never leak our internal Stripe error verbatim.
         # Card-declined we DO want the buyer to see: it is about their card and

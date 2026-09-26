@@ -54,6 +54,31 @@ def _filter_by_email(rows: list[dict], email: str) -> list[dict]:
     return [r for r in rows if r.get("email") == email]
 
 
+# What a withheld claim code reads as in an export: the kind of code, and
+# none of its characters. Not a slice of the real code: the referral code
+# printed in every claim email is claim_code[3:15], so any part of a code
+# is already part of a bearer secret.
+WITHHELD_CLAIM_CODE = "pk_…"
+
+
+def _credit_rows_for_export(email: str) -> list[dict]:
+    """The credit rows that name `email`, with the claim code withheld on
+    referral bonus rows.
+
+    Before 2026-09-26 a bonus row carried the BUYER's email while crediting
+    the code it was bought for, which on a gift is the RECIPIENT's bearer
+    code. The row is still the buyer's data (they bought, they were
+    referred), so it stays in their export; the recipient's code does not.
+    A bonus on the buyer's own code loses nothing: that code is on the
+    buyer's own mint row, which is exported as it is."""
+    out = []
+    for row in _filter_by_email(_read_rows(credits.LEDGER_PATH), email):
+        if credits.is_referral_bonus_row(row) and row.get("claim_code"):
+            row = {**row, "claim_code": WITHHELD_CLAIM_CODE}
+        out.append(row)
+    return out
+
+
 def export_for_email(email: str) -> dict:
     """Return everything we hold for this email. Read-only."""
     if not email:
@@ -62,7 +87,7 @@ def export_for_email(email: str) -> dict:
         "email": email,
         "exported_at": _iso_now(),
         "items": {
-            "credit_ledger": _filter_by_email(_read_rows(credits.LEDGER_PATH), email),
+            "credit_ledger": _credit_rows_for_export(email),
             "subscription_ledger": _filter_by_email(_read_rows(subscriptions.SUB_LEDGER), email),
             "customer_email_map": _filter_by_email(_read_rows(subscriptions.CUSTOMER_MAP), email),
             "auth_tokens": _filter_by_email(_read_rows(auth.TOKEN_LEDGER), email),

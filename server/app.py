@@ -345,6 +345,10 @@ _sub_change_limiter = TokenBucket(SUB_CHANGE_CAPACITY, SUB_CHANGE_REFILL)
 # fresh one per request with no limit (25 requests, 25 upstream invoices,
 # measured 2026-09-26). One bucket per client for both paths; past it the
 # anchor path answers the plain 429 and the quote path answers 429.
+# An invoice that is paid and spent on an anchor gives its token back (see
+# the mark_spent call in the anchor handler), so the budget only counts
+# invoices nobody paid. The token goes back to the client key that spends
+# the credential, which is the one that asked for it unless the agent moved.
 # In-memory like the buckets above.
 LN_INVOICE_CAPACITY = 20
 LN_INVOICE_REFILL = 20 / 3600.0  # burst 20, then one every 3 minutes
@@ -622,17 +626,26 @@ def _pack_recover_resend(addr: str) -> None:
     thread after /api/pack/recover has answered, so nothing the caller can
     time depends on whether the address owns a pack."""
     try:
-        for code in credits.find_claim_codes_by_email(addr):
+        codes = credits.find_claim_codes_by_email(addr)
+    except Exception as e:  # noqa: BLE001
+        # The caller already has its answer; a failure here reaches only the
+        # log, and the address stays out of it.
+        sys.stderr.write(f"[pack-recover] resend failed: {type(e).__name__}\n")
+        return
+    for code in codes:
+        # One try per code, as before the resend moved onto this thread: a
+        # balance that will not parse or a send that raises for one code must
+        # not stop the customer's other codes from going out. Neither the
+        # address nor the code (a bearer credential) goes in the log.
+        try:
             remaining = credits.balance(code)
             # Only re-send codes with anchors still on them — a fully spent
             # pack has nothing to reuse, and a "Pack of 0" notice would be
             # misleading.
             if remaining > 0:
                 mailer.send_pack_claim_email(addr, code, remaining)
-    except Exception as e:  # noqa: BLE001
-        # The caller already has its answer; a failure here reaches only the
-        # log, and the address stays out of it.
-        sys.stderr.write(f"[pack-recover] resend failed: {type(e).__name__}\n")
+        except Exception as e:  # noqa: BLE001
+            sys.stderr.write(f"[pack-recover] resend of one code failed: {type(e).__name__}\n")
 
 
 def _json_response(handler: BaseHTTPRequestHandler, status: int, payload: dict) -> None:
@@ -3215,6 +3228,13 @@ class Handler(BaseHTTPRequestHandler):
                 # Annotate the existing claim row with the receipt it bought,
                 # so the audit trail links payment to artifact.
                 lightning.mark_spent(ln_payment_hash, record["receipt_id"])
+                # A paid invoice gives its token back to the invoice budget,
+                # so only unpaid invoices use it up. Without this an agent
+                # that paid every invoice was cut to 20 purchases and then
+                # one per 3 minutes. Here and not at claim(): a claim is
+                # released on a 0-calendar anchor and can be taken again,
+                # while mark_spent is reached once per payment.
+                _ln_invoice_limiter.refund(f"ln-invoice:{self._client_key()}")
             else:
                 lightning.release(ln_payment_hash)
                 credit_refunded = True
