@@ -132,15 +132,17 @@ def test_head_does_not_unsubscribe_anyone(server):
     # The person's own click still works in one action, and HEAD described
     # that response exactly (same length: the "Confirmed." page).
     status, get_body, _h = _srv.request(base, path, timeout=15)
-    assert status == 200 and b"Confirmed." in get_body
+    assert status == 200 and b"Confirmed" in get_body
     assert head_before.get("Content-Length") == str(len(get_body))
     assert [r.get("email") for r in _rows(data_dir / "suppressions.jsonl")] .count(email) == 1
 
-    # Once recorded, HEAD and GET agree on the "already" page too.
+    # Once recorded, HEAD and GET still agree, and on the SAME page as before:
+    # a page that changed once the address was suppressed let a HEAD, which
+    # writes nothing, read whether anyone had unsubscribed.
     _s, _b, head_after = _srv.request(base, path, method="HEAD", timeout=15)
     _s, get_again, _h = _srv.request(base, path, timeout=15)
-    assert b"Already on the suppression list" in get_again
-    assert head_after.get("Content-Length") == str(len(get_again))
+    assert get_again == get_body
+    assert head_after.get("Content-Length") == head_before.get("Content-Length")
     assert [r.get("email") for r in _rows(data_dir / "suppressions.jsonl")].count(email) == 1
 
 
@@ -187,6 +189,20 @@ def test_an_unwritable_suppression_ledger_is_answered_not_dropped(server, read_o
     assert (get_status, head_status) == (503, 503)
     assert b"could not record" in get_body, "the person must be told it did not work"
     assert b"Done" not in get_body
+
+
+def test_an_unwritable_ledger_does_not_tell_a_suppressed_address_apart(server, read_only):
+    """With the ledger unwritable, an already-suppressed address used to get the
+    page (the lookup short-circuits before any write) while a new one got 503,
+    so the status said which address had unsubscribed."""
+    base, _data_dir = server
+    known = "/api/unsubscribe?e=already-suppressed@example.test"
+    assert _srv.request(base, known, timeout=15)[0] == 200  # control: now suppressed
+    read_only("suppressions.jsonl")
+    fresh = "/api/unsubscribe?e=never-seen@example.test"
+    for method in ("GET", "HEAD"):
+        assert _srv.request(base, known, method=method, timeout=15)[0] == 503, method
+        assert _srv.request(base, fresh, method=method, timeout=15)[0] == 503, method
 
 
 def test_an_unwritable_sign_in_ledger_is_answered_and_keeps_the_link(server, read_only):
