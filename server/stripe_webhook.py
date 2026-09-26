@@ -194,10 +194,12 @@ def demand_events(result: dict) -> list[tuple[str, str, bool]]:
     `payment_confirmed` is a claim that money settled. Since 2026-09-26 a pack
     paid by a delayed method is delivered when it settles, so a held session
     (`awaiting_settlement`) earns nothing yet and its settlement earns both
-    events. The unpaid-delivery branch below still describes packs delivered
-    at `completed` before that change: they earned only the entitlement, and
-    the payment is confirmed when their settlement lands. A result from before
-    the status was recorded reads as settled, which is what every card payment is.
+    events. The unpaid-delivery branch below is live for subscriptions, which
+    are welcomed at `completed` whatever the payment status, and for packs
+    delivered at `completed` before that change: each earns only the
+    entitlement, and the payment is confirmed when its settlement lands. A
+    result from before the status was recorded reads as settled, which is what
+    every card payment is.
     """
     if not result.get("ok") or result.get("duplicate"):
         return []
@@ -337,8 +339,11 @@ def handle_event(payload: bytes) -> dict:
         # async events. Founder decision 2026-09-26: a pack is delivered when
         # the payment SETTLES (`async_payment_succeeded`), not when the form
         # completes. The earlier rule delivered at `completed` because this
-        # endpoint was not subscribed to the async events; it has been since
-        # 2026-09-26 (verified by a live event in production). A failure still
+        # endpoint was not subscribed to the async events. They were added on
+        # 2026-09-26 in the same dashboard save as customer.subscription.updated,
+        # which production then received live; no async event has been observed
+        # yet. A missed settlement shows in scripts/reconcile_stripe_ledger.py as
+        # LOST (Stripe has the event, the ledger has no grant). A failure still
         # takes back anything delivered, for sessions settled before the change.
         if event_type == "checkout.session.async_payment_failed":
             failed = event.get("data", {}).get("object", {}) or {}
@@ -430,6 +435,12 @@ def handle_event(payload: bytes) -> dict:
                     result["payment_settled"] = True
                 _mark_processed(event_id, result)
                 return result
+            if session.get("payment_status") == "unpaid":
+                _stderr(
+                    f"[stripe_webhook] subscription session {session_id} completed "
+                    f"UNPAID (delayed payment method): welcome sent now; access "
+                    f"follows the subscription's status events\n"
+                )
             # Plan label: best-effort read of the line item's price metadata.
             plan_label = "Standing Order"
             try:
@@ -453,11 +464,16 @@ def handle_event(payload: bytes) -> dict:
 
         # A pack paid by a delayed method waits for its settlement. Only the
         # customer map above is written now; `async_payment_succeeded` carries
-        # payment_status "paid" and delivers below, and the once-only guard
-        # keeps a late or repeated `completed` from delivering twice.
+        # payment_status "paid" and delivers below. Stripe does not order
+        # events, so an unpaid `completed` can also arrive after the settlement
+        # already delivered: that one is a repeat, not a session still waiting.
         # Subscriptions are not held here: their access follows the
         # subscription's own status events.
         if session.get("payment_status") == "unpaid":
+            if _session_delivered(session_id, "claim_code_minted"):
+                result = {"ok": True, "already_delivered": True, "session_id": session_id}
+                _mark_processed(event_id, result)
+                return result
             _stderr(
                 f"[stripe_webhook] session {session_id} completed UNPAID (delayed "
                 f"payment method): pack delivers when the payment settles\n"

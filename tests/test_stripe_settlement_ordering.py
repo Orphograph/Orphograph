@@ -136,10 +136,30 @@ def test_an_unpaid_completed_waits_for_settlement_then_delivers_once(_isolate):
     assert settled.get("claim_code_minted") is True, settled
     assert _held("cs_ok") == 10 and len(sent) == 1
 
-    # A redelivered `completed` (new event id, same session) does not deliver twice.
+    # A redelivered `completed` (new event id, same session) does not deliver
+    # twice, and says the session was delivered rather than "waiting".
     again = stripe_webhook.handle_event(_event("evt_ok_again", "cs_ok", payment_status="unpaid"))
     assert not again.get("claim_code_minted"), again
+    assert again.get("already_delivered") is True and not again.get("awaiting_settlement"), again
     assert _held("cs_ok") == 10 and len(sent) == 1
+
+
+def test_a_completed_that_arrives_after_the_settlement_is_not_held(_isolate, capsys):
+    """Stripe does not order events. When the settlement lands first and
+    delivers, the late unpaid `completed` must not be recorded or logged as a
+    session still waiting for its money (found by /code-review high 274)."""
+    sent = _isolate
+    settled = stripe_webhook.handle_event(_event(
+        "evt_first", "cs_late_completed", type_="checkout.session.async_payment_succeeded",
+        payment_status="paid"))
+    assert settled.get("claim_code_minted") is True, settled
+    capsys.readouterr()
+    late = stripe_webhook.handle_event(_event("evt_late", "cs_late_completed",
+                                              payment_status="unpaid"))
+    assert late.get("already_delivered") is True, late
+    assert not late.get("awaiting_settlement"), late
+    assert "delivers when the payment settles" not in capsys.readouterr().err
+    assert _held("cs_late_completed") == 10 and len(sent) == 1
 
 
 def test_a_card_payment_is_still_delivered_at_completed(_isolate):

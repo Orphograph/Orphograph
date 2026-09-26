@@ -301,8 +301,10 @@ _anchor_limiter = TokenBucket(
 # decision 2026-09-26: its own bucket. 10 at once, then 10 an hour, per rail
 # and address, which still bounds how many sessions and invoices one caller
 # can make the providers create. In-memory: a restart refilling it is harmless.
-CHECKOUT_RATE_CAPACITY = 10
-CHECKOUT_RATE_REFILL = 10 / 3600.0
+# CHECKOUT_RATE_PER_HOUR overrides the 10, so an operator can tighten it in an
+# incident with an env change, as RATE_LIMIT_PER_DAY did while checkout shared it.
+CHECKOUT_RATE_CAPACITY = max(1, int(os.environ.get("CHECKOUT_RATE_PER_HOUR", "10")))
+CHECKOUT_RATE_REFILL = CHECKOUT_RATE_CAPACITY / 3600.0
 _checkout_limiter = TokenBucket(CHECKOUT_RATE_CAPACITY, CHECKOUT_RATE_REFILL)
 
 # /api/anchor_folder reads and re-hashes up to 8 MB / 50,000 leaves before it

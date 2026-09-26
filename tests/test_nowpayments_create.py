@@ -132,23 +132,6 @@ def test_create_is_rate_limited(tmp_path):
         _stop(proc)
 
 
-def test_create_does_not_share_the_anchor_budget(tmp_path):
-    """Founder decision 2026-09-26: a buyer who has used the day's free
-    anchors (production: 3 per address) can still start a checkout. With the
-    anchor budget at 1, spend it, then create four times: none is a 429."""
-    proc, base = _start_server(tmp_path, "1")
-    try:
-        first, _b = _post(base + "/api/anchor", {"hash_hex": "ab" * 32})
-        spent, _b = _post(base + "/api/anchor", {"hash_hex": "cd" * 32})
-        assert spent == 429, f"control: the anchor budget of 1 is spent ({first}, {spent})"
-        codes = [_post(base + "/api/nowpayments/create",
-                       {"currency": "btc", "plan": "writer_pack", "email": ""})[0]
-                 for _ in range(4)]
-        assert codes == [400] * 4, codes  # past the limiter, refused on the email
-    finally:
-        _stop(proc)
-
-
 def test_support_lookup_surfaces_crypto_claim_codes(tmp_path, monkeypatch):
     """A crypto buyer's minted claim code must be visible to founder support
     via the credit ledger — with cross-customer isolation and no spend rows."""

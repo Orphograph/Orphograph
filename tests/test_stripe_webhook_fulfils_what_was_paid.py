@@ -304,6 +304,20 @@ def test_a_subscription_is_welcomed_once(normal):
     assert _mints(data_dir, sid) == [], "a subscription never mints Pack credits"
 
 
+def test_a_subscription_completed_unpaid_is_still_logged(normal):
+    """The founder log flagged every unpaid `completed` before the pack hold was
+    added; the hold's log line sits after the subscription branch, so an unpaid
+    subscription went silent (found by /code-review high 274)."""
+    base, data_dir = normal
+    _deliver(base, _event("evt_sub_log", "cs_sub_log", mode="subscription",
+                          payment_status="unpaid", amount_total=900))
+    assert _log_lines(data_dir, "cs_sub_log completed UNPAID"), "the founder must see it"
+    # Control: a card-paid subscription is not flagged.
+    _deliver(base, _event("evt_sub_card", "cs_sub_card", mode="subscription",
+                          payment_status="paid", amount_total=900))
+    assert not _log_lines(data_dir, "cs_sub_card completed UNPAID")
+
+
 # --- the reconciler must agree with the webhook --------------------------------
 
 def _reconciler():
@@ -363,6 +377,42 @@ def test_the_reconciler_treats_the_settlement_event_as_a_delivery_event():
     assert out["ghost"] == [], out["ghost"]
     assert out["lost"] == [], out["lost"]
     assert "checkout.session.async_payment_succeeded" in rec.EVENT_TYPES
+
+
+def test_the_reconciler_lists_a_held_session_as_held_not_lost():
+    """Since 2026-09-26 an unpaid `completed` pack is held until it settles, so
+    for days it has no grant by design; reporting it LOST ("PAID but did NOT
+    receive credits") is a false alarm. Once Stripe has the settlement event
+    and the ledger still has no grant, the webhook missed it: that IS lost, and
+    it is the alarm for a missed `async_payment_succeeded` (found by
+    /code-review high 274)."""
+    rec = _reconciler()
+    events = [
+        _ev("e1", "checkout.session.completed", id="cs_held", mode="payment",
+            payment_status="unpaid"),
+        _ev("e2", "checkout.session.completed", id="cs_settled_missed", mode="payment",
+            payment_status="unpaid"),
+        _ev("e3", "checkout.session.async_payment_succeeded", id="cs_settled_missed",
+            mode="payment", payment_status="paid"),
+        _ev("e4", "checkout.session.completed", id="cs_held_failed", mode="payment",
+            payment_status="unpaid"),
+        _ev("e5", "checkout.session.async_payment_failed", id="cs_held_failed",
+            mode="payment", payment_status="unpaid"),
+        _ev("e6", "checkout.session.completed", id="cs_card_lost", mode="payment",
+            payment_status="paid"),
+        _ev("e7", "checkout.session.completed", id="cs_sub_unpaid", mode="subscription",
+            payment_status="unpaid"),
+    ]
+    out = rec.correlate(events, [])
+    assert out["held"] == ["cs_held"], out
+    assert out["lost"] == ["cs_card_lost", "cs_settled_missed"], out["lost"]
+    assert out["leak"] == [], out["leak"]
+
+    from datetime import datetime, timezone
+    only_held = rec.correlate(events[:1], [])
+    report = rec.render_report(only_held, 7, datetime(2026, 9, 26, tzinfo=timezone.utc))
+    assert "OK — no drift" in report, report
+    assert "`cs_held`" in report, "the held session must be visible, not hidden"
 
 
 def _spent_ledger(unspent: int) -> list[dict]:
