@@ -24,6 +24,7 @@ import posixpath
 import re
 import secrets
 import sys
+import threading
 import time
 from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -282,6 +283,21 @@ _anchor_limiter = TokenBucket(
     ANCHOR_RATE_REFILL,
     snapshot_path=RATE_LIMIT_SNAPSHOT,
 )
+
+# /api/anchor_folder reads and re-hashes up to 8 MB / 50,000 leaves before it
+# can tell a valid manifest from a bad one, and validation now comes before
+# any charge, so the charge can no longer be what bounds that work. Two
+# things do. A rejected manifest spends a per-address budget of its own (a
+# valid one spends nothing here), checked before the body is read. And one
+# address has one folder request in flight at a time: one 8 MB manifest
+# peaks near 15 MB on a 512 MB machine, and 25 concurrent corrupt manifests
+# from one fresh address reached 369 MB before this bound. Per address, not
+# a global slot count, so a slow upload can only hold up its own sender.
+FOLDER_REJECT_CAPACITY = 10
+FOLDER_REJECT_REFILL = 10 / 3600.0  # then one every 6 minutes
+_folder_reject_limiter = TokenBucket(FOLDER_REJECT_CAPACITY, FOLDER_REJECT_REFILL)
+_folder_in_flight: set[str] = set()
+_folder_in_flight_lock = threading.Lock()
 
 # Read-only status lookups the buyer's own page makes after paying:
 # web/pay/success.js polls /api/nowpayments/order/<id> up to 6 times, and
@@ -2623,14 +2639,17 @@ class Handler(BaseHTTPRequestHandler):
 
     def _anchor_payload(self, max_bytes: int):
         """Parse untrusted anchor input before charging any allowance."""
+        # credit_refunded / max_bytes: keys these 400s carried before
+        # validation moved ahead of charging. Nothing is charged yet here.
         length = _read_content_length(self)
         if length <= 0 or length > max_bytes:
-            _json_response(self, 400, {"error": "invalid body size"})
+            _json_response(self, 400, {"error": "invalid body size",
+                                       "max_bytes": max_bytes, "credit_refunded": False})
             return None
         try:
             payload = json.loads(self.rfile.read(length).decode("utf-8"))
         except (UnicodeDecodeError, ValueError, RecursionError):
-            _json_response(self, 400, {"error": "body must be JSON"})
+            _json_response(self, 400, {"error": "body must be JSON", "credit_refunded": False})
             return None
         if not isinstance(payload, dict):
             _json_response(self, 400, {"error": "body must be a JSON object"})
@@ -3261,7 +3280,8 @@ class Handler(BaseHTTPRequestHandler):
                                            surface="batch", outcome="limited")
                     _json_response(self, 429, {"error": "rate limit exceeded",
                         "retry_after_seconds": int(retry_after) + 1,
-                        "limit_per_day": ANCHOR_RATE_CAPACITY})
+                        "limit_per_day": ANCHOR_RATE_CAPACITY,
+                        "hint": "Buy a Pack or subscribe to skip rate limits."})
                     return
                 free_budget_checked = True
             hash_hex = item.get("hash_hex", "")
@@ -4318,6 +4338,33 @@ class Handler(BaseHTTPRequestHandler):
         })
 
     def _handle_anchor_folder(self) -> None:
+        """POST /api/anchor_folder, one request in flight per client address."""
+        key = self._client_key()
+        with _folder_in_flight_lock:
+            busy = key in _folder_in_flight
+            if not busy:
+                _folder_in_flight.add(key)
+        if busy:
+            self.send_response(429)
+            body = json.dumps({
+                "error": "a folder anchor from this address is already in progress",
+                "detail": "Send folder manifests one at a time. Nothing was charged.",
+                "retry_after_seconds": 5,
+            }).encode("utf-8")
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Retry-After", "5")
+            self.send_header("Content-Length", str(len(body)))
+            _security_headers(self)
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        try:
+            self._anchor_folder_one()
+        finally:
+            with _folder_in_flight_lock:
+                _folder_in_flight.discard(key)
+
+    def _anchor_folder_one(self) -> None:
         """Anchor a folder-Merkle root.
 
         Body: { manifest: <orphograph-merkle-v1-rfc6962 manifest>, client_label? }
@@ -4357,14 +4404,63 @@ class Handler(BaseHTTPRequestHandler):
             if pack_consumed:
                 credits.refund_credit(pack_token, reason="folder-anchor-rejected")
                 payload = {**payload, "credit_refunded": True}
+            if code == 400:
+                _folder_reject_limiter.check(client_key)
             _json_response(self, code, payload)
+
+        def _limited(retry_after: float) -> None:
+            Handler._record_demand(self,
+                "free_limit_reached", auth_path="free", surface="folder",
+                outcome="limited")
+            self.send_response(429)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Retry-After", str(int(retry_after) + 1))
+            body = json.dumps({
+                "error": "rate limit exceeded",
+                "retry_after_seconds": int(retry_after) + 1,
+                "limit_per_day": ANCHOR_RATE_CAPACITY,
+                "hint": "Buy a Pack or sign in to anchor without rate limits.",
+            }).encode("utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            _security_headers(self)
+            self.end_headers()
+            self.wfile.write(body)
+
+        client_key = self._client_key()
         api_key = self.headers.get("X-Orpho-Api-Key", "").strip()
         api_key_email = api_keys.email_for_key(api_key) if api_key else None
         api_key_active = bool(api_key_email and _subscription_active_for(api_key_email))
         subscriber_email = api_key_email or (self._session_email() if not pack_available else None)
         subscription_active = api_key_active or _subscription_active_for(subscriber_email)
+        # Both gates look without spending, before the body is read: a caller
+        # whose manifests keep failing, or a free caller with no allowance
+        # left, is answered before 8 MB is parsed. Spending stays after
+        # validation, so input that fails still costs no allowance.
+        reject_tokens = _folder_reject_limiter.peek(client_key)
+        if reject_tokens < 1.0:
+            retry = int((1.0 - reject_tokens) / FOLDER_REJECT_REFILL) + 1
+            self.send_response(429)
+            body = json.dumps({
+                "error": "too many rejected manifests",
+                "detail": ("Recent manifests from this address failed validation. "
+                           "Nothing was charged; check the manifest and retry later."),
+                "retry_after_seconds": retry,
+            }).encode("utf-8")
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Retry-After", str(retry))
+            self.send_header("Content-Length", str(len(body)))
+            _security_headers(self)
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        if not pack_available and not subscription_active:
+            free_tokens = _anchor_limiter.peek(client_key)
+            if free_tokens < 1.0:
+                _limited((1.0 - free_tokens) / _anchor_limiter.refill_per_sec)
+                return
         payload = self._anchor_payload(MAX_FOLDER_MANIFEST_BYTES)
         if payload is None:
+            _folder_reject_limiter.check(client_key)
             return
         error = self._anchor_input_error(payload)
         if error:
@@ -4399,7 +4495,10 @@ class Handler(BaseHTTPRequestHandler):
         # in which the leaves do not actually commit to the stated root.
         try:
             tree = merkle.MerkleTree.from_manifest(manifest)
-        except (KeyError, TypeError, ValueError, AttributeError, RecursionError) as e:
+        except (KeyError, TypeError, ValueError, AttributeError, RecursionError,
+                OverflowError) as e:
+            # OverflowError: a leaf size of 1e400 or Infinity parses as a JSON
+            # float and int() of it overflows.
             _reject(400, {"error": f"manifest invalid: {e}"})
             return
         # Optional edit-lineage elements (design: docs/DESIGN_EDIT_LINEAGE.md).
@@ -4409,7 +4508,8 @@ class Handler(BaseHTTPRequestHandler):
         # and anchors exactly as before.
         try:
             lineage_pre = engine.derive_lineage_from_manifest(manifest, verify_tree=False)
-        except (ValueError, TypeError, KeyError, AttributeError, RecursionError) as e:
+        except (ValueError, TypeError, KeyError, AttributeError, RecursionError,
+                OverflowError) as e:
             _reject(400, {"error": f"lineage invalid: {e}"})
             return
         if lineage_pre is not None:
@@ -4492,24 +4592,9 @@ class Handler(BaseHTTPRequestHandler):
         if pack_token:
             pack_consumed, _ = credits.consume_credit(pack_token)
         if not pack_consumed and not subscription_active:
-            allowed, retry_after = _anchor_limiter.check(self._client_key())
+            allowed, retry_after = _anchor_limiter.check(client_key)
             if not allowed:
-                Handler._record_demand(self,
-                    "free_limit_reached", auth_path="free", surface="folder",
-                    outcome="limited")
-                self.send_response(429)
-                self.send_header("Content-Type", "application/json; charset=utf-8")
-                self.send_header("Retry-After", str(int(retry_after) + 1))
-                body = json.dumps({
-                    "error": "rate limit exceeded",
-                    "retry_after_seconds": int(retry_after) + 1,
-                    "limit_per_day": ANCHOR_RATE_CAPACITY,
-                    "hint": "Buy a Pack or sign in to anchor without rate limits.",
-                }).encode("utf-8")
-                self.send_header("Content-Length", str(len(body)))
-                _security_headers(self)
-                self.end_headers()
-                self.wfile.write(body)
+                _limited(retry_after)
                 return
         if pack_consumed:
             source = f"pack:{pack_token[:8]}"
