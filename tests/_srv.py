@@ -24,6 +24,7 @@ test needs beyond this belongs in that test, not in another copy of this.
 """
 from __future__ import annotations
 
+import contextlib
 import http.client
 import json
 import os
@@ -270,6 +271,29 @@ def raw_request(base: str, target: str, method: str = "GET", *,
         raise ServerGone(f"{first!r} to {base} got no answer ({e!r})\n"
                          f"--- server output ---\n{_tail(log_path)}") from e
     return b"".join(chunks)
+
+
+@contextlib.contextmanager
+def stalled_request(base: str, target: str, method: str = "POST", *,
+                    declared_length: int = 1024, sent: bytes = b"",
+                    content_type: str = "application/json"):
+    """Hold a request open mid-body for the length of the `with` block.
+
+    The request declares `declared_length` body bytes and sends only `sent`,
+    so the server's handler thread sits in its body read the whole time: what
+    a slow upload looks like. Leaving the block closes the socket, and the
+    handler then reads end-of-file."""
+    import socket
+    from urllib.parse import urlparse
+    u = urlparse(base)
+    s = socket.create_connection((u.hostname, u.port), timeout=15)
+    try:
+        s.sendall(f"{method} {target} HTTP/1.1\r\nHost: {u.netloc}\r\n"
+                  f"Content-Type: {content_type}\r\nContent-Length: {declared_length}\r\n"
+                  "User-Agent: uptime-check/1.0\r\n\r\n".encode("latin-1") + sent)
+        yield
+    finally:
+        s.close()
 
 
 def _json_object(raw: bytes) -> dict:
