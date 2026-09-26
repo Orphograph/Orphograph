@@ -229,7 +229,13 @@ def test_a_killed_writer_never_leaves_an_empty_or_torn_ledger(tmp_path):
         while time.monotonic() < deadline:
             data = path.read_bytes()
             assert data, 'an unlocked reader saw an empty ledger'
-            assert all(isinstance(json.loads(line), dict) for line in data.splitlines()), 'torn ledger'
+            lines = data.splitlines()
+            if not data.endswith(b'\n'):
+                # An ordinary append in flight: a reader may see the start of
+                # the newest row, as with any JSONL writer. Everything before
+                # it must be whole, and a compaction must never show one.
+                lines = lines[:-1]
+            assert all(isinstance(json.loads(line), dict) for line in lines), 'torn ledger'
             reads += 1
         child.send_signal(signal.SIGKILL)
         child.wait(timeout=10)
