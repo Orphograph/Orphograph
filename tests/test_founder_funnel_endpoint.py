@@ -104,10 +104,11 @@ def _stub_events(data_dir: Path) -> None:
     events_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-# The endpoint reads data/events.jsonl relative to the SERVER source tree,
-# not relative to ORPHO_DATA_DIR. Make sure we land the stub there.
-def _events_path_from_app() -> Path:
-    return ROOT / "data" / "events.jsonl"
+# The endpoint reads the ledger the collector writes: <ORPHO_DATA_DIR>/events.jsonl.
+# (It used to read the source tree's data/, so this test planted its stub in the
+# repository and restored the original afterwards.)
+def _events_path_in(data_dir: Path) -> Path:
+    return data_dir / "events.jsonl"
 
 
 class TestFunnelEndpointTokenUnset(unittest.TestCase):
@@ -145,8 +146,6 @@ class TestFunnelEndpointTokenUnset(unittest.TestCase):
 
 class TestFunnelEndpointTokenSet(unittest.TestCase):
     TOKEN = "test-funnel-token-xyz789"
-    _stub_events_backup: bytes | None = None
-    _stub_existed = False
 
     @classmethod
     def setUpClass(cls):
@@ -157,13 +156,7 @@ class TestFunnelEndpointTokenSet(unittest.TestCase):
         )}
         os.environ["ORPHO_FOUNDER_TOKEN"] = cls.TOKEN
 
-        # Back up / install stub events.jsonl at the path the endpoint reads.
-        events = _events_path_from_app()
-        cls._stub_existed = events.exists()
-        if cls._stub_existed:
-            cls._stub_events_backup = events.read_bytes()
-        else:
-            events.parent.mkdir(parents=True, exist_ok=True)
+        events = _events_path_in(Path(cls._tmp.name))
         now = datetime.now(timezone.utc)
         stub_lines = []
         for offset, ev in [
@@ -186,15 +179,6 @@ class TestFunnelEndpointTokenSet(unittest.TestCase):
         _stop(cls._server)
         cls._tmp.cleanup()
         _restore(cls._saved)
-        # Restore the original events.jsonl (or remove the stub).
-        events = _events_path_from_app()
-        if cls._stub_existed and cls._stub_events_backup is not None:
-            events.write_bytes(cls._stub_events_backup)
-        else:
-            try:
-                events.unlink()
-            except FileNotFoundError:
-                pass
         for k, v in cls._old_env.items():
             if v is None:
                 os.environ.pop(k, None)
@@ -263,8 +247,7 @@ class TestFunnelEndpointTokenSet(unittest.TestCase):
         no error anywhere.
         """
         # An events file with NO funnel events at all — every denominator 0.
-        path = _events_path_from_app()
-        path.parent.mkdir(parents=True, exist_ok=True)
+        path = _events_path_in(Path(self._tmp.name))
         original = path.read_text(encoding="utf-8") if path.exists() else None
         try:
             path.write_text(

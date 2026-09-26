@@ -76,6 +76,9 @@ CF_EGRESS_HINTS = ("104.22.", "104.23.", "162.158.", "162.159.", "108.162.",
 UNKNOWN = "UNKNOWN"
 
 
+COMPACTED_EVENT = "_compacted"  # server/analytics.py writes it on compaction
+
+
 def load(path):
     rows, bad = [], 0
     with open(path) as f:
@@ -86,12 +89,43 @@ def load(path):
             try:
                 r = json.loads(line)
                 if isinstance(r, dict):
-                    rows.append(r)
+                    if r.get("event") != COMPACTED_EVENT:
+                        rows.append(r)
                 else:
                     bad += 1
             except json.JSONDecodeError:
                 bad += 1
     return rows, bad
+
+
+def compaction_marker(path):
+    """The ledger's compaction marker, or None. The server keeps events.jsonl
+    under a size cap by dropping its oldest rows, and then starts the file
+    with {"event": "_compacted", "oldest_kept_ts": ...}. Rows before that
+    time are gone, so a leg short of its target cannot say NOT_MET: the
+    missing clicks may simply no longer be held."""
+    try:
+        with open(path) as f:
+            first = json.loads(f.readline() or "null")
+    except (OSError, ValueError):
+        return None
+    return first if isinstance(first, dict) and first.get("event") == COMPACTED_EVENT else None
+
+
+def apply_compaction(legs, marker):
+    """NOT_MET -> UNKNOWN on every counted leg when the ledger was compacted."""
+    if not marker:
+        return legs
+    for name in ("unique_prefixes", "cta_clicks"):
+        leg = legs.get(name)
+        if leg and leg.get("status") == "NOT_MET":
+            leg["status"] = UNKNOWN
+            leg["reason"] = (
+                f"events.jsonl was compacted (rows before "
+                f"{marker.get('oldest_kept_ts')} were dropped to keep it under "
+                "its size cap), so a count short of the target is not a "
+                "measurement of no demand.")
+    return legs
 
 
 def partition(rows, fix_deployed_after=None):
@@ -302,6 +336,7 @@ def main():
     a = ap.parse_args()
 
     rows, bad = load(a.events)
+    marker = compaction_marker(a.events)
     excluded = set(a.exclude_prefix)
     usable, pre_fix, relay, regressed = partition(rows, a.fix_deployed_after)
 
@@ -310,11 +345,13 @@ def main():
         "cta_clicks": leg_cta(usable, pre_fix, relay, excluded),
         "inbound_email": leg_inbound(a.inbound),
     }
+    legs = apply_compaction(legs, marker)
     out = {
         "gate": "2026-08-06 demand gate",
         "verdict": verdict(legs),
         "total_rows": len(rows),
         "malformed_rows": bad,
+        "ledger_compacted": marker,
         "legs": legs,
         "warning": contamination_warning(pre_fix),
         "regression": (

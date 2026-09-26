@@ -40,7 +40,9 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 # A claim code already minted for a crypto order. Email is the address on file.
-ORDER_ID = "np_pack10_abc123XYZ"
+# With a "-": real ids are np_<plan>_ + token_urlsafe(10), and about 1 in 5
+# carries one, so the resend test below proves the id check accepts it.
+ORDER_ID = "np_pack10_abc-123XYZ"
 LEDGER_EMAIL = "Buyer@Example.com"          # mixed case on purpose
 CLAIM_CODE = "pk_existing_crypto_code_001"
 CREDIT_DELTA = 10

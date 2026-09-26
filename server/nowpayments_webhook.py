@@ -88,13 +88,16 @@ def verify_signature(payload: bytes, sig_header_hex: str, secret: str) -> bool:
         return False
     try:
         parsed = json.loads(payload.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError):
+    except (ValueError, RecursionError):
         return False
     # Canonical JSON: sort keys, no whitespace. NOWPayments docs specify
     # `json.dumps(data, separators=(',', ':'), sort_keys=True)`.
     canonical = json.dumps(parsed, separators=(",", ":"), sort_keys=True).encode("utf-8")
     expected = hmac.new(secret.encode("utf-8"), canonical, hashlib.sha512).hexdigest()
-    return hmac.compare_digest(expected, sig_header_hex.strip())
+    # As bytes, like the founder gate: a header byte 0x80-0xFF arrives as a
+    # non-ASCII char, which compare_digest(str, str) refuses with TypeError.
+    return hmac.compare_digest(expected.encode("ascii"),
+                               sig_header_hex.strip().encode("latin-1", "replace"))
 
 
 def _has_been_processed(event_id: str) -> bool:

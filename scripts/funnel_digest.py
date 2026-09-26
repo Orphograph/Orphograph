@@ -68,6 +68,24 @@ def _rate(num: int, den: int) -> float:
     return round(100.0 * num / den, 1) if den else 0.0
 
 
+def _compacted_note(kept_from: str) -> str:
+    return (f"Note: the ledger was compacted to stay under its size cap. Rows "
+            f"before {kept_from} are no longer held, so any window reaching "
+            "past that time is a lower bound, not a full count.")
+
+
+def _kept_from(events_path: pathlib.Path) -> str | None:
+    """oldest_kept_ts from the ledger's compaction marker (its first row)."""
+    try:
+        with events_path.open("rb") as f:
+            first = json.loads(f.readline(4096) or b"null")
+    except (OSError, ValueError):
+        return None
+    if isinstance(first, dict) and first.get("event") == "_compacted":
+        return str(first.get("oldest_kept_ts") or "") or None
+    return None
+
+
 def _rollup(
     events_path: pathlib.Path,
     now_utc: _dt.datetime,
@@ -116,6 +134,7 @@ def _format_text_body(
     per_day_7d: dict[str, dict[str, int]],
     totals_30d: dict[str, int],
     events_scanned: int,
+    kept_from: str | None = None,
 ) -> str:
     rates_7d = {
         "visible_to_anchored": _rate(totals_7d["file_anchored"], totals_7d["drop_zone_visible"]),
@@ -166,6 +185,8 @@ def _format_text_body(
     lines.append("")
     lines.append("─" * 32)
     lines.append(f"Source: data/events.jsonl on the Fly machine ({events_scanned} lines scanned)")
+    if kept_from:
+        lines.append(_compacted_note(kept_from))
     return "\n".join(lines) + "\n"
 
 
@@ -175,6 +196,7 @@ def _format_html_body(
     per_day_7d: dict[str, dict[str, int]],
     totals_30d: dict[str, int],
     events_scanned: int,
+    kept_from: str | None = None,
 ) -> str:
     rates_7d = {
         "visible_to_anchored": _rate(totals_7d["file_anchored"], totals_7d["drop_zone_visible"]),
@@ -257,6 +279,10 @@ def _format_html_body(
         f"Source: data/events.jsonl on the Fly machine ({events_scanned} lines scanned)."
         "</p>"
     )
+    if kept_from:
+        html.append("<p style=\"color:#b45309;font-size:12px;\">"
+                    + _compacted_note(kept_from).replace("&", "&amp;").replace("<", "&lt;")
+                    + "</p>")
     html.append("</div>")
     return "".join(html)
 
@@ -306,6 +332,7 @@ def main(argv: list[str] | None = None) -> int:
     # same file but the 30-day window is the broader, more accurate count
     # for the "lines scanned" footer).
     events_scanned = max(scanned_7d, scanned_30d)
+    kept_from = _kept_from(EVENTS_PATH)
 
     subject = f"Orphograph weekly funnel digest — week ending {week_ending.isoformat()}"
     text_body = _format_text_body(
@@ -314,6 +341,7 @@ def main(argv: list[str] | None = None) -> int:
         per_day_7d=per_day_7d,
         totals_30d=totals_30d,
         events_scanned=events_scanned,
+        kept_from=kept_from,
     )
     html_body = _format_html_body(
         week_ending=week_ending,
@@ -321,6 +349,7 @@ def main(argv: list[str] | None = None) -> int:
         per_day_7d=per_day_7d,
         totals_30d=totals_30d,
         events_scanned=events_scanned,
+        kept_from=kept_from,
     )
 
     if args.dry_run:

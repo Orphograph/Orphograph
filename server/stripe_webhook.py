@@ -125,7 +125,12 @@ def verify_signature(payload: bytes, sig_header: str, secret: str, tolerance_sec
         return False
     signed_payload = f"{timestamp}.".encode("utf-8") + payload
     expected = hmac.new(secret.encode("utf-8"), signed_payload, hashlib.sha256).hexdigest()
-    return any(hmac.compare_digest(expected, sig) for sig in received_sigs)
+    # As bytes: http.server decodes headers as latin-1, so a byte 0x80-0xFF in
+    # the header arrives as a non-ASCII char, and compare_digest(str, str)
+    # raises TypeError on those. Unauthenticated callers could drop the
+    # connection with a traceback; a non-matching signature must be False.
+    return any(hmac.compare_digest(expected.encode("ascii"), sig.encode("latin-1", "replace"))
+               for sig in received_sigs)
 
 
 def _has_been_processed(event_id: str) -> bool:
