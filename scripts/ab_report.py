@@ -45,7 +45,10 @@ def load(path: pathlib.Path) -> dict[str, dict[str, int]]:
                 a["assignments"] += 1
         elif event == "anchor":
             a["anchors"] += 1
-        elif event == "checkout_view":
+        elif event == "checkout_view" and rec.get("v", 1) >= 2:
+            # Only v2 rows: before 2026-09-25 one visit wrote a row for the
+            # page and each of its assets (and rows were written with the
+            # experiment off), so v1 rows are not one checkout each.
             a["checkouts"] += 1
     return arms
 
