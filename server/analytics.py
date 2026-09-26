@@ -47,14 +47,32 @@ ALLOWED_PAGES = ("landing", "verify", "account", "pricing", "docs", "blog",
 MAX_EVENTS_BYTES = 8 * 1024 * 1024
 
 
+COMPACTED_EVENT = "_compacted"
+
+
+def _lock_path(path: Path) -> Path:
+    return path.with_name(path.name + ".lock")
+
+
 def append_event(row: dict, *, path: Path | None = None) -> bool:
     """Best-effort bounded JSONL shared by browser and internal analytics.
 
-    Keep the newest complete rows. Lock the ledger itself and compact in
-    place so every cooperating process locks the same inode; no rollover
-    files accumulate. Tail reads are bounded even for a pre-existing large
-    ledger. This is disposable analytics, not an evidentiary ledger.
+    Keeps the newest complete rows under the size cap. Every writer, in every
+    process, takes the sidecar lock `<ledger>.lock`, not the ledger: a
+    compaction writes the kept rows to a temp file, fsyncs it and
+    os.replace()s it over the ledger, which changes the ledger's inode. So a
+    crash mid-compaction leaves the old file or the new one, never an empty or
+    half-written one, and readers, which take no lock, always see a whole file.
+    (The first version truncated the live file and rewrote it in place: a kill
+    in that window emptied it, and an unlocked reader saw zero rows.)
+
+    A compaction starts the new file with a marker row
+    {"event": "_compacted", "ts": ..., "oldest_kept_ts": ..., "dropped_bytes": N}
+    so readers can tell "nothing happened" from "rows no longer held": a
+    count over a window that reaches past oldest_kept_ts is incomplete, not
+    zero. The marker is left out only when the cap is too small to hold it.
     """
+    target = path if path is not None else EVENTS_PATH
     try:
         limit = max(1, min(MAX_EVENTS_BYTES, int(os.environ.get(
             "ORPHO_EVENTS_MAX_BYTES", str(MAX_EVENTS_BYTES)))))
@@ -64,13 +82,25 @@ def append_event(row: dict, *, path: Path | None = None) -> bool:
     if len(encoded) > limit:
         return False
     try:
-        with locked(path if path is not None else EVENTS_PATH, mode="a+b") as f:
-            f.seek(0, os.SEEK_END)
-            size = f.tell()
-            if size + len(encoded) > limit:
-                # Leave headroom so a busy collector does not rewrite an
-                # eight-megabyte ledger for every subsequent small event.
-                budget = min(limit - len(encoded), limit * 3 // 4)
+        with locked(_lock_path(target), mode="a"):
+            with open(target, "a+b") as f:
+                try:
+                    os.chmod(target, 0o600)
+                except OSError:
+                    pass
+                f.seek(0, os.SEEK_END)
+                size = f.tell()
+                if size + len(encoded) <= limit:
+                    if size:
+                        f.seek(-1, os.SEEK_END)
+                        if f.read(1) != b"\n":
+                            # Repair an interrupted final append first.
+                            f.seek(0)
+                            previous = f.read(size)
+                            f.truncate(previous.rfind(b"\n") + 1)
+                    f.write(encoded)
+                    f.flush()
+                    return True
                 start = max(0, size - limit)
                 at_boundary = start == 0
                 if start:
@@ -78,36 +108,96 @@ def append_event(row: dict, *, path: Path | None = None) -> bool:
                     at_boundary = f.read(1) == b"\n"
                 f.seek(start)
                 tail = f.read(limit)
-                # A nonzero offset may cut through UTF-8 or a JSON row.
-                if not at_boundary:
-                    tail = tail.partition(b"\n")[2]
-                complete = []
-                for line in reversed(tail.splitlines(keepends=True)):
-                    if not line.endswith(b"\n"):
-                        continue
-                    try:
-                        if isinstance(json.loads(line), dict):
-                            if len(line) > budget:
-                                break
-                            complete.append(line)
-                            budget -= len(line)
-                    except (ValueError, UnicodeDecodeError, RecursionError):
-                        continue
-                f.seek(0)
-                f.truncate()
-                f.write(b"".join(reversed(complete)))
-            elif size:
-                f.seek(-1, os.SEEK_END)
-                if f.read(1) != b"\n":
-                    # Repair an interrupted final append before adding a row.
-                    f.seek(0)
-                    previous = f.read(size)
-                    f.truncate(previous.rfind(b"\n") + 1)
-            f.write(encoded)
-            f.flush()
+            _compact(target, tail, at_boundary, size, limit, encoded)
     except OSError:
         return False
     return True
+
+
+def _compact(target: Path, tail: bytes, at_boundary: bool, size: int,
+             limit: int, encoded: bytes) -> None:
+    """Replace `target` with its newest complete rows plus `encoded`.
+
+    Called with the sidecar lock held. Leaves headroom (a quarter of the cap)
+    so a busy collector does not rewrite the ledger for every small event."""
+    from datetime import datetime, timezone
+    # A nonzero offset may cut through UTF-8 or a JSON row.
+    if not at_boundary:
+        tail = tail.partition(b"\n")[2]
+    rows = []
+    for line in tail.splitlines(keepends=True):
+        if not line.endswith(b"\n"):
+            continue
+        try:
+            parsed = json.loads(line)
+        except (ValueError, UnicodeDecodeError, RecursionError):
+            continue
+        if isinstance(parsed, dict) and parsed.get("event") != COMPACTED_EVENT:
+            rows.append((line, parsed))
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    # Sized with the widest values it can hold, so the kept rows plus the
+    # real marker never exceed the cap.
+    probe = _marker_line(now, "9" * 32, 10 ** 12)
+    budget = min(limit - len(encoded) - len(probe), limit * 3 // 4)
+    with_marker = budget >= 0
+    if not with_marker:
+        budget = min(limit - len(encoded), limit * 3 // 4)
+    kept: list[tuple[bytes, dict]] = []
+    for line, parsed in reversed(rows):
+        if len(line) > budget:
+            break
+        kept.append((line, parsed))
+        budget -= len(line)
+    kept.reverse()
+    body = b"".join(line for line, _ in kept)
+    head = b""
+    if with_marker:
+        oldest = (next((str(r.get("ts") or r.get("timestamp") or "") for _, r in kept), "")
+                  or now)[:32]
+        head = _marker_line(now, oldest, max(0, size - len(body)))
+    tmp = target.with_name(f".{target.name}.{os.getpid()}.tmp")
+    try:
+        with open(tmp, "wb") as out:
+            os.chmod(tmp, 0o600)
+            out.write(head + body + encoded)
+            out.flush()
+            os.fsync(out.fileno())
+        os.replace(tmp, target)
+    finally:
+        try:
+            tmp.unlink()
+        except FileNotFoundError:
+            pass
+    try:
+        fd = os.open(target.parent, os.O_RDONLY)
+        try:
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+    except OSError:
+        pass  # durability of the rename is best effort; the data is intact
+
+
+def _marker_line(ts: str, oldest_kept_ts: str, dropped_bytes: int) -> bytes:
+    return (json.dumps({"event": COMPACTED_EVENT, "ts": ts,
+                        "oldest_kept_ts": oldest_kept_ts,
+                        "dropped_bytes": dropped_bytes},
+                       separators=(",", ":")) + "\n").encode("utf-8")
+
+
+def compaction_marker(path: Path) -> dict | None:
+    """The ledger's compaction marker (its first row), or None if it has never
+    been compacted. Readers use it to say a window is incomplete."""
+    try:
+        with open(path, "rb") as f:
+            first = f.readline(4096)
+    except OSError:
+        return None
+    try:
+        row = json.loads(first)
+    except (ValueError, UnicodeDecodeError, RecursionError):
+        return None
+    return row if isinstance(row, dict) and row.get("event") == COMPACTED_EVENT else None
 
 DEMAND_EVENT_VERSION = 1
 DEMAND_EVENTS = frozenset({
