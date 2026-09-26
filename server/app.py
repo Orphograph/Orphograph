@@ -2977,7 +2977,9 @@ class Handler(BaseHTTPRequestHandler):
                 source=source,
                 private=want_private,
                 owner_id=owner_id if want_private else None,
-                account_id=owner_id if subscription_active else None,
+                # Only a subscription-paid receipt joins the account. A pack
+                # or L402 anchor stays unowned, as it was before this field.
+                account_id=owner_id if source.startswith(("api:", "sub:")) else None,
                 attestation=attestation,
                 metadata=metadata,
                 c2pa_manifest_hash=c2pa_manifest_hash,
@@ -3189,7 +3191,10 @@ class Handler(BaseHTTPRequestHandler):
         api_key_active = bool(api_key_email and _subscription_active_for(api_key_email))
         session_email = self._session_email()
         sub_active = api_key_active or bool(session_email and _subscription_active_for(session_email))
-        effective_email = api_key_email or session_email
+        # The account whose subscription pays is the one the receipt is filed
+        # under. A lapsed key's owner is not paying when the session is, and
+        # /api/anchor already treats that key as not subscribed.
+        effective_email = api_key_email if api_key_active else session_email
 
         # Free tier is rate-limited per IP; consume ONE token for the whole
         # batch (the per-item OTS work is what we're budgeting against).
@@ -3264,7 +3269,8 @@ class Handler(BaseHTTPRequestHandler):
                     client_label=client_label,
                     sha512_hex=sha512_hex,
                     source=source,
-                    account_id=auth.email_id(effective_email) if sub_active else None,
+                    account_id=(auth.email_id(effective_email)
+                                if source.startswith(("api:", "sub:")) else None),
                 )
             except ValueError as e:
                 # A credit was consumed above but this item produced NO
@@ -4495,7 +4501,8 @@ class Handler(BaseHTTPRequestHandler):
                 source=source,
                 private=want_private,
                 owner_id=auth.email_id(subscriber_email) if (want_private and subscriber_email) else None,
-                account_id=auth.email_id(subscriber_email) if (subscription_active and subscriber_email) else None,
+                account_id=(auth.email_id(subscriber_email)
+                            if subscriber_email and source.startswith(("api:", "sub:")) else None),
             )
         except ValueError as e:
             _reject(400, {"error": str(e)})
@@ -5528,29 +5535,42 @@ if not _SITE_STYLESHEET_LINKS:
 
 
 def _owned_sources_for_email(email: str) -> set[str]:
-    """Unambiguous legacy sources, including historical rotated API keys."""
+    """The source tag this account's session anchors carry (sub:<email_id>).
+
+    API-key tags (api:<key[:10]>) are not listed: whether a key prefix is this
+    account's depends on when the receipt was made, so _receipt_belongs_to
+    resolves them per receipt through api_keys.prefix_owner."""
     if not email:
         return set()
-    return {"sub:" + auth.email_id(email)} | {
-        "api:" + p for p in api_keys.source_prefixes_for_email(email)}
+    return {"sub:" + auth.email_id(email)}
 
 
-def _receipt_ownership_context(email: str) -> tuple[str, set[str]]:
+def _receipt_ownership_context(email: str) -> tuple[str, set[str], dict]:
     """Build once per list/count, rather than rescan the key ledger per row."""
-    return auth.email_id(email), _owned_sources_for_email(email)
+    return (auth.email_id(email), _owned_sources_for_email(email),
+            api_keys.prefix_issuers())
 
 
 def _receipt_belongs_to(rec: dict, email: str, *,
-                        context: tuple[str, set[str]] | None = None) -> bool:
-    """Account identity wins; private legacy owner wins; ambiguous sources deny."""
+                        context: tuple[str, set[str], dict] | None = None) -> bool:
+    """Account identity wins; a private legacy owner wins; then the legacy
+    source tag. An api: tag belongs to the one account that held a key with
+    that prefix when the receipt was made; an ambiguous prefix denies."""
     if not email:
         return False
-    account_id, sources = context if context is not None else _receipt_ownership_context(email)
+    account_id, sources, issuers = (context if context is not None
+                                    else _receipt_ownership_context(email))
     if "account_id" in rec:
         return bool(account_id) and rec["account_id"] == account_id
     if rec.get("private"):
         return bool(account_id) and rec.get("owner_id") == account_id
-    return rec.get("source") in sources
+    source = rec.get("source")
+    if source in sources:
+        return True
+    if isinstance(source, str) and source.startswith("api:"):
+        owner = api_keys.prefix_owner(issuers.get(source[4:], []), rec.get("created_at"))
+        return owner is not None and owner == email.lower()
+    return False
 
 
 def _count_anchors_for_email(email: str) -> int:
