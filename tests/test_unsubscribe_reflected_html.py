@@ -98,10 +98,15 @@ def test_ordinary_address_works_and_is_idempotent(server, data_dir):
     status, body, headers = _get(server, "reader@example.com")
     assert status == 200
     assert "<strong>reader@example.com</strong>" in body
-    assert "Confirmed." in body
+    assert "Confirmed" in body
     assert "reader@example.com" in _ledger_emails(data_dir)
-    status2, body2, _ = _get(server, "reader@example.com")
-    assert status2 == 200 and "Already on the suppression list" in body2
+    # The second visit gets the same page: a different one said whether the
+    # address had been suppressed before, to anyone who asked.
+    status2, body2, headers2 = _get(server, "reader@example.com")
+    assert status2 == 200 and body2 == body
+    # The page carries the recipient's address, so it is never cached.
+    assert headers.get("Cache-Control") == "no-store"
+    assert headers2.get("Cache-Control") == "no-store"
     assert "style-src 'self'" in (headers.get("Content-Security-Policy") or "")
 
 
