@@ -161,12 +161,33 @@ def _request(method: str, path: str, form: dict | None = None) -> dict:
                 f"path={mask_session_ids(path)}\n"
             )
         else:
+            # Both the body and Stripe's message are written with repr(), so
+            # each stays on its one line. Stripe echoes the caller's input
+            # back ("Invalid email address: <what they sent>"), and the
+            # decoded message kept a newline in that input as a real one: a
+            # caller could start a second log line that read like ours (an
+            # "ALERT" line, say). Stripe also pretty-prints its JSON bodies
+            # over several lines. repr() escapes every line break, including
+            # \r, \x85 and \u2028, and keeps the "…" that masking leaves.
             sys.stderr.write(
                 f"[stripe_api] HTTP {e.code} ({category}) path={mask_session_ids(path)} "
-                f"body={mask_session_ids(body[:200])}\n"
+                f"body={mask_session_ids(body[:200])!r}\n"
             )
-        # Customer-facing message — never leak our internal Stripe error verbatim
-        # for auth/server errors. Card-declined we DO want the buyer to see.
+            if stripe_msg:
+                # The body above is cut at 200 characters. Stripe's own
+                # message no longer reaches the customer (below), so this
+                # line is the only place it is kept whole.
+                sys.stderr.write(
+                    f"[stripe_api] stripe message ({category}, code={stripe_code or '-'}): "
+                    f"{mask_session_ids(stripe_msg)!r}\n"
+                )
+        # Customer-facing message — never leak our internal Stripe error verbatim.
+        # Card-declined we DO want the buyer to see: it is about their card and
+        # tells them what to do. Every other 4xx is about OUR request. Stripe's
+        # text for those named our configured price id and live/test key mode
+        # to an anonymous /api/stripe/checkout caller, and echoed the caller's
+        # own input back in a JSON error body, so they get a fixed message and
+        # the detail stays in the log.
         if category == "auth_error":
             customer_msg = "Payment system misconfigured. We've been notified."
         elif category == "card_declined":
@@ -176,9 +197,9 @@ def _request(method: str, path: str, form: dict | None = None) -> dict:
         elif category == "stripe_outage":
             customer_msg = "Stripe is having issues — try again in a minute, or pay via Bitcoin."
         elif category == "invalid_request":
-            customer_msg = stripe_msg or "Request rejected by Stripe (invalid parameters)."
+            customer_msg = "Request rejected by Stripe (invalid parameters)."
         else:
-            customer_msg = stripe_msg or f"Payment error ({e.code})."
+            customer_msg = f"Payment error ({e.code})."
         return {
             "ok": False,
             "category": category,

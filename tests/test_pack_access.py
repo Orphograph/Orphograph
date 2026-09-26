@@ -188,6 +188,23 @@ def _read_stderr(stderr_log: Path) -> str:
         return ""
 
 
+def _await_sends(stderr_log: Path, since: int, count: int, timeout: float = 10.0) -> str:
+    """The log text after offset `since` once it holds `count` inert sends.
+
+    Since 2026-09-26 /api/pack/recover answers FIRST and re-sends on a
+    background thread (a synchronous send made a hit measurably slower than a
+    miss). A fixed sleep would race that thread: under load the hit's sends
+    could land after the next test took its offset and be counted as a send
+    for an address with no pack. So wait for the sends themselves."""
+    deadline = time.time() + timeout
+    text = ""
+    while time.time() < deadline:
+        text = _read_stderr(stderr_log)[since:]
+        if text.count("[email:inert] would send") >= count:
+            break
+    return text
+
+
 # ---- /pack route ----------------------------------------------------------
 
 def test_pack_page_route_200(server):
@@ -227,7 +244,7 @@ def test_recover_hit_sends_and_is_neutral(server):
     j = json.loads(body)
     assert j["ok"] is True
     assert "sent the code" in j["message"]
-    new_err = _read_stderr(server["stderr_log"])[err_before:]
+    new_err = _await_sends(server["stderr_log"], err_before, 2)
     # Two codes with positive balance -> two inert sends. CODE_SPENT (0 left)
     # belongs to a different email and is not touched here anyway.
     assert new_err.count("[email:inert] would send") == 2, new_err
@@ -238,8 +255,12 @@ def test_recover_hit_sends_and_is_neutral(server):
 def test_recover_miss_is_identical_and_sends_nothing(server):
     """An address with NO packs returns a byte-identical body and sends no
     mail — the endpoint cannot be used to tell which emails own a pack."""
+    hit_before = len(_read_stderr(server["stderr_log"]))
     _, hit_body = _post(server["base"] + "/api/pack/recover",
                         {"email": "seller@example.com"})
+    # The hit's two sends run after its answer; let them land before taking
+    # the offset for the miss, or they would be counted against the miss.
+    _await_sends(server["stderr_log"], hit_before, 2)
     err_before = len(_read_stderr(server["stderr_log"]))
     status, miss_body = _post(server["base"] + "/api/pack/recover",
                              {"email": "nobody-here@example.com"})

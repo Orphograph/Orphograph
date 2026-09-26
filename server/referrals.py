@@ -132,9 +132,14 @@ def apply(ref_code: str, new_buyer_email: str, new_claim_code: str) -> dict:
         if _already_credited(new_buyer_email, ref_code):
             return {"ok": False, "reason": "already credited (race)"}
         # +10 to the new buyer (on top of their Pack's 10).
+        # email="" like the referrer row below: the mint row already names the
+        # code's holder. A row carrying an email is what /api/pack/recover
+        # mails codes by, and on a gift the code is the RECIPIENT's while
+        # new_buyer_email is the buyer's, so writing it here let the buyer
+        # have the recipient's bearer code re-sent to themselves.
         credits.add_credits(
             claim_code=new_claim_code,
-            email=new_buyer_email,
+            email="",
             amount=REFERRAL_BONUS,
             source=f"referral_bonus:from_{ref_code}",
         )

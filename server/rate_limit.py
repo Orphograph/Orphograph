@@ -11,6 +11,7 @@ elapsed time (NTP rollback) to zero to avoid token overflow.
 Public API:
     limiter = TokenBucket(capacity, refill_per_sec, snapshot_path=...)
     allowed, retry_after = limiter.check(key)
+    limiter.refund(key)  # give one token back, capped at capacity
     limiter.save()  # optional; auto-saves on a debounce
 """
 from __future__ import annotations
@@ -125,6 +126,30 @@ class TokenBucket:
             except OSError:
                 pass  # don't kill a request because the disk is grumpy
         return allowed, retry_after
+
+    def refund(self, key: str, amount: float = 1.0) -> None:
+        """Give `amount` tokens back to `key`, never above capacity.
+
+        For a budget that should only count attempts that came to nothing:
+        the caller spends with check() up front and refunds once the attempt
+        turns out to have been worth it (a paid Lightning invoice, in app.py).
+        A key with no bucket is already full, so there is nothing to give
+        back. Refill up to now is applied first, under the same lock as
+        check(), so a refund and a concurrent check cannot overwrite each
+        other's update.
+        """
+        if amount <= 0:
+            return
+        now = time.time()
+        with self._lock:
+            entry = self._buckets.get(key)
+            if entry is None:
+                return
+            tokens, last = entry
+            elapsed = max(0.0, now - last)
+            tokens = min(self.capacity, tokens + elapsed * self.refill_per_sec + amount)
+            self._buckets[key] = (tokens, now)
+            self._dirty = True
 
     def peek(self, key: str) -> float:
         """Return the tokens currently available for `key` WITHOUT consuming.

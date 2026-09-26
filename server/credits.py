@@ -288,6 +288,19 @@ def find_mint_by_exact_source(sources: set[str]) -> dict | None:
     return None
 
 
+REFERRAL_BONUS_SOURCE_PREFIX = "referral_bonus:"
+
+
+def is_referral_bonus_row(row: dict) -> bool:
+    """Is this the +10 a referred buyer's code gets (referrals.apply)?
+
+    Its `email` says who BOUGHT, not who holds the code: on a gift the code
+    is the recipient's. Readers that key credit rows by email must not treat
+    it as a mint for that address (see find_claim_codes_by_email)."""
+    source = row.get("source")
+    return isinstance(source, str) and source.startswith(REFERRAL_BONUS_SOURCE_PREFIX)
+
+
 def find_claim_codes_by_email(email: str) -> list[str]:
     """Return the distinct claim_codes ever minted against `email`, in
     first-seen order.
@@ -300,6 +313,15 @@ def find_claim_codes_by_email(email: str) -> list[str]:
     write email=""), so a case-insensitive exact match on the address
     naturally selects the original purchase rows. Append-only means the
     same code can appear on several rows; we dedupe, preserving order.
+
+    Referral bonus rows are the exception, and they are skipped. Before
+    2026-09-26 referrals.apply wrote them with the BUYER's email, and on a
+    gift the code they credit is the RECIPIENT's, so the buyer could have
+    the recipient's bearer code mailed to themselves. The writer now leaves
+    the email empty, but the rows it already wrote stay in the append-only
+    ledger, so the reader has to ignore them. Nothing is lost: a bonus only
+    ever lands on a code that has its own mint row naming its holder. It is
+    a denylist on purpose, so a mint kind added later is never dropped here.
     """
     if not email:
         return []
@@ -310,6 +332,8 @@ def find_claim_codes_by_email(email: str) -> list[str]:
     with _lock:
         with LEDGER_PATH.open() as f:
             for row in _ledger_rows(f):
+                if is_referral_bonus_row(row):
+                    continue
                 email_value = row.get("email") or ""
                 row_email = email_value.strip().lower() if isinstance(email_value, str) else ""
                 if row_email and row_email == needle:
