@@ -412,6 +412,33 @@ def _scan_forks(links: dict[str, dict]) -> dict[str, list[str]]:
     return {p: rids for p, rids in children.items() if len(rids) > 1}
 
 
+_VALUE_OPTIONS = ("--tip", "--dir")
+_FLAGS = {"--chain", "--tip", "--dir", "--ots-check", "--max-depth", "--exclude", "-h", "--help"}
+
+
+def _join_dash_values(argv: list[str]) -> list[str]:
+    """Attach a value that begins with '-' to its --tip / --dir option.
+
+    Receipt ids are url-safe base64, and about one in 64 begins with '-'.
+    argparse reads such a value as an option, so `--tip -AbC…` failed with
+    "expected one argument" and the documented command did not work for
+    that receipt. A following token that is itself one of our flags is left
+    alone, so a missing value is still reported as missing."""
+    out: list[str] = []
+    i = 0
+    while i < len(argv):
+        arg = argv[i]
+        nxt = argv[i + 1] if i + 1 < len(argv) else None
+        if (arg in _VALUE_OPTIONS and nxt is not None and nxt.startswith("-")
+                and nxt.split("=", 1)[0] not in _FLAGS):
+            out.append(f"{arg}={nxt}")
+            i += 2
+            continue
+        out.append(arg)
+        i += 1
+    return out
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(
         prog="verify_lineage.py",
@@ -442,7 +469,7 @@ def main(argv: list[str] | None = None) -> int:
             "the folder was anchored with."
         ),
     )
-    args = p.parse_args(argv)
+    args = p.parse_args(_join_dash_values(sys.argv[1:] if argv is None else list(argv)))
 
     chain_dir = Path(args.chain).expanduser().resolve()
     if not chain_dir.is_dir():
@@ -498,7 +525,7 @@ def main(argv: list[str] | None = None) -> int:
             print(
                 "cannot auto-detect the tip "
                 f"({len(candidates)} candidates: {', '.join(sorted(candidates)) or 'none'}); "
-                "pass --tip RID",
+                "pass --tip=RID",
                 file=sys.stderr,
             )
             return EXIT_ARGS

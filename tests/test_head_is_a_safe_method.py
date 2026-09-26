@@ -129,15 +129,17 @@ def test_head_does_not_unsubscribe_anyone(server):
     # The person's own click still works in one action, and HEAD described
     # that response exactly (same length: the "Confirmed." page).
     status, get_body, _h = _srv.request(base, path, timeout=15)
-    assert status == 200 and b"Confirmed." in get_body
+    assert status == 200 and b"Confirmed" in get_body
     assert head_before.get("Content-Length") == str(len(get_body))
     assert [r.get("email") for r in _rows(data_dir / "suppressions.jsonl")] .count(email) == 1
 
-    # Once recorded, HEAD and GET agree on the "already" page too.
+    # Once recorded, HEAD and GET still agree, and on the SAME page as before:
+    # a page that changed once the address was suppressed let a HEAD, which
+    # writes nothing, read whether anyone had unsubscribed.
     _s, _b, head_after = _srv.request(base, path, method="HEAD", timeout=15)
     _s, get_again, _h = _srv.request(base, path, timeout=15)
-    assert b"Already on the suppression list" in get_again
-    assert head_after.get("Content-Length") == str(len(get_again))
+    assert get_again == get_body
+    assert head_after.get("Content-Length") == head_before.get("Content-Length")
     assert [r.get("email") for r in _rows(data_dir / "suppressions.jsonl")].count(email) == 1
 
 

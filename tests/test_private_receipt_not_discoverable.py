@@ -137,6 +137,43 @@ class TestPrivateReceiptNotDiscoverable(unittest.TestCase):
         self.assertEqual(priv, gone)
         self.assertEqual(priv, 404)
 
+    # ── pages and routes that answered a private id differently ──────────
+    def _same_as_missing(self, path_fmt):
+        priv = self._get(path_fmt.format(self.private_rid))
+        gone = self._get(path_fmt.format(NONEXISTENT))
+        return priv, gone, (priv[0], priv[1].replace(self.private_rid, "<id>")) == \
+            (gone[0], gone[1].replace(NONEXISTENT, "<id>"))
+
+    def test_the_pages_render_a_private_id_exactly_like_a_missing_one(self):
+        """/certificate/<id> and /r/<id> are public, cached shells. A private
+        id kept the default unfurl text while a missing one got "No record",
+        so the page bytes confirmed a private receipt exists."""
+        for page in ("/certificate/{}", "/r/{}"):
+            priv, gone, same = self._same_as_missing(page)
+            self.assertEqual(priv[0], 200)
+            self.assertTrue(same, f"{page}: a private id renders differently "
+                                  f"from a missing one")
+            # Control: the comparison can see a difference at all.
+            pub = self._get(page.format(self.public_rid))
+            self.assertNotEqual(pub[1].replace(self.public_rid, "<id>"),
+                                gone[1].replace(NONEXISTENT, "<id>"),
+                                f"{page}: public and missing render the same, "
+                                f"so the equality above proves nothing")
+
+    def test_verify_folder_answers_a_private_single_file_id_like_a_missing_one(self):
+        priv, gone, same = self._same_as_missing("/api/verify_folder/{}")
+        self.assertEqual(priv[0], 404, priv)
+        self.assertTrue(same, (priv, gone))
+
+    def test_verify_folder_still_tells_the_owner_it_is_not_a_folder(self):
+        sid, _ = self.auth.create_session("owner@example.com")
+        req = urllib.request.Request(
+            f"{self._base}/api/verify_folder/{self.private_rid}",
+            headers={"Cookie": f"orpho_sid={sid}"})
+        with self.assertRaises(urllib.error.HTTPError) as cm:
+            urllib.request.urlopen(req, timeout=15)
+        self.assertEqual(cm.exception.code, 400)
+
     # ── the broader sweep, kept as a standing probe ───────────────────────
     def test_no_public_surface_leaks_a_private_receipts_label(self):
         """client_label is customer-chosen text and can name a project, a

