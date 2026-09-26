@@ -135,3 +135,33 @@ def test_isolation_between_emails():
     ))
     assert subscriptions.is_active("a@b.com") is True
     assert subscriptions.is_active("b@b.com") is False
+
+
+def _deleted(email):
+    # The row gdpr.delete_for_email appends to both ledgers.
+    for path in (subscriptions.SUB_LEDGER, subscriptions.CUSTOMER_MAP):
+        with path.open("a") as f:
+            f.write(json.dumps({"ts": "2026-09-26T00:00:00+00:00",
+                                "event": "email_deleted", "email": email}) + "\n")
+
+
+def test_deletion_unlinks_the_customer_until_it_is_mapped_again():
+    """A deleted email's customer stops resolving to it, so that customer's
+    later events cannot stamp the email back on. The SAME customer mapped to
+    the address again (a new checkout on a reused customer) is a new link."""
+    end = time.time() + 86400
+    subscriptions.record_customer_email("cus_x", "a@b.com")
+    subscriptions.record_subscription_event("cus_x", "active", end, "sub_x")
+    assert subscriptions.is_active("a@b.com") is True
+
+    _deleted("a@b.com")
+    assert subscriptions._email_for_customer("cus_x") is None
+    subscriptions.record_subscription_event("cus_x", "active", end, "sub_x")
+    assert subscriptions.is_active("a@b.com") is False
+    assert subscriptions.stripe_subscription_id_for("a@b.com") == ""
+
+    subscriptions.record_customer_email("cus_x", "a@b.com")
+    assert subscriptions._email_for_customer("cus_x") == "a@b.com"
+    subscriptions.record_subscription_event("cus_x", "active", end, "sub_x2")
+    assert subscriptions.is_active("a@b.com") is True
+    assert subscriptions.stripe_subscription_id_for("a@b.com") == "sub_x2"

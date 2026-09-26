@@ -322,6 +322,21 @@ SESSION_LOOKUP_CAPACITY = 5
 SESSION_LOOKUP_REFILL = 5 / 3600.0
 _session_lookup_limiter = TokenBucket(SESSION_LOOKUP_CAPACITY, SESSION_LOOKUP_REFILL)
 
+# Sign-out is unauthenticated, and any cookie it carries costs a scan of the
+# whole session ledger (auth.session_email reads it line by line: about 6 s
+# per request at a million rows, measured 2026-09-26). It also used to append
+# a `revoked` row for any cookie value at all, so one address could grow that
+# ledger by 1,237 rows a second. Only a live session is revoked now, which
+# stops the growth; this bucket bounds the scans. It counts only misses, a
+# cookie that is not a live session, the way _founder_fail_limiter counts
+# only failed guesses: signing out of a real session never spends it, so
+# people sharing one address cannot use it up by signing out. It is not
+# _anchor_limiter, whose budget is 3 a day per address in production
+# (fly.toml): that would refuse a shared office's fourth sign-out.
+SIGNOUT_MISS_CAPACITY = 20
+SIGNOUT_MISS_REFILL = 20 / 3600.0  # burst 20, then one every 3 minutes
+_signout_miss_limiter = TokenBucket(SIGNOUT_MISS_CAPACITY, SIGNOUT_MISS_REFILL)
+
 # Funnel-event limiter: 60 events / IP / minute. Separate bucket so noisy
 # analytics traffic can't burn the anchor-rate budget (and vice versa).
 # Cookieless: keyed by truncated IP only. In-memory only (no snapshot) —
@@ -5244,21 +5259,70 @@ class Handler(BaseHTTPRequestHandler):
         if not email:
             _json_response(self, 401, {"error": "not authenticated"})
             return
+        # Stop the billing BEFORE anything is tombstoned. Once the tombstones
+        # are written the email no longer resolves to its subscription, so
+        # cancel-subscription answers 404 and the customer has no way left to
+        # stop being charged for an account that no longer exists. That is
+        # what happened before this check: delete made no Stripe call at all.
+        # So if Stripe cannot be told, the account is left exactly as it was.
+        latest = subscriptions.status_for(email) or {}
+        sub_id = subscriptions.stripe_subscription_id_for(email)
+        if not sub_id:
+            billing = {"outcome": "no_subscription",
+                       "detail": "No subscription was on file, so there is nothing to bill."}
+        elif latest.get("status") in subscriptions.ENDED_STATUSES:
+            # Stripe refuses to change a subscription that has already ended,
+            # and asking would block this deletion for good.
+            billing = {"outcome": "already_ended",
+                       "detail": "Your subscription had already ended, so it will not renew."}
+        else:
+            result = stripe_api.cancel_at_period_end(sub_id)
+            if not result.get("ok"):
+                _json_response(self, 503, {
+                    "error": "stripe error",
+                    "detail": result.get("error"),
+                    "message": (
+                        "Your account was not deleted, because the payment provider did "
+                        "not confirm that your subscription was stopped. Deleting the "
+                        "account first would leave the subscription renewing with no "
+                        "account to cancel it from. Nothing was changed. Try again in "
+                        "a few minutes."
+                    ),
+                })
+                return
+            period_end = ""
+            try:
+                period_end = datetime.fromtimestamp(
+                    float(latest.get("current_period_end")), timezone.utc).date().isoformat()
+            except (TypeError, ValueError, OverflowError, OSError):
+                pass
+            billing = {
+                "outcome": "cancel_at_period_end",
+                "period_end": period_end or None,
+                "detail": (
+                    "Your subscription will not renew. It is set to cancel at the end "
+                    "of the current billing period"
+                    + (f", on {period_end}" if period_end else "")
+                    + ". No refund was issued for the current period."
+                ),
+            }
         result = gdpr.delete_for_email(email)
-        # Tear down the active session too.
-        cookies = SimpleCookie()
-        cookies.load(self.headers.get("Cookie", "") or "")
-        sid = cookies.get(auth.cookie_name(COOKIE_SECURE)) or cookies.get("orpho_sid") or cookies.get("__Host-orpho_sid")
-        if sid:
-            auth.revoke_session(sid.value)
+        # Every way into the account ends here, not only this browser's
+        # session: a session on another device and the API key stayed live
+        # after a delete, still answering as the deleted email.
+        sessions_revoked = auth.revoke_all_sessions(email)
+        api_key_revoked = api_keys.revoke(email)
         body = json.dumps({
             "ok": True,
             "email": email,
             "events_appended": result["events_appended"],
+            "sessions_revoked": sessions_revoked,
+            "api_key_revoked": api_key_revoked,
+            "billing": billing,
             "message": (
                 "Your data has been marked for deletion. Append-only ledgers retain "
                 "the deletion event for audit purposes; the email no longer resolves "
-                "to any active state."
+                "to any active state. " + billing["detail"]
             ),
         }, indent=2).encode("utf-8")
         self.send_response(200)
@@ -5273,12 +5337,31 @@ class Handler(BaseHTTPRequestHandler):
         cookies = SimpleCookie()
         cookies.load(self.headers.get("Cookie", "") or "")
         sid = cookies.get(auth.cookie_name(COOKIE_SECURE)) or cookies.get("orpho_sid") or cookies.get("__Host-orpho_sid")
-        if sid:
-            auth.revoke_session(sid.value)
-        self.send_response(200)
+        status, payload, retry_after = 200, {"ok": True}, 0
+        # No cookie means no scan and no write, so it is neither counted nor
+        # refused. A cookie is revoked only when it is a live session: a
+        # `revoked` row for anything else is ledger growth that every later
+        # session lookup has to read past.
+        if sid and sid.value:
+            key = f"signout:{self._client_key()}"
+            tokens = _signout_miss_limiter.peek(key)
+            if tokens < 1.0:
+                retry_after = int((1.0 - tokens) / _signout_miss_limiter.refill_per_sec) + 1
+                status, payload = 429, {"error": "too many requests",
+                                        "retry_after_seconds": retry_after}
+            elif auth.session_email(sid.value):
+                auth.revoke_session(sid.value)
+            else:
+                _signout_miss_limiter.check(key)
+        self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
+        # Cleared on every answer, the refused one included: both shipped
+        # clients (account.js, statusbar.js) ignore the status and go home,
+        # so this is what signs the browser out.
         self.send_header("Set-Cookie", auth.clear_session_cookie(secure=COOKIE_SECURE))
-        body = json.dumps({"ok": True}).encode("utf-8")
+        if retry_after:
+            self.send_header("Retry-After", str(retry_after))
+        body = json.dumps(payload).encode("utf-8")
         self.send_header("Content-Length", str(len(body)))
         _security_headers(self)
         self.end_headers()

@@ -34,6 +34,14 @@ SUB_LEDGER = Path(os.environ.get("ORPHO_SUB_LEDGER", str(DATA_DIR / "subscriptio
 CUSTOMER_MAP = Path(os.environ.get("ORPHO_CUSTOMER_MAP", str(DATA_DIR / "stripe_customer_emails.jsonl")))
 
 ACTIVE_STATUSES = {"active", "trialing"}
+# Stripe statuses a subscription never leaves. It bills nothing more, and
+# Stripe refuses to update it, so there is nothing left to cancel.
+ENDED_STATUSES = {"canceled", "incomplete_expired"}
+
+# gdpr.delete_for_email appends a row carrying this event and the email to
+# both ledgers this module reads. It is recognised here by its shape rather
+# than by asking gdpr, because gdpr imports this module.
+DELETED_EVENT = "email_deleted"
 
 
 def _now_unix() -> float:
@@ -75,10 +83,26 @@ def record_customer_email(stripe_customer: str, email: str) -> None:
     })
 
 
+def _is_deletion(row: dict) -> bool:
+    return row.get("event") == DELETED_EVENT and bool(row.get("email"))
+
+
 def _email_for_customer(stripe_customer: str) -> str | None:
-    rows = _read_all(CUSTOMER_MAP)
+    """The email a Stripe customer is linked to, or None.
+
+    A deletion of that email unlinks the customer. Without this, the deleted
+    account's own subscription events (Stripe keeps sending them until the
+    subscription ends) were stamped with the deleted email again, and the
+    account's subscription came back for whoever signed in with that address
+    next. A mapping written after the deletion is a new link and counts."""
+    if not stripe_customer:
+        return None
     latest = None
-    for row in rows:
+    for row in _read_all(CUSTOMER_MAP):
+        if _is_deletion(row):
+            if latest and latest.get("email") == row.get("email"):
+                latest = None
+            continue
         if row.get("stripe_customer") == stripe_customer:
             latest = row
     return latest.get("email") if latest else None
@@ -106,28 +130,44 @@ def record_subscription_event(
     })
 
 
+def _customer_links(email: str) -> tuple[set[str], set[str]]:
+    """(linked, unlinked) stripe_customer IDs for this email.
+
+    Linked: every customer mapped to the email since it was last deleted.
+    Unlinked: customers a deletion cut off, and not mapped to it again since.
+    """
+    linked: set[str] = set()
+    unlinked: set[str] = set()
+    if not email:
+        return linked, unlinked
+    for row in _read_all(CUSTOMER_MAP):
+        if row.get("email") != email:
+            continue
+        if _is_deletion(row):
+            unlinked |= linked
+            linked = set()
+        elif row.get("stripe_customer"):
+            linked.add(row["stripe_customer"])
+    return linked, unlinked - linked
+
+
 def _customers_for_email(email: str) -> set[str]:
-    """Return every stripe_customer ID ever mapped to this email.
+    """Return every stripe_customer ID mapped to this email since it was
+    last deleted.
 
     The customer→email map is the source of truth for the email link;
     subscription events sometimes arrive BEFORE that mapping is written
     (Stripe dispatch order is not guaranteed), so the sub row's own
     `email` field can be empty even though the customer is real.
     """
-    out: set[str] = set()
-    if not email:
-        return out
-    for row in _read_all(CUSTOMER_MAP):
-        if row.get("email") == email and row.get("stripe_customer"):
-            out.add(row["stripe_customer"])
-    return out
+    return _customer_links(email)[0]
 
 
 def _latest_for_email(email: str) -> dict | None:
     if not email:
         return None
     rows = _read_all(SUB_LEDGER)
-    customers = _customers_for_email(email)
+    customers, unlinked = _customer_links(email)
     latest = None
     for row in rows:
         # Match by stored email first, falling back to the customer→email
@@ -135,6 +175,16 @@ def _latest_for_email(email: str) -> dict | None:
         # checkout.session.completed) still resolve correctly.
         row_email = row.get("email")
         row_customer = row.get("stripe_customer")
+        if _is_deletion(row) and row_email == email:
+            # Nothing written before the deletion describes whoever holds
+            # this address now; a later sign-in with it is a new account.
+            latest = None
+            continue
+        if row_customer and row_customer in unlinked:
+            # The deleted account's customer. Its events can still carry the
+            # email: a webhook that looked the email up just before the
+            # deletion landed appends just after it.
+            continue
         if row_email == email or (not row_email and row_customer in customers):
             latest = row
     return latest
