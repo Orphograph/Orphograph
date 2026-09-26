@@ -64,6 +64,7 @@ import nowpayments_api  # noqa: E402
 import nowpayments_webhook  # noqa: E402
 import subscriptions  # noqa: E402
 import teams  # noqa: E402
+from email_fold import fold_email  # noqa: E402
 import unsubscribe  # noqa: E402
 import waitlist  # noqa: E402
 import webhooks  # noqa: E402
@@ -335,9 +336,11 @@ _session_lookup_limiter = TokenBucket(SESSION_LOOKUP_CAPACITY, SESSION_LOOKUP_RE
 # key ledger that each keyed anchor and vault request reads, and nothing
 # bounded it: 150 issuances in a row all answered 200 (2026-09-25). A person
 # rotates a key a handful of times, so 5 at once and then one every 12
-# minutes. Keyed on the lowercased session email so spellings of one mailbox
-# share it; a double click spends 2. In-memory: a restart refilling it is
-# harmless.
+# minutes. Keyed on fold_email(session email) so spellings of one mailbox
+# share it, the same fold the key ledger counts live keys by. str.lower()
+# here put a U+212A KELVIN SIGN spelling of "karl@x" in karl@x's bucket, so
+# one account could spend another's. A double click spends 2. In-memory: a
+# restart refilling it is harmless.
 API_KEY_ISSUE_CAPACITY = 5
 API_KEY_ISSUE_REFILL = 5 / 3600.0
 _api_key_issue_limiter = TokenBucket(API_KEY_ISSUE_CAPACITY, API_KEY_ISSUE_REFILL)
@@ -4052,7 +4055,10 @@ class Handler(BaseHTTPRequestHandler):
         if wrong:
             _json_response(self, 400, {"error": f"{wrong} must be a string"})
             return
-        member_email = _json_str(payload, "member_email").strip().lower()
+        # Not lowercased here: remove_member folds both sides itself, and
+        # str.lower() would turn a U+212A KELVIN SIGN spelling into another
+        # member's plain-"k" address.
+        member_email = _json_str(payload, "member_email").strip()
         if not member_email:
             _json_response(self, 400, {"error": "member_email required"})
             return
@@ -4433,7 +4439,7 @@ class Handler(BaseHTTPRequestHandler):
         if not subscriptions.is_active(email):
             _json_response(self, 402, {"error": "API access requires an active subscription"})
             return
-        allowed, retry_after = _api_key_issue_limiter.check(f"apikey-issue:{email.strip().lower()}")
+        allowed, retry_after = _api_key_issue_limiter.check(f"apikey-issue:{fold_email(email)}")
         if not allowed:
             self.send_response(429)
             self.send_header("Content-Type", "application/json; charset=utf-8")

@@ -25,6 +25,7 @@ import threading
 from datetime import datetime, timezone
 from pathlib import Path
 
+from email_fold import fold_email
 from file_lock import locked
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -84,11 +85,19 @@ def _live_keys(rows: list[dict], email: str) -> list[dict]:
     One pass over rows already read. issue() used to re-read the whole ledger
     once per key the account had ever held, so 2,000 rotations cost 41 s per
     call on a server thread. A key is dead once any row revokes it, which is
-    what the old nested scan checked too."""
+    what the old nested scan checked too.
+
+    Rows match on fold_email, not the exact string. Sign-in keeps the case
+    typed, so "Alice@x" and "alice@x" each held a live key, and a revoke from
+    one spelling left the other key working, while the issuance limiter
+    already counted both spellings as one account (2026-09-26)."""
+    me = fold_email(email)
+    if not me:
+        return []
     revoked = {r.get("key_hash") for r in rows if r.get("event") == "revoked"}
     return [
         r for r in rows
-        if r.get("event") == "issued" and r.get("email") == email
+        if r.get("event") == "issued" and fold_email(r.get("email")) == me
         and isinstance(r.get("key_hash"), str) and r["key_hash"] not in revoked
     ]
 

@@ -33,6 +33,7 @@ import threading
 import time
 from pathlib import Path
 
+from email_fold import fold_email
 from file_lock import locked
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -63,17 +64,18 @@ class InviteLimitReached(Exception):
 
 
 def _same(email) -> str:
-    """The form two emails are compared in. Sign-in keeps the case the person
-    typed, while create_team and redeem store the address lowercased, so an
-    exact comparison refused a mixed-case owner on their own team (403 on
-    invite and remove, shown as "member") and answered a mixed-case member's
-    leave with ok:false. Every ownership and membership check compares this
-    form on both sides; stored rows are unchanged.
+    """The form two emails are compared in, and the form create and redeem
+    store. Sign-in keeps the case the person typed, so an exact comparison
+    refused a mixed-case owner on their own team (403 on invite and remove,
+    shown as "member") and answered a mixed-case member's leave with ok:false.
+    Every ownership and membership check compares this form on both sides.
 
-    str.lower() rather than casefold(): it is the normalisation the ledger
-    already stores with, and casefold() also folds "ß" into "ss", which would
-    treat two different mailboxes as one person."""
-    return email.strip().lower() if isinstance(email, str) else ""
+    email_fold folds ASCII A-Z only. str.lower() turned U+212A KELVIN SIGN
+    into "k", so a Kelvin-sign spelling of "karl@x" counted as the owner of
+    karl@x's team and could remove its members; casefold() would also merge
+    "ß" with "ss". Rows written before this used str.lower(), which is the
+    same thing for every ASCII address."""
+    return fold_email(email)
 
 
 def _lock_path() -> Path:
@@ -87,12 +89,12 @@ def _lock_path() -> Path:
 @contextlib.contextmanager
 def _ledger_lock():
     """One critical section for every read-check-append on team state:
-    create_team, issue_invite and redeem_invite_code. The threading lock
-    covers handler threads in one process; the file lock covers processes
-    and machines that share the data volume. Taking both in the same order
-    everywhere, and never calling one of those three from inside another,
-    is what keeps it free of deadlock: the RLock re-enters, the flock does
-    not."""
+    create_team, issue_invite, redeem_invite_code, remove_member and
+    leave_team. The threading lock covers handler threads in one process;
+    the file lock covers processes and machines that share the data volume.
+    Taking both in the same order everywhere, and never calling one of those
+    five from inside another, is what keeps it free of deadlock: the RLock
+    re-enters, the flock does not."""
     with _state_lock, locked(_lock_path(), exclusive=True):
         yield
 
@@ -111,10 +113,14 @@ def _invite_expiry(ev: dict) -> float:
     """When an issued invite stops working. Rows written since invites got a
     TTL carry `expires_at`; older rows lapse INVITE_TTL_SECONDS after they
     were issued. A time that cannot be read counts as already expired: an
-    invite that cannot show it is fresh is not."""
-    stored = _as_time(ev.get("expires_at"))
-    if stored is not None:
-        return stored
+    invite that cannot show it is fresh is not.
+
+    A row that carries `expires_at` is judged on it alone. Falling back to
+    `ts` when it is NaN or garbage let a damaged new row live another week
+    on its issue time; only a row with no `expires_at` at all is an old one."""
+    if "expires_at" in ev:
+        stored = _as_time(ev.get("expires_at"))
+        return stored if stored is not None else 0.0
     issued = _as_time(ev.get("ts"))
     return issued + INVITE_TTL_SECONDS if issued is not None else 0.0
 
@@ -195,7 +201,16 @@ def _team_state() -> dict[str, dict]:
             "deleted": False,
         })
         if et == "create":
-            t["owner"] = ev.get("owner_email", "")
+            owner = ev.get("owner_email")
+            t["owner"] = owner if isinstance(owner, str) else ""
+            # The owner's address as they signed in, which is the spelling
+            # their Stripe row carries. Taken only when it is a spelling of
+            # the stored owner, so a damaged row cannot point members'
+            # inheritance at another mailbox's subscription.
+            spelling = ev.get("owner_spelling")
+            t["owner_spelling"] = (
+                spelling if isinstance(spelling, str) and spelling.strip()
+                and _same(spelling) == _same(t["owner"]) else t["owner"])
             t["name"] = ev.get("name", "")
             t["created_at"] = ev.get("ts", t["created_at"])
         elif et == "join":
@@ -253,12 +268,19 @@ def create_team(owner_email: str, team_name: str) -> str:
 
     The check and the append share one lock with redeem: 30 simultaneous
     creates for one owner used to write up to 3 teams (2026-09-25).
+
+    The row stores the owner in the _same form and, beside it, the spelling
+    the owner signed in with. Members inherit through that spelling:
+    subscriptions.is_active matches the Stripe row's spelling exactly, so an
+    owner signed in as "Alice@Example.com" with a Stripe row to match could
+    fill seats while every member got nothing (2026-09-26).
     """
-    owner_email = (owner_email or "").strip().lower()
+    spelling = owner_email.strip() if isinstance(owner_email, str) else ""
+    owner_email = _same(spelling)
     team_name = (team_name or "").strip()[:80] or "Team"
     if not owner_email or "@" not in owner_email:
         raise ValueError("invalid owner email")
-    me = _same(owner_email)
+    me = owner_email
     with _ledger_lock():
         owned = member_of = None
         for t in _team_state().values():
@@ -278,6 +300,7 @@ def create_team(owner_email: str, team_name: str) -> str:
             "event": "create",
             "team_id": team_id,
             "owner_email": owner_email,
+            "owner_spelling": spelling,
             "name": team_name,
         })
         return team_id
@@ -342,11 +365,11 @@ def redeem_invite_code(invite_code: str, joiner_email: str) -> dict:
     cannot both pass the "already in a team" check. Its file half extends
     that to other processes sharing the data volume.
     """
-    joiner_email = (joiner_email or "").strip().lower()
+    joiner_email = _same(joiner_email)
     invite_code = (invite_code or "").strip()
     if not joiner_email or "@" not in joiner_email:
         return {"ok": False, "error": "invalid joiner email"}
-    me = _same(joiner_email)
+    me = joiner_email
     with _ledger_lock():
         invites = _invite_state()
         inv = invites.get(invite_code)
@@ -390,50 +413,65 @@ def redeem_invite_code(invite_code: str, joiner_email: str) -> dict:
         return {"ok": True, "team_id": team_id}
 
 
-def remove_member(team_id: str, owner_email: str, member_email: str) -> bool:
-    if not _same(owner_email) or not _same(member_email):
-        return False
-    teams = _team_state()
-    t = teams.get(team_id)
-    if not t or t.get("deleted") or _same(t.get("owner")) != _same(owner_email):
-        return False
-    # The reducer drops a member by exact string, so each remove row carries
-    # the spelling a join row stored, whatever case the caller used.
+def _append_removes(t: dict, member_email: str) -> bool:
+    """Write a remove row for every stored spelling of `member_email` in team
+    `t`. The reducer drops a member by exact string, so each row carries the
+    spelling a join row stored, whatever case the caller used. Called with
+    _ledger_lock held."""
     stored = sorted(m for m in t.get("members", set()) if _same(m) == _same(member_email))
-    if not stored:
-        return False
     for m in stored:
         _append(TEAMS_LEDGER, {
             "ts": _now(),
             "event": "remove",
-            "team_id": team_id,
+            "team_id": t["team_id"],
             "member_email": m,
         })
-    return True
+    return bool(stored)
+
+
+def remove_member(team_id: str, owner_email: str, member_email: str) -> bool:
+    if not _same(owner_email) or not _same(member_email):
+        return False
+    with _ledger_lock():
+        t = _team_state().get(team_id)
+        if not t or t.get("deleted") or _same(t.get("owner")) != _same(owner_email):
+            return False
+        return _append_removes(t, member_email)
 
 
 def leave_team(member_email: str) -> bool:
-    t = team_for_member(member_email)
-    if not t or t.get("deleted") or _same(t.get("owner")) == _same(member_email):
+    """The member writes their own remove row. Leaving used to go through
+    remove_member with the owner's address as the credential, so a team whose
+    create row was missing or damaged, which reduces to owner "", kept its
+    members forever: nobody could pass as that owner, and a member cannot
+    join another team until they leave (2026-09-26)."""
+    me = _same(member_email)
+    if not me:
         return False
-    return remove_member(t["team_id"], t["owner"], member_email)
+    with _ledger_lock():
+        t = _team_of(me)
+        if not t or _same(t.get("owner")) == me:
+            return False
+        return _append_removes(t, me)
+
+
+def _team_of(me: str) -> dict | None:
+    """The first active team where `me` (already in _same form) is the owner
+    or a member, as the reducer holds it, or None."""
+    if not me:
+        return None
+    for t in _team_state().values():
+        if t.get("deleted"):
+            continue
+        if _same(t.get("owner")) == me or any(_same(m) == me for m in t.get("members", set())):
+            return t
+    return None
 
 
 def team_for_member(email: str) -> dict | None:
     """Return the team where `email` is the owner OR a member, or None."""
-    if not email:
-        return None
-    me = _same(email)
-    if not me:
-        return None
-    teams = _team_state()
-    # Active teams only
-    for t in teams.values():
-        if t.get("deleted"):
-            continue
-        if _same(t.get("owner")) == me or any(_same(m) == me for m in t.get("members", set())):
-            return _serialize(t)
-    return None
+    t = _team_of(_same(email))
+    return _serialize(t) if t else None
 
 
 def is_owner(team: dict | None, email: str | None) -> bool:
@@ -451,15 +489,25 @@ def team_for_email(email: str) -> dict | None:
 def owner_email_for(email: str) -> str | None:
     """Return the subscription-bearing owner email for this email, or None.
 
-    If `email` is the owner, returns email. If `email` is a team member,
-    returns the team owner's email. Otherwise None.
+    If `email` is the owner, returns the owner's address. If `email` is a
+    team member, returns the team owner's address. Otherwise None.
+
+    The address comes back in the spelling the owner signed in with when the
+    team was created, because the caller hands it to subscriptions.is_active,
+    which matches the Stripe row's spelling exactly. The stored owner is
+    lowercased, so a mixed-case owner's members inherited nothing. Rows
+    written before the spelling was kept give the stored owner.
     """
-    t = team_for_member(email)
-    return t.get("owner") if t else None
+    t = _team_of(_same(email))
+    if not t:
+        return None
+    return t.get("owner_spelling") or t.get("owner")
 
 
 def _serialize(t: dict) -> dict:
-    """Convert the in-memory set to a list for JSON output."""
+    """Convert the in-memory set to a list for JSON output. The owner's
+    sign-in spelling stays server-side: `owner` is what the pages show."""
     out = dict(t)
+    out.pop("owner_spelling", None)
     out["members"] = sorted(t.get("members", set()))
     return out
