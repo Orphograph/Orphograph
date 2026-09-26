@@ -34,7 +34,10 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 @pytest.fixture(scope="module")
 def server(tmp_path_factory):
     data_dir = tmp_path_factory.mktemp("head_safe_data")
-    for base in _srv.server_processes(data_dir, stub_calendars=True):
+    # The homepage experiment is on, so its checkout-view writer is live and
+    # the sweep below can show HEAD does not reach it. With it off, GET does
+    # not write either, and the control would have nothing to see.
+    for base in _srv.server_processes(data_dir, stub_calendars=True, ORPHO_AB_HOME="0.5"):
         yield base, data_dir
 
 
@@ -246,7 +249,9 @@ def test_head_on_every_get_route_leaves_the_data_dir_untouched(server, monkeypat
     assert len(paths) >= 50 and "/api/unsubscribe" in paths, paths
 
     token = _mint_token(data_dir, "class-guard@example.test")
-    paths += [f"/a/{token}", "/api/unsubscribe?e=class-guard@example.test"]
+    # /pay/crypto: the checkout-view writer, which the enumerated sweep does
+    # not otherwise request.
+    paths += [f"/a/{token}", "/api/unsubscribe?e=class-guard@example.test", "/pay/crypto"]
 
     # Some GET writes only happen for a visitor the server recognises: a
     # signed-in account (first read of an affiliate code registers it) or an
@@ -261,8 +266,11 @@ def test_head_on_every_get_route_leaves_the_data_dir_untouched(server, monkeypat
     assert (data_dir / ".hmac_secret").exists(), "bootstrap did not happen before the snapshot"
     visitors = {
         "anonymous": {},
+        # Not a bot UA: the experiment never counts bots, so the default
+        # Python-urllib agent would skip the writer under GET as well.
         "signed in, with an experiment cookie": {
-            "Cookie": f"orpho_sid={sid}; orpho_ab_home=dark"},
+            "Cookie": f"orpho_sid={sid}; orpho_ab_home=dark",
+            "User-Agent": "orpho-head-sweep/1.0"},
     }
 
     before = _snapshot(data_dir)

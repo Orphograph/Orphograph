@@ -336,7 +336,7 @@ def anchor(path):
   </p>
 
   <h3>Auth</h3>
-  <p>Same model as <code>/api/anchor</code>. Pack tokens consume one credit per item; the rate limit applies once to the whole batch on the free tier.</p>
+  <p>Same model as <code>/api/anchor</code>. Pack tokens consume one credit per item; the rate limit applies once to the whole batch on the free tier. One difference: a batch sent with an <code>X-Pack-Token</code> that has no credits left, or does not exist, is answered <code>402</code> and nothing is charged. It does not fall back to the free tier, so a pack holder's batch never spends the free allowance by accident.</p>
 
   <h3>Request</h3>
 <pre>POST /api/anchor/batch

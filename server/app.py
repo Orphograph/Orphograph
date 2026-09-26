@@ -17,6 +17,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import math
 import mimetypes
 mimetypes.add_type("font/woff2", ".woff2")  # serve self-hosted fonts with correct type (X-Content-Type-Options: nosniff is set)
 import os
@@ -24,6 +25,7 @@ import posixpath
 import re
 import secrets
 import sys
+import threading
 import time
 from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -151,6 +153,14 @@ def _lineage_section_html(rid: str, lineage) -> str:
     )
 TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]{16,64}$")
 EMAIL_RE = re.compile(r"^[^@\s,]{1,64}@[^@\s,]{1,255}$")
+
+
+def _utf8_encodable(text: str) -> bool:
+    try:
+        text.encode("utf-8")
+    except UnicodeEncodeError:
+        return False
+    return True
 COOKIE_SECURE = os.environ.get("ORPHO_COOKIE_SECURE", "1") != "0"
 TRUST_PROXY_HEADERS = os.environ.get("ORPHO_TRUST_PROXY_HEADERS", "0") == "1"
 # Platform-set real-client-IP header. Fly.io sets `Fly-Client-IP` to the true
@@ -283,6 +293,21 @@ _anchor_limiter = TokenBucket(
     snapshot_path=RATE_LIMIT_SNAPSHOT,
 )
 
+# /api/anchor_folder reads and re-hashes up to 8 MB / 50,000 leaves before it
+# can tell a valid manifest from a bad one, and validation now comes before
+# any charge, so the charge can no longer be what bounds that work. Two
+# things do. A rejected manifest spends a per-address budget of its own (a
+# valid one spends nothing here), checked before the body is read. And one
+# address has one folder request in flight at a time: one 8 MB manifest
+# peaks near 15 MB on a 512 MB machine, and 25 concurrent corrupt manifests
+# from one fresh address reached 369 MB before this bound. Per address, not
+# a global slot count, so a slow upload can only hold up its own sender.
+FOLDER_REJECT_CAPACITY = 10
+FOLDER_REJECT_REFILL = 10 / 3600.0  # then one every 6 minutes
+_folder_reject_limiter = TokenBucket(FOLDER_REJECT_CAPACITY, FOLDER_REJECT_REFILL)
+_folder_in_flight: set[str] = set()
+_folder_in_flight_lock = threading.Lock()
+
 # Read-only status lookups the buyer's own page makes after paying:
 # web/pay/success.js polls /api/nowpayments/order/<id> up to 6 times, and
 # web/buy.js asks /api/stripe/session once per load. Both used to draw on
@@ -389,6 +414,12 @@ MAX_EVENT_PAGE_LEN = 256
 # collector's privacy contract (no cookies recorded) stays untouched.
 AB_HOME_COOKIE = "orpho_ab_home"
 AB_LOG_PATH = DATA_DIR / "ab_home.jsonl"
+# The ledger shares the data volume with receipts and the credit ledger, and
+# any client can forge the arm cookie, so it stops growing here.
+AB_LOG_MAX_BYTES = 16 * 1024 * 1024
+# The checkout page itself. Its .css/.js, redirect hops and 404 neighbours are
+# not a person reaching checkout.
+AB_CHECKOUT_PATHS = frozenset({"/pay/crypto", "/pay/crypto/"})
 _AB_BOT_RE = re.compile(
     r"bot|crawl|spider|slurp|bingpreview|facebookexternalhit|twitterbot|"
     r"linkedinbot|whatsapp|telegram|lighthouse|headless|python-urllib|"
@@ -747,12 +778,72 @@ def _build_sitemap() -> str:
     return "\n".join(lines)
 
 
+def _ascii_word(value: str, extra: str = "_") -> bool:
+    """True when every char is an ASCII letter or digit, or one of `extra`.
+
+    str.isalnum() alone accepts any Unicode letter or digit (é, ٣, fullwidth),
+    so an id that passed it could still be unsendable in an upstream URL: the
+    HTTP client raised before connecting and the handler dropped the socket
+    with no response instead of answering 400."""
+    return value.isascii() and all(c.isalnum() or c in extra for c in value)
+
+
+def _json_str(payload: dict, key: str) -> str:
+    """payload[key] when it is a string, else "". A JSON body is the client's
+    to shape: `{"email": 1}` is valid JSON, and `.strip()` on it raised out of
+    the handler, which dropped the connection instead of answering 400.
+    Handlers first reject a present field of the wrong type with
+    _wrong_type_field, so "" here only ever means absent or null."""
+    value = payload.get(key)
+    return value if isinstance(value, str) else ""
+
+
+def _wrong_type_field(payload: dict, *keys: str) -> str | None:
+    """The first of `keys` present with a non-string, non-null value. Such a
+    request answers 400: treating it as absent made {"team_name": 1} create a
+    team called "My Team"."""
+    for key in keys:
+        value = payload.get(key)
+        if value is not None and not isinstance(value, str):
+            return key
+    return None
+
+
+def _ab_fraction() -> float:
+    """ORPHO_AB_HOME as a fraction in [0, 1]; 0 (experiment off) when unset or
+    unreadable. float() accepts "nan", "inf" and "1e400"; unclamped, the
+    homepage split then raised on int(fraction * 10_000) for every visitor."""
+    try:
+        value = float(os.environ.get("ORPHO_AB_HOME", "0") or 0)
+    except ValueError:
+        return 0.0
+    return min(1.0, max(0.0, value)) if math.isfinite(value) else 0.0
+
+
+def _ab_counts_this_visitor(handler: BaseHTTPRequestHandler) -> bool:
+    """A cookie-attributed A/B write is allowed: the experiment runs and the
+    client is not a bot the split never assigns. The arm cookie is forgeable,
+    so without this every cookie-bearing request wrote a row."""
+    return _ab_fraction() > 0 and not _AB_BOT_RE.search(handler.headers.get("User-Agent", ""))
+
+
+_AB_CAP_NOTICE = {"sent": False}
+
+
 def _ab_log(event: str, variant: str, extra: dict | None = None) -> None:
     """Append one experiment record. Best-effort: analytics must never break serving."""
     try:
         from datetime import datetime, timezone
+        if AB_LOG_PATH.exists() and AB_LOG_PATH.stat().st_size >= AB_LOG_MAX_BYTES:
+            if not _AB_CAP_NOTICE["sent"]:
+                _AB_CAP_NOTICE["sent"] = True
+                sys.stderr.write(f"[ab] {AB_LOG_PATH.name} reached {AB_LOG_MAX_BYTES} bytes; "
+                                 "experiment rows are no longer recorded\n")
+            return
+        # v2: one row per page view. Rows before it counted the page's own
+        # .css/.js and redirect hops too, and were written with the test off.
         rec = {"ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-               "event": event, "variant": variant}
+               "event": event, "variant": variant, "v": 2}
         if extra:
             rec.update(extra)
         with open(AB_LOG_PATH, "a", encoding="utf-8") as f:
@@ -779,10 +870,7 @@ def _serve_ab_home(handler: BaseHTTPRequestHandler) -> bool:
     homepage (experiment off, bot traffic, or unreadable variant document).
     Both arms are served with no-store so shared caches can't bleed arms.
     """
-    try:
-        fraction = float(os.environ.get("ORPHO_AB_HOME", "0") or 0)
-    except ValueError:
-        fraction = 0.0
+    fraction = _ab_fraction()
     if fraction <= 0:
         return False
     if _AB_BOT_RE.search(handler.headers.get("User-Agent", "")):
@@ -1425,8 +1513,15 @@ class Handler(BaseHTTPRequestHandler):
             return False  # global lockout — distributed spray in progress
         supplied = self.headers.get("X-Orpho-Founder", "").strip()
         # Constant-time compare to avoid timing-side-channel leaks of the token.
+        # As bytes: http.server decodes header bytes as latin-1, so a byte
+        # 0x80-0xFF arrives as a non-ASCII char, and compare_digest refuses
+        # non-ASCII str with a TypeError. That escaped the handler (dropped
+        # connection, traceback) on every founder route and never reached the
+        # failure budget below, so it told a prober which routes are real.
+        # latin-1 gives back the bytes the client sent.
         import hmac as _hmac
-        if _hmac.compare_digest(supplied, token):
+        if _hmac.compare_digest(supplied.encode("latin-1", "replace"),
+                                token.encode("utf-8")):
             return True
         _founder_fail_limiter.check(key)  # count the failed guess (per-IP)
         _founder_fail_global_limiter.check(_FOUNDER_GLOBAL_FAIL_KEY)  # and globally
@@ -1485,8 +1580,11 @@ class Handler(BaseHTTPRequestHandler):
         # homepage A/B: split "/" between the cream and dark documents
         if path == "/" and _serve_ab_home(self):
             return
-        # homepage A/B: attribute checkout-page reach to the visitor's arm
-        if path.startswith("/pay/crypto"):
+        # homepage A/B: attribute checkout-page reach to the visitor's arm.
+        # Only while the experiment runs, only the page itself, and not for
+        # the bots the split never assigns: the cookie is forgeable, and the
+        # write used to fire for every /pay/crypto* path with the test off.
+        if path in AB_CHECKOUT_PATHS and _ab_counts_this_visitor(self):
             _ab_arm = _ab_cookie_variant(self)
             # A view is a person seeing the page; HEAD shows nobody anything.
             if _ab_arm and not self._is_head():
@@ -2630,6 +2728,50 @@ class Handler(BaseHTTPRequestHandler):
         except (OSError, ValueError):
             return 0
 
+    def _anchor_payload(self, max_bytes: int):
+        """Parse untrusted anchor input before charging any allowance."""
+        # credit_refunded / max_bytes: keys these 400s carried before
+        # validation moved ahead of charging. Nothing is charged yet here.
+        length = _read_content_length(self)
+        if length <= 0 or length > max_bytes:
+            _json_response(self, 400, {"error": "invalid body size",
+                                       "max_bytes": max_bytes, "credit_refunded": False})
+            return None
+        try:
+            payload = json.loads(self.rfile.read(length).decode("utf-8"))
+        except (UnicodeDecodeError, ValueError, RecursionError):
+            _json_response(self, 400, {"error": "body must be JSON", "credit_refunded": False})
+            return None
+        if not isinstance(payload, dict):
+            _json_response(self, 400, {"error": "body must be a JSON object"})
+            return None
+        return payload
+
+    @staticmethod
+    def _anchor_input_error(payload: dict, *, hash_required: bool = False):
+        """Validate types and digest values before paid/free accounting."""
+        types = {
+            "client_label": str, "notify_email": str, "sha512_hex": str,
+            "c2pa_manifest_hash": str, "hardware_attestation": dict,
+            "zk_proof": dict, "attestation": dict, "metadata": dict,
+            "private": bool, "paths_public": bool,
+        }
+        for field, want in types.items():
+            value = payload.get(field)
+            if value is not None and not isinstance(value, want):
+                return f"{field} must be {want.__name__}"
+        digests = {"sha512_hex": 128, "c2pa_manifest_hash": 64}
+        if hash_required:
+            digests["hash_hex"] = 64
+        for field, size in digests.items():
+            value = payload.get(field)
+            if value is None and field != "hash_hex":
+                continue
+            if (not isinstance(value, str) or
+                    re.fullmatch(r"[0-9a-f]{" + str(size) + r"}", value.strip().lower()) is None):
+                return f"{field} must be {size} lowercase hex characters"
+        return None
+
     def _optional_typed(self, payload: dict, field: str, want: type, label: str):
         """Read an OPTIONAL structured field, or 400 if it is present with the
         wrong type. Returns (value_or_None, handled) — `handled` True means a
@@ -2782,6 +2924,13 @@ class Handler(BaseHTTPRequestHandler):
                 "detail": "Calendar service unavailable. Anchoring is temporarily disabled.",
             })
             return
+        payload = self._anchor_payload(MAX_BODY_BYTES)
+        if payload is None:
+            return
+        error = self._anchor_input_error(payload, hash_required=True)
+        if error:
+            _json_response(self, 400, {"error": error})
+            return
         pack_token = self.headers.get("X-Pack-Token", "").strip()
         pack_consumed = False
         pack_remaining = 0
@@ -2827,6 +2976,19 @@ class Handler(BaseHTTPRequestHandler):
         # Authenticated subscribers bypass the free-tier rate limit.
         subscriber_email = api_key_email or (self._session_email() if not pack_consumed else None)
         subscription_active = api_key_active or _subscription_active_for(subscriber_email)
+        # Private receipts: subscriber-only feature. Anonymous and pack-only
+        # anchors cannot be marked private (no owner_id to gate by).
+        #
+        # FAIL CLOSED. This used to be `bool(...) and subscription_active`,
+        # which silently PUBLISHED a receipt the caller had explicitly asked
+        # to keep private — no error, no warning, nothing in the response.
+        # Publishing is not undoable; retrying without `private` costs the
+        # caller one line. So when the request cannot be honoured we decline
+        # to anchor at all and say why.
+        if bool(payload.get("private", False)) and not subscription_active:
+            _reject_private(self, pack_consumed, pack_token)
+            return
+        want_private = bool(payload.get("private", False))
         if not pack_consumed and not subscription_active and ln_payment_hash is None:
             allowed, retry_after = _anchor_limiter.check(self._client_key())
             if not allowed and lightning.configured():
@@ -2875,40 +3037,10 @@ class Handler(BaseHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(body)
                 return
-        length = _read_content_length(self)
-        if length <= 0 or length > MAX_BODY_BYTES:
-            # Credit was consumed above; a malformed request must not burn it.
-            if pack_consumed:
-                credits.refund_credit(pack_token)
-            _json_response(self, 400, {"error": "invalid body size",
-                                       "credit_refunded": pack_consumed})
-            return
-        raw = self.rfile.read(length)
-        try:
-            payload = json.loads(raw.decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError):
-            if pack_consumed:
-                credits.refund_credit(pack_token)
-            _json_response(self, 400, {"error": "body must be JSON",
-                                       "credit_refunded": pack_consumed})
-            return
         hash_hex = payload.get("hash_hex", "")
         sha512_hex = payload.get("sha512_hex")
         client_label = payload.get("client_label")
         notify_email = payload.get("notify_email")
-        # Private receipts: subscriber-only feature. Anonymous and pack-only
-        # anchors cannot be marked private (no owner_id to gate by).
-        #
-        # FAIL CLOSED. This used to be `bool(...) and subscription_active`,
-        # which silently PUBLISHED a receipt the caller had explicitly asked
-        # to keep private — no error, no warning, nothing in the response.
-        # Publishing is not undoable; retrying without `private` costs the
-        # caller one line. So when the request cannot be honoured we decline
-        # to anchor at all and say why.
-        if bool(payload.get("private", False)) and not subscription_active:
-            _reject_private(self, pack_consumed, pack_token)
-            return
-        want_private = bool(payload.get("private", False))
         # Attestation + metadata: any caller can submit these. The engine
         # sanitizes (allowlist + size caps); unknown fields are dropped.
         attestation = payload.get("attestation") if isinstance(payload.get("attestation"), dict) else None
@@ -2986,6 +3118,9 @@ class Handler(BaseHTTPRequestHandler):
                 source=source,
                 private=want_private,
                 owner_id=owner_id if want_private else None,
+                # Only a subscription-paid receipt joins the account. A pack
+                # or L402 anchor stays unowned, as it was before this field.
+                account_id=owner_id if source.startswith(("api:", "sub:")) else None,
                 attestation=attestation,
                 metadata=metadata,
                 c2pa_manifest_hash=c2pa_manifest_hash,
@@ -3008,7 +3143,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         # homepage A/B: attribute the successful anchor to the visitor's arm
         _ab_arm = _ab_cookie_variant(self)
-        if _ab_arm:
+        if _ab_arm and _ab_counts_this_visitor(self):
             _ab_log("anchor", _ab_arm)
         # Distinct upstream calendars, not server acknowledgements. One
         # helper for every anchor surface (single, batch, folder) so the pair
@@ -3163,7 +3298,10 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             payload = json.loads(self.rfile.read(length).decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError):
+        except (ValueError, RecursionError):
+            _json_response(self, 400, {"error": "body must be JSON"})
+            return
+        if not isinstance(payload, dict):
             _json_response(self, 400, {"error": "body must be JSON"})
             return
         email = payload.get("email", "")
@@ -3185,6 +3323,12 @@ class Handler(BaseHTTPRequestHandler):
         a backlog. API-key auth bypasses the rate limit; pack tokens consume
         one credit per item; subscribers anchor under their session.
         """
+        if ORPHO_DISABLE_ANCHORING:
+            _json_response(self, 503, {"error": "anchoring temporarily unavailable"})
+            return
+        payload = self._anchor_payload(MAX_BATCH_BODY_BYTES)
+        if payload is None:
+            return
         # Auth resolution mirrors /api/anchor but with one twist: pack-token
         # credit-consumption happens per-item below so partial fills work.
         pack_token = self.headers.get("X-Pack-Token", "").strip()
@@ -3197,34 +3341,10 @@ class Handler(BaseHTTPRequestHandler):
         api_key_active = bool(api_key_email and _subscription_active_for(api_key_email))
         session_email = self._session_email()
         sub_active = api_key_active or bool(session_email and _subscription_active_for(session_email))
-        effective_email = api_key_email or session_email
-
-        # Free tier is rate-limited per IP; consume ONE token for the whole
-        # batch (the per-item OTS work is what we're budgeting against).
-        if not pack_token and not api_key_active and not sub_active:
-            allowed, retry_after = _anchor_limiter.check(self._client_key())
-            if not allowed:
-                Handler._record_demand(self,
-                    "free_limit_reached", auth_path="free", surface="batch",
-                    outcome="limited")
-                _json_response(self, 429, {
-                    "error": "rate limit exceeded",
-                    "retry_after_seconds": int(retry_after) + 1,
-                    "limit_per_day": ANCHOR_RATE_CAPACITY,
-                    "hint": "Buy a Pack or subscribe to skip rate limits.",
-                })
-                return
-
-        length = _read_content_length(self)
-        if length <= 0 or length > MAX_BATCH_BODY_BYTES:
-            _json_response(self, 400, {"error": "invalid body size",
-                                       "max_bytes": MAX_BATCH_BODY_BYTES})
-            return
-        try:
-            payload = json.loads(self.rfile.read(length).decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError):
-            _json_response(self, 400, {"error": "body must be JSON"})
-            return
+        # The account whose subscription pays is the one the receipt is filed
+        # under. A lapsed key's owner is not paying when the session is, and
+        # /api/anchor already treats that key as not subscribed.
+        effective_email = api_key_email if api_key_active else session_email
 
         items = payload.get("hashes") if isinstance(payload, dict) else None
         if not isinstance(items, list) or not items:
@@ -3234,11 +3354,36 @@ class Handler(BaseHTTPRequestHandler):
             _json_response(self, 400, {"error": f"too many items (max {MAX_BATCH_ITEMS})"})
             return
 
+        # A supplied bearer token must actually fund work.
+        paid_available = bool(pack_token and credits.balance(pack_token) > 0)
+        if pack_token and not paid_available and not api_key_active and not sub_active:
+            # No item can be submitted under this entitlement. Reject before
+            # touching free allowance; a bad token must neither buy work nor
+            # burn the anonymous request the caller could make instead.
+            _json_response(self, 402, {"error": "pack credits exhausted or invalid"})
+            return
+        free_budget_checked = False
         results: list[dict] = []
         for idx, item in enumerate(items):
             if not isinstance(item, dict):
                 results.append({"index": idx, "ok": False, "error": "item must be an object"})
                 continue
+            error = self._anchor_input_error(item, hash_required=True)
+            if error:
+                results.append({"index": idx, "ok": False, "error": error})
+                continue
+            # Charge one free request only when a valid item is ready.
+            if not paid_available and not api_key_active and not sub_active and not free_budget_checked:
+                allowed, retry_after = _anchor_limiter.check(self._client_key())
+                if not allowed:
+                    Handler._record_demand(self, "free_limit_reached", auth_path="free",
+                                           surface="batch", outcome="limited")
+                    _json_response(self, 429, {"error": "rate limit exceeded",
+                        "retry_after_seconds": int(retry_after) + 1,
+                        "limit_per_day": ANCHOR_RATE_CAPACITY,
+                        "hint": "Buy a Pack or subscribe to skip rate limits."})
+                    return
+                free_budget_checked = True
             hash_hex = item.get("hash_hex", "")
             sha512_hex = item.get("sha512_hex")
             client_label = item.get("client_label")
@@ -3272,6 +3417,8 @@ class Handler(BaseHTTPRequestHandler):
                     client_label=client_label,
                     sha512_hex=sha512_hex,
                     source=source,
+                    account_id=(auth.email_id(effective_email)
+                                if source.startswith(("api:", "sub:")) else None),
                 )
             except ValueError as e:
                 # A credit was consumed above but this item produced NO
@@ -3287,6 +3434,10 @@ class Handler(BaseHTTPRequestHandler):
                                 "credit_refunded": refunded_here,
                                 "client_label": client_label})
                 continue
+            credit_refunded = False
+            if pack_consumed_here and record["calendars_ok"] == 0:
+                credits.refund_credit(pack_token, reason="batch-refund:no-calendars")
+                credit_refunded = True
             site = os.environ.get("SITE_URL", "https://orphograph.com").rstrip("/")
             rid = record["receipt_id"]
             if pack_consumed_here:
@@ -3314,6 +3465,7 @@ class Handler(BaseHTTPRequestHandler):
                 "created_at": record["created_at"],
                 "client_label": record["client_label"],
                 "calendars_ok": record["calendars_ok"],
+                "credit_refunded": credit_refunded,
                 "calendars_total": record["calendars_total"],
                 **item_distinct,
                 "low_redundancy": (item_distinct["calendars_distinct_ok"]
@@ -3463,7 +3615,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             payload = json.loads(self.rfile.read(length).decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError):
+        except (UnicodeDecodeError, ValueError, RecursionError):
             _json_response(self, 400, {"error": "body must be JSON"})
             return
         if not isinstance(payload, dict):
@@ -3483,10 +3635,14 @@ class Handler(BaseHTTPRequestHandler):
         if not isinstance(page, str) or not page:
             _json_response(self, 400, {"error": "invalid page"})
             return
-        # Bound page length; the client only ever sends location.pathname
+        # Bound page UTF-8 bytes; the client only ever sends location.pathname
         # which is well under this cap. We do NOT coerce the value — it's
         # written verbatim so the funnel report can show real paths.
-        page = page[:MAX_EVENT_PAGE_LEN]
+        try:
+            page = page.encode("utf-8")[:MAX_EVENT_PAGE_LEN].decode("utf-8", errors="ignore")
+        except UnicodeEncodeError:
+            _json_response(self, 400, {"error": "invalid page"})
+            return
         # NOT client_key: that is the rate-limit bucket (Fly-edge address,
         # i.e. Cloudflare behind the CDN). The recorded row wants the real
         # visitor, truncated the same way.
@@ -3498,15 +3654,7 @@ class Handler(BaseHTTPRequestHandler):
             "ip_trunc": ip_trunc,
             "ip_src": ip_src,
         }
-        try:
-            FUNNEL_EVENTS_PATH.parent.mkdir(parents=True, exist_ok=True)
-            with FUNNEL_EVENTS_PATH.open("a") as f:
-                f.write(json.dumps(row) + "\n")
-                f.flush()
-        except OSError:
-            # Disk full / read-only volume — drop silently. The page user
-            # gets no benefit from being told their analytics ping failed.
-            pass
+        analytics.append_event(row, path=FUNNEL_EVENTS_PATH)
         self.send_response(204)
         self.send_header("Content-Length", "0")
         self.send_header("Cache-Control", "no-store")
@@ -3525,16 +3673,24 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             payload = json.loads(self.rfile.read(length).decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError):
+        except (UnicodeDecodeError, ValueError, RecursionError):
             _json_response(self, 400, {"error": "body must be JSON"})
+            return
+        if not isinstance(payload, dict):
+            _json_response(self, 400, {"error": "body must be a JSON object"})
             return
         email = payload.get("email", "")
         interest = payload.get("interest", "personal")
-        if not isinstance(email, str) or not EMAIL_RE.match(email.strip()):
+        # A lone surrogate (JSON "\ud800") matches EMAIL_RE but is not text:
+        # it cannot be encoded, so it is never stored or mailed.
+        if (not isinstance(email, str) or not EMAIL_RE.match(email.strip())
+                or not _utf8_encodable(email)):
             # Don't leak whether the address was valid.
             _json_response(self, 200, {"ok": True})
             return
-        waitlist.add(email.strip(), interest if isinstance(interest, str) else "personal")
+        if not isinstance(interest, str) or not _utf8_encodable(interest):
+            interest = "personal"
+        waitlist.add(email.strip(), interest)
         _json_response(self, 200, {"ok": True, "message": "On the list."})
 
     # Neutral response for the pack-recovery endpoint. Identical wording is
@@ -3573,7 +3729,10 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             payload = json.loads(self.rfile.read(length).decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError):
+        except (ValueError, RecursionError):
+            _json_response(self, 400, {"error": "body must be JSON"})
+            return
+        if not isinstance(payload, dict):
             _json_response(self, 400, {"error": "body must be JSON"})
             return
         email = payload.get("email", "")
@@ -3786,10 +3945,17 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             payload = json.loads(self.rfile.read(length).decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError):
+        except (ValueError, RecursionError):
             _json_response(self, 400, {"error": "body must be JSON"})
             return
-        name = (payload.get("team_name") or "").strip()[:80]
+        if not isinstance(payload, dict):
+            _json_response(self, 400, {"error": "body must be JSON"})
+            return
+        wrong = _wrong_type_field(payload, "team_name")
+        if wrong:
+            _json_response(self, 400, {"error": f"{wrong} must be a string"})
+            return
+        name = _json_str(payload, "team_name").strip()[:80]
         try:
             team_id = teams.create_team(email, name or "My Team")
         except ValueError as e:
@@ -3841,10 +4007,17 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             payload = json.loads(self.rfile.read(length).decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError):
+        except (ValueError, RecursionError):
             _json_response(self, 400, {"error": "body must be JSON"})
             return
-        code = (payload.get("invite_code") or "").strip()
+        if not isinstance(payload, dict):
+            _json_response(self, 400, {"error": "body must be JSON"})
+            return
+        wrong = _wrong_type_field(payload, "invite_code")
+        if wrong:
+            _json_response(self, 400, {"error": f"{wrong} must be a string"})
+            return
+        code = _json_str(payload, "invite_code").strip()
         result = teams.redeem_invite_code(code, email)
         status = 200 if result.get("ok") else 400
         _json_response(self, status, result)
@@ -3864,10 +4037,17 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             payload = json.loads(self.rfile.read(length).decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError):
+        except (ValueError, RecursionError):
             _json_response(self, 400, {"error": "body must be JSON"})
             return
-        member_email = (payload.get("member_email") or "").strip().lower()
+        if not isinstance(payload, dict):
+            _json_response(self, 400, {"error": "body must be JSON"})
+            return
+        wrong = _wrong_type_field(payload, "member_email")
+        if wrong:
+            _json_response(self, 400, {"error": f"{wrong} must be a string"})
+            return
+        member_email = _json_str(payload, "member_email").strip().lower()
         if not member_email:
             _json_response(self, 400, {"error": "member_email required"})
             return
@@ -3918,7 +4098,10 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             payload = json.loads(self.rfile.read(length).decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError):
+        except (ValueError, RecursionError):
+            _json_response(self, 400, {"error": "body must be JSON"})
+            return
+        if not isinstance(payload, dict):
             _json_response(self, 400, {"error": "body must be JSON"})
             return
         want_private = bool(payload.get("private", False))
@@ -3941,6 +4124,9 @@ class Handler(BaseHTTPRequestHandler):
         if not _receipt_belongs_to(rec, email):
             _json_response(self, 404, {"error": "receipt not found"})
             return
+        # Preserve the proven account association before clearing a legacy
+        # private owner. Privacy changes must never erase account ownership.
+        rec.setdefault("account_id", viewer_id)
         rec["private"] = want_private
         rec["owner_id"] = viewer_id if want_private else None
         # Atomic write: a crash mid-write_text would leave a truncated
@@ -4046,12 +4232,15 @@ class Handler(BaseHTTPRequestHandler):
             pass
 
         try:
-            events_path = ROOT / "data" / "events.jsonl"
+            # The ledger the collector writes (DATA_DIR; /app/data in production,
+            # where ROOT/data is the same directory).
+            events_path = FUNNEL_EVENTS_PATH
             if events_path.exists():
                 cutoff = now_utc - timedelta(hours=24)
                 n = 0
-                # Read only the last 4 KiB — events are append-only and we just
-                # want a magnitude estimate, not a full scan.
+                # Read only the last 64 KiB: a magnitude estimate, not a full
+                # scan. The ledger is capped and compacted by analytics, which
+                # replaces it whole, so this unlocked read sees a complete file.
                 with events_path.open("rb") as f:
                     f.seek(0, 2)
                     end = f.tell()
@@ -4096,7 +4285,9 @@ class Handler(BaseHTTPRequestHandler):
             self.send_error(404, "not found")
             return
 
-        events_path = Path(__file__).resolve().parent.parent / "data" / "events.jsonl"
+        # The ledger the collector writes (DATA_DIR; /app/data in production,
+        # where ROOT/data is the same directory).
+        events_path = FUNNEL_EVENTS_PATH
         funnel_events = ["drop_zone_visible", "file_anchored", "checkout_clicked", "checkout_returned_success"]
         now_utc = datetime.now(timezone.utc)
         cutoff = now_utc - timedelta(days=30)
@@ -4176,13 +4367,28 @@ class Handler(BaseHTTPRequestHandler):
         days_sorted = sorted(per_day.keys(), reverse=True)
         series = [{"date": d, **per_day[d]} for d in days_sorted]
 
+        # The ledger is capped: a compaction drops its oldest rows and leaves
+        # a marker. If the marker's oldest kept row is inside the window, the
+        # totals are a lower bound for a shorter window, not 30-day counts.
+        marker = analytics.compaction_marker(events_path)
+        window_complete = True
+        if marker:
+            try:
+                kept_from = datetime.fromisoformat(
+                    str(marker.get("oldest_kept_ts", "")).replace("Z", "+00:00"))
+                window_complete = kept_from <= cutoff
+            except ValueError:
+                window_complete = False
+
         _json_response(self, 200, {
             "timestamp": now_utc.isoformat() + "Z",
             "totals_30d": totals,
             "rates_30d_pct": rates_30d,
             # Which rates are null, and why. Empty when everything computed.
             "unmeasured_reason": unmeasured,
-            "events_scanned": total_lines,
+            "events_scanned": total_lines - (1 if marker else 0),
+            "window_complete": window_complete,
+            "ledger_compacted": marker,
             "series_by_day": series,
         })
 
@@ -4253,10 +4459,17 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             payload = json.loads(self.rfile.read(length).decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError):
+        except (ValueError, RecursionError):
             _json_response(self, 400, {"error": "body must be JSON"})
             return
-        url = (payload.get("url") or "").strip()
+        if not isinstance(payload, dict):
+            _json_response(self, 400, {"error": "body must be JSON"})
+            return
+        wrong = _wrong_type_field(payload, "url")
+        if wrong:
+            _json_response(self, 400, {"error": f"{wrong} must be a string"})
+            return
+        url = _json_str(payload, "url").strip()
         result = webhooks.register(email=email, url=url)
         if not result.get("ok"):
             _json_response(self, 400, {"error": result.get("reason", "register_failed")})
@@ -4294,6 +4507,33 @@ class Handler(BaseHTTPRequestHandler):
         })
 
     def _handle_anchor_folder(self) -> None:
+        """POST /api/anchor_folder, one request in flight per client address."""
+        key = self._client_key()
+        with _folder_in_flight_lock:
+            busy = key in _folder_in_flight
+            if not busy:
+                _folder_in_flight.add(key)
+        if busy:
+            self.send_response(429)
+            body = json.dumps({
+                "error": "a folder anchor from this address is already in progress",
+                "detail": "Send folder manifests one at a time. Nothing was charged.",
+                "retry_after_seconds": 5,
+            }).encode("utf-8")
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Retry-After", "5")
+            self.send_header("Content-Length", str(len(body)))
+            _security_headers(self)
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        try:
+            self._anchor_folder_one()
+        finally:
+            with _folder_in_flight_lock:
+                _folder_in_flight.discard(key)
+
+    def _anchor_folder_one(self) -> None:
         """Anchor a folder-Merkle root.
 
         Body: { manifest: <orphograph-merkle-v1-rfc6962 manifest>, client_label? }
@@ -4322,57 +4562,78 @@ class Handler(BaseHTTPRequestHandler):
         # Authentication / paid-path: same precedence as /api/anchor.
         pack_token = self.headers.get("X-Pack-Token", "").strip()
         pack_consumed = False
-        if pack_token:
-            pack_consumed, _ = credits.consume_credit(pack_token)
+        pack_available = bool(pack_token and credits.balance(pack_token) > 0)
 
         def _reject(code: int, payload: dict) -> None:
             """Respond to a REJECTED folder anchor, refunding the credit.
 
-            The credit is consumed above (it gates access), but a request
-            that yields no receipt must not cost a paid anchor. Every
-            rejection path below goes through here — previously each one
-            returned directly and the customer silently lost a credit per
-            failed attempt, including the 503 that ADVISES retrying without
-            a signature block.
+            Validation precedes accounting. Failures after the eventual
+            consume still refund exactly once through this responder.
             """
             if pack_consumed:
                 credits.refund_credit(pack_token, reason="folder-anchor-rejected")
                 payload = {**payload, "credit_refunded": True}
+            if code == 400:
+                _folder_reject_limiter.check(client_key)
             _json_response(self, code, payload)
+
+        def _limited(retry_after: float) -> None:
+            Handler._record_demand(self,
+                "free_limit_reached", auth_path="free", surface="folder",
+                outcome="limited")
+            self.send_response(429)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Retry-After", str(int(retry_after) + 1))
+            body = json.dumps({
+                "error": "rate limit exceeded",
+                "retry_after_seconds": int(retry_after) + 1,
+                "limit_per_day": ANCHOR_RATE_CAPACITY,
+                "hint": "Buy a Pack or sign in to anchor without rate limits.",
+            }).encode("utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            _security_headers(self)
+            self.end_headers()
+            self.wfile.write(body)
+
+        client_key = self._client_key()
         api_key = self.headers.get("X-Orpho-Api-Key", "").strip()
         api_key_email = api_keys.email_for_key(api_key) if api_key else None
         api_key_active = bool(api_key_email and _subscription_active_for(api_key_email))
-        subscriber_email = api_key_email or (self._session_email() if not pack_consumed else None)
+        subscriber_email = api_key_email or (self._session_email() if not pack_available else None)
         subscription_active = api_key_active or _subscription_active_for(subscriber_email)
-        if not pack_consumed and not subscription_active:
-            allowed, retry_after = _anchor_limiter.check(self._client_key())
-            if not allowed:
-                Handler._record_demand(self,
-                    "free_limit_reached", auth_path="free", surface="folder",
-                    outcome="limited")
-                self.send_response(429)
-                self.send_header("Content-Type", "application/json; charset=utf-8")
-                self.send_header("Retry-After", str(int(retry_after) + 1))
-                body = json.dumps({
-                    "error": "rate limit exceeded",
-                    "retry_after_seconds": int(retry_after) + 1,
-                    "limit_per_day": ANCHOR_RATE_CAPACITY,
-                    "hint": "Buy a Pack or sign in to anchor without rate limits.",
-                }).encode("utf-8")
-                self.send_header("Content-Length", str(len(body)))
-                _security_headers(self)
-                self.end_headers()
-                self.wfile.write(body)
-                return
-        length = _read_content_length(self)
-        if length <= 0 or length > MAX_FOLDER_MANIFEST_BYTES:
-            _reject(400, {"error": "invalid body size"})
+        # Both gates look without spending, before the body is read: a caller
+        # whose manifests keep failing, or a free caller with no allowance
+        # left, is answered before 8 MB is parsed. Spending stays after
+        # validation, so input that fails still costs no allowance.
+        reject_tokens = _folder_reject_limiter.peek(client_key)
+        if reject_tokens < 1.0:
+            retry = int((1.0 - reject_tokens) / FOLDER_REJECT_REFILL) + 1
+            self.send_response(429)
+            body = json.dumps({
+                "error": "too many rejected manifests",
+                "detail": ("Recent manifests from this address failed validation. "
+                           "Nothing was charged; check the manifest and retry later."),
+                "retry_after_seconds": retry,
+            }).encode("utf-8")
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Retry-After", str(retry))
+            self.send_header("Content-Length", str(len(body)))
+            _security_headers(self)
+            self.end_headers()
+            self.wfile.write(body)
             return
-        raw = self.rfile.read(length)
-        try:
-            payload = json.loads(raw.decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError):
-            _reject(400, {"error": "body must be JSON"})
+        if not pack_available and not subscription_active:
+            free_tokens = _anchor_limiter.peek(client_key)
+            if free_tokens < 1.0:
+                _limited((1.0 - free_tokens) / _anchor_limiter.refill_per_sec)
+                return
+        payload = self._anchor_payload(MAX_FOLDER_MANIFEST_BYTES)
+        if payload is None:
+            _folder_reject_limiter.check(client_key)
+            return
+        error = self._anchor_input_error(payload)
+        if error:
+            _reject(400, {"error": error})
             return
         # Accept either { manifest: {...}, client_label?: "..." } or the raw
         # manifest as the top-level object. The frontend currently posts the
@@ -4385,6 +4646,9 @@ class Handler(BaseHTTPRequestHandler):
             manifest = payload
         else:
             _reject(400, {"error": "manifest is required"})
+            return
+        if manifest.get("signature") is not None and not isinstance(manifest["signature"], dict):
+            _reject(400, {"error": "manifest signature must be an object"})
             return
         leaves = manifest.get("leaves")
         if not isinstance(leaves, list) or not leaves or len(leaves) > MAX_FOLDER_LEAVES:
@@ -4400,7 +4664,10 @@ class Handler(BaseHTTPRequestHandler):
         # in which the leaves do not actually commit to the stated root.
         try:
             tree = merkle.MerkleTree.from_manifest(manifest)
-        except (KeyError, TypeError, ValueError) as e:
+        except (KeyError, TypeError, ValueError, AttributeError, RecursionError,
+                OverflowError) as e:
+            # OverflowError: a leaf size of 1e400 or Infinity parses as a JSON
+            # float and int() of it overflows.
             _reject(400, {"error": f"manifest invalid: {e}"})
             return
         # Optional edit-lineage elements (design: docs/DESIGN_EDIT_LINEAGE.md).
@@ -4410,7 +4677,8 @@ class Handler(BaseHTTPRequestHandler):
         # and anchors exactly as before.
         try:
             lineage_pre = engine.derive_lineage_from_manifest(manifest, verify_tree=False)
-        except ValueError as e:
+        except (ValueError, TypeError, KeyError, AttributeError, RecursionError,
+                OverflowError) as e:
             _reject(400, {"error": f"lineage invalid: {e}"})
             return
         if lineage_pre is not None:
@@ -4465,14 +4733,6 @@ class Handler(BaseHTTPRequestHandler):
             client_label = client_label[:200]
         else:
             client_label = None
-        if pack_consumed:
-            source = f"pack:{pack_token[:8]}"
-        elif api_key_active:
-            source = f"api:{api_key[:10]}"
-        elif subscription_active:
-            source = "sub:" + auth.email_id(subscriber_email)
-        else:
-            source = "free"
         # Fail closed — see _reject_private. This path is where it bit us:
         # the daily repo anchor asks for private and has been publishing.
         # _reject refunds the pack credit and is the folder path's refunding
@@ -4498,6 +4758,21 @@ class Handler(BaseHTTPRequestHandler):
         # renders them to anyone (default keeps paths owner-only). Independent
         # of `private`, which gates the whole receipt to its owner.
         want_public_paths = bool(payload.get("paths_public", False))
+        if pack_token:
+            pack_consumed, _ = credits.consume_credit(pack_token)
+        if not pack_consumed and not subscription_active:
+            allowed, retry_after = _anchor_limiter.check(client_key)
+            if not allowed:
+                _limited(retry_after)
+                return
+        if pack_consumed:
+            source = f"pack:{pack_token[:8]}"
+        elif api_key_active:
+            source = f"api:{api_key[:10]}"
+        elif subscription_active:
+            source = "sub:" + auth.email_id(subscriber_email)
+        else:
+            source = "free"
         try:
             record = engine.anchor_hash(
                 root_hex,
@@ -4505,6 +4780,8 @@ class Handler(BaseHTTPRequestHandler):
                 source=source,
                 private=want_private,
                 owner_id=auth.email_id(subscriber_email) if (want_private and subscriber_email) else None,
+                account_id=(auth.email_id(subscriber_email)
+                            if subscriber_email and source.startswith(("api:", "sub:")) else None),
             )
         except ValueError as e:
             _reject(400, {"error": str(e)})
@@ -4659,6 +4936,10 @@ class Handler(BaseHTTPRequestHandler):
             authenticated=api_key_active or subscription_active,
             paid=demand_auth_path != "free",
         )
+        response_body["credit_refunded"] = False
+        if pack_consumed and record["calendars_ok"] == 0:
+            credits.refund_credit(pack_token, reason="folder-refund:no-calendars")
+            response_body["credit_refunded"] = True
         _json_response(self, 200, response_body)
 
     def _handle_verify_folder(self, rid: str) -> None:
@@ -4794,13 +5075,20 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             payload = json.loads(self.rfile.read(length).decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError):
+        except (ValueError, RecursionError):
             _json_response(self, 400, {"error": "invalid request"})
+            return
+        if not isinstance(payload, dict):
+            _json_response(self, 400, {"error": "invalid request"})
+            return
+        wrong = _wrong_type_field(payload, "stripe_session_id", "email")
+        if wrong:
+            _json_response(self, 400, {"error": f"{wrong} must be a string"})
             return
         # The same field carries either a Stripe checkout session id
         # (cs_test_/cs_live_) or a crypto (NOWPayments) order id (np_...).
-        sid = (payload.get("stripe_session_id") or "").strip()
-        provided_email = (payload.get("email") or "").strip().lower()
+        sid = _json_str(payload, "stripe_session_id").strip()
+        provided_email = _json_str(payload, "email").strip().lower()
         # Email shape is required for BOTH paths; check it once up front so the
         # generic 400 below is identical regardless of which path is taken.
         if not provided_email or "@" not in provided_email or len(provided_email) > 254:
@@ -4821,7 +5109,7 @@ class Handler(BaseHTTPRequestHandler):
         # Strict shape check on the session id. Stripe ids are cs_test_ or
         # cs_live_ followed by alphanumerics + underscores.
         if not sid.startswith(("cs_test_", "cs_live_")) or len(sid) > 256 \
-           or not all(c.isalnum() or c == "_" for c in sid):
+           or not _ascii_word(sid):
             _json_response(self, 400, {"error": "invalid request"})
             return
         if not stripe_api.is_configured():
@@ -4938,9 +5226,7 @@ class Handler(BaseHTTPRequestHandler):
         stripped + lower-cased by the caller.
         """
         # 1. Validate order_id shape: [A-Za-z0-9_-], length 1..64.
-        if not (1 <= len(order_id) <= 64) or not all(
-            c.isalnum() or c in "_-" for c in order_id
-        ):
+        if not (1 <= len(order_id) <= 64) or not _ascii_word(order_id, "_-"):
             _json_response(self, 400, {"error": "invalid request"})
             return
 
@@ -5011,8 +5297,10 @@ class Handler(BaseHTTPRequestHandler):
         if length > 0:
             try:
                 payload = json.loads(self.rfile.read(length).decode("utf-8"))
-            except (UnicodeDecodeError, json.JSONDecodeError):
+            except (ValueError, RecursionError):
                 payload = {}
+        if not isinstance(payload, dict):
+            payload = {}
         reason = ""
         if isinstance(payload.get("reason"), str):
             reason = payload["reason"][:500].strip()
@@ -5080,10 +5368,17 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             payload = json.loads(self.rfile.read(length).decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError):
+        except (ValueError, RecursionError):
             _json_response(self, 400, {"error": "body must be JSON"})
             return
-        url = (payload.get("url") or "").strip()
+        if not isinstance(payload, dict):
+            _json_response(self, 400, {"error": "body must be JSON"})
+            return
+        wrong = _wrong_type_field(payload, "url")
+        if wrong:
+            _json_response(self, 400, {"error": f"{wrong} must be a string"})
+            return
+        url = _json_str(payload, "url").strip()
         ok = webhooks.delete(email=email, url=url)
         _json_response(self, 200 if ok else 404, {"ok": ok})
 
@@ -5211,7 +5506,7 @@ class Handler(BaseHTTPRequestHandler):
         sid_list = query.get("id", [])
         sid = sid_list[0] if sid_list else ""
         # Stripe session IDs are cs_test_… or cs_live_… plus alphanumerics
-        if not sid or not sid.startswith("cs_") or len(sid) > 256 or not all(c.isalnum() or c == "_" for c in sid):
+        if not sid or not sid.startswith("cs_") or len(sid) > 256 or not _ascii_word(sid):
             _json_response(self, 400, {"error": "invalid session id"})
             return
         # Light rate-limit so this can't be used as a session-id oracle. After
@@ -5285,12 +5580,19 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             payload = json.loads(self.rfile.read(length).decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError):
+        except (ValueError, RecursionError):
             _json_response(self, 400, {"error": "body must be JSON"})
             return
+        if not isinstance(payload, dict):
+            _json_response(self, 400, {"error": "body must be JSON"})
+            return
+        wrong = _wrong_type_field(payload, "plan", "email")
+        if wrong:
+            _json_response(self, 400, {"error": f"{wrong} must be a string"})
+            return
 
-        plan = (payload.get("plan") or "").strip().lower()
-        email = (payload.get("email") or "").strip()
+        plan = _json_str(payload, "plan").strip().lower()
+        email = _json_str(payload, "email").strip()
         session_metadata: dict[str, str] = {}
         if plan == "pack":
             price_env, mode = "STRIPE_PRICE_PACK", "payment"
@@ -5458,7 +5760,7 @@ class Handler(BaseHTTPRequestHandler):
         raw = self.rfile.read(length) if length > 0 else b""
         try:
             body = json.loads(raw.decode("utf-8")) if raw else {}
-        except (UnicodeDecodeError, json.JSONDecodeError):
+        except (ValueError, RecursionError):
             _json_response(self, 400, {"error": "bad json"})
             return
         if not isinstance(body, dict):
@@ -5541,50 +5843,53 @@ if not _SITE_STYLESHEET_LINKS:
 
 
 def _owned_sources_for_email(email: str) -> set[str]:
-    """Every `source` tag that means "this receipt belongs to `email`".
+    """The source tag this account's session anchors carry (sub:<email_id>).
 
-    SINGLE SOURCE OF TRUTH. A receipt is tagged by HOW it was paid for, not
-    by who owns it:
-
-        session-anchored   sub:<email_id>
-        API-key-anchored   api:<key[:10]>   (any key ever issued to them,
-                                             including since-rotated ones)
-
-    Three call sites each answered "is this receipt theirs?" independently
-    and two got it wrong (2026-08-07 drift sweep). Only the vault LIST knew
-    about api: tags, so for a customer who anchors through the API:
-
-      * the vault listed their receipt but the counter said 0 — the same
-        page showed both numbers, disagreeing;
-      * the privacy toggle replied "receipt not found" about a receipt they
-        own and were looking at.
-
-    Add a new payment path and it must be added HERE, once.
-    """
+    API-key tags (api:<key[:10]>) are not listed: whether a key prefix is this
+    account's depends on when the receipt was made, so _receipt_belongs_to
+    resolves them per receipt through api_keys.prefix_owner."""
     if not email:
         return set()
-    owned = {"sub:" + auth.email_id(email)}
-    owned.update("api:" + p for p in api_keys.source_prefixes_for_email(email))
-    return owned
+    return {"sub:" + auth.email_id(email)}
 
 
-def _receipt_belongs_to(rec: dict, email: str) -> bool:
-    """Ownership test for one receipt. Use this, never a bare source compare."""
-    return bool(email) and rec.get("source") in _owned_sources_for_email(email)
+def _receipt_ownership_context(email: str) -> tuple[str, set[str], dict]:
+    """Build once per list/count, rather than rescan the key ledger per row."""
+    return (auth.email_id(email), _owned_sources_for_email(email),
+            api_keys.prefix_issuers())
+
+
+def _receipt_belongs_to(rec: dict, email: str, *,
+                        context: tuple[str, set[str], dict] | None = None) -> bool:
+    """Account identity wins; a private legacy owner wins; then the legacy
+    source tag. An api: tag belongs to the one account that held a key with
+    that prefix when the receipt was made; an ambiguous prefix denies."""
+    if not email:
+        return False
+    account_id, sources, issuers = (context if context is not None
+                                    else _receipt_ownership_context(email))
+    if "account_id" in rec:
+        return bool(account_id) and rec["account_id"] == account_id
+    if rec.get("private"):
+        return bool(account_id) and rec.get("owner_id") == account_id
+    source = rec.get("source")
+    if source in sources:
+        return True
+    if isinstance(source, str) and source.startswith("api:"):
+        owner = api_keys.prefix_owner(issuers.get(source[4:], []), rec.get("created_at"))
+        return owner is not None and owner == email.lower()
+    return False
 
 
 def _count_anchors_for_email(email: str) -> int:
     """Fast O(receipts) count of anchors owned by this email.
 
-    Reads only `source` from each receipt.json (small field at the top
-    via streaming json parse fallback to full-load), skipping body parse
-    when possible. Replaces the previous "list 10000 then len()" pattern
-    which was a tail-latency offender on /api/me and added 2.5s+ to every
-    page navigation via the status strip.
+    Uses the same ownership predicate as exports and privacy changes, with
+    the historical key lookup precomputed once for the entire scan.
     """
     if not email:
         return 0
-    owned_sources = _owned_sources_for_email(email)
+    ownership = _receipt_ownership_context(email)
     receipts_dir = engine.RECEIPTS_DIR
     if not receipts_dir.exists():
         return 0
@@ -5599,7 +5904,7 @@ def _count_anchors_for_email(email: str) -> int:
             rec = json.loads(rfile.read_text())
         except (OSError, json.JSONDecodeError):
             continue
-        if rec.get("source") in owned_sources:
+        if _receipt_belongs_to(rec, email, context=ownership):
             count += 1
     return count
 
@@ -5693,11 +5998,8 @@ def _list_anchors_for_email(
     """
     if not email:
         return ([], False) if with_more_flag else []
-    # See _owned_sources_for_email: session anchors are tagged sub:<email_id>,
-    # API-key anchors api:<key[:10]>, and both belong in the owner's vault.
-    # This call site had it right; two others did not, so the rule now lives
-    # in one place.
-    expected_sources = _owned_sources_for_email(email)
+    # Resolve legacy key-prefix ambiguity once for this entire listing.
+    ownership = _receipt_ownership_context(email)
     receipts_dir = engine.RECEIPTS_DIR
     if not receipts_dir.exists():
         return ([], False) if with_more_flag else []
@@ -5715,7 +6017,7 @@ def _list_anchors_for_email(
             rec = json.loads(rfile.read_text())
         except (OSError, json.JSONDecodeError):
             continue
-        if rec.get("source") not in expected_sources:
+        if not _receipt_belongs_to(rec, email, context=ownership):
             continue
         created = rec.get("created_at", "")
         if before is not None and created >= before:

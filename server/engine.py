@@ -517,6 +517,7 @@ def anchor_hash(
     source: str = "free",
     private: bool = False,
     owner_id: str | None = None,
+    account_id: str | None = None,
     attestation: dict | None = None,
     metadata: dict | None = None,
     c2pa_manifest_hash: str | None = None,
@@ -663,6 +664,9 @@ def anchor_hash(
         "successes": successes,
         "failures": failures,
     }
+    # Internal immutable account association; never a proof/renewal field.
+    if account_id:
+        record["account_id"] = account_id
     # Optional zero-knowledge provenance proof (machine proof, distinct from
     # the human `attestation` claim above). Sanitized to a strict shape; only
     # written when present so existing receipts remain shape-stable.
