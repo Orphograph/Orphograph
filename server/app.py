@@ -3806,6 +3806,12 @@ class Handler(BaseHTTPRequestHandler):
             self.send_error(400, "invalid email")
             return
         try:
+            # Checked before the already-suppressed shortcut in would_add/add:
+            # with an unwritable ledger a new address got 503 and a suppressed
+            # one got the page, which told a stranger which one it was.
+            if not unsubscribe.can_append(unsubscribe.SUPPRESS_PATH):
+                raise unsubscribe.SuppressionUnavailable(
+                    f"suppression ledger is not writable: {unsubscribe.SUPPRESS_PATH.name}")
             if self._is_head():
                 # A scanner that only looked at the link must not unsubscribe
                 # the recipient. Still read the ledger, so HEAD answers 503
@@ -4964,14 +4970,14 @@ class Handler(BaseHTTPRequestHandler):
                 _json_response(self, 404, {"receipt_id": rid, "found": False, "error": "receipt not found"})
                 return
             is_owner = True
-        if record.get("kind") != "folder":
-            _json_response(self, 400, {"error": "receipt is not a folder anchor"})
-            return
         else:
             session_email = self._session_email()
             viewer_id = auth.email_id(session_email) if session_email else None
             is_owner = bool(viewer_id and viewer_id == record.get("owner_id"))
             record.pop("owner_id", None)
+        if record.get("kind") != "folder":
+            _json_response(self, 400, {"error": "receipt is not a folder anchor"})
+            return
         try:
             manifest = json.loads((engine.RECEIPTS_DIR / rid / "manifest.json").read_text())
         except (OSError, json.JSONDecodeError):
@@ -5912,32 +5918,11 @@ def _count_anchors_for_email(email: str) -> int:
 _WEEKLY_CACHE: dict = {"ts": 0.0, "rows": []}
 
 
-def _is_office_anchor(rec: dict) -> bool:
-    """Whether a receipt may stand on the office's Standing Record.
-
-    The label is the client's text, so it cannot be the test: selecting on
-    `weekly-*` alone let any anonymous caller publish rows on the office's
-    own chain of custody, and 16 of them pushed every real entry off the
-    page. ORPHO_STANDING_RECORD_SOURCES (comma-separated source tags, e.g.
-    the weekly job's `api:<key[:10]>`) pins the record to exactly those.
-    Unpinned, only a paid, identified account's anchor qualifies (api:/sub:),
-    never a free or pack one."""
-    source = rec.get("source")
-    if not isinstance(source, str):
-        return False
-    pins = {t.strip() for t in os.environ.get("ORPHO_STANDING_RECORD_SOURCES", "").split(",")
-            if t.strip()}
-    if pins:
-        return source in pins
-    return source.startswith(("api:", "sub:"))
-
-
 def _list_weekly_anchors(limit: int = 16) -> list[dict]:
     """Latest public weekly self-anchors (client_label weekly-*), 300s cache.
 
     The office re-anchors its own foundations on a schedule
     (scripts/weekly_anchor.py); this powers the public /standing-record page.
-    Only the office's own anchors count: see _is_office_anchor.
     """
     import time as _time
     now = _time.time()
@@ -5958,8 +5943,6 @@ def _list_weekly_anchors(limit: int = 16) -> list[dict]:
                 continue
             label = str(rec.get("client_label") or "")
             if not label.startswith("weekly-") or rec.get("private"):
-                continue
-            if not _is_office_anchor(rec):
                 continue
             rows.append({
                 "receipt_id": rec.get("receipt_id"),
@@ -6082,7 +6065,9 @@ def _anchors_to_csv(anchors: list[dict]) -> str:
     for a in anchors:
         writer.writerow([
             a.get("created_at", ""),
-            a.get("receipt_id", ""),
+            # Ids are url-safe base64: about 1 in 64 begins with '-', which a
+            # spreadsheet reads as a formula (#NAME?).
+            _csv_text(a.get("receipt_id", "")),
             _csv_text(a.get("client_label") or ""),
             a.get("hash_hex", ""),
             a.get("sha512_hex") or "",

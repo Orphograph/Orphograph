@@ -49,3 +49,6 @@ def test_joining_is_limited_to_value_options():
     assert mod._join_dash_values(["--tip", "--chain", "c"]) == ["--tip", "--chain", "c"]
     assert mod._join_dash_values(["--dir", "-r=/p"]) == ["--dir=-r=/p"]
     assert mod._join_dash_values(["--ots-check", "-x"]) == ["--ots-check", "-x"]
+    # argparse takes unambiguous prefixes, so these are flags too, not values.
+    for flag in ("--ots", "--max-depth=3", "--max", "--exc"):
+        assert mod._join_dash_values(["--tip", flag]) == ["--tip", flag], flag

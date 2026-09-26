@@ -165,6 +165,22 @@ class TestPrivateReceiptNotDiscoverable(unittest.TestCase):
         self.assertEqual(priv[0], 404, priv)
         self.assertTrue(same, (priv, gone))
 
+    def test_verify_folder_hides_a_private_id_from_another_account_too(self):
+        """A signed-in stranger is still a stranger: same 404 as a missing id."""
+        sid, _ = self.auth.create_session("someone-else@example.com")
+        def get(rid):
+            req = urllib.request.Request(f"{self._base}/api/verify_folder/{rid}",
+                                         headers={"Cookie": f"orpho_sid={sid}"})
+            try:
+                with urllib.request.urlopen(req, timeout=15) as r:
+                    return r.getcode(), r.read().decode()
+            except urllib.error.HTTPError as e:
+                return e.code, e.read().decode()
+        priv, gone = get(self.private_rid), get(NONEXISTENT)
+        self.assertEqual(priv[0], 404)
+        self.assertEqual(priv[1].replace(self.private_rid, "<id>"),
+                         gone[1].replace(NONEXISTENT, "<id>"))
+
     def test_verify_folder_still_tells_the_owner_it_is_not_a_folder(self):
         sid, _ = self.auth.create_session("owner@example.com")
         req = urllib.request.Request(

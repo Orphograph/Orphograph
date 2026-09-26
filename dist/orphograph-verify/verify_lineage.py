@@ -416,6 +416,16 @@ _VALUE_OPTIONS = ("--tip", "--dir")
 _FLAGS = {"--chain", "--tip", "--dir", "--ots-check", "--max-depth", "--exclude", "-h", "--help"}
 
 
+def _is_flag(token: str) -> bool:
+    """Whether argparse would read `token` as one of our options. argparse
+    accepts any unambiguous prefix (`--ots` for --ots-check), so an exact-name
+    check glued `--tip --ots` into a tip of "--ots"."""
+    key = token.split("=", 1)[0]
+    if key in _FLAGS:
+        return True
+    return key.startswith("--") and len(key) > 2 and any(f.startswith(key) for f in _FLAGS)
+
+
 def _join_dash_values(argv: list[str]) -> list[str]:
     """Attach a value that begins with '-' to its --tip / --dir option.
 
@@ -430,7 +440,7 @@ def _join_dash_values(argv: list[str]) -> list[str]:
         arg = argv[i]
         nxt = argv[i + 1] if i + 1 < len(argv) else None
         if (arg in _VALUE_OPTIONS and nxt is not None and nxt.startswith("-")
-                and nxt.split("=", 1)[0] not in _FLAGS):
+                and not _is_flag(nxt)):
             out.append(f"{arg}={nxt}")
             i += 2
             continue

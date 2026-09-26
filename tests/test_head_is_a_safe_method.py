@@ -191,6 +191,20 @@ def test_an_unwritable_suppression_ledger_is_answered_not_dropped(server, read_o
     assert b"Done" not in get_body
 
 
+def test_an_unwritable_ledger_does_not_tell_a_suppressed_address_apart(server, read_only):
+    """With the ledger unwritable, an already-suppressed address used to get the
+    page (the lookup short-circuits before any write) while a new one got 503,
+    so the status said which address had unsubscribed."""
+    base, _data_dir = server
+    known = "/api/unsubscribe?e=already-suppressed@example.test"
+    assert _srv.request(base, known, timeout=15)[0] == 200  # control: now suppressed
+    read_only("suppressions.jsonl")
+    fresh = "/api/unsubscribe?e=never-seen@example.test"
+    for method in ("GET", "HEAD"):
+        assert _srv.request(base, known, method=method, timeout=15)[0] == 503, method
+        assert _srv.request(base, fresh, method=method, timeout=15)[0] == 503, method
+
+
 def test_an_unwritable_sign_in_ledger_is_answered_and_keeps_the_link(server, read_only):
     base, data_dir = server
     token = _mint_token(data_dir, "cannot-sign-in@example.test")
