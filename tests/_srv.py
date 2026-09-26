@@ -235,7 +235,7 @@ def request(base: str, path: str, method: str = "GET", body: bytes | None = None
 
 
 def raw_request(base: str, target: str, method: str = "GET", *,
-                line: str | None = None, headers: str = "",
+                line: str | None = None, headers: str = "", body: bytes = b"",
                 timeout: float = 15) -> bytes:
     """Send one request line EXACTLY as written and return the raw response.
 
@@ -244,8 +244,9 @@ def raw_request(base: str, target: str, method: str = "GET", *,
     and its access log both see from real clients. `line` replaces the whole
     request line (a one-word line, a control character). `headers` is extra
     header lines, each ending in CRLF, sent as latin-1: a char 0x80-0xFF goes
-    out as that one byte, which urllib refuses to send. A server that has
-    stopped answering raises ServerGone with its output, like request()."""
+    out as that one byte, which urllib refuses to send. `body`, if any, goes
+    after the headers with its Content-Length. A server that has stopped
+    answering raises ServerGone with its output, like request()."""
     import socket
     from urllib.parse import urlparse
     u = urlparse(base)
@@ -253,9 +254,10 @@ def raw_request(base: str, target: str, method: str = "GET", *,
     chunks = []
     try:
         with socket.create_connection((u.hostname, u.port), timeout=timeout) as s:
-            s.sendall(f"{first}\r\nHost: {u.netloc}\r\n{headers}"
+            length = f"Content-Length: {len(body)}\r\n" if body else ""
+            s.sendall(f"{first}\r\nHost: {u.netloc}\r\n{headers}{length}"
                       "User-Agent: uptime-check/1.0\r\nConnection: close\r\n\r\n"
-                      .encode("latin-1"))
+                      .encode("latin-1") + body)
             while True:
                 chunk = s.recv(65536)
                 if not chunk:

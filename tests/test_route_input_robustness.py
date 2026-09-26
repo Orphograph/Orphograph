@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import time
 import sys
 from pathlib import Path
 from unittest.mock import patch
@@ -107,7 +108,9 @@ def stripe_server(tmp_path_factory):
     data_dir = tmp_path_factory.mktemp("robust_stripe")
     # A dummy key so the routes reach their id checks. Every id sent below is
     # rejected before any Stripe call, so nothing leaves the machine.
-    for base in _srv.server_processes(data_dir, STRIPE_SECRET_KEY="sk_test_not_a_real_key"):
+    # NOWPAYMENTS_API_KEY likewise, so /api/nowpayments/create parses its body.
+    for base in _srv.server_processes(data_dir, STRIPE_SECRET_KEY="sk_test_not_a_real_key",
+                                      NOWPAYMENTS_API_KEY="np_not_a_real_key"):
         yield base, data_dir
 
 
@@ -117,6 +120,9 @@ def test_non_ascii_session_id_is_rejected_not_dropped(stripe_server, sid):
     status, _, _ = _srv.request(base, f"/api/stripe/session?id={sid}",
                                 headers={"Accept": "application/json"})
     assert status == 400
+    # The route's own check answered, before the lookup budget and before the
+    # Stripe client: the client's fallback would log "unsendable path".
+    assert "unsendable path" not in _log(base)
 
 
 @pytest.mark.parametrize("sid", ["cs_test_é", "cs_live_٣abc"])
@@ -137,8 +143,40 @@ def test_stripe_client_answers_an_unsendable_path(monkeypatch):
     # Closed loopback port: even a regression that got as far as connecting
     # could not reach anything.
     monkeypatch.setattr(stripe_api, "STRIPE_BASE", "http://127.0.0.1:9/v1")
-    res = stripe_api._request("GET", "/checkout/sessions/cs_test_é")
-    assert res["ok"] is False and res["status"] == 400
+    for bad in ("cs_test_é", "cs_test_a\x01b"):  # UnicodeError, InvalidURL
+        res = stripe_api._request("GET", f"/checkout/sessions/{bad}")
+        assert res["ok"] is False and res["status"] == 400, bad
+
+
+# ── webhook signatures: the same compare, the same crash ───────────────────
+
+@pytest.fixture(scope="module")
+def webhook_server(tmp_path_factory):
+    data_dir = tmp_path_factory.mktemp("robust_webhooks")
+    for base in _srv.server_processes(data_dir, STRIPE_WEBHOOK_SECRET="whsec_not_a_real_secret",
+                                      NOWPAYMENTS_IPN_SECRET="ipn_not_a_real_secret"):
+        yield base
+
+
+@pytest.mark.parametrize("route,header", [
+    ("/api/stripe/webhook", "Stripe-Signature: t=%d,v1=\xe9\xff\r\n"),
+    ("/api/nowpayments/webhook", "x-nowpayments-sig: \xe9\xff\r\n"),
+])
+def test_a_non_ascii_webhook_signature_is_refused_not_dropped(webhook_server, route, header):
+    if "%d" in header:
+        header = header % int(time.time())
+    raw = _srv.raw_request(webhook_server, route, "POST", body=b'{"id":"evt_x","type":"x"}',
+                           headers="Content-Type: application/json\r\n" + header)
+    assert 400 <= _status_of(raw) < 500
+    assert "Traceback" not in _log(webhook_server)
+
+
+def test_a_deeply_nested_nowpayments_body_is_refused(webhook_server):
+    raw = _srv.raw_request(webhook_server, "/api/nowpayments/webhook", "POST",
+                           body=b"[" * 2000 + b"]" * 2000,
+                           headers="Content-Type: application/json\r\nx-nowpayments-sig: abc\r\n")
+    assert 400 <= _status_of(raw) < 500
+    assert "Traceback" not in _log(webhook_server)
 
 
 # ── JSON bodies of the wrong shape ──────────────────────────────────────────
@@ -177,21 +215,43 @@ def test_a_body_that_is_not_an_object_is_a_400(member, route, body):
     base, headers = member
     status, _, _ = _srv.request(base, route, "POST", body, headers)
     assert status == 400
+    assert "Traceback" not in _log(base)
+
+
+STRING_FIELDS = ("stripe_session_id", "email", "plan", "team_name", "invite_code",
+                 "member_email", "url")
 
 
 @pytest.mark.parametrize("route", JSON_ROUTES)
-def test_fields_of_the_wrong_type_get_an_answer(member, route):
+def test_fields_of_the_wrong_type_are_a_400(member, route):
+    """A present field of the wrong type is the client's error, and changes
+    nothing: treating it as absent made {"team_name": 1} create "My Team"."""
     base, headers = member
-    body = json.dumps({k: 1 for k in (
-        "stripe_session_id", "email", "plan", "team_name", "invite_code",
-        "member_email", "url")}).encode()
+    body = json.dumps({k: 1 for k in STRING_FIELDS}).encode()
     status, _, _ = _srv.request(base, route, "POST", body, headers)
-    # The handler answered, and blamed the request rather than itself.
-    assert status < 500, status
+    if route.endswith("/privacy"):
+        assert status < 500, status  # reads no string field
+    else:
+        assert status == 400, status
+    assert "Traceback" not in _log(base)
 
 
-def test_no_json_route_left_a_traceback(member):
-    base, _ = member
+# Routes outside the set above that parse a JSON body. anchor, anchor/batch,
+# anchor_folder, event and waitlist are hardened in their own PRs.
+MORE_JSON_ROUTES = ("/api/auth/email-link", "/api/pack/recover",
+                    "/api/me/refund-request", "/api/nowpayments/create")
+
+
+@pytest.mark.parametrize("route", MORE_JSON_ROUTES)
+@pytest.mark.parametrize("body", [b"[]", b"null", b"[" * 2000 + b"]" * 2000], ids=["list", "null", "deep"])
+def test_the_other_json_routes_answer_too(member, route, body):
+    base, headers = member
+    status, _, _ = _srv.request(base, route, "POST", body, headers)
+    if route == "/api/me/refund-request":
+        # By design a missing or unreadable body is a request with no reason.
+        assert status < 500, status
+    else:
+        assert status == 400, status
     assert "Traceback" not in _log(base)
 
 
@@ -201,7 +261,7 @@ def test_failed_account_lookup_is_not_repeated_every_call(monkeypatch):
     sys.path.insert(0, str(REPO_ROOT / "server"))
     import stripe_api
     monkeypatch.setattr(stripe_api, "STRIPE_SECRET_KEY", "sk_test_not_a_real_key")
-    monkeypatch.setattr(stripe_api, "_ACCOUNT_CACHE", {"ts": 0.0, "enabled": None, "tried": 0.0})
+    monkeypatch.setattr(stripe_api, "_ACCOUNT_CACHE", {"ts": 0.0, "enabled": None, "failed": 0.0})
     clock = [1_000_000.0]
     monkeypatch.setattr(stripe_api.time, "time", lambda: clock[0])
     calls = []
@@ -214,22 +274,50 @@ def test_failed_account_lookup_is_not_repeated_every_call(monkeypatch):
         for _ in range(8):
             assert stripe_api.charges_enabled() is None
         assert calls == ["/account"], "a failing lookup ran on every call"
-        clock[0] += stripe_api.ACCOUNT_RETRY_SEC + 1
+        # No answer yet (a fresh process): retry soon, not after a minute.
+        clock[0] += stripe_api.ACCOUNT_RETRY_COLD_SEC + 1
         assert stripe_api.charges_enabled() is None
-        assert len(calls) == 2, "the lookup never retried after the backoff"
+        assert len(calls) == 2, "the cold lookup never retried"
 
-    # Stale-if-error: a known answer past its TTL survives a failing Stripe,
-    # and the failure is not retried on every call either.
     with patch.object(stripe_api, "_request",
                       return_value={"ok": True, "data": {"charges_enabled": True}}):
-        clock[0] += stripe_api.ACCOUNT_RETRY_SEC + 1
+        clock[0] += stripe_api.ACCOUNT_RETRY_COLD_SEC + 1
         assert stripe_api.charges_enabled() is True
+    # Stale-if-error, and the failure is not retried on every call either.
     clock[0] += stripe_api.ACCOUNT_CACHE_TTL_SEC + 1
     calls.clear()
     with patch.object(stripe_api, "_request", side_effect=failing):
         for _ in range(5):
             assert stripe_api.charges_enabled() is True
-    assert calls == ["/account"]
+        assert calls == ["/account"]
+        clock[0] += stripe_api.ACCOUNT_RETRY_COLD_SEC + 1
+        assert stripe_api.charges_enabled() is True
+        assert calls == ["/account"], "with an answer in hand the wait is the full minute"
+
+
+def test_concurrent_first_lookups_all_get_the_answer(monkeypatch):
+    """A request that arrives while the first lookup after boot is in flight
+    must not be told the card rail is off."""
+    import threading
+    sys.path.insert(0, str(REPO_ROOT / "server"))
+    import stripe_api
+    monkeypatch.setattr(stripe_api, "STRIPE_SECRET_KEY", "sk_test_not_a_real_key")
+    monkeypatch.setattr(stripe_api, "_ACCOUNT_CACHE", {"ts": 0.0, "enabled": None, "failed": 0.0})
+
+    def slow_ok(method, path, form=None):
+        time.sleep(0.3)
+        return {"ok": True, "data": {"charges_enabled": True}}
+
+    answers = []
+    with patch.object(stripe_api, "_request", side_effect=slow_ok):
+        threads = [threading.Thread(target=lambda: answers.append(stripe_api.charges_enabled()))
+                   for _ in range(3)]
+        for t in threads:
+            t.start()
+            time.sleep(0.05)
+        for t in threads:
+            t.join()
+    assert answers == [True, True, True]
 
 
 # ── /pay/crypto: the A/B ledger only records the page, only while running ──
@@ -257,12 +345,14 @@ def test_checkout_view_is_not_written_with_the_experiment_off(tmp_path):
 def test_checkout_view_counts_the_page_only(tmp_path):
     for base in _srv.server_processes(tmp_path, ORPHO_AB_HOME="1.0"):
         assert _get(base, "/pay/crypto") == 200  # control: one real view
+        assert _get(base, "/pay/crypto/") == 200  # the page with a slash: a view too
         for path in ("/pay/crypto.css?v=2", "/pay/crypto.js?v=2",
                      "/pay/crypto.html", "/pay/cryptoZZZ"):
             _get(base, path)
         _get(base, "/pay/crypto", ua="Googlebot/2.1")
         rows = [r for r in _ab_rows(tmp_path) if r["event"] == "checkout_view"]
-        assert len(rows) == 1, rows
+        assert len(rows) == 2, rows
+        assert all(r.get("v") == 2 for r in rows)
 
         # The ledger has a ceiling: once full, it stops growing.
         ledger = tmp_path / "ab_home.jsonl"

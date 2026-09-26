@@ -247,7 +247,9 @@ def test_head_on_every_get_route_leaves_the_data_dir_untouched(server, monkeypat
     assert len(paths) >= 50 and "/api/unsubscribe" in paths, paths
 
     token = _mint_token(data_dir, "class-guard@example.test")
-    paths += [f"/a/{token}", "/api/unsubscribe?e=class-guard@example.test"]
+    # /pay/crypto: the checkout-view writer, which the enumerated sweep does
+    # not otherwise request.
+    paths += [f"/a/{token}", "/api/unsubscribe?e=class-guard@example.test", "/pay/crypto"]
 
     # Some GET writes only happen for a visitor the server recognises: a
     # signed-in account (first read of an affiliate code registers it) or an

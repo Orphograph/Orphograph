@@ -17,6 +17,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import math
 import mimetypes
 mimetypes.add_type("font/woff2", ".woff2")  # serve self-hosted fonts with correct type (X-Content-Type-Options: nosniff is set)
 import os
@@ -766,17 +767,43 @@ def _ascii_word(value: str, extra: str = "_") -> bool:
 def _json_str(payload: dict, key: str) -> str:
     """payload[key] when it is a string, else "". A JSON body is the client's
     to shape: `{"email": 1}` is valid JSON, and `.strip()` on it raised out of
-    the handler, which dropped the connection instead of answering 400."""
+    the handler, which dropped the connection instead of answering 400.
+    Handlers first reject a present field of the wrong type with
+    _wrong_type_field, so "" here only ever means absent or null."""
     value = payload.get(key)
     return value if isinstance(value, str) else ""
 
 
+def _wrong_type_field(payload: dict, *keys: str) -> str | None:
+    """The first of `keys` present with a non-string, non-null value. Such a
+    request answers 400: treating it as absent made {"team_name": 1} create a
+    team called "My Team"."""
+    for key in keys:
+        value = payload.get(key)
+        if value is not None and not isinstance(value, str):
+            return key
+    return None
+
+
 def _ab_fraction() -> float:
-    """ORPHO_AB_HOME as a fraction; 0 (experiment off) when unset or unreadable."""
+    """ORPHO_AB_HOME as a fraction in [0, 1]; 0 (experiment off) when unset or
+    unreadable. float() accepts "nan", "inf" and "1e400"; unclamped, the
+    homepage split then raised on int(fraction * 10_000) for every visitor."""
     try:
-        return float(os.environ.get("ORPHO_AB_HOME", "0") or 0)
+        value = float(os.environ.get("ORPHO_AB_HOME", "0") or 0)
     except ValueError:
         return 0.0
+    return min(1.0, max(0.0, value)) if math.isfinite(value) else 0.0
+
+
+def _ab_counts_this_visitor(handler: BaseHTTPRequestHandler) -> bool:
+    """A cookie-attributed A/B write is allowed: the experiment runs and the
+    client is not a bot the split never assigns. The arm cookie is forgeable,
+    so without this every cookie-bearing request wrote a row."""
+    return _ab_fraction() > 0 and not _AB_BOT_RE.search(handler.headers.get("User-Agent", ""))
+
+
+_AB_CAP_NOTICE = {"sent": False}
 
 
 def _ab_log(event: str, variant: str, extra: dict | None = None) -> None:
@@ -784,9 +811,15 @@ def _ab_log(event: str, variant: str, extra: dict | None = None) -> None:
     try:
         from datetime import datetime, timezone
         if AB_LOG_PATH.exists() and AB_LOG_PATH.stat().st_size >= AB_LOG_MAX_BYTES:
+            if not _AB_CAP_NOTICE["sent"]:
+                _AB_CAP_NOTICE["sent"] = True
+                sys.stderr.write(f"[ab] {AB_LOG_PATH.name} reached {AB_LOG_MAX_BYTES} bytes; "
+                                 "experiment rows are no longer recorded\n")
             return
+        # v2: one row per page view. Rows before it counted the page's own
+        # .css/.js and redirect hops too, and were written with the test off.
         rec = {"ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-               "event": event, "variant": variant}
+               "event": event, "variant": variant, "v": 2}
         if extra:
             rec.update(extra)
         with open(AB_LOG_PATH, "a", encoding="utf-8") as f:
@@ -1527,8 +1560,7 @@ class Handler(BaseHTTPRequestHandler):
         # Only while the experiment runs, only the page itself, and not for
         # the bots the split never assigns: the cookie is forgeable, and the
         # write used to fire for every /pay/crypto* path with the test off.
-        if (path in AB_CHECKOUT_PATHS and _ab_fraction() > 0
-                and not _AB_BOT_RE.search(self.headers.get("User-Agent", ""))):
+        if path in AB_CHECKOUT_PATHS and _ab_counts_this_visitor(self):
             _ab_arm = _ab_cookie_variant(self)
             # A view is a person seeing the page; HEAD shows nobody anything.
             if _ab_arm and not self._is_head():
@@ -3041,7 +3073,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         # homepage A/B: attribute the successful anchor to the visitor's arm
         _ab_arm = _ab_cookie_variant(self)
-        if _ab_arm:
+        if _ab_arm and _ab_counts_this_visitor(self):
             _ab_log("anchor", _ab_arm)
         # Distinct upstream calendars, not server acknowledgements. One
         # helper for every anchor surface (single, batch, folder) so the pair
@@ -3196,7 +3228,10 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             payload = json.loads(self.rfile.read(length).decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError):
+        except (ValueError, RecursionError):
+            _json_response(self, 400, {"error": "body must be JSON"})
+            return
+        if not isinstance(payload, dict):
             _json_response(self, 400, {"error": "body must be JSON"})
             return
         email = payload.get("email", "")
@@ -3606,7 +3641,10 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             payload = json.loads(self.rfile.read(length).decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError):
+        except (ValueError, RecursionError):
+            _json_response(self, 400, {"error": "body must be JSON"})
+            return
+        if not isinstance(payload, dict):
             _json_response(self, 400, {"error": "body must be JSON"})
             return
         email = payload.get("email", "")
@@ -3819,6 +3857,10 @@ class Handler(BaseHTTPRequestHandler):
         if not isinstance(payload, dict):
             _json_response(self, 400, {"error": "body must be JSON"})
             return
+        wrong = _wrong_type_field(payload, "team_name")
+        if wrong:
+            _json_response(self, 400, {"error": f"{wrong} must be a string"})
+            return
         name = _json_str(payload, "team_name").strip()[:80]
         try:
             team_id = teams.create_team(email, name or "My Team")
@@ -3877,6 +3919,10 @@ class Handler(BaseHTTPRequestHandler):
         if not isinstance(payload, dict):
             _json_response(self, 400, {"error": "body must be JSON"})
             return
+        wrong = _wrong_type_field(payload, "invite_code")
+        if wrong:
+            _json_response(self, 400, {"error": f"{wrong} must be a string"})
+            return
         code = _json_str(payload, "invite_code").strip()
         result = teams.redeem_invite_code(code, email)
         status = 200 if result.get("ok") else 400
@@ -3902,6 +3948,10 @@ class Handler(BaseHTTPRequestHandler):
             return
         if not isinstance(payload, dict):
             _json_response(self, 400, {"error": "body must be JSON"})
+            return
+        wrong = _wrong_type_field(payload, "member_email")
+        if wrong:
+            _json_response(self, 400, {"error": f"{wrong} must be a string"})
             return
         member_email = _json_str(payload, "member_email").strip().lower()
         if not member_email:
@@ -4297,6 +4347,10 @@ class Handler(BaseHTTPRequestHandler):
             return
         if not isinstance(payload, dict):
             _json_response(self, 400, {"error": "body must be JSON"})
+            return
+        wrong = _wrong_type_field(payload, "url")
+        if wrong:
+            _json_response(self, 400, {"error": f"{wrong} must be a string"})
             return
         url = _json_str(payload, "url").strip()
         result = webhooks.register(email=email, url=url)
@@ -4838,6 +4892,10 @@ class Handler(BaseHTTPRequestHandler):
         if not isinstance(payload, dict):
             _json_response(self, 400, {"error": "invalid request"})
             return
+        wrong = _wrong_type_field(payload, "stripe_session_id", "email")
+        if wrong:
+            _json_response(self, 400, {"error": f"{wrong} must be a string"})
+            return
         # The same field carries either a Stripe checkout session id
         # (cs_test_/cs_live_) or a crypto (NOWPayments) order id (np_...).
         sid = _json_str(payload, "stripe_session_id").strip()
@@ -5050,8 +5108,10 @@ class Handler(BaseHTTPRequestHandler):
         if length > 0:
             try:
                 payload = json.loads(self.rfile.read(length).decode("utf-8"))
-            except (UnicodeDecodeError, json.JSONDecodeError):
+            except (ValueError, RecursionError):
                 payload = {}
+        if not isinstance(payload, dict):
+            payload = {}
         reason = ""
         if isinstance(payload.get("reason"), str):
             reason = payload["reason"][:500].strip()
@@ -5124,6 +5184,10 @@ class Handler(BaseHTTPRequestHandler):
             return
         if not isinstance(payload, dict):
             _json_response(self, 400, {"error": "body must be JSON"})
+            return
+        wrong = _wrong_type_field(payload, "url")
+        if wrong:
+            _json_response(self, 400, {"error": f"{wrong} must be a string"})
             return
         url = _json_str(payload, "url").strip()
         ok = webhooks.delete(email=email, url=url)
@@ -5333,6 +5397,10 @@ class Handler(BaseHTTPRequestHandler):
         if not isinstance(payload, dict):
             _json_response(self, 400, {"error": "body must be JSON"})
             return
+        wrong = _wrong_type_field(payload, "plan", "email")
+        if wrong:
+            _json_response(self, 400, {"error": f"{wrong} must be a string"})
+            return
 
         plan = _json_str(payload, "plan").strip().lower()
         email = _json_str(payload, "email").strip()
@@ -5503,7 +5571,7 @@ class Handler(BaseHTTPRequestHandler):
         raw = self.rfile.read(length) if length > 0 else b""
         try:
             body = json.loads(raw.decode("utf-8")) if raw else {}
-        except (UnicodeDecodeError, json.JSONDecodeError):
+        except (ValueError, RecursionError):
             _json_response(self, 400, {"error": "bad json"})
             return
         if not isinstance(body, dict):

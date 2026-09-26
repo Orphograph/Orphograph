@@ -40,13 +40,16 @@ def is_configured() -> bool:
 # account lookup must not become a per-request Stripe round-trip. Stale-if-error:
 # a transient API failure serves the last known answer instead of flapping the
 # card buttons.
-_ACCOUNT_CACHE: dict = {"ts": 0.0, "enabled": None, "tried": 0.0}
+_ACCOUNT_CACHE: dict = {"ts": 0.0, "enabled": None, "failed": 0.0}
 ACCOUNT_CACHE_TTL_SEC = 600
-# A failed lookup is not cached as an answer, but it is cached as an attempt:
-# no new lookup for this long. Without it a failing Stripe (revoked key, 429,
-# 5xx, timeout) was asked again on every /api/config load, each call spending
-# the read budget checkout shares and each 401 writing an ALERT line.
+# A failed lookup is not cached as an answer, but its time is: no new lookup
+# for this long after one. Without it a failing Stripe (revoked key, 429, 5xx,
+# timeout) was asked again on every /api/config load, each call spending the
+# read budget checkout shares and each 401 writing an ALERT line. While no
+# answer has ever arrived (a fresh process) the wait is short, so one blip
+# right after a deploy does not hide the card button for a minute.
 ACCOUNT_RETRY_SEC = 60
+ACCOUNT_RETRY_COLD_SEC = 5
 
 
 def charges_enabled() -> bool | None:
@@ -67,15 +70,15 @@ def charges_enabled() -> bool | None:
     now = time.time()
     if _ACCOUNT_CACHE["enabled"] is not None and now - _ACCOUNT_CACHE["ts"] < ACCOUNT_CACHE_TTL_SEC:
         return _ACCOUNT_CACHE["enabled"]
-    # Stamped before the call, so requests that arrive while it is in flight
-    # serve the cached answer instead of each starting their own lookup.
-    if now - _ACCOUNT_CACHE.get("tried", 0.0) < ACCOUNT_RETRY_SEC:
+    wait = ACCOUNT_RETRY_SEC if _ACCOUNT_CACHE["enabled"] is not None else ACCOUNT_RETRY_COLD_SEC
+    if now - _ACCOUNT_CACHE.get("failed", 0.0) < wait:
         return _ACCOUNT_CACHE["enabled"]
-    _ACCOUNT_CACHE["tried"] = now
     res = _request("GET", "/account")
     if res.get("ok"):
         _ACCOUNT_CACHE["ts"] = now
         _ACCOUNT_CACHE["enabled"] = bool((res.get("data") or {}).get("charges_enabled"))
+    else:
+        _ACCOUNT_CACHE["failed"] = now
     return _ACCOUNT_CACHE["enabled"]
 
 
