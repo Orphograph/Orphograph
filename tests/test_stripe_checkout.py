@@ -351,8 +351,10 @@ class TestChargesEnabled(unittest.TestCase):
         # Expire the cache, then fail the lookup: last known answer survives.
         self.stripe_api._ACCOUNT_CACHE["ts"] = 0.0
         with patch.object(self.stripe_api, "_request",
-                          return_value={"ok": False, "error": "boom"}):
+                          return_value={"ok": False, "error": "boom"}) as failing:
             self.assertIs(self.stripe_api.charges_enabled(), True)
+        # The failing lookup really ran; the answer is the stale one it kept.
+        self.assertEqual(failing.call_count, 1)
 
 
 if __name__ == "__main__":

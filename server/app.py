@@ -17,6 +17,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import math
 import mimetypes
 mimetypes.add_type("font/woff2", ".woff2")  # serve self-hosted fonts with correct type (X-Content-Type-Options: nosniff is set)
 import os
@@ -413,6 +414,12 @@ MAX_EVENT_PAGE_LEN = 256
 # collector's privacy contract (no cookies recorded) stays untouched.
 AB_HOME_COOKIE = "orpho_ab_home"
 AB_LOG_PATH = DATA_DIR / "ab_home.jsonl"
+# The ledger shares the data volume with receipts and the credit ledger, and
+# any client can forge the arm cookie, so it stops growing here.
+AB_LOG_MAX_BYTES = 16 * 1024 * 1024
+# The checkout page itself. Its .css/.js, redirect hops and 404 neighbours are
+# not a person reaching checkout.
+AB_CHECKOUT_PATHS = frozenset({"/pay/crypto", "/pay/crypto/"})
 _AB_BOT_RE = re.compile(
     r"bot|crawl|spider|slurp|bingpreview|facebookexternalhit|twitterbot|"
     r"linkedinbot|whatsapp|telegram|lighthouse|headless|python-urllib|"
@@ -771,12 +778,72 @@ def _build_sitemap() -> str:
     return "\n".join(lines)
 
 
+def _ascii_word(value: str, extra: str = "_") -> bool:
+    """True when every char is an ASCII letter or digit, or one of `extra`.
+
+    str.isalnum() alone accepts any Unicode letter or digit (é, ٣, fullwidth),
+    so an id that passed it could still be unsendable in an upstream URL: the
+    HTTP client raised before connecting and the handler dropped the socket
+    with no response instead of answering 400."""
+    return value.isascii() and all(c.isalnum() or c in extra for c in value)
+
+
+def _json_str(payload: dict, key: str) -> str:
+    """payload[key] when it is a string, else "". A JSON body is the client's
+    to shape: `{"email": 1}` is valid JSON, and `.strip()` on it raised out of
+    the handler, which dropped the connection instead of answering 400.
+    Handlers first reject a present field of the wrong type with
+    _wrong_type_field, so "" here only ever means absent or null."""
+    value = payload.get(key)
+    return value if isinstance(value, str) else ""
+
+
+def _wrong_type_field(payload: dict, *keys: str) -> str | None:
+    """The first of `keys` present with a non-string, non-null value. Such a
+    request answers 400: treating it as absent made {"team_name": 1} create a
+    team called "My Team"."""
+    for key in keys:
+        value = payload.get(key)
+        if value is not None and not isinstance(value, str):
+            return key
+    return None
+
+
+def _ab_fraction() -> float:
+    """ORPHO_AB_HOME as a fraction in [0, 1]; 0 (experiment off) when unset or
+    unreadable. float() accepts "nan", "inf" and "1e400"; unclamped, the
+    homepage split then raised on int(fraction * 10_000) for every visitor."""
+    try:
+        value = float(os.environ.get("ORPHO_AB_HOME", "0") or 0)
+    except ValueError:
+        return 0.0
+    return min(1.0, max(0.0, value)) if math.isfinite(value) else 0.0
+
+
+def _ab_counts_this_visitor(handler: BaseHTTPRequestHandler) -> bool:
+    """A cookie-attributed A/B write is allowed: the experiment runs and the
+    client is not a bot the split never assigns. The arm cookie is forgeable,
+    so without this every cookie-bearing request wrote a row."""
+    return _ab_fraction() > 0 and not _AB_BOT_RE.search(handler.headers.get("User-Agent", ""))
+
+
+_AB_CAP_NOTICE = {"sent": False}
+
+
 def _ab_log(event: str, variant: str, extra: dict | None = None) -> None:
     """Append one experiment record. Best-effort: analytics must never break serving."""
     try:
         from datetime import datetime, timezone
+        if AB_LOG_PATH.exists() and AB_LOG_PATH.stat().st_size >= AB_LOG_MAX_BYTES:
+            if not _AB_CAP_NOTICE["sent"]:
+                _AB_CAP_NOTICE["sent"] = True
+                sys.stderr.write(f"[ab] {AB_LOG_PATH.name} reached {AB_LOG_MAX_BYTES} bytes; "
+                                 "experiment rows are no longer recorded\n")
+            return
+        # v2: one row per page view. Rows before it counted the page's own
+        # .css/.js and redirect hops too, and were written with the test off.
         rec = {"ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-               "event": event, "variant": variant}
+               "event": event, "variant": variant, "v": 2}
         if extra:
             rec.update(extra)
         with open(AB_LOG_PATH, "a", encoding="utf-8") as f:
@@ -803,10 +870,7 @@ def _serve_ab_home(handler: BaseHTTPRequestHandler) -> bool:
     homepage (experiment off, bot traffic, or unreadable variant document).
     Both arms are served with no-store so shared caches can't bleed arms.
     """
-    try:
-        fraction = float(os.environ.get("ORPHO_AB_HOME", "0") or 0)
-    except ValueError:
-        fraction = 0.0
+    fraction = _ab_fraction()
     if fraction <= 0:
         return False
     if _AB_BOT_RE.search(handler.headers.get("User-Agent", "")):
@@ -1449,8 +1513,15 @@ class Handler(BaseHTTPRequestHandler):
             return False  # global lockout — distributed spray in progress
         supplied = self.headers.get("X-Orpho-Founder", "").strip()
         # Constant-time compare to avoid timing-side-channel leaks of the token.
+        # As bytes: http.server decodes header bytes as latin-1, so a byte
+        # 0x80-0xFF arrives as a non-ASCII char, and compare_digest refuses
+        # non-ASCII str with a TypeError. That escaped the handler (dropped
+        # connection, traceback) on every founder route and never reached the
+        # failure budget below, so it told a prober which routes are real.
+        # latin-1 gives back the bytes the client sent.
         import hmac as _hmac
-        if _hmac.compare_digest(supplied, token):
+        if _hmac.compare_digest(supplied.encode("latin-1", "replace"),
+                                token.encode("utf-8")):
             return True
         _founder_fail_limiter.check(key)  # count the failed guess (per-IP)
         _founder_fail_global_limiter.check(_FOUNDER_GLOBAL_FAIL_KEY)  # and globally
@@ -1509,8 +1580,11 @@ class Handler(BaseHTTPRequestHandler):
         # homepage A/B: split "/" between the cream and dark documents
         if path == "/" and _serve_ab_home(self):
             return
-        # homepage A/B: attribute checkout-page reach to the visitor's arm
-        if path.startswith("/pay/crypto"):
+        # homepage A/B: attribute checkout-page reach to the visitor's arm.
+        # Only while the experiment runs, only the page itself, and not for
+        # the bots the split never assigns: the cookie is forgeable, and the
+        # write used to fire for every /pay/crypto* path with the test off.
+        if path in AB_CHECKOUT_PATHS and _ab_counts_this_visitor(self):
             _ab_arm = _ab_cookie_variant(self)
             # A view is a person seeing the page; HEAD shows nobody anything.
             if _ab_arm and not self._is_head():
@@ -3060,7 +3134,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         # homepage A/B: attribute the successful anchor to the visitor's arm
         _ab_arm = _ab_cookie_variant(self)
-        if _ab_arm:
+        if _ab_arm and _ab_counts_this_visitor(self):
             _ab_log("anchor", _ab_arm)
         # Distinct upstream calendars, not server acknowledgements. One
         # helper for every anchor surface (single, batch, folder) so the pair
@@ -3215,7 +3289,10 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             payload = json.loads(self.rfile.read(length).decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError):
+        except (ValueError, RecursionError):
+            _json_response(self, 400, {"error": "body must be JSON"})
+            return
+        if not isinstance(payload, dict):
             _json_response(self, 400, {"error": "body must be JSON"})
             return
         email = payload.get("email", "")
@@ -3643,7 +3720,10 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             payload = json.loads(self.rfile.read(length).decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError):
+        except (ValueError, RecursionError):
+            _json_response(self, 400, {"error": "body must be JSON"})
+            return
+        if not isinstance(payload, dict):
             _json_response(self, 400, {"error": "body must be JSON"})
             return
         email = payload.get("email", "")
@@ -3850,10 +3930,17 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             payload = json.loads(self.rfile.read(length).decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError):
+        except (ValueError, RecursionError):
             _json_response(self, 400, {"error": "body must be JSON"})
             return
-        name = (payload.get("team_name") or "").strip()[:80]
+        if not isinstance(payload, dict):
+            _json_response(self, 400, {"error": "body must be JSON"})
+            return
+        wrong = _wrong_type_field(payload, "team_name")
+        if wrong:
+            _json_response(self, 400, {"error": f"{wrong} must be a string"})
+            return
+        name = _json_str(payload, "team_name").strip()[:80]
         try:
             team_id = teams.create_team(email, name or "My Team")
         except ValueError as e:
@@ -3905,10 +3992,17 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             payload = json.loads(self.rfile.read(length).decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError):
+        except (ValueError, RecursionError):
             _json_response(self, 400, {"error": "body must be JSON"})
             return
-        code = (payload.get("invite_code") or "").strip()
+        if not isinstance(payload, dict):
+            _json_response(self, 400, {"error": "body must be JSON"})
+            return
+        wrong = _wrong_type_field(payload, "invite_code")
+        if wrong:
+            _json_response(self, 400, {"error": f"{wrong} must be a string"})
+            return
+        code = _json_str(payload, "invite_code").strip()
         result = teams.redeem_invite_code(code, email)
         status = 200 if result.get("ok") else 400
         _json_response(self, status, result)
@@ -3928,10 +4022,17 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             payload = json.loads(self.rfile.read(length).decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError):
+        except (ValueError, RecursionError):
             _json_response(self, 400, {"error": "body must be JSON"})
             return
-        member_email = (payload.get("member_email") or "").strip().lower()
+        if not isinstance(payload, dict):
+            _json_response(self, 400, {"error": "body must be JSON"})
+            return
+        wrong = _wrong_type_field(payload, "member_email")
+        if wrong:
+            _json_response(self, 400, {"error": f"{wrong} must be a string"})
+            return
+        member_email = _json_str(payload, "member_email").strip().lower()
         if not member_email:
             _json_response(self, 400, {"error": "member_email required"})
             return
@@ -3982,7 +4083,10 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             payload = json.loads(self.rfile.read(length).decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError):
+        except (ValueError, RecursionError):
+            _json_response(self, 400, {"error": "body must be JSON"})
+            return
+        if not isinstance(payload, dict):
             _json_response(self, 400, {"error": "body must be JSON"})
             return
         want_private = bool(payload.get("private", False))
@@ -4340,10 +4444,17 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             payload = json.loads(self.rfile.read(length).decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError):
+        except (ValueError, RecursionError):
             _json_response(self, 400, {"error": "body must be JSON"})
             return
-        url = (payload.get("url") or "").strip()
+        if not isinstance(payload, dict):
+            _json_response(self, 400, {"error": "body must be JSON"})
+            return
+        wrong = _wrong_type_field(payload, "url")
+        if wrong:
+            _json_response(self, 400, {"error": f"{wrong} must be a string"})
+            return
+        url = _json_str(payload, "url").strip()
         result = webhooks.register(email=email, url=url)
         if not result.get("ok"):
             _json_response(self, 400, {"error": result.get("reason", "register_failed")})
@@ -4945,13 +5056,20 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             payload = json.loads(self.rfile.read(length).decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError):
+        except (ValueError, RecursionError):
             _json_response(self, 400, {"error": "invalid request"})
+            return
+        if not isinstance(payload, dict):
+            _json_response(self, 400, {"error": "invalid request"})
+            return
+        wrong = _wrong_type_field(payload, "stripe_session_id", "email")
+        if wrong:
+            _json_response(self, 400, {"error": f"{wrong} must be a string"})
             return
         # The same field carries either a Stripe checkout session id
         # (cs_test_/cs_live_) or a crypto (NOWPayments) order id (np_...).
-        sid = (payload.get("stripe_session_id") or "").strip()
-        provided_email = (payload.get("email") or "").strip().lower()
+        sid = _json_str(payload, "stripe_session_id").strip()
+        provided_email = _json_str(payload, "email").strip().lower()
         # Email shape is required for BOTH paths; check it once up front so the
         # generic 400 below is identical regardless of which path is taken.
         if not provided_email or "@" not in provided_email or len(provided_email) > 254:
@@ -4972,7 +5090,7 @@ class Handler(BaseHTTPRequestHandler):
         # Strict shape check on the session id. Stripe ids are cs_test_ or
         # cs_live_ followed by alphanumerics + underscores.
         if not sid.startswith(("cs_test_", "cs_live_")) or len(sid) > 256 \
-           or not all(c.isalnum() or c == "_" for c in sid):
+           or not _ascii_word(sid):
             _json_response(self, 400, {"error": "invalid request"})
             return
         if not stripe_api.is_configured():
@@ -5089,9 +5207,7 @@ class Handler(BaseHTTPRequestHandler):
         stripped + lower-cased by the caller.
         """
         # 1. Validate order_id shape: [A-Za-z0-9_-], length 1..64.
-        if not (1 <= len(order_id) <= 64) or not all(
-            c.isalnum() or c in "_-" for c in order_id
-        ):
+        if not (1 <= len(order_id) <= 64) or not _ascii_word(order_id, "_-"):
             _json_response(self, 400, {"error": "invalid request"})
             return
 
@@ -5162,8 +5278,10 @@ class Handler(BaseHTTPRequestHandler):
         if length > 0:
             try:
                 payload = json.loads(self.rfile.read(length).decode("utf-8"))
-            except (UnicodeDecodeError, json.JSONDecodeError):
+            except (ValueError, RecursionError):
                 payload = {}
+        if not isinstance(payload, dict):
+            payload = {}
         reason = ""
         if isinstance(payload.get("reason"), str):
             reason = payload["reason"][:500].strip()
@@ -5231,10 +5349,17 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             payload = json.loads(self.rfile.read(length).decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError):
+        except (ValueError, RecursionError):
             _json_response(self, 400, {"error": "body must be JSON"})
             return
-        url = (payload.get("url") or "").strip()
+        if not isinstance(payload, dict):
+            _json_response(self, 400, {"error": "body must be JSON"})
+            return
+        wrong = _wrong_type_field(payload, "url")
+        if wrong:
+            _json_response(self, 400, {"error": f"{wrong} must be a string"})
+            return
+        url = _json_str(payload, "url").strip()
         ok = webhooks.delete(email=email, url=url)
         _json_response(self, 200 if ok else 404, {"ok": ok})
 
@@ -5362,7 +5487,7 @@ class Handler(BaseHTTPRequestHandler):
         sid_list = query.get("id", [])
         sid = sid_list[0] if sid_list else ""
         # Stripe session IDs are cs_test_… or cs_live_… plus alphanumerics
-        if not sid or not sid.startswith("cs_") or len(sid) > 256 or not all(c.isalnum() or c == "_" for c in sid):
+        if not sid or not sid.startswith("cs_") or len(sid) > 256 or not _ascii_word(sid):
             _json_response(self, 400, {"error": "invalid session id"})
             return
         # Light rate-limit so this can't be used as a session-id oracle. After
@@ -5436,12 +5561,19 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             payload = json.loads(self.rfile.read(length).decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError):
+        except (ValueError, RecursionError):
             _json_response(self, 400, {"error": "body must be JSON"})
             return
+        if not isinstance(payload, dict):
+            _json_response(self, 400, {"error": "body must be JSON"})
+            return
+        wrong = _wrong_type_field(payload, "plan", "email")
+        if wrong:
+            _json_response(self, 400, {"error": f"{wrong} must be a string"})
+            return
 
-        plan = (payload.get("plan") or "").strip().lower()
-        email = (payload.get("email") or "").strip()
+        plan = _json_str(payload, "plan").strip().lower()
+        email = _json_str(payload, "email").strip()
         session_metadata: dict[str, str] = {}
         if plan == "pack":
             price_env, mode = "STRIPE_PRICE_PACK", "payment"
@@ -5609,7 +5741,7 @@ class Handler(BaseHTTPRequestHandler):
         raw = self.rfile.read(length) if length > 0 else b""
         try:
             body = json.loads(raw.decode("utf-8")) if raw else {}
-        except (UnicodeDecodeError, json.JSONDecodeError):
+        except (ValueError, RecursionError):
             _json_response(self, 400, {"error": "bad json"})
             return
         if not isinstance(body, dict):
