@@ -152,6 +152,14 @@ def _lineage_section_html(rid: str, lineage) -> str:
     )
 TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]{16,64}$")
 EMAIL_RE = re.compile(r"^[^@\s,]{1,64}@[^@\s,]{1,255}$")
+
+
+def _utf8_encodable(text: str) -> bool:
+    try:
+        text.encode("utf-8")
+    except UnicodeEncodeError:
+        return False
+    return True
 COOKIE_SECURE = os.environ.get("ORPHO_COOKIE_SECURE", "1") != "0"
 TRUST_PROXY_HEADERS = os.environ.get("ORPHO_TRUST_PROXY_HEADERS", "0") == "1"
 # Platform-set real-client-IP header. Fly.io sets `Fly-Client-IP` to the true
@@ -3521,7 +3529,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             payload = json.loads(self.rfile.read(length).decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError):
+        except (UnicodeDecodeError, ValueError, RecursionError):
             _json_response(self, 400, {"error": "body must be JSON"})
             return
         if not isinstance(payload, dict):
@@ -3541,10 +3549,14 @@ class Handler(BaseHTTPRequestHandler):
         if not isinstance(page, str) or not page:
             _json_response(self, 400, {"error": "invalid page"})
             return
-        # Bound page length; the client only ever sends location.pathname
+        # Bound page UTF-8 bytes; the client only ever sends location.pathname
         # which is well under this cap. We do NOT coerce the value — it's
         # written verbatim so the funnel report can show real paths.
-        page = page[:MAX_EVENT_PAGE_LEN]
+        try:
+            page = page.encode("utf-8")[:MAX_EVENT_PAGE_LEN].decode("utf-8", errors="ignore")
+        except UnicodeEncodeError:
+            _json_response(self, 400, {"error": "invalid page"})
+            return
         # NOT client_key: that is the rate-limit bucket (Fly-edge address,
         # i.e. Cloudflare behind the CDN). The recorded row wants the real
         # visitor, truncated the same way.
@@ -3556,15 +3568,7 @@ class Handler(BaseHTTPRequestHandler):
             "ip_trunc": ip_trunc,
             "ip_src": ip_src,
         }
-        try:
-            FUNNEL_EVENTS_PATH.parent.mkdir(parents=True, exist_ok=True)
-            with FUNNEL_EVENTS_PATH.open("a") as f:
-                f.write(json.dumps(row) + "\n")
-                f.flush()
-        except OSError:
-            # Disk full / read-only volume — drop silently. The page user
-            # gets no benefit from being told their analytics ping failed.
-            pass
+        analytics.append_event(row, path=FUNNEL_EVENTS_PATH)
         self.send_response(204)
         self.send_header("Content-Length", "0")
         self.send_header("Cache-Control", "no-store")
@@ -3583,16 +3587,24 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             payload = json.loads(self.rfile.read(length).decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError):
+        except (UnicodeDecodeError, ValueError, RecursionError):
             _json_response(self, 400, {"error": "body must be JSON"})
+            return
+        if not isinstance(payload, dict):
+            _json_response(self, 400, {"error": "body must be a JSON object"})
             return
         email = payload.get("email", "")
         interest = payload.get("interest", "personal")
-        if not isinstance(email, str) or not EMAIL_RE.match(email.strip()):
+        # A lone surrogate (JSON "\ud800") matches EMAIL_RE but is not text:
+        # it cannot be encoded, so it is never stored or mailed.
+        if (not isinstance(email, str) or not EMAIL_RE.match(email.strip())
+                or not _utf8_encodable(email)):
             # Don't leak whether the address was valid.
             _json_response(self, 200, {"ok": True})
             return
-        waitlist.add(email.strip(), interest if isinstance(interest, str) else "personal")
+        if not isinstance(interest, str) or not _utf8_encodable(interest):
+            interest = "personal"
+        waitlist.add(email.strip(), interest)
         _json_response(self, 200, {"ok": True, "message": "On the list."})
 
     # Neutral response for the pack-recovery endpoint. Identical wording is
@@ -4101,12 +4113,15 @@ class Handler(BaseHTTPRequestHandler):
             pass
 
         try:
-            events_path = ROOT / "data" / "events.jsonl"
+            # The ledger the collector writes (DATA_DIR; /app/data in production,
+            # where ROOT/data is the same directory).
+            events_path = FUNNEL_EVENTS_PATH
             if events_path.exists():
                 cutoff = now_utc - timedelta(hours=24)
                 n = 0
-                # Read only the last 4 KiB — events are append-only and we just
-                # want a magnitude estimate, not a full scan.
+                # Read only the last 64 KiB: a magnitude estimate, not a full
+                # scan. The ledger is capped and compacted by analytics, which
+                # replaces it whole, so this unlocked read sees a complete file.
                 with events_path.open("rb") as f:
                     f.seek(0, 2)
                     end = f.tell()
@@ -4151,7 +4166,9 @@ class Handler(BaseHTTPRequestHandler):
             self.send_error(404, "not found")
             return
 
-        events_path = Path(__file__).resolve().parent.parent / "data" / "events.jsonl"
+        # The ledger the collector writes (DATA_DIR; /app/data in production,
+        # where ROOT/data is the same directory).
+        events_path = FUNNEL_EVENTS_PATH
         funnel_events = ["drop_zone_visible", "file_anchored", "checkout_clicked", "checkout_returned_success"]
         now_utc = datetime.now(timezone.utc)
         cutoff = now_utc - timedelta(days=30)
@@ -4231,13 +4248,28 @@ class Handler(BaseHTTPRequestHandler):
         days_sorted = sorted(per_day.keys(), reverse=True)
         series = [{"date": d, **per_day[d]} for d in days_sorted]
 
+        # The ledger is capped: a compaction drops its oldest rows and leaves
+        # a marker. If the marker's oldest kept row is inside the window, the
+        # totals are a lower bound for a shorter window, not 30-day counts.
+        marker = analytics.compaction_marker(events_path)
+        window_complete = True
+        if marker:
+            try:
+                kept_from = datetime.fromisoformat(
+                    str(marker.get("oldest_kept_ts", "")).replace("Z", "+00:00"))
+                window_complete = kept_from <= cutoff
+            except ValueError:
+                window_complete = False
+
         _json_response(self, 200, {
             "timestamp": now_utc.isoformat() + "Z",
             "totals_30d": totals,
             "rates_30d_pct": rates_30d,
             # Which rates are null, and why. Empty when everything computed.
             "unmeasured_reason": unmeasured,
-            "events_scanned": total_lines,
+            "events_scanned": total_lines - (1 if marker else 0),
+            "window_complete": window_complete,
+            "ledger_compacted": marker,
             "series_by_day": series,
         })
 

@@ -61,7 +61,7 @@ context (email tied to payments/claims).
 ### 2.4 Low-PII telemetry
 | File | Purpose | PII class | Retention | Rule |
 |---|---|---|---|---|
-| `events.jsonl` | 4-event funnel analytics (`event`, `page`, truncated IP) | P1 | 13 months | No emails/UA/cookies by design (schema rejects extra keys). Rotate annually if size warrants |
+| `events.jsonl` | 4-event funnel analytics (`event`, `page`, truncated IP) | P1 | 13 months, or less: the file is capped at 8 MB | No emails/UA/cookies by design (schema rejects extra keys). Over the cap, `analytics.append_event` drops the oldest rows (atomic replace) and writes a `_compacted` marker with `oldest_kept_ts`; the funnel readers report any window older than that as incomplete, never as zero |
 | `payout_pings.jsonl`, `.cadence_last_run`, etc. | ops state | P0 | operational | none |
 
 ### 2.5 New stores introduced by the branch (post-deploy)
