@@ -3454,7 +3454,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             payload = json.loads(self.rfile.read(length).decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError):
+        except (UnicodeDecodeError, ValueError, RecursionError):
             _json_response(self, 400, {"error": "body must be JSON"})
             return
         if not isinstance(payload, dict):
@@ -3474,10 +3474,14 @@ class Handler(BaseHTTPRequestHandler):
         if not isinstance(page, str) or not page:
             _json_response(self, 400, {"error": "invalid page"})
             return
-        # Bound page length; the client only ever sends location.pathname
+        # Bound page UTF-8 bytes; the client only ever sends location.pathname
         # which is well under this cap. We do NOT coerce the value — it's
         # written verbatim so the funnel report can show real paths.
-        page = page[:MAX_EVENT_PAGE_LEN]
+        try:
+            page = page.encode("utf-8")[:MAX_EVENT_PAGE_LEN].decode("utf-8", errors="ignore")
+        except UnicodeEncodeError:
+            _json_response(self, 400, {"error": "invalid page"})
+            return
         # NOT client_key: that is the rate-limit bucket (Fly-edge address,
         # i.e. Cloudflare behind the CDN). The recorded row wants the real
         # visitor, truncated the same way.
@@ -3489,15 +3493,7 @@ class Handler(BaseHTTPRequestHandler):
             "ip_trunc": ip_trunc,
             "ip_src": ip_src,
         }
-        try:
-            FUNNEL_EVENTS_PATH.parent.mkdir(parents=True, exist_ok=True)
-            with FUNNEL_EVENTS_PATH.open("a") as f:
-                f.write(json.dumps(row) + "\n")
-                f.flush()
-        except OSError:
-            # Disk full / read-only volume — drop silently. The page user
-            # gets no benefit from being told their analytics ping failed.
-            pass
+        analytics.append_event(row, path=FUNNEL_EVENTS_PATH)
         self.send_response(204)
         self.send_header("Content-Length", "0")
         self.send_header("Cache-Control", "no-store")
@@ -3516,8 +3512,11 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             payload = json.loads(self.rfile.read(length).decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError):
+        except (UnicodeDecodeError, ValueError, RecursionError):
             _json_response(self, 400, {"error": "body must be JSON"})
+            return
+        if not isinstance(payload, dict):
+            _json_response(self, 400, {"error": "body must be a JSON object"})
             return
         email = payload.get("email", "")
         interest = payload.get("interest", "personal")

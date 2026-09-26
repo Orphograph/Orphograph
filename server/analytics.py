@@ -44,6 +44,70 @@ DEMAND_EVENTS_PATH = Path(os.environ.get(
 ALLOWED_EVENTS = ("page_view", "anchor_click", "buy_pack_click", "verify_click")
 ALLOWED_PAGES = ("landing", "verify", "account", "pricing", "docs", "blog",
                  "status", "stats", "about", "press", "compare", "affiliate")
+MAX_EVENTS_BYTES = 8 * 1024 * 1024
+
+
+def append_event(row: dict, *, path: Path | None = None) -> bool:
+    """Best-effort bounded JSONL shared by browser and internal analytics.
+
+    Keep the newest complete rows. Lock the ledger itself and compact in
+    place so every cooperating process locks the same inode; no rollover
+    files accumulate. Tail reads are bounded even for a pre-existing large
+    ledger. This is disposable analytics, not an evidentiary ledger.
+    """
+    try:
+        limit = max(1, min(MAX_EVENTS_BYTES, int(os.environ.get(
+            "ORPHO_EVENTS_MAX_BYTES", str(MAX_EVENTS_BYTES)))))
+    except ValueError:
+        limit = MAX_EVENTS_BYTES
+    encoded = (json.dumps(row, separators=(",", ":")) + "\n").encode("utf-8")
+    if len(encoded) > limit:
+        return False
+    try:
+        with locked(path if path is not None else EVENTS_PATH, mode="a+b") as f:
+            f.seek(0, os.SEEK_END)
+            size = f.tell()
+            if size + len(encoded) > limit:
+                # Leave headroom so a busy collector does not rewrite an
+                # eight-megabyte ledger for every subsequent small event.
+                budget = min(limit - len(encoded), limit * 3 // 4)
+                start = max(0, size - limit)
+                at_boundary = start == 0
+                if start:
+                    f.seek(start - 1)
+                    at_boundary = f.read(1) == b"\n"
+                f.seek(start)
+                tail = f.read(limit)
+                # A nonzero offset may cut through UTF-8 or a JSON row.
+                if not at_boundary:
+                    tail = tail.partition(b"\n")[2]
+                complete = []
+                for line in reversed(tail.splitlines(keepends=True)):
+                    if not line.endswith(b"\n"):
+                        continue
+                    try:
+                        if isinstance(json.loads(line), dict):
+                            if len(line) > budget:
+                                break
+                            complete.append(line)
+                            budget -= len(line)
+                    except (ValueError, UnicodeDecodeError, RecursionError):
+                        continue
+                f.seek(0)
+                f.truncate()
+                f.write(b"".join(reversed(complete)))
+            elif size:
+                f.seek(-1, os.SEEK_END)
+                if f.read(1) != b"\n":
+                    # Repair an interrupted final append before adding a row.
+                    f.seek(0)
+                    previous = f.read(size)
+                    f.truncate(previous.rfind(b"\n") + 1)
+            f.write(encoded)
+            f.flush()
+    except OSError:
+        return False
+    return True
 
 DEMAND_EVENT_VERSION = 1
 DEMAND_EVENTS = frozenset({
@@ -89,10 +153,7 @@ def record(
         "ip_prefix": ip_prefix_safe,
         "ref_host": ref_host_safe,
     }
-    EVENTS_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with EVENTS_PATH.open("a") as f:
-        f.write(json.dumps(row) + "\n")
-    return True
+    return append_event(row)
 
 
 def _internal_key_hashes() -> tuple[str, ...]:
