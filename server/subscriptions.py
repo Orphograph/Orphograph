@@ -16,6 +16,7 @@ Public API:
     record_subscription_event(stripe_customer, status, current_period_end, sub_id) -> None
     is_active(email) -> bool
     status_for(email) -> dict | None
+    subscriptions_for(email) -> list[dict]
 """
 from __future__ import annotations
 
@@ -87,25 +88,53 @@ def _is_deletion(row: dict) -> bool:
     return row.get("event") == DELETED_EVENT and bool(row.get("email"))
 
 
+def _links() -> tuple[dict[str, str], dict[str, set[str]], set[tuple[str, str]]]:
+    """Read the customer map once, deletions included.
+
+    Returns (current, since_deleted, severed):
+      current        customer -> the email it resolves to now
+      since_deleted  email -> customers mapped to it since it was last deleted
+      severed        (customer, email) pairs a deletion of that email cut
+
+    A severed pair stays cut. Stripe makes a new customer for every checkout
+    (create_checkout_session never sends one), so the same customer mapped to
+    the deleted email again can only be a late event about the deleted
+    account's own old checkout: the webhook writes the mapping before it
+    notices the session was already delivered. Letting that re-link brought
+    the old subscription back for whoever holds the address now. A new
+    customer id mapped after the deletion is a new subscription, and links."""
+    current: dict[str, str] = {}
+    since_deleted: dict[str, set[str]] = {}
+    severed: set[tuple[str, str]] = set()
+    for row in _read_all(CUSTOMER_MAP):
+        email = row.get("email")
+        if not email:
+            continue
+        if _is_deletion(row):
+            for customer in since_deleted.pop(email, set()):
+                severed.add((customer, email))
+                if current.get(customer) == email:
+                    del current[customer]
+            continue
+        customer = row.get("stripe_customer")
+        if not customer or (customer, email) in severed:
+            continue
+        since_deleted.setdefault(email, set()).add(customer)
+        current[customer] = email
+    return current, since_deleted, severed
+
+
 def _email_for_customer(stripe_customer: str) -> str | None:
     """The email a Stripe customer is linked to, or None.
 
-    A deletion of that email unlinks the customer. Without this, the deleted
-    account's own subscription events (Stripe keeps sending them until the
-    subscription ends) were stamped with the deleted email again, and the
-    account's subscription came back for whoever signed in with that address
-    next. A mapping written after the deletion is a new link and counts."""
+    A deletion of that email unlinks the customer for good (see _links).
+    Without this, the deleted account's own subscription events (Stripe
+    keeps sending them until the subscription ends) were stamped with the
+    deleted email again, and the account's subscription came back for
+    whoever signed in with that address next."""
     if not stripe_customer:
         return None
-    latest = None
-    for row in _read_all(CUSTOMER_MAP):
-        if _is_deletion(row):
-            if latest and latest.get("email") == row.get("email"):
-                latest = None
-            continue
-        if row.get("stripe_customer") == stripe_customer:
-            latest = row
-    return latest.get("email") if latest else None
+    return _links()[0].get(stripe_customer)
 
 
 def record_subscription_event(
@@ -134,21 +163,13 @@ def _customer_links(email: str) -> tuple[set[str], set[str]]:
     """(linked, unlinked) stripe_customer IDs for this email.
 
     Linked: every customer mapped to the email since it was last deleted.
-    Unlinked: customers a deletion cut off, and not mapped to it again since.
+    Unlinked: customers a deletion of the email cut off. They stay cut off.
     """
-    linked: set[str] = set()
-    unlinked: set[str] = set()
     if not email:
-        return linked, unlinked
-    for row in _read_all(CUSTOMER_MAP):
-        if row.get("email") != email:
-            continue
-        if _is_deletion(row):
-            unlinked |= linked
-            linked = set()
-        elif row.get("stripe_customer"):
-            linked.add(row["stripe_customer"])
-    return linked, unlinked - linked
+        return set(), set()
+    _current, since_deleted, severed = _links()
+    return (set(since_deleted.get(email, set())),
+            {customer for customer, cut in severed if cut == email})
 
 
 def _customers_for_email(email: str) -> set[str]:
@@ -163,12 +184,14 @@ def _customers_for_email(email: str) -> set[str]:
     return _customer_links(email)[0]
 
 
-def _latest_for_email(email: str) -> dict | None:
+def _rows_for_email(email: str) -> list[dict]:
+    """Every subscription row that describes whoever holds this address now,
+    oldest first."""
     if not email:
-        return None
+        return []
     rows = _read_all(SUB_LEDGER)
     customers, unlinked = _customer_links(email)
-    latest = None
+    matched: list[dict] = []
     for row in rows:
         # Match by stored email first, falling back to the customer→email
         # map so out-of-order events (subscription.created before
@@ -178,7 +201,9 @@ def _latest_for_email(email: str) -> dict | None:
         if _is_deletion(row) and row_email == email:
             # Nothing written before the deletion describes whoever holds
             # this address now; a later sign-in with it is a new account.
-            latest = None
+            # Unlinking customers does not cover this: a row can carry the
+            # email for a customer the map has no line for.
+            matched = []
             continue
         if row_customer and row_customer in unlinked:
             # The deleted account's customer. Its events can still carry the
@@ -186,8 +211,31 @@ def _latest_for_email(email: str) -> dict | None:
             # deletion landed appends just after it.
             continue
         if row_email == email or (not row_email and row_customer in customers):
-            latest = row
-    return latest
+            matched.append(row)
+    return matched
+
+
+def _latest_for_email(email: str) -> dict | None:
+    rows = _rows_for_email(email)
+    return rows[-1] if rows else None
+
+
+def subscriptions_for(email: str) -> list[dict]:
+    """The newest row of each Stripe subscription this address holds, in the
+    order they first appeared.
+
+    One address can pay for more than one subscription: checkout does not
+    ask whether the buyer already subscribes, and Stripe makes a new customer
+    for each checkout. The newest row of all (status_for) says nothing about
+    the others, so anything that must stop all the billing, like account
+    deletion, reads this instead. A row with no subscription id names
+    nothing that could be cancelled, so it is left out."""
+    latest: dict[str, dict] = {}
+    for row in _rows_for_email(email):
+        sub_id = row.get("stripe_sub")
+        if sub_id:
+            latest[sub_id] = row
+    return list(latest.values())
 
 
 def status_for(email: str) -> dict | None:

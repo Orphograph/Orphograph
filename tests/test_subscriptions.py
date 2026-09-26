@@ -145,10 +145,13 @@ def _deleted(email):
                                 "event": "email_deleted", "email": email}) + "\n")
 
 
-def test_deletion_unlinks_the_customer_until_it_is_mapped_again():
+def test_deletion_unlinks_the_customer_for_good_and_a_new_customer_links():
     """A deleted email's customer stops resolving to it, so that customer's
     later events cannot stamp the email back on. The SAME customer mapped to
-    the address again (a new checkout on a reused customer) is a new link."""
+    the address again stays unlinked: Stripe makes a new customer for every
+    checkout (create_checkout_session never sends one), so that mapping can
+    only be a late event about the deleted account's own old checkout. A new
+    customer id after the delete is a new subscription, and links."""
     end = time.time() + 86400
     subscriptions.record_customer_email("cus_x", "a@b.com")
     subscriptions.record_subscription_event("cus_x", "active", end, "sub_x")
@@ -161,7 +164,42 @@ def test_deletion_unlinks_the_customer_until_it_is_mapped_again():
     assert subscriptions.stripe_subscription_id_for("a@b.com") == ""
 
     subscriptions.record_customer_email("cus_x", "a@b.com")
-    assert subscriptions._email_for_customer("cus_x") == "a@b.com"
-    subscriptions.record_subscription_event("cus_x", "active", end, "sub_x2")
+    assert subscriptions._email_for_customer("cus_x") is None
+    subscriptions.record_subscription_event("cus_x", "active", end, "sub_x")
+    assert subscriptions.is_active("a@b.com") is False
+    assert subscriptions.subscriptions_for("a@b.com") == []
+
+    subscriptions.record_customer_email("cus_y", "a@b.com")
+    assert subscriptions._email_for_customer("cus_y") == "a@b.com"
+    subscriptions.record_subscription_event("cus_y", "active", end, "sub_y")
     assert subscriptions.is_active("a@b.com") is True
-    assert subscriptions.stripe_subscription_id_for("a@b.com") == "sub_x2"
+    assert subscriptions.stripe_subscription_id_for("a@b.com") == "sub_y"
+    assert [r["stripe_sub"] for r in subscriptions.subscriptions_for("a@b.com")] == ["sub_y"]
+
+
+def test_deleting_one_email_leaves_other_emails_customers_linked():
+    end = time.time() + 86400
+    subscriptions.record_customer_email("cus_a", "a@b.com")
+    subscriptions.record_customer_email("cus_b", "b@b.com")
+    _deleted("a@b.com")
+    assert subscriptions._email_for_customer("cus_a") is None
+    assert subscriptions._email_for_customer("cus_b") == "b@b.com"
+    subscriptions.record_subscription_event("cus_b", "active", end, "sub_b")
+    assert subscriptions._read_all(subscriptions.SUB_LEDGER)[-1]["email"] == "b@b.com"
+
+
+def test_subscriptions_for_gives_the_latest_row_of_every_subscription():
+    """Delete has to see every subscription an address pays for, each by its
+    own newest row, not the newest row of all of them."""
+    end = time.time() + 86400
+    subscriptions.record_customer_email("cus_1", "a@b.com")
+    subscriptions.record_customer_email("cus_2", "a@b.com")
+    subscriptions.record_subscription_event("cus_1", "active", end, "sub_1")
+    subscriptions.record_subscription_event("cus_2", "active", end, "sub_2")
+    subscriptions.record_subscription_event("cus_1", "past_due", end, "sub_1")
+    subscriptions.record_subscription_event("cus_1", "canceled", end, "sub_1")
+    subscriptions.record_subscription_event("cus_other", "active", end, "sub_other")
+    assert [(r["stripe_sub"], r["status"]) for r in subscriptions.subscriptions_for("a@b.com")] == [
+        ("sub_1", "canceled"), ("sub_2", "active")]
+    # The newest row of all is sub_1's cancellation; status reads that one.
+    assert subscriptions.status_for("a@b.com")["stripe_sub"] == "sub_1"

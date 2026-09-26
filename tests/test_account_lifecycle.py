@@ -15,9 +15,27 @@ Four defects, each reproduced over HTTP against origin/master before the fix:
      unauthenticated and unthrottled (1,237 rows a second from one address),
      into the ledger that every session lookup reads line by line.
 
+A review of the first fix then reproduced four more on this branch, over
+HTTP against its own server files (2026-09-26):
+
+  5. Sign-out asked the miss bucket before asking whether the session was
+     live, so once junk cookies from an address had emptied the bucket, a
+     real sign-out from that address got 429 and its session stayed live.
+     Master had answered 200 and revoked it: a regression.
+  6. Delete cancelled only the subscription on the newest ledger row. With
+     two live subscriptions one kept billing, and an old one's `canceled`
+     row landing last made delete report the billing as already ended.
+  7. A late checkout event for the deleted account's own old checkout wrote
+     its customer back to the email, which brought the old subscription back.
+  8. Any Stripe refusal blocked deletion, including "No such subscription"
+     for one deleted in the dashboard whose webhook was missed, so that
+     person could never delete their account.
+
 Everything goes through the real routes of a real server process. Stripe is
 replaced inside that process (tests/_run_server.py --stub-stripe): each call
-is recorded to a file and never sent anywhere.
+is recorded to a file and never sent anywhere. A test that needs Stripe to
+refuse one call scripts the answer (_stripe_answers); the refusal then comes
+back through the product's own HTTP error handling, from loopback.
 """
 from __future__ import annotations
 
@@ -112,6 +130,30 @@ def _me(base: str, sid: str) -> tuple[int, dict]:
 
 def _stripe_calls(data: Path) -> list[dict]:
     return _rows(data / "stub_stripe_calls.jsonl")
+
+
+def _stripe_answers(data: Path, answers: dict) -> None:
+    """Script what Stripe answers for a path, e.g. {"/subscriptions/sub_x":
+    (404, "resource_missing", "No such subscription: 'sub_x'")}. An empty dict
+    puts every path back to success."""
+    (data / "stub_stripe_answers.json").write_text(json.dumps({
+        path: {"status": status, "error": {"type": "invalid_request_error",
+                                           "code": code, "message": message}}
+        for path, (status, code, message) in answers.items()}))
+
+
+def _ledgers(data: Path) -> dict:
+    return {name: (data / name).read_bytes() if (data / name).exists() else None
+            for name in LEDGERS}
+
+
+def _second_subscription(data: Path, status: str = "active") -> None:
+    """Alice subscribed twice. Checkout has no already-subscribed check and
+    Stripe makes a new customer for every checkout, so this is one person
+    with two customers and two subscriptions, both billing."""
+    _append(data / "stripe_customer_emails.jsonl",
+            {"ts": "2026-09-02T00:00:00+00:00", "stripe_customer": "cus_alice2", "email": ALICE})
+    _append(data / "subscriptions.jsonl", _sub_row("cus_alice2", "sub_alice2", ALICE, status))
 
 
 def _webhook(base: str, event_type: str, event_id: str, obj: dict) -> None:
@@ -221,8 +263,11 @@ def test_delete_changes_nothing_when_stripe_cannot_be_told(server):
 
 
 def test_delete_of_an_ended_or_absent_subscription_needs_no_stripe_call(server):
-    """Stripe refuses to update a subscription that has already ended, so
-    asking would block these deletions for good."""
+    """Not a reproduction: master made no Stripe call on any delete, so this
+    passes there too. It pins the branch that skips the call, and the billing
+    field that says why. Skipping matters because Stripe refuses to update a
+    subscription that has already ended, so asking would block these
+    deletions for good."""
     base, data = server
     _append(data / "subscriptions.jsonl", {**_sub_row("cus_alice", "sub_alice", ALICE, "canceled"),
                                            "event_type": "customer.subscription.deleted"})
@@ -236,6 +281,158 @@ def test_delete_of_an_ended_or_absent_subscription_needs_no_stripe_call(server):
     assert (body.get("billing") or {}).get("outcome") == "no_subscription", body
     assert "nothing to bill" in (body.get("message") or ""), body
     assert _stripe_calls(data) == []
+
+
+def _outcomes(body: dict) -> list[tuple[str, str]]:
+    return [(s.get("stripe_sub"), s.get("outcome"))
+            for s in (body.get("billing") or body).get("subscriptions") or []]
+
+
+def test_delete_cancels_every_live_subscription_not_only_the_newest(server):
+    """Defect 6: delete read one row, the newest, so it cancelled one
+    subscription and the other went on billing."""
+    base, data = server
+    _second_subscription(data)
+    status, body, _ = _post(base, "/api/me/delete", "sess-alice-A")
+    assert status == 200, body
+    assert _stripe_calls(data) == [
+        {"method": "POST", "path": f"/subscriptions/{sub}", "form": {"cancel_at_period_end": "true"}}
+        for sub in ("sub_alice", "sub_alice2")]
+    assert (body.get("billing") or {}).get("outcome") == "cancel_at_period_end", body
+    assert _outcomes(body) == [("sub_alice", "cancel_at_period_end"),
+                               ("sub_alice2", "cancel_at_period_end")], body
+    assert "Your 2 subscriptions will not renew." in (body.get("message") or ""), body
+    assert "No refund was issued" in (body.get("message") or ""), body
+    status, me = _me(base, "sess-bob-C")
+    assert status == 200 and me["subscription_active"] is True
+
+
+def test_an_ended_subscription_landing_last_does_not_hide_a_live_one(server):
+    """Defect 6, second face: alice resubscribed (a new customer) while her
+    first subscription ran out, so that one's `canceled` row is the newest
+    line. Delete read only it, skipped Stripe, and told her the billing had
+    already ended while sub_alice2 went on charging."""
+    base, data = server
+    _second_subscription(data)
+    _append(data / "subscriptions.jsonl", {**_sub_row("cus_alice", "sub_alice", ALICE, "canceled"),
+                                           "event_type": "customer.subscription.deleted"})
+    status, body, _ = _post(base, "/api/me/delete", "sess-alice-A")
+    assert status == 200, body
+    assert [c["path"] for c in _stripe_calls(data)] == ["/subscriptions/sub_alice2"]
+    assert (body.get("billing") or {}).get("outcome") == "cancel_at_period_end", body
+    assert "already ended" not in (body.get("message") or ""), body
+    assert _outcomes(body) == [("sub_alice", "already_ended"),
+                               ("sub_alice2", "cancel_at_period_end")], body
+
+
+def test_delete_changes_nothing_when_one_of_two_cancels_fails(server):
+    """Fail closed over every subscription, not only the first: if any cancel
+    is not confirmed, the account is not deleted and no ledger changes."""
+    base, data = server
+    _second_subscription(data)
+    _stripe_answers(data, {"/subscriptions/sub_alice2": (500, "", "An unknown error occurred.")})
+    before = _ledgers(data)
+
+    status, body, _ = _post(base, "/api/me/delete", "sess-alice-A")
+    assert status == 503, body
+    assert [c["path"] for c in _stripe_calls(data)] == ["/subscriptions/sub_alice",
+                                                        "/subscriptions/sub_alice2"]
+    # The refusal came from the scripted Stripe. An unreachable one would
+    # also give 503, and this test would then prove nothing about the path.
+    assert "Stripe is having issues" in (body.get("detail") or ""), body
+    assert _ledgers(data) == before, "a failed cancel still changed the account's ledgers"
+    assert _outcomes(body) == [("sub_alice", "cancel_at_period_end"),
+                               ("sub_alice2", "failed")], body
+    message = body.get("message") or ""
+    assert "not deleted" in message, body
+    # sub_alice was set not to renew before sub_alice2 failed, and that stays
+    # at Stripe, so "nothing was changed" would be untrue.
+    assert "Nothing was changed" not in message, body
+    assert "1 of your subscriptions was already set not to renew" in message, body
+    for sid in ("sess-alice-A", "sess-alice-B"):
+        assert _me(base, sid)[0] == 200, sid
+
+    _stripe_answers(data, {})
+    status, body, _ = _post(base, "/api/me/delete", "sess-alice-A")
+    assert status == 200, body
+    assert len(_stripe_calls(data)) == 4
+
+
+def test_delete_goes_ahead_when_stripe_has_no_such_subscription(server):
+    """Defect 8: a subscription deleted in the Stripe dashboard, whose
+    webhook never arrived, is still `active` here. Stripe answers 404
+    resource_missing for it on every try, and cannot bill a subscription it
+    does not have, so it counts as ended and the delete goes ahead."""
+    base, data = server
+    _stripe_answers(data, {"/subscriptions/sub_alice": (
+        404, "resource_missing", "No such subscription: 'sub_alice'")})
+    status, body, _ = _post(base, "/api/me/delete", "sess-alice-A")
+    assert status == 200, body
+    assert [c["path"] for c in _stripe_calls(data)] == ["/subscriptions/sub_alice"]
+    billing = body.get("billing") or {}
+    assert billing.get("outcome") == "already_ended", body
+    assert [(s["stripe_sub"], s["outcome"], s.get("why")) for s in billing["subscriptions"]] == [
+        ("sub_alice", "already_ended", "not_at_stripe")], body
+    for sid in ("sess-alice-A", "sess-alice-B"):
+        assert _me(base, sid)[0] == 401, f"{sid} outlived the delete"
+
+
+@pytest.mark.parametrize("http_status, code, message", [
+    # A 404 that is not Stripe saying "no such subscription": a wrong base
+    # URL or a proxy answers this way, and the subscription may be billing.
+    (404, "", "Unrecognized request URL (POST: /v1/subscriptions/sub_alice)."),
+    # resource_missing about something that is not the subscription.
+    (400, "resource_missing", "No such subscription item: 'si_alice'"),
+])
+def test_delete_still_refuses_when_stripe_refuses_for_another_reason(server, http_status, code, message):
+    """Only a 404 that says resource_missing reads as ended. Anything else
+    Stripe refuses may still be billing, so the delete stops as before."""
+    base, data = server
+    _stripe_answers(data, {"/subscriptions/sub_alice": (http_status, code, message)})
+    before = _ledgers(data)
+    status, body, _ = _post(base, "/api/me/delete", "sess-alice-A")
+    assert status == 503, body
+    assert body.get("detail") == message, body  # Stripe's own words: the fake was reached
+    assert len(_stripe_calls(data)) == 1
+    assert _ledgers(data) == before
+    assert _me(base, "sess-alice-A")[0] == 200
+
+
+@pytest.mark.parametrize("behind", ["past_due", "unpaid"])
+def test_delete_cancels_a_subscription_that_is_behind_on_payment(server, behind):
+    """past_due and unpaid are not ended: Stripe keeps retrying the card or
+    keeps raising invoices, and a card that works again is charged. Only
+    canceled and incomplete_expired are final."""
+    base, data = server
+    _append(data / "subscriptions.jsonl", {**_sub_row("cus_alice", "sub_alice", ALICE, behind),
+                                           "event_type": "customer.subscription.updated"})
+    status, body, _ = _post(base, "/api/me/delete", "sess-alice-A")
+    assert status == 200, body
+    assert [c["path"] for c in _stripe_calls(data)] == ["/subscriptions/sub_alice"]
+    assert (body.get("billing") or {}).get("outcome") == "cancel_at_period_end", body
+
+
+def test_delete_forgets_a_row_stamped_with_the_email_whose_customer_is_not_mapped(server):
+    """A subscription row can carry the email while the customer map has no
+    line for its customer: a row older than the map, or a map restored from
+    an older backup. Unlinking customers cannot reach that row; the deletion
+    row itself has to end its claim on the address."""
+    base, data = server
+    _append(data / "subscriptions.jsonl", _sub_row("cus_carol_unmapped", "sub_carol", CAROL))
+    assert _me(base, "sess-carol-D")[1]["subscription_active"] is True
+    status, body, _ = _post(base, "/api/me/delete", "sess-carol-D")
+    assert status == 200, body
+    assert [c["path"] for c in _stripe_calls(data)] == ["/subscriptions/sub_carol"]
+
+    sid = _sign_in(base, data, CAROL)
+    status, me = _me(base, sid)
+    assert status == 200 and me["subscription_active"] is False, me
+    assert me["subscription_status"] is None, me
+    # The new account's own delete has none of the old account's billing.
+    status, body, _ = _post(base, "/api/me/delete", sid)
+    assert status == 200, body
+    assert (body.get("billing") or {}).get("outcome") == "no_subscription", body
+    assert len(_stripe_calls(data)) == 1
 
 
 # --- 2. the deleted account's subscription stays deleted ---------------------
@@ -274,6 +471,58 @@ def test_a_webhook_after_delete_does_not_bring_the_subscription_back(server):
     assert me["subscription_status"]["stripe_sub"] == "sub_alice_new", me
     assert _post(base, "/api/me/cancel-subscription", sid)[0] == 200
     assert _stripe_calls(data)[-1]["path"] == "/subscriptions/sub_alice_new"
+
+
+def _old_subscription_updated(base: str, event_id: str) -> None:
+    _webhook(base, "customer.subscription.updated", event_id, {
+        "id": "sub_alice", "customer": "cus_alice", "status": "active",
+        "current_period_end": int(time.time() + 20 * 86400), "cancel_at_period_end": True})
+
+
+def test_a_late_checkout_event_after_delete_does_not_relink_the_old_customer(server):
+    """Defect 7. A bank debit completes the checkout form days before it
+    settles, and Stripe does not order events, so the deleted account's own
+    old checkout can report again after the delete. The webhook writes the
+    session's customer and email to the customer map before it notices the
+    session was already delivered. That wrote cus_alice back to the deleted
+    email, and the old subscription came back with it. Stripe makes a new
+    customer for every checkout (create_checkout_session never sends one),
+    so the same customer id after a delete is always this old news."""
+    base, data = server
+    session = {"id": "cs_test_alice_old", "customer": "cus_alice", "mode": "subscription",
+               "customer_details": {"email": ALICE}}
+    _webhook(base, "checkout.session.completed", "evt_old_completed",
+             {**session, "payment_status": "unpaid"})
+    assert _post(base, "/api/me/delete", "sess-alice-A")[0] == 200
+    _old_subscription_updated(base, "evt_old_updated_1")
+    _webhook(base, "checkout.session.async_payment_succeeded", "evt_old_settled",
+             {**session, "payment_status": "paid"})
+    _old_subscription_updated(base, "evt_old_updated_2")
+
+    # The stored row, not only /api/me: the unlinked-customer skip in the
+    # status read would hide a row stamped with the email again.
+    last = _rows(data / "subscriptions.jsonl")[-1]
+    assert (last["stripe_sub"], last["email"]) == ("sub_alice", ""), last
+    sid = _sign_in(base, data, ALICE)
+    status, me = _me(base, sid)
+    assert status == 200 and me["subscription_active"] is False, me
+    assert me["subscription_status"] is None, me
+    assert _post(base, "/api/me/cancel-subscription", sid)[0] == 404
+
+
+def test_after_a_delete_another_customers_events_keep_their_email(server):
+    """Deleting alice unlinks alice's customers and nobody else's. Checked on
+    the stored row: bob's /api/me would still read active through the
+    customer-map fallback even if his rows lost their email."""
+    base, data = server
+    assert _post(base, "/api/me/delete", "sess-alice-A")[0] == 200
+    _webhook(base, "customer.subscription.updated", "evt_bob_renewal", {
+        "id": "sub_bob", "customer": "cus_bob", "status": "active",
+        "current_period_end": int(time.time() + 50 * 86400), "cancel_at_period_end": False})
+    last = _rows(data / "subscriptions.jsonl")[-1]
+    assert (last["stripe_sub"], last["email"]) == ("sub_bob", BOB), last
+    status, me = _me(base, "sess-bob-C")
+    assert status == 200 and me["subscription_active"] is True, me
 
 
 # --- 3. delete ends every way in ---------------------------------------------
@@ -377,3 +626,28 @@ def test_signout_limits_misses_per_address_not_real_sign_outs(tmp_path):
         assert sum(1 for r in _rows(ledger) if r["event"] == "revoked") == len(real)
         assert _junk_signouts_until_refused(base)[0] == allowed, (
             "signing out of real sessions spent the budget meant for misses")
+
+
+def test_a_real_sign_out_is_never_refused_once_misses_empty_the_bucket(tmp_path):
+    """Defect 5, a regression on this branch: the bucket was asked before the
+    session was, so junk cookies from one address (one office, one mobile
+    network's shared NAT) left the next real sign-out from it answered 429,
+    with its session still live. Master answered 200 and revoked it."""
+    ledger = tmp_path / "auth_sessions.jsonl"
+    _append(ledger, _session_row("sess-shared-office", "office@example.test"))
+    for base in _srv.server_processes(tmp_path, stub_calendars=True):
+        _junk_signouts_until_refused(base)
+        before = len(_rows(ledger))
+        status, raw, hdrs = _srv.request(base, "/api/auth/signout", "POST", b"",
+                                         _cookie("sess-shared-office"))
+        assert (status, json.loads(raw)) == (200, {"ok": True}), (status, raw)
+        assert hdrs.get("Retry-After") is None
+        assert hdrs.get_all("Set-Cookie") == [CLEARED]
+        added = _rows(ledger)[before:]
+        assert [(r["event"], r["session_hash"]) for r in added] == [
+            ("revoked", _sha("sess-shared-office"))]
+        assert _me(base, "sess-shared-office")[0] == 401
+        # Misses from the address are still refused.
+        status, _raw, _hdrs = _srv.request(base, "/api/auth/signout", "POST", b"",
+                                           _cookie("junk-after"))
+        assert status == 429
