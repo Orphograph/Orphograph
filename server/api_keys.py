@@ -120,19 +120,53 @@ def revoke(email: str) -> bool:
     return False
 
 
-def source_prefixes_for_email(email: str) -> set[str]:
-    """10-char plaintext prefixes of every key ever issued to this email —
-    the form receipts are tagged with at anchor time (`api:<key[:10]>`).
-    Rotated-away keys are included so their receipts stay reachable."""
-    if not email:
-        return set()
-    out: set[str] = set()
+def prefix_issuers() -> dict[str, list[tuple[str, str]]]:
+    """Every issued key's receipt prefix (its first 10 chars, what
+    `source="api:<key[:10]>"` records) -> [(issued ts, owner email), ...].
+
+    Rotated and revoked keys stay in: a receipt made with a key before it was
+    revoked is still that key owner's. Read once per listing, not per row."""
+    issuers: dict[str, list[tuple[str, str]]] = {}
     for row in _read_rows():
-        if row.get("email") == email and row.get("event") == "issued":
-            kp = row.get("key_prefix") or ""
-            if len(kp) >= 10:
-                out.add(kp[:10])
-    return out
+        if row.get("event") != "issued":
+            continue
+        kp = row.get("key_prefix")
+        owner = row.get("email")
+        if isinstance(kp, str) and len(kp) >= 10:
+            ts = row.get("ts")
+            issuers.setdefault(kp[:10], []).append((
+                ts if isinstance(ts, str) else "",
+                owner.lower() if isinstance(owner, str) else ""))
+    return issuers
+
+
+def _parse_ts(value) -> datetime | None:
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        t = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return t if t.tzinfo else t.replace(tzinfo=timezone.utc)
+
+
+def prefix_owner(issued: list[tuple[str, str]], made_at) -> str | None:
+    """The one account that held a key with this prefix when a receipt was
+    made, or None when that is not exactly one account.
+
+    Keys issued AFTER the receipt cannot have made it, so they do not count.
+    Counting every key ever issued meant a later key that happened to share
+    the 10-char prefix (4 random chars) made it ambiguous, and the rightful
+    owner lost a legacy receipt from their vault for good. A row or receipt
+    whose time cannot be read counts as possibly earlier, which can only
+    deny, never grant."""
+    made = _parse_ts(made_at)
+    owners = set()
+    for ts, owner in issued:
+        t = _parse_ts(ts)
+        if made is None or t is None or t <= made:
+            owners.add(owner)
+    return next(iter(owners)) if len(owners) == 1 else None
 
 
 def email_for_key(key: str) -> str | None:

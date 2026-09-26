@@ -3027,6 +3027,9 @@ class Handler(BaseHTTPRequestHandler):
                 source=source,
                 private=want_private,
                 owner_id=owner_id if want_private else None,
+                # Only a subscription-paid receipt joins the account. A pack
+                # or L402 anchor stays unowned, as it was before this field.
+                account_id=owner_id if source.startswith(("api:", "sub:")) else None,
                 attestation=attestation,
                 metadata=metadata,
                 c2pa_manifest_hash=c2pa_manifest_hash,
@@ -3244,7 +3247,10 @@ class Handler(BaseHTTPRequestHandler):
         api_key_active = bool(api_key_email and _subscription_active_for(api_key_email))
         session_email = self._session_email()
         sub_active = api_key_active or bool(session_email and _subscription_active_for(session_email))
-        effective_email = api_key_email or session_email
+        # The account whose subscription pays is the one the receipt is filed
+        # under. A lapsed key's owner is not paying when the session is, and
+        # /api/anchor already treats that key as not subscribed.
+        effective_email = api_key_email if api_key_active else session_email
 
         items = payload.get("hashes") if isinstance(payload, dict) else None
         if not isinstance(items, list) or not items:
@@ -3317,6 +3323,8 @@ class Handler(BaseHTTPRequestHandler):
                     client_label=client_label,
                     sha512_hex=sha512_hex,
                     source=source,
+                    account_id=(auth.email_id(effective_email)
+                                if source.startswith(("api:", "sub:")) else None),
                 )
             except ValueError as e:
                 # A credit was consumed above but this item produced NO
@@ -3985,6 +3993,9 @@ class Handler(BaseHTTPRequestHandler):
         if not _receipt_belongs_to(rec, email):
             _json_response(self, 404, {"error": "receipt not found"})
             return
+        # Preserve the proven account association before clearing a legacy
+        # private owner. Privacy changes must never erase account ownership.
+        rec.setdefault("account_id", viewer_id)
         rec["private"] = want_private
         rec["owner_id"] = viewer_id if want_private else None
         # Atomic write: a crash mid-write_text would leave a truncated
@@ -4611,6 +4622,8 @@ class Handler(BaseHTTPRequestHandler):
                 source=source,
                 private=want_private,
                 owner_id=auth.email_id(subscriber_email) if (want_private and subscriber_email) else None,
+                account_id=(auth.email_id(subscriber_email)
+                            if subscriber_email and source.startswith(("api:", "sub:")) else None),
             )
         except ValueError as e:
             _reject(400, {"error": str(e)})
@@ -5647,50 +5660,53 @@ if not _SITE_STYLESHEET_LINKS:
 
 
 def _owned_sources_for_email(email: str) -> set[str]:
-    """Every `source` tag that means "this receipt belongs to `email`".
+    """The source tag this account's session anchors carry (sub:<email_id>).
 
-    SINGLE SOURCE OF TRUTH. A receipt is tagged by HOW it was paid for, not
-    by who owns it:
-
-        session-anchored   sub:<email_id>
-        API-key-anchored   api:<key[:10]>   (any key ever issued to them,
-                                             including since-rotated ones)
-
-    Three call sites each answered "is this receipt theirs?" independently
-    and two got it wrong (2026-08-07 drift sweep). Only the vault LIST knew
-    about api: tags, so for a customer who anchors through the API:
-
-      * the vault listed their receipt but the counter said 0 — the same
-        page showed both numbers, disagreeing;
-      * the privacy toggle replied "receipt not found" about a receipt they
-        own and were looking at.
-
-    Add a new payment path and it must be added HERE, once.
-    """
+    API-key tags (api:<key[:10]>) are not listed: whether a key prefix is this
+    account's depends on when the receipt was made, so _receipt_belongs_to
+    resolves them per receipt through api_keys.prefix_owner."""
     if not email:
         return set()
-    owned = {"sub:" + auth.email_id(email)}
-    owned.update("api:" + p for p in api_keys.source_prefixes_for_email(email))
-    return owned
+    return {"sub:" + auth.email_id(email)}
 
 
-def _receipt_belongs_to(rec: dict, email: str) -> bool:
-    """Ownership test for one receipt. Use this, never a bare source compare."""
-    return bool(email) and rec.get("source") in _owned_sources_for_email(email)
+def _receipt_ownership_context(email: str) -> tuple[str, set[str], dict]:
+    """Build once per list/count, rather than rescan the key ledger per row."""
+    return (auth.email_id(email), _owned_sources_for_email(email),
+            api_keys.prefix_issuers())
+
+
+def _receipt_belongs_to(rec: dict, email: str, *,
+                        context: tuple[str, set[str], dict] | None = None) -> bool:
+    """Account identity wins; a private legacy owner wins; then the legacy
+    source tag. An api: tag belongs to the one account that held a key with
+    that prefix when the receipt was made; an ambiguous prefix denies."""
+    if not email:
+        return False
+    account_id, sources, issuers = (context if context is not None
+                                    else _receipt_ownership_context(email))
+    if "account_id" in rec:
+        return bool(account_id) and rec["account_id"] == account_id
+    if rec.get("private"):
+        return bool(account_id) and rec.get("owner_id") == account_id
+    source = rec.get("source")
+    if source in sources:
+        return True
+    if isinstance(source, str) and source.startswith("api:"):
+        owner = api_keys.prefix_owner(issuers.get(source[4:], []), rec.get("created_at"))
+        return owner is not None and owner == email.lower()
+    return False
 
 
 def _count_anchors_for_email(email: str) -> int:
     """Fast O(receipts) count of anchors owned by this email.
 
-    Reads only `source` from each receipt.json (small field at the top
-    via streaming json parse fallback to full-load), skipping body parse
-    when possible. Replaces the previous "list 10000 then len()" pattern
-    which was a tail-latency offender on /api/me and added 2.5s+ to every
-    page navigation via the status strip.
+    Uses the same ownership predicate as exports and privacy changes, with
+    the historical key lookup precomputed once for the entire scan.
     """
     if not email:
         return 0
-    owned_sources = _owned_sources_for_email(email)
+    ownership = _receipt_ownership_context(email)
     receipts_dir = engine.RECEIPTS_DIR
     if not receipts_dir.exists():
         return 0
@@ -5705,7 +5721,7 @@ def _count_anchors_for_email(email: str) -> int:
             rec = json.loads(rfile.read_text())
         except (OSError, json.JSONDecodeError):
             continue
-        if rec.get("source") in owned_sources:
+        if _receipt_belongs_to(rec, email, context=ownership):
             count += 1
     return count
 
@@ -5776,11 +5792,8 @@ def _list_anchors_for_email(
     """
     if not email:
         return ([], False) if with_more_flag else []
-    # See _owned_sources_for_email: session anchors are tagged sub:<email_id>,
-    # API-key anchors api:<key[:10]>, and both belong in the owner's vault.
-    # This call site had it right; two others did not, so the rule now lives
-    # in one place.
-    expected_sources = _owned_sources_for_email(email)
+    # Resolve legacy key-prefix ambiguity once for this entire listing.
+    ownership = _receipt_ownership_context(email)
     receipts_dir = engine.RECEIPTS_DIR
     if not receipts_dir.exists():
         return ([], False) if with_more_flag else []
@@ -5798,7 +5811,7 @@ def _list_anchors_for_email(
             rec = json.loads(rfile.read_text())
         except (OSError, json.JSONDecodeError):
             continue
-        if rec.get("source") not in expected_sources:
+        if not _receipt_belongs_to(rec, email, context=ownership):
             continue
         created = rec.get("created_at", "")
         if before is not None and created >= before:
