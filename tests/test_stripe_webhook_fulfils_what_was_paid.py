@@ -142,35 +142,62 @@ def test_the_forged_event_control_still_holds_during_a_freeze(frozen):
 
 # --- 2. delayed payment methods ----------------------------------------------
 
-def test_a_delayed_payment_is_delivered_at_completed_not_held_hostage(normal):
-    """The buyer-protective half. If this ever flips to "wait for the success
-    event", a buyer on an endpoint not subscribed to it gets nothing."""
+def test_a_delayed_payment_is_delivered_when_it_settles(normal):
+    """Founder decision 2026-09-26: a pack paid by a delayed method is delivered
+    on `async_payment_succeeded`, not at `completed`. (This test used to pin
+    the opposite, because the endpoint was not subscribed to the async events;
+    it has been since 2026-09-26, proven by a live event in production.)"""
     base, data_dir = normal
     _status, result = _deliver(base, _event("evt_d1", "cs_delayed_ok", payment_status="unpaid"))
-    assert result.get("claim_code_minted") is True, result
-    assert _spendable(data_dir, "cs_delayed_ok") == 10
+    assert result.get("awaiting_settlement") is True, result
+    assert _spendable(data_dir, "cs_delayed_ok") == 0, "delivered before the payment settled"
     assert _log_lines(data_dir, "cs_delayed_ok completed UNPAID"), "the founder must see it"
 
-    # Settlement arrives later under a different event id: nothing more to do.
-    _status, again = _deliver(base, _event(
+    _status, settled = _deliver(base, _event(
         "evt_d1_ok", "cs_delayed_ok",
+        type_="checkout.session.async_payment_succeeded", payment_status="paid"))
+    assert settled.get("claim_code_minted") is True, settled
+    assert _spendable(data_dir, "cs_delayed_ok") == 10
+
+    # A second settlement event (another event id) delivers nothing more.
+    _status, again = _deliver(base, _event(
+        "evt_d1_ok2", "cs_delayed_ok",
         type_="checkout.session.async_payment_succeeded", payment_status="paid"))
     assert again.get("already_delivered") is True, again
     assert len(_mints(data_dir, "cs_delayed_ok")) == 1
-    assert _spendable(data_dir, "cs_delayed_ok") == 10
 
 
-def test_a_failed_delayed_payment_takes_back_what_is_unused(normal):
+def test_a_failed_delayed_payment_delivers_nothing(normal):
     base, data_dir = normal
     _deliver(base, _event("evt_d2", "cs_delayed_fail", payment_status="unpaid"))
-    assert _spendable(data_dir, "cs_delayed_fail") == 10, "control: it was delivered first"
-
     status, result = _deliver(base, _event(
         "evt_d2_fail", "cs_delayed_fail",
         type_="checkout.session.async_payment_failed", payment_status="unpaid"))
-    assert status == 200 and result.get("revoked"), result
-    assert _spendable(data_dir, "cs_delayed_fail") == 0, "a failed payment kept its credits"
+    assert status == 200 and result.get("revoked") == [], result
+    # Even if a success event followed (Stripe does not order events), the
+    # recorded failure stands.
+    _status, late = _deliver(base, _event(
+        "evt_d2_late", "cs_delayed_fail",
+        type_="checkout.session.async_payment_succeeded", payment_status="paid"))
+    assert not late.get("claim_code_minted"), late
+    assert _mints(data_dir, "cs_delayed_fail") == []
 
+
+def test_a_pack_delivered_before_the_change_is_still_taken_back_on_failure(normal):
+    """Sessions delivered at `completed` under the old rule can still fail
+    afterwards; the take-back path must keep working for them."""
+    base, data_dir = normal
+    ledger = data_dir / "credit_ledger.jsonl"
+    with ledger.open("a") as f:
+        f.write(json.dumps({"ts": "2026-09-20T00:00:00+00:00", "claim_code": "pk_legacyDelayed01",
+                            "email": "legacy@example.test", "credits_delta": 10,
+                            "source": "stripe:cs_legacy_delayed"}) + "\n")
+    assert _spendable(data_dir, "cs_legacy_delayed") == 10  # control
+    status, result = _deliver(base, _event(
+        "evt_d5_fail", "cs_legacy_delayed",
+        type_="checkout.session.async_payment_failed", payment_status="unpaid"))
+    assert status == 200 and result.get("revoked"), result
+    assert _spendable(data_dir, "cs_legacy_delayed") == 0, "a failed payment kept its credits"
     # Another session's credits are untouched by that revoke.
     assert _spendable(data_dir, "cs_delayed_ok") == 10
 
@@ -432,7 +459,7 @@ def test_an_unpaid_delivery_is_not_counted_as_a_confirmed_payment(measured):
 
     _deliver(base, _event("evt_m_unpaid", "cs_m_unpaid", payment_status="unpaid"))
     events = _demand(data_dir)
-    assert events.count("entitlement_activated") == 2, "the pack WAS delivered"
+    assert events.count("entitlement_activated") == 1, "a held session was counted as delivered"
     assert events.count("payment_confirmed") == 1, (
         "an unpaid session was counted as a confirmed payment")
 
@@ -441,4 +468,4 @@ def test_an_unpaid_delivery_is_not_counted_as_a_confirmed_payment(measured):
                           payment_status="paid"))
     events = _demand(data_dir)
     assert events.count("payment_confirmed") == 2, "the settlement never confirmed the payment"
-    assert events.count("entitlement_activated") == 2, "settlement is not a second activation"
+    assert events.count("entitlement_activated") == 2, "the settlement delivered it once"

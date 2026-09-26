@@ -294,6 +294,17 @@ _anchor_limiter = TokenBucket(
     snapshot_path=RATE_LIMIT_SNAPSHOT,
 )
 
+# Starting a checkout, card or crypto, is a buyer about to pay. It drew on the
+# anchor bucket (3 a day per address in production), so a buyer who opened
+# checkout a fourth time in a day from one /24 (a retry after a declined card,
+# a second pack, a household on one network) was refused for hours. Founder
+# decision 2026-09-26: its own bucket. 10 at once, then 10 an hour, per rail
+# and address, which still bounds how many sessions and invoices one caller
+# can make the providers create. In-memory: a restart refilling it is harmless.
+CHECKOUT_RATE_CAPACITY = 10
+CHECKOUT_RATE_REFILL = 10 / 3600.0
+_checkout_limiter = TokenBucket(CHECKOUT_RATE_CAPACITY, CHECKOUT_RATE_REFILL)
+
 # /api/anchor_folder reads and re-hashes up to 8 MB / 50,000 leaves before it
 # can tell a valid manifest from a bad one, and validation now comes before
 # any charge, so the charge can no longer be what bounds that work. Two
@@ -5853,10 +5864,10 @@ class Handler(BaseHTTPRequestHandler):
             _json_response(self, 503, {"error": "Checkout is temporarily disabled"})
             return
 
-        # Rate-limit: every other public POST gates on _anchor_limiter; this
-        # one was missing it. Trivial unrestricted loop would create unbounded
-        # cs_… sessions and pressure our Stripe API quota. Per-IP-prefix key.
-        allowed, retry_after = _anchor_limiter.check(f"stripe:{self._client_key()}")
+        # Rate-limited so a loop cannot create unbounded cs_… sessions against
+        # our Stripe API quota. Checkout's own bucket, not the anchor one: see
+        # _checkout_limiter. Per-IP-prefix key.
+        allowed, retry_after = _checkout_limiter.check(f"stripe:{self._client_key()}")
         if not allowed:
             self.send_response(429)
             self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -6032,11 +6043,11 @@ class Handler(BaseHTTPRequestHandler):
                 "error": "Crypto checkout is not currently enabled.",
             })
             return
-        # Rate-limit like every other public money POST (mirror the Stripe
-        # checkout limiter): an unauthenticated create hits the NOWPayments
-        # /invoice API, so an unthrottled caller could mint unlimited real
-        # hosted invoices and exhaust the merchant quota. Per-IP-prefix key.
-        allowed, retry_after = _anchor_limiter.check(f"nowpay:{self._client_key()}")
+        # Rate-limited like the Stripe checkout: an unauthenticated create hits
+        # the NOWPayments /invoice API, so an unthrottled caller could mint
+        # unlimited real hosted invoices and exhaust the merchant quota. Same
+        # checkout bucket (see _checkout_limiter), its own key. Per-IP-prefix.
+        allowed, retry_after = _checkout_limiter.check(f"nowpay:{self._client_key()}")
         if not allowed:
             self.send_response(429)
             self.send_header("Content-Type", "application/json; charset=utf-8")

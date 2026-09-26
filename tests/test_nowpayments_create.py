@@ -112,20 +112,39 @@ def test_create_rejects_missing_or_invalid_email(server, email):
 
 
 def test_create_is_rate_limited(tmp_path):
-    """Capacity 2 → the third create from the same client is throttled (429),
-    not allowed to hammer the NOWPayments invoice API."""
-    proc, base = _start_server(tmp_path, "2")
+    """Checkout has its own bucket (10 at once, then 10 an hour per address):
+    the eleventh create from the same client is throttled (429), so a loop
+    cannot hammer the NOWPayments invoice API."""
+    proc, base = _start_server(tmp_path, "100000")
     try:
         codes = []
-        for _ in range(3):
+        for _ in range(11):
             c, _b = _post(
                 base + "/api/nowpayments/create",
                 {"currency": "btc", "plan": "writer_pack", "email": ""},
             )
             codes.append(c)
-        # First two pass the limiter (then 400 on the missing email); the
-        # third is denied by the limiter before reaching the body.
-        assert codes[2] == 429, f"expected 3rd request 429, got {codes}"
+        # The first ten pass the limiter (then 400 on the missing email); the
+        # eleventh is denied by the limiter before reaching the body.
+        assert codes[:10] == [400] * 10, codes
+        assert codes[10] == 429, f"expected the 11th request 429, got {codes}"
+    finally:
+        _stop(proc)
+
+
+def test_create_does_not_share_the_anchor_budget(tmp_path):
+    """Founder decision 2026-09-26: a buyer who has used the day's free
+    anchors (production: 3 per address) can still start a checkout. With the
+    anchor budget at 1, spend it, then create four times: none is a 429."""
+    proc, base = _start_server(tmp_path, "1")
+    try:
+        first, _b = _post(base + "/api/anchor", {"hash_hex": "ab" * 32})
+        spent, _b = _post(base + "/api/anchor", {"hash_hex": "cd" * 32})
+        assert spent == 429, f"control: the anchor budget of 1 is spent ({first}, {spent})"
+        codes = [_post(base + "/api/nowpayments/create",
+                       {"currency": "btc", "plan": "writer_pack", "email": ""})[0]
+                 for _ in range(4)]
+        assert codes == [400] * 4, codes  # past the limiter, refused on the email
     finally:
         _stop(proc)
 

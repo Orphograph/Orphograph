@@ -121,11 +121,59 @@ def test_a_settlement_failure_that_arrives_first_stops_the_late_completed(_isola
     assert sent == [], "a claim email went out for a failed payment"
 
 
-def test_control_without_a_prior_failure_the_same_completed_still_delivers(_isolate):
-    """Delivery at `completed` is the buyer-protective policy and stays."""
-    result = stripe_webhook.handle_event(_event("evt_ok", "cs_ok", payment_status="unpaid"))
+def test_an_unpaid_completed_waits_for_settlement_then_delivers_once(_isolate):
+    """Founder decision 2026-09-26: a delayed payment is delivered when it
+    SETTLES. (This test used to pin delivery at `completed`, the policy while
+    the endpoint was not subscribed to the async events; it has been since.)"""
+    sent = _isolate
+    waiting = stripe_webhook.handle_event(_event("evt_ok", "cs_ok", payment_status="unpaid"))
+    assert waiting.get("awaiting_settlement") is True, waiting
+    assert _held("cs_ok") == 0 and sent == [], "a pack went out before the payment settled"
+
+    settled = stripe_webhook.handle_event(_event(
+        "evt_ok_settled", "cs_ok", type_="checkout.session.async_payment_succeeded",
+        payment_status="paid"))
+    assert settled.get("claim_code_minted") is True, settled
+    assert _held("cs_ok") == 10 and len(sent) == 1
+
+    # A redelivered `completed` (new event id, same session) does not deliver twice.
+    again = stripe_webhook.handle_event(_event("evt_ok_again", "cs_ok", payment_status="unpaid"))
+    assert not again.get("claim_code_minted"), again
+    assert _held("cs_ok") == 10 and len(sent) == 1
+
+
+def test_a_card_payment_is_still_delivered_at_completed(_isolate):
+    """Control: only the unpaid (delayed) case waits."""
+    result = stripe_webhook.handle_event(_event("evt_card", "cs_card", payment_status="paid"))
     assert result.get("claim_code_minted") is True, result
-    assert _held("cs_ok") == 10
+    assert _held("cs_card") == 10
+
+
+def test_a_settlement_that_fails_after_the_wait_delivers_nothing(_isolate):
+    sent = _isolate
+    stripe_webhook.handle_event(_event("evt_w1", "cs_wait", payment_status="unpaid"))
+    failed = stripe_webhook.handle_event(_event(
+        "evt_w2", "cs_wait", type_="checkout.session.async_payment_failed",
+        payment_status="unpaid"))
+    assert failed["revoked"] == [], "there was nothing to take back"
+    late = stripe_webhook.handle_event(_event(
+        "evt_w3", "cs_wait", type_="checkout.session.async_payment_succeeded",
+        payment_status="paid"))
+    assert not late.get("claim_code_minted"), "a settlement reported failed was delivered anyway"
+    assert _held("cs_wait") == 0 and sent == []
+
+
+def test_a_gift_paid_by_a_delayed_method_also_waits(_isolate):
+    sent = _isolate
+    waiting = stripe_webhook.handle_event(_event(
+        "evt_gw", "cs_giftwait", payment_status="unpaid",
+        metadata={"gift_to_email": "friend@example.test"}))
+    assert waiting.get("awaiting_settlement") is True and sent == [], waiting
+    settled = stripe_webhook.handle_event(_event(
+        "evt_gs", "cs_giftwait", type_="checkout.session.async_payment_succeeded",
+        payment_status="paid", metadata={"gift_to_email": "friend@example.test"}))
+    assert settled.get("claim_code_minted") is True, settled
+    assert len(sent) == 1
 
 
 def test_a_failure_for_one_session_does_not_block_another(_isolate):
