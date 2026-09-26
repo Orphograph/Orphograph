@@ -568,7 +568,16 @@ function renderTeam(me) {
       const result = $("#team-invite-result");
       result.hidden = false;
       if (!r.ok) {
-        result.textContent = "Could not issue invite — check that your subscription is active.";
+        // The server says why: no subscription (402), not the owner (403), or
+        // every free seat already has an open invite (409). One fixed line
+        // blaming the subscription sent a full team's owner to billing.
+        // A body that is not JSON (a proxy error page) gets the fixed line.
+        let msg = "Could not issue invite. Try again in a moment.";
+        try {
+          const j = await r.json();
+          if (j && typeof j.error === "string" && j.error) msg = j.error;
+        } catch (e) {}
+        result.textContent = msg;
         return;
       }
       const data = await r.json();
