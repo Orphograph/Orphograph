@@ -392,8 +392,11 @@ def test_delete_still_refuses_when_stripe_refuses_for_another_reason(server, htt
     before = _ledgers(data)
     status, body, _ = _post(base, "/api/me/delete", "sess-alice-A")
     assert status == 503, body
-    assert body.get("detail") == message, body  # Stripe's own words: the fake was reached
+    # The recorded call proves the fake Stripe was reached. Its own words stay
+    # out of the answer: a 4xx refusal is shown to callers as a fixed message
+    # (#payment-outbound), since Stripe's text can echo request input.
     assert len(_stripe_calls(data)) == 1
+    assert body.get("detail") and message not in json.dumps(body), body
     assert _ledgers(data) == before
     assert _me(base, "sess-alice-A")[0] == 200
 
