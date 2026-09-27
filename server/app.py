@@ -4596,10 +4596,13 @@ class Handler(BaseHTTPRequestHandler):
         from urllib.parse import parse_qs
         from_page = parse_qs(raw.decode("latin-1")).get("via") == ["page"]
         try:
-            # Checked before the already-suppressed shortcut in add(): with an
-            # unwritable ledger a new address got 503 and a suppressed one got
-            # success, which told anyone which one it was (the GET handler did
-            # this check until the write moved here, 2026-09-27).
+            # Checked before the already-suppressed shortcut in add(): with a
+            # ledger that could not be opened a new address got 503 and a
+            # suppressed one got success, which told anyone which one it was
+            # (the GET handler did this check until the write moved here,
+            # 2026-09-27). Not covered: the file opens and the write itself
+            # fails (a full volume). add() then still answers a suppressed
+            # address 200 and a new one 503.
             unsubscribe.ensure_writable()
             unsubscribe.add(email, source="page_post" if from_page else "link_post")
         except unsubscribe.SuppressionUnavailable:

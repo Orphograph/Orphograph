@@ -116,3 +116,58 @@ def test_a_one_click_post_is_recorded_in_a_directory_the_writer_repairs(tmp_path
             assert "gmail-user@example.test" in ledger.read_text()
     finally:
         sub.chmod(0o700)
+
+
+def test_a_held_lock_does_not_delay_an_already_unsubscribed_address(tmp_path, monkeypatch):
+    """The writability check took the ledger's exclusive lock, and that lock
+    waits. A POST for an address that is already suppressed writes nothing,
+    and it is the one mailbox providers retry, yet it waited for whoever held
+    the lock (reproduced in review: a 4 s hold delayed the answer 4 s)."""
+    import fcntl
+    import threading
+    import unsubscribe
+
+    ledger = tmp_path / "suppressions.jsonl"
+    monkeypatch.setattr(unsubscribe, "SUPPRESS_PATH", ledger)
+    assert unsubscribe.add("known@example.test") is True
+    raised: list[BaseException] = []
+
+    def check() -> None:
+        try:
+            unsubscribe.ensure_writable()
+        except BaseException as e:   # reported below, not lost with the thread
+            raised.append(e)
+
+    checker = threading.Thread(target=check, daemon=True)
+    holder = ledger.open("a")
+    try:
+        fcntl.flock(holder.fileno(), fcntl.LOCK_EX)
+        with ledger.open("a") as other:
+            with pytest.raises(OSError):   # control: the lock is held and binds
+                fcntl.flock(other.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        checker.start()
+        checker.join(timeout=2)
+        waited = checker.is_alive()
+    finally:
+        fcntl.flock(holder.fileno(), fcntl.LOCK_UN)
+        holder.close()
+    checker.join(timeout=5)   # a check that waited finishes before tmp_path goes
+    assert not waited, "the writability check waited for the ledger lock"
+    assert raised == [], raised
+
+
+def test_looking_at_the_link_touches_nothing_on_disk(tmp_path):
+    """GET and HEAD only ask. The writability check creates the ledger and
+    chmods its directory, so it belongs to the POST alone: after both
+    requests there is no ledger and the directory keeps its mode."""
+    sub = tmp_path / "sub"
+    sub.mkdir()
+    sub.chmod(0o755)
+    ledger = sub / "suppressions.jsonl"
+    before = oct(sub.stat().st_mode)
+    path = "/api/unsubscribe?e=" + quote("only-looking@example.test")
+    for base in _srv.server_processes(tmp_path, ORPHO_SUPPRESSIONS=str(ledger)):
+        assert _srv.request(base, path, timeout=15)[0] == 200
+        assert _srv.request(base, path, method="HEAD", timeout=15)[0] == 200
+    assert not ledger.exists(), "looking at the link created the ledger"
+    assert oct(sub.stat().st_mode) == before, "looking at the link changed the directory"
