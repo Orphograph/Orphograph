@@ -8,8 +8,8 @@ parties: +10 bonus credits to the new buyer's claim code, +10
 added back to the referrer's original claim code.
 
 Guardrails:
-- A given referee can only credit a referrer once (block double
-  credit on retries).
+- A given referee is credited once per referrer (whoever holds the
+  referring pack), whichever of the referrer's packs or codes is used.
 - A buyer cannot self-refer: a code whose pack the buyer holds (matched
   by email id) is refused, whichever of their packs it came from.
 - A referral code carries nothing of the claim code it rewards (it is an
@@ -140,14 +140,22 @@ def _holder_email_id(claim_code: str) -> str:
     return ""
 
 
-def _already_credited(buyer_eid: str, referrer_claim: str) -> bool:
-    """Has this buyer already been credited for referring by this pack?
+def _referrer_identity(referrer_claim: str) -> str:
+    """Who refers: the email id holding the pack, or the pack itself when no
+    mint row names an address."""
+    return _holder_email_id(referrer_claim) or f"pack:{referrer_claim}"
 
-    Keyed on the referrer's PACK and the buyer's email id, not on the code
-    string and the raw address: a pack has two valid codes (the legacy one
-    already mailed and the current one), and `Bob@` is `bob@`."""
+
+def _already_credited(buyer_eid: str, referrer_claim: str) -> bool:
+    """Has this buyer already been credited for a referral by this referrer?
+
+    Keyed on the REFERRER (whoever holds the referring pack) and the buyer's
+    email id, not on the code string and the raw address: a pack has two
+    valid codes (the legacy one already mailed and the current one), a
+    referrer can hold several packs, and `Bob@` is `bob@`."""
     if not REFERRAL_LEDGER.exists():
         return False
+    me = _referrer_identity(referrer_claim)
     with REFERRAL_LEDGER.open() as f:
         for line in f:
             try:
@@ -156,10 +164,12 @@ def _already_credited(buyer_eid: str, referrer_claim: str) -> bool:
                 continue
             if not isinstance(row, dict) or row.get("event") != "credited":
                 continue
-            if row.get("referrer_claim_code") != referrer_claim:
-                continue
             email = row.get("new_buyer_email")
-            if isinstance(email, str) and auth.email_id(email.strip()) == buyer_eid:
+            if not isinstance(email, str) or auth.email_id(email.strip()) != buyer_eid:
+                continue
+            other = row.get("referrer_claim_code")
+            if isinstance(other, str) and (other == referrer_claim
+                                           or _referrer_identity(other) == me):
                 return True
     return False
 
@@ -170,7 +180,8 @@ def apply(ref_code: str, new_buyer_email: str, new_claim_code: str) -> dict:
     Returns {"ok": True, "bonus_credits": N, "referrer_credited": True}
     on success; {"ok": False, "reason": "..."} otherwise.
     """
-    if not ref_code or not new_buyer_email.strip() or not new_claim_code:
+    if (not ref_code or not isinstance(new_buyer_email, str)
+            or not new_buyer_email.strip() or not new_claim_code):
         return {"ok": False, "reason": "missing input"}
 
     referrer_claim = _claim_code_from_ref(ref_code)
@@ -224,7 +235,11 @@ def apply(ref_code: str, new_buyer_email: str, new_claim_code: str) -> dict:
                 "bonus_each": REFERRAL_BONUS,
             }, separators=(",", ":")) + "\n")
 
+    # The pack is named by its current code, never by the code as received:
+    # a legacy code is 12 characters of the referrer's claim code, and this
+    # line goes to the stream the access log writes to.
     sys.stderr.write(
-        f"[referrals] +{REFERRAL_BONUS}/each — {ref_code} → new buyer {new_buyer_email[:1]}***\n"
+        f"[referrals] +{REFERRAL_BONUS}/each — {code_for(referrer_claim)} → "
+        f"new buyer {new_buyer_email[:1]}***\n"
     )
     return {"ok": True, "bonus_credits": REFERRAL_BONUS, "referrer_credited": True}

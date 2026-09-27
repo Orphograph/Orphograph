@@ -80,9 +80,11 @@ def _hmac_secret() -> bytes:
 
 
 def keyed_hex(label: bytes, value: str) -> str:
-    """HMAC-SHA256 hex of `value` under this installation's secret, with a
-    caller-chosen label so digests made for different purposes never collide
-    with each other or with email_id."""
+    """HMAC-SHA256 hex of `label + value` under this installation's secret.
+
+    The caller's label keeps digests made for different purposes apart.
+    email_id signs the bare lowercased address with no label, so a label must
+    not look like the start of an email address."""
     return hmac.new(_hmac_secret(), label + value.encode("utf-8"), hashlib.sha256).hexdigest()
 
 

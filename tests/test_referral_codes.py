@@ -225,3 +225,38 @@ def test_the_claim_email_goes_out_even_if_the_share_link_cannot_be_made(monkeypa
     assert mailer.send_pack_claim_email("alice@example.test", ALICE_PACK, 10) is True
     assert len(sent) == 1 and ALICE_PACK in sent[0], "the claim code was not delivered"
     assert "?ref=" not in sent[0]
+
+
+# --- review round 2 (adversarial review of 2d10369) ------------------------------
+
+def test_a_credited_legacy_code_is_not_written_to_the_log(tmp_path, capsys):
+    """Once legacy links matched (round 1), the success line printed the raw
+    code: 12 claim-code characters in the stream the access-log fix protects.
+    The line names the pack by its current code instead."""
+    credits.add_credits(ALICE_PACK, "alice@example.test", 10, "stripe:cs_alice")
+    credits.add_credits(BOB_PACK, "bob@example.test", 10, "stripe:cs_bob")
+    capsys.readouterr()
+    legacy = ("ref_" + ALICE_PACK[3:15]).lower()
+    assert referrals.apply(legacy, "bob@example.test", BOB_PACK)["ok"] is True  # control
+    err = capsys.readouterr().err
+    assert ALICE_PACK[3:15].lower() not in err.lower(), err
+    assert referrals.code_for(ALICE_PACK) in err, "the line should still say which pack"
+
+
+def test_a_buyer_is_credited_once_per_referrer_not_once_per_pack():
+    """The guardrail is one credit per referee per REFERRER. Keyed on the pack,
+    a referrer holding two packs let the same buyer be credited twice."""
+    credits.add_credits(ALICE_PACK, "alice@example.test", 10, "stripe:cs_alice")
+    alice_two = "pk_aliceTWOpack00001"
+    credits.add_credits(alice_two, "Alice@Example.test", 10, "stripe:cs_alice2")
+    credits.add_credits(BOB_PACK, "bob@example.test", 10, "stripe:cs_bob")
+    bob_two = "pk_bobTWOpack0000001"
+    credits.add_credits(bob_two, "bob@example.test", 10, "stripe:cs_bob2")
+    assert referrals.apply(referrals.code_for(ALICE_PACK), "bob@example.test", BOB_PACK)["ok"] is True
+    again = referrals.apply(referrals.code_for(alice_two), "bob@example.test", bob_two)
+    assert again["ok"] is False and "already credited" in again["reason"], again
+    assert credits.balance(alice_two) == 10 and credits.balance(bob_two) == 10
+    # Control: a different buyer through Alice's second pack is still credited.
+    carol = "pk_carolPACK00000001"
+    credits.add_credits(carol, "carol@example.test", 10, "stripe:cs_carol")
+    assert referrals.apply(referrals.code_for(alice_two), "carol@example.test", carol)["ok"] is True
