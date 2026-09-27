@@ -385,17 +385,23 @@ def send_pack_claim_email(to: str, claim_code: str, credit_count: int) -> bool:
     return _send(to, subject, text, html)
 
 
-def send_pack_clearing_email(to: str) -> bool:
+def send_pack_clearing_email(to: str, gift: bool = False) -> bool:
     """A pack paid by a delayed method (bank debit) is delivered when the
     payment settles, days later (founder decision 2026-09-26). This notice
     tells the buyer so at checkout. Founder decision 2026-09-27 (1A). No
-    code exists yet, so none is shown."""
+    code exists yet, so none is shown. On a gift the code goes to the
+    recipient, not to the buyer this is sent to."""
+    who = "the recipient" if gift else "this address"
     subject = "Orphograph — your Pack payment is clearing"
+    delivery = (f"The Pack's claim code will be sent to {who} as soon as "
+                f"Stripe confirms the payment.")
+    failure = ("If the bank payment does not go through, no Pack is issued and "
+               "nothing is charged.")
     text = (
         "Receipt of your order is acknowledged. It was paid by a bank "
         "payment, which takes a few business days to clear.\n\n"
-        "Your Pack's claim code will be sent to this address as soon as "
-        "Stripe confirms the payment. Nothing further is required of you.\n\n"
+        f"{delivery} Nothing else is needed from you while it clears. "
+        f"{failure}\n\n"
         "Correspondence regarding this order may be addressed to this "
         "thread by reply.\n"
     )
@@ -403,8 +409,8 @@ def send_pack_clearing_email(to: str) -> bool:
         "<p>Receipt of your order is acknowledged. It was paid by a bank "
         "payment, which takes <strong>a few business days</strong> to "
         "clear.</p>"
-        "<p>Your Pack's claim code will be sent to this address as soon as "
-        "Stripe confirms the payment. Nothing further is required of you.</p>"
+        f"<p>{delivery} Nothing else is needed from you while it clears. "
+        f"{failure}</p>"
         "<p style=\"color:#666;font-size:13px;\">Correspondence regarding "
         "this order may be addressed to this thread by reply.</p>"
     )

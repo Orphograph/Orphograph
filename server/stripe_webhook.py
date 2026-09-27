@@ -478,16 +478,17 @@ def handle_event(payload: bytes) -> dict:
                 f"[stripe_webhook] session {session_id} completed UNPAID (delayed "
                 f"payment method): pack delivers when the payment settles\n"
             )
-            # Founder decision 2026-09-27 (1A): tell the buyer it is clearing,
-            # once per session. The marker is written only when the email went
-            # out, so a failed send is tried again on Stripe's redelivery.
-            notice = False
-            if not _session_delivered(session_id, "clearing_notice_sent"):
-                notice = bool(mailer.send_pack_clearing_email(customer_email))
+            # Founder decision 2026-09-27 (1A): tell the buyer it is clearing.
+            # Best effort, once: this event is answered 200 and marked processed
+            # either way, and Stripe sends one `completed` per session, so a
+            # failed send is not retried. Nothing depends on it: the claim code
+            # still goes out when the payment settles.
+            gift_to = ((session.get("metadata") or {}).get("gift_to_email") or "").strip()
+            notice = bool(mailer.send_pack_clearing_email(
+                customer_email, gift="@" in gift_to))
             result = {"ok": True, "awaiting_settlement": True,
-                      "session_id": session_id, "delivered": False}
-            if notice:
-                result["clearing_notice_sent"] = True
+                      "session_id": session_id, "delivered": False,
+                      "clearing_notice_sent": notice}
             _mark_processed(event_id, result)
             return result
 
