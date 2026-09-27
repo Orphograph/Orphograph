@@ -96,6 +96,9 @@ def _is_valuation_intent(match: str, context: str = "") -> bool:
 EXCLUDE_GLOBS: tuple[str, ...] = (
     ".git/*",
     "node_modules/*",
+    # Any depth: zk-provenance/snark/node_modules/ was scanned, and one vendored
+    # doc read as a valuation hit, so the daily job exited 1 on noise.
+    "*/node_modules/*",
     "sdk-node/node_modules/*",
     "sdk-node/dist/*",
     "__pycache__/*",

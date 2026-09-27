@@ -179,3 +179,22 @@ def test_excluded_paths_are_not_scanned():
         assert rc == 1
         for h in report["high_severity_hits"]:
             assert not h["path"].startswith("node_modules/")
+
+
+def test_a_nested_node_modules_is_excluded_like_the_top_level_one():
+    """Only the top-level node_modules/ was excluded, so the snark prover's
+    zk-provenance/snark/node_modules/ was scanned and one vendored doc read as
+    a valuation hit: the daily compliance job exited 1 on every run from at
+    least 2026-09-13, on noise (found 2026-09-27)."""
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        _write(root / "zk-provenance" / "snark" / "node_modules" / "pkg" / "doc.md",
+               "FMV today is $350K; 5y EV ~$3M.\n")
+        _write(root / "README.md", "plain\n")
+        out = root / "outbox" / "report.json"
+        rc, report = _run(root, out)
+        assert rc == 0, report["valuation_hits"]
+        # Control: the same text outside node_modules still trips the gate.
+        _write(root / "zk-provenance" / "snark" / "notes.md", "FMV today is $350K; 5y EV ~$3M.\n")
+        rc, report = _run(root, out)
+        assert rc == 1 and report["valuation_hits"], "the control must still fire"
