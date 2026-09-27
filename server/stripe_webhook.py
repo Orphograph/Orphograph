@@ -269,6 +269,22 @@ def handle_event(payload: bytes) -> dict:
                 cancel_at_period_end=cancel_at_period_end,
             )
             result = {"ok": True, "subscription_event": event_type, "status": status}
+            # Stripe does not order events, so both checkouts of a duplicate can
+            # complete before either subscription row exists and neither sees
+            # the other. A second active subscription is caught here too, when
+            # its own row lands.
+            if event_type == "customer.subscription.created" and sub_id:
+                holder = subscriptions._email_for_customer(customer) or ""
+                active = subscriptions.active_subscription_ids(holder) if holder else []
+                others = [s for s in active if s != sub_id]
+                if sub_id in active and others:
+                    _stderr(
+                        f"[stripe_webhook] DUPLICATE subscription for "
+                        f"{auth.mask_email(holder)}: new {sub_id} while "
+                        f"{', '.join(others)} active; cancel and refund one in Stripe\n"
+                    )
+                    result["duplicate_subscription"] = True
+                    result["duplicate_of"] = others
             _mark_processed(event_id, result)
             return result
 

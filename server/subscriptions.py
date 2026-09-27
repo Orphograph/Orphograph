@@ -273,5 +273,14 @@ def stripe_subscription_id_for(email: str) -> str:
 
 
 def is_active(email: str) -> bool:
-    latest = _latest_for_email(email)
-    return bool(latest) and _row_is_active(latest)
+    """Does this address hold ANY active subscription now?
+
+    Each subscription is judged by its own newest row. Judging the newest row
+    across all of them let one subscription's cancellation hide another that
+    is still being paid for, which is exactly what cancelling a duplicate
+    produced (found in review, 2026-09-27). Rows with no subscription id are
+    one group, so they keep the meaning they always had."""
+    newest: dict[str, dict] = {}
+    for row in _rows_for_email(email):
+        newest[row.get("stripe_sub") or ""] = row
+    return any(_row_is_active(row) for row in newest.values())

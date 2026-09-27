@@ -173,3 +173,70 @@ def test_a_first_subscription_is_not_flagged(webhook):
     result = stripe_webhook.handle_event(_completed_sub("evt_first", "cs_first", "carol@example.com", "sub_first"))
     assert result.get("subscription_checkout") is True, result
     assert not result.get("duplicate_subscription"), result
+
+
+# --- review of 8a00a97: "active" means ANY subscription is active ------------------
+
+def test_a_subscriber_whose_other_subscription_was_canceled_is_still_active(ledgers):
+    """is_active read only the newest row across ALL of an address's
+    subscriptions, so cancelling one duplicate (what the DUPLICATE log line
+    tells the founder to do) cut off the one still being paid for."""
+    subscriptions.record_customer_email("cus_old", "bob@example.com")
+    subscriptions.record_customer_email("cus_new", "bob@example.com")
+    subscriptions.record_subscription_event("cus_old", "active", FUTURE, sub_id="sub_old")
+    subscriptions.record_subscription_event("cus_new", "active", FUTURE, sub_id="sub_new")
+    subscriptions.record_subscription_event("cus_old", "canceled", FUTURE, sub_id="sub_old")
+    assert subscriptions.active_subscription_ids("bob@example.com") == ["sub_new"]
+    assert subscriptions.is_active("bob@example.com"), "a paying subscriber read as inactive"
+
+
+def test_a_row_without_a_subscription_id_still_counts(ledgers):
+    """Control: rows written without a Stripe subscription id keep the old
+    newest-row meaning."""
+    with (ledgers / "subscriptions.jsonl").open("a") as f:
+        f.write(json.dumps({"email": "legacy@example.com", "status": "active"}) + "\n")
+    assert subscriptions.is_active("legacy@example.com")
+
+
+def test_the_guard_refuses_while_any_subscription_is_active(tmp_path):
+    (tmp_path / "auth_sessions.jsonl").write_text(json.dumps(dict(
+        event="created", session_hash=hashlib.sha256(b"session-0").hexdigest(),
+        email="bob@example.com", expires_unix=time.time() + 3600)) + "\n")
+    (tmp_path / "subscriptions.jsonl").write_text("".join(json.dumps(r) + "\n" for r in [
+        dict(email="bob@example.com", status="active", stripe_sub="sub_old", current_period_end=FUTURE),
+        dict(email="bob@example.com", status="active", stripe_sub="sub_new", current_period_end=FUTURE),
+        dict(email="bob@example.com", status="canceled", stripe_sub="sub_old", current_period_end=FUTURE),
+    ]))
+    for base in _srv.server_processes(tmp_path, stub_calendars=True, stub_stripe=True,
+                                      STRIPE_SECRET_KEY="sk_test_not_a_real_key",
+                                      STRIPE_PRICE_SUB="price_test_sub"):
+        status, raw, _h = _srv.request(base, "/api/stripe/checkout", "POST",
+                                       json.dumps({"plan": "pro"}).encode(), {
+                                           "Content-Type": "application/json",
+                                           "Cookie": "orpho_sid=session-0"})
+        assert status == 409, (status, raw)
+        assert _stripe_calls(tmp_path) == 0
+
+
+def _sub_event(event_id: str, type_: str, customer: str, sub_id: str, status: str = "active") -> bytes:
+    return json.dumps({"id": event_id, "type": type_, "data": {"object": {
+        "id": sub_id, "customer": customer, "status": status,
+        "current_period_end": FUTURE}}}).encode()
+
+
+def test_a_duplicate_is_flagged_even_when_both_checkouts_complete_first(webhook, capsys):
+    """Stripe does not order events: both `completed` can land before either
+    subscription row exists, so neither checkout sees the other. The second
+    subscription is caught when its own created event lands."""
+    for n in ("A", "B"):
+        stripe_webhook.handle_event(json.dumps({"id": f"evt_c{n}", "type": "checkout.session.completed",
+            "data": {"object": {"id": f"cs_{n}", "mode": "subscription", "payment_status": "paid",
+                                "customer": f"cus_{n}", "subscription": f"sub_{n}",
+                                "customer_email": "bob@example.com", "amount_total": 900}}}).encode())
+    capsys.readouterr()
+    first = stripe_webhook.handle_event(_sub_event("evt_sA", "customer.subscription.created", "cus_A", "sub_A"))
+    second = stripe_webhook.handle_event(_sub_event("evt_sB", "customer.subscription.created", "cus_B", "sub_B"))
+    assert not first.get("duplicate_subscription"), first
+    assert second.get("duplicate_subscription") is True, second
+    err = capsys.readouterr().err
+    assert "DUPLICATE subscription" in err and "sub_A" in err and "sub_B" in err, err
