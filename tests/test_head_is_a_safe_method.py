@@ -305,12 +305,11 @@ def test_head_on_every_get_route_leaves_the_data_dir_untouched(server, monkeypat
     # disguise), and the same snapshot sees the same routes write under GET.
     member = visitors["signed in, with an experiment cookie"]
     assert _srv.request(base, "/api/me", headers=member, timeout=15)[0] == 200
-    _srv.request(base, "/api/me/referral-code", headers=member, timeout=15)
     _srv.request(base, "/pay/crypto", headers=member, timeout=15)
     seen = _snapshot(data_dir)
     wrote = sorted(k for k in seen.keys() | after.keys() if seen.get(k) != after.get(k))
-    assert "affiliate_codes.jsonl" in wrote and "ab_home.jsonl" in wrote, (
-        f"control: GET on the writer routes changed only {wrote}")
+    assert "ab_home.jsonl" in wrote, (
+        f"control: GET on the writer route changed only {wrote}")
 
 
 def _sign_in(base: str, data_dir: Path, email: str) -> str:
@@ -321,25 +320,19 @@ def _sign_in(base: str, data_dir: Path, email: str) -> str:
     return cookie.split("orpho_sid=", 1)[1].split(";", 1)[0]
 
 
-def test_head_reports_the_same_affiliate_code_without_registering_it(server):
+def test_the_retired_affiliate_reads_write_nothing_under_either_method(server):
+    """HEAD used to report the code GET would register. Since 2026-09-27 the
+    program is retired (10A): both methods answer 410 and nobody registers
+    anything (tests/test_affiliate_retired.py)."""
     base, data_dir = server
     member = {"Cookie": f"orpho_sid={_sign_in(base, data_dir, 'affiliate-head@example.test')}"}
     registry = data_dir / "affiliate_codes.jsonl"
     before = len(_rows(registry))
     for path in ("/api/me/referral-code", "/api/me/affiliate"):
-        status, _b, _h = _srv.request(base, path, method="HEAD", headers=member, timeout=15)
-        assert status == 200, f"HEAD {path} never reached the signed-in branch ({status})"
-    assert len(_rows(registry)) == before, "HEAD registered an affiliate code"
-
-    _s, _b, head = _srv.request(base, "/api/me/referral-code", method="HEAD",
-                                headers=member, timeout=15)
-    status, body, _h = _srv.request(base, "/api/me/referral-code", headers=member, timeout=15)
-    code = json.loads(body)["ref_code"]
-    assert status == 200 and code.startswith("ref_")
-    assert head.get("Content-Length") == str(len(body)), "HEAD described a different code"
-    # Control: the ledger stores a hash, never the email, so the only honest
-    # observation is the row itself. GET must have written exactly this one.
-    assert [r["ref_code"] for r in _rows(registry)][before:] == [code]
+        for method in ("HEAD", "GET"):
+            status, _b, _h = _srv.request(base, path, method=method, headers=member, timeout=15)
+            assert status == 410, (method, path, status)
+    assert len(_rows(registry)) == before, "a retired read registered an affiliate code"
 
 
 @pytest.fixture(scope="module")
@@ -380,7 +373,8 @@ def test_head_is_not_a_visitor_to_the_homepage_experiment(experiment_server):
 _KNOWN_GET_WRITERS = {
     ("auth", "redeem_link_token"), ("auth", "create_session"),
     ("unsubscribe", "add"),
-    ("affiliate", "code_for_email"), ("affiliate", "stats"),
+    # ("affiliate", ...) left this list on 2026-09-27: its endpoints are
+    # retired (410) and no GET writes the code registry any more (10A).
     ("", "_ab_log"),
 }
 
@@ -502,7 +496,10 @@ class Handler:
         if path == "/by-argument":
             affiliate.code_for_email(email, register=not self._is_head())
 '''
-    seen, offenders = _unguarded_writer_calls(planted)
+    # The scanner's logic, not today's writer list: plant writers it knows.
+    seen, offenders = _unguarded_writer_calls(
+        planted, writers=frozenset(_KNOWN_GET_WRITERS | {("affiliate", "code_for_email"),
+                                                        ("unsubscribe", "add")}))
     assert seen == {"unsubscribe.add", "affiliate.code_for_email"}
     assert offenders == ["do_GET:10 unsubscribe.add"], offenders
 
@@ -536,7 +533,10 @@ class Handler:
             else:
                 unsubscribe.add(email)
 '''
-    seen, offenders = _unguarded_writer_calls(planted)
+    # The scanner's logic, not today's writer list: plant writers it knows.
+    seen, offenders = _unguarded_writer_calls(
+        planted, writers=frozenset(_KNOWN_GET_WRITERS | {("affiliate", "code_for_email"),
+                                                        ("unsubscribe", "add")}))
     assert seen == {"unsubscribe.add", "affiliate.code_for_email"}
     # Line 6: the writer sits in the HEAD branch. Line 8: the flag is inverted.
     # Line 24: the writer sits in the else-branch of `not _is_head()`, which is

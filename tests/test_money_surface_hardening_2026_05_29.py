@@ -105,12 +105,13 @@ def test_btc_claim_empty_body_is_gone_and_does_not_500(server):
 # --------------------------------------------------------- affiliate payout glue
 
 def test_affiliate_payout_fails_closed_not_500(server):
-    """Dispatched-but-undefined handler used to AttributeError → 500. Now it
-    fails closed with a clear 503 and never auto-grants value."""
+    """Dispatched-but-undefined handler used to AttributeError → 500; it then
+    failed closed with 503. Since 2026-09-27 the program is retired (10A):
+    410, and still never auto-grants value."""
     code = _post(f"{server}/api/me/affiliate/payout",
                  body=b'{"method":"credits"}')
     assert code != 500, "affiliate payout must not 500 (missing-handler regression)"
-    assert code == 503
+    assert code == 410
 
 
 # --------------------------------------------------------- XFF bypass (pure unit)

@@ -35,7 +35,6 @@ from urllib.parse import unquote_plus
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import engine  # noqa: E402
 import acceptance_hook  # noqa: E402
-import affiliate  # noqa: E402
 import analytics  # noqa: E402
 import api_keys  # noqa: E402
 import blog  # noqa: E402
@@ -697,6 +696,17 @@ def _pack_recover_resend(addr: str) -> None:
                 mailer.send_pack_claim_email(addr, code, remaining)
         except Exception as e:  # noqa: BLE001
             sys.stderr.write(f"[pack-recover] resend of one code failed: {type(e).__name__}\n")
+
+
+# Founder decision 2026-09-27 (10A): the account-level referral/affiliate
+# program never worked end to end (the Stripe webhook cannot resolve its codes,
+# nothing ever recorded a signup, no page offered it) and every GET wrote the
+# code registry. Its endpoints answer 410. Pack referral links in claim emails
+# are a different program and work.
+_AFFILIATE_RETIRED = {
+    "error": "The account referral program is retired.",
+    "detail": "Referral links in Pack claim emails still work.",
+}
 
 
 def _json_response(handler: BaseHTTPRequestHandler, status: int, payload: dict) -> None:
@@ -2365,29 +2375,10 @@ class Handler(BaseHTTPRequestHandler):
             _json_response(self, 200, {"webhooks": webhooks.list_for_email(email)})
             return
         if path == "/api/me/referral-code":
-            email = self._session_email()
-            if not email:
-                _json_response(self, 401, {"error": "not authenticated"})
-                return
-            code = affiliate.code_for_email(email, register=not self._is_head())
-            site = os.environ.get("SITE_URL", "").rstrip("/")
-            share_url = f"{site}/?ref={code}" if (site and code) else (
-                f"/?ref={code}" if code else ""
-            )
-            _json_response(self, 200, {
-                "ref_code": code,
-                "share_url": share_url,
-            })
+            _json_response(self, 410, _AFFILIATE_RETIRED)
             return
         if path == "/api/me/affiliate":
-            email = self._session_email()
-            if not email:
-                _json_response(self, 401, {"error": "not authenticated"})
-                return
-            s = affiliate.stats(email, register=not self._is_head())
-            # Privacy: stats() returns aggregate counters + masked history;
-            # never an email or referee identifier. Pass through as-is.
-            _json_response(self, 200, s)
+            _json_response(self, 410, _AFFILIATE_RETIRED)
             return
         if path == "/api/me/team":
             email = self._session_email()
@@ -3909,25 +3900,10 @@ class Handler(BaseHTTPRequestHandler):
                              name="pack-recover", daemon=True).start()
 
     def _handle_affiliate_payout(self) -> None:
-        """POST /api/me/affiliate/payout.
-
-        do_POST dispatches here, but the handler was never defined — every
-        request 500'd with an AttributeError. The backing logic exists
-        (affiliate.request_payout), but self-serve payouts are intentionally
-        NOT enabled yet: the BTC/credit payout rail is a deferred feature and
-        the "credits" method would auto-grant boosted value. Fail CLOSED with a
-        clear, honest message instead of crashing, and never settle value
-        autonomously. To enable self-serve payouts later, wire this handler to
-        affiliate.request_payout(email, method, destination) behind a session
-        check (see _handle_refund_request for the session-gating pattern).
-        """
-        _json_response(self, 503, {
-            "ok": False,
-            "reason": "payouts_not_self_serve",
-            "error": "Referral payouts are settled manually for now — reply to "
-                     "your referral email with your payout details and we'll "
-                     "process it.",
-        })
+        """POST /api/me/affiliate/payout: retired with the program (10A). It
+        never settled anything (it answered 503 "settled manually"), and no
+        signup was ever recorded for a payout to be owed."""
+        _json_response(self, 410, _AFFILIATE_RETIRED)
 
     def _parse_unsub_email(self) -> str:
         """Extract ?e=<email> from the request path. Returns '' if absent/invalid."""
