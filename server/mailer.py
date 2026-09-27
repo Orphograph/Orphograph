@@ -385,6 +385,32 @@ def send_pack_claim_email(to: str, claim_code: str, credit_count: int) -> bool:
     return _send(to, subject, text, html)
 
 
+def send_pack_clearing_email(to: str) -> bool:
+    """A pack paid by a delayed method (bank debit) is delivered when the
+    payment settles, days later (founder decision 2026-09-26). This notice
+    tells the buyer so at checkout. Founder decision 2026-09-27 (1A). No
+    code exists yet, so none is shown."""
+    subject = "Orphograph — your Pack payment is clearing"
+    text = (
+        "Receipt of your order is acknowledged. It was paid by a bank "
+        "payment, which takes a few business days to clear.\n\n"
+        "Your Pack's claim code will be sent to this address as soon as "
+        "Stripe confirms the payment. Nothing further is required of you.\n\n"
+        "Correspondence regarding this order may be addressed to this "
+        "thread by reply.\n"
+    )
+    html = (
+        "<p>Receipt of your order is acknowledged. It was paid by a bank "
+        "payment, which takes <strong>a few business days</strong> to "
+        "clear.</p>"
+        "<p>Your Pack's claim code will be sent to this address as soon as "
+        "Stripe confirms the payment. Nothing further is required of you.</p>"
+        "<p style=\"color:#666;font-size:13px;\">Correspondence regarding "
+        "this order may be addressed to this thread by reply.</p>"
+    )
+    return _send(to, subject, text, html, transactional=True, category="pack_clearing")
+
+
 def send_pack_gift_email(
     to: str,
     from_email: str,
