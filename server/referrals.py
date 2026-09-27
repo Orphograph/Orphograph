@@ -8,15 +8,17 @@ parties: +10 bonus credits to the new buyer's claim code, +10
 added back to the referrer's original claim code.
 
 Guardrails:
-- A given referee can only credit a referrer once (block double
-  credit on retries).
-- A buyer cannot self-refer (cannot use their own ref code).
-- A revoked or zeroed claim code cannot be used as a referrer.
+- A given referee is credited once per referrer (whoever holds the
+  referring pack), whichever of the referrer's packs or codes is used.
+- A buyer cannot self-refer: a code whose pack the buyer holds (matched
+  by email id) is refused, whichever of their packs it came from.
+- A referral code carries nothing of the claim code it rewards (it is an
+  HMAC of it) and resolves only by exact match.
 
 Storage: append-only JSONL of referral events.
 
 Public API:
-    code_for(claim_code) -> str                # legacy: derived from claim_code
+    code_for(claim_code) -> str                # keyed digest of the claim code, stable
     code_for_email(email) -> str               # per-customer stable code (see affiliate.py)
     email_for_ref_code(ref_code) -> str | None # → referrer email_id hash (NOT plaintext)
     apply(ref_code, new_buyer_email, new_claim_code) -> dict
@@ -30,6 +32,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import affiliate
+import auth
 import credits
 from file_lock import locked
 
@@ -43,16 +46,29 @@ def _iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
-def code_for(claim_code: str) -> str:
-    """The referral code IS the claim code prefix. Reusing the existing
-    bearer credential keeps the data model simple — we don't need a
-    separate referral_codes ledger to look up by code.
+# Until 2026-09-27 the code was ref_ + claim_code[3:15]: 12 of the 16 random
+# characters of the bearer claim code, in a link the claim email asks the buyer
+# to share. It is now a keyed digest of the claim code (the installation's HMAC
+# secret, which account ids already depend on, with its own label), so the
+# link says nothing about the credential. Codes already mailed in the old shape
+# keep working, matched exactly but without case: web/app.js lowercases every
+# ?ref= before checkout, and a legacy code is mixed-case base64. Lengths tell
+# the two apart. The account-level affiliate codes (8 hex, affiliate.py) are
+# NOT resolved here: they resolve to nothing, as they always have.
+CODE_HEX_LEN = 10
+LEGACY_NEEDLE_LEN = 12
+_CODE_LABEL = b"orphograph-referral-code-v1:"
 
-    Format: ref_<first 12 chars of the claim_code after pk_>.
+
+def code_for(claim_code: str) -> str:
+    """The referral code for a pack: ref_<10 hex of HMAC(secret, claim code)>.
+
+    Stable for a given claim code (it is printed in the claim email) and
+    reveals nothing of it.
     """
     if not claim_code or not claim_code.startswith("pk_"):
         return ""
-    return "ref_" + claim_code[3:15]
+    return "ref_" + auth.keyed_hex(_CODE_LABEL, claim_code)[:CODE_HEX_LEN]
 
 
 def code_for_email(email: str) -> str:
@@ -75,33 +91,85 @@ def email_id_for_ref_code(ref_code: str) -> str | None:
 
 
 def _claim_code_from_ref(ref_code: str) -> str:
-    if not ref_code or not ref_code.startswith("ref_"):
-        return ""
-    # We don't store a ref→claim mapping; we scan the credit ledger to
-    # find a claim code whose first chars match. Cheap at MVP scale
-    # (thousands of rows max), revisit if 100k+ packs sold.
-    if not credits.LEDGER_PATH.exists():
+    """The pack a referral code rewards, matched EXACTLY, or "".
+
+    The old lookup accepted a needle of any length, so `ref_` (empty) matched
+    the first pack in the ledger and any short prefix matched some pack: a
+    buyer could collect the bonus with no one's code and credit a stranger.
+    Only the two real shapes resolve now. No ref→claim mapping is stored; the
+    credit ledger is scanned, which is cheap at this scale (revisit past
+    100k packs).
+    """
+    if not isinstance(ref_code, str) or not ref_code.startswith("ref_"):
         return ""
     needle = ref_code[len("ref_"):]
+    if len(needle) == CODE_HEX_LEN:
+        def matches(claim: str) -> bool:
+            return code_for(claim) == ref_code
+    elif len(needle) == LEGACY_NEEDLE_LEN:
+        needle = needle.lower()
+
+        def matches(claim: str) -> bool:
+            return claim[3:3 + LEGACY_NEEDLE_LEN].lower() == needle
+    else:
+        return ""
+    if not credits.LEDGER_PATH.exists():
+        return ""
+    seen: set[str] = set()
     for row in credits.iter_ledger_rows():
         claim = row.get("claim_code", "")
-        if isinstance(claim, str) and claim.startswith("pk_") and claim[3:3 + len(needle)] == needle:
+        if not isinstance(claim, str) or not claim.startswith("pk_") or claim in seen:
+            continue
+        seen.add(claim)
+        if matches(claim):
             return claim
     return ""
 
 
-def _already_credited(new_buyer_email: str, ref_code: str) -> bool:
+def _holder_email_id(claim_code: str) -> str:
+    """Email id of whoever holds a pack: its mint row's address.
+
+    Referral bonus rows are skipped; before 2026-09-26 they named the BUYER,
+    not the holder (see credits.is_referral_bonus_row)."""
+    for row in credits.iter_ledger_rows():
+        if row.get("claim_code") != claim_code or credits.is_referral_bonus_row(row):
+            continue
+        email = row.get("email")
+        if isinstance(email, str) and email.strip():
+            return auth.email_id(email.strip())
+    return ""
+
+
+def _referrer_identity(referrer_claim: str) -> str:
+    """Who refers: the email id holding the pack, or the pack itself when no
+    mint row names an address."""
+    return _holder_email_id(referrer_claim) or f"pack:{referrer_claim}"
+
+
+def _already_credited(buyer_eid: str, referrer_claim: str) -> bool:
+    """Has this buyer already been credited for a referral by this referrer?
+
+    Keyed on the REFERRER (whoever holds the referring pack) and the buyer's
+    email id, not on the code string and the raw address: a pack has two
+    valid codes (the legacy one already mailed and the current one), a
+    referrer can hold several packs, and `Bob@` is `bob@`."""
     if not REFERRAL_LEDGER.exists():
         return False
+    me = _referrer_identity(referrer_claim)
     with REFERRAL_LEDGER.open() as f:
         for line in f:
             try:
                 row = json.loads(line)
             except (json.JSONDecodeError, ValueError):
                 continue
-            if row.get("new_buyer_email") == new_buyer_email and \
-               row.get("ref_code") == ref_code and \
-               row.get("event") == "credited":
+            if not isinstance(row, dict) or row.get("event") != "credited":
+                continue
+            email = row.get("new_buyer_email")
+            if not isinstance(email, str) or auth.email_id(email.strip()) != buyer_eid:
+                continue
+            other = row.get("referrer_claim_code")
+            if isinstance(other, str) and (other == referrer_claim
+                                           or _referrer_identity(other) == me):
                 return True
     return False
 
@@ -112,15 +180,21 @@ def apply(ref_code: str, new_buyer_email: str, new_claim_code: str) -> dict:
     Returns {"ok": True, "bonus_credits": N, "referrer_credited": True}
     on success; {"ok": False, "reason": "..."} otherwise.
     """
-    if not ref_code or not new_buyer_email or not new_claim_code:
+    if (not ref_code or not isinstance(new_buyer_email, str)
+            or not new_buyer_email.strip() or not new_claim_code):
         return {"ok": False, "reason": "missing input"}
 
     referrer_claim = _claim_code_from_ref(ref_code)
     if not referrer_claim:
         return {"ok": False, "reason": "unknown referral code"}
-    if referrer_claim == new_claim_code:
+    # Comparing the two claim codes alone could never fire (a new pack is not
+    # the one its code came from), so a repeat buyer used an earlier pack's
+    # code and collected both bonuses. The buyer is who holds the referrer.
+    buyer_eid = auth.email_id(new_buyer_email.strip())
+    if referrer_claim == new_claim_code or (
+            buyer_eid and _holder_email_id(referrer_claim) == buyer_eid):
         return {"ok": False, "reason": "cannot self-refer"}
-    if _already_credited(new_buyer_email, ref_code):
+    if _already_credited(buyer_eid, referrer_claim):
         return {"ok": False, "reason": "already credited"}
 
     # Atomicity: hold a sentinel lock around the read+write so two
@@ -129,7 +203,7 @@ def apply(ref_code: str, new_buyer_email: str, new_claim_code: str) -> dict:
     # processed-events ledger, but defense in depth).
     lockfile = REFERRAL_LEDGER.with_suffix(REFERRAL_LEDGER.suffix + ".lock")
     with locked(lockfile, mode="a", exclusive=True):
-        if _already_credited(new_buyer_email, ref_code):
+        if _already_credited(buyer_eid, referrer_claim):
             return {"ok": False, "reason": "already credited (race)"}
         # +10 to the new buyer (on top of their Pack's 10).
         # email="" like the referrer row below: the mint row already names the
@@ -161,7 +235,11 @@ def apply(ref_code: str, new_buyer_email: str, new_claim_code: str) -> dict:
                 "bonus_each": REFERRAL_BONUS,
             }, separators=(",", ":")) + "\n")
 
+    # The pack is named by its current code, never by the code as received:
+    # a legacy code is 12 characters of the referrer's claim code, and this
+    # line goes to the stream the access log writes to.
     sys.stderr.write(
-        f"[referrals] +{REFERRAL_BONUS}/each — {ref_code} → new buyer {new_buyer_email[:1]}***\n"
+        f"[referrals] +{REFERRAL_BONUS}/each — {code_for(referrer_claim)} → "
+        f"new buyer {new_buyer_email[:1]}***\n"
     )
     return {"ok": True, "bonus_credits": REFERRAL_BONUS, "referrer_credited": True}

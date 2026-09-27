@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import re
+
 import pytest
 
+import auth
 import credits
 import referrals
 
@@ -10,11 +13,17 @@ import referrals
 def _isolated(tmp_path, monkeypatch):
     monkeypatch.setattr(credits, "LEDGER_PATH", tmp_path / "credits.jsonl")
     monkeypatch.setattr(referrals, "REFERRAL_LEDGER", tmp_path / "referrals.jsonl")
+    monkeypatch.setattr(auth, "_HMAC_SECRET_CACHE", b"test-referral-secret-0123456789ab")
     yield
 
 
-def test_code_for_returns_predictable_prefix():
-    assert referrals.code_for("pk_abc123def456ghi") == "ref_abc123def456"
+def test_code_for_is_a_stable_keyed_digest():
+    # This test used to pin ref_ + claim_code[3:15], which put 12 of the 16
+    # random characters of the bearer code into a shareable link (2026-09-27).
+    code = referrals.code_for("pk_abc123def456ghi")
+    assert re.fullmatch(r"ref_[0-9a-f]{10}", code), code
+    assert code == referrals.code_for("pk_abc123def456ghi")
+    assert "abc123" not in code
 
 
 def test_code_for_handles_bad_input():
@@ -29,9 +38,7 @@ def test_apply_credits_both_parties(tmp_path):
     credits.add_credits(new_buyer, "bob@b.com", 10, "stripe:cs_bob")
 
     ref_code = referrals.code_for(referrer)
-    # ref_code is "ref_" + claim_code[3:15] = "ref_alice1234567" (12-char slice)
-    assert ref_code.startswith("ref_alice")
-    assert len(ref_code) == 4 + 12
+    assert not ref_code.startswith("ref_alice"), "the code must not be a slice of the claim code"
 
     result = referrals.apply(ref_code, "bob@b.com", new_buyer)
     assert result["ok"] is True

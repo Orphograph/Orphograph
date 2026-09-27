@@ -284,3 +284,20 @@ def test_the_final_review_shapes(server):
     text = _log(data_dir)
     assert code not in text and "someone" not in text
     assert "/?[redacted]=[redacted]" in text, "control: the unknown key was logged, redacted"
+
+
+def test_a_legacy_referral_code_does_not_reach_the_log(server):
+    """Until 2026-09-27 a referral code was ref_ + 12 characters of the bearer
+    claim code, and those links are still out in claim emails; `ref` is a kept
+    key, so a visit through one wrote most of a spendable credential to the log
+    (found by /code-review high 275). Short partner codes and the current
+    10-hex codes stay readable."""
+    base, data_dir = server
+    legacy = "ref_aB3xQ9-_Zk7W"            # 12 base64url characters after ref_
+    pasted = "pk_aB3xQ9-_Zk7WmN2p"          # a whole claim code in the ref slot
+    _srv.raw_request(base, f"/?ref={legacy}")
+    _srv.raw_request(base, f"/pricing?ref={pasted}")
+    _srv.raw_request(base, "/?ref=ref_0123456789")
+    text = _log(data_dir)
+    assert "aB3xQ9" not in text, "a legacy referral code (12 claim-code characters) was logged"
+    assert "GET /?ref=ref_0123456789 " in text, "a current referral code should stay readable"

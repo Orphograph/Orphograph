@@ -10,7 +10,16 @@ from __future__ import annotations
 
 import pytest
 
+import auth
 import newsletter
+
+
+@pytest.fixture(autouse=True)
+def _pinned_secret(monkeypatch):
+    # The confirm token is signed with the installation secret. Without this,
+    # the first signer in the process created a real `.hmac_secret` in the
+    # checkout's data directory (the repo root in a worktree), found 2026-09-27.
+    monkeypatch.setattr(auth, "_HMAC_SECRET_CACHE", b"test-newsletter-secret-0123456789")
 
 
 class TestConfirmToken:
