@@ -240,3 +240,80 @@ def test_a_duplicate_is_flagged_even_when_both_checkouts_complete_first(webhook,
     assert second.get("duplicate_subscription") is True, second
     err = capsys.readouterr().err
     assert "DUPLICATE subscription" in err and "sub_A" in err and "sub_B" in err, err
+
+
+# --- review of 4b0ae7e: what the account acts on is the ACTIVE subscription -------
+
+def _old_canceled_new_active(ledgers):
+    subscriptions.record_customer_email("cus_old", "bob@example.com")
+    subscriptions.record_customer_email("cus_new", "bob@example.com")
+    subscriptions.record_subscription_event("cus_old", "active", FUTURE, sub_id="sub_old")
+    subscriptions.record_subscription_event("cus_new", "active", FUTURE, sub_id="sub_new")
+    subscriptions.record_subscription_event("cus_old", "canceled", FUTURE, sub_id="sub_old")
+
+
+def test_the_account_acts_on_the_subscription_still_being_paid(ledgers):
+    """The page said Active (is_active) while status_for and
+    stripe_subscription_id_for still named the newest row, the canceled
+    duplicate, so Cancel could only hit the subscription that had ended."""
+    _old_canceled_new_active(ledgers)
+    assert subscriptions.stripe_subscription_id_for("bob@example.com") == "sub_new"
+    assert (subscriptions.status_for("bob@example.com") or {}).get("status") == "active"
+
+
+def test_with_nothing_active_the_newest_row_still_speaks(ledgers):
+    """Control: an ended subscription is still reported as ended."""
+    subscriptions.record_customer_email("cus_a", "ann@example.com")
+    subscriptions.record_subscription_event("cus_a", "active", FUTURE, sub_id="sub_a")
+    subscriptions.record_subscription_event("cus_a", "canceled", FUTURE, sub_id="sub_a")
+    assert (subscriptions.status_for("ann@example.com") or {}).get("status") == "canceled"
+    assert subscriptions.stripe_subscription_id_for("ann@example.com") == "sub_a"
+
+
+def test_a_duplicate_that_becomes_active_later_is_flagged_once(webhook, capsys):
+    """Created `incomplete` (a delayed payment), active on a later update: the
+    created-time check never saw it active. A renewal of an already active
+    subscription is not flagged again."""
+    for n in ("A", "B"):
+        subscriptions.record_customer_email(f"cus_{n}", "bob@example.com")
+    stripe_webhook.handle_event(_sub_event("evt_a1", "customer.subscription.created", "cus_A", "sub_A"))
+    stripe_webhook.handle_event(_sub_event("evt_b1", "customer.subscription.created", "cus_B", "sub_B",
+                                           status="incomplete"))
+    capsys.readouterr()
+    became = stripe_webhook.handle_event(_sub_event("evt_b2", "customer.subscription.updated",
+                                                    "cus_B", "sub_B"))
+    assert became.get("duplicate_subscription") is True, became
+    renewal = stripe_webhook.handle_event(_sub_event("evt_b3", "customer.subscription.updated",
+                                                     "cus_B", "sub_B"))
+    assert not renewal.get("duplicate_subscription"), renewal
+    assert capsys.readouterr().err.count("DUPLICATE subscription") == 1
+
+
+def test_a_row_with_no_subscription_id_is_still_overridden_by_any_later_row(ledgers):
+    """A hand-written row with no subscription id and no period end used to
+    be ended by whatever row came after it. Grouped on its own it would stay
+    active forever (found in review of 4b0ae7e)."""
+    with (ledgers / "subscriptions.jsonl").open("a") as f:
+        f.write(json.dumps({"email": "legacy@example.com", "status": "active",
+                            "current_period_end": None}) + "\n")
+    assert subscriptions.is_active("legacy@example.com")  # control: newest row of all
+    subscriptions.record_customer_email("cus_L", "legacy@example.com")
+    subscriptions.record_subscription_event("cus_L", "canceled", FUTURE, sub_id="sub_L")
+    assert not subscriptions.is_active("legacy@example.com")
+    assert (subscriptions.status_for("legacy@example.com") or {}).get("status") == "canceled"
+
+
+def test_one_duplicate_is_flagged_once_in_the_usual_event_order(webhook, capsys):
+    """completed and created both look for a duplicate; in the usual order
+    both saw it and the founder log said it twice."""
+    subscriptions.record_customer_email("cus_A", "bob@example.com")
+    stripe_webhook.handle_event(_sub_event("evt_a", "customer.subscription.created", "cus_A", "sub_A"))
+    capsys.readouterr()
+    done = stripe_webhook.handle_event(json.dumps({"id": "evt_cB", "type": "checkout.session.completed",
+        "data": {"object": {"id": "cs_B", "mode": "subscription", "payment_status": "paid",
+                            "customer": "cus_B", "subscription": "sub_B",
+                            "customer_email": "bob@example.com", "amount_total": 900}}}).encode())
+    assert done.get("duplicate_subscription") is True, done
+    made = stripe_webhook.handle_event(_sub_event("evt_b", "customer.subscription.created", "cus_B", "sub_B"))
+    assert not made.get("duplicate_subscription"), made
+    assert capsys.readouterr().err.count("DUPLICATE subscription") == 1

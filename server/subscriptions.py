@@ -262,25 +262,42 @@ def active_subscription_ids(email: str) -> list[str]:
     return [row["stripe_sub"] for row in subscriptions_for(email) if _row_is_active(row)]
 
 
-def status_for(email: str) -> dict | None:
-    return _latest_for_email(email)
-
-
-def stripe_subscription_id_for(email: str) -> str:
-    """Return the most recently seen Stripe sub_xxx id for this email."""
-    latest = _latest_for_email(email)
-    return (latest or {}).get("stripe_sub", "") or ""
-
-
-def is_active(email: str) -> bool:
-    """Does this address hold ANY active subscription now?
+def _current_row(email: str) -> dict | None:
+    """The row describing the subscription this address is on now: the newest
+    row of the most recently updated ACTIVE subscription, or, with none
+    active, the newest row of all.
 
     Each subscription is judged by its own newest row. Judging the newest row
     across all of them let one subscription's cancellation hide another that
-    is still being paid for, which is exactly what cancelling a duplicate
-    produced (found in review, 2026-09-27). Rows with no subscription id are
-    one group, so they keep the meaning they always had."""
-    newest: dict[str, dict] = {}
-    for row in _rows_for_email(email):
-        newest[row.get("stripe_sub") or ""] = row
-    return any(_row_is_active(row) for row in newest.values())
+    is still being paid for (what cancelling a duplicate produced), and every
+    reader must agree on the choice: the page, cancel, reactivate, the refund
+    request and the support lookup (found in review, 2026-09-27).
+
+    A row with no subscription id (hand-written; the webhook always records
+    the id) names no subscription of its own, so it keeps the meaning it
+    always had: it speaks only while it is the newest row of all."""
+    rows = _rows_for_email(email)
+    newest: dict[str, tuple[int, dict]] = {}
+    for i, row in enumerate(rows):
+        newest[row.get("stripe_sub") or ""] = (i, row)
+    last = len(rows) - 1
+    active = [(i, row) for sub, (i, row) in newest.items()
+              if _row_is_active(row) and (sub or i == last)]
+    if active:
+        return max(active, key=lambda pair: pair[0])[1]
+    return rows[-1] if rows else None
+
+
+def status_for(email: str) -> dict | None:
+    return _current_row(email)
+
+
+def stripe_subscription_id_for(email: str) -> str:
+    """The Stripe sub_xxx id this address is on now (see _current_row)."""
+    return (_current_row(email) or {}).get("stripe_sub", "") or ""
+
+
+def is_active(email: str) -> bool:
+    """Does this address hold ANY active subscription now? (see _current_row)"""
+    current = _current_row(email)
+    return bool(current) and _row_is_active(current)
