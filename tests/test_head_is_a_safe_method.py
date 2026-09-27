@@ -267,10 +267,13 @@ def test_head_on_every_get_route_leaves_the_data_dir_untouched(server, monkeypat
     # not otherwise request.
     paths += [f"/a/{token}", "/api/unsubscribe?e=class-guard@example.test", "/pay/crypto"]
 
-    # Some GET writes only happen for a visitor the server recognises: a
-    # signed-in account (first read of an affiliate code registers it) or an
-    # experiment cookie (a checkout view is attributed to its arm). An
-    # anonymous sweep never reaches those branches, so sweep as both.
+    # Some GET writes only happen for a visitor the server recognises: an
+    # experiment cookie (a checkout view is attributed to its arm) or a
+    # signed-in account. The one known account write, the first read of an
+    # affiliate code registering it, was retired on 2026-09-27, and no GET
+    # registers anything now. The signed-in branches are still where the
+    # next such writer would land, and an anonymous sweep never reaches
+    # them, so sweep as both.
     sid = _sign_in(base, data_dir, "class-guard-member@example.test")
     # One-time bootstrap, not request state: the first email-id computation in
     # a data dir creates its HMAC key. Production has had one since day one, so

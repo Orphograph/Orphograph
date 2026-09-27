@@ -1,9 +1,10 @@
 """test_affiliate_redirect.py — /affiliate must redirect, not 404.
 
-There is no standalone web/affiliate.html landing page; the affiliate /
-referral details live on the signed-in account page. The /affiliate route
-must therefore 302-redirect to /account instead of serving a missing
-static file (which previously produced a 404).
+The account-level affiliate program was retired on 2026-09-27 and never had
+a page: there is no web/affiliate.html, and the account page shows nothing
+about it. Old links to /affiliate still land on the account page. The route
+302-redirects to /account instead of serving a missing static file (which
+previously produced a 404).
 
 Mirrors the ThreadingHTTPServer harness + no-follow redirect handler used by
 tests/test_security_txt.py.
