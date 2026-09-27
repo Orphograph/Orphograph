@@ -37,6 +37,9 @@ def _isolate(tmp_path, monkeypatch):
                         lambda to, code, n: sent.append(code) or True)
     monkeypatch.setattr(stripe_webhook.mailer, "send_pack_gift_email",
                         lambda **kw: sent.append(kw.get("claim_code", "")) or True)
+    # The unpaid hold sends a clearing notice (1A): stubbed, never the real mailer.
+    monkeypatch.setattr(stripe_webhook.mailer, "send_pack_clearing_email",
+                        lambda *a, **k: True)
     yield sent
 
 
