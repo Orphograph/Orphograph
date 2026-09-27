@@ -176,6 +176,13 @@ def _settlement_failed(session_id: str) -> bool:
     return _session_delivered(session_id, "settlement_failed")
 
 
+def _is_gift_address(raw: str) -> bool:
+    """Is `metadata.gift_to_email` an address a pack can be gifted to? Minimal
+    shape check. One rule for the hold's notice and for the delivery, so the
+    notice never names a recipient the delivery will refuse."""
+    return bool(raw) and "@" in raw and len(raw) <= 254
+
+
 def _mark_processed(event_id: str, result: dict) -> None:
     if not event_id:
         return
@@ -479,13 +486,25 @@ def handle_event(payload: bytes) -> dict:
                 f"payment method): pack delivers when the payment settles\n"
             )
             # Founder decision 2026-09-27 (1A): tell the buyer it is clearing.
-            # Best effort, once: this event is answered 200 and marked processed
-            # either way, and Stripe sends one `completed` per session, so a
-            # failed send is not retried. Nothing depends on it: the claim code
-            # still goes out when the payment settles.
+            # Best effort, once per session: a second event about a session
+            # already told sends nothing. A send that returns False or raises
+            # counts as not sent, and this event is marked processed and
+            # answered either way. A notice that was not sent is tried again
+            # only if another event about this held session arrives. Nothing
+            # depends on it: the claim code still goes out when the payment
+            # settles.
             gift_to = ((session.get("metadata") or {}).get("gift_to_email") or "").strip()
-            notice = bool(mailer.send_pack_clearing_email(
-                customer_email, gift="@" in gift_to))
+            notice = False
+            if not _session_delivered(session_id, "clearing_notice_sent"):
+                try:
+                    notice = bool(mailer.send_pack_clearing_email(
+                        customer_email, gift=_is_gift_address(gift_to)))
+                except Exception as e:  # noqa: BLE001
+                    # Only the type: the exception's text can carry the address.
+                    _stderr(
+                        f"[stripe_webhook] clearing notice failed for session "
+                        f"{session_id}: {type(e).__name__}\n"
+                    )
             result = {"ok": True, "awaiting_settlement": True,
                       "session_id": session_id, "delivered": False,
                       "clearing_notice_sent": notice}
@@ -502,7 +521,7 @@ def handle_event(payload: bytes) -> dict:
         is_gift = False
         recipient_email = customer_email
         # Minimal email shape validation; mailer will skip cleanly if invalid.
-        if gift_to_raw and "@" in gift_to_raw and len(gift_to_raw) <= 254:
+        if _is_gift_address(gift_to_raw):
             recipient_email = gift_to_raw
             is_gift = True
         elif gift_to_raw:

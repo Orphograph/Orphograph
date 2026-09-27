@@ -386,31 +386,36 @@ def send_pack_claim_email(to: str, claim_code: str, credit_count: int) -> bool:
 
 
 def send_pack_clearing_email(to: str, gift: bool = False) -> bool:
-    """A pack paid by a delayed method (bank debit) is delivered when the
-    payment settles, days later (founder decision 2026-09-26). This notice
-    tells the buyer so at checkout. Founder decision 2026-09-27 (1A). No
-    code exists yet, so none is shown. On a gift the code goes to the
-    recipient, not to the buyer this is sent to."""
+    """A pack paid by a delayed method is delivered when the payment settles,
+    which can be days later (founder decision 2026-09-26). This notice tells
+    the buyer so at checkout. Founder decision 2026-09-27 (1A). No code
+    exists yet, so none is shown. On a gift the code goes to the recipient,
+    not to the buyer this is sent to. The text names no payment method and
+    makes no statement about money moving: the hold fires for every delayed
+    method, and this code does not know what the buyer's bank does with a
+    payment that fails."""
     who = "the recipient" if gift else "this address"
     subject = "Orphograph — your Pack payment is clearing"
     delivery = (f"The Pack's claim code will be sent to {who} as soon as "
                 f"Stripe confirms the payment.")
-    failure = ("If the bank payment does not go through, no Pack is issued and "
-               "nothing is charged.")
+    failure = "If the payment does not go through, no Pack is issued."
+    step = ("If your bank or payment provider asked you to complete a step, "
+            "please complete it. Otherwise nothing else is needed from you.")
     text = (
-        "Receipt of your order is acknowledged. It was paid by a bank "
-        "payment, which takes a few business days to clear.\n\n"
-        f"{delivery} Nothing else is needed from you while it clears. "
-        f"{failure}\n\n"
+        "Receipt of your order is acknowledged. The payment has not settled "
+        "yet: payments of this kind can take a few business days to "
+        "clear.\n\n"
+        f"{delivery} {failure}\n\n"
+        f"{step}\n\n"
         "Correspondence regarding this order may be addressed to this "
         "thread by reply.\n"
     )
     html = (
-        "<p>Receipt of your order is acknowledged. It was paid by a bank "
-        "payment, which takes <strong>a few business days</strong> to "
-        "clear.</p>"
-        f"<p>{delivery} Nothing else is needed from you while it clears. "
-        f"{failure}</p>"
+        "<p>Receipt of your order is acknowledged. The payment has not "
+        "settled yet: payments of this kind can take <strong>a few business "
+        "days</strong> to clear.</p>"
+        f"<p>{delivery} {failure}</p>"
+        f"<p>{step}</p>"
         "<p style=\"color:#666;font-size:13px;\">Correspondence regarding "
         "this order may be addressed to this thread by reply.</p>"
     )
