@@ -600,7 +600,7 @@ def test_unsubscribe_creates_a_ledger_directory_that_does_not_exist_yet(tmp_path
 
     ledger = tmp_path / "not-yet" / "deeper" / "suppressions.jsonl"
     monkeypatch.setattr(unsubscribe, "SUPPRESS_PATH", ledger)
-    assert unsubscribe.would_add("fresh@example.test") is True, "HEAD must agree with GET"
+    assert unsubscribe.can_append(ledger) is True, "the pre-check must agree with the writer"
     assert unsubscribe.add("fresh@example.test", source="test") is True
     assert ledger.exists() and "fresh@example.test" in ledger.read_text()
     assert unsubscribe.add("fresh@example.test", source="test") is False, "idempotent"
@@ -622,13 +622,35 @@ def test_unsubscribe_still_refuses_a_ledger_it_cannot_write(tmp_path, monkeypatc
     try:
         assert not os.access(ledger, os.W_OK), "control: the ledger is read-only"
         monkeypatch.setattr(unsubscribe, "SUPPRESS_PATH", ledger)
-        with pytest.raises(unsubscribe.SuppressionUnavailable):
-            unsubscribe.would_add("blocked@example.test")
+        assert not unsubscribe.can_append(ledger)
         with pytest.raises(unsubscribe.SuppressionUnavailable):
             unsubscribe.add("blocked@example.test", source="test")
         assert ledger.read_text() == "", "nothing may have been recorded"
     finally:
         ledger.chmod(0o600)
+
+
+def test_can_append_agrees_with_a_directory_the_writer_repairs(tmp_path):
+    """locked() chmods an existing parent it owns to 0700 before opening, so a
+    read-only directory this process owns is writable to the real writer. The
+    pre-check said no, and the unsubscribe POST (which pre-checks since
+    2026-09-27) refused a one-click unsubscribe the writer would have recorded
+    (found in review of 81760a5)."""
+    import os
+    from file_lock import can_append, locked
+    assert os.geteuid() != 0, "run this suite as a non-root user"
+    sub = tmp_path / "sub"
+    sub.mkdir()
+    sub.chmod(0o500)
+    target = sub / "suppressions.jsonl"
+    try:
+        assert not os.access(sub, os.W_OK), "control: the directory is read-only"
+        assert can_append(target) is True
+        with locked(target) as f:            # the writer does repair it
+            f.write("x\n")
+        assert target.read_text() == "x\n"
+    finally:
+        sub.chmod(0o700)
 
 
 def test_can_append_follows_what_the_real_writer_does(tmp_path):

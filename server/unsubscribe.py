@@ -52,22 +52,6 @@ def _is_new(email: str) -> bool:
     return not is_unsubscribed(email)
 
 
-def would_add(email: str) -> bool:
-    """What `add` would return right now, without writing. For HEAD on the
-    unsubscribe link: a scanner that only looked must not unsubscribe anyone."""
-    if not _is_new(email):
-        return False
-    # "Would add" includes "could add". A ledger we can read and not write
-    # used to answer HEAD with the success page while GET got no answer at all.
-    # Only HEAD asks: `add` itself writes, and maps a failed write below, so it
-    # does not also pre-check (a pre-check there refused a ledger whose parent
-    # directory did not exist yet, which the real write creates).
-    if not can_append(SUPPRESS_PATH):
-        raise SuppressionUnavailable(
-            f"suppression ledger is not writable: {SUPPRESS_PATH.name}")
-    return True
-
-
 def add(email: str, source: str = "user") -> bool:
     """Mark an email as unsubscribed. Idempotent — second call returns False."""
     if not _is_new(email):

@@ -79,6 +79,17 @@ def test_markup_is_encoded_never_rendered(server, payload):
 
 
 @pytest.mark.parametrize("payload", PAYLOADS)
+def test_the_done_page_encodes_markup_too(server, payload):
+    """The Done page shows the address as well, and since 2026-09-27 (9A) it
+    is served only to the POST; the GET tests above no longer reach it."""
+    import html
+    status, body, _ = _press(server, payload)
+    assert status == 200 and "Done" in body
+    assert payload not in body, "raw markup from the URL reached the Done page"
+    assert html.escape(payload) in body
+
+
+@pytest.mark.parametrize("payload", PAYLOADS)
 def test_unsubscribe_is_as_permissive_as_intake(server, data_dir, payload):
     """THE REVIEW FINDING, pinned: stranding an address is worse than storing
     an ugly one. Whatever the shape check admits must be recorded."""
