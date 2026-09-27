@@ -52,6 +52,7 @@ def _start_server(data_dir: Path, rate_per_day: str):
         "ORPHO_DATA_DIR": str(data_dir),
         "ORPHO_COOKIE_SECURE": "0",
         "RATE_LIMIT_PER_DAY": rate_per_day,
+        "CHECKOUT_RATE_PER_HOUR": "10",  # pinned: an inherited value moves the ceiling
         "NOWPAYMENTS_API_KEY": "test_dummy_key_not_real",
     }
     proc = subprocess.Popen(

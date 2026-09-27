@@ -303,7 +303,10 @@ _anchor_limiter = TokenBucket(
 # can make the providers create. In-memory: a restart refilling it is harmless.
 # CHECKOUT_RATE_PER_HOUR overrides the 10, so an operator can tighten it in an
 # incident with an env change, as RATE_LIMIT_PER_DAY did while checkout shared it.
-CHECKOUT_RATE_CAPACITY = max(1, int(os.environ.get("CHECKOUT_RATE_PER_HOUR", "10")))
+# A non-integer falls back to 10 with a log line rather than failing the boot
+# (which would take every route down with checkout), and the floor is 1 an
+# hour: the off switch is ORPHO_DISABLE_CHECKOUT, not this.
+CHECKOUT_RATE_CAPACITY = max(1, public_config._int_env("CHECKOUT_RATE_PER_HOUR", 10))
 CHECKOUT_RATE_REFILL = CHECKOUT_RATE_CAPACITY / 3600.0
 _checkout_limiter = TokenBucket(CHECKOUT_RATE_CAPACITY, CHECKOUT_RATE_REFILL)
 

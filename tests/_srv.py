@@ -88,6 +88,9 @@ def base_env(data_dir: str | os.PathLike, port: int, **extra: str) -> dict:
         # Default generous: a rate-limited response is the LIMITER's verdict,
         # not the handler's, and a test that cannot tell them apart is vacuous.
         "RATE_LIMIT_PER_DAY": "100000",
+        # Pinned for the same reason: an inherited value would move the
+        # checkout ceiling the budget tests assert exactly.
+        "CHECKOUT_RATE_PER_HOUR": "10",
         **extra,
     }
     env.pop("RESEND_API_KEY", None)

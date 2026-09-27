@@ -54,6 +54,18 @@ def test_the_operator_can_set_the_checkout_budget(tmp_path):
         assert [_checkout(base) for _ in range(3)] == [400, 400, 429]
 
 
+def test_a_malformed_budget_falls_back_instead_of_killing_the_server(tmp_path):
+    """An operator reaching for "half a checkout an hour" in an incident must
+    not take every route down with it: a non-integer falls back to the default
+    (found by review of d5d0839)."""
+    for base in _srv.server_processes(tmp_path, stub_calendars=True, stub_stripe=True,
+                                      STRIPE_SECRET_KEY="sk_test_not_a_real_key",
+                                      CHECKOUT_RATE_PER_HOUR="0.5"):
+        codes = [_checkout(base) for _ in range(11)]
+        assert codes[:10] == [400] * 10, codes
+        assert codes[10] == 429, codes
+
+
 def test_checkout_still_has_a_ceiling(tmp_path):
     for base in _srv.server_processes(tmp_path, stub_calendars=True, stub_stripe=True,
                                       STRIPE_SECRET_KEY="sk_test_not_a_real_key"):
