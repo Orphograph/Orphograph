@@ -715,6 +715,30 @@ def _json_response(handler: BaseHTTPRequestHandler, status: int, payload: dict) 
     handler.wfile.write(body)
 
 
+def _send_rate_limited(handler: BaseHTTPRequestHandler, retry_seconds: int,
+                       payload: dict, *, headers: tuple = ()) -> None:
+    """Every 429 the server sends: `payload` as compact JSON (with
+    retry_after_seconds), Retry-After, never cached. `headers` are extra
+    (name, value) pairs, e.g. sign-out's cookie-clearing Set-Cookie.
+
+    Nineteen answers built this by hand or through _json_response and had
+    drifted: some sent no-store and some did not, and nine never sent
+    Retry-After at all. tests/test_rate_limited_responses.py fails if the
+    number 429 appears anywhere else in this module."""
+    payload = {**payload, "retry_after_seconds": retry_seconds}
+    body = json.dumps(payload).encode("utf-8")
+    handler.send_response(429)
+    handler.send_header("Content-Type", "application/json; charset=utf-8")
+    handler.send_header("Retry-After", str(retry_seconds))
+    handler.send_header("Cache-Control", "no-store")
+    for name, value in headers:
+        handler.send_header(name, value)
+    handler.send_header("Content-Length", str(len(body)))
+    _security_headers(handler)
+    handler.end_headers()
+    handler.wfile.write(body)
+
+
 def _send_html(handler: BaseHTTPRequestHandler, status: int, html_body: str) -> None:
     body = html_body.encode("utf-8")
     ctype = "text/html; charset=utf-8"
@@ -2338,10 +2362,7 @@ class Handler(BaseHTTPRequestHandler):
                 return
             allowed, retry = _status_limiter.check(f"orderstat:{self._client_key()}")
             if not allowed:
-                _json_response(self, 429, {
-                    "error": "too many requests",
-                    "retry_after_seconds": int(retry) + 1,
-                })
+                _send_rate_limited(self, int(retry) + 1, {"error": "too many requests"})
                 return
             # Only a crypto order answers, and only by its own order id: see
             # credits.find_nowpayments_mint for what the looser lookup allowed.
@@ -3180,19 +3201,12 @@ class Handler(BaseHTTPRequestHandler):
                 Handler._record_demand(self,
                     "free_limit_reached", auth_path="free", surface="single",
                     outcome="limited")
-                self.send_response(429)
-                self.send_header("Content-Type", "application/json; charset=utf-8")
-                self.send_header("Retry-After", str(int(retry_after) + 1))
-                body = json.dumps({
+                _send_rate_limited(self, int(retry_after) + 1, {
                     "error": "rate limit exceeded",
                     "retry_after_seconds": int(retry_after) + 1,
                     "limit_per_day": ANCHOR_RATE_CAPACITY,
                     "hint": "Buy a Pack to anchor without rate limits.",
-                }).encode("utf-8")
-                self.send_header("Content-Length", str(len(body)))
-                _security_headers(self)
-                self.end_headers()
-                self.wfile.write(body)
+                })
                 return
         hash_hex = payload.get("hash_hex", "")
         sha512_hex = payload.get("sha512_hex")
@@ -3454,7 +3468,7 @@ class Handler(BaseHTTPRequestHandler):
         # Rate-limited by IP to prevent email bombing.
         allowed, retry = _anchor_limiter.check(f"auth:{self._client_key()}")
         if not allowed:
-            _json_response(self, 429, {"error": "too many requests", "retry_after_seconds": int(retry) + 1})
+            _send_rate_limited(self, int(retry) + 1, {"error": "too many requests"})
             return
         length = _read_content_length(self)
         if length <= 0 or length > MAX_BODY_BYTES:
@@ -3542,8 +3556,8 @@ class Handler(BaseHTTPRequestHandler):
                 if not allowed:
                     Handler._record_demand(self, "free_limit_reached", auth_path="free",
                                            surface="batch", outcome="limited")
-                    _json_response(self, 429, {"error": "rate limit exceeded",
-                        "retry_after_seconds": int(retry_after) + 1,
+                    _send_rate_limited(self, int(retry_after) + 1, {
+                        "error": "rate limit exceeded",
                         "limit_per_day": ANCHOR_RATE_CAPACITY,
                         "hint": "Buy a Pack or subscribe to skip rate limits."})
                     return
@@ -3829,7 +3843,7 @@ class Handler(BaseHTTPRequestHandler):
         # Same per-IP rate limit as the auth endpoint to prevent spam.
         allowed, retry = _anchor_limiter.check(f"waitlist:{self._client_key()}")
         if not allowed:
-            _json_response(self, 429, {"error": "too many requests", "retry_after_seconds": int(retry) + 1})
+            _send_rate_limited(self, int(retry) + 1, {"error": "too many requests"})
             return
         length = _read_content_length(self)
         if length <= 0 or length > MAX_BODY_BYTES:
@@ -3886,7 +3900,7 @@ class Handler(BaseHTTPRequestHandler):
         """
         allowed, retry = _anchor_limiter.check(f"pack_recover:{self._client_key()}")
         if not allowed:
-            _json_response(self, 429, {"error": "too many requests", "retry_after_seconds": int(retry) + 1})
+            _send_rate_limited(self, int(retry) + 1, {"error": "too many requests"})
             return
         length = _read_content_length(self)
         if length <= 0 or length > MAX_BODY_BYTES:
@@ -4605,18 +4619,10 @@ class Handler(BaseHTTPRequestHandler):
             return
         allowed, retry_after = _api_key_issue_limiter.check(f"apikey-issue:{fold_email(email)}")
         if not allowed:
-            self.send_response(429)
-            self.send_header("Content-Type", "application/json; charset=utf-8")
-            self.send_header("Retry-After", str(int(retry_after) + 1))
-            self.send_header("Cache-Control", "no-store")
-            body = json.dumps({
+            _send_rate_limited(self, int(retry_after) + 1, {
                 "error": "too many new keys; try again later",
                 "retry_after_seconds": int(retry_after) + 1,
-            }).encode("utf-8")
-            self.send_header("Content-Length", str(len(body)))
-            _security_headers(self)
-            self.end_headers()
-            self.wfile.write(body)
+            })
             return
         key = api_keys.issue(email)
         _json_response(self, 200, {
@@ -4684,15 +4690,8 @@ class Handler(BaseHTTPRequestHandler):
         allowed, retry_after = _ln_invoice_limiter.check(f"ln-invoice:{self._client_key()}")
         if not allowed:
             retry = int(retry_after) + 1
-            body = json.dumps({"error": "too many invoice requests",
-                               "retry_after_seconds": retry}).encode("utf-8")
-            self.send_response(429)
-            self.send_header("Content-Type", "application/json; charset=utf-8")
-            self.send_header("Retry-After", str(retry))
-            self.send_header("Content-Length", str(len(body)))
-            _security_headers(self)
-            self.end_headers()
-            self.wfile.write(body)
+            _send_rate_limited(self, retry, {"error": "too many invoice requests",
+                                             "retry_after_seconds": retry})
             return
         ok, inv = lightning.create_invoice(lightning.PRICE_SATS,
                                            "orphograph anchor")
@@ -4723,18 +4722,11 @@ class Handler(BaseHTTPRequestHandler):
             if not busy:
                 _folder_in_flight.add(key)
         if busy:
-            self.send_response(429)
-            body = json.dumps({
+            _send_rate_limited(self, 5, {
                 "error": "a folder anchor from this address is already in progress",
                 "detail": "Send folder manifests one at a time. Nothing was charged.",
                 "retry_after_seconds": 5,
-            }).encode("utf-8")
-            self.send_header("Content-Type", "application/json; charset=utf-8")
-            self.send_header("Retry-After", "5")
-            self.send_header("Content-Length", str(len(body)))
-            _security_headers(self)
-            self.end_headers()
-            self.wfile.write(body)
+            })
             return
         try:
             self._anchor_folder_one()
@@ -4790,19 +4782,12 @@ class Handler(BaseHTTPRequestHandler):
             Handler._record_demand(self,
                 "free_limit_reached", auth_path="free", surface="folder",
                 outcome="limited")
-            self.send_response(429)
-            self.send_header("Content-Type", "application/json; charset=utf-8")
-            self.send_header("Retry-After", str(int(retry_after) + 1))
-            body = json.dumps({
+            _send_rate_limited(self, int(retry_after) + 1, {
                 "error": "rate limit exceeded",
                 "retry_after_seconds": int(retry_after) + 1,
                 "limit_per_day": ANCHOR_RATE_CAPACITY,
                 "hint": "Buy a Pack or sign in to anchor without rate limits.",
-            }).encode("utf-8")
-            self.send_header("Content-Length", str(len(body)))
-            _security_headers(self)
-            self.end_headers()
-            self.wfile.write(body)
+            })
 
         client_key = self._client_key()
         api_key = self.headers.get("X-Orpho-Api-Key", "").strip()
@@ -4817,19 +4802,12 @@ class Handler(BaseHTTPRequestHandler):
         reject_tokens = _folder_reject_limiter.peek(client_key)
         if reject_tokens < 1.0:
             retry = int((1.0 - reject_tokens) / FOLDER_REJECT_REFILL) + 1
-            self.send_response(429)
-            body = json.dumps({
+            _send_rate_limited(self, retry, {
                 "error": "too many rejected manifests",
                 "detail": ("Recent manifests from this address failed validation. "
                            "Nothing was charged; check the manifest and retry later."),
                 "retry_after_seconds": retry,
-            }).encode("utf-8")
-            self.send_header("Content-Type", "application/json; charset=utf-8")
-            self.send_header("Retry-After", str(retry))
-            self.send_header("Content-Length", str(len(body)))
-            _security_headers(self)
-            self.end_headers()
-            self.wfile.write(body)
+            })
             return
         if not pack_available and not subscription_active:
             free_tokens = _anchor_limiter.peek(client_key)
@@ -5274,9 +5252,9 @@ class Handler(BaseHTTPRequestHandler):
           - All errors return a generic message — no PII leak in failure cases
         """
         # Light per-IP rate limit
-        allowed, _ = _anchor_limiter.check(f"recover:{self._client_key()}")
+        allowed, retry = _anchor_limiter.check(f"recover:{self._client_key()}")
         if not allowed:
-            _json_response(self, 429, {"error": "too many requests"})
+            _send_rate_limited(self, int(retry) + 1, {"error": "too many requests"})
             return
         length = _read_content_length(self)
         if length <= 0 or length > MAX_BODY_BYTES:
@@ -5494,9 +5472,9 @@ class Handler(BaseHTTPRequestHandler):
             _json_response(self, 401, {"error": "not authenticated"})
             return
         # Rate-limit so a single account cannot spam the ledger / inbox.
-        allowed, _ = _anchor_limiter.check(f"refund:{auth.email_id(email)}")
+        allowed, retry = _anchor_limiter.check(f"refund:{auth.email_id(email)}")
         if not allowed:
-            _json_response(self, 429, {"error": "too many requests"})
+            _send_rate_limited(self, int(retry) + 1, {"error": "too many requests"})
             return
         length = _read_content_length(self)
         if length < 0 or length > MAX_BODY_BYTES:
@@ -5605,15 +5583,8 @@ class Handler(BaseHTTPRequestHandler):
         if allowed:
             return False
         retry = int(retry_after) + 1
-        body = json.dumps({"error": "too many subscription changes",
-                           "retry_after_seconds": retry}).encode("utf-8")
-        self.send_response(429)
-        self.send_header("Content-Type", "application/json; charset=utf-8")
-        self.send_header("Retry-After", str(retry))
-        self.send_header("Content-Length", str(len(body)))
-        _security_headers(self)
-        self.end_headers()
-        self.wfile.write(body)
+        _send_rate_limited(self, retry, {"error": "too many subscription changes",
+                                         "retry_after_seconds": retry})
         return True
 
     def _handle_cancel_subscription(self) -> None:
@@ -5750,7 +5721,6 @@ class Handler(BaseHTTPRequestHandler):
         cookies = SimpleCookie()
         cookies.load(self.headers.get("Cookie", "") or "")
         sid = cookies.get(auth.cookie_name(COOKIE_SECURE)) or cookies.get("orpho_sid") or cookies.get("__Host-orpho_sid")
-        status, payload, retry_after = 200, {"ok": True}, 0
         # No cookie means no scan and no write, so it is neither counted nor
         # refused. A cookie is revoked only when it is a live session: a
         # `revoked` row for anything else is ledger growth that every later
@@ -5763,18 +5733,17 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 allowed, wait = _signout_miss_limiter.check(f"signout:{self._client_key()}")
                 if not allowed:
-                    retry_after = int(wait) + 1
-                    status, payload = 429, {"error": "too many requests",
-                                            "retry_after_seconds": retry_after}
-        self.send_response(status)
+                    # Cleared on the refused answer too: both shipped clients
+                    # (account.js, statusbar.js) ignore the status and go home,
+                    # so this is what signs the browser out.
+                    _send_rate_limited(self, int(wait) + 1, {"error": "too many requests"},
+                                       headers=(("Set-Cookie", auth.clear_session_cookie(
+                                           secure=COOKIE_SECURE)),))
+                    return
+        self.send_response(200)
         self.send_header("Content-Type", "application/json; charset=utf-8")
-        # Cleared on every answer, the refused one included: both shipped
-        # clients (account.js, statusbar.js) ignore the status and go home,
-        # so this is what signs the browser out.
         self.send_header("Set-Cookie", auth.clear_session_cookie(secure=COOKIE_SECURE))
-        if retry_after:
-            self.send_header("Retry-After", str(retry_after))
-        body = json.dumps(payload).encode("utf-8")
+        body = json.dumps({"ok": True}).encode("utf-8")
         self.send_header("Content-Length", str(len(body)))
         _security_headers(self)
         self.end_headers()
@@ -5791,9 +5760,9 @@ class Handler(BaseHTTPRequestHandler):
         # Rate-limit per account, matching every other authenticated /api/me POST
         # (security review 2026-06-22) — bounds ledger-append churn from a
         # logout-all loop and restores parity with the sibling handlers.
-        allowed, _ = _anchor_limiter.check(f"logout-all:{auth.email_id(email)}")
+        allowed, retry = _anchor_limiter.check(f"logout-all:{auth.email_id(email)}")
         if not allowed:
-            _json_response(self, 429, {"error": "too many requests"})
+            _send_rate_limited(self, int(retry) + 1, {"error": "too many requests"})
             return
         n = auth.revoke_all_sessions(email)
         body = json.dumps({"ok": True, "sessions_revoked": n}).encode("utf-8")
@@ -5832,9 +5801,9 @@ class Handler(BaseHTTPRequestHandler):
         # Light rate-limit so this can't be used as a session-id oracle. After
         # the shape check: a malformed id costs nothing, so a page that sent a
         # bad value does not spend the buyer's budget for a real lookup.
-        allowed, _ = _session_lookup_limiter.check(f"stripe-session:{self._client_key()}")
+        allowed, retry = _session_lookup_limiter.check(f"stripe-session:{self._client_key()}")
         if not allowed:
-            _json_response(self, 429, {"error": "rate limit exceeded"})
+            _send_rate_limited(self, int(retry) + 1, {"error": "rate limit exceeded"})
             return
         result = stripe_api._request("GET", f"/checkout/sessions/{sid}")
         if not result.get("ok"):
@@ -5881,17 +5850,10 @@ class Handler(BaseHTTPRequestHandler):
         # _checkout_limiter. Per-IP-prefix key.
         allowed, retry_after = _checkout_limiter.check(f"stripe:{self._client_key()}")
         if not allowed:
-            self.send_response(429)
-            self.send_header("Content-Type", "application/json; charset=utf-8")
-            self.send_header("Retry-After", str(int(retry_after) + 1))
-            body = json.dumps({
+            _send_rate_limited(self, int(retry_after) + 1, {
                 "error": "rate limit exceeded",
                 "retry_after_seconds": int(retry_after) + 1,
-            }).encode("utf-8")
-            self.send_header("Content-Length", str(len(body)))
-            _security_headers(self)
-            self.end_headers()
-            self.wfile.write(body)
+            })
             return
 
         length = _read_content_length(self)
@@ -6061,17 +6023,10 @@ class Handler(BaseHTTPRequestHandler):
         # checkout bucket (see _checkout_limiter), its own key. Per-IP-prefix.
         allowed, retry_after = _checkout_limiter.check(f"nowpay:{self._client_key()}")
         if not allowed:
-            self.send_response(429)
-            self.send_header("Content-Type", "application/json; charset=utf-8")
-            self.send_header("Retry-After", str(int(retry_after) + 1))
-            body = json.dumps({
+            _send_rate_limited(self, int(retry_after) + 1, {
                 "error": "rate limit exceeded",
                 "retry_after_seconds": int(retry_after) + 1,
-            }).encode("utf-8")
-            self.send_header("Content-Length", str(len(body)))
-            _security_headers(self)
-            self.end_headers()
-            self.wfile.write(body)
+            })
             return
         length = _read_content_length(self)
         if length < 0 or length > MAX_BODY_BYTES:
