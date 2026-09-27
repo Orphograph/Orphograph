@@ -191,13 +191,15 @@ def demand_events(result: dict) -> list[tuple[str, str, bool]]:
     """(event, auth_path, paid) for each server-side demand event a handled
     result earns.
 
-    `payment_confirmed` is a claim that money settled. Delivery happens at
-    `completed`, which for a delayed payment method arrives `unpaid`; recording
-    a confirmed payment then counted sessions whose bank debit later failed
-    into the paid-demand instrument. So: an unpaid delivery earns only the
-    entitlement, and the payment is confirmed when the settlement event lands.
-    A result from before the status was recorded reads as settled, which is
-    what every card payment is.
+    `payment_confirmed` is a claim that money settled. Since 2026-09-26 a pack
+    paid by a delayed method is delivered when it settles, so a held session
+    (`awaiting_settlement`) earns nothing yet and its settlement earns both
+    events. The unpaid-delivery branch below is live for subscriptions, which
+    are welcomed at `completed` whatever the payment status, and for packs
+    delivered at `completed` before that change: each earns only the
+    entitlement, and the payment is confirmed when its settlement lands. A
+    result from before the status was recorded reads as settled, which is what
+    every card payment is.
     """
     if not result.get("ok") or result.get("duplicate"):
         return []
@@ -334,11 +336,15 @@ def handle_event(payload: bytes) -> dict:
         # A delayed payment method (bank debit and the like) completes the
         # form first and settles days later. `completed` then arrives with
         # payment_status "unpaid", and the outcome arrives as one of the two
-        # async events. Delivery stays at `completed`, as it always has: making
-        # it wait for `async_payment_succeeded` would hand a paying buyer
-        # nothing whenever this endpoint is not subscribed to that event, which
-        # is worse than the risk it removes. What was missing is the other half:
-        # when the settlement FAILS, take back what is still unused.
+        # async events. Founder decision 2026-09-26: a pack is delivered when
+        # the payment SETTLES (`async_payment_succeeded`), not when the form
+        # completes. The earlier rule delivered at `completed` because this
+        # endpoint was not subscribed to the async events. They were added on
+        # 2026-09-26 in the same dashboard save as customer.subscription.updated,
+        # which production then received live; no async event has been observed
+        # yet. A missed settlement shows in scripts/reconcile_stripe_ledger.py as
+        # LOST (Stripe has the event, the ledger has no grant). A failure still
+        # takes back anything delivered, for sessions settled before the change.
         if event_type == "checkout.session.async_payment_failed":
             failed = event.get("data", {}).get("object", {}) or {}
             failed_sid = failed.get("id", "")
@@ -375,12 +381,6 @@ def handle_event(payload: bytes) -> dict:
         # marker closed the replay path.
 
         session = event.get("data", {}).get("object", {}) or {}
-        if session.get("payment_status") == "unpaid":
-            _stderr(
-                f"[stripe_webhook] WARNING session {session.get('id', '')} completed "
-                f"UNPAID (delayed payment method): delivering now; a failed "
-                f"settlement revokes what is unused\n"
-            )
         customer_email = (
             session.get("customer_email")
             or session.get("customer_details", {}).get("email")
@@ -435,6 +435,12 @@ def handle_event(payload: bytes) -> dict:
                     result["payment_settled"] = True
                 _mark_processed(event_id, result)
                 return result
+            if session.get("payment_status") == "unpaid":
+                _stderr(
+                    f"[stripe_webhook] subscription session {session_id} completed "
+                    f"UNPAID (delayed payment method): welcome sent now; access "
+                    f"follows the subscription's status events\n"
+                )
             # Plan label: best-effort read of the line item's price metadata.
             plan_label = "Standing Order"
             try:
@@ -453,6 +459,27 @@ def handle_event(payload: bytes) -> dict:
             result = {"ok": True, "subscription_checkout": True,
                       "welcome_email_sent": sent, "session_id": session_id,
                       "payment_status": session.get("payment_status") or ""}
+            _mark_processed(event_id, result)
+            return result
+
+        # A pack paid by a delayed method waits for its settlement. Only the
+        # customer map above is written now; `async_payment_succeeded` carries
+        # payment_status "paid" and delivers below. Stripe does not order
+        # events, so an unpaid `completed` can also arrive after the settlement
+        # already delivered: that one is a repeat, not a session still waiting.
+        # Subscriptions are not held here: their access follows the
+        # subscription's own status events.
+        if session.get("payment_status") == "unpaid":
+            if _session_delivered(session_id, "claim_code_minted"):
+                result = {"ok": True, "already_delivered": True, "session_id": session_id}
+                _mark_processed(event_id, result)
+                return result
+            _stderr(
+                f"[stripe_webhook] session {session_id} completed UNPAID (delayed "
+                f"payment method): pack delivers when the payment settles\n"
+            )
+            result = {"ok": True, "awaiting_settlement": True,
+                      "session_id": session_id, "delivered": False}
             _mark_processed(event_id, result)
             return result
 

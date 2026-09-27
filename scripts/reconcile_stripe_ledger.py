@@ -169,6 +169,13 @@ def correlate(events: list[dict], ledger_rows: list[dict]) -> dict:
     # and a delayed payment that FAILED was never paid at all.
     not_owed_credits: set[str] = set()
     refunds_disputes: list[tuple[str, str, str]] = []  # (event_type, session_id, event_id)
+    # A pack paid by a delayed method is delivered when it settles (since
+    # 2026-09-26), so between an unpaid `completed` and its outcome event it
+    # has no grant by design. Held, not LOST. Once Stripe has the outcome, the
+    # session leaves this set: a settlement with no grant is then LOST, which
+    # is exactly the alarm for a settlement event the webhook missed.
+    unpaid_completed: set[str] = set()
+    settled_or_failed: set[str] = set()
 
     for ev in events:
         et = ev.get("type", "")
@@ -180,18 +187,29 @@ def correlate(events: list[dict], ledger_rows: list[dict]) -> dict:
                 stripe_session_ids.add(sid)
                 if obj.get("mode") == "subscription":
                     not_owed_credits.add(sid)
+                elif et == "checkout.session.async_payment_succeeded":
+                    settled_or_failed.add(sid)
+                elif obj.get("payment_status") == "unpaid":
+                    unpaid_completed.add(sid)
         elif et == "checkout.session.async_payment_failed":
             sid = obj.get("id", "")
             if sid:
                 not_owed_credits.add(sid)
+                settled_or_failed.add(sid)
                 refunds_disputes.append((et, sid, ev.get("id", "")))
         elif et in {"charge.refunded", "charge.dispute.created"}:
             sid = _extract_session_id_from_charge(obj)
             refunds_disputes.append((et, sid, ev.get("id", "")))
 
+    held = sorted(
+        sid for sid in unpaid_completed - settled_or_failed - not_owed_credits
+        if f"stripe:{sid}" not in grant_sources
+        and f"stripe-gift:{sid}" not in grant_sources  # delivered under the old rule
+    )
+
     # LOST: stripe session has no matching ledger grant (either prefix).
     lost: list[str] = []
-    for sid in sorted(stripe_session_ids - not_owed_credits):
+    for sid in sorted(stripe_session_ids - not_owed_credits - set(held)):
         if (
             f"stripe:{sid}" not in grant_sources
             and f"stripe-gift:{sid}" not in grant_sources
@@ -236,9 +254,10 @@ def correlate(events: list[dict], ledger_rows: list[dict]) -> dict:
             })
             continue
         if et == "checkout.session.async_payment_failed":
-            # Delivery happens at `completed`, before a delayed payment
-            # settles. If it then fails, what was granted must come back.
-            # Nothing granted means nothing to take back.
+            # Packs delivered at `completed` before 2026-09-26 (and any
+            # subscription-era grant) predate settlement: if it then fails,
+            # what was granted must come back. Nothing granted (every pack
+            # held since then) means nothing to take back.
             if (f"stripe:{sid}" not in grant_sources
                     and f"stripe-gift:{sid}" not in grant_sources):
                 continue
@@ -261,6 +280,7 @@ def correlate(events: list[dict], ledger_rows: list[dict]) -> dict:
         "stripe_session_ids": sorted(stripe_session_ids),
         "grant_sources": sorted(grant_sources),
         "lost": lost,
+        "held": held,
         "ghost": ghost,
         "leak": leak,
         "consumed": consumed,
@@ -289,6 +309,8 @@ def render_report(result: dict, window_days: int, generated_at: datetime) -> str
     lines.append(f"- Ledger stripe* grant sources: {len(result['grant_sources'])}")
     lines.append(f"- Refund / dispute events: {result['refund_dispute_count']}")
     lines.append(f"- LOST credits (paid, no grant): {len(lost)}")
+    held = result.get("held", [])
+    lines.append(f"- Held for settlement (delayed payment, no outcome yet; not drift): {len(held)}")
     lines.append(f"- GHOST credits (granted, no payment): {len(ghost)}")
     lines.append(f"- LEAK credits (refund/dispute, no revoke): {len(leak)}")
     consumed = result.get("consumed", [])
@@ -304,6 +326,18 @@ def render_report(result: dict, window_days: int, generated_at: datetime) -> str
         lines.append("These customers PAID but did NOT receive credits. Investigate webhook.")
         lines.append("")
         for sid in lost:
+            lines.append(f"- `{sid}`")
+    lines.append("")
+
+    lines.append("## Delayed payments waiting to settle (HELD)")
+    lines.append("")
+    if not held:
+        lines.append("_None._")
+    else:
+        lines.append("Not drift: the pack is delivered when Stripe reports the payment settled.")
+        lines.append("A session that stays here past its bank's clearing time needs a look in Stripe.")
+        lines.append("")
+        for sid in held:
             lines.append(f"- `{sid}`")
     lines.append("")
 

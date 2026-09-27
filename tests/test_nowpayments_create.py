@@ -52,6 +52,7 @@ def _start_server(data_dir: Path, rate_per_day: str):
         "ORPHO_DATA_DIR": str(data_dir),
         "ORPHO_COOKIE_SECURE": "0",
         "RATE_LIMIT_PER_DAY": rate_per_day,
+        "CHECKOUT_RATE_PER_HOUR": "10",  # pinned: an inherited value moves the ceiling
         "NOWPAYMENTS_API_KEY": "test_dummy_key_not_real",
     }
     proc = subprocess.Popen(
@@ -112,20 +113,22 @@ def test_create_rejects_missing_or_invalid_email(server, email):
 
 
 def test_create_is_rate_limited(tmp_path):
-    """Capacity 2 → the third create from the same client is throttled (429),
-    not allowed to hammer the NOWPayments invoice API."""
-    proc, base = _start_server(tmp_path, "2")
+    """Checkout has its own bucket (10 at once, then 10 an hour per address):
+    the eleventh create from the same client is throttled (429), so a loop
+    cannot hammer the NOWPayments invoice API."""
+    proc, base = _start_server(tmp_path, "100000")
     try:
         codes = []
-        for _ in range(3):
+        for _ in range(11):
             c, _b = _post(
                 base + "/api/nowpayments/create",
                 {"currency": "btc", "plan": "writer_pack", "email": ""},
             )
             codes.append(c)
-        # First two pass the limiter (then 400 on the missing email); the
-        # third is denied by the limiter before reaching the body.
-        assert codes[2] == 429, f"expected 3rd request 429, got {codes}"
+        # The first ten pass the limiter (then 400 on the missing email); the
+        # eleventh is denied by the limiter before reaching the body.
+        assert codes[:10] == [400] * 10, codes
+        assert codes[10] == 429, f"expected the 11th request 429, got {codes}"
     finally:
         _stop(proc)
 

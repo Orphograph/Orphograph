@@ -74,11 +74,17 @@ async function showStripeConfirmation(sessionId) {
   const p = settledEl.querySelector("p");
   const a = $("#next-link");
 
-  if (paymentStatus && paymentStatus !== "paid") {
+  // "no_payment_required" (a fully discounted checkout) is delivered at once,
+  // like "paid"; only a payment still clearing waits for its code. A
+  // subscription gets no Pack code: its welcome email is sent at checkout.
+  if (paymentStatus && paymentStatus !== "paid" && paymentStatus !== "no_payment_required") {
     if (h) h.textContent = "Payment pending.";
     if (p) p.textContent =
       "Stripe reports this session is " + paymentStatus + ". " +
-      "If you completed payment, your access will arrive shortly — confirmation is recorded automatically once Stripe reports the charge. Check back in a few minutes.";
+      "Bank payments can take a few business days to clear. " +
+      (mode === "subscription"
+        ? "A welcome email with sign-in steps is on its way; use the email you paid with."
+        : "Your Pack code is emailed as soon as Stripe confirms the payment, and nothing is needed from you until then.");
     if (a) { a.textContent = ""; a.removeAttribute("href"); }
     return;
   }
