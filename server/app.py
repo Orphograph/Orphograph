@@ -1416,7 +1416,10 @@ class Handler(BaseHTTPRequestHandler):
     #   * control characters AND the backslash are escaped, as the stdlib does.
     # `q` and `label` are not listed (a private vault search on
     # /api/me/anchors), nor coupon/promo codes (spendable). `ref` is: a
-    # referral code is made to be shared in links. NOT `pack`: the legacy
+    # referral code is made to be shared in links. But until 2026-09-27 a
+    # referral code was ref_ + 12 characters of the bearer claim code, and those
+    # links are still in claim emails, so a `ref` value carrying a run of 12+
+    # token characters goes (see _LOG_REF_TOKEN_RUN). NOT `pack`: the legacy
     # `/?pack=pk_…` link (web/app.js, web/assets/pack.js) carries the claim
     # code itself.
     _LOG_KEEP_PARAMS = frozenset({
@@ -1432,6 +1435,7 @@ class Handler(BaseHTTPRequestHandler):
         "path", "order", "from", "to", "subject",
     })
     _LOG_TOKEN_LIKE = re.compile(r"[A-Za-z0-9_-]{16,}")
+    _LOG_REF_TOKEN_RUN = re.compile(r"[A-Za-z0-9_-]{12,}")
     _LOG_PLAIN_PATH = re.compile(r"/[A-Za-z0-9/_.,~-]*")
     _LOG_PLAIN_VALUE = re.compile(r"[A-Za-z0-9_.,:-]{0,128}")
     _LOG_PLAIN_MESSAGE = re.compile(r"[A-Za-z0-9 ,.'_-]{0,200}")
@@ -1478,6 +1482,9 @@ class Handler(BaseHTTPRequestHandler):
                         and cls._log_bearer_route(value) is None)
             else:
                 keep = key in cls._LOG_KEEP_PARAMS and bool(cls._LOG_PLAIN_VALUE.fullmatch(value))
+                if keep and key == "ref":
+                    tail = value[4:] if value.lower().startswith("ref_") else value
+                    keep = not cls._LOG_REF_TOKEN_RUN.search(tail)
             # The KEY is request data too (`/?pk_<code>=1`): it is shown only
             # when it names a parameter this server knows.
             shown_key = raw_key if key in cls._LOG_KNOWN_KEYS else "[redacted]"
@@ -6673,7 +6680,9 @@ def main() -> int:
     _start_cadence_scheduler()
     _start_funnel_digest_scheduler()
     server = ThreadingHTTPServer((HOST, PORT), Handler)
-    sys.stderr.write(f"orphograph listening on http://{HOST}:{PORT}\n")
+    # The port actually bound (PORT=0 lets the OS choose, as the test harness
+    # does); for any fixed PORT this is the same number.
+    sys.stderr.write(f"orphograph listening on http://{HOST}:{server.server_address[1]}\n")
     try:
         server.serve_forever()
     except KeyboardInterrupt:

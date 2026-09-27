@@ -30,6 +30,7 @@ import urllib.request
 # into stderr when the mailer is in inert (dev) mode.
 sys.path.insert(0, os.path.dirname(__file__))
 import auth as _auth
+import referrals as _referrals
 try:
     import receipt_pdf as _receipt_pdf
 except Exception:
@@ -323,7 +324,16 @@ def send_pack_claim_email(to: str, claim_code: str, credit_count: int) -> bool:
     # URL fragment, not query string: fragments never reach the server,
     # so the bearer claim code does not appear in access logs / referer headers.
     activate_url = f"{SITE_URL}/#pack={claim_code}"
-    ref_code = "ref_" + claim_code[3:15] if claim_code.startswith("pk_") else ""
+    # A keyed digest of the claim code, never a slice of it: this link is
+    # meant to be shared, and the claim code is the bearer credential. The link
+    # is optional and the claim code is not, so a failure making it drops the
+    # referral section instead of the email.
+    try:
+        ref_code = _referrals.code_for(claim_code)
+    except Exception as e:  # noqa: BLE001
+        sys.stderr.write(f"[mailer] referral link unavailable ({type(e).__name__}); "
+                         f"claim email sent without it\n")
+        ref_code = ""
     referral_url = f"{SITE_URL}/?ref={ref_code}" if ref_code else ""
     subject = f"Orphograph — Pack of {credit_count} registered to your name"
     text = (

@@ -56,8 +56,9 @@ def _filter_by_email(rows: list[dict], email: str) -> list[dict]:
 
 # What a withheld claim code reads as in an export: the kind of code, and
 # none of its characters. Not a slice of the real code: the referral code
-# printed in every claim email is claim_code[3:15], so any part of a code
-# is already part of a bearer secret.
+# printed in claim emails until 2026-09-27 was claim_code[3:15], and those
+# emails are still out, so any part of a code is already part of a bearer
+# secret.
 WITHHELD_CLAIM_CODE = "pk_…"
 
 

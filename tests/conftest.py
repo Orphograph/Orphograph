@@ -20,6 +20,24 @@ if str(TESTS_DIR) not in sys.path:
 from _ots_bodies import PENDING_BODY, PINNED_BODY  # noqa: E402,F401
 
 
+# --- the installation HMAC secret stays inside the test ------------------------
+# auth creates `.hmac_secret` in DATA_DIR the first time anything signs or
+# hashes an address, and DATA_DIR is the checkout (its data/, or the repo root
+# in a worktree). Since 2026-09-27 every claim email derives a referral code
+# from that secret, so any in-process test that sends one (the NOWPayments
+# webhook tests, for one) wrote a real secret into the checkout. Tests that
+# need a particular secret or path still set their own; server subprocesses
+# are untouched (they get their own ORPHO_DATA_DIR).
+import pytest  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def _hmac_secret_stays_in_the_test(tmp_path_factory, monkeypatch):
+    import auth  # noqa: E402  (server/ is on sys.path above)
+    monkeypatch.setattr(auth, "HMAC_SECRET_PATH",
+                        tmp_path_factory.getbasetemp() / "hmac_secret_session")
+
+
 def make_pending_ots(digest: bytes = b"\x11" * 32, ops: bytes = b"") -> bytes:
     """A well-formed pending .ots blob as engine.py writes it: header +
     version + sha256 tag + digest + optional op run + pending attestation
