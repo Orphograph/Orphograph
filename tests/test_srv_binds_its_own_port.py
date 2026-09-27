@@ -23,7 +23,17 @@ def test_the_harness_does_not_choose_the_port(tmp_path, monkeypatch):
     def no_reservations(n):
         raise AssertionError("spin() reserved a port the server then had to bind")
     monkeypatch.setattr(_srv, "reserve_ports", no_reservations)
+    # The claim is that the SERVER picks: every child is started with PORT=0,
+    # however the harness might otherwise have chosen one.
+    ports_given: list[int] = []
+    real_env = _srv.base_env
+
+    def recording_env(data_dir, port, **extra):
+        ports_given.append(port)
+        return real_env(data_dir, port, **extra)
+    monkeypatch.setattr(_srv, "base_env", recording_env)
     for base in _srv.server_processes(tmp_path, stub_calendars=True):
+        assert ports_given == [0], ports_given
         port = int(base.rsplit(":", 1)[1])
         assert port > 0
         assert _srv.request(base, "/api/health")[0] == 200
@@ -48,11 +58,24 @@ def test_a_server_that_dies_before_binding_fails_at_once_with_its_output(tmp_pat
             pass
 
 
-def test_the_hmac_secret_is_not_written_into_the_checkout():
+def test_the_hmac_secret_is_not_written_into_the_checkout(monkeypatch):
     """An in-process claim email derives a referral code from the installation
-    secret; auth must not create that secret in the checkout while tests run."""
+    secret; loading it must not create or touch a secret in the checkout.
+
+    The cache is emptied first so the email itself must load the secret, and
+    the test fails if it did not (a no-op mailer made the first version of
+    this test pass while checking nothing; found by review of #276)."""
     import auth
     import mailer
     repo = Path(__file__).resolve().parent.parent
+    in_checkout = [repo / ".hmac_secret", repo / "data" / ".hmac_secret"]
+
+    def state():
+        return {p: (p.stat().st_mtime_ns if p.exists() else None) for p in in_checkout}
+    before = state()
+    monkeypatch.setattr(auth, "_HMAC_SECRET_CACHE", None)
     mailer.send_pack_claim_email("secret-path@example.test", "pk_secretPathTest01", 10)
+    assert auth._HMAC_SECRET_CACHE is not None, "the email never loaded the secret"
     assert repo not in auth.HMAC_SECRET_PATH.parents, auth.HMAC_SECRET_PATH
+    assert auth.HMAC_SECRET_PATH.read_bytes() == auth._HMAC_SECRET_CACHE
+    assert state() == before, "a secret file in the checkout was created or rewritten"
