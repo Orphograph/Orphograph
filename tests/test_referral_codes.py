@@ -140,3 +140,88 @@ def test_the_webhook_applies_the_new_code_and_refuses_the_empty_one(tmp_path, mo
     stripe_webhook.handle_event(_completed("evt_r2", "cs_carol1", "carol@example.test", "ref_"))
     assert credits.balance(codes[-1]) == 10, "an empty code still earned the bonus"
     assert credits.balance(ALICE_PACK) == 20, "an empty code credited a stranger's pack"
+
+
+# --- review round 1 (/code-review high 275) ----------------------------------------
+
+_APP_JS_DRIVER = r"""
+const fs = require("fs");
+const [src, search] = process.argv.slice(2);
+const text = fs.readFileSync(src, "utf8");
+const start = text.indexOf("function readReferralCode()");
+const end = text.indexOf("\nfunction ", start + 1);
+const fnSrc = text.slice(start, end);
+const localStorage = { setItem() {}, getItem() { return ""; } };
+const location = { search, hash: "" };
+const readReferralCode = new Function("location", "localStorage", "URLSearchParams",
+  fnSrc + "\nreturn readReferralCode();");
+process.stdout.write(readReferralCode(location, localStorage, URLSearchParams));
+"""
+
+
+def _as_the_site_sends_it(tmp_path, link_ref: str) -> str:
+    """Run the real readReferralCode from web/app.js on a ?ref= link: what the
+    site puts into Stripe metadata is what the webhook receives."""
+    import shutil
+    import subprocess
+    from pathlib import Path
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("node not on PATH: this check runs the real web/app.js")
+    driver = tmp_path / "ref_driver.js"
+    driver.write_text(_APP_JS_DRIVER)
+    app_js = Path(__file__).resolve().parent.parent / "web" / "app.js"
+    out = subprocess.run([node, str(driver), str(app_js), "?ref=" + link_ref],
+                         capture_output=True, text=True, timeout=60)
+    assert out.returncode == 0, out.stderr
+    return out.stdout
+
+
+def test_a_legacy_link_works_after_the_site_lowercases_it(tmp_path):
+    """web/app.js lowercases every ?ref= before checkout, and a legacy code is
+    mixed-case base64: matched case-sensitively, no mailed link could ever
+    credit anyone (found by /code-review high 275)."""
+    credits.add_credits(ALICE_PACK, "alice@example.test", 10, "stripe:cs_alice")
+    credits.add_credits(BOB_PACK, "bob@example.test", 10, "stripe:cs_bob")
+    sent = _as_the_site_sends_it(tmp_path, "ref_" + ALICE_PACK[3:15])
+    assert sent == ("ref_" + ALICE_PACK[3:15]).lower(), sent  # control: the site did fold it
+    result = referrals.apply(sent, "bob@example.test", BOB_PACK)
+    assert result["ok"] is True, result
+    assert credits.balance(ALICE_PACK) == 20
+
+
+def test_the_new_code_survives_the_site_unchanged(tmp_path):
+    code = referrals.code_for(ALICE_PACK)
+    assert _as_the_site_sends_it(tmp_path, code) == code
+
+
+@pytest.mark.parametrize("again_as", ["bob@example.test", "Bob@Example.TEST"])
+def test_one_buyer_is_credited_once_per_referrer_whichever_code_they_use(again_as):
+    """A pack has two valid codes (the legacy one already mailed, the new one in
+    any re-sent email), and the dedupe keyed on the code string and the raw
+    address: the same buyer took the bonus twice (found by /code-review high 275)."""
+    credits.add_credits(ALICE_PACK, "alice@example.test", 10, "stripe:cs_alice")
+    credits.add_credits(BOB_PACK, "bob@example.test", 10, "stripe:cs_bob")
+    second = "pk_bobSECONDpack0001"
+    credits.add_credits(second, again_as, 10, "stripe:cs_bob2")
+    first = referrals.apply("ref_" + ALICE_PACK[3:15], "bob@example.test", BOB_PACK)
+    assert first["ok"] is True, first
+    again = referrals.apply(referrals.code_for(ALICE_PACK), again_as, second)
+    assert again["ok"] is False and "already credited" in again["reason"], again
+    assert credits.balance(ALICE_PACK) == 20 and credits.balance(second) == 10
+
+
+def test_the_claim_email_goes_out_even_if_the_share_link_cannot_be_made(monkeypatch):
+    """The claim code is the only way to spend a pack; the referral link is
+    optional. A failure making the link must not stop the email (found by
+    /code-review high 275)."""
+    sent: list[str] = []
+    monkeypatch.setattr(mailer, "_send", lambda to, subject, text, html, *a, **k:
+                        sent.append(text) or True)
+
+    def _boom(_claim):
+        raise OSError("secret unreadable")
+    monkeypatch.setattr(referrals, "code_for", _boom)
+    assert mailer.send_pack_claim_email("alice@example.test", ALICE_PACK, 10) is True
+    assert len(sent) == 1 and ALICE_PACK in sent[0], "the claim code was not delivered"
+    assert "?ref=" not in sent[0]

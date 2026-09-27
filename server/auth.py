@@ -79,6 +79,13 @@ def _hmac_secret() -> bytes:
     return _HMAC_SECRET_CACHE
 
 
+def keyed_hex(label: bytes, value: str) -> str:
+    """HMAC-SHA256 hex of `value` under this installation's secret, with a
+    caller-chosen label so digests made for different purposes never collide
+    with each other or with email_id."""
+    return hmac.new(_hmac_secret(), label + value.encode("utf-8"), hashlib.sha256).hexdigest()
+
+
 def email_id(email: str) -> str:
     """Stable, non-reversible identifier for an email, safe for on-disk storage.
 
