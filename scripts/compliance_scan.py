@@ -48,6 +48,12 @@ ALL_CAPS_DENY = ["companycam","spectora","jobnimbus","procore","buildertrend","v
 TECH_NAME_CARVEOUTS = {"adobe", "stripe", "google", "anthropic", "claude", "samsung", "leica"}
 
 # Dollar / valuation regex. Word-bounded where useful.
+# `series [A-Z]` stays case-insensitive on purpose (reviewed 2026-09-27): a
+# narrower pattern that ignored ordinary English ("a time series a verifier")
+# also stopped catching "closed our series A", "SERIES A CLOSED" and "our
+# series a valuation", which is what this gate exists for. An English
+# sentence that trips it is rephrased; the one that tripped it every day was
+# vendored under node_modules, which is excluded.
 DOLLAR_REGEX = re.compile(
     r"(\$[0-9]+(?:\.[0-9]+)?[KMB]?\b|\bvaluation\b|\bacquired for\b|\braised(?=\s+\$)|\bseries [A-Z]\b)",
     re.IGNORECASE,

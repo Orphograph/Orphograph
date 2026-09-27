@@ -198,3 +198,20 @@ def test_a_nested_node_modules_is_excluded_like_the_top_level_one():
         _write(root / "zk-provenance" / "snark" / "notes.md", "FMV today is $350K; 5y EV ~$3M.\n")
         rc, report = _run(root, out)
         assert rc == 1 and report["valuation_hits"], "the control must still fire"
+
+
+@pytest.mark.parametrize("line", [
+    "We just closed our series A.",
+    "SERIES A CLOSED",
+    "Our series a valuation is private.",
+    "We raised a Series A last spring.",
+    "We are a series b company.",
+])
+def test_funding_round_language_trips_the_gate_in_any_case(line):
+    """Pinned after review of a narrowing (2026-09-27) that stopped catching
+    these: over-matching an English "series a" is the accepted cost."""
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        _write(root / "web" / "about.html", line + "\n")
+        rc, report = _run(root, root / "outbox" / "report.json")
+        assert rc == 1 and report["valuation_hits"], report
