@@ -128,7 +128,10 @@ def _footer_text(to_email: str, transactional: bool) -> str:
         # Legal requirement for commercial email — physical address.
         lines.insert(2, f"{BUSINESS_ADDRESS}")
         unsub = f"{SITE_URL}/api/unsubscribe?e={urllib.parse.quote(to_email)}"
-        lines.append(f"Unsubscribe instantly: {unsub}")
+        # The link opens a one-button page (founder decision 2026-09-27, 9A),
+        # so "instantly" would over-promise. Mail clients' own unsubscribe
+        # button still sends the one-click POST (List-Unsubscribe-Post).
+        lines.append(f"Unsubscribe from all marketing email: {unsub}")
     return "\n".join(lines) + "\n"
 
 
