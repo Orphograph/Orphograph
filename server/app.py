@@ -3958,65 +3958,26 @@ class Handler(BaseHTTPRequestHandler):
         # it — that is the guard, not rejection.
         return e
 
-    def _handle_unsubscribe_get(self) -> None:
-        """Confirmation page for marketing-email unsubscribe.
-
-        CAN-SPAM, GDPR Art. 21, CASL, LGPD all accept a single-click flow.
-        We process the unsubscribe on GET too (idempotent) so users who
-        merely click the link from their inbox don't need a second action.
-        """
-        email = self._parse_unsub_email()
-        if not email:
-            self.send_error(400, "invalid email")
-            return
-        try:
-            # Checked before the already-suppressed shortcut in would_add/add:
-            # with an unwritable ledger a new address got 503 and a suppressed
-            # one got the page, which told a stranger which one it was.
-            if not unsubscribe.can_append(unsubscribe.SUPPRESS_PATH):
-                raise unsubscribe.SuppressionUnavailable(
-                    f"suppression ledger is not writable: {unsubscribe.SUPPRESS_PATH.name}")
-            if self._is_head():
-                # A scanner that only looked at the link must not unsubscribe
-                # the recipient. Still read the ledger, so HEAD answers 503
-                # exactly when GET would.
-                unsubscribe.would_add(email)
-            else:
-                unsubscribe.add(email, source="link_get")
-        except unsubscribe.SuppressionUnavailable:
-            # Without this the socket just closed: the visitor could not tell
-            # whether the unsubscribe was recorded. It was not. Say so.
-            self.send_error(503, "We could not record this just now. "
-                                 "Please try the link again in a few minutes.")
-            return
-        from html import escape as _h
+    def _unsubscribe_page(self, status: int, title: str, heading: str,
+                          meta: str, body_html: str) -> None:
+        """One page shape for the confirm, done and could-not-record answers.
+        Every value shown that came from the URL is escaped by the caller."""
         body = (
             "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
-            "<title>Unsubscribed — Orphograph</title>"
+            f"<title>{title} — Orphograph</title>"
             "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
             "<meta name=\"robots\" content=\"noindex\">"
             f"{_SITE_STYLESHEET_LINKS}</head><body class=\"orpho\">"
             "<main class=\"blog-post\"><article class=\"post-header\">"
-            "<h1>Done — you're unsubscribed.</h1>"
+            f"<h1>{heading}</h1>"
             # In the header, not .post-body: `.post-body p` out-specifies
             # `.muted`, and the error page places its muted line here too.
-            "<p class=\"post-meta muted\">If this was a mistake, just sign in "
-            "again or buy a pack and you'll be re-enrolled per your action.</p>"
-            "</article><section class=\"post-body\">"
-            # The address arrives in a URL anyone can craft. Escape on output.
-            f"<p>We've removed <strong>{_h(email)}</strong> from all marketing "
-            "email. You will still receive <em>transactional</em> mail "
-            "tied to actions you take on the site (receipts, sign-in "
-            "links, pack codes) — those are required by the service "
-            "itself, not promotional.</p>"
-            # One sentence whether or not the address was already there: the
-            # two used to differ, so a HEAD (which writes nothing) told anyone
-            # holding an address whether its owner had unsubscribed.
-            "<p>Confirmed — this address is on the suppression list.</p>"
+            f"<p class=\"post-meta muted\">{meta}</p>"
+            f"</article><section class=\"post-body\">{body_html}"
             "<p><a href=\"/\">Back to Orphograph</a></p>"
             "</section></main></body></html>"
         ).encode("utf-8")
-        self.send_response(200)
+        self.send_response(status)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         # The page carries the recipient's address.
@@ -4024,6 +3985,49 @@ class Handler(BaseHTTPRequestHandler):
         _security_headers(self)
         self.end_headers()
         self.wfile.write(body)
+
+    def _handle_unsubscribe_get(self) -> None:
+        """Confirmation page for marketing-email unsubscribe. Writes nothing.
+
+        Founder decision 2026-09-27: GET used to record the suppression, so a
+        mail gateway or link scanner that fetched the link unsubscribed the
+        recipient without them doing anything. The page now asks, and its
+        button POSTs to this same URL. Mailbox providers' one-click POST
+        (RFC 8058) is unchanged. The page is the same whether or not the
+        address is already suppressed and never reads the ledger, so neither
+        GET nor HEAD tells anyone whether its owner unsubscribed.
+        """
+        email = self._parse_unsub_email()
+        if not email:
+            self.send_error(400, "invalid email")
+            return
+        from html import escape as _h
+        from urllib.parse import quote as _q
+        action = _h("/api/unsubscribe?e=" + _q(email))
+        self._unsubscribe_page(
+            200, "Unsubscribe", "Unsubscribe from Orphograph email?",
+            "One button below. Nothing changes until you press it.",
+            # The address arrives in a URL anyone can craft. Escape on output.
+            f"<p>This stops all marketing email to <strong>{_h(email)}</strong>. "
+            "You will still receive <em>transactional</em> mail tied to actions "
+            "you take on the site (receipts, sign-in links, pack codes).</p>"
+            f"<form method=\"post\" action=\"{action}\">"
+            "<input type=\"hidden\" name=\"via\" value=\"page\">"
+            "<button type=\"submit\">Unsubscribe</button></form>")
+
+    def _unsubscribe_done_page(self, email: str) -> None:
+        from html import escape as _h
+        self._unsubscribe_page(
+            200, "Unsubscribed", "Done — you're unsubscribed.",
+            "If this was a mistake, just sign in again or buy a pack and "
+            "you'll be re-enrolled per your action.",
+            f"<p>We've removed <strong>{_h(email)}</strong> from all marketing "
+            "email. You will still receive <em>transactional</em> mail "
+            "tied to actions you take on the site (receipts, sign-in "
+            "links, pack codes) — those are required by the service "
+            "itself, not promotional.</p>"
+            # One sentence whether or not the address was already there.
+            "<p>Confirmed — this address is on the suppression list.</p>")
 
     def _handle_payout_status(self) -> None:
         """JSON endpoint — founder-only view of hot BTC balance + sweep status.
@@ -4592,20 +4596,43 @@ class Handler(BaseHTTPRequestHandler):
         if not email:
             _json_response(self, 400, {"error": "invalid email"})
             return
-        # Drain body without reading large payloads.
+        # Drain body without reading large payloads. The address is always
+        # the query string's; the body only says whether our confirm page sent
+        # it (`via=page`), which decides the answer's shape, never whose
+        # address is unsubscribed.
         length = _read_content_length(self)
+        raw = b""
         if 0 < length <= 4096:
             try:
-                self.rfile.read(length)
+                raw = self.rfile.read(length)
             except OSError:
                 pass
+        from urllib.parse import parse_qs
+        from_page = parse_qs(raw.decode("latin-1")).get("via") == ["page"]
         try:
-            unsubscribe.add(email, source="link_post")
+            # Checked before the already-suppressed shortcut in add(): with a
+            # ledger that could not be opened a new address got 503 and a
+            # suppressed one got success, which told anyone which one it was
+            # (the GET handler did this check until the write moved here,
+            # 2026-09-27). Not covered: the file opens and the write itself
+            # fails (a full volume). add() then still answers a suppressed
+            # address 200 and a new one 503.
+            unsubscribe.ensure_writable()
+            unsubscribe.add(email, source="page_post" if from_page else "link_post")
         except unsubscribe.SuppressionUnavailable:
+            if from_page:
+                self._unsubscribe_page(
+                    503, "Not recorded", "We could not record this just now.",
+                    "Nothing was changed.",
+                    "<p>Please try the link again in a few minutes.</p>")
+                return
             # A mailbox provider's one-click POST must get an answer it can
             # retry on, never a dropped connection read as success or failure
             # at the provider's discretion.
             _json_response(self, 503, {"error": "suppression ledger unavailable; retry"})
+            return
+        if from_page:
+            self._unsubscribe_done_page(email)
             return
         _json_response(self, 200, {"ok": True})
 
