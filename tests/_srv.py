@@ -5,8 +5,11 @@ server fixtures that had each drifted:
 
   * PORT REUSE RACE. `_free_port()` binds :0 and closes, so calling it twice
     can hand back the SAME port and the second server fails to bind. Twenty-one
-    test files carry a copy of that helper. Fix: reserve every port at once,
-    holding the sockets, and release them together.
+    test files carry a copy of that helper. First fix: reserve every port at
+    once, holding the sockets, and release them together. That still left the
+    window between releasing a port and the server binding it, which failed
+    the deploy of #275 on 2026-09-27. Fix now: the server binds port 0 itself
+    and prints the port it got; spin() reads it from that server's own log.
 
   * STARTUP DEADLINE TOO SHORT. Copies used 10s or 15s. With eleven fixtures
     the suite times out under load, which reads as a product failure. Fix: one
@@ -28,6 +31,7 @@ import contextlib
 import http.client
 import json
 import os
+import re
 import socket
 import subprocess
 import sys
@@ -43,11 +47,9 @@ APP = REPO_ROOT / "server" / "app.py"
 TEST_SERVER = REPO_ROOT / "tests" / "_run_server.py"
 
 STARTUP_TIMEOUT_SEC = 45
-# A port can be taken between reserve_ports() releasing it and the server
-# binding it. Only that cause is retried, on fresh ports, this many times.
-BIND_ATTEMPTS = 3
-_BIND_LOST = "Address already in use"
 _TAIL_CHARS = 1500
+# app.main writes this only after its bind succeeds, with the port it got.
+_LISTENING = re.compile(r"orphograph listening on http://[^\s:]+:(\d+)\n")
 
 # base URL -> log path of the server spun on it, so a request that finds the
 # server gone can say what the server said last.
@@ -118,12 +120,12 @@ def spin(data_dir: str | os.PathLike, n: int = 1, *,
     in <data_dir>/stub_stripe_calls.jsonl instead of sending it; see
     tests/_run_server.py for how a test makes those calls fail.
     """
-    ports = reserve_ports(n)
-    procs, bases, logs = [], [], []
-    for port in ports:
-        log_path = Path(data_dir) / f"server-{port}.log"
+    procs, starting = [], []
+    for i in range(n):
+        # Named for its port once the server has one (see _bound_port).
+        log_path = Path(data_dir) / f"server-starting-{os.getpid()}-{i}.log"
         lf = open(log_path, "w")
-        logs.append((log_path, lf))
+        starting.append((log_path, lf))
         command = [sys.executable, str(APP)]
         if stub_calendars:
             # A test-harness process patch, not a product environment knob.
@@ -143,12 +145,40 @@ def spin(data_dir: str | os.PathLike, n: int = 1, *,
                              "only the test launcher can replace Stripe")
         procs.append(subprocess.Popen(
             command,
-            env=base_env(data_dir, port, **env_extra),
+            env=base_env(data_dir, 0, **env_extra),
             stdout=lf, stderr=subprocess.STDOUT,   # never DEVNULL — see docstring
         ))
+    bases, logs = [], []
+    for i, (proc, (log_path, lf)) in enumerate(zip(procs, starting)):
+        port, why = _bound_port(proc, log_path)
+        if port is None:
+            _kill_all(procs, logs + starting[i:])
+            pytest.fail(f"server {why}\n--- server output ---\n{_tail(log_path)}")
+        named = log_path.with_name(f"server-{port}.log")
+        log_path.rename(named)          # the server keeps writing to the same file
+        logs.append((named, lf))
         bases.append(f"http://127.0.0.1:{port}")
-        _LOG_BY_BASE[bases[-1]] = log_path
+        _LOG_BY_BASE[bases[-1]] = named
     return bases, procs, logs
+
+
+def _bound_port(proc, log_path: Path) -> tuple[int | None, str]:
+    """(port, "") for the port this server bound, read from the line its own
+    process writes after the bind succeeds; nothing else can hold that port
+    while it lives, so no answer on it comes from another process. Or
+    (None, why) when it died or never bound."""
+    deadline = time.time() + STARTUP_TIMEOUT_SEC
+    while time.time() < deadline:
+        try:
+            m = _LISTENING.search(log_path.read_text(errors="replace"))
+        except OSError:
+            m = None
+        if m:
+            return int(m.group(1)), ""
+        if proc.poll() is not None:
+            return None, f"EXITED during startup (code {proc.returncode})"
+        time.sleep(0.05)
+    return None, f"did not bind within {STARTUP_TIMEOUT_SEC}s"
 
 
 def _tail(log_path: Path) -> str:
@@ -158,51 +188,30 @@ def _tail(log_path: Path) -> str:
         return "(no server log)"
 
 
-def _says_listening(log_path: Path, base: str) -> bool:
-    """Has THIS process bound its port? app.main writes the line only after
-    the bind succeeds, into the log this process alone writes."""
-    try:
-        return f"orphograph listening on {base}\n" in log_path.read_text(errors="replace")
-    except OSError:
-        return False
+def wait_ready(bases, procs, logs) -> None:
+    """Block until every server answers /api/health, or fail with its OUTPUT.
 
-
-def wait_ready(bases, procs, logs, *, bind_retry: bool = False) -> bool:
-    """Block until every server has bound its port and answers /api/health,
-    or fail with its OUTPUT.
-
-    A health answer alone proved nothing: whatever held the port answered it,
-    and a server that had lost its port to another server was reported ready
-    (found 2026-09-27). With `bind_retry`, a server that died because its port
-    was taken stops everything, removes the attempt's logs and returns False
-    so the caller can start again on fresh ports; any other death still fails.
-    """
+    spin() already proved each server bound its own port, so the answer comes
+    from that process. (Asking /api/health alone used to prove nothing: when a
+    port was lost to another server, that server answered; found 2026-09-27.)"""
     for base, proc, (log_path, _lf) in zip(bases, procs, logs):
         deadline = time.time() + STARTUP_TIMEOUT_SEC   # per server, not shared
         while time.time() < deadline:
             if proc.poll() is not None:
                 break                                   # died — stop waiting
-            if _says_listening(log_path, base):
-                try:
-                    urllib.request.urlopen(base + "/api/health", timeout=1).read()
-                    break
-                except Exception:
-                    pass
-            time.sleep(0.2)
+            try:
+                urllib.request.urlopen(base + "/api/health", timeout=1).read()
+                break
+            except Exception:
+                time.sleep(0.2)
         else:
             _kill_all(procs, logs)
             pytest.fail(f"{base} did not start within {STARTUP_TIMEOUT_SEC}s\n"
                         f"--- server output ---\n{_tail(log_path)}")
         if proc.poll() is not None:
-            tail = _tail(log_path)
             _kill_all(procs, logs)
-            if bind_retry and _BIND_LOST in tail:
-                for path, _lf in logs:
-                    path.unlink(missing_ok=True)
-                return False
             pytest.fail(f"{base} EXITED during startup (code {proc.returncode})\n"
-                        f"--- server output ---\n{tail}")
-    return True
+                        f"--- server output ---\n{_tail(log_path)}")
 
 
 def _kill_all(procs, logs) -> None:
@@ -232,12 +241,10 @@ def server_processes(data_dir, n: int = 1, *,
         def server(tmp_path_factory):
             yield from _srv.server_processes(tmp_path_factory.mktemp("x"))
     """
-    for attempt in range(1, BIND_ATTEMPTS + 1):
-        bases, procs, logs = spin(
-            data_dir, n=n, stub_calendars=stub_calendars,
-            fail_calendars=fail_calendars, stub_stripe=stub_stripe, **env_extra)
-        if wait_ready(bases, procs, logs, bind_retry=attempt < BIND_ATTEMPTS):
-            break
+    bases, procs, logs = spin(
+        data_dir, n=n, stub_calendars=stub_calendars,
+        fail_calendars=fail_calendars, stub_stripe=stub_stripe, **env_extra)
+    wait_ready(bases, procs, logs)
     try:
         yield bases[0] if n == 1 else bases
     finally:
