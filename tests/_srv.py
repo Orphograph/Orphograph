@@ -43,6 +43,10 @@ APP = REPO_ROOT / "server" / "app.py"
 TEST_SERVER = REPO_ROOT / "tests" / "_run_server.py"
 
 STARTUP_TIMEOUT_SEC = 45
+# A port can be taken between reserve_ports() releasing it and the server
+# binding it. Only that cause is retried, on fresh ports, this many times.
+BIND_ATTEMPTS = 3
+_BIND_LOST = "Address already in use"
 _TAIL_CHARS = 1500
 
 # base URL -> log path of the server spun on it, so a request that finds the
@@ -154,26 +158,51 @@ def _tail(log_path: Path) -> str:
         return "(no server log)"
 
 
-def wait_ready(bases, procs, logs) -> None:
-    """Block until every server answers /api/health, or fail with its OUTPUT."""
+def _says_listening(log_path: Path, base: str) -> bool:
+    """Has THIS process bound its port? app.main writes the line only after
+    the bind succeeds, into the log this process alone writes."""
+    try:
+        return f"orphograph listening on {base}\n" in log_path.read_text(errors="replace")
+    except OSError:
+        return False
+
+
+def wait_ready(bases, procs, logs, *, bind_retry: bool = False) -> bool:
+    """Block until every server has bound its port and answers /api/health,
+    or fail with its OUTPUT.
+
+    A health answer alone proved nothing: whatever held the port answered it,
+    and a server that had lost its port to another server was reported ready
+    (found 2026-09-27). With `bind_retry`, a server that died because its port
+    was taken stops everything, removes the attempt's logs and returns False
+    so the caller can start again on fresh ports; any other death still fails.
+    """
     for base, proc, (log_path, _lf) in zip(bases, procs, logs):
         deadline = time.time() + STARTUP_TIMEOUT_SEC   # per server, not shared
         while time.time() < deadline:
             if proc.poll() is not None:
                 break                                   # died — stop waiting
-            try:
-                urllib.request.urlopen(base + "/api/health", timeout=1).read()
-                break
-            except Exception:
-                time.sleep(0.2)
+            if _says_listening(log_path, base):
+                try:
+                    urllib.request.urlopen(base + "/api/health", timeout=1).read()
+                    break
+                except Exception:
+                    pass
+            time.sleep(0.2)
         else:
             _kill_all(procs, logs)
             pytest.fail(f"{base} did not start within {STARTUP_TIMEOUT_SEC}s\n"
                         f"--- server output ---\n{_tail(log_path)}")
         if proc.poll() is not None:
+            tail = _tail(log_path)
             _kill_all(procs, logs)
+            if bind_retry and _BIND_LOST in tail:
+                for path, _lf in logs:
+                    path.unlink(missing_ok=True)
+                return False
             pytest.fail(f"{base} EXITED during startup (code {proc.returncode})\n"
-                        f"--- server output ---\n{_tail(log_path)}")
+                        f"--- server output ---\n{tail}")
+    return True
 
 
 def _kill_all(procs, logs) -> None:
@@ -203,10 +232,12 @@ def server_processes(data_dir, n: int = 1, *,
         def server(tmp_path_factory):
             yield from _srv.server_processes(tmp_path_factory.mktemp("x"))
     """
-    bases, procs, logs = spin(
-        data_dir, n=n, stub_calendars=stub_calendars,
-        fail_calendars=fail_calendars, stub_stripe=stub_stripe, **env_extra)
-    wait_ready(bases, procs, logs)
+    for attempt in range(1, BIND_ATTEMPTS + 1):
+        bases, procs, logs = spin(
+            data_dir, n=n, stub_calendars=stub_calendars,
+            fail_calendars=fail_calendars, stub_stripe=stub_stripe, **env_extra)
+        if wait_ready(bases, procs, logs, bind_retry=attempt < BIND_ATTEMPTS):
+            break
     try:
         yield bases[0] if n == 1 else bases
     finally:
