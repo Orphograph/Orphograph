@@ -435,6 +435,18 @@ def handle_event(payload: bytes) -> dict:
                     result["payment_settled"] = True
                 _mark_processed(event_id, result)
                 return result
+            # A second subscription for an address that already has an active
+            # one (hosted payment links never pass the checkout guard). Not
+            # refunded here: that is a founder call. Flagged loudly instead.
+            new_sub = session.get("subscription") or ""
+            others = [s for s in subscriptions.active_subscription_ids(customer_email)
+                      if s != new_sub]
+            if others:
+                _stderr(
+                    f"[stripe_webhook] DUPLICATE subscription for {masked}: new "
+                    f"{new_sub or '(unknown)'} while {', '.join(others)} active; "
+                    f"cancel and refund one in Stripe\n"
+                )
             if session.get("payment_status") == "unpaid":
                 _stderr(
                     f"[stripe_webhook] subscription session {session_id} completed "
@@ -459,6 +471,9 @@ def handle_event(payload: bytes) -> dict:
             result = {"ok": True, "subscription_checkout": True,
                       "welcome_email_sent": sent, "session_id": session_id,
                       "payment_status": session.get("payment_status") or ""}
+            if others:
+                result["duplicate_subscription"] = True
+                result["duplicate_of"] = others
             _mark_processed(event_id, result)
             return result
 

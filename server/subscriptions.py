@@ -28,6 +28,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from file_lock import locked  # noqa: E402
+from email_fold import fold_email  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = Path(os.environ.get("ORPHO_DATA_DIR", str(ROOT / "data") if (ROOT / "data").is_dir() else str(ROOT)))
@@ -107,7 +108,9 @@ def _links() -> tuple[dict[str, str], dict[str, set[str]], set[tuple[str, str]]]
     since_deleted: dict[str, set[str]] = {}
     severed: set[tuple[str, str]] = set()
     for row in _read_all(CUSTOMER_MAP):
-        email = row.get("email")
+        # Stripe keeps the case the buyer typed; sign-in keeps its own. One
+        # mailbox is one key (founder decision 2026-09-27, 3A).
+        email = fold_email(row.get("email"))
         if not email:
             continue
         if _is_deletion(row):
@@ -165,6 +168,7 @@ def _customer_links(email: str) -> tuple[set[str], set[str]]:
     Linked: every customer mapped to the email since it was last deleted.
     Unlinked: customers a deletion of the email cut off. They stay cut off.
     """
+    email = fold_email(email)
     if not email:
         return set(), set()
     _current, since_deleted, severed = _links()
@@ -186,7 +190,8 @@ def _customers_for_email(email: str) -> set[str]:
 
 def _rows_for_email(email: str) -> list[dict]:
     """Every subscription row that describes whoever holds this address now,
-    oldest first."""
+    oldest first. Addresses compare folded (email_fold.fold_email)."""
+    email = fold_email(email)
     if not email:
         return []
     rows = _read_all(SUB_LEDGER)
@@ -196,7 +201,7 @@ def _rows_for_email(email: str) -> list[dict]:
         # Match by stored email first, falling back to the customer→email
         # map so out-of-order events (subscription.created before
         # checkout.session.completed) still resolve correctly.
-        row_email = row.get("email")
+        row_email = fold_email(row.get("email"))
         row_customer = row.get("stripe_customer")
         if _is_deletion(row) and row_email == email:
             # Nothing written before the deletion describes whoever holds
@@ -238,6 +243,25 @@ def subscriptions_for(email: str) -> list[dict]:
     return list(latest.values())
 
 
+def _row_is_active(row: dict) -> bool:
+    if row.get("status", "") not in ACTIVE_STATUSES:
+        return False
+    end = row.get("current_period_end")
+    if end is None:
+        # No period end given (e.g., trial without explicit end): treat as active.
+        return True
+    try:
+        return float(end) > _now_unix()
+    except (TypeError, ValueError):
+        return False
+
+
+def active_subscription_ids(email: str) -> list[str]:
+    """The Stripe subscriptions this address holds that are active now, each
+    judged by its own newest row (see subscriptions_for)."""
+    return [row["stripe_sub"] for row in subscriptions_for(email) if _row_is_active(row)]
+
+
 def status_for(email: str) -> dict | None:
     return _latest_for_email(email)
 
@@ -250,16 +274,4 @@ def stripe_subscription_id_for(email: str) -> str:
 
 def is_active(email: str) -> bool:
     latest = _latest_for_email(email)
-    if not latest:
-        return False
-    status = latest.get("status", "")
-    if status not in ACTIVE_STATUSES:
-        return False
-    end = latest.get("current_period_end")
-    if end is None:
-        # No period end given (e.g., trial without explicit end): treat as active.
-        return True
-    try:
-        return float(end) > _now_unix()
-    except (TypeError, ValueError):
-        return False
+    return bool(latest) and _row_is_active(latest)

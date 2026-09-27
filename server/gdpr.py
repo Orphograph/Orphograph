@@ -23,6 +23,7 @@ from pathlib import Path
 import auth
 import credits
 import subscriptions
+from email_fold import fold_email
 from file_lock import locked
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -51,7 +52,10 @@ def _read_rows(path: Path) -> list[dict]:
 
 
 def _filter_by_email(rows: list[dict], email: str) -> list[dict]:
-    return [r for r in rows if r.get("email") == email]
+    """Rows naming this mailbox, whatever case each writer kept: Stripe keeps
+    the buyer's, sign-in its own, and a person's export must hold both."""
+    want = fold_email(email)
+    return [r for r in rows if want and fold_email(r.get("email")) == want]
 
 
 # What a withheld claim code reads as in an export: the kind of code, and
@@ -137,7 +141,8 @@ def delete_for_email(email: str) -> dict:
 def is_email_deleted(email: str) -> bool:
     if not email:
         return False
+    want = fold_email(email)
     for row in _read_rows(DELETIONS_LEDGER):
-        if row.get("email") == email:
+        if want and fold_email(row.get("email")) == want:
             return True
     return False
