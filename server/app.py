@@ -6706,7 +6706,9 @@ def main() -> int:
     _start_cadence_scheduler()
     _start_funnel_digest_scheduler()
     server = ThreadingHTTPServer((HOST, PORT), Handler)
-    sys.stderr.write(f"orphograph listening on http://{HOST}:{PORT}\n")
+    # The port actually bound (PORT=0 lets the OS choose, as the test harness
+    # does); for any fixed PORT this is the same number.
+    sys.stderr.write(f"orphograph listening on http://{HOST}:{server.server_address[1]}\n")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
