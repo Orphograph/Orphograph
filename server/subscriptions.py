@@ -39,6 +39,9 @@ ACTIVE_STATUSES = {"active", "trialing"}
 # Stripe statuses a subscription never leaves. It bills nothing more, and
 # Stripe refuses to update it, so there is nothing left to cancel.
 ENDED_STATUSES = {"canceled", "incomplete_expired"}
+# Stripe statuses of a subscription that gives no access now but still exists
+# at Stripe: it can still be cancelled, and Stripe may still charge for it.
+OPEN_STATUSES = {"past_due", "unpaid", "incomplete", "paused"}
 
 # gdpr.delete_for_email appends a row carrying this event and the email to
 # both ledgers this module reads. It is recognised here by its shape rather
@@ -256,6 +259,10 @@ def _row_is_active(row: dict) -> bool:
         return False
 
 
+def _row_is_open(row: dict) -> bool:
+    return row.get("status", "") in OPEN_STATUSES
+
+
 def active_subscription_ids(email: str) -> list[str]:
     """The Stripe subscriptions this address holds that are active now, each
     judged by its own newest row (see subscriptions_for)."""
@@ -263,15 +270,25 @@ def active_subscription_ids(email: str) -> list[str]:
 
 
 def _current_row(email: str) -> dict | None:
-    """The row describing the subscription this address is on now: the newest
-    row of the most recently updated ACTIVE subscription, or, with none
-    active, the newest row of all.
+    """The row describing the subscription this address is on now. The first
+    of these that finds one decides:
+
+      1. the most recently updated ACTIVE subscription;
+      2. the most recently updated subscription that still exists at Stripe
+         without being active (OPEN_STATUSES);
+      3. the newest row of all.
 
     Each subscription is judged by its own newest row. Judging the newest row
     across all of them let one subscription's cancellation hide another that
     is still being paid for (what cancelling a duplicate produced), and every
     reader must agree on the choice: the page, cancel, reactivate, the refund
     request and the support lookup (found in review, 2026-09-27).
+
+    The second tier is there for the same reason. With nothing active, the
+    newest row of all could be the cancellation of one subscription while
+    another was past due, and Stripe keeps retrying a past due payment. The
+    account then acted on the one that had ended, and Cancel could not reach
+    the one still being charged.
 
     A row with no subscription id (hand-written; the webhook always records
     the id) names no subscription of its own, so it keeps the meaning it
@@ -281,10 +298,11 @@ def _current_row(email: str) -> dict | None:
     for i, row in enumerate(rows):
         newest[row.get("stripe_sub") or ""] = (i, row)
     last = len(rows) - 1
-    active = [(i, row) for sub, (i, row) in newest.items()
-              if _row_is_active(row) and (sub or i == last)]
-    if active:
-        return max(active, key=lambda pair: pair[0])[1]
+    speaking = [(i, row) for sub, (i, row) in newest.items() if sub or i == last]
+    for in_tier in (_row_is_active, _row_is_open):
+        tier = [pair for pair in speaking if in_tier(pair[1])]
+        if tier:
+            return max(tier, key=lambda pair: pair[0])[1]
     return rows[-1] if rows else None
 
 

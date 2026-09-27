@@ -218,10 +218,11 @@ def test_the_guard_refuses_while_any_subscription_is_active(tmp_path):
         assert _stripe_calls(tmp_path) == 0
 
 
-def _sub_event(event_id: str, type_: str, customer: str, sub_id: str, status: str = "active") -> bytes:
+def _sub_event(event_id: str, type_: str, customer: str, sub_id: str, status: str = "active",
+               period_end: float = FUTURE) -> bytes:
     return json.dumps({"id": event_id, "type": type_, "data": {"object": {
         "id": sub_id, "customer": customer, "status": status,
-        "current_period_end": FUTURE}}}).encode()
+        "current_period_end": period_end}}}).encode()
 
 
 def test_a_duplicate_is_flagged_even_when_both_checkouts_complete_first(webhook, capsys):
@@ -317,3 +318,105 @@ def test_one_duplicate_is_flagged_once_in_the_usual_event_order(webhook, capsys)
     made = stripe_webhook.handle_event(_sub_event("evt_b", "customer.subscription.created", "cus_B", "sub_B"))
     assert not made.get("duplicate_subscription"), made
     assert capsys.readouterr().err.count("DUPLICATE subscription") == 1
+
+
+# --- review of 2f63529: a duplicate is a PAIR of active subscriptions --------------
+
+def _map_to_bob(*customers: str) -> None:
+    for customer in customers:
+        subscriptions.record_customer_email(customer, "bob@example.com")
+
+
+def test_a_renewal_of_the_older_subscription_is_not_flagged_again(webhook, capsys, monkeypatch):
+    """A renewal arrives after the period it renews has ended, so the stored
+    row of the older subscription read as not active, its renewal read as a
+    subscription becoming active, and the pair was reported a second time,
+    naming the older one as the new duplicate."""
+    _map_to_bob("cus_A", "cus_B")
+    stripe_webhook.handle_event(_sub_event("evt_a1", "customer.subscription.created", "cus_A", "sub_A",
+                                           period_end=time.time() + 10))
+    flagged = stripe_webhook.handle_event(_sub_event("evt_b1", "customer.subscription.created",
+                                                     "cus_B", "sub_B"))
+    assert flagged.get("duplicate_subscription") is True, flagged   # control
+    monkeypatch.setattr(subscriptions, "_now_unix", lambda: time.time() + 60)
+    assert subscriptions.active_subscription_ids("bob@example.com") == ["sub_B"]  # A has lapsed
+    renewal = stripe_webhook.handle_event(_sub_event("evt_a2", "customer.subscription.updated",
+                                                     "cus_A", "sub_A"))
+    assert not renewal.get("duplicate_subscription"), renewal
+    assert capsys.readouterr().err.count("DUPLICATE subscription") == 1
+
+
+def test_a_different_duplicate_later_is_flagged(webhook, capsys):
+    """A subscription flagged once was never flagged again, whatever it was
+    a duplicate of. sub_B with sub_E is not the pair that was reported."""
+    _map_to_bob("cus_A", "cus_B")
+    stripe_webhook.handle_event(_sub_event("evt_a1", "customer.subscription.created", "cus_A", "sub_A"))
+    first = stripe_webhook.handle_event(_sub_event("evt_b1", "customer.subscription.created",
+                                                   "cus_B", "sub_B"))
+    assert first.get("duplicate_subscription") is True, first   # control
+    stripe_webhook.handle_event(_sub_event("evt_a2", "customer.subscription.deleted", "cus_A", "sub_A"))
+    stripe_webhook.handle_event(_sub_event("evt_b2", "customer.subscription.updated", "cus_B", "sub_B",
+                                           status="past_due"))
+    _map_to_bob("cus_E")
+    alone = stripe_webhook.handle_event(_sub_event("evt_e1", "customer.subscription.created",
+                                                   "cus_E", "sub_E"))
+    assert not alone.get("duplicate_subscription"), alone   # control: only sub_E is active
+    capsys.readouterr()
+    again = stripe_webhook.handle_event(_sub_event("evt_b3", "customer.subscription.updated",
+                                                   "cus_B", "sub_B"))
+    assert again.get("duplicate_subscription") is True, again
+    assert first.get("duplicate_pairs") == ["sub_A|sub_B"], first
+    assert again.get("duplicate_pairs") == ["sub_B|sub_E"], again
+    assert again.get("duplicate_of") == ["sub_E"], again
+    err = capsys.readouterr().err
+    assert err.count("DUPLICATE subscription") == 1 and "sub_B" in err and "sub_E" in err, err
+    assert "sub_A" not in err, err
+
+
+def test_a_duplicate_created_while_the_other_was_between_periods_is_caught_at_renewal(
+        webhook, capsys, monkeypatch):
+    """The older subscription's period had ended and its renewal had not
+    landed yet, so the new one was alone when it was created. The pair exists
+    from the renewal on, and that is the event that must report it."""
+    _map_to_bob("cus_A", "cus_B")
+    stripe_webhook.handle_event(_sub_event("evt_a1", "customer.subscription.created", "cus_A", "sub_A",
+                                           period_end=time.time() + 10))
+    monkeypatch.setattr(subscriptions, "_now_unix", lambda: time.time() + 60)
+    capsys.readouterr()
+    made = stripe_webhook.handle_event(_sub_event("evt_b1", "customer.subscription.created",
+                                                  "cus_B", "sub_B"))
+    assert not made.get("duplicate_subscription"), made
+    renewal = stripe_webhook.handle_event(_sub_event("evt_a2", "customer.subscription.updated",
+                                                     "cus_A", "sub_A"))
+    assert renewal.get("duplicate_subscription") is True, renewal
+    assert renewal.get("duplicate_pairs") == ["sub_A|sub_B"], renewal
+    assert renewal.get("duplicate_of") == ["sub_B"], renewal
+    assert capsys.readouterr().err.count("DUPLICATE subscription") == 1
+
+
+# --- review of 2f63529: act on a subscription that still exists at Stripe ----------
+
+def test_a_past_due_subscription_is_not_hidden_by_another_ones_cancellation(ledgers):
+    """With nothing active the newest row of all spoke, here the canceled
+    sub_Q, while sub_P is the one Stripe still retries the payment of. Cancel
+    could only reach the subscription that had already ended."""
+    _map_to_bob("cus_P", "cus_Q")
+    subscriptions.record_subscription_event("cus_P", "active", FUTURE, sub_id="sub_P")
+    subscriptions.record_subscription_event("cus_Q", "active", FUTURE, sub_id="sub_Q")
+    subscriptions.record_subscription_event("cus_P", "past_due", FUTURE, sub_id="sub_P")
+    subscriptions.record_subscription_event("cus_Q", "canceled", FUTURE, sub_id="sub_Q")
+    current = subscriptions.status_for("bob@example.com") or {}
+    assert current.get("stripe_sub") == "sub_P", current
+    assert current.get("status") == "past_due", current
+    assert subscriptions.stripe_subscription_id_for("bob@example.com") == "sub_P"
+    assert subscriptions.is_active("bob@example.com") is False
+
+
+def test_with_only_ended_subscriptions_the_newest_row_speaks(ledgers):
+    """Control: with nothing active and nothing left to cancel, the newest
+    row of all is still the answer."""
+    _map_to_bob("cus_X", "cus_Y")
+    subscriptions.record_subscription_event("cus_X", "canceled", FUTURE, sub_id="sub_X")
+    subscriptions.record_subscription_event("cus_Y", "canceled", FUTURE, sub_id="sub_Y")
+    assert (subscriptions.status_for("bob@example.com") or {}).get("stripe_sub") == "sub_Y"
+    assert subscriptions.is_active("bob@example.com") is False
