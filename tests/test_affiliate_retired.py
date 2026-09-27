@@ -48,13 +48,18 @@ def test_the_retired_reads_answer_gone_and_write_nothing(server, path):
     base, data_dir = server
     member = _signed_in(base, data_dir)
     registry = data_dir / "affiliate_codes.jsonl"
+    # Compared before and after THIS path's requests: the data dir is shared
+    # by both parametrized paths, and a write by one must not be pinned on
+    # the other.
+    before = registry.read_text() if registry.exists() else ""
     for headers in (member, {}):
         status, body, _h = _srv.request(base, path, headers=headers, timeout=15)
         assert status == 410, (path, headers, status, body)
         assert "still work" in json.loads(body)["detail"]
         head = _srv.request(base, path, method="HEAD", headers=headers, timeout=15)
         assert head[0] == 410
-    assert not registry.exists() or registry.read_text() == "", "a retired read wrote the registry"
+    after = registry.read_text() if registry.exists() else ""
+    assert after == before, f"{path} wrote the code registry"
 
 
 def test_the_payout_request_answers_gone(server):

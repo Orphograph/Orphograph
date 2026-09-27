@@ -2618,11 +2618,10 @@ class Handler(BaseHTTPRequestHandler):
             self._handle_founder_funnel()
             return
         if path in ("/affiliate", "/affiliate/"):
-            # No standalone public landing page exists for the affiliate
-            # program; referral/affiliate details live on the signed-in
-            # account page. Redirect there rather than 404 on a missing
-            # static file. 302 (temporary) so a future landing page can
-            # reclaim this URL without a cached 301 getting in the way.
+            # The account-level affiliate program is retired (2026-09-27)
+            # and never had a page. Old links to /affiliate land on the
+            # account page rather than a 404. 302 (temporary) so the URL
+            # can be reused without a cached 301 getting in the way.
             self.send_response(302)
             self.send_header("Location", "/account")
             self.send_header("Content-Length", "0")

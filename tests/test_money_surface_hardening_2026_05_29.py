@@ -3,8 +3,9 @@
 Regression tests for the 2026-05-29 money-surface hardening pass (Tier 2/3):
   - /api/btc/claim no longer 500s (was NameError: _truncate_ip/_client_ip
     never existed; the real helper is _client_key()).
-  - /api/me/affiliate/payout fails CLOSED with 503 instead of 500
-    (handler was dispatched but never defined → AttributeError).
+  - /api/me/affiliate/payout fails CLOSED instead of 500 (handler was
+    dispatched but never defined → AttributeError). It answered 503 until
+    the program was retired on 2026-09-27; it answers 410 now.
   - Rate-limit client-IP bucketing can no longer be bypassed by rotating a
     client-supplied X-Forwarded-For (leftmost token was attacker-controlled).
 """
