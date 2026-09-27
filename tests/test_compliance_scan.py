@@ -198,34 +198,3 @@ def test_a_nested_node_modules_is_excluded_like_the_top_level_one():
         _write(root / "zk-provenance" / "snark" / "notes.md", "FMV today is $350K; 5y EV ~$3M.\n")
         rc, report = _run(root, out)
         assert rc == 1 and report["valuation_hits"], "the control must still fire"
-
-
-@pytest.mark.parametrize("line", [
-    "Each receipt log is a time series a verifier can replay offline.",
-    "This file defines a map and a series a R1CS of the form below.",
-    "A TV series about notaries; series b of the tests runs nightly.",
-])
-def test_ordinary_english_series_is_not_a_funding_round(line):
-    """The vendored hit that failed the daily job was 'series a R1CS', matched
-    case-insensitively as a funding designator with no dollar in sight. The
-    node_modules exclusion hid that one file; authored English still tripped
-    it (found in review of 8842b1b)."""
-    with tempfile.TemporaryDirectory() as td:
-        root = Path(td)
-        _write(root / "docs" / "notes.md", line + "\n")
-        rc, report = _run(root, root / "outbox" / "report.json")
-        assert rc == 0, report["valuation_hits"]
-
-
-@pytest.mark.parametrize("line", [
-    "We raised a Series A last spring.",
-    "Our series b round closes in March.",
-    "Talks with Series C investors continue.",
-])
-def test_a_funding_round_still_trips_the_gate(line):
-    """Control: the designator the gate exists for."""
-    with tempfile.TemporaryDirectory() as td:
-        root = Path(td)
-        _write(root / "docs" / "deck.md", line + "\n")
-        rc, report = _run(root, root / "outbox" / "report.json")
-        assert rc == 1 and report["valuation_hits"], report

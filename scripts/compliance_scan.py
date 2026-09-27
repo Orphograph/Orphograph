@@ -47,18 +47,9 @@ ALL_CAPS_DENY = ["companycam","spectora","jobnimbus","procore","buildertrend","v
 # the build.
 TECH_NAME_CARVEOUTS = {"adobe", "stripe", "google", "anthropic", "claude", "samsung", "leica"}
 
-# A funding-round designator: "Series A".."Series H" as a capitalised name, or
-# lowercase only with a funding word after it. Matched case-insensitively,
-# "series a" also caught ordinary English ("a time series a verifier can
-# replay", "a series a R1CS"), and one vendored doc failed the daily job on it
-# every day (found 2026-09-27).
-FUNDING_SERIES = (r"(?-i:\bSeries\s+[A-H]\b)"
-                  r"|\bseries\s+[a-h]\s+(?:round|funding|financing|raise|investors?|investment)\b")
-
 # Dollar / valuation regex. Word-bounded where useful.
 DOLLAR_REGEX = re.compile(
-    r"(\$[0-9]+(?:\.[0-9]+)?[KMB]?\b|\bvaluation\b|\bacquired for\b|\braised(?=\s+\$)|"
-    + FUNDING_SERIES + r")",
+    r"(\$[0-9]+(?:\.[0-9]+)?[KMB]?\b|\bvaluation\b|\bacquired for\b|\braised(?=\s+\$)|\bseries [A-Z]\b)",
     re.IGNORECASE,
 )
 
@@ -87,7 +78,7 @@ _VAL_CTX_RE = re.compile(
     r"enterprise\s+value|FMV|funding\s+round|seed\s+round)\b",
     re.IGNORECASE,
 )
-_SERIES_RE = re.compile(FUNDING_SERIES, re.IGNORECASE)
+_SERIES_RE = re.compile(r"\bseries\s+[A-E]\b", re.IGNORECASE)
 _DOLLAR_AMT_RE = re.compile(r"\$[0-9][0-9,]*(?:\.[0-9]+)?\s*[KMB]?\b", re.IGNORECASE)
 
 
