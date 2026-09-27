@@ -47,15 +47,20 @@ ALL_CAPS_DENY = ["companycam","spectora","jobnimbus","procore","buildertrend","v
 # the build.
 TECH_NAME_CARVEOUTS = {"adobe", "stripe", "google", "anthropic", "claude", "samsung", "leica"}
 
+# A funding-round designator: "series" + A..H, in any case, joined by spaces,
+# a hyphen or &nbsp;. One pattern for the recorded hit and for the exit
+# decision (they used to differ: the hit took one space and A-Z, the exit
+# A-E, so "Series F", "Series  A" and "Series-A" shipped past the gate).
+# Case-insensitive on purpose (reviewed 2026-09-27): a narrower pattern that
+# ignored ordinary English ("a time series a verifier") also stopped catching
+# "closed our series A" and "SERIES A CLOSED". An English sentence that trips
+# it is rephrased.
+FUNDING_SERIES = r"\bseries(?:\s+|-|&nbsp;)[A-H]\b"
+
 # Dollar / valuation regex. Word-bounded where useful.
-# `series [A-Z]` stays case-insensitive on purpose (reviewed 2026-09-27): a
-# narrower pattern that ignored ordinary English ("a time series a verifier")
-# also stopped catching "closed our series A", "SERIES A CLOSED" and "our
-# series a valuation", which is what this gate exists for. An English
-# sentence that trips it is rephrased; the one that tripped it every day was
-# vendored under node_modules, which is excluded.
 DOLLAR_REGEX = re.compile(
-    r"(\$[0-9]+(?:\.[0-9]+)?[KMB]?\b|\bvaluation\b|\bacquired for\b|\braised(?=\s+\$)|\bseries [A-Z]\b)",
+    r"(\$[0-9]+(?:\.[0-9]+)?[KMB]?\b|\bvaluation\b|\bacquired for\b|\braised(?=\s+\$)|"
+    + FUNDING_SERIES + r")",
     re.IGNORECASE,
 )
 
@@ -84,7 +89,7 @@ _VAL_CTX_RE = re.compile(
     r"enterprise\s+value|FMV|funding\s+round|seed\s+round)\b",
     re.IGNORECASE,
 )
-_SERIES_RE = re.compile(r"\bseries\s+[A-E]\b", re.IGNORECASE)
+_SERIES_RE = re.compile(FUNDING_SERIES, re.IGNORECASE)
 _DOLLAR_AMT_RE = re.compile(r"\$[0-9][0-9,]*(?:\.[0-9]+)?\s*[KMB]?\b", re.IGNORECASE)
 
 
@@ -101,6 +106,9 @@ def _is_valuation_intent(match: str, context: str = "") -> bool:
 # ----------------------------------------------------------------------------
 EXCLUDE_GLOBS: tuple[str, ...] = (
     ".git/*",
+    # Agent worktrees: stale copies of this repo on other branches. Nothing
+    # there ships, and a sentence there cannot be fixed by editing the tree.
+    ".claude/*",
     "node_modules/*",
     # Any depth: zk-provenance/snark/node_modules/ was scanned, and one vendored
     # doc read as a valuation hit, so the daily job exited 1 on noise.

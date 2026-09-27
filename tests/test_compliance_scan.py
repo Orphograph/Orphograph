@@ -215,3 +215,37 @@ def test_funding_round_language_trips_the_gate_in_any_case(line):
         _write(root / "web" / "about.html", line + "\n")
         rc, report = _run(root, root / "outbox" / "report.json")
         assert rc == 1 and report["valuation_hits"], report
+
+
+@pytest.mark.parametrize("line", [
+    "Our Series F is done.",
+    "We closed our Series  A.",          # two spaces
+    "We closed our Series-A round.",
+    "We closed our Series&nbsp;A.",
+])
+def test_funding_round_spellings_trip_the_gate(line):
+    """The exit decision matched only `series` + one space + A-E, so these
+    shipped past the daily gate (found in review, 2026-09-27)."""
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        _write(root / "web" / "about.html", line + "\n")
+        rc, report = _run(root, root / "outbox" / "report.json")
+        assert rc == 1 and report["valuation_hits"], report
+
+
+def test_agent_worktree_copies_are_not_scanned():
+    """.claude/worktrees holds stale copies of the repo on other branches
+    (4,920 of the 5,925 files the scan walked on 2026-09-27). A sentence
+    there cannot be fixed by editing the tree, so it must not fail the gate."""
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        _write(root / ".claude" / "worktrees" / "agent-1" / "docs" / "deck.md",
+               "FMV today is $350K; 5y EV ~$3M.\n")
+        _write(root / "README.md", "plain\n")
+        out = root / "outbox" / "report.json"
+        rc, report = _run(root, out)
+        assert rc == 0, report["valuation_hits"]
+        # Control: the same text in the tree proper still trips the gate.
+        _write(root / "docs" / "deck.md", "FMV today is $350K; 5y EV ~$3M.\n")
+        rc, report = _run(root, out)
+        assert rc == 1 and report["valuation_hits"], "the control must still fire"
