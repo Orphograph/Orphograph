@@ -600,7 +600,7 @@ def test_unsubscribe_creates_a_ledger_directory_that_does_not_exist_yet(tmp_path
 
     ledger = tmp_path / "not-yet" / "deeper" / "suppressions.jsonl"
     monkeypatch.setattr(unsubscribe, "SUPPRESS_PATH", ledger)
-    assert unsubscribe.can_append(ledger) is True, "the pre-check must agree with the writer"
+    unsubscribe.ensure_writable()   # the check agrees with the writer, and creates the parents
     assert unsubscribe.add("fresh@example.test", source="test") is True
     assert ledger.exists() and "fresh@example.test" in ledger.read_text()
     assert unsubscribe.add("fresh@example.test", source="test") is False, "idempotent"
@@ -622,7 +622,8 @@ def test_unsubscribe_still_refuses_a_ledger_it_cannot_write(tmp_path, monkeypatc
     try:
         assert not os.access(ledger, os.W_OK), "control: the ledger is read-only"
         monkeypatch.setattr(unsubscribe, "SUPPRESS_PATH", ledger)
-        assert not unsubscribe.can_append(ledger)
+        with pytest.raises(unsubscribe.SuppressionUnavailable):
+            unsubscribe.ensure_writable()
         with pytest.raises(unsubscribe.SuppressionUnavailable):
             unsubscribe.add("blocked@example.test", source="test")
         assert ledger.read_text() == "", "nothing may have been recorded"
@@ -630,27 +631,46 @@ def test_unsubscribe_still_refuses_a_ledger_it_cannot_write(tmp_path, monkeypatc
         ledger.chmod(0o600)
 
 
-def test_can_append_agrees_with_a_directory_the_writer_repairs(tmp_path):
+def test_the_unsubscribe_check_agrees_with_a_directory_the_writer_repairs(tmp_path, monkeypatch):
     """locked() chmods an existing parent it owns to 0700 before opening, so a
-    read-only directory this process owns is writable to the real writer. The
-    pre-check said no, and the unsubscribe POST (which pre-checks since
-    2026-09-27) refused a one-click unsubscribe the writer would have recorded
-    (found in review of 81760a5)."""
+    read-only directory this process owns is writable to the real writer.
+    can_append guesses no there (its docstring says so), and the unsubscribe
+    POST used it: a one-click unsubscribe the writer would have recorded got
+    503 (found in review of 81760a5). ensure_writable opens the ledger the
+    way the writer does."""
     import os
-    from file_lock import can_append, locked
+    import unsubscribe
+    from file_lock import can_append
     assert os.geteuid() != 0, "run this suite as a non-root user"
     sub = tmp_path / "sub"
     sub.mkdir()
     sub.chmod(0o500)
-    target = sub / "suppressions.jsonl"
+    ledger = sub / "suppressions.jsonl"
+    monkeypatch.setattr(unsubscribe, "SUPPRESS_PATH", ledger)
     try:
-        assert not os.access(sub, os.W_OK), "control: the directory is read-only"
-        assert can_append(target) is True
-        with locked(target) as f:            # the writer does repair it
-            f.write("x\n")
-        assert target.read_text() == "x\n"
+        assert can_append(ledger) is False, "control: the guess still says no"
+        unsubscribe.ensure_writable()
+        assert unsubscribe.add("repaired@example.test", source="test") is True
+        assert "repaired@example.test" in ledger.read_text()
     finally:
         sub.chmod(0o700)
+
+
+def test_the_unsubscribe_check_refuses_what_the_writer_cannot_open(tmp_path, monkeypatch):
+    """Control: a read-only ledger FILE is refused, for a new address and an
+    already suppressed one alike."""
+    import os
+    import unsubscribe
+    assert os.geteuid() != 0, "run this suite as a non-root user"
+    ledger = tmp_path / "suppressions.jsonl"
+    monkeypatch.setattr(unsubscribe, "SUPPRESS_PATH", ledger)
+    assert unsubscribe.add("known@example.test", source="test") is True
+    ledger.chmod(0o400)
+    try:
+        with pytest.raises(unsubscribe.SuppressionUnavailable):
+            unsubscribe.ensure_writable()
+    finally:
+        ledger.chmod(0o600)
 
 
 def test_can_append_follows_what_the_real_writer_does(tmp_path):

@@ -93,3 +93,26 @@ def test_the_one_click_post_mailbox_providers_send_still_works(server):
         headers={"Content-Type": "application/x-www-form-urlencoded"}, timeout=15)
     assert status == 200 and json.loads(raw) == {"ok": True}
     assert _suppressed(data_dir).count(email) == 1
+
+
+def test_a_one_click_post_is_recorded_in_a_directory_the_writer_repairs(tmp_path):
+    """The ledger's directory exists, is owned by the server and is read-only;
+    the writer chmods it and writes. The first writability check on POST
+    guessed "unwritable" and answered a mailbox provider 503 for an
+    unsubscribe the writer would have recorded (found in review of 81760a5)."""
+    import os
+    assert os.geteuid() != 0, "run this suite as a non-root user"
+    sub = tmp_path / "sub"
+    sub.mkdir()
+    sub.chmod(0o500)
+    ledger = sub / "suppressions.jsonl"
+    try:
+        for base in _srv.server_processes(tmp_path, ORPHO_SUPPRESSIONS=str(ledger)):
+            status, raw, _h = _srv.request(
+                base, "/api/unsubscribe?e=" + quote("gmail-user@example.test"), method="POST",
+                body=b"List-Unsubscribe=One-Click",
+                headers={"Content-Type": "application/x-www-form-urlencoded"}, timeout=15)
+            assert status == 200, (status, raw)
+            assert "gmail-user@example.test" in ledger.read_text()
+    finally:
+        sub.chmod(0o700)

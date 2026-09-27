@@ -21,7 +21,7 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 
-from file_lock import can_append, locked
+from file_lock import locked
 
 
 class SuppressionUnavailable(RuntimeError):
@@ -50,6 +50,23 @@ def _is_new(email: str) -> bool:
     if "@" not in email or len(email) > 320:
         return False
     return not is_unsubscribed(email)
+
+
+def ensure_writable() -> None:
+    """Raise SuppressionUnavailable unless the ledger can be appended to right
+    now. Opens it exactly as `add` does and writes nothing.
+
+    For the unsubscribe POST, which must refuse before `add`'s
+    already-suppressed shortcut: with an unwritable ledger a new address got
+    503 and a suppressed one got success, which told anyone which one it was.
+    Not file_lock.can_append: that is a pre-check that guesses, and it
+    refuses a directory this process owns and `locked` repairs, so a one-click
+    unsubscribe the writer would have recorded got 503 (review, 2026-09-27)."""
+    try:
+        with locked(SUPPRESS_PATH, mode="a", exclusive=True):
+            pass
+    except OSError as e:
+        raise SuppressionUnavailable(f"suppression ledger is not writable: {e}") from e
 
 
 def add(email: str, source: str = "user") -> bool:

@@ -4600,9 +4600,7 @@ class Handler(BaseHTTPRequestHandler):
             # unwritable ledger a new address got 503 and a suppressed one got
             # success, which told anyone which one it was (the GET handler did
             # this check until the write moved here, 2026-09-27).
-            if not unsubscribe.can_append(unsubscribe.SUPPRESS_PATH):
-                raise unsubscribe.SuppressionUnavailable(
-                    f"suppression ledger is not writable: {unsubscribe.SUPPRESS_PATH.name}")
+            unsubscribe.ensure_writable()
             unsubscribe.add(email, source="page_post" if from_page else "link_post")
         except unsubscribe.SuppressionUnavailable:
             if from_page:

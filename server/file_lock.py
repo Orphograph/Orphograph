@@ -59,22 +59,13 @@ def can_append(path: Path) -> bool:
     only the immediate parent called a not-yet-created data directory
     unwritable, which refused a write the real writer would have made.
 
-    `locked` also chmods an EXISTING parent to 0700 when this process owns it,
-    so a read-only directory it owns is writable to the real writer, and this
-    says so. (It used to report False there, which refused a one-click
-    unsubscribe the writer would have recorded; 2026-09-27.)
-
     A pre-check, so a race remains; callers that cannot tolerate one must also
-    handle the OSError from the real write.
+    handle the OSError from the real write. One known difference: `locked` also
+    chmods the parent to 0700 when it owns it, so a read-only directory this
+    process owns is repaired by the real write while this reports False.
     """
     if path.exists():
         return os.access(path, os.W_OK)
-    parent = path.parent
-    if parent.is_dir() and not os.access(parent, os.W_OK | os.X_OK):
-        try:
-            return parent.stat().st_uid == os.geteuid()   # locked() repairs it
-        except OSError:
-            return False
     for parent in path.parents:
         if parent.exists():
             return parent.is_dir() and os.access(parent, os.W_OK | os.X_OK)
