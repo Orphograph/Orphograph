@@ -21,7 +21,7 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 
-from file_lock import can_append, locked
+from file_lock import locked
 
 
 class SuppressionUnavailable(RuntimeError):
@@ -52,20 +52,53 @@ def _is_new(email: str) -> bool:
     return not is_unsubscribed(email)
 
 
-def would_add(email: str) -> bool:
-    """What `add` would return right now, without writing. For HEAD on the
-    unsubscribe link: a scanner that only looked must not unsubscribe anyone."""
-    if not _is_new(email):
+def ensure_writable() -> None:
+    """Raise SuppressionUnavailable unless the ledger can be opened for
+    appending right now. Writes nothing and takes no lock.
+
+    For the unsubscribe POST, which must refuse before `add`'s
+    already-suppressed shortcut: with a ledger that could not be opened a new
+    address got 503 and a suppressed one got success, which told anyone which
+    one it was. That case is all this closes. Not covered: the file opens and
+    the write itself fails (a full volume). `add` then still answers a
+    suppressed address with success and a new one with 503.
+
+    No lock, because only whether the file can be opened matters here; `add`
+    takes the lock when it writes. Taking it made a POST for an address that
+    is already suppressed, the one mailbox providers retry, wait for whoever
+    held it (review, 2026-09-27). The steps mirror file_lock.locked up to the
+    lock and must stay in step with it.
+
+    Not file_lock.can_append: that is a pre-check that guesses, and it
+    refuses a directory this process owns and `locked` repairs, so a one-click
+    unsubscribe the writer would have recorded got 503 (review, 2026-09-27)."""
+    path = SUPPRESS_PATH
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            os.chmod(path.parent, 0o700)
+        except OSError:
+            pass
+        with open(path, "a"):
+            try:
+                os.chmod(path, 0o600)
+            except OSError:
+                pass
+    except OSError as e:
+        raise SuppressionUnavailable(f"suppression ledger is not writable: {e}") from e
+
+
+def _ends_mid_line(path: Path) -> bool:
+    """Does the file end without a newline (a torn last line)?"""
+    try:
+        with path.open("rb") as f:
+            f.seek(0, os.SEEK_END)
+            if f.tell() == 0:
+                return False
+            f.seek(-1, os.SEEK_END)
+            return f.read(1) != b"\n"
+    except OSError:
         return False
-    # "Would add" includes "could add". A ledger we can read and not write
-    # used to answer HEAD with the success page while GET got no answer at all.
-    # Only HEAD asks: `add` itself writes, and maps a failed write below, so it
-    # does not also pre-check (a pre-check there refused a ledger whose parent
-    # directory did not exist yet, which the real write creates).
-    if not can_append(SUPPRESS_PATH):
-        raise SuppressionUnavailable(
-            f"suppression ledger is not writable: {SUPPRESS_PATH.name}")
-    return True
 
 
 def add(email: str, source: str = "user") -> bool:
@@ -75,6 +108,11 @@ def add(email: str, source: str = "user") -> bool:
     email = _norm(email)
     try:
         with locked(SUPPRESS_PATH, mode="a", exclusive=True) as f:
+            # A write that failed part-way leaves a line with no newline. This
+            # row would be glued onto it and never read back, while the person
+            # is told it worked. Start on a fresh line.
+            if _ends_mid_line(SUPPRESS_PATH):
+                f.write("\n")
             f.write(json.dumps({
                 "ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
                 "email": email,

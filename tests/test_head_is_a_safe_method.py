@@ -11,8 +11,11 @@ SIDE EFFECT also fired on HEAD. Two routes had one (2026-09-19):
   * `/api/unsubscribe?e=` recorded the suppression, so a scanner that only
     looked at the link unsubscribed the recipient.
 
-GET keeps both behaviours; they are deliberate single-click flows. HEAD now
+GET keeps the sign-in behaviour, a deliberate single-click flow. HEAD
 reports what GET WOULD answer, from read-only lookups, and writes nothing.
+Since 2026-09-27 (founder decision 9A) the unsubscribe GET writes nothing
+either: it asks, and the person's POST records it
+(tests/test_unsubscribe_confirms_by_post.py).
 
 Drives a real server over HTTP and reads the server's own ledgers afterwards:
 the assertion is on recorded state, not on a handler's return value.
@@ -119,22 +122,31 @@ def test_head_on_a_spent_or_unknown_link_answers_like_get(server):
 
 # --- /api/unsubscribe -------------------------------------------------------
 
+_PRESS = {"Content-Type": "application/x-www-form-urlencoded"}
+
+
 def test_head_does_not_unsubscribe_anyone(server):
     base, data_dir = server
     email = "only-looked@example.test"
     path = f"/api/unsubscribe?e={email}"
 
+    def recorded() -> int:
+        return [r.get("email") for r in _rows(data_dir / "suppressions.jsonl")].count(email)
+
     status, body, head_before = _srv.request(base, path, method="HEAD", timeout=15)
     assert status == 200 and body == b""
-    assert [r for r in _rows(data_dir / "suppressions.jsonl")
-            if r.get("email") == email] == [], "HEAD recorded an unsubscribe"
+    assert recorded() == 0, "HEAD recorded an unsubscribe"
 
-    # The person's own click still works in one action, and HEAD described
-    # that response exactly (same length: the "Confirmed." page).
+    # Since 2026-09-27 (9A) GET only asks; HEAD described that page exactly.
     status, get_body, _h = _srv.request(base, path, timeout=15)
-    assert status == 200 and b"Confirmed" in get_body
+    assert status == 200 and b'<form method="post"' in get_body
     assert head_before.get("Content-Length") == str(len(get_body))
-    assert [r.get("email") for r in _rows(data_dir / "suppressions.jsonl")] .count(email) == 1
+    assert recorded() == 0, "GET recorded an unsubscribe"
+
+    # The person's POST records it, once.
+    assert _srv.request(base, path, method="POST", body=b"via=page", headers=_PRESS,
+                        timeout=15)[0] == 200
+    assert recorded() == 1
 
     # Once recorded, HEAD and GET still agree, and on the SAME page as before:
     # a page that changed once the address was suppressed let a HEAD, which
@@ -143,7 +155,7 @@ def test_head_does_not_unsubscribe_anyone(server):
     _s, get_again, _h = _srv.request(base, path, timeout=15)
     assert get_again == get_body
     assert head_after.get("Content-Length") == head_before.get("Content-Length")
-    assert [r.get("email") for r in _rows(data_dir / "suppressions.jsonl")].count(email) == 1
+    assert recorded() == 1
 
 
 def test_head_on_a_refused_address_answers_like_get(server):
@@ -178,17 +190,21 @@ def read_only(server):
 
 
 def test_an_unwritable_suppression_ledger_is_answered_not_dropped(server, read_only):
-    """GET used to get NO response (an OSError escaped the handler and the
-    socket closed) while HEAD showed the success page."""
+    """The write used to get NO response (an OSError escaped the handler and
+    the socket closed). Since 2026-09-27 (9A) the write is the person's POST;
+    GET and HEAD only ask and never touch the ledger."""
     base, data_dir = server
-    _srv.request(base, "/api/unsubscribe?e=seed-the-ledger@example.test", timeout=15)
+    _srv.request(base, "/api/unsubscribe?e=seed-the-ledger@example.test", method="POST",
+                 body=b"via=page", headers=_PRESS, timeout=15)
     read_only("suppressions.jsonl")
     path = "/api/unsubscribe?e=cannot-record@example.test"
-    get_status, get_body, _h = _srv.request(base, path, timeout=15)
-    head_status, _b, _h = _srv.request(base, path, method="HEAD", timeout=15)
-    assert (get_status, head_status) == (503, 503)
-    assert b"could not record" in get_body, "the person must be told it did not work"
-    assert b"Done" not in get_body
+    post_status, post_body, _h = _srv.request(base, path, method="POST", body=b"via=page",
+                                              headers=_PRESS, timeout=15)
+    assert post_status == 503
+    assert b"could not record" in post_body, "the person must be told it did not work"
+    assert b"Done" not in post_body
+    assert _srv.request(base, path, timeout=15)[0] == 200
+    assert _srv.request(base, path, method="HEAD", timeout=15)[0] == 200
 
 
 def test_an_unwritable_ledger_does_not_tell_a_suppressed_address_apart(server, read_only):
@@ -197,12 +213,16 @@ def test_an_unwritable_ledger_does_not_tell_a_suppressed_address_apart(server, r
     so the status said which address had unsubscribed."""
     base, _data_dir = server
     known = "/api/unsubscribe?e=already-suppressed@example.test"
-    assert _srv.request(base, known, timeout=15)[0] == 200  # control: now suppressed
+    assert _srv.request(base, known, method="POST", body=b"via=page", headers=_PRESS,
+                        timeout=15)[0] == 200  # control: now suppressed
     read_only("suppressions.jsonl")
     fresh = "/api/unsubscribe?e=never-seen@example.test"
-    for method in ("GET", "HEAD"):
-        assert _srv.request(base, known, method=method, timeout=15)[0] == 503, method
-        assert _srv.request(base, fresh, method=method, timeout=15)[0] == 503, method
+    for method in ("GET", "HEAD"):   # never read the ledger: the same answer
+        assert _srv.request(base, known, method=method, timeout=15)[0] == 200, method
+        assert _srv.request(base, fresh, method=method, timeout=15)[0] == 200, method
+    for path in (known, fresh):      # the write: the same refusal for both
+        assert _srv.request(base, path, method="POST", body=b"via=page", headers=_PRESS,
+                            timeout=15)[0] == 503, path
 
 
 def test_an_unwritable_sign_in_ledger_is_answered_and_keeps_the_link(server, read_only):
@@ -267,10 +287,13 @@ def test_head_on_every_get_route_leaves_the_data_dir_untouched(server, monkeypat
     # not otherwise request.
     paths += [f"/a/{token}", "/api/unsubscribe?e=class-guard@example.test", "/pay/crypto"]
 
-    # Some GET writes only happen for a visitor the server recognises: a
-    # signed-in account (first read of an affiliate code registers it) or an
-    # experiment cookie (a checkout view is attributed to its arm). An
-    # anonymous sweep never reaches those branches, so sweep as both.
+    # Some GET writes only happen for a visitor the server recognises: an
+    # experiment cookie (a checkout view is attributed to its arm) or a
+    # signed-in account. The one known account write, the first read of an
+    # affiliate code registering it, was retired on 2026-09-27, and no GET
+    # registers anything now. The signed-in branches are still where the
+    # next such writer would land, and an anonymous sweep never reaches
+    # them, so sweep as both.
     sid = _sign_in(base, data_dir, "class-guard-member@example.test")
     # One-time bootstrap, not request state: the first email-id computation in
     # a data dir creates its HMAC key. Production has had one since day one, so
@@ -305,12 +328,11 @@ def test_head_on_every_get_route_leaves_the_data_dir_untouched(server, monkeypat
     # disguise), and the same snapshot sees the same routes write under GET.
     member = visitors["signed in, with an experiment cookie"]
     assert _srv.request(base, "/api/me", headers=member, timeout=15)[0] == 200
-    _srv.request(base, "/api/me/referral-code", headers=member, timeout=15)
     _srv.request(base, "/pay/crypto", headers=member, timeout=15)
     seen = _snapshot(data_dir)
     wrote = sorted(k for k in seen.keys() | after.keys() if seen.get(k) != after.get(k))
-    assert "affiliate_codes.jsonl" in wrote and "ab_home.jsonl" in wrote, (
-        f"control: GET on the writer routes changed only {wrote}")
+    assert "ab_home.jsonl" in wrote, (
+        f"control: GET on the writer route changed only {wrote}")
 
 
 def _sign_in(base: str, data_dir: Path, email: str) -> str:
@@ -321,25 +343,19 @@ def _sign_in(base: str, data_dir: Path, email: str) -> str:
     return cookie.split("orpho_sid=", 1)[1].split(";", 1)[0]
 
 
-def test_head_reports_the_same_affiliate_code_without_registering_it(server):
+def test_the_retired_affiliate_reads_write_nothing_under_either_method(server):
+    """HEAD used to report the code GET would register. Since 2026-09-27 the
+    program is retired (10A): both methods answer 410 and nobody registers
+    anything (tests/test_affiliate_retired.py)."""
     base, data_dir = server
     member = {"Cookie": f"orpho_sid={_sign_in(base, data_dir, 'affiliate-head@example.test')}"}
     registry = data_dir / "affiliate_codes.jsonl"
     before = len(_rows(registry))
     for path in ("/api/me/referral-code", "/api/me/affiliate"):
-        status, _b, _h = _srv.request(base, path, method="HEAD", headers=member, timeout=15)
-        assert status == 200, f"HEAD {path} never reached the signed-in branch ({status})"
-    assert len(_rows(registry)) == before, "HEAD registered an affiliate code"
-
-    _s, _b, head = _srv.request(base, "/api/me/referral-code", method="HEAD",
-                                headers=member, timeout=15)
-    status, body, _h = _srv.request(base, "/api/me/referral-code", headers=member, timeout=15)
-    code = json.loads(body)["ref_code"]
-    assert status == 200 and code.startswith("ref_")
-    assert head.get("Content-Length") == str(len(body)), "HEAD described a different code"
-    # Control: the ledger stores a hash, never the email, so the only honest
-    # observation is the row itself. GET must have written exactly this one.
-    assert [r["ref_code"] for r in _rows(registry)][before:] == [code]
+        for method in ("HEAD", "GET"):
+            status, _b, _h = _srv.request(base, path, method=method, headers=member, timeout=15)
+            assert status == 410, (method, path, status)
+    assert len(_rows(registry)) == before, "a retired read registered an affiliate code"
 
 
 @pytest.fixture(scope="module")
@@ -379,8 +395,10 @@ def test_head_is_not_a_visitor_to_the_homepage_experiment(experiment_server):
 # sweep above is what finds a writer nobody listed; this pins the listed ones.
 _KNOWN_GET_WRITERS = {
     ("auth", "redeem_link_token"), ("auth", "create_session"),
-    ("unsubscribe", "add"),
-    ("affiliate", "code_for_email"), ("affiliate", "stats"),
+    # ("unsubscribe", "add") left this list on 2026-09-27: the unsubscribe
+    # GET no longer writes at all (founder decision 9A).
+    # ("affiliate", ...) left it the same day: its endpoints are retired
+    # (410) and no GET writes the code registry any more (10A).
     ("", "_ab_log"),
 }
 
@@ -502,7 +520,10 @@ class Handler:
         if path == "/by-argument":
             affiliate.code_for_email(email, register=not self._is_head())
 '''
-    seen, offenders = _unguarded_writer_calls(planted)
+    # The scanner's logic, not today's writer list: plant writers it knows.
+    seen, offenders = _unguarded_writer_calls(
+        planted, writers=frozenset(_KNOWN_GET_WRITERS | {("affiliate", "code_for_email"),
+                                                        ("unsubscribe", "add")}))
     assert seen == {"unsubscribe.add", "affiliate.code_for_email"}
     assert offenders == ["do_GET:10 unsubscribe.add"], offenders
 
@@ -536,7 +557,10 @@ class Handler:
             else:
                 unsubscribe.add(email)
 '''
-    seen, offenders = _unguarded_writer_calls(planted)
+    # The scanner's logic, not today's writer list: plant writers it knows.
+    seen, offenders = _unguarded_writer_calls(
+        planted, writers=frozenset(_KNOWN_GET_WRITERS | {("affiliate", "code_for_email"),
+                                                        ("unsubscribe", "add")}))
     assert seen == {"unsubscribe.add", "affiliate.code_for_email"}
     # Line 6: the writer sits in the HEAD branch. Line 8: the flag is inverted.
     # Line 24: the writer sits in the else-branch of `not _is_head()`, which is
@@ -575,7 +599,7 @@ def test_unsubscribe_creates_a_ledger_directory_that_does_not_exist_yet(tmp_path
 
     ledger = tmp_path / "not-yet" / "deeper" / "suppressions.jsonl"
     monkeypatch.setattr(unsubscribe, "SUPPRESS_PATH", ledger)
-    assert unsubscribe.would_add("fresh@example.test") is True, "HEAD must agree with GET"
+    unsubscribe.ensure_writable()   # the check agrees with the writer, and creates the parents
     assert unsubscribe.add("fresh@example.test", source="test") is True
     assert ledger.exists() and "fresh@example.test" in ledger.read_text()
     assert unsubscribe.add("fresh@example.test", source="test") is False, "idempotent"
@@ -598,10 +622,52 @@ def test_unsubscribe_still_refuses_a_ledger_it_cannot_write(tmp_path, monkeypatc
         assert not os.access(ledger, os.W_OK), "control: the ledger is read-only"
         monkeypatch.setattr(unsubscribe, "SUPPRESS_PATH", ledger)
         with pytest.raises(unsubscribe.SuppressionUnavailable):
-            unsubscribe.would_add("blocked@example.test")
+            unsubscribe.ensure_writable()
         with pytest.raises(unsubscribe.SuppressionUnavailable):
             unsubscribe.add("blocked@example.test", source="test")
         assert ledger.read_text() == "", "nothing may have been recorded"
+    finally:
+        ledger.chmod(0o600)
+
+
+def test_the_unsubscribe_check_agrees_with_a_directory_the_writer_repairs(tmp_path, monkeypatch):
+    """locked() chmods an existing parent it owns to 0700 before opening, so a
+    read-only directory this process owns is writable to the real writer.
+    can_append guesses no there (its docstring says so), and the unsubscribe
+    POST used it: a one-click unsubscribe the writer would have recorded got
+    503 (found in review of 81760a5). ensure_writable opens the ledger the
+    way the writer does."""
+    import os
+    import unsubscribe
+    from file_lock import can_append
+    assert os.geteuid() != 0, "run this suite as a non-root user"
+    sub = tmp_path / "sub"
+    sub.mkdir()
+    sub.chmod(0o500)
+    ledger = sub / "suppressions.jsonl"
+    monkeypatch.setattr(unsubscribe, "SUPPRESS_PATH", ledger)
+    try:
+        assert can_append(ledger) is False, "control: the guess still says no"
+        unsubscribe.ensure_writable()
+        assert unsubscribe.add("repaired@example.test", source="test") is True
+        assert "repaired@example.test" in ledger.read_text()
+    finally:
+        sub.chmod(0o700)
+
+
+def test_the_unsubscribe_check_refuses_what_the_writer_cannot_open(tmp_path, monkeypatch):
+    """Control: a read-only ledger FILE is refused, for a new address and an
+    already suppressed one alike."""
+    import os
+    import unsubscribe
+    assert os.geteuid() != 0, "run this suite as a non-root user"
+    ledger = tmp_path / "suppressions.jsonl"
+    monkeypatch.setattr(unsubscribe, "SUPPRESS_PATH", ledger)
+    assert unsubscribe.add("known@example.test", source="test") is True
+    ledger.chmod(0o400)
+    try:
+        with pytest.raises(unsubscribe.SuppressionUnavailable):
+            unsubscribe.ensure_writable()
     finally:
         ledger.chmod(0o600)
 

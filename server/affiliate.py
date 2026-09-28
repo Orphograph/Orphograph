@@ -1,6 +1,12 @@
 #!/usr/bin/env python3
 """affiliate.py — real affiliate program on top of referrals.
 
+RETIRED 2026-09-27 (founder decision). Nothing in the server calls this
+module any more: its three endpoints answer 410, no signup was ever
+recorded, and the Stripe webhook never resolved its codes. The module and
+its ledgers stay so existing rows remain readable; the text below describes
+the program as it was designed.
+
 Tiers (from deploy/INFLUENCER_TARGETS.md):
     - Writer Pack signup (one-shot, $19):  referrer earns $5  + referee gets +10 bonus credits
     - Standing Order signup ($9/mo):       referrer earns $25

@@ -54,6 +54,14 @@ def _get(base: str, raw: str):
     return status, body.decode("utf-8"), headers
 
 
+def _press(base: str, raw: str):
+    """The confirm page's button (since 2026-09-27 GET only asks, 9A)."""
+    status, body, headers = _srv.request(
+        base, "/api/unsubscribe?e=" + quote(raw), method="POST", body=b"via=page",
+        headers={"Content-Type": "application/x-www-form-urlencoded"})
+    return status, body.decode("utf-8"), headers
+
+
 def _ledger_emails(data_dir: Path) -> list[str]:
     p = data_dir / "suppressions.jsonl"
     if not p.exists():
@@ -71,10 +79,21 @@ def test_markup_is_encoded_never_rendered(server, payload):
 
 
 @pytest.mark.parametrize("payload", PAYLOADS)
+def test_the_done_page_encodes_markup_too(server, payload):
+    """The Done page shows the address as well, and since 2026-09-27 (9A) it
+    is served only to the POST; the GET tests above no longer reach it."""
+    import html
+    status, body, _ = _press(server, payload)
+    assert status == 200 and "Done" in body
+    assert payload not in body, "raw markup from the URL reached the Done page"
+    assert html.escape(payload) in body
+
+
+@pytest.mark.parametrize("payload", PAYLOADS)
 def test_unsubscribe_is_as_permissive_as_intake(server, data_dir, payload):
     """THE REVIEW FINDING, pinned: stranding an address is worse than storing
     an ugly one. Whatever the shape check admits must be recorded."""
-    _get(server, payload)
+    _press(server, payload)
     assert payload.lower() in [e.lower() for e in _ledger_emails(data_dir)]
 
 
@@ -95,14 +114,17 @@ def test_refused_value_is_not_reflected_in_the_error_body(server):
 
 
 def test_ordinary_address_works_and_is_idempotent(server, data_dir):
-    status, body, headers = _get(server, "reader@example.com")
+    asked = _get(server, "reader@example.com")
+    assert asked[0] == 200 and "<strong>reader@example.com</strong>" in asked[1]
+    assert "reader@example.com" not in _ledger_emails(data_dir), "GET only asks (9A)"
+    status, body, headers = _press(server, "reader@example.com")
     assert status == 200
     assert "<strong>reader@example.com</strong>" in body
     assert "Confirmed" in body
     assert "reader@example.com" in _ledger_emails(data_dir)
-    # The second visit gets the same page: a different one said whether the
+    # The second press gets the same page: a different one said whether the
     # address had been suppressed before, to anyone who asked.
-    status2, body2, headers2 = _get(server, "reader@example.com")
+    status2, body2, headers2 = _press(server, "reader@example.com")
     assert status2 == 200 and body2 == body
     # The page carries the recipient's address, so it is never cached.
     assert headers.get("Cache-Control") == "no-store"
@@ -121,7 +143,8 @@ def test_page_has_no_inline_style_and_links_the_site_sheets(server):
 def test_unreadable_ledger_answers_503_not_a_dropped_socket(broken_server):
     """Before: the exception escaped, the socket closed, and _srv.request
     raised ServerGone. The visitor could not tell whether it was recorded."""
-    status, body, _ = _get(broken_server, "reader@example.com")
+    assert _get(broken_server, "reader@example.com")[0] == 200  # GET only asks (9A)
+    status, body, _ = _press(broken_server, "reader@example.com")
     assert status == 503
     assert "Done" not in body, "claimed success while nothing was recorded"
     status_post, raw, _ = _srv.request(

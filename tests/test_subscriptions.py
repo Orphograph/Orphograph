@@ -201,5 +201,8 @@ def test_subscriptions_for_gives_the_latest_row_of_every_subscription():
     subscriptions.record_subscription_event("cus_other", "active", end, "sub_other")
     assert [(r["stripe_sub"], r["status"]) for r in subscriptions.subscriptions_for("a@b.com")] == [
         ("sub_1", "canceled"), ("sub_2", "active")]
-    # The newest row of all is sub_1's cancellation; status reads that one.
-    assert subscriptions.status_for("a@b.com")["stripe_sub"] == "sub_1"
+    # The newest row of all is sub_1's cancellation, but sub_2 is still paid
+    # for: status (and so the page, cancel and reactivate) reads sub_2. It
+    # read sub_1 until 2026-09-27, which left Cancel pointing at the
+    # subscription that had already ended.
+    assert subscriptions.status_for("a@b.com")["stripe_sub"] == "sub_2"

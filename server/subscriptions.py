@@ -28,6 +28,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from file_lock import locked  # noqa: E402
+from email_fold import fold_email  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = Path(os.environ.get("ORPHO_DATA_DIR", str(ROOT / "data") if (ROOT / "data").is_dir() else str(ROOT)))
@@ -38,7 +39,8 @@ ACTIVE_STATUSES = {"active", "trialing"}
 # Stripe statuses a subscription never leaves. It bills nothing more, and
 # Stripe refuses to update it, so there is nothing left to cancel.
 ENDED_STATUSES = {"canceled", "incomplete_expired"}
-
+# Stripe statuses of a subscription that gives no access now but still exists
+# at Stripe: it can still be cancelled, and Stripe may still charge for it.
 # gdpr.delete_for_email appends a row carrying this event and the email to
 # both ledgers this module reads. It is recognised here by its shape rather
 # than by asking gdpr, because gdpr imports this module.
@@ -107,7 +109,9 @@ def _links() -> tuple[dict[str, str], dict[str, set[str]], set[tuple[str, str]]]
     since_deleted: dict[str, set[str]] = {}
     severed: set[tuple[str, str]] = set()
     for row in _read_all(CUSTOMER_MAP):
-        email = row.get("email")
+        # Stripe keeps the case the buyer typed; sign-in keeps its own. One
+        # mailbox is one key (founder decision 2026-09-27, 3A).
+        email = fold_email(row.get("email"))
         if not email:
             continue
         if _is_deletion(row):
@@ -165,6 +169,7 @@ def _customer_links(email: str) -> tuple[set[str], set[str]]:
     Linked: every customer mapped to the email since it was last deleted.
     Unlinked: customers a deletion of the email cut off. They stay cut off.
     """
+    email = fold_email(email)
     if not email:
         return set(), set()
     _current, since_deleted, severed = _links()
@@ -186,7 +191,8 @@ def _customers_for_email(email: str) -> set[str]:
 
 def _rows_for_email(email: str) -> list[dict]:
     """Every subscription row that describes whoever holds this address now,
-    oldest first."""
+    oldest first. Addresses compare folded (email_fold.fold_email)."""
+    email = fold_email(email)
     if not email:
         return []
     rows = _read_all(SUB_LEDGER)
@@ -196,7 +202,7 @@ def _rows_for_email(email: str) -> list[dict]:
         # Match by stored email first, falling back to the customer→email
         # map so out-of-order events (subscription.created before
         # checkout.session.completed) still resolve correctly.
-        row_email = row.get("email")
+        row_email = fold_email(row.get("email"))
         row_customer = row.get("stripe_customer")
         if _is_deletion(row) and row_email == email:
             # Nothing written before the deletion describes whoever holds
@@ -238,24 +244,10 @@ def subscriptions_for(email: str) -> list[dict]:
     return list(latest.values())
 
 
-def status_for(email: str) -> dict | None:
-    return _latest_for_email(email)
-
-
-def stripe_subscription_id_for(email: str) -> str:
-    """Return the most recently seen Stripe sub_xxx id for this email."""
-    latest = _latest_for_email(email)
-    return (latest or {}).get("stripe_sub", "") or ""
-
-
-def is_active(email: str) -> bool:
-    latest = _latest_for_email(email)
-    if not latest:
+def _row_is_active(row: dict) -> bool:
+    if row.get("status", "") not in ACTIVE_STATUSES:
         return False
-    status = latest.get("status", "")
-    if status not in ACTIVE_STATUSES:
-        return False
-    end = latest.get("current_period_end")
+    end = row.get("current_period_end")
     if end is None:
         # No period end given (e.g., trial without explicit end): treat as active.
         return True
@@ -263,3 +255,56 @@ def is_active(email: str) -> bool:
         return float(end) > _now_unix()
     except (TypeError, ValueError):
         return False
+
+
+def active_subscription_ids(email: str) -> list[str]:
+    """The Stripe subscriptions this address holds that are active now, each
+    judged by its own newest row (see subscriptions_for)."""
+    return [row["stripe_sub"] for row in subscriptions_for(email) if _row_is_active(row)]
+
+
+def _current_row(email: str) -> dict | None:
+    """The row describing the subscription this address is on now: the newest
+    row of the most recently updated ACTIVE subscription, or, with none
+    active, the newest row of all.
+
+    Each subscription is judged by its own newest row. Judging the newest row
+    across all of them let one subscription's cancellation hide another that
+    is still being paid for (what cancelling a duplicate produced), and every
+    reader must agree on the choice: the page, cancel, reactivate, the refund
+    request and the support lookup (found in review, 2026-09-27).
+
+    Known limit, left for a decision: with nothing active, a subscription
+    that is past due (Stripe keeps retrying it) can be hidden by another
+    one's later cancellation. Preferring any subscription still open at
+    Stripe was tried and removed: an `incomplete` row never ages out here,
+    so an abandoned attempt spoke for the account.
+
+    A row with no subscription id (hand-written; the webhook always records
+    the id) names no subscription of its own, so it keeps the meaning it
+    always had: it speaks only while it is the newest row of all."""
+    rows = _rows_for_email(email)
+    newest: dict[str, tuple[int, dict]] = {}
+    for i, row in enumerate(rows):
+        newest[row.get("stripe_sub") or ""] = (i, row)
+    last = len(rows) - 1
+    active = [(i, row) for sub, (i, row) in newest.items()
+              if _row_is_active(row) and (sub or i == last)]
+    if active:
+        return max(active, key=lambda pair: pair[0])[1]
+    return rows[-1] if rows else None
+
+
+def status_for(email: str) -> dict | None:
+    return _current_row(email)
+
+
+def stripe_subscription_id_for(email: str) -> str:
+    """The Stripe sub_xxx id this address is on now (see _current_row)."""
+    return (_current_row(email) or {}).get("stripe_sub", "") or ""
+
+
+def is_active(email: str) -> bool:
+    """Does this address hold ANY active subscription now? (see _current_row)"""
+    current = _current_row(email)
+    return bool(current) and _row_is_active(current)

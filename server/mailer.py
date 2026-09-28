@@ -128,7 +128,10 @@ def _footer_text(to_email: str, transactional: bool) -> str:
         # Legal requirement for commercial email — physical address.
         lines.insert(2, f"{BUSINESS_ADDRESS}")
         unsub = f"{SITE_URL}/api/unsubscribe?e={urllib.parse.quote(to_email)}"
-        lines.append(f"Unsubscribe instantly: {unsub}")
+        # The link opens a one-button page (founder decision 2026-09-27, 9A),
+        # so "instantly" would over-promise. Mail clients' own unsubscribe
+        # button still sends the one-click POST (List-Unsubscribe-Post).
+        lines.append(f"Unsubscribe from all marketing email: {unsub}")
     return "\n".join(lines) + "\n"
 
 
@@ -383,6 +386,43 @@ def send_pack_claim_email(to: str, claim_code: str, credit_count: int) -> bool:
             f"<a href=\"{referral_url}\">{referral_url}</a></p>"
         )
     return _send(to, subject, text, html)
+
+
+def send_pack_clearing_email(to: str, gift: bool = False) -> bool:
+    """A pack paid by a delayed method is delivered when the payment settles,
+    which can be days later (founder decision 2026-09-26). This notice tells
+    the buyer so at checkout. Founder decision 2026-09-27 (1A). No code
+    exists yet, so none is shown. On a gift the code goes to the recipient,
+    not to the buyer this is sent to. The text names no payment method and
+    makes no statement about money moving: the hold fires for every delayed
+    method, and this code does not know what the buyer's bank does with a
+    payment that fails."""
+    who = "the recipient" if gift else "this address"
+    subject = "Orphograph — your Pack payment is clearing"
+    delivery = (f"The Pack's claim code will be sent to {who} as soon as "
+                f"Stripe confirms the payment.")
+    failure = "If the payment does not go through, no Pack is issued."
+    step = ("If your bank or payment provider asked you to complete a step, "
+            "please complete it. Otherwise nothing else is needed from you.")
+    text = (
+        "Receipt of your order is acknowledged. The payment has not settled "
+        "yet: payments of this kind can take a few business days to "
+        "clear.\n\n"
+        f"{delivery} {failure}\n\n"
+        f"{step}\n\n"
+        "Correspondence regarding this order may be addressed to this "
+        "thread by reply.\n"
+    )
+    html = (
+        "<p>Receipt of your order is acknowledged. The payment has not "
+        "settled yet: payments of this kind can take <strong>a few business "
+        "days</strong> to clear.</p>"
+        f"<p>{delivery} {failure}</p>"
+        f"<p>{step}</p>"
+        "<p style=\"color:#666;font-size:13px;\">Correspondence regarding "
+        "this order may be addressed to this thread by reply.</p>"
+    )
+    return _send(to, subject, text, html, transactional=True, category="pack_clearing")
 
 
 def send_pack_gift_email(
