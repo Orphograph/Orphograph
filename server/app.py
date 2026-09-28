@@ -341,8 +341,10 @@ _status_limiter = TokenBucket(STATUS_RATE_CAPACITY, STATUS_RATE_REFILL)
 # account's Stripe read limit (100/s) is shared with checkout and the webhook.
 # A buyer loads the page a handful of times, so the burst stays small: at 5,
 # twenty prefixes are needed to reach Stripe's per-second limit even briefly
-# (the old 3/day bucket needed 34). No ceiling shared across callers: one
-# would let a few prefixes lock every buyer out.
+# (the old 3/day bucket needed 34). A HEAD has a bucket of its own, the same
+# size (see _lookup_allowed), so a prefix sending both can make 10 reads and
+# ten prefixes are needed. No ceiling shared across callers: one would let a
+# few prefixes lock every buyer out.
 SESSION_LOOKUP_CAPACITY = 5
 SESSION_LOOKUP_REFILL = 5 / 3600.0
 _session_lookup_limiter = TokenBucket(SESSION_LOOKUP_CAPACITY, SESSION_LOOKUP_REFILL)
@@ -1624,6 +1626,24 @@ class Handler(BaseHTTPRequestHandler):
         )
         return truncate_ip(chosen)
 
+    def _lookup_allowed(self, limiter: TokenBucket, key: str) -> tuple[bool, float]:
+        """Spend one token for a read-only lookup: (allowed, retry_seconds).
+
+        do_HEAD runs the GET routing, so a HEAD used to spend from the bucket
+        of the GET it mirrors. Link scanners and uptime probes send HEAD, and
+        one on the buyer's network used up the budget the buyer's
+        confirmation page polls with. A HEAD spends from a key of its own on
+        the same limiter, so it cannot touch the GET budget and is bounded
+        the same way: the lookup behind it (a Stripe read, for the session
+        route) runs whatever the method.
+
+        Not for the founder-token failure limiters: a guess is a guess
+        whatever the method.
+        """
+        if self._is_head():
+            key = f"head:{key}"
+        return limiter.check(key)
+
     def _record_demand(self, event: str, *, auth_path: str, surface: str,
                        outcome: str, api_key: str = "",
                        authenticated: bool = False, paid: bool = False) -> None:
@@ -2370,7 +2390,8 @@ class Handler(BaseHTTPRequestHandler):
             if not RECEIPT_ID_RE.match(order_id):
                 _json_response(self, 400, {"error": "invalid order id"})
                 return
-            allowed, retry = _status_limiter.check(f"orderstat:{self._client_key()}")
+            allowed, retry = self._lookup_allowed(
+                _status_limiter, f"orderstat:{self._client_key()}")
             if not allowed:
                 _send_rate_limited(self, int(retry) + 1, {"error": "too many requests"})
                 return
@@ -5803,7 +5824,8 @@ class Handler(BaseHTTPRequestHandler):
         # Light rate-limit so this can't be used as a session-id oracle. After
         # the shape check: a malformed id costs nothing, so a page that sent a
         # bad value does not spend the buyer's budget for a real lookup.
-        allowed, retry = _session_lookup_limiter.check(f"stripe-session:{self._client_key()}")
+        allowed, retry = self._lookup_allowed(
+            _session_lookup_limiter, f"stripe-session:{self._client_key()}")
         if not allowed:
             _send_rate_limited(self, int(retry) + 1, {"error": "rate limit exceeded"})
             return
