@@ -396,22 +396,6 @@ def test_a_duplicate_created_while_the_other_was_between_periods_is_caught_at_re
 
 # --- review of 2f63529: act on a subscription that still exists at Stripe ----------
 
-def test_a_past_due_subscription_is_not_hidden_by_another_ones_cancellation(ledgers):
-    """With nothing active the newest row of all spoke, here the canceled
-    sub_Q, while sub_P is the one Stripe still retries the payment of. Cancel
-    could only reach the subscription that had already ended."""
-    _map_to_bob("cus_P", "cus_Q")
-    subscriptions.record_subscription_event("cus_P", "active", FUTURE, sub_id="sub_P")
-    subscriptions.record_subscription_event("cus_Q", "active", FUTURE, sub_id="sub_Q")
-    subscriptions.record_subscription_event("cus_P", "past_due", FUTURE, sub_id="sub_P")
-    subscriptions.record_subscription_event("cus_Q", "canceled", FUTURE, sub_id="sub_Q")
-    current = subscriptions.status_for("bob@example.com") or {}
-    assert current.get("stripe_sub") == "sub_P", current
-    assert current.get("status") == "past_due", current
-    assert subscriptions.stripe_subscription_id_for("bob@example.com") == "sub_P"
-    assert subscriptions.is_active("bob@example.com") is False
-
-
 def test_with_only_ended_subscriptions_the_newest_row_speaks(ledgers):
     """Control: with nothing active and nothing left to cancel, the newest
     row of all is still the answer."""
@@ -420,3 +404,50 @@ def test_with_only_ended_subscriptions_the_newest_row_speaks(ledgers):
     subscriptions.record_subscription_event("cus_Y", "canceled", FUTURE, sub_id="sub_Y")
     assert (subscriptions.status_for("bob@example.com") or {}).get("stripe_sub") == "sub_Y"
     assert subscriptions.is_active("bob@example.com") is False
+
+
+# --- verification of 1910f5e ----------------------------------------------------------
+
+def test_an_abandoned_attempt_does_not_speak_for_the_account(ledgers):
+    """A tier that preferred any subscription still open at Stripe (past due,
+    incomplete) over an ended one was tried and removed the same day: an
+    `incomplete` row never ages out here, so an abandoned sign-up attempt
+    named itself as the account's subscription in place of the one that was
+    paid for and then cancelled."""
+    subscriptions.record_customer_email("cus_X", "dana@example.com")
+    subscriptions.record_customer_email("cus_Y", "dana@example.com")
+    subscriptions.record_subscription_event("cus_X", "incomplete", FUTURE, sub_id="sub_X")
+    subscriptions.record_subscription_event("cus_Y", "active", FUTURE, sub_id="sub_Y")
+    subscriptions.record_subscription_event("cus_Y", "canceled", FUTURE, sub_id="sub_Y")
+    assert subscriptions.stripe_subscription_id_for("dana@example.com") == "sub_Y"
+    assert (subscriptions.status_for("dana@example.com") or {}).get("status") == "canceled"
+
+
+def test_a_subscription_sent_as_an_object_does_not_break_the_checkout_event(webhook):
+    """Stripe sends `subscription` as an id, or as the expanded object when
+    the event was made with expansion. The pair check hashed whatever it got
+    and raised on the object, before the welcome email and before the event
+    was marked processed."""
+    result = stripe_webhook.handle_event(json.dumps({
+        "id": "evt_obj", "type": "checkout.session.completed", "data": {"object": {
+            "id": "cs_obj", "mode": "subscription", "payment_status": "paid",
+            "customer": "cus_obj", "subscription": {"id": "sub_obj", "object": "subscription"},
+            "customer_email": "erin@example.com", "amount_total": 900}}}).encode())
+    assert result.get("subscription_checkout") is True, result
+    assert not result.get("duplicate_subscription"), result
+
+
+def test_the_log_does_not_call_a_subscription_active_before_it_is(webhook, capsys):
+    """At `completed` the new subscription has been BOUGHT; whether it is
+    active is for its own events to say (a delayed payment is not)."""
+    subscriptions.record_customer_email("cus_old", "bob@example.com")
+    subscriptions.record_subscription_event("cus_old", "active", FUTURE, sub_id="sub_old")
+    capsys.readouterr()
+    stripe_webhook.handle_event(json.dumps({
+        "id": "evt_unpaid", "type": "checkout.session.completed", "data": {"object": {
+            "id": "cs_unpaid", "mode": "subscription", "payment_status": "unpaid",
+            "customer": "cus_new", "subscription": "sub_new",
+            "customer_email": "bob@example.com", "amount_total": 900}}}).encode())
+    err = capsys.readouterr().err
+    assert "DUPLICATE subscription" in err and "sub_new bought while sub_old" in err, err
+    assert "are all active" not in err, err

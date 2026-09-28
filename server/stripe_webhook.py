@@ -502,16 +502,26 @@ def handle_event(payload: bytes) -> dict:
             # refunded here: that is a founder call. Flagged loudly instead.
             # The subscription just bought counts as active: its own row may
             # not have been written yet.
+            # An id, or the whole object when the event was made with
+            # expansion; anything else names nothing.
             new_sub = session.get("subscription") or ""
-            candidate = subscriptions.active_subscription_ids(customer_email)
+            if isinstance(new_sub, dict):
+                new_sub = new_sub.get("id") or ""
+            if not isinstance(new_sub, str):
+                new_sub = ""
+            others = subscriptions.active_subscription_ids(customer_email)
+            candidate = list(others)
             if new_sub and new_sub not in candidate:
                 candidate.append(new_sub)
             new_pairs = _unflagged_pairs(candidate)
             if new_pairs:
+                # "bought", not "active": whether the new one is active is for
+                # its own events to say (a delayed payment is not, yet).
                 _stderr(
                     f"[stripe_webhook] DUPLICATE subscription for {masked}: "
-                    f"{', '.join(candidate)} are all active; cancel and refund "
-                    f"all but one in Stripe\n"
+                    f"{new_sub or '(unknown)'} bought while "
+                    f"{', '.join(s for s in others if s != new_sub)} active; "
+                    f"cancel and refund all but one in Stripe\n"
                 )
             if session.get("payment_status") == "unpaid":
                 _stderr(
