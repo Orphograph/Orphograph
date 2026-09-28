@@ -171,3 +171,18 @@ def test_looking_at_the_link_touches_nothing_on_disk(tmp_path):
         assert _srv.request(base, path, method="HEAD", timeout=15)[0] == 200
     assert not ledger.exists(), "looking at the link created the ledger"
     assert oct(sub.stat().st_mode) == before, "looking at the link changed the directory"
+
+
+def test_an_unsubscribe_after_a_torn_write_is_still_recorded(tmp_path, monkeypatch):
+    """A write that failed part-way (a full volume) leaves a line with no
+    newline. The next unsubscribe was glued onto it: add() said yes, the page
+    said Done, and the row could not be read back, so the address stayed
+    mailable (found in verification, 2026-09-27)."""
+    import unsubscribe
+    ledger = tmp_path / "suppressions.jsonl"
+    ledger.write_text('{"ts":"2026-09-27T00:00:00+00:00","email":"before@example.test","source":"t"}\n'
+                      '{"ts":"2026-09-27T00:00:01+00:00","em')          # torn, no newline
+    monkeypatch.setattr(unsubscribe, "SUPPRESS_PATH", ledger)
+    assert unsubscribe.add("after@example.test", source="test") is True
+    assert unsubscribe.is_unsubscribed("after@example.test"), "recorded, and not readable back"
+    assert unsubscribe.is_unsubscribed("before@example.test")           # control
