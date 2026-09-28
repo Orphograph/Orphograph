@@ -55,6 +55,13 @@ def _signed_in(base: str, data_dir: Path, email: str) -> dict:
     return {"Cookie": "orpho_sid=" + cookie.split("orpho_sid=", 1)[1].split(";", 1)[0]}
 
 
+def _ledgers(data_dir: Path) -> dict[str, bytes]:
+    """Every ledger file in the data dir, by name. Not the server log, which
+    every request appends to, nor the rate-limit snapshot, which every
+    limited route rewrites."""
+    return {p.name: p.read_bytes() for p in sorted(data_dir.glob("*.jsonl"))}
+
+
 @pytest.mark.parametrize("path", RETIRED_GET)
 def test_the_retired_reads_answer_gone_and_write_nothing(server, path):
     base, data_dir = server
@@ -62,19 +69,20 @@ def test_the_retired_reads_answer_gone_and_write_nothing(server, path):
     # both paths read as the same account, the second write finds the row the
     # first one left, changes nothing, and passes.
     member = _signed_in(base, data_dir, _account_for(path))
-    registry = data_dir / "affiliate_codes.jsonl"
-    # Compared before and after THIS path's requests: the data dir is shared
-    # by both parametrized paths, and a write by one must not be pinned on
-    # the other.
-    before = registry.read_text() if registry.exists() else ""
+    # Every ledger in the data dir, compared before and after THIS path's
+    # requests (the dir is shared by both parametrized paths). Only the code
+    # registry was compared before, so a retired handler writing any other
+    # ledger passed (found in verification, 2026-09-27).
+    before = _ledgers(data_dir)
     for headers in (member, {}):
         status, body, _h = _srv.request(base, path, headers=headers, timeout=15)
         assert status == 410, (path, headers, status, body)
         assert "still work" in json.loads(body)["detail"]
         head = _srv.request(base, path, method="HEAD", headers=headers, timeout=15)
         assert head[0] == 410
-    after = registry.read_text() if registry.exists() else ""
-    assert after == before, f"{path} wrote the code registry"
+    after = _ledgers(data_dir)
+    changed = sorted(k for k in before.keys() | after.keys() if before.get(k) != after.get(k))
+    assert changed == [], f"{path} wrote {changed}"
 
 
 def test_each_retired_path_reads_as_its_own_account():
