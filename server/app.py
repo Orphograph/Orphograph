@@ -5916,6 +5916,19 @@ class Handler(BaseHTTPRequestHandler):
         else:
             _json_response(self, 400, {"error": "plan must be 'pack', 'pack50' or 'pro'"})
             return
+        # Founder decision 2026-09-27 (2A): an account that already subscribes
+        # is not sold a second subscription. Only the signed-in account's own
+        # address is checked: answering for a typed address would tell anyone
+        # whether that address subscribes. Payment-link subscriptions never
+        # reach here; the webhook flags a second one (stripe_webhook).
+        if mode == "subscription":
+            holder = self._session_email()
+            if holder and subscriptions.is_active(holder):
+                _json_response(self, 409, {
+                    "error": "This account already has an active subscription.",
+                    "detail": "Manage it from your account page; nothing was charged.",
+                })
+                return
         price_id = os.environ.get(price_env, "")
         if not price_id:
             _json_response(self, 503, {

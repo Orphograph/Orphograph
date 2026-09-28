@@ -171,6 +171,44 @@ def _session_delivered(session_id: str, kind: str) -> bool:
     return False
 
 
+def _flagged_pairs() -> set[str]:
+    """Every pair of subscriptions already reported as a duplicate, each
+    written "a|b" with a < b. Both `completed` and the subscriptions' own
+    events look for duplicates, so one pair is seen more than once.
+
+    What is remembered is the pair, not one subscription. Remembering one
+    subscription exempted it for good, so a later duplicate of it with a
+    different subscription was never reported."""
+    pairs: set[str] = set()
+    if not PROCESSED_EVENTS_PATH.exists():
+        return pairs
+    with PROCESSED_EVENTS_PATH.open() as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                result = json.loads(line).get("result") or {}
+            except (json.JSONDecodeError, AttributeError):
+                continue
+            if not isinstance(result, dict) or not result.get("duplicate_subscription"):
+                continue
+            flagged = result.get("duplicate_pairs")
+            if isinstance(flagged, list):
+                pairs.update(p for p in flagged if isinstance(p, str))
+    return pairs
+
+
+def _unflagged_pairs(active_ids: list[str]) -> list[str]:
+    """The pairs among these subscriptions that have not been reported yet,
+    sorted, each written as _flagged_pairs writes it."""
+    ids = sorted({s for s in active_ids if s})
+    if len(ids) < 2:
+        return []
+    pairs = {f"{a}|{b}" for i, a in enumerate(ids) for b in ids[i + 1:]}
+    return sorted(pairs - _flagged_pairs())
+
+
 def _settlement_failed(session_id: str) -> bool:
     """Has a failed settlement already been recorded for exactly this session?"""
     return _session_delivered(session_id, "settlement_failed")
@@ -276,6 +314,30 @@ def handle_event(payload: bytes) -> dict:
                 cancel_at_period_end=cancel_at_period_end,
             )
             result = {"ok": True, "subscription_event": event_type, "status": status}
+            # Stripe does not order events, so both checkouts of a duplicate can
+            # complete before either subscription row exists and neither sees
+            # the other. So every subscription event looks too, and reports any
+            # two subscriptions of the address that are both active now and
+            # have not been reported together before.
+            #
+            # This does not ask whether the subscription was active before the
+            # event. A renewal lands after the period it renews has ended, so
+            # the older subscription of a pair read as not active, its renewal
+            # read as a new subscription, and the pair was reported again with
+            # the older one named as the duplicate.
+            holder = subscriptions._email_for_customer(customer) or ""
+            if holder:
+                active = subscriptions.active_subscription_ids(holder)
+                new_pairs = _unflagged_pairs(active)
+                if new_pairs:
+                    _stderr(
+                        f"[stripe_webhook] DUPLICATE subscription for "
+                        f"{auth.mask_email(holder)}: {', '.join(active)} are all "
+                        f"active; cancel and refund all but one in Stripe\n"
+                    )
+                    result["duplicate_subscription"] = True
+                    result["duplicate_pairs"] = new_pairs
+                    result["duplicate_of"] = [s for s in active if s != sub_id]
             _mark_processed(event_id, result)
             return result
 
@@ -442,6 +504,32 @@ def handle_event(payload: bytes) -> dict:
                     result["payment_settled"] = True
                 _mark_processed(event_id, result)
                 return result
+            # A second subscription for an address that already has an active
+            # one (hosted payment links never pass the checkout guard). Not
+            # refunded here: that is a founder call. Flagged loudly instead.
+            # The subscription just bought counts as active: its own row may
+            # not have been written yet.
+            # An id, or the whole object when the event was made with
+            # expansion; anything else names nothing.
+            new_sub = session.get("subscription") or ""
+            if isinstance(new_sub, dict):
+                new_sub = new_sub.get("id") or ""
+            if not isinstance(new_sub, str):
+                new_sub = ""
+            others = subscriptions.active_subscription_ids(customer_email)
+            candidate = list(others)
+            if new_sub and new_sub not in candidate:
+                candidate.append(new_sub)
+            new_pairs = _unflagged_pairs(candidate)
+            if new_pairs:
+                # "bought", not "active": whether the new one is active is for
+                # its own events to say (a delayed payment is not, yet).
+                _stderr(
+                    f"[stripe_webhook] DUPLICATE subscription for {masked}: "
+                    f"{new_sub or '(unknown)'} bought while "
+                    f"{', '.join(s for s in others if s != new_sub)} active; "
+                    f"cancel and refund all but one in Stripe\n"
+                )
             if session.get("payment_status") == "unpaid":
                 _stderr(
                     f"[stripe_webhook] subscription session {session_id} completed "
@@ -466,6 +554,10 @@ def handle_event(payload: bytes) -> dict:
             result = {"ok": True, "subscription_checkout": True,
                       "welcome_email_sent": sent, "session_id": session_id,
                       "payment_status": session.get("payment_status") or ""}
+            if new_pairs:
+                result["duplicate_subscription"] = True
+                result["duplicate_pairs"] = new_pairs
+                result["duplicate_of"] = [s for s in candidate if s != new_sub]
             _mark_processed(event_id, result)
             return result
 

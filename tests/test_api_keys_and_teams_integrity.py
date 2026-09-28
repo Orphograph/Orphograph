@@ -586,8 +586,13 @@ def test_members_of_a_mixed_case_owner_inherit_the_subscription(srv):
     # The page shows the stored owner; the sign-in spelling stays server-side.
     assert me["team"]["owner"] == owner_email.lower() and "owner_spelling" not in me["team"], me
 
+    # End the owner's OWN subscription (account() names it "sub_" + the
+    # session id). This row used a different id, which only read as an ending
+    # while "active" meant the newest row of any subscription; since
+    # 2026-09-27 each subscription is judged by its own rows.
+    owner_sub = "sub_" + owner["Cookie"].split("orpho_sid=", 1)[1]
     _append_rows(data / "subscriptions.jsonl", [dict(
-        email=owner_email, status="canceled", stripe_sub="sub_ended_" + tag)])
+        email=owner_email, status="canceled", stripe_sub=owner_sub)])
     code, me = get(base, "/api/me", member)
     assert code == 200 and me.get("subscription_active") is False, me
 
