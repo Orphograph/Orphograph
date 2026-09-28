@@ -19,8 +19,6 @@ Storage: append-only JSONL of referral events.
 
 Public API:
     code_for(claim_code) -> str                # keyed digest of the claim code, stable
-    code_for_email(email) -> str               # per-customer stable code (see affiliate.py)
-    email_for_ref_code(ref_code) -> str | None # → referrer email_id hash (NOT plaintext)
     apply(ref_code, new_buyer_email, new_claim_code) -> dict
 """
 from __future__ import annotations
@@ -31,7 +29,6 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-import affiliate
 import auth
 import credits
 from file_lock import locked
@@ -54,7 +51,8 @@ def _iso() -> str:
 # keep working, matched exactly but without case: web/app.js lowercases every
 # ?ref= before checkout, and a legacy code is mixed-case base64. Lengths tell
 # the two apart. The account-level affiliate codes (8 hex, affiliate.py) are
-# NOT resolved here: they resolve to nothing, as they always have.
+# NOT resolved here: they resolve to nothing, as they always have, and that
+# program's endpoints are retired (2026-09-27).
 CODE_HEX_LEN = 10
 LEGACY_NEEDLE_LEN = 12
 _CODE_LABEL = b"orphograph-referral-code-v1:"
@@ -69,25 +67,6 @@ def code_for(claim_code: str) -> str:
     if not claim_code or not claim_code.startswith("pk_"):
         return ""
     return "ref_" + auth.keyed_hex(_CODE_LABEL, claim_code)[:CODE_HEX_LEN]
-
-
-def code_for_email(email: str) -> str:
-    """Per-customer stable referral code.
-
-    Delegates to affiliate.code_for_email so the (ref_code, email_id)
-    mapping is registered and reverse-lookupable later. Preferred over
-    code_for(claim_code) for new flows.
-    """
-    return affiliate.code_for_email(email)
-
-
-def email_id_for_ref_code(ref_code: str) -> str | None:
-    """Reverse-lookup the email_id HMAC hash for a ref code.
-
-    Returns NEVER plaintext — only the hash. This is the privacy-safe
-    primitive used by self-referral checks.
-    """
-    return affiliate.email_id_for_ref_code(ref_code)
 
 
 def _claim_code_from_ref(ref_code: str) -> str:
