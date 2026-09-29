@@ -304,9 +304,12 @@ def _send(to: str, subject: str, text: str, html: str,
     )
     try:
         from pathlib import Path as _Path
+        # The queue lives in the data directory like every other ledger. It
+        # used to be built from this file's location, so a server told to keep
+        # its state elsewhere still wrote the queue under the source tree.
         q = _Path(os.environ.get(
             "ORPHO_MANUAL_FULFILL_QUEUE",
-            str(_Path(__file__).resolve().parent.parent / "data" / "manual_fulfillment_queue.jsonl"),
+            str(_auth.DATA_DIR / "manual_fulfillment_queue.jsonl"),
         ))
         q.parent.mkdir(parents=True, exist_ok=True)
         with q.open("a") as f:

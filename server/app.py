@@ -4377,7 +4377,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             ledger_path = Path(os.environ.get(
                 "ORPHO_REFUND_LEDGER",
-                str(ROOT / "data" / "refund_requests.jsonl"),
+                str(DATA_DIR / "refund_requests.jsonl"),
             ))
             if ledger_path.exists():
                 pending = 0
@@ -5357,9 +5357,11 @@ class Handler(BaseHTTPRequestHandler):
                 f"email={auth.mask_email(provided_email)} — likely webhook race or fulfillment gap\n"
             )
             try:
+                # In the data directory, not under the source tree: a
+                # server given its own data directory keeps the log there.
                 gap_path = Path(os.environ.get(
                     "ORPHO_RECOVERY_GAP_LOG",
-                    str(ROOT / "data" / "recovery_gaps.jsonl"),
+                    str(DATA_DIR / "recovery_gaps.jsonl"),
                 ))
                 gap_path.parent.mkdir(parents=True, exist_ok=True)
                 with gap_path.open("a") as f:
@@ -5494,10 +5496,11 @@ class Handler(BaseHTTPRequestHandler):
         if isinstance(payload.get("reason"), str):
             reason = payload["reason"][:500].strip()
         sub_id = subscriptions.stripe_subscription_id_for(email)
-        # Append to ledger.
+        # Append to ledger. It lives in the data directory, the same file
+        # the founder's morning summary counts.
         ledger_path = Path(os.environ.get(
             "ORPHO_REFUND_LEDGER",
-            str(ROOT / "data" / "refund_requests.jsonl"),
+            str(DATA_DIR / "refund_requests.jsonl"),
         ))
         ledger_path.parent.mkdir(parents=True, exist_ok=True)
         row = {

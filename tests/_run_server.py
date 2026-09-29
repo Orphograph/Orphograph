@@ -40,7 +40,10 @@ def _fake_stripe(answers: Path) -> str:
     and this server sends that status with Stripe's error body. A test needs
     this to tell one refusal from another: a subscription Stripe has no
     record of is not the same failure as an outage, and the product must be
-    able to tell them apart from what actually comes back on the wire."""
+    able to tell them apart from what actually comes back on the wire.
+
+    An answer with "data" in place of "error" is sent as the body, for a
+    route that reads the object Stripe returns (a paid checkout session)."""
     from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
     class Answer(BaseHTTPRequestHandler):
@@ -51,7 +54,8 @@ def _fake_stripe(answers: Path) -> str:
             path = self.path[len("/v1"):] if self.path.startswith("/v1") else self.path
             script = _answers(answers).get(path) or {}
             status = int(script.get("status") or 200)
-            raw = json.dumps({"error": script["error"]} if "error" in script else {}).encode()
+            raw = json.dumps({"error": script["error"]} if "error" in script
+                             else script.get("data") or {}).encode()
             self.send_response(status)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(raw)))
