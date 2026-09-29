@@ -13,7 +13,6 @@ from __future__ import annotations
 import hashlib
 import os
 import re
-import socket
 import subprocess
 import sys
 import time
@@ -207,14 +206,6 @@ def test_render_no_external_assets():
 
 # ── HTTP integration tests (in-process — no subprocess) ──────────────────
 
-def _free_port() -> int:
-    s = socket.socket()
-    s.bind(("127.0.0.1", 0))
-    p = s.getsockname()[1]
-    s.close()
-    return p
-
-
 @pytest.fixture(scope="module")
 def server(tmp_path_factory):
     """Spin up the HTTP handler in-process on a background thread.
@@ -241,12 +232,13 @@ def server(tmp_path_factory):
     app.engine.RECEIPTS_DIR = receipts_dir
     app.engine.LEDGER = data_dir / "ledger.jsonl"
 
-    port = _free_port()
-    httpd = ThreadingHTTPServer(("127.0.0.1", port), app.Handler)
+    # Port 0: the server takes a free port as it binds, and the fixture reads
+    # which. Picking one first and binding it after can lose it in between.
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), app.Handler)
     thread = threading.Thread(target=httpd.serve_forever, daemon=True)
     thread.start()
 
-    base = f"http://127.0.0.1:{port}"
+    base = f"http://127.0.0.1:{httpd.server_address[1]}"
     # Confirm the server answers before any test runs.
     deadline = time.time() + 5
     started = False

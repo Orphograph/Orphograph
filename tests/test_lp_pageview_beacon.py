@@ -19,16 +19,11 @@ Two-sided fix pinned here:
 from __future__ import annotations
 
 import json
-import os
-import socket
-import subprocess
-import sys
-import time
-import urllib.error
-import urllib.request
 from pathlib import Path
 
 import pytest
+
+import _srv
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 LP_CTA_JS = REPO_ROOT / "web" / "assets" / "lp-cta.js"
@@ -81,69 +76,25 @@ def test_lp_references_bumped_lp_cta_version():
 
 # ── Layer 3: live HTTP contract — page_view now 204s and is durable ────────
 
-def _free_port() -> int:
-    s = socket.socket()
-    s.bind(("127.0.0.1", 0))
-    p = s.getsockname()[1]
-    s.close()
-    return p
-
-
 @pytest.fixture(scope="module")
 def live_server(tmp_path_factory):
-    port = _free_port()
     data_dir = tmp_path_factory.mktemp("data")
-    env = {
-        **os.environ,
-        "PORT": str(port),
-        "HOST": "127.0.0.1",
-        "ORPHO_DATA_DIR": str(data_dir),
-        "RATE_LIMIT_PER_DAY": "100000",
-    }
-    proc = subprocess.Popen(
-        [sys.executable, str(REPO_ROOT / "server" / "app.py")],
-        env=env,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
-    base = f"http://127.0.0.1:{port}"
-    deadline = time.time() + 10
-    while time.time() < deadline:
-        try:
-            with urllib.request.urlopen(base + "/api/health", timeout=1) as r:
-                if r.status == 200:
-                    break
-        except Exception:
-            time.sleep(0.2)
-    else:
-        proc.kill()
-        pytest.fail("server did not start in 10s")
-    yield base, Path(data_dir)
-    proc.terminate()
-    try:
-        proc.wait(timeout=5)
-    except subprocess.TimeoutExpired:
-        proc.kill()
+    for base in _srv.server_processes(
+            data_dir, stub_calendars=True, RATE_LIMIT_PER_DAY="100000"):
+        yield base, Path(data_dir)
 
 
-def _post_json(url: str, body: dict):
+def _post_json(base: str, path: str, body: dict):
     data = json.dumps(body).encode("utf-8")
-    req = urllib.request.Request(
-        url, data=data, headers={"Content-Type": "application/json"}, method="POST"
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=5) as r:
-            return r.status, r.read()
-    except urllib.error.HTTPError as e:
-        return e.code, e.read()
-    except OSError as e:
-        pytest.skip(f"network unreachable in this env: {e!r}")
+    status, raw, _ = _srv.request(
+        base, path, "POST", data, {"Content-Type": "application/json"}, timeout=5)
+    return status, raw
 
 
 def test_lp_page_view_returns_204_and_is_durable(live_server):
     base, data_dir = live_server
     status, raw = _post_json(
-        base + "/api/event", {"event": "page_view", "page": "/lp/agent-receipts"}
+        base, "/api/event", {"event": "page_view", "page": "/lp/agent-receipts"}
     )
     assert status == 204, f"page_view must be accepted (204), got {status}: {raw[:200]!r}"
     # Durable: a row lands in events.jsonl carrying the LP path — the exact
@@ -161,5 +112,5 @@ def test_lp_page_view_returns_204_and_is_durable(live_server):
 def test_unknown_event_still_rejected(live_server):
     """Re-enabling page_view must not weaken the whitelist."""
     base, _ = live_server
-    status, _ = _post_json(base + "/api/event", {"event": "not_a_real_event", "page": "/"})
+    status, _ = _post_json(base, "/api/event", {"event": "not_a_real_event", "page": "/"})
     assert status == 400, f"unknown event must still 400, got {status}"

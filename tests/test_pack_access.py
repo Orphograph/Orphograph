@@ -19,20 +19,13 @@ harness the crypto-recovery suite uses.
 from __future__ import annotations
 
 import json
-import os
-import socket
-import subprocess
-import sys
 import time
-import urllib.error
-import urllib.request
 from pathlib import Path
 
 import pytest
 
+import _srv
 import credits
-
-REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
 # ───────────────────────── unit: find_claim_codes_by_email ─────────────────
@@ -90,14 +83,6 @@ SPENT_EMAIL  = "spent@example.com"
 CODE_SPENT   = "pk_spentpackCCC"             # 1 minted, 1 consumed -> 0 left
 
 
-def _free_port() -> int:
-    s = socket.socket()
-    s.bind(("127.0.0.1", 0))
-    p = s.getsockname()[1]
-    s.close()
-    return p
-
-
 def _seed_ledger(path: Path) -> None:
     rows = [
         {"ts": "2026-07-01T00:00:00+00:00", "claim_code": CODE_A, "email": PACK_EMAIL,
@@ -115,69 +100,38 @@ def _seed_ledger(path: Path) -> None:
 
 
 def _start_server(data_dir: Path, rate_limit_per_day: str = "100000"):
-    port = _free_port()
+    """Seed the ledger, start the server, yield where to reach it and where
+    its output goes, and stop it when the caller is done. _srv leaves
+    RESEND_API_KEY unset (inert mailer) and writes the server's stderr, with
+    its stdout, to the one server-<port>.log in the data dir."""
     ledger_path = data_dir / "credit_ledger.jsonl"
     _seed_ledger(ledger_path)
-    stderr_log = data_dir / "server.stderr.log"
-    env = {
-        **os.environ,
-        "PORT": str(port),
-        "HOST": "127.0.0.1",
-        "ORPHO_DATA_DIR": str(data_dir),
-        "ORPHO_COOKIE_SECURE": "0",
-        "RATE_LIMIT_PER_DAY": rate_limit_per_day,
-    }
-    env.pop("RESEND_API_KEY", None)  # inert mailer
-    err_fh = stderr_log.open("wb")
-    proc = subprocess.Popen(
-        [sys.executable, str(REPO_ROOT / "server" / "app.py")],
-        env=env, stdout=subprocess.PIPE, stderr=err_fh,
-    )
-    base = f"http://127.0.0.1:{port}"
-    deadline = time.time() + 10
-    while time.time() < deadline:
-        try:
-            urllib.request.urlopen(base + "/api/health", timeout=1).read()
-            break
-        except Exception:
-            time.sleep(0.2)
-    else:
-        proc.kill()
-        err_fh.close()
-        pytest.fail("server did not start")
-    return proc, err_fh, {"base": base, "ledger": ledger_path, "stderr_log": stderr_log}
+    for base in _srv.server_processes(
+            data_dir, stub_calendars=True,
+            ORPHO_COOKIE_SECURE="0",
+            RATE_LIMIT_PER_DAY=rate_limit_per_day,
+    ):
+        logs = list(data_dir.glob("server-*.log"))
+        assert len(logs) == 1, f"expected one server log, found {logs}"
+        yield {"base": base, "ledger": ledger_path, "stderr_log": logs[0]}
 
 
 @pytest.fixture(scope="module")
 def server(tmp_path_factory):
     data_dir = tmp_path_factory.mktemp("pack_access_data")
-    proc, err_fh, info = _start_server(data_dir)
-    yield info
-    proc.terminate()
-    try:
-        proc.wait(timeout=5)
-    except subprocess.TimeoutExpired:
-        proc.kill()
-    err_fh.close()
+    yield from _start_server(data_dir)
 
 
-def _get(url, timeout=5):
-    try:
-        with urllib.request.urlopen(url, timeout=timeout) as r:
-            return r.status, r.read().decode("utf-8", "replace")
-    except urllib.error.HTTPError as e:
-        return e.code, e.read().decode("utf-8", "replace")
+def _get(base, path, timeout=5):
+    status, body, _ = _srv.request(base, path, timeout=timeout)
+    return status, body.decode("utf-8", "replace")
 
 
-def _post(url, payload, timeout=5):
+def _post(base, path, payload, timeout=5):
     body = json.dumps(payload).encode("utf-8")
-    req = urllib.request.Request(url, data=body, method="POST",
-                                 headers={"Content-Type": "application/json"})
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as r:
-            return r.status, r.read().decode("utf-8", "replace")
-    except urllib.error.HTTPError as e:
-        return e.code, e.read().decode("utf-8", "replace")
+    status, raw, _ = _srv.request(
+        base, path, "POST", body, {"Content-Type": "application/json"}, timeout=timeout)
+    return status, raw.decode("utf-8", "replace")
 
 
 def _read_stderr(stderr_log: Path) -> str:
@@ -208,7 +162,7 @@ def _await_sends(stderr_log: Path, since: int, count: int, timeout: float = 10.0
 # ---- /pack route ----------------------------------------------------------
 
 def test_pack_page_route_200(server):
-    status, body = _get(server["base"] + "/pack")
+    status, body = _get(server["base"], "/pack")
     assert status == 200
     assert "Access your Pack" in body
     # External JS/CSS only (CSP): no inline <script> handlers on the page.
@@ -219,7 +173,7 @@ def test_pack_page_route_200(server):
 # ---- balance --------------------------------------------------------------
 
 def test_balance_happy_path(server):
-    status, body = _get(server["base"] + f"/api/pack/balance/{CODE_A}")
+    status, body = _get(server["base"], f"/api/pack/balance/{CODE_A}")
     assert status == 200
     j = json.loads(body)
     assert j["claim_code"] == CODE_A
@@ -227,7 +181,7 @@ def test_balance_happy_path(server):
 
 
 def test_balance_full_pack(server):
-    status, body = _get(server["base"] + f"/api/pack/balance/{CODE_B}")
+    status, body = _get(server["base"], f"/api/pack/balance/{CODE_B}")
     assert status == 200
     assert json.loads(body)["balance"] == 50
 
@@ -238,7 +192,7 @@ def test_recover_hit_sends_and_is_neutral(server):
     """An address with packs: the response is the neutral confirmation AND the
     mailer is invoked once per code that still has anchors (CODE_A, CODE_B)."""
     err_before = len(_read_stderr(server["stderr_log"]))
-    status, body = _post(server["base"] + "/api/pack/recover",
+    status, body = _post(server["base"], "/api/pack/recover",
                          {"email": "  seller@example.com  "})  # case/space differ
     assert status == 200
     j = json.loads(body)
@@ -256,13 +210,13 @@ def test_recover_miss_is_identical_and_sends_nothing(server):
     """An address with NO packs returns a byte-identical body and sends no
     mail — the endpoint cannot be used to tell which emails own a pack."""
     hit_before = len(_read_stderr(server["stderr_log"]))
-    _, hit_body = _post(server["base"] + "/api/pack/recover",
+    _, hit_body = _post(server["base"], "/api/pack/recover",
                         {"email": "seller@example.com"})
     # The hit's two sends run after its answer; let them land before taking
     # the offset for the miss, or they would be counted against the miss.
     _await_sends(server["stderr_log"], hit_before, 2)
     err_before = len(_read_stderr(server["stderr_log"]))
-    status, miss_body = _post(server["base"] + "/api/pack/recover",
+    status, miss_body = _post(server["base"], "/api/pack/recover",
                              {"email": "nobody-here@example.com"})
     assert status == 200
     # Same wording whether or not the address has a pack (no enumeration).
@@ -275,7 +229,7 @@ def test_recover_malformed_email_still_neutral(server):
     """A malformed address gets the SAME neutral 200 (never a distinguishing
     400) and sends nothing — mirrors the waitlist endpoint."""
     err_before = len(_read_stderr(server["stderr_log"]))
-    status, body = _post(server["base"] + "/api/pack/recover",
+    status, body = _post(server["base"], "/api/pack/recover",
                         {"email": "not-an-email"})
     assert status == 200
     assert json.loads(body)["ok"] is True
@@ -287,7 +241,7 @@ def test_recover_spent_pack_email_sends_nothing(server):
     """An address whose only pack is fully spent: neutral response, and no
     mail (a 'Pack of 0' notice would be misleading)."""
     err_before = len(_read_stderr(server["stderr_log"]))
-    status, body = _post(server["base"] + "/api/pack/recover",
+    status, body = _post(server["base"], "/api/pack/recover",
                         {"email": SPENT_EMAIL})
     assert status == 200
     assert json.loads(body)["ok"] is True
@@ -300,20 +254,12 @@ def test_recover_spent_pack_email_sends_nothing(server):
 def test_recover_is_rate_limited(tmp_path_factory):
     """A low per-IP budget must eventually 429 the recover endpoint."""
     data_dir = tmp_path_factory.mktemp("pack_recover_rl")
-    proc, err_fh, info = _start_server(data_dir, rate_limit_per_day="3")
-    try:
+    for info in _start_server(data_dir, rate_limit_per_day="3"):
         codes = []
         for _ in range(8):
-            status, _ = _post(info["base"] + "/api/pack/recover",
-                             {"email": "nobody@example.com"})
+            status, _ = _post(info["base"], "/api/pack/recover",
+                              {"email": "nobody@example.com"})
             codes.append(status)
         assert 429 in codes, f"expected a 429 within the budget, got {codes}"
         # Non-429 responses are the neutral 200 (never a 4xx that would leak).
         assert set(codes) <= {200, 429}, codes
-    finally:
-        proc.terminate()
-        try:
-            proc.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            proc.kill()
-        err_fh.close()
