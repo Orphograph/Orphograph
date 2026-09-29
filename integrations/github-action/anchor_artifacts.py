@@ -73,6 +73,13 @@ def hash_file(path: str) -> tuple:
     return h256.hexdigest(), h512.hexdigest()
 
 
+def receipt_url(base_url: str, receipt_id: str) -> str:
+    # The link names the server that issued the receipt. It used to name
+    # orphograph.com whatever base_url was, so a run against any other host
+    # wrote links that led nowhere.
+    return base_url.rstrip("/") + "/r/" + receipt_id
+
+
 def build_headers() -> dict:
     headers = {
         "Content-Type": "application/json",
@@ -231,7 +238,7 @@ def main() -> int:
             "file": path,
             "sha256": sha256_hex,
             "receipt_id": receipt_id,
-            "receipt_url": "https://orphograph.com/r/" + receipt_id,
+            "receipt_url": receipt_url(base_url, receipt_id),
         }
         rows.append(row)
         log("anchored %s -> %s (calendars %s/%s)" % (

@@ -3,7 +3,9 @@
 ## Static handoff specimen
 
 - Claimed action text: `sent invoice #42`
-- UTF-8 bytes include no trailing newline: recipient must confirm the exact byte convention.
+- Committed bytes: the text exactly as it arrived on stdin. Piped through
+  `echo`, that is the text followed by one newline byte; the recipient must
+  recompute the digest from those same bytes.
 - SHA-256: `<REPLACE_WITH_SHA256>`
 - Receipt ID and proof: `<REPLACE_WITH_SUCCESSFUL_RECEIPT_AND_OTS_PROOF>`
 - Workflow record: `<REPLACE_WITH_AGENT_RUN_ID_AND_LOCAL_RECEIPTS_JSONL_EXCERPT>`

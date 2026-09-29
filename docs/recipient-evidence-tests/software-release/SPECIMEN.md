@@ -15,7 +15,7 @@ This specimen contains placeholders and does not establish a release.
 
 For each row backed by a successfully verified receipt/proof, recomputing the
 artifact digest can prove that those exact bytes existed no later than the
-attesting Bitcoin block. The GitHub Action creates individual receipts for
+attesting Bitcoin block. The release action creates individual receipts for
 matched files; it does not create one atomic receipt for the release as a whole.
 
 ## Exact non-proof statement

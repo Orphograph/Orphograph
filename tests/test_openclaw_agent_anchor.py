@@ -17,10 +17,61 @@ anchor = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(anchor)
 
 
+@pytest.fixture(autouse=True)
+def _no_network_no_stray_files(tmp_path, monkeypatch):
+    """No test here may reach a server or write into the checkout.
+
+    The CLI's default base URL is the live service and its receipts file lands
+    in the current directory. Two tests in this module never stubbed the
+    transport because a guard exits before it; with that guard broken they
+    anchored on the live service and left .orphograph/ in the repo. A test
+    that needs the transport replaces these stubs with its own.
+    """
+    def blocked(*args, **kwargs):
+        raise AssertionError("the CLI reached its transport without a stub")
+
+    monkeypatch.setattr(anchor, "post_anchor", blocked)
+    monkeypatch.setattr(anchor, "get_verify", blocked)
+    monkeypatch.setattr(anchor.urllib.request, "urlopen", blocked)
+    monkeypatch.chdir(tmp_path)
+
+
 def run_main(monkeypatch, argv, *, stdin=""):
     monkeypatch.setattr(sys, "argv", [str(MODULE_PATH), *argv])
     monkeypatch.setattr(sys, "stdin", io.StringIO(stdin))
     return anchor.main()
+
+
+def test_an_unstubbed_anchor_cannot_reach_a_server(tmp_path, monkeypatch):
+    # Nothing listens on 127.0.0.1:9, so if the real transport ran it would
+    # come back as a network_error record and exit 1 instead of raising.
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(AssertionError, match="without a stub"):
+        run_main(monkeypatch, ["--base", "http://127.0.0.1:9", "anchor-text"],
+                 stdin="payload")
+    assert not (tmp_path / ".orphograph").exists()
+
+
+def test_options_before_the_subcommand_still_work(tmp_path, monkeypatch, capsys):
+    # The form every caller had to use before options were also accepted
+    # after the subcommand. The subcommand's own defaults must not erase it.
+    source = tmp_path / "artifact.bin"
+    source.write_bytes(b"artifact bytes")
+    monkeypatch.chdir(tmp_path)
+    labels = []
+    monkeypatch.setattr(
+        anchor, "post_anchor",
+        lambda base, sha256, sha512, **kwargs: labels.append(kwargs["label"])
+        or {"receipt_id": "r-before"},
+    )
+
+    assert run_main(monkeypatch, ["--label", "build", "anchor-file", str(source)]) == 0
+    assert labels == ["build"]
+
+    capsys.readouterr()
+    assert run_main(monkeypatch, ["--dry-run", "anchor-file", str(source)]) == 0
+    assert json.loads(capsys.readouterr().out)["dry_run"] is True
+    assert labels == ["build"], "a dry run must not anchor"
 
 
 def test_anchor_file_parses_label_after_command_and_persists_receipt(
