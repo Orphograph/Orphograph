@@ -23,19 +23,11 @@ reads it through the real credits module.
 from __future__ import annotations
 
 import json
-import os
-import socket
-import subprocess
-import sys
-import time
-import urllib.error
-import urllib.request
 from datetime import datetime, timezone
-from pathlib import Path
 
 import pytest
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+import _srv
 
 # A credited order seeded into the ledger before the server starts. The source
 # mirrors the real webhook format ("nowpayments:<invoice_id>:<order_id>"), which
@@ -46,17 +38,8 @@ SEED_CLAIM_CODE = "pk_SECRETcodeMustNeverLeak"
 SEED_EMAIL = "buyer-leak-canary@example.com"
 
 
-def _free_port() -> int:
-    s = socket.socket()
-    s.bind(("127.0.0.1", 0))
-    p = s.getsockname()[1]
-    s.close()
-    return p
-
-
 @pytest.fixture(scope="module")
 def server(tmp_path_factory):
-    port = _free_port()
     data_dir = tmp_path_factory.mktemp("orderstatus_data")
 
     # Seed a credited-order row into the credit ledger BEFORE the server boots.
@@ -72,56 +55,25 @@ def server(tmp_path_factory):
     }
     ledger.write_text(json.dumps(row, separators=(",", ":")) + "\n")
 
-    env = {
-        **os.environ,
-        "PORT": str(port),
-        "HOST": "127.0.0.1",
-        "ORPHO_DATA_DIR": str(data_dir),
-        "ORPHO_COOKIE_SECURE": "0",
-        "RATE_LIMIT_PER_DAY": "100000",  # don't trip limits during these probes
-    }
-    proc = subprocess.Popen(
-        [sys.executable, str(REPO_ROOT / "server" / "app.py")],
-        env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+    yield from _srv.server_processes(
+        data_dir, stub_calendars=True,
+        ORPHO_COOKIE_SECURE="0",
+        RATE_LIMIT_PER_DAY="100000",  # don't trip limits during these probes
     )
-    base = f"http://127.0.0.1:{port}"
-    deadline = time.time() + 10
-    while time.time() < deadline:
-        try:
-            urllib.request.urlopen(base + "/api/health", timeout=1).read()
-            break
-        except Exception:
-            time.sleep(0.2)
-    else:
-        proc.kill()
-        out, err = proc.communicate(timeout=5)
-        pytest.fail(f"server did not start: {err.decode(errors='replace')[:2000]}")
-    yield base
-    proc.terminate()
-    try:
-        proc.wait(timeout=5)
-    except subprocess.TimeoutExpired:
-        proc.kill()
 
 
-def _get(url, timeout=5):
-    """Return (status, body_bytes). On HTTPError, return its code + body so the
+def _get(base, path, timeout=5):
+    """Return (status, body_bytes). A 4xx comes back as its code + body so the
     leak-guard can inspect 4xx bodies too."""
-    req = urllib.request.Request(url, method="GET",
-                                 headers={"Accept": "application/json"})
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as r:
-            return r.status, r.read()
-    except urllib.error.HTTPError as e:
-        return e.code, e.read()
-    except Exception:
-        return -1, b""
+    status, body, _ = _srv.request(
+        base, path, headers={"Accept": "application/json"}, timeout=timeout)
+    return status, body
 
 
 # --------------------------------------------------------------- (a) credited
 
 def test_credited_order_reports_credited_true_with_count(server):
-    status, body = _get(f"{server}/api/nowpayments/order/{CREDITED_ORDER}")
+    status, body = _get(server, f"/api/nowpayments/order/{CREDITED_ORDER}")
     assert status == 200, body
     data = json.loads(body)
     assert data["ok"] is True
@@ -133,7 +85,7 @@ def test_credited_order_reports_credited_true_with_count(server):
 # --------------------------------------------------------------- (b) unknown
 
 def test_unknown_order_reports_not_credited_with_null_credits(server):
-    status, body = _get(f"{server}/api/nowpayments/order/np_does_not_exist_999")
+    status, body = _get(server, "/api/nowpayments/order/np_does_not_exist_999")
     assert status == 200, body
     data = json.loads(body)
     assert data["ok"] is True
@@ -150,7 +102,7 @@ def test_response_never_exposes_claim_code_or_email(server):
     status response body, and that no "pk_" / email substring leaks at all.
     Exercise both the credited and the unknown path."""
     for order in (CREDITED_ORDER, "np_does_not_exist_999"):
-        status, body = _get(f"{server}/api/nowpayments/order/{order}")
+        status, body = _get(server, f"/api/nowpayments/order/{order}")
         assert status == 200, body
         text = body.decode("utf-8")
         # No claim code (never expose a "pk_..." bearer token).
@@ -168,7 +120,7 @@ def test_response_never_exposes_claim_code_or_email(server):
 
 def test_bad_shape_order_id_returns_400(server):
     # Contains characters outside [A-Za-z0-9_-] -> 400.
-    status, body = _get(f"{server}/api/nowpayments/order/bad%20id%21")
+    status, body = _get(server, "/api/nowpayments/order/bad%20id%21")
     assert status == 400, body
     # And the 400 body must also never leak a code or email.
     text = body.decode("utf-8")
@@ -178,7 +130,7 @@ def test_bad_shape_order_id_returns_400(server):
 
 def test_overlong_order_id_returns_400(server):
     long_id = "a" * 65  # len 65 > 64 -> rejected
-    status, body = _get(f"{server}/api/nowpayments/order/{long_id}")
+    status, body = _get(server, f"/api/nowpayments/order/{long_id}")
     assert status == 400, body
 
 
@@ -188,9 +140,9 @@ def test_other_parts_of_a_mint_source_do_not_answer_for_the_order(server):
     part answered `credited:true` with the credit count of somebody's sale.
     Only the order's own id may answer."""
     for probe in ("nowpayments", "inv_test_001"):
-        status, body = _get(f"{server}/api/nowpayments/order/{probe}")
+        status, body = _get(server, f"/api/nowpayments/order/{probe}")
         assert status == 200, (probe, status)
         rec = json.loads(body)
         assert rec["credited"] is False and rec["credits"] is None, (probe, rec)
-    status, body = _get(f"{server}/api/nowpayments/order/{CREDITED_ORDER}")
+    status, body = _get(server, f"/api/nowpayments/order/{CREDITED_ORDER}")
     assert json.loads(body)["credited"] is True, "control: the real order must still answer"

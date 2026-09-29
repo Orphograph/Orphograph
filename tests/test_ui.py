@@ -1,6 +1,6 @@
 """test_ui.py — lightweight UI smoke without a real browser.
 
-Spins the server in a background thread, fetches the landing page, and
+Spins the server as a subprocess (tests/_srv.py), fetches the landing page, and
 asserts the elements the JS expects to find by ID actually exist in the
 rendered HTML. Catches the silent-breakage class where someone edits the
 landing template and removes a hook the JS depends on.
@@ -9,68 +9,39 @@ Also runs `node --check` on web/app.js if node is on PATH, otherwise skips.
 """
 from __future__ import annotations
 
-import os
 import shutil
-import socket
 import subprocess
-import sys
 import threading
-import time
-import urllib.request
 from html.parser import HTMLParser
 from pathlib import Path
 
 import pytest
 
+import _srv
+
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-
-
-def _free_port() -> int:
-    s = socket.socket()
-    s.bind(("127.0.0.1", 0))
-    p = s.getsockname()[1]
-    s.close()
-    return p
 
 
 @pytest.fixture(scope="module")
 def live_server(tmp_path_factory):
     """Start server in a subprocess against a clean data dir, yield base URL."""
-    port = _free_port()
     data_dir = tmp_path_factory.mktemp("data")
-    env = {
-        **os.environ,
-        "PORT": str(port),
-        "HOST": "127.0.0.1",
-        "ORPHO_DATA_DIR": str(data_dir),
-        "RATE_LIMIT_PER_DAY": "100000",
-    }
-    proc = subprocess.Popen(
-        [sys.executable, str(REPO_ROOT / "server" / "app.py")],
-        env=env,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
-    base = f"http://127.0.0.1:{port}"
-    # wait for /api/health
-    deadline = time.time() + 10
-    while time.time() < deadline:
-        try:
-            with urllib.request.urlopen(base + "/api/health", timeout=1) as r:
-                if r.status == 200:
-                    break
-        except Exception:
-            time.sleep(0.2)
-    else:
-        proc.kill()
-        pytest.fail("server did not start in 10s")
-    yield base
-    proc.terminate()
-    try:
-        proc.wait(timeout=5)
-    except subprocess.TimeoutExpired:
-        proc.kill()
+    yield from _srv.server_processes(
+        data_dir, stub_calendars=True, RATE_LIMIT_PER_DAY="100000")
+
+
+def _open(base: str, path: str):
+    """GET a page as urlopen did for this module: (body, headers) of a 2xx.
+
+    urlopen raised on a 4xx or 5xx and took a redirect unseen. _srv.request
+    does neither, so both are done here: the one 301 that moves a `.html` URL
+    to its extensionless path is taken, and anything but a 2xx fails."""
+    status, body, headers = _srv.request(base, path)
+    if status == 301 and headers.get("Location", "").startswith("/"):
+        status, body, headers = _srv.request(base, headers["Location"])
+    assert 200 <= status < 300, f"GET {path} answered {status}"
+    return body, headers
 
 
 class _IdCollector(HTMLParser):
@@ -103,8 +74,7 @@ REQUIRED_IDS = {
 
 
 def test_landing_has_all_ids_the_js_references(live_server):
-    with urllib.request.urlopen(live_server + "/") as r:
-        html = r.read().decode()
+    html = _open(live_server, "/")[0].decode()
     p = _IdCollector()
     p.feed(html)
     missing = REQUIRED_IDS - p.ids
@@ -112,8 +82,7 @@ def test_landing_has_all_ids_the_js_references(live_server):
 
 
 def test_landing_has_security_headers(live_server):
-    with urllib.request.urlopen(live_server + "/") as r:
-        headers = {k.lower(): v for k, v in r.headers.items()}
+    headers = {k.lower(): v for k, v in _open(live_server, "/")[1].items()}
     assert headers.get("x-content-type-options") == "nosniff"
     assert headers.get("x-frame-options") == "DENY"
     assert "default-src 'self'" in headers.get("content-security-policy", "")
@@ -130,8 +99,7 @@ def test_landing_has_security_headers(live_server):
 def test_landing_does_not_load_third_party_scripts(live_server):
     """CSP is script-src 'self'. Make sure no inline <script> or external src
     sneaks in (would be blocked by CSP, but better to catch at build time)."""
-    with urllib.request.urlopen(live_server + "/") as r:
-        html = r.read().decode()
+    html = _open(live_server, "/")[0].decode()
     # Acceptable script tags on the homepage:
     #   1. <script src="/...">     — self-hosted JS files
     #   2. <script type="application/ld+json"> — structured-data block.
@@ -149,17 +117,16 @@ def test_sample_ots_cache_is_short_lived(live_server):
     # /sample/*.ots bytes change at fixed URLs when the canonical receipt's
     # proofs upgrade; a 1-day browser cache beside a 5-minute index.json
     # serves a pending proof for a receipt the index calls pinned.
-    with urllib.request.urlopen(live_server + "/sample/a.ots") as r:
-        assert "max-age=300" in r.headers.get("Cache-Control", ""), r.headers.get("Cache-Control")
+    _, headers = _open(live_server, "/sample/a.ots")
+    assert "max-age=300" in headers.get("Cache-Control", ""), headers.get("Cache-Control")
     # Control: versioned binaries elsewhere keep the long cache.
-    with urllib.request.urlopen(live_server + "/verify/orphograph-verify-0.1.tar.gz") as r:
-        assert "max-age=86400" in r.headers.get("Cache-Control", ""), r.headers.get("Cache-Control")
+    _, headers = _open(live_server, "/verify/orphograph-verify-0.1.tar.gz")
+    assert "max-age=86400" in headers.get("Cache-Control", ""), headers.get("Cache-Control")
 
 
 def test_sample_index_serves_and_has_sha512(live_server):
-    with urllib.request.urlopen(live_server + "/sample/index.json") as r:
-        import json
-        meta = json.loads(r.read())
+    import json
+    meta = json.loads(_open(live_server, "/sample/index.json")[0])
     assert meta.get("receipt_id")
     assert meta.get("sha512_hex")
     assert len(meta["sha512_hex"]) == 128
@@ -167,8 +134,7 @@ def test_sample_index_serves_and_has_sha512(live_server):
 
 def test_terms_and_privacy_pages_render(live_server):
     for path in ("/terms.html", "/privacy.html"):
-        with urllib.request.urlopen(live_server + path) as r:
-            html = r.read().decode()
+        html = _open(live_server, path)[0].decode()
         assert "<h1>" in html
         assert "orphograph" in html.lower()
 
@@ -178,17 +144,16 @@ def test_license_files_serve_as_text(live_server):
     # (/LICENSE) and the verifier page (/verify/LICENSE). Both must serve 200 as
     # text/plain — the static suffix-allowlist previously 403'd them.
     for path in ("/LICENSE", "/verify/LICENSE"):
-        with urllib.request.urlopen(live_server + path) as r:
-            assert r.status == 200, f"{path} did not serve"
-            assert r.headers.get_content_type() == "text/plain", f"{path} wrong content-type"
-            body = r.read().decode()
+        status, raw, headers = _srv.request(live_server, path)
+        assert status == 200, f"{path} did not serve"
+        assert headers.get_content_type() == "text/plain", f"{path} wrong content-type"
+        body = raw.decode()
         assert "MIT" in body or "Permission is hereby granted" in body, f"{path} not the license text"
 
 
 def test_health_endpoint_returns_extended_snapshot(live_server):
     import json
-    with urllib.request.urlopen(live_server + "/api/health") as r:
-        body = json.loads(r.read())
+    body = json.loads(_open(live_server, "/api/health")[0])
     # Must include the new fields used by the status page.
     for key in ("ok", "version", "uptime_sec", "counts", "ledger_bytes", "last", "calendars", "checked_at"):
         assert key in body, f"/api/health missing {key}"
@@ -196,8 +161,7 @@ def test_health_endpoint_returns_extended_snapshot(live_server):
 
 
 def test_status_page_loads_without_pii(live_server):
-    with urllib.request.urlopen(live_server + "/status.html") as r:
-        html = r.read().decode()
+    html = _open(live_server, "/status.html")[0].decode()
     # Status page was rewritten as a transparency record (plain-English lede +
     # three independent checks). The H1 changed; instead of asserting a literal
     # heading string, verify the structural pieces the page MUST contain: the
@@ -222,8 +186,7 @@ def test_app_js_syntax_via_node_if_available():
 
 def test_signin_pages_render(live_server):
     for path in ("/signin.html", "/account.html"):
-        with urllib.request.urlopen(live_server + path) as r:
-            html = r.read().decode()
+        html = _open(live_server, path)[0].decode()
         assert "<h1>" in html
         # all the IDs the JS expects must exist
         if path == "/signin.html":
@@ -249,40 +212,28 @@ def test_full_signin_flow_via_api(live_server, tmp_path):
 
     Cleanest: do the entire round-trip in-process via auth.issue_link_token.
     """
-    import http.cookiejar
-    import urllib.request
-
     # Mint a token in the live server's data dir by calling its API.
     base = live_server
     # The live_server fixture's data dir is the tmp dir it created. We don't
     # have a direct handle to that here, so the simpler test is: drive the
     # API + inspect HTTP behavior, not the cookie contents.
-    req = urllib.request.Request(
-        base + "/api/auth/email-link",
-        data=b'{"email":"test@example.com"}',
-        headers={"Content-Type": "application/json"},
-        method="POST",
+    status, raw, _ = _srv.request(
+        base, "/api/auth/email-link", "POST",
+        b'{"email":"test@example.com"}',
+        {"Content-Type": "application/json"},
     )
-    with urllib.request.urlopen(req) as r:
-        assert r.status == 200
-        body = r.read().decode()
-        assert '"ok": true' in body
+    assert status == 200
+    body = raw.decode()
+    assert '"ok": true' in body
 
     # /api/me without cookie returns 401
-    try:
-        urllib.request.urlopen(base + "/api/me")
-        assert False, "/api/me without cookie should have returned 401"
-    except urllib.error.HTTPError as e:
-        assert e.code == 401
+    status, _, _ = _srv.request(base, "/api/me")
+    assert status == 401, "/api/me without cookie should have returned 401"
 
     # /a/<garbage> returns 400 (validates token shape)
-    try:
-        urllib.request.urlopen(base + "/a/short")
-        assert False, "garbage token should 400"
-    except urllib.error.HTTPError as e:
-        assert e.code == 400
+    status, _, _ = _srv.request(base, "/a/short")
+    assert status == 400, "garbage token should 400"
 
     # Sign-out without an active cookie is still 200
-    req = urllib.request.Request(base + "/api/auth/signout", method="POST", data=b"")
-    with urllib.request.urlopen(req) as r:
-        assert r.status == 200
+    status, _, _ = _srv.request(base, "/api/auth/signout", "POST", b"")
+    assert status == 200
