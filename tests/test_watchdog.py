@@ -8,7 +8,9 @@ from __future__ import annotations
 import importlib
 import json
 import os
+import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -64,41 +66,20 @@ def _completed(stdout: str = "", returncode: int = 0):
 
 class WatchdogTests(unittest.TestCase):
     def setUp(self) -> None:
-        # Each test gets its own log dir so _recent_failures sees a clean slate.
-        self._tmpdir = mock.patch.object(
-            watchdog,
-            "LOG_DIR",
-            str(ROOT / "tests" / ".watchdog_tmp_logs"),
-        )
-        self._tmpdir.start()
-        os.makedirs(watchdog.LOG_DIR, exist_ok=True)
-        self._logpath = mock.patch.object(
-            watchdog,
-            "LOG_PATH",
-            os.path.join(watchdog.LOG_DIR, "orphograph_watchdog.jsonl"),
-        )
-        self._logpath.start()
-        self._alertpath = mock.patch.object(
-            watchdog,
-            "ALERT_PATH",
-            os.path.join(watchdog.LOG_DIR, "orphograph_watchdog_ALERT.txt"),
-        )
-        self._alertpath.start()
-        # Clean log + alert files between tests.
-        for p in (watchdog.LOG_PATH, watchdog.ALERT_PATH):
-            if os.path.exists(p):
-                os.unlink(p)
-
-    def tearDown(self) -> None:
-        self._alertpath.stop()
-        self._logpath.stop()
-        self._tmpdir.stop()
-        for p in (
-            os.path.join(watchdog.LOG_DIR, "orphograph_watchdog.jsonl"),
-            os.path.join(watchdog.LOG_DIR, "orphograph_watchdog_ALERT.txt"),
+        # Each test gets its own log dir so _recent_failures sees a clean
+        # slate. A temp directory, removed with everything in it: the old one
+        # was inside the checkout. The patches are undone by addCleanup, so
+        # nothing here ever names a file through the unpatched LOG_DIR.
+        logs = tempfile.TemporaryDirectory(prefix="orpho_watchdog_")
+        self.addCleanup(logs.cleanup)
+        for name, value in (
+            ("LOG_DIR", logs.name),
+            ("LOG_PATH", os.path.join(logs.name, "orphograph_watchdog.jsonl")),
+            ("ALERT_PATH", os.path.join(logs.name, "orphograph_watchdog_ALERT.txt")),
         ):
-            if os.path.exists(p):
-                os.unlink(p)
+            patch = mock.patch.object(watchdog, name, value)
+            patch.start()
+            self.addCleanup(patch.stop)
 
     # ---------- 1. healthy path ---------- #
     def test_healthy_returns_zero_no_action(self) -> None:
@@ -210,6 +191,28 @@ class WatchdogTests(unittest.TestCase):
         self.assertIn("UNHEALTHY", txt)
         # Telegram was attempted (importability check).
         tg.assert_called()
+
+
+def test_the_real_log_directory_is_left_alone(tmp_path):
+    """The tests above run against a log directory of their own. tearDown used
+    to stop its patches first and delete the log and the alert file after, by
+    which time LOG_DIR was the real directory again: every run of this file
+    removed the watchdog's own history, and with it the count of consecutive
+    failures that decides when to alert."""
+    log = tmp_path / "orphograph_watchdog.jsonl"
+    alert = tmp_path / "orphograph_watchdog_ALERT.txt"
+    log.write_text('{"status":"ok"}\n')
+    alert.write_text("an alert the founder has not read yet\n")
+    env = dict(os.environ, ORPHOGRAPH_WATCHDOG_LOG_DIR=str(tmp_path),
+               PYTEST_DISABLE_PLUGIN_AUTOLOAD="1")
+    proc = subprocess.run(
+        [sys.executable, "-m", "pytest", "-q", "--color=no", "-p", "no:cacheprovider",
+         __file__, "-k", "WatchdogTests"],
+        capture_output=True, text=True, timeout=120, cwd=ROOT, env=env)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert " passed" in proc.stdout, proc.stdout
+    assert log.read_text() == '{"status":"ok"}\n'
+    assert alert.read_text() == "an alert the founder has not read yet\n"
 
 
 if __name__ == "__main__":
