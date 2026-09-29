@@ -29,6 +29,11 @@ data/
 **/auth_sessions.jsonl
 **/auth_link_tokens.jsonl
 **/auth_revoked.jsonl
+# These three hold customer addresses and follow the data directory, which
+# is the repo root in a checkout with no data/ and no ORPHO_DATA_DIR.
+**/manual_fulfillment_queue.jsonl
+**/refund_requests.jsonl
+**/recovery_gaps.jsonl
 **/credits.ledger
 
 # python
