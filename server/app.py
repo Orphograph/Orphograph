@@ -2349,6 +2349,9 @@ class Handler(BaseHTTPRequestHandler):
                 "signed_in": True,
                 "plan": plan_label,
                 "subscription_active": sub_active,
+                # The account's own subscription, which Cancel acts on. It
+                # gives no access; the page says so and offers Cancel.
+                "subscription_past_due": subscriptions.row_is_past_due(sub_status),
                 "subscription_status": sub_status or None,
                 "days_remaining": days_remaining,
                 "anchor_count": anchor_count,
@@ -5596,7 +5599,10 @@ class Handler(BaseHTTPRequestHandler):
             return
         if self._sub_change_limited(email):
             return
-        sub_id = subscriptions.stripe_subscription_id_for(email)
+        # Read once: the id sent to Stripe and the words sent back must be
+        # about the same subscription.
+        current = subscriptions.status_for(email) or {}
+        sub_id = current.get("stripe_sub") or ""
         if not sub_id:
             _json_response(self, 404, {"error": "no active subscription found"})
             return
@@ -5604,10 +5610,14 @@ class Handler(BaseHTTPRequestHandler):
         if not result.get("ok"):
             _json_response(self, 503, {"error": "stripe error", "detail": result.get("error")})
             return
-        _json_response(self, 200, {
-            "ok": True,
-            "message": "Subscription will end at the period boundary; you keep access until then.",
-        })
+        message = "Subscription will end at the period boundary; you keep access until then."
+        if subscriptions.row_is_past_due(current):
+            # A past-due subscription gives no access, so none is promised.
+            # The request ends it at the period boundary; it does not take
+            # back the payment that is already due.
+            message = ("Subscription will end at the period boundary and will not renew. "
+                       "The payment that is past due may still be retried until then.")
+        _json_response(self, 200, {"ok": True, "message": message})
 
     def _handle_reactivate_subscription(self) -> None:
         email = self._session_email()
@@ -5902,6 +5912,17 @@ class Handler(BaseHTTPRequestHandler):
                 _json_response(self, 409, {
                     "error": "This account already has an active subscription.",
                     "detail": "Manage it from your account page; nothing was charged.",
+                })
+                return
+            # A past-due subscription is one whose payment is still being
+            # retried: a second one would be billed on top of it the day the
+            # retry succeeds (founder decision 2026-09-28). The buy page shows
+            # `error` alone, so the way out is named there.
+            if holder and subscriptions.is_past_due(holder):
+                _json_response(self, 409, {
+                    "error": ("This account has a subscription that is past due. "
+                              "You can cancel it from your account page."),
+                    "detail": "Nothing was charged.",
                 })
                 return
         price_id = os.environ.get(price_env, "")

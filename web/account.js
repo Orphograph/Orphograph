@@ -23,7 +23,12 @@ async function main() {
   $("#email").textContent = me.email;
   const planEl = $("#plan-label");
   if (planEl) planEl.textContent = me.plan || (me.subscription_active ? "Standing Order" : "Free tier");
-  $("#sub-status").textContent = me.subscription_active ? "Active" : "Not active";
+  // A past-due subscription gives no access, but it is still there and its
+  // payment is still being retried, so the page says so and offers Cancel.
+  const isPastDue = !!me.subscription_past_due;
+  $("#sub-status").textContent = isPastDue
+    ? "Past due: the last payment did not go through"
+    : (me.subscription_active ? "Active" : "Not active");
   const renewal = me.subscription_status && me.subscription_status.current_period_end;
   if (renewal) {
     const d = new Date(renewal * 1000);
@@ -69,9 +74,9 @@ async function main() {
   const msgEl = $("#sub-action-msg");
   const subStatus = me.subscription_status || {};
   const isActive = !!me.subscription_active;
-  const isCancelling = subStatus.status === "active" && subStatus.cancel_at_period_end === true;
+  const isCancelling = (subStatus.status === "active" || isPastDue) && subStatus.cancel_at_period_end === true;
 
-  if (isActive && !isCancelling) cancelBtn.hidden = false;
+  if ((isActive || isPastDue) && !isCancelling) cancelBtn.hidden = false;
   if (isCancelling || subStatus.status === "canceled") reactivateBtn.hidden = false;
 
   // Refund-request self-serve button — visible while any paid sub
@@ -126,7 +131,10 @@ async function main() {
   };
 
   cancelBtn.addEventListener("click", async () => {
-    if (!confirm("Cancel your subscription at the end of the current period? You'll keep access until then.")) return;
+    const question = isPastDue
+      ? "Cancel your past-due subscription? It ends at the end of the current period and will not renew."
+      : "Cancel your subscription at the end of the current period? You'll keep access until then.";
+    if (!confirm(question)) return;
     cancelBtn.disabled = true;
     try {
       const r = await fetch("/api/me/cancel-subscription", { method: "POST" });

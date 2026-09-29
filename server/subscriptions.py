@@ -15,6 +15,7 @@ Public API:
     record_customer_email(stripe_customer, email) -> None
     record_subscription_event(stripe_customer, status, current_period_end, sub_id) -> None
     is_active(email) -> bool
+    is_past_due(email) -> bool
     status_for(email) -> dict | None
     subscriptions_for(email) -> list[dict]
 """
@@ -39,8 +40,13 @@ ACTIVE_STATUSES = {"active", "trialing"}
 # Stripe statuses a subscription never leaves. It bills nothing more, and
 # Stripe refuses to update it, so there is nothing left to cancel.
 ENDED_STATUSES = {"canceled", "incomplete_expired"}
-# Stripe statuses of a subscription that gives no access now but still exists
-# at Stripe: it can still be cancelled, and Stripe may still charge for it.
+# The Stripe status of a subscription whose payment failed and is still being
+# retried. It gives no access, but it still exists at Stripe: it can still be
+# cancelled, and a retry that succeeds is charged. With nothing active it is
+# the subscription the account is on (founder decision 2026-09-28). Only this
+# status: `incomplete` and `unpaid` are not preferred (see _current_row).
+PAST_DUE_STATUS = "past_due"
+
 # gdpr.delete_for_email appends a row carrying this event and the email to
 # both ledgers this module reads. It is recognised here by its shape rather
 # than by asking gdpr, because gdpr imports this module.
@@ -263,10 +269,19 @@ def active_subscription_ids(email: str) -> list[str]:
     return [row["stripe_sub"] for row in subscriptions_for(email) if _row_is_active(row)]
 
 
+def row_is_past_due(row: dict) -> bool:
+    """Does this row say a subscription is past due? A row with no
+    subscription id names nothing Cancel could reach, so it does not count."""
+    return row.get("status", "") == PAST_DUE_STATUS and bool(row.get("stripe_sub"))
+
+
 def _current_row(email: str) -> dict | None:
-    """The row describing the subscription this address is on now: the newest
-    row of the most recently updated ACTIVE subscription, or, with none
-    active, the newest row of all.
+    """The row describing the subscription this address is on now. The first
+    of these that finds one decides:
+
+      1. the most recently updated ACTIVE subscription;
+      2. the most recently updated PAST-DUE subscription;
+      3. the newest row of all.
 
     Each subscription is judged by its own newest row. Judging the newest row
     across all of them let one subscription's cancellation hide another that
@@ -274,11 +289,15 @@ def _current_row(email: str) -> dict | None:
     reader must agree on the choice: the page, cancel, reactivate, the refund
     request and the support lookup (found in review, 2026-09-27).
 
-    Known limit, left for a decision: with nothing active, a subscription
-    that is past due (Stripe keeps retrying it) can be hidden by another
-    one's later cancellation. Preferring any subscription still open at
-    Stripe was tried and removed: an `incomplete` row never ages out here,
-    so an abandoned attempt spoke for the account.
+    The second is there for the same reason (founder decision 2026-09-28).
+    With nothing active, the newest row of all could be the cancellation of
+    one subscription, or an abandoned attempt, while another was past due.
+    Stripe keeps retrying a past-due payment, and Cancel could not reach it.
+
+    It is past due and nothing wider. Preferring any subscription still open
+    at Stripe was tried and removed: an `incomplete` row never ages out here,
+    so an abandoned attempt spoke for the account. `unpaid` is left where it
+    was; the decision covers past due only.
 
     A row with no subscription id (hand-written; the webhook always records
     the id) names no subscription of its own, so it keeps the meaning it
@@ -288,10 +307,11 @@ def _current_row(email: str) -> dict | None:
     for i, row in enumerate(rows):
         newest[row.get("stripe_sub") or ""] = (i, row)
     last = len(rows) - 1
-    active = [(i, row) for sub, (i, row) in newest.items()
-              if _row_is_active(row) and (sub or i == last)]
-    if active:
-        return max(active, key=lambda pair: pair[0])[1]
+    speaking = [pair for sub, pair in newest.items() if sub or pair[0] == last]
+    for in_tier in (_row_is_active, row_is_past_due):
+        tier = [pair for pair in speaking if in_tier(pair[1])]
+        if tier:
+            return max(tier, key=lambda pair: pair[0])[1]
     return rows[-1] if rows else None
 
 
@@ -308,3 +328,11 @@ def is_active(email: str) -> bool:
     """Does this address hold ANY active subscription now? (see _current_row)"""
     current = _current_row(email)
     return bool(current) and _row_is_active(current)
+
+
+def is_past_due(email: str) -> bool:
+    """Is the subscription this address is on now past due? (see _current_row)
+
+    It gives no access: is_active stays False. It says there is a subscription
+    Stripe is still trying to charge, which Cancel can reach."""
+    return row_is_past_due(_current_row(email) or {})
