@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -59,15 +60,18 @@ def ensure_writable() -> None:
     For the unsubscribe POST, which must refuse before `add`'s
     already-suppressed shortcut: with a ledger that could not be opened a new
     address got 503 and a suppressed one got success, which told anyone which
-    one it was. That case is all this closes. Not covered: the file opens and
-    the write itself fails (a full volume). `add` then still answers a
-    suppressed address with success and a new one with 503.
+    one it was. That case is all this closes. The file opening and the write
+    itself failing (a full volume) is closed by `add(prove_write=True)`,
+    which the POST passes: a suppressed address then tries a write as long as
+    a new one's row, and is refused where the row would be.
 
     No lock, because only whether the file can be opened matters here; `add`
     takes the lock when it writes. Taking it made a POST for an address that
     is already suppressed, the one mailbox providers retry, wait for whoever
-    held it (review, 2026-09-27). The steps mirror file_lock.locked up to the
-    lock and must stay in step with it.
+    held it (review, 2026-09-27). With prove_write that POST writes, so it
+    waits in `add` for the lock as a new address does; this check still does
+    not. The steps mirror file_lock.locked up to the lock and must stay in
+    step with it.
 
     Not file_lock.can_append: that is a pre-check that guesses, and it
     refuses a directory this process owns and `locked` repairs, so a one-click
@@ -101,29 +105,71 @@ def _ends_mid_line(path: Path) -> bool:
         return False
 
 
-def add(email: str, source: str = "user") -> bool:
-    """Mark an email as unsubscribed. Idempotent — second call returns False."""
-    if not _is_new(email):
+def _prove_append(f, length: int) -> None:
+    """Append `length` blank bytes to the open ledger, then cut them off.
+
+    As long as the row, not one byte: a full volume still has the unused rest
+    of the file's last block, and one byte fits there long after a row has
+    stopped fitting (measured on a full volume, 2026-09-28). The answer has
+    to be the one a row would get.
+
+    Cut off again, because nothing limits how often a stranger may POST and
+    the ledger is read through on every marketing send. Only when the file is
+    exactly that much longer than it was: a writer that does not take the
+    lock (scripts/reply_router.py) may have appended in between, and then the
+    blanks stay rather than its row being cut. Blanks also stay when the
+    write fails part-way. Every reader skips them, and `_ends_mid_line`
+    starts the next row on a fresh line.
+
+    Not covered: a filesystem that reports a full volume only when the file
+    is closed (a network mount). The blanks are gone again by then."""
+    before = os.fstat(f.fileno()).st_size
+    f.write(" " * (length - 1) + "\n")
+    f.flush()
+    try:
+        if os.fstat(f.fileno()).st_size == before + length:
+            os.ftruncate(f.fileno(), before)
+    except OSError as e:
+        # The write is proven, which is what was asked. The blanks stay.
+        print(f"[unsubscribe] proof left in the ledger: {type(e).__name__}",
+              file=sys.stderr, flush=True)
+
+
+def add(email: str, source: str = "user", prove_write: bool = False) -> bool:
+    """Mark an email as unsubscribed. Idempotent — second call returns False.
+
+    `prove_write` is for a caller that answers a stranger (the unsubscribe
+    POST). With nothing to record this returned before it touched the ledger,
+    so on a full volume an address already suppressed got success and a new
+    one SuppressionUnavailable, which told anyone which one it was. With
+    prove_write it tries the write a new address would make, under the same
+    lock, and a failed write raises for both. The ledger is left as it was."""
+    new = _is_new(email)
+    if not new and not prove_write:
         return False
     email = _norm(email)
+    row = json.dumps({
+        "ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "email": email,
+        "source": source,
+    }, separators=(",", ":")) + "\n"
     try:
         with locked(SUPPRESS_PATH, mode="a", exclusive=True) as f:
             # A write that failed part-way leaves a line with no newline. This
             # row would be glued onto it and never read back, while the person
             # is told it worked. Start on a fresh line.
             if _ends_mid_line(SUPPRESS_PATH):
-                f.write("\n")
-            f.write(json.dumps({
-                "ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-                "email": email,
-                "source": source,
-            }, separators=(",", ":")) + "\n")
+                row = "\n" + row
+            if new:
+                f.write(row)
+            else:
+                _prove_append(f, len(row))
     except OSError as e:
         # Not recorded. The caller must be able to SAY so: an OSError escaping
         # here closed the socket with no response, and someone unsubscribing
         # could not tell whether it had worked.
         raise SuppressionUnavailable(f"could not record the unsubscribe: {e}") from e
-    return True
+    return new
 
 
 def is_unsubscribed(email: str) -> bool:

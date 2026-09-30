@@ -23,6 +23,12 @@ sys.path.insert(0, str(ROOT / "tests"))
 STRIPE_CALLS = "stub_stripe_calls.jsonl"
 STRIPE_DOWN = "stub_stripe_down"
 STRIPE_ANSWERS = "stub_stripe_answers.json"
+# While <data dir>/stub_calendars_down exists, every stubbed calendar
+# refuses. --fail-calendars is fixed at launch; this is a total outage a
+# test can start and END on the same server, which the x402 rail needs: a
+# payment settled before the anchor must be shown held through an outage
+# and redeemed after it, on one process with one ledger.
+CALENDARS_DOWN = "stub_calendars_down"
 
 
 def _answers(path: Path) -> dict:
@@ -40,7 +46,10 @@ def _fake_stripe(answers: Path) -> str:
     and this server sends that status with Stripe's error body. A test needs
     this to tell one refusal from another: a subscription Stripe has no
     record of is not the same failure as an outage, and the product must be
-    able to tell them apart from what actually comes back on the wire."""
+    able to tell them apart from what actually comes back on the wire.
+
+    An answer with "data" in place of "error" is sent as the body, for a
+    route that reads the object Stripe returns (a paid checkout session)."""
     from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
     class Answer(BaseHTTPRequestHandler):
@@ -51,7 +60,8 @@ def _fake_stripe(answers: Path) -> str:
             path = self.path[len("/v1"):] if self.path.startswith("/v1") else self.path
             script = _answers(answers).get(path) or {}
             status = int(script.get("status") or 200)
-            raw = json.dumps({"error": script["error"]} if "error" in script else {}).encode()
+            raw = json.dumps({"error": script["error"]} if "error" in script
+                             else script.get("data") or {}).encode()
             self.send_response(status)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(raw)))
@@ -139,10 +149,12 @@ def main() -> int:
     if unknown:
         parser.error(f"--fail-calendars names no shipped calendar: {sorted(unknown)}")
 
+    calendars_down = Path(os.environ["ORPHO_DATA_DIR"]) / CALENDARS_DOWN
+
     def accepted(calendar_url: str, hash_bytes: bytes):
         if len(hash_bytes) != 32:
             return False, "hash must be exactly 32 bytes (SHA-256)"
-        if engine._calendar_short(calendar_url) in refused:
+        if engine._calendar_short(calendar_url) in refused or calendars_down.exists():
             return False, "HTTP 503: stubbed calendar outage"
         return True, PENDING_BODY
 

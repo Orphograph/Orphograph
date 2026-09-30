@@ -209,8 +209,12 @@ os.environ["ORPHO_EVENTS_MAX_BYTES"] = "262144"
 import analytics
 from pathlib import Path
 path = Path(sys.argv[2])
+parent = os.getppid()
 i = 0
-while True:
+while os.getppid() == parent:
+    # A writer whose test was interrupted before its SIGKILL used to run
+    # forever: three of them sat at a full core each from 2026-09-25 to
+    # 09-30. Being reparented is the signal that the test is gone.
     analytics.append_event({"event": "e", "ts": "2026-09-25T00:00:00+00:00", "seq": i, "pad": "z" * 180}, path=path)
     i += 1
 '''
@@ -240,10 +244,23 @@ def test_a_killed_writer_never_leaves_an_empty_or_torn_ledger(tmp_path):
         child.send_signal(signal.SIGKILL)
         child.wait(timeout=10)
         data = path.read_bytes()
-        assert data and data.endswith(b'\n') or data.count(b'\n') > 1000
+        assert data, 'the kill left an empty ledger'
+        whole = data.splitlines()
+        if not data.endswith(b'\n'):
+            # The kill can land mid-append, so the last line may be cut short
+            # at ANY length. The old check allowed that only past 1000 lines,
+            # and a compacted file restarts short: CI failed it at 859 lines
+            # on 2026-09-30 with the ledger otherwise whole. The rule the
+            # comment below always stated is what is checked now: only that
+            # one line is cut, and it is never a compaction marker, because
+            # _compact writes the whole file by atomic replace.
+            cut = whole.pop()
+            marker_prefix = json.dumps({"event": analytics.COMPACTED_EVENT},
+                                       separators=(",", ":"))[:-1].encode()
+            assert not cut.startswith(marker_prefix), 'a compaction left a torn marker'
         # At most the one line being appended at the kill can be cut short,
         # and the next append repairs it.
-        assert all(isinstance(json.loads(line), dict) for line in data.splitlines()[:-1])
+        assert all(isinstance(json.loads(line), dict) for line in whole)
         assert reads > 10
     assert analytics.compaction_marker(path) is not None, 'control: the writer compacted'
 

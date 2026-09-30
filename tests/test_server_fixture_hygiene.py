@@ -17,9 +17,9 @@ duplication:
     and was diagnosed only by capturing the output by hand.
 
 This does not rewrite the 32. It stops the count growing: any NEW module that
-starts the server must import _srv, whose one implementation reserves ports
-together, uses one tuned deadline, and puts the server's last words into the
-failure message.
+starts the server must import _srv, whose one implementation lets the server
+bind its own port, uses one tuned deadline, and puts the server's last words
+into the failure message.
 
 LEGACY is frozen deliberately. It may SHRINK as modules migrate — that is
 enforced below, so a migration cannot be silently reverted — but a new name
@@ -35,51 +35,37 @@ TESTS = Path(__file__).resolve().parent
 
 LEGACY = frozenset({
     "test_ab_home.py",
-    "test_access_hub.py",
     "test_admin_toggles.py",
     "test_affiliate_redirect.py",
     "test_agent_discovery.py",
     "test_anchoring_disabled.py",
-    "test_attacks.py",
     "test_badge.py",
     "test_biweekly_safety_audit.py",
-    "test_blog_static_css.py",
     "test_capability_copy.py",
     "test_card_notify_capture.py",
     "test_compliance_scan.py",
     "test_css_cache_discipline.py",
-    "test_docs_hub.py",
     "test_error_pages.py",
-    "test_event_ip_source.py",
     "test_folder_anchor.py",
     "test_founder_funnel_endpoint.py",
     "test_founder_token_bruteforce.py",
-    "test_funnel_event_whitelist.py",
     "test_harness_cleanup.py",
     "test_head_method.py",
     "test_l402_single_use.py",
     "test_lightning_l402.py",
     "test_lineage_endpoint.py",
-    "test_lp_pageview_beacon.py",
-    "test_money_surface_hardening_2026_05_29.py",
     "test_no_qr_on_site.py",
     "test_notify_and_folder_delivery.py",
-    "test_nowpayments_create.py",
-    "test_order_status.py",
-    "test_pack_access.py",
     "test_post_content_type_gate.py",
     "test_private_fails_closed.py",
     "test_private_receipt_not_discoverable.py",
     "test_private_receipts.py",
     "test_receipt_ownership_agrees.py",
-    "test_recover_crypto.py",
     "test_renewal.py",
-    "test_scroll_depth.py",
     "test_security_txt.py",
     "test_snark_receipt.py",
     "test_stripe_checkout.py",
     "test_subscription_inheritance.py",
-    "test_ui.py",
     "test_vault_api_key.py",
     "test_vault_filters.py",
 })
@@ -157,8 +143,8 @@ def test_new_server_spinning_modules_use_the_shared_helper() -> None:
     ]
     assert not offenders, (
         "These modules start server/app.py with their own fixture. Use "
-        "tests/_srv.py instead — it reserves ports together (no reuse race), "
-        "uses one tuned startup deadline, and reports the server's OUTPUT when "
+        "tests/_srv.py instead — the server binds its own port (no race for "
+        "it), one tuned startup deadline, and the server's OUTPUT when "
         "startup fails instead of a bare 'did not start':\n  "
         + "\n  ".join(offenders)
     )
@@ -215,10 +201,19 @@ def test_the_scan_can_actually_see_a_server_fixture() -> None:
     # them), so they were false entries the textual detector had manufactured.
     # The floor moves with the corpus; it exists to catch the detector going
     # blind, not to freeze a number.
-    assert len(spinning) >= 50, (
+    # 2026-09-28: 54 -> 43. Fourteen modules moved to _srv, and a module that
+    # starts its server through _srv no longer names app.py, so eleven of them
+    # left this count. Every migration lowers it; the planted sources below
+    # do not move.
+    assert len(spinning) >= 40, (
         f"only {len(spinning)} modules detected as starting a server — the "
         "detector is broken, not the suite clean"
     )
+    assert _spins_a_server(
+        "proc = subprocess.Popen([sys.executable, str(ROOT / 'server' / 'app.py')])\n")
+    assert _spins_a_server(
+        "import app\nhttpd = ThreadingHTTPServer(('127.0.0.1', 0), app.Handler)\n")
+    assert not _spins_a_server('"""Reachable from server/app.py."""\nimport os\n')
 
 
 # --- request helpers (added 2026-09-18) ------------------------------------
@@ -319,3 +314,208 @@ def test_the_connection_scan_can_actually_see_a_private_helper() -> None:
     # Not a fixed floor — LEGACY is meant to shrink to nothing.
     seen = [p.name for p, t in _modules() if _opens_its_own_connection(t)]
     assert seen or not LEGACY, "no module detected opening a connection — detector is blind"
+
+
+# --- pre-picked ports (added 2026-09-28) -----------------------------------
+# A fixture that binds :0, closes the socket and hands the number to a server
+# leaves a window in which another process takes the port. It failed the
+# deploy of #275 on 2026-09-27. _srv.spin() closed it for its callers: the
+# server is started with PORT=0 and the harness reads the port that server
+# bound. This keeps every other fixture from picking one again.
+#
+# Picking a port is still right for one thing: a port that must be CLOSED, to
+# point a proxy at. So the scan follows the picked number to where it goes and
+# only objects when that is a server.
+
+# getsockname is the picking itself, done inline with no helper to name.
+_PORT_PICKERS = frozenset({"_free_port", "free_port", "reserve_ports", "getsockname"})
+
+
+def _called(node: ast.Call) -> str:
+    f = node.func
+    return f.attr if isinstance(f, ast.Attribute) else getattr(f, "id", "")
+
+
+def _names(node: ast.AST) -> set[str]:
+    return {n.id for n in ast.walk(node) if isinstance(n, ast.Name)}
+
+
+def _picks_a_port(fn: ast.AST) -> bool:
+    """A function that binds a socket and returns a value read from
+    getsockname() picks a port, whatever it is called."""
+    attrs = {n.attr for n in ast.walk(fn) if isinstance(n, ast.Attribute)}
+    returns = any(isinstance(n, ast.Return) and n.value is not None
+                  for n in ast.walk(fn))
+    return returns and {"bind", "getsockname"} <= attrs
+
+
+def _pickers_defined_in(text: str) -> set[str]:
+    tree = _parse_code(text)
+    if tree is None:
+        return set()
+    return {n.name for n in ast.walk(tree)
+            if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+            and _picks_a_port(n)}
+
+
+def _picked_ports_handed_to_a_server(
+        text: str, shared: frozenset[str] = frozenset()) -> list[str]:
+    """Where this source gives a picked port to a server, as "line N: what".
+
+    `shared` names the pickers other modules define, since a module that
+    imports one defines nothing to judge it by.
+
+    A name is followed through assignments, loops and calls to functions of
+    the same module, by NAME across the whole module: a name that holds a
+    picked port anywhere counts as holding one everywhere. That can only
+    over-report, and an over-report is loud."""
+    tree = _parse_code(text)
+    if tree is None:
+        # Unparseable: a scan that cannot read the file reports "maybe".
+        maybe = any(p in text for p in _PORT_PICKERS | shared)
+        return ["unparseable, and it picks a port"] if maybe else []
+
+    defs = {n.name: n for n in ast.walk(tree)
+            if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
+    pickers = _PORT_PICKERS | shared | _pickers_defined_in(text)
+    held: set[str] = set()
+
+    def picked(expr: ast.AST) -> bool:
+        return any(
+            (isinstance(n, ast.Call) and _called(n) in pickers)
+            or (isinstance(n, ast.Name) and n.id in held)
+            for n in ast.walk(expr))
+
+    while True:
+        before = len(held)
+        for n in ast.walk(tree):
+            if isinstance(n, ast.Assign) and picked(n.value):
+                held.update(*(_names(t) for t in n.targets))
+            elif (isinstance(n, (ast.AnnAssign, ast.AugAssign, ast.NamedExpr))
+                  and n.value is not None and picked(n.value)):
+                held |= _names(n.target)
+            elif isinstance(n, (ast.For, ast.comprehension)) and picked(n.iter):
+                held |= _names(n.target)
+            elif isinstance(n, ast.Call) and _called(n) in defs:
+                # The callee's parameter now holds what the caller passed.
+                spec = defs[_called(n)].args
+                params = [a.arg for a in spec.posonlyargs + spec.args]
+                held.update(p for p, a in zip(params, n.args) if picked(a))
+                held.update(k.arg for k in n.keywords if k.arg and picked(k.value))
+        if len(held) == before:
+            break
+
+    found = []
+    for n in ast.walk(tree):
+        line = getattr(n, "lineno", 0)
+        if isinstance(n, ast.Dict):
+            for key, value in zip(n.keys, n.values):
+                if (isinstance(key, ast.Constant) and key.value == "PORT"
+                        and picked(value)):
+                    found.append(f"line {value.lineno}: PORT is a picked port")
+        elif isinstance(n, ast.Assign) and picked(n.value):
+            for t in n.targets:
+                if (isinstance(t, ast.Subscript) and isinstance(t.slice, ast.Constant)
+                        and t.slice.value == "PORT"):
+                    found.append(f"line {line}: PORT is a picked port")
+        elif isinstance(n, ast.Call):
+            if any(k.arg == "PORT" and picked(k.value) for k in n.keywords):
+                found.append(f"line {line}: PORT is a picked port")
+            # setenv("PORT", n), setdefault("PORT", n), putenv("PORT", n)
+            if (len(n.args) >= 2 and isinstance(n.args[0], ast.Constant)
+                    and n.args[0].value == "PORT" and picked(n.args[1])):
+                found.append(f"line {line}: PORT is a picked port")
+            # In-process: HTTPServer((host, n), ...) or sock.bind((host, n)).
+            name = _called(n)
+            if (name.endswith("Server") or name == "bind") and n.args and picked(n.args[0]):
+                found.append(f"line {line}: {name}() binds a picked port")
+    return found
+
+
+def _port_offenders(sources: dict[str, str]) -> dict[str, list[str]]:
+    """{module: where it hands a picked port to a server}, over a set of
+    modules given as {name: source}. A picker defined in any of them is a
+    picker in all of them."""
+    shared = frozenset().union(*(_pickers_defined_in(t) for t in sources.values()))
+    return {name: found for name, text in sorted(sources.items())
+            if (found := _picked_ports_handed_to_a_server(text, shared))}
+
+
+def test_no_fixture_hands_a_picked_port_to_a_server() -> None:
+    """THE GUARD. Every module under tests/, helpers included: a server gets
+    PORT=0 (or binds port 0 in-process) and the fixture reads the port the
+    server got."""
+    offenders = _port_offenders({
+        str(p.relative_to(TESTS)): p.read_text(encoding="utf-8", errors="replace")
+        for p in TESTS.rglob("*.py")})
+    assert not offenders, (
+        "These modules pick a port and then hand it to a server, which loses "
+        "the port to another process now and then. Start the server through "
+        "_srv.server_processes (it binds port 0 and reports the port it got), "
+        "or bind port 0 in-process and read server_address:\n  "
+        + "\n  ".join(f"{name}: {found}" for name, found in offenders.items()))
+
+
+_PICK_AND_LAUNCH = '''
+import os, socket, subprocess, sys
+def _free_port():
+    s = socket.socket()
+    s.bind(("127.0.0.1", 0))
+    p = s.getsockname()[1]
+    s.close()
+    return p
+def server():
+    port = _free_port()
+    env = {**os.environ, "PORT": str(port), "HOST": "127.0.0.1"}
+    return subprocess.Popen([sys.executable, "server/app.py"], env=env)
+'''
+
+
+def test_the_port_scan_can_actually_see_a_picked_port() -> None:
+    """NEGATIVE CONTROL, on planted sources. The first is the fixture fourteen
+    modules carried; the rest are the same defect spelled another way."""
+    sees = _picked_ports_handed_to_a_server
+    assert sees(_PICK_AND_LAUNCH) == ["line 11: PORT is a picked port"]
+    # Under another name: judged by what the function does.
+    assert sees(_PICK_AND_LAUNCH.replace("_free_port", "_any_port"))
+    # With no helper at all.
+    assert sees("s = socket.socket()\ns.bind(('127.0.0.1', 0))\n"
+                "port = s.getsockname()[1]\ns.close()\n"
+                "subprocess.Popen(cmd, env={**os.environ, 'PORT': str(port)})\n")
+    # Through a helper's parameter, and through a second name.
+    assert sees("def _env(number):\n    return {'PORT': str(number)}\n"
+                "chosen = _srv.reserve_ports(1)[0]\nalso = chosen\n"
+                "subprocess.Popen(cmd, env=_env(also))\n")
+    assert sees("env = dict(os.environ)\nenv['PORT'] = f'{_free_port()}'\n")
+    assert sees("for port in _srv.reserve_ports(2):\n"
+                "    _srv.spin(d, PORT=str(port))\n")
+    assert sees("monkeypatch.setenv('PORT', str(_free_port()))\n")
+    assert sees("port = _free_port()\n"
+                "httpd = ThreadingHTTPServer(('127.0.0.1', port), app.Handler)\n"
+                ) == ["line 2: ThreadingHTTPServer() binds a picked port"]
+    assert sees("def broken(:\n    port = _free_port()\n"), "unparseable must read as maybe"
+
+    # A picker kept in a shared helper, under a name no list here knows: the
+    # module that calls it defines nothing, so it is judged with the others.
+    shared = {"_ports.py": _PICK_AND_LAUNCH.replace("_free_port", "grab")
+                                           .split("def server")[0],
+              "test_x.py": "from _ports import grab\n"
+                           "env = {**os.environ, 'PORT': str(grab())}\n"
+                           "subprocess.Popen(cmd, env=env)\n"}
+    assert _port_offenders(shared) == {"test_x.py": ["line 2: PORT is a picked port"]}
+
+    # What must stay allowed: the server picks, or the picked port is one
+    # nothing listens on.
+    assert sees("env = {'PORT': '0'}\nsubprocess.Popen(cmd, env=env)\n") == []
+    assert sees("httpd = ThreadingHTTPServer(('127.0.0.1', 0), app.Handler)\n"
+                "port = httpd.server_address[1]\n"
+                "base = f'http://127.0.0.1:{port}'\n") == []
+    assert sees("closed = _srv.reserve_ports(1)[0]\n"
+                "env = {'HTTPS_PROXY': f'http://127.0.0.1:{closed}', 'PORT': '0'}\n"
+                "subprocess.Popen(cmd, env=env)\n") == []
+    assert sees('def f():\n    """env = {"PORT": str(_free_port())} in prose."""\n') == []
+
+    # The corpus: _srv.reserve_ports is a picker by what it does, not only by
+    # its name, so the detector that reads function bodies is seeing them.
+    assert _pickers_defined_in(
+        (TESTS / "_srv.py").read_text(encoding="utf-8")) == {"reserve_ports"}
