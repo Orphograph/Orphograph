@@ -22,16 +22,30 @@ twice.
                                   → 200 receipt, PAYMENT-RESPONSE header
                                     carries the settlement
 
-Server checks, in order: parse the header → VERIFY with the facilitator
-(cheap, no chain write) → claim the authorization's nonce atomically (our
-own single-use lock — verify() alone is not single-use, and relying on the
-chain to catch a replay after the fact is exactly the race L402's own
-`lightning.claim()` was built to close) → do the actual anchor → only THEN
-settle for real. An on-chain USDC transfer cannot be refunded the way a
-Pack credit or an L402 credential can, so nothing is charged for an anchor
-that never happened, and a total-calendar-outage anchor (worthless, no
-Bitcoin commitment) is never charged for either — the claim is released so
-the same signature can be retried.
+Server checks, in order: parse the header → look up what this
+authorization's nonce has already bought (hex case ignored: `0xAABB..` and
+`0xaabb..` are one nonce) → if it already bought an anchor, 401 and nothing
+else runs → otherwise VERIFY with the facilitator (cheap, no chain write) →
+SETTLE for real, still before any anchor work, and record the charge →
+claim the nonce atomically (our own single-use lock, the same one
+`lightning.claim()` gives L402 — verify() alone is not single-use) → do the
+actual anchor. A payment that has not settled buys nothing: a refused
+settlement is a 402 with no receipt anywhere, an unreachable facilitator a
+503 with nothing recorded, and either payload can be resubmitted.
+
+The first cut settled AFTER the anchor, so that nothing would be charged
+for an anchor that never happened. That handed out real receipts on
+verify() alone — a settle() failure afterwards could not take the 200 back
+— and, with the nonce compared as a string, a re-cased resubmission of a
+spent payload bought a second one. The fairness that order was after is
+kept the other way round: a settled payment whose anchor then fails (a
+total calendar outage, 0 of 5 accepted, no Bitcoin commitment) is HELD,
+not lost. That 200 says `x402_payment_held: true` and carries no
+PAYMENT-RESPONSE header; the identical payload, resubmitted once calendars
+answer, goes straight to another anchor attempt on the money already
+collected — no second settle() — and after that it is a replay like any
+other. Both facts live on disk: the charge in `x402_ledger.jsonl`, the
+delivery as the claim in `x402_claimed.jsonl`.
 
 ## Custody posture (stated plainly)
 

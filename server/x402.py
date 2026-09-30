@@ -12,14 +12,33 @@ plain HTTP + JSON instead of Lightning invoices:
     2. the agent signs an EIP-3009 transferWithAuthorization for that
        exact amount (the x402 client SDK does this; we never do)
     3. retry with the signed payload in the PAYMENT-SIGNATURE header
-         -> we VERIFY it with the facilitator (cheap, no chain write);
-            only once the anchor itself has actually succeeded do we
-            SETTLE it (the facilitator submits the transfer on-chain).
+         -> we VERIFY it with the facilitator (cheap, no chain write),
+            then SETTLE it (the facilitator submits the transfer
+            on-chain), and only once settlement has SUCCEEDED do we do
+            the paid work (the anchor).
 
-Settle-after-work, not before: an on-chain USDC transfer cannot be
-refunded the way a Pack credit or an L402 credential can, so nothing is
-charged for an anchor that never happened. See _handle_anchor's x402
-block in app.py for the full sequencing and why.
+Settle BEFORE work, never after. The first cut of this rail did the
+opposite — anchor first, settle() only afterwards — on the theory that an
+on-chain USDC transfer cannot be refunded, so nothing should be charged
+for an anchor that never happened. That made the anchor free whenever
+settlement failed: verify() proves nothing about settlement (it is
+side-effect-free; the facilitator marks nothing used), so any payload
+that passed verify() bought a real receipt — on disk, served at /r/<id>
+with HTTP 200 — before a single unit of USDC moved, and a settle()
+failure afterwards changed nothing about the answer already sent. With
+the local single-use identifier keyed on the raw nonce STRING, a
+resubmission with the nonce's hex re-cased (0xAABB.. -> 0xaabb..) read as
+a brand-new payment, anchored, and then predictably failed to settle (the
+real nonce was already spent): a second receipt for free, deterministic,
+no race needed. Now the order is the one L402 already had —
+verify_l402() requires invoice_settled() to be TRUE before app.py ever
+reaches the anchor — a payment that has not settled buys nothing.
+
+The fairness the old order was after is kept a different way: a
+settlement whose anchor then fails (a 0-calendar outage, no Bitcoin
+commitment) is HELD, not forfeit — the same signed payload, resubmitted,
+redeems it for another anchor attempt with no second settle(). See
+settlement_state() below and _handle_anchor's x402 block in app.py.
 
 Custody posture: this module never holds a wallet key. Verification and
 settlement happen at the FACILITATOR (a hosted service — the public
@@ -257,8 +276,10 @@ def verify(payment_payload: dict, payment_requirements: dict) -> dict:
 
 
 def settle(payment_payload: dict, payment_requirements: dict) -> dict:
-    """Submit the payment for real. Only called after the paid work
-    (the anchor) has already succeeded — see app.py's x402 block.
+    """Submit the payment for real. Called right after verify() and BEFORE
+    any anchor work — a success here is written by record_settlement()
+    before app.py proceeds, so the payment is never settled twice and never
+    forfeit if the anchor then fails (see settlement_state()).
 
     Returns a dict shaped like SettleResponse: {"success": bool,
     "transaction": str | None, "network": str, "errorReason": str | None}.
@@ -279,7 +300,11 @@ _MOCK_SETTLED_NONCES: set[str] = set()
 def _mock_inner_and_nonce(body: dict) -> tuple[dict, str]:
     inner = (body.get("paymentPayload") or {}).get("payload") or {}
     nonce = (inner.get("authorization") or {}).get("nonce") or inner.get("nonce") or ""
-    return inner, nonce
+    # A bytes32 nonce is the same nonce whatever case its hex is written
+    # in; the chain does not see the string. The mock must not be more
+    # lenient than the chain it stands in for, or a re-cased replay would
+    # "settle" here and fail there.
+    return inner, nonce.lower()
 
 
 def _mock_facilitator_call(path: str, body: dict) -> dict:
@@ -324,17 +349,26 @@ def reset_mock_state() -> None:
     _MOCK_SETTLED_NONCES.clear()
 
 
-# ── single-use claim (atomic; mirrors lightning.py's spent-set exactly) ────
+# ── settlement state: paid? delivered? (two append-only ledgers) ──────────
 #
-# verify() is side-effect-free — the facilitator marks nothing used, only
-# settle() consumes the on-chain nonce, and settle() does not run here until
-# AFTER the anchor. Without a claim of our own, N concurrent requests
-# carrying the SAME signed payload would each pass verify(), each get a
-# free anchor from engine.anchor_hash, and only one of the N settle() calls
-# would actually land on-chain — the office paid once, N-1 anchors free.
-# This is the identical bug class lightning.claim()'s docstring documents
-# ("eight concurrent requests with one paid credential produced eight
-# receipts"); the fix is the same shape, applied before it ever shipped.
+# One settled payment buys exactly one valuable anchor. Two facts are kept
+# per payment identifier, each in its own append-only, last-row-wins file
+# (the shape lightning.py's spent-set established):
+#
+#   PAID       x402_ledger.jsonl — a row with settled=true, written the
+#              moment settle() succeeds and BEFORE any anchor work. Never
+#              undone: money moved on-chain. A failed settle() attempt is
+#              recorded too (settled=false) for the audit trail, and counts
+#              for nothing.
+#   DELIVERED  x402_claimed.jsonl — the atomic claim taken immediately
+#              before the anchor and left standing once a calendars_ok>0
+#              receipt exists; RELEASED when the anchor produced nothing
+#              worth paying for, so the same payload can redeem the held
+#              settlement with another attempt.
+#
+# The claim also does what lightning.claim() does: N concurrent requests
+# carrying the SAME signed payload get one anchor, not N — the read and the
+# mark happen under one exclusive lock, so no two can both find it free.
 
 _CLAIM_FILE = "x402_claimed.jsonl"
 
@@ -351,20 +385,28 @@ def payment_identifier(payment_payload: dict) -> str:
     Falling back to a hash of the whole payload keeps any other scheme
     safely single-use too, rather than silently skipping the claim for a
     shape this module doesn't specifically recognise.
+
+    The nonce is lower-cased before it becomes the key. It used to be
+    taken as sent: a bytes32 value the chain compares as bytes was being
+    compared here as a STRING, so 0xAABB.. and 0xaabb.. — one signed
+    authorization — were two identifiers, and the re-cased resubmission of
+    a spent payload passed the single-use check as new. Every caller keys
+    on this function, so every caller gets the same key for the same nonce.
     """
     inner = payment_payload.get("payload") or {}
     nonce = (inner.get("authorization") or {}).get("nonce")
     if isinstance(nonce, str) and nonce:
-        return f"nonce:{nonce}"
+        return f"nonce:{nonce.lower()}"
     digest = hashlib.sha256(
         json.dumps(payment_payload, sort_keys=True).encode()).hexdigest()
     return f"payload:{digest}"
 
 
 class ClaimSetUnavailable(RuntimeError):
-    """The claim ledger exists but could not be read, so freshness is
-    UNKNOWN. Mirrors lightning.SpentSetUnavailable: the caller must fail
-    the request rather than resolve an unprovable state to "not claimed"."""
+    """A settlement-state ledger (claims or settlements) exists but could
+    not be read, so the state is UNKNOWN. Mirrors lightning.SpentSetUnavailable:
+    the caller must fail the request rather than resolve an unprovable
+    state to "not claimed" or "not paid"."""
 
 
 def _last_claim_state(fh, ident: str) -> str:
@@ -383,22 +425,30 @@ def _last_claim_state(fh, ident: str) -> str:
 
 
 def is_claimed(ident: str) -> bool:
+    """True iff this payment's anchor attempt is claimed and never released
+    — after a calendars_ok>0 receipt, that is the DELIVERED state. Read
+    under the file's shared lock, like paid_record(), so a claim row being
+    appended by claim() is never read half-written."""
     path = _claim_path()
     if not path.exists():
         return False
     try:
-        with path.open() as f:
+        with file_lock.locked(path, mode="r", exclusive=False) as f:
             return _last_claim_state(f, ident) == "claimed"
     except OSError as e:
         raise ClaimSetUnavailable(str(e)) from e
 
 
 def claim(payment_payload: dict, receipt_id: str = "") -> tuple[bool, str]:
-    """Atomically reserve this payment payload. Returns (claimed, ident).
+    """Atomically reserve this payment's one anchor attempt. Returns
+    (claimed, ident).
 
-    Read and append happen under one exclusive lock (file_lock.locked),
-    so the check and the mark cannot be interleaved by another thread or
-    process — the same guarantee lightning.claim() gives L402 credentials.
+    Taken immediately before the anchor, for a just-settled payment and for
+    a held one being redeemed alike. Read and append happen under one
+    exclusive lock (file_lock.locked), so the check and the mark cannot be
+    interleaved by another thread or process — the same guarantee
+    lightning.claim() gives L402 credentials. A claim left standing IS the
+    "delivered" state; release() is the only way back.
     """
     ident = payment_identifier(payment_payload)
     path = _claim_path()
@@ -420,7 +470,9 @@ def claim(payment_payload: dict, receipt_id: str = "") -> tuple[bool, str]:
 
 
 def release(ident: str) -> None:
-    """Undo a claim that never produced an anchor (0-calendar outage)."""
+    """Undo a claim whose anchor produced nothing worth paying for (the
+    anchor raised, or a 0-calendar outage). The settlement behind it stays
+    PAID and is now held: the same payload redeems it on its next try."""
     path = _claim_path()
     try:
         with file_lock.locked(path, mode="a") as f:
@@ -441,17 +493,27 @@ def _ledger_path() -> Path:
     return _data_dir() / _LEDGER_FILE
 
 
-def record_settlement(*, receipt_id: str, amount_atomic: str, asset_addr: str,
-                       network_id: str, tx_hash: str | None, payer: str | None,
-                       settled: bool, reason: str = "") -> None:
-    """Append one row per settle() attempt. No payer identity beyond the
-    on-chain address already present in `payer`/`tx_hash` — nothing else
-    is logged, per the plan's "no payer identity beyond on-chain data"."""
+def record_settlement(*, ident: str, receipt_id: str, amount_atomic: str,
+                       asset_addr: str, network_id: str, tx_hash: str | None,
+                       payer: str | None, settled: bool, reason: str = "",
+                       delivered: bool = False) -> None:
+    """Append one row per settle() attempt, written the moment the
+    facilitator answers — before any anchor, so `receipt_id` is empty on
+    the charge row; mark_delivered() appends the row that names the
+    receipt once one exists. `ident` is what settlement_state() reads the
+    file by. Flushed and fsynced before the lock is released, like claim():
+    a charge that only lived in a buffer when the process died would be
+    money taken with no record of it.
+
+    No payer identity beyond the on-chain address already present in
+    `payer`/`tx_hash` — nothing else is logged, per the plan's "no payer
+    identity beyond on-chain data"."""
     path = _ledger_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     with file_lock.locked(path, mode="a") as f:
         f.write(json.dumps({
             "ts": int(time.time()),
+            "id": ident,
             "receipt_id": receipt_id,
             "amount_atomic": amount_atomic,
             "asset": asset_addr,
@@ -459,12 +521,95 @@ def record_settlement(*, receipt_id: str, amount_atomic: str, asset_addr: str,
             "tx_hash": tx_hash,
             "payer": payer,
             "settled": settled,
+            "delivered": delivered,
             "reason": reason,
         }, separators=(",", ":")) + "\n")
+        f.flush()
+        os.fsync(f.fileno())
     try:
         os.chmod(path, 0o600)
     except OSError:
         pass
+
+
+def _last_settled_row(fh, ident: str) -> dict | None:
+    """The last row that records a SUCCESSFUL settle() for this identifier
+    (a failed attempt, settled=false, is audit only and never counts as
+    paid), or None. Corrupt lines are skipped, as in _last_claim_state."""
+    found = None
+    for line in fh:
+        if not line.strip():
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if row.get("id") == ident and row.get("settled"):
+            found = row
+    return found
+
+
+def paid_record(ident: str) -> dict | None:
+    """The settlement this identifier is paid by, or None if settle() has
+    never succeeded for it. Read under the ledger's shared lock, so a row
+    being appended is never read half-written.
+
+    Raises ClaimSetUnavailable when the ledger exists but cannot be read —
+    an unreadable ledger is not "unpaid". Resolving it that way would
+    settle the same nonce again (which can only fail on-chain) or, worse,
+    treat a held payment as never made.
+    """
+    path = _ledger_path()
+    if not path.exists():
+        return None
+    try:
+        with file_lock.locked(path, mode="r", exclusive=False) as f:
+            return _last_settled_row(f, ident)
+    except OSError as e:
+        raise ClaimSetUnavailable(str(e)) from e
+
+
+def mark_delivered(ident: str, receipt_id: str) -> None:
+    """Append the row that links a held settlement to the receipt it
+    finally bought — the audit trail's payment -> artifact link, the same
+    annotation lightning.mark_spent() makes. The DELIVERED decision itself
+    is the claim left standing (claim()/release()); this row records it."""
+    paid = paid_record(ident) or {}
+    record_settlement(
+        ident=ident, receipt_id=receipt_id,
+        amount_atomic=paid.get("amount_atomic", ""), asset_addr=paid.get("asset", ""),
+        network_id=paid.get("network", ""), tx_hash=paid.get("tx_hash"),
+        payer=paid.get("payer"), settled=True, delivered=True)
+
+
+def settlement_state(ident: str) -> tuple[str, dict | None]:
+    """Where a payment identifier stands, before any facilitator call:
+
+        ("unpaid", None)       settle() has never succeeded for it: a fresh
+                               payment — app.py must verify(), then settle(),
+                               then record the charge, then anchor
+        ("held", record)       settled, but no valuable anchor delivered yet
+                               (a 0-calendar outage, or the anchor raised):
+                               the same payload redeems it — claim + anchor
+                               again, NO second verify()/settle()
+        ("delivered", record)  settled AND a valuable anchor was delivered:
+                               any further resubmission is a replay
+
+    `record` is the charge rebuilt in SettleResponse shape (the ledger row
+    stores it as tx_hash/payer/network), so a redeemed anchor answers with
+    the real transaction it was paid by, in the same PAYMENT-RESPONSE
+    header a first-try anchor gets. Raises ClaimSetUnavailable when either
+    ledger exists but cannot be read; the caller must fail the request.
+    """
+    row = paid_record(ident)
+    if row is None:
+        return "unpaid", None
+    record = {"success": True, "transaction": row.get("tx_hash"),
+              "network": row.get("network"), "payer": row.get("payer"),
+              "errorReason": None}
+    if is_claimed(ident):
+        return "delivered", record
+    return "held", record
 
 
 def iter_ledger_rows():
