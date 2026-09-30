@@ -993,3 +993,160 @@ def test_a_claim_whose_fsync_fails_is_released_so_the_payment_stays_held(fsync_f
     s2, h2, b2 = _post(base, "/api/anchor", {"hash_hex": HASH_B}, headers)
     assert s2 == 200 and b2["x402_payment_held"] is False, b2
     assert _payment_response(h2)["transaction"] == _settled_rows(tmp_path)[0]["tx_hash"], "a second settle ran"
+
+
+def test_a_failed_claim_write_never_lands_later_and_cannot_release_a_concurrent_claim(tmp_path, monkeypatch):
+    """Review of d9d95e9 (LOW, reproduced). claim() wrote its line through the
+    buffered file object. When the flush itself failed, the claim line and
+    the release row both stayed in the buffer and reached the file at
+    close(), which file_lock runs AFTER unlocking: a concurrent identical
+    request that claimed in that window was then released by the late
+    rows, so a delivered payment read as held and could buy a second anchor.
+
+    Faults BOTH layers a claim write can go through (the buffered file's
+    raw writes and os.write) so the test binds the invariant, not one
+    implementation: once claim() has failed, nothing of its reaches the
+    file afterwards, and the concurrent request's claim stands."""
+    import errno
+    import io
+    import file_lock  # the module x402 locks through (server/ on sys.path)
+    monkeypatch.setenv("ORPHO_DATA_DIR", str(tmp_path))
+    payload = _signed_payload(nonce="0xrace1")
+    body = {"hash_hex": HASH_B}
+    ident = x402_const.payment_identifier(payload)
+    x402_const.record_settlement(
+        ident=ident, receipt_id="", amount_atomic="50000", asset_addr="0xusdc",
+        network_id="eip155:84532", tx_hash="0xtx", payer="0x" + "11" * 20, settled=True,
+        digest=x402_const.payment_digest(payload), request_digest=x402_const.request_digest(body))
+    concurrent = {}
+    real_open, real_write = open, os.write
+
+    def second_request_claims():
+        if "claimed" not in concurrent:
+            concurrent["claimed"] = x402_const.claim(payload)[0]
+
+    class FaultyRaw(io.FileIO):
+        calls = 0
+
+        def write(self, b):
+            FaultyRaw.calls += 1
+            if FaultyRaw.calls <= 2:
+                raise OSError(errno.EIO, "injected")
+            if FaultyRaw.calls == 3:          # close() flushing after LOCK_UN
+                file_lock.open = real_open
+                monkeypatch.setattr(os, "write", real_write)
+                second_request_claims()
+            return super().write(b)
+
+    def faulty_open(path, mode="r", *a, **k):
+        if str(path).endswith("x402_claimed.jsonl") and "+" in mode:
+            raw = FaultyRaw(str(path), "a+")
+            return io.TextIOWrapper(io.BufferedRandom(raw), encoding="utf-8")
+        return real_open(path, mode, *a, **k)
+
+    os_write_calls = {"n": 0}
+
+    def faulty_os_write(fd, data):
+        os_write_calls["n"] += 1
+        if os_write_calls["n"] <= 2:
+            raise OSError(errno.EIO, "injected")
+        return real_write(fd, data)
+
+    monkeypatch.setattr(file_lock, "open", faulty_open, raising=False)
+    monkeypatch.setattr(os, "write", faulty_os_write)
+    with pytest.raises(x402_const.ClaimSetUnavailable):
+        x402_const.claim(payload)
+    file_lock.open = real_open
+    monkeypatch.setattr(os, "write", real_write)
+    second_request_claims()   # no-op if it already ran inside close()
+    assert concurrent["claimed"] is True
+    assert x402_const.is_claimed(ident), "a late row from the failed claim released the concurrent one"
+    assert x402_const.claim(payload)[0] is False, "a third identical request could claim again"
+
+
+NOSUB_EMAIL, SUB_EMAIL = "nosub@example.test", "sub@example.test"
+
+
+def _sha(s: str) -> str:
+    import hashlib
+    return hashlib.sha256(s.encode()).hexdigest()
+
+
+def _append_rows(path: Path, *rows):
+    with path.open("a") as f:
+        for r in rows:
+            f.write(json.dumps(r, separators=(",", ":")) + "\n")
+
+
+@pytest.fixture()
+def sessions_server(tmp_path):
+    """Two signed-in callers: one with no subscription, one subscribed."""
+    import time as _t
+    _append_rows(tmp_path / "auth_sessions.jsonl",
+                 {"event": "created", "session_hash": _sha("sess-nosub"), "email": NOSUB_EMAIL,
+                  "expires_unix": _t.time() + 86400},
+                 {"event": "created", "session_hash": _sha("sess-sub"), "email": SUB_EMAIL,
+                  "expires_unix": _t.time() + 86400})
+    _append_rows(tmp_path / "stripe_customer_emails.jsonl",
+                 {"ts": "2026-09-01T00:00:00+00:00", "stripe_customer": "cus_s", "email": SUB_EMAIL})
+    _append_rows(tmp_path / "subscriptions.jsonl",
+                 {"ts": "2026-09-01T00:00:00+00:00", "event_type": "customer.subscription.created",
+                  "stripe_customer": "cus_s", "stripe_sub": "sub_s", "email": SUB_EMAIL,
+                  "status": "active", "current_period_end": _t.time() + 20 * 86400,
+                  "cancel_at_period_end": False})
+    yield from _srv.server_processes(tmp_path, stub_calendars=True, **X402_ENV)
+
+
+def test_a_non_subscriber_charge_row_links_no_account(sessions_server, tmp_path):
+    """Review of d9d95e9 (LOW, reproduced). A signed-in non-subscriber's
+    public x402 anchor stored their account id on the charge row, the only
+    place linking an account to an on-chain payer address, for an ownership
+    use that can never apply to them (a private request is refused at
+    charge time). The id is recorded only for a subscriber."""
+    _exhaust_free_tier(sessions_server)
+    s, _h, b = _post(sessions_server, "/api/anchor", {"hash_hex": HASH_B},
+                     {**_payment_headers(nonce="n30"), "Cookie": "orpho_sid=sess-nosub"})
+    assert s == 200 and b["x402_settled"] is True, b
+    assert all(not r.get("owner_id") for r in _ledger_rows(tmp_path)), "account linked to a non-subscriber's payment"
+    # control: a subscriber's charge still records the owner (held private redemption needs it)
+    s2, _h2, b2 = _post(sessions_server, "/api/anchor", {"hash_hex": HASH_D},
+                        {**_payment_headers(nonce="n31"), "Cookie": "orpho_sid=sess-sub"})
+    assert s2 == 200, b2
+    rows = [r for r in _ledger_rows(tmp_path) if r.get("id") == x402_const.payment_identifier(
+        _signed_payload(nonce="n31"))]
+    assert rows and all(r.get("owner_id") for r in rows), rows
+
+
+@pytest.fixture()
+def held_private_fault_server(tmp_path):
+    """A held PRIVATE charge with a recorded owner, and a claim file that
+    cannot be read (a directory where the file should be)."""
+    payload = _signed_payload(nonce="n32")
+    body = {"hash_hex": HASH_E, "private": True}
+    (tmp_path / "x402_ledger.jsonl").write_text(json.dumps({
+        "ts": 1, "id": x402_const.payment_identifier(payload), "receipt_id": "",
+        "amount_atomic": "50000", "asset": x402_const.USDC_BASE_SEPOLIA, "network": "eip155:84532",
+        "tx_hash": "0xmockheldprivate", "payer": "0xagentPayer0000000000000000000000000001",
+        "settled": True, "delivered": False, "reason": "",
+        "digest": x402_const.payment_digest(payload),
+        "request_digest": x402_const.request_digest(body), "owner_id": "owner-hmac-id"}) + "\n")
+    (tmp_path / "x402_claimed.jsonl").mkdir()
+    yield from _srv.server_processes(tmp_path, stub_calendars=True, **X402_ENV)
+
+
+def test_an_unreadable_claim_file_during_a_held_private_redemption_is_a_503_not_the_private_402(
+        held_private_fault_server, tmp_path):
+    """Review of d9d95e9 (LOW, reproduced). The held-private pre-check turned
+    a claim-file read fault into "not a held redemption", so the payer met
+    the private-gate 402 ("resend without private"), whose advice changes
+    the body and ends at "sign a fresh one": a second payment for a charge
+    that was redeemable all along. The fault gets the same 503 the main
+    path gives ("resubmit the identical request shortly")."""
+    _exhaust_free_tier(held_private_fault_server)
+    s, _h, b = _post(held_private_fault_server, "/api/anchor", {"hash_hex": HASH_E, "private": True},
+                     _payment_headers(nonce="n32"))
+    assert s == 503, b
+    assert "settlement state" in b["error"], b
+    assert "identical request" in b.get("hint", ""), b
+    assert "x402_ledger" not in json.dumps(b) and tmp_path.name not in json.dumps(b)
+    assert _receipts_on_disk_for(tmp_path, HASH_E) == []

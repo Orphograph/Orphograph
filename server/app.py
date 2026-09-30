@@ -667,11 +667,16 @@ def _x402_held_charge_owner(headers, body: dict) -> str:
             return ""
         _version, payment = parsed
         ident = x402.payment_identifier(payment)
-        state, _record = x402.settlement_state(
-            ident, x402.payment_digest(payment), x402.request_digest(body))
-        return x402.charge_owner(ident) if state == "held" else ""
-    except (ValueError, x402.ClaimSetUnavailable):
-        return ""
+    except ValueError:
+        return ""   # a malformed header meets the private gate, as before
+    # ClaimSetUnavailable propagates: the caller answers it with the same
+    # 503 the main path gives. Read as "not held" it sent the payer to the
+    # private-gate 402, whose advice changes the body and ends at "sign a
+    # fresh one": a second payment for a charge that was redeemable
+    # (review of d9d95e9).
+    state, _record = x402.settlement_state(
+        ident, x402.payment_digest(payment), x402.request_digest(body))
+    return x402.charge_owner(ident) if state == "held" else ""
 
 
 def _x402_had_earlier_attempt(ident: str) -> bool:
@@ -3211,7 +3216,18 @@ class Handler(BaseHTTPRequestHandler):
         x402_held_private_owner = ""
         if (bool(payload.get("private", False)) and not subscription_active
                 and not pack_consumed and ln_payment_hash is None):
-            x402_held_private_owner = _x402_held_charge_owner(self.headers, payload)
+            try:
+                x402_held_private_owner = _x402_held_charge_owner(self.headers, payload)
+            except x402.ClaimSetUnavailable as e:
+                sys.stderr.write(f"[x402] settlement state unreadable (private pre-check): {e}\n")
+                _json_response(self, 503, {
+                    "error": "cannot read x402 settlement state",
+                    "detail": "the payment ledger is unreadable",
+                    "hint": "office-side fault: the office cannot read its "
+                            "payment records right now. This request moved "
+                            "no money and made no anchor; resubmit the "
+                            "identical request shortly."})
+                return
         if (bool(payload.get("private", False)) and not subscription_active
                 and not x402_held_private_owner):
             _reject_private(self, pack_consumed, pack_token)
@@ -3255,7 +3271,7 @@ class Handler(BaseHTTPRequestHandler):
                 # either once a receipt is shared (it is served publicly;
                 # review of ca45f33), so the binding's guarantee is that a
                 # redemption can only make the exact anchor the payer asked
-                # for, owned by and mailed to whoever it was charged for.
+                # for, filed under whoever it was charged for.
                 x402_digest = x402.payment_digest(x402_payload)
                 x402_request_digest = x402.request_digest(payload)
                 try:
@@ -3390,8 +3406,12 @@ class Handler(BaseHTTPRequestHandler):
                             reason=x402_paid.get("errorReason") or "",
                             digest=x402_digest,
                             request_digest=x402_request_digest,
+                            # Only a subscriber's id: a held private redemption
+                            # files the receipt under it. Anyone else's account
+                            # is never linked to an on-chain payment (review of
+                            # d9d95e9).
                             owner_id=(auth.email_id(subscriber_email)
-                                      if subscriber_email else ""),
+                                      if subscription_active and subscriber_email else ""),
                         )
                     except OSError as e:
                         # The one row that proves the charge could not be
@@ -3451,8 +3471,10 @@ class Handler(BaseHTTPRequestHandler):
                             "hint": "office-side fault; no anchor was made. The "
                                     "payment is held — resubmit the identical request."})
                         return
-        # A held redemption is filed under, and mailed to, whoever the charge
-        # was made for — not whoever presents the identical request (review
+        # A held redemption is filed under whoever the charge was made for,
+        # and its receipt email and webhook go only to that identity when it
+        # presents the request itself (or to a notify_email in the paid body)
+        # — never to whoever else presents the identical request (review
         # of ca45f33: a second subscriber redeemed a victim's held private
         # payment and owned the receipt; a subscriber redeeming an anonymous
         # payer's held payment had their own address filed on it).

@@ -66,12 +66,19 @@ receipt serves its hash, label and metadata publicly, and the held 200
 hands out that receipt's URL. So the binding does not rest on anyone being
 unable to rebuild the body. It rests on what a redemption can produce:
 the exact anchor the payer asked for, filed under whoever the charge was
-made for. The charge row records the payer's account identity (an HMAC id,
-never an address) when the charge is made, and a held redemption uses that
-identity for a private receipt's owner, the receipt email and the
-`anchor.created` webhook, never the identity of whoever presents the
-request. A held private payment also stays redeemable after the payer's
-subscription lapses: it was authorised as private when it was charged.
+made for. When the payer is a subscriber, the charge row records their
+account identity (an HMAC id, never an address; nobody else's account is
+linked to a payment), and a held redemption files a private receipt under
+that identity, never under whoever presents the request. The redeemed
+receipt's email and `anchor.created` webhook go only to that identity when
+it presents the request itself (signed in, subscribed), or to a
+`notify_email` carried in the paid body; otherwise nobody is mailed, and
+the payer's replay of the identical request names the receipt. A held
+private payment also stays redeemable after the payer's subscription
+lapses: it was authorised as private when it was charged. If the office
+cannot read its payment records during that redemption, the answer is the
+same 503 as everywhere else ("resubmit the identical request shortly"),
+never the private-receipt refusal.
 
 Accepted residual, stated rather than hidden: anyone who can rebuild both
 the payload (from the chain) and the body (from a shared receipt) can

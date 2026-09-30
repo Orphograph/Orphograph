@@ -463,8 +463,10 @@ def request_digest(request_body: dict) -> str:
     narrower and still holds: the most anyone holding a rebuilt payload
     and body can do with a held payment is make the exact anchor its payer
     asked for — same hash, same label, same metadata — never their own,
-    and it is owned by, and mailed to, whoever it was charged for (the
-    stored owner_id; see record_settlement). Accepted residual, stated in
+    and it is filed under whoever it was charged for (the stored owner_id;
+    see record_settlement). Its receipt email and anchor.created webhook go
+    only to that identity when it presents the request itself, or to a
+    notify_email carried in the paid body, never to whoever else redeems. Accepted residual, stated in
     docs/X402_AGENT_PAYMENTS.md: whoever can rebuild the body can confirm
     which receipt a payment bought (the replay 401 names it). No public
     route finds a receipt by hash, so this needs a receipt already shared.
@@ -513,6 +515,24 @@ def is_claimed(ident: str) -> bool:
         raise ClaimSetUnavailable(str(e)) from e
 
 
+def _write_all(fd: int, data: bytes) -> None:
+    """os.write until every byte is out. If a write fails after some bytes
+    of a row reached the file, terminate the torn row with a newline so the
+    NEXT writer's row starts on a line of its own (a torn row is skipped by
+    the readers; a row glued onto it would be lost with it)."""
+    written = 0
+    try:
+        while written < len(data):
+            written += os.write(fd, data[written:])
+    except OSError:
+        if 0 < written < len(data):
+            try:
+                os.write(fd, b"\n")
+            except OSError:
+                pass
+        raise
+
+
 def claim(payment_payload: dict, receipt_id: str = "") -> tuple[bool, str]:
     """Atomically reserve this payment's one anchor attempt. Returns
     (claimed, ident).
@@ -536,13 +556,20 @@ def claim(payment_payload: dict, receipt_id: str = "") -> tuple[bool, str]:
             f.seek(0)
             if _last_claim_state(f, ident) == "claimed":
                 return False, ident
-            f.write(json.dumps({
+            # Unbuffered, straight to the O_APPEND descriptor, while the lock
+            # is held. Through the buffered file object a failed flush left
+            # the claim line (and the release row after it) in the buffer,
+            # and file_lock closes the file only AFTER unlocking: the late
+            # rows then landed on top of a concurrent request's claim and
+            # released it (review of d9d95e9). With os.write nothing of this
+            # call is left to reach the file once the lock drops.
+            fd = f.fileno()
+            _write_all(fd, (json.dumps({
                 "id": ident, "receipt_id": receipt_id,
                 "claimed_at": int(time.time()),
-            }) + "\n")
+            }) + "\n").encode())
             try:
-                f.flush()
-                os.fsync(f.fileno())
+                os.fsync(fd)
             except OSError:
                 # The claim line may already be on disk; left standing it
                 # reads as DELIVERED and the 503 below ("held — resubmit")
@@ -550,11 +577,10 @@ def claim(payment_payload: dict, receipt_id: str = "") -> tuple[bool, str]:
                 # same lock, best effort; if even that fails, boot-time
                 # release_stranded_claims() covers it.
                 try:
-                    f.write(json.dumps({
+                    _write_all(fd, (json.dumps({
                         "id": ident, "released": True,
                         "released_at": int(time.time()),
-                    }) + "\n")
-                    f.flush()
+                    }) + "\n").encode())
                 except OSError:
                     pass
                 raise
@@ -601,9 +627,11 @@ def record_settlement(*, ident: str, receipt_id: str, amount_atomic: str,
     a charge that only lived in a buffer when the process died would be
     money taken with no record of it.
 
-    No payer identity beyond the on-chain address already present in
-    `payer`/`tx_hash` — nothing else is logged, per the plan's "no payer
-    identity beyond on-chain data"."""
+    Payer identity: the on-chain address already present in `payer` /
+    `tx_hash`, and `owner_id`, the HMAC account id (never the email) of a
+    caller who was SUBSCRIBED at charge time, which a held private
+    redemption needs to file the receipt under its payer. Nobody else's
+    account is linked to a payment (review of d9d95e9)."""
     path = _ledger_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     with file_lock.locked(path, mode="a") as f:
