@@ -32,11 +32,13 @@ claim the nonce atomically (our own single-use lock, the same one
 actual anchor. A payment that has not settled buys nothing: a refused
 settlement is a 402 with no receipt anywhere, an unreachable facilitator a
 503 with no charge — only an audit row saying the settlement call got no
-answer, which never blocks a resubmission of the identical payload. If the
+answer, which never blocks a resubmission of the identical request. If the
 network then refuses that resubmission as "used", the 402 says an earlier
 attempt existed (`x402_earlier_attempt: true`) instead of claiming nothing
-was ever charged; the payer's wallet is the arbiter, and support has the
-row.
+was ever charged — whether that refusal comes at settle() or already at
+verify() — and a plain refusal speaks only for itself ("this request moved
+no money"), never for calls the office may not have on record. The payer's
+wallet is the arbiter, and support has the row.
 
 One more office-side failure is answered by name: a settlement that
 succeeded but whose ledger row could not be written is a 503 carrying
@@ -45,23 +47,37 @@ no anchor; the charge cannot be held or redeemed without its row, so the
 hint says to contact support with that id rather than resubmit. A paid 200
 always carries `x402_settled: true`.
 
-Redemption is bound to the payload that paid, not to the nonce: the ledger
-row carries a digest of the signature and authorization, and a payload
-that matches the nonce but not the digest is answered exactly like a
-replay (401, no receipt named). The nonce is public on-chain once settled;
-without this a stranger could redeem someone else's held payment. For the
-same reason the replay 401 names the receipt a payment already bought
-ONLY to the payload that paid.
+Redemption is bound to the REQUEST that paid, not to anything on-chain.
+Once a payment settles, the whole signed payload is public: the
+facilitator settles with EIP-3009 `transferWithAuthorization(from, to,
+value, validAfter, validBefore, nonce, signature)`, and every one of those
+fields is in the transaction's calldata. So the charge row carries a
+digest of the request body the payer sent (canonical JSON, key order
+ignored; only the digest is stored), and a held payment is redeemed — and
+the replay 401 names the receipt a payment bought — only for the identical
+request. Anything else presenting that payment's payload is answered like
+a replay (401, no receipt named). The most anyone who rebuilds the payload
+from the chain can do with a held payment is make the exact anchor its
+payer asked for: same hash, same label, same metadata. A held payment
+cannot be redeemed for a different hash; that is the price of the binding.
+
+(An earlier version of this rail, never deployed, bound redemption to a
+digest of the signature and authorization on the premise that only the
+payer holds the signature. That premise is false for this scheme, for the
+reason above; a review reproduced an observer redeeming a held payment for
+their own hash from calldata alone. The payload digest is still stored —
+it tells two signed payloads sharing a nonce apart — but it binds nothing.)
 
 A crash between the claim and delivery used to leave the claim standing,
 which reads as delivered: the charged payment answered 401 for ever. Now
 any failure inside the anchor releases the claim (the charge stays held),
-and at boot — when no anchor can be in flight — every standing claim
+and at boot — when no anchor can be in flight, given ONE server process
+per data directory, which is the production shape — every standing claim
 without a delivery row is released. One bounded consequence, stated
 rather than hidden: if the anchor succeeded and the delivery row itself
 could not be written (the ledger file unwritable seconds after it took the
-charge row), the next boot releases that claim too, and the payload that
-paid can redeem it for a second anchor. The cost is one anchor's price,
+charge row), the next boot releases that claim too, and the identical
+request can redeem it for a second anchor. The cost is one anchor's price,
 to the payer who did pay, on a disk that is already failing.
 
 The first cut settled AFTER the anchor, so that nothing would be charged
@@ -72,8 +88,8 @@ spent payload bought a second one. The fairness that order was after is
 kept the other way round: a settled payment whose anchor then fails (a
 total calendar outage, 0 of 5 accepted, no Bitcoin commitment) is HELD,
 not lost. That 200 says `x402_payment_held: true` and carries no
-PAYMENT-RESPONSE header; the identical payload, resubmitted once calendars
-answer, goes straight to another anchor attempt on the money already
+PAYMENT-RESPONSE header; the identical request (same payload, same body),
+resubmitted once calendars answer, goes straight to another anchor attempt on the money already
 collected — no second settle() — and after that it is a replay like any
 other. Both facts live on disk: the charge in `x402_ledger.jsonl`, the
 delivery as the claim in `x402_claimed.jsonl`.

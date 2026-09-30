@@ -265,10 +265,9 @@ def test_replayed_signature_is_rejected_locally_before_a_second_anchor(server, t
     assert s2 == 401, b2
     assert "already used" in b2["error"]
     assert len(_ledger_rows(tmp_path)) == before, "a replay must not even attempt settlement"
-    # The 401 names the receipt this payment ALREADY bought (in case the
-    # first 200 never reached the payer) — never a new one.
-    assert b2.get("receipt_id") == b["receipt_id"], "no second anchor was created"
-    assert "receipt_url" not in b2
+    # A different request body: no second anchor, and no receipt named —
+    # only the identical request that paid is told what it bought.
+    assert "receipt_id" not in b2 and "receipt_url" not in b2, "no second anchor was created"
     assert _receipts_on_disk_for(tmp_path, HASH_D) == []
 
 
@@ -289,9 +288,13 @@ def test_recased_nonce_resubmission_is_the_same_payment_and_is_rejected(server, 
                         _payment_headers(nonce=upper.lower()))
     assert s2 == 401, b2
     assert "already used" in b2["error"]
-    assert b2.get("receipt_id") == b["receipt_id"], "the re-cased nonce is the SAME payment"
-    assert "receipt_url" not in b2
+    assert "receipt_id" not in b2 and "receipt_url" not in b2
     assert _receipts_on_disk_for(tmp_path, HASH_D) == [], "the re-cased nonce bought an anchor"
+    # The identical request, re-cased nonce: the SAME payment, told its receipt.
+    s3, _h3, b3 = _post(server, "/api/anchor", {"hash_hex": HASH_B},
+                        _payment_headers(nonce=upper.lower()))
+    assert s3 == 401, b3
+    assert b3.get("receipt_id") == b["receipt_id"], "the re-cased nonce is the SAME payment"
     assert len(_ledger_rows(tmp_path)) == before, "a replay must not even attempt settlement"
 
 
@@ -496,11 +499,13 @@ def stranded_server(tmp_path):
     payload = _signed_payload(nonce="n11")
     ident = x402_const.payment_identifier(payload)
     digest = getattr(x402_const, "payment_digest", lambda p: "")(payload)
+    request_digest = getattr(x402_const, "request_digest", lambda b: "")({"hash_hex": HASH_E})
     (tmp_path / "x402_ledger.jsonl").write_text(json.dumps({
         "ts": 1, "id": ident, "receipt_id": "", "amount_atomic": "50000",
         "asset": x402_const.USDC_BASE_SEPOLIA, "network": "eip155:84532",
         "tx_hash": "0xmockstranded", "payer": "0xagentPayer0000000000000000000000000001",
-        "settled": True, "delivered": False, "reason": "", "digest": digest}) + "\n")
+        "settled": True, "delivered": False, "reason": "", "digest": digest,
+        "request_digest": request_digest}) + "\n")
     (tmp_path / "x402_claimed.jsonl").write_text(json.dumps({
         "id": ident, "receipt_id": "", "claimed_at": 1}) + "\n")
     yield from _srv.server_processes(tmp_path, stub_calendars=True, **X402_ENV)
@@ -547,9 +552,15 @@ def test_a_delivered_replay_names_the_receipt_it_bought(server, tmp_path):
     headers = _payment_headers(nonce="n14")
     s, _h, b = _post(server, "/api/anchor", {"hash_hex": HASH_B}, headers)
     assert s == 200, b
-    s2, _h2, b2 = _post(server, "/api/anchor", {"hash_hex": HASH_D}, headers)
+    s2, _h2, b2 = _post(server, "/api/anchor", {"hash_hex": HASH_B}, headers)
     assert s2 == 401, b2
     assert b2.get("receipt_id") == b["receipt_id"]
+    # A different request with the same payload is not the one that paid:
+    # the signed payload is public on-chain once settled, so it proves
+    # nothing about who is asking. No receipt is named to it.
+    s3, _h3, b3 = _post(server, "/api/anchor", {"hash_hex": HASH_D}, headers)
+    assert s3 == 401, b3
+    assert "receipt_id" not in b3 and "receipt_url" not in b3
 
 
 def test_concurrent_identical_payloads_buy_exactly_one_anchor(server, tmp_path):
@@ -590,6 +601,8 @@ def test_a_settled_payment_whose_ledger_row_cannot_be_written_is_not_a_500(serve
     assert str(b.get("x402_transaction", "")).startswith("0xmock"), "the customer's proof is the tx id"
     assert "receipt_id" not in b and "receipt_url" not in b
     assert x402_const.PAYMENT_RESPONSE_HEADER not in h
+    assert "x402_ledger.jsonl" not in json.dumps(b) and tmp_path.name not in json.dumps(b), \
+        "the server's filesystem layout leaked into the body"
     assert _receipts_on_disk_for(tmp_path, HASH_B) == []
     assert _ledger_rows(tmp_path) == []
     # Ledger back (the office fixed its disk). The record is gone for good:
@@ -600,4 +613,152 @@ def test_a_settled_payment_whose_ledger_row_cannot_be_written_is_not_a_500(serve
     s2, _h2, b2 = _post(server, "/api/anchor", {"hash_hex": HASH_B}, headers)
     assert s2 == 402, b2
     assert "settlement failed" in b2["error"]
+    # One response ago the server said the transfer landed; it must not now
+    # say the opposite.
+    assert "nothing was charged" not in json.dumps(b2).lower(), b2
+    assert b2.get("x402_earlier_attempt") is True, b2
     assert _receipts_on_disk_for(tmp_path, HASH_B) == []
+
+
+def _chain_observer_payload(victim: dict) -> dict:
+    """Exactly what the settling transaction publishes and nothing more.
+    The exact-EVM scheme settles with USDC's EIP-3009
+    transferWithAuthorization(from, to, value, validAfter, validBefore,
+    nonce, signature): every signed field is in the calldata, decoded by any
+    block explorer. The decoder's casing and key order are its own; there is
+    no `accepted`, no `x402Version` 2, no test-only mock field."""
+    inner = victim["payload"]
+    auth = inner["authorization"]
+    rebuilt = {k: (v.upper() if isinstance(v, str) else v) for k, v in reversed(list(auth.items()))}
+    return {"x402Version": 1, "payload": {"signature": inner["signature"].upper(),
+                                          "authorization": rebuilt}}
+
+
+def test_a_chain_observer_cannot_redeem_a_held_payment_or_learn_its_receipt(server, tmp_path):
+    """Review of 672be2f (HIGH, reproduced by two finders and by hand). The
+    round-2 binding hashed the signature and the authorization, and both are
+    public on-chain the moment the payment settles: an observer rebuilt the
+    payload from calldata, anchored THEIR hash on the victim's USDC, and the
+    victim's own resubmission was then told the observer's receipt. A
+    redemption must now be the identical REQUEST that paid (its whole body;
+    key order ignored), so the most anyone can make of a rebuilt payload is
+    the exact anchor the payer asked for."""
+    _exhaust_free_tier(server)
+    victim = _signed_payload(nonce="n20", payer="0x3333333333333333333333333333333333333333")
+    body = {"hash_hex": HASH_E, "client_label": "victim-label"}
+    down = tmp_path / CALENDARS_DOWN
+    down.write_text("")
+    s, _h, b = _post(server, "/api/anchor", body, _headers_for(victim))
+    assert s == 200 and b["x402_payment_held"] is True, b
+    down.unlink()
+    original_tx = _settled_rows(tmp_path)[0]["tx_hash"]
+    held_receipts = sorted(_receipts_on_disk_for(tmp_path, HASH_E))
+    observer = _chain_observer_payload(victim)
+    # The premise the round-2 binding rested on is false: calldata alone
+    # reproduces the digest.
+    assert x402_const.payment_digest(observer) == x402_const.payment_digest(victim)
+    # (a) the observer's own hash
+    s2, h2, b2 = _post(server, "/api/anchor", {"hash_hex": HASH_D}, _headers_for(observer))
+    assert s2 == 401, b2
+    assert "receipt_id" not in b2 and x402_const.PAYMENT_RESPONSE_HEADER not in h2
+    assert _receipts_on_disk_for(tmp_path, HASH_D) == [], "an anchor on the victim's money"
+    # (b) the victim's hash, the observer's label / metadata
+    for other in ({"hash_hex": HASH_E, "client_label": "attacker"},
+                  {"hash_hex": HASH_E, "client_label": "victim-label", "metadata": {"k": "v"}},
+                  {"hash_hex": HASH_E}):
+        s3, _h3, b3 = _post(server, "/api/anchor", other, _headers_for(observer))
+        assert s3 == 401, (other, b3)
+        assert "receipt_id" not in b3
+    assert sorted(_receipts_on_disk_for(tmp_path, HASH_E)) == held_receipts
+    assert len(_settled_rows(tmp_path)) == 1, "no second charge"
+    # (d) the victim's identical request, keys reordered, still redeems
+    s4, h4, b4 = _post(server, "/api/anchor", {"client_label": "victim-label", "hash_hex": HASH_E},
+                       _headers_for(victim))
+    assert s4 == 200 and b4["x402_payment_held"] is False, b4
+    assert _payment_response(h4)["transaction"] == original_tx
+    # (c) delivered: a different request is told nothing about the receipt
+    s5, _h5, b5 = _post(server, "/api/anchor", {"hash_hex": HASH_D}, _headers_for(observer))
+    assert s5 == 401, b5
+    assert "receipt_id" not in b5 and "receipt_url" not in b5, "payment -> receipt link leaked"
+    # the identical request that paid is told its receipt
+    s6, _h6, b6 = _post(server, "/api/anchor", body, _headers_for(victim))
+    assert s6 == 401 and b6.get("receipt_id") == b4["receipt_id"], b6
+
+
+def test_a_verify_answer_after_an_unanswered_settle_never_asks_for_a_second_payment(server, tmp_path):
+    """Review of 672be2f (MEDIUM). After a settle() that got no answer, the
+    network's refusal of the identical resubmission can come at verify()
+    (a spent nonce, or a wallet the landed transfer drained). That answer
+    said "request a fresh challenge"; a verify() that does not answer said
+    "nothing was charged". Both must carry the earlier attempt instead."""
+    _exhaust_free_tier(server)
+    s, _h, b = _post(server, "/api/anchor", {"hash_hex": HASH_B},
+                     _payment_headers(nonce="n21", outcome="unreachable_settle"))
+    assert s == 503, b
+    s2, _h2, b2 = _post(server, "/api/anchor", {"hash_hex": HASH_B},
+                        _payment_headers(nonce="n21", outcome="unreachable"))
+    assert s2 == 503, b2
+    assert b2.get("x402_earlier_attempt") is True, b2
+    assert "nothing was charged" not in json.dumps(b2).lower(), b2
+    s3, _h3, b3 = _post(server, "/api/anchor", {"hash_hex": HASH_B},
+                        _payment_headers(nonce="n21", outcome="invalid"))
+    assert s3 == 402, b3
+    assert b3.get("x402_earlier_attempt") is True, b3
+    assert "fresh challenge" not in json.dumps(b3).lower(), b3
+    assert _receipts_on_disk_for(tmp_path, HASH_B) == []
+    # A fresh authorization with no history still gets the plain answers.
+    s4, _h4, b4 = _post(server, "/api/anchor", {"hash_hex": HASH_B},
+                        _payment_headers(nonce="n22", outcome="invalid"))
+    assert s4 == 402 and "x402_earlier_attempt" not in b4, b4
+
+
+def test_an_unreadable_payment_ledger_is_a_503_without_the_servers_paths(server, tmp_path):
+    """Review of 672be2f (LOW). The office-side 503s interpolated the raw
+    OSError, which carries the data directory's absolute path. A directory
+    where the ledger file should be makes every read fail portably."""
+    _exhaust_free_tier(server)
+    (tmp_path / "x402_ledger.jsonl").mkdir()
+    s, _h, b = _post(server, "/api/anchor", {"hash_hex": HASH_B}, _payment_headers(nonce="n23"))
+    assert s == 503, b
+    text = json.dumps(b)
+    assert "x402_ledger.jsonl" not in text and tmp_path.name not in text, b
+    assert _receipts_on_disk_for(tmp_path, HASH_B) == []
+
+
+def test_an_unwritable_claim_file_after_a_real_charge_is_a_503_and_the_payment_is_held(server, tmp_path):
+    """Self-review of 672be2f. claim() mapped a failed READ of the claim
+    file to ClaimSetUnavailable but not a failed OPEN, which escaped as an
+    unhandled exception — a dropped connection — after settle() had moved
+    the money. It is a 503 that says the payment is held, and once the
+    file is back the identical request redeems it without a second settle."""
+    _exhaust_free_tier(server)
+    claim_file = tmp_path / "x402_claimed.jsonl"
+    claim_file.mkdir()
+    headers = _payment_headers(nonce="n24")
+    s, _h, b = _post(server, "/api/anchor", {"hash_hex": HASH_B}, headers)
+    assert s == 503, b
+    assert "held" in json.dumps(b).lower(), b
+    assert "x402_claimed.jsonl" not in json.dumps(b) and tmp_path.name not in json.dumps(b), b
+    assert _receipts_on_disk_for(tmp_path, HASH_B) == []
+    assert len(_settled_rows(tmp_path)) == 1
+    claim_file.rmdir()
+    s2, h2, b2 = _post(server, "/api/anchor", {"hash_hex": HASH_B}, headers)
+    assert s2 == 200 and b2["x402_settled"] is True, b2
+    assert _payment_response(h2)["transaction"] == _settled_rows(tmp_path)[0]["tx_hash"]
+
+
+@pytest.mark.parametrize("inner", ["a string", ["a", "list"], {"authorization": "a string"},
+                                   {"authorization": ["a", "list"]}, {"signature": {"not": "a string"}}])
+def test_a_malformed_inner_payload_is_a_400_not_a_dropped_connection(server, tmp_path, inner):
+    """Review of 672be2f (noted by the security lens). payment_identifier()
+    called .get() on whatever `payload` held; a string there raised
+    AttributeError and the client saw its connection dropped."""
+    _exhaust_free_tier(server)
+    raw = base64.b64encode(json.dumps({"x402Version": 2, "payload": inner}).encode()).decode()
+    s, _h, b = _post(server, "/api/anchor", {"hash_hex": HASH_B},
+                     {x402_const.PAYMENT_SIGNATURE_HEADER: raw})
+    assert s == 400, b
+    assert "x402" in b["error"]
+    # the server is still there, and the ordinary rail still works
+    s2, _h2, b2 = _post(server, "/api/anchor", {"hash_hex": HASH_B}, _payment_headers(nonce="n25"))
+    assert s2 == 200, b2

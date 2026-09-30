@@ -209,6 +209,18 @@ def parse_payment_header(headers) -> tuple[int, dict] | None:
         raise ValueError(f"malformed payment header: {e}") from e
     if not isinstance(payload, dict):
         raise ValueError("payment payload must be a JSON object")
+    # payment_identifier() and payment_digest() read these as a dict and a
+    # string. A string where `payload` should be raised AttributeError in
+    # the handler and the client saw a dropped connection (review of
+    # 672be2f, 2026-09-30); a shape we cannot key is a 400, like bad base64.
+    inner = payload.get("payload")
+    if inner is not None:
+        if not isinstance(inner, dict):
+            raise ValueError("payment payload's `payload` must be a JSON object")
+        if inner.get("authorization") is not None and not isinstance(inner["authorization"], dict):
+            raise ValueError("payment payload's `authorization` must be a JSON object")
+        if inner.get("signature") is not None and not isinstance(inner["signature"], str):
+            raise ValueError("payment payload's `signature` must be a string")
     return version, payload
 
 
@@ -403,17 +415,22 @@ def payment_identifier(payment_payload: dict) -> str:
 
 
 def payment_digest(payment_payload: dict) -> str:
-    """What binds a redemption to the request that PAID: a digest of the
-    signed part of the payload (the signature and the authorization it
-    covers), hex lower-cased so re-casing cannot make two of one.
+    """A digest of the signed part of the payload (the signature and the
+    authorization it covers), hex lower-cased so re-casing cannot make two
+    of one. It tells two different signed payloads that share a nonce
+    apart. It is NOT a secret and proves nothing about who presents it.
 
-    The identifier above is the nonce, and a nonce is public once the
-    authorization is on-chain. A held payment used to be redeemable by
-    anyone who presented that nonce with any signature and any address
-    (review of a2d37d2, 2026-09-30: reproduced, a stranger anchored their
-    own hash on a victim's settled USDC and the victim's own resubmission
-    was then a replay). Only the payer holds the signature, so only the
-    payer can produce this digest.
+    Round 2 (672be2f) bound redemption of a held payment to this digest on
+    the premise "only the payer holds the signature". That premise is
+    false for this scheme: the facilitator settles by calling EIP-3009
+    transferWithAuthorization(from, to, value, validAfter, validBefore,
+    nonce, signature), so every field hashed here is in the settling
+    transaction's calldata the moment the transfer lands. Review of
+    672be2f (2026-09-30, reproduced three times): an observer rebuilt the
+    payload from calldata, redeemed a victim's held payment for their own
+    hash, and the victim's resubmission was told the observer's receipt.
+    What binds a redemption now is request_digest() below, which nothing
+    on-chain contains.
     """
     inner = payment_payload.get("payload") or {}
     def _norm(v):
@@ -430,6 +447,24 @@ def payment_digest(payment_payload: dict) -> str:
         signed = _norm(payment_payload)
     return hashlib.sha256(
         json.dumps(signed, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+def request_digest(request_body: dict) -> str:
+    """What binds a held payment's redemption, and the naming of the
+    receipt it bought, to the request that PAID: a digest of the whole
+    parsed request body (canonical JSON, keys sorted, so key order does not
+    matter and every value does).
+
+    Nothing here is on-chain: the payer sent it to us over TLS, and the
+    settling transaction carries only the authorization. So the most
+    anyone holding a rebuilt payload can do with a held payment is make
+    the exact anchor its payer asked for — same hash, same label, same
+    metadata — never their own. Only the digest is stored, never the body,
+    so no request metadata enters the payment ledger.
+    """
+    return hashlib.sha256(json.dumps(
+        request_body, sort_keys=True, separators=(",", ":"), ensure_ascii=True,
+    ).encode()).hexdigest()
 
 
 class ClaimSetUnavailable(RuntimeError):
@@ -482,20 +517,24 @@ def claim(payment_payload: dict, receipt_id: str = "") -> tuple[bool, str]:
     """
     ident = payment_identifier(payment_payload)
     path = _claim_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with file_lock.locked(path, mode="a+") as f:
-        f.seek(0)
-        try:
+    # Every OSError, including the OPEN: a claim file that cannot be opened
+    # escaped as an unhandled exception after settle() had moved the money
+    # (self-review of 672be2f). The caller answers ClaimSetUnavailable with
+    # a 503 that says the payment is held.
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with file_lock.locked(path, mode="a+") as f:
+            f.seek(0)
             if _last_claim_state(f, ident) == "claimed":
                 return False, ident
-        except OSError as e:
-            raise ClaimSetUnavailable(str(e)) from e
-        f.write(json.dumps({
-            "id": ident, "receipt_id": receipt_id,
-            "claimed_at": int(time.time()),
-        }) + "\n")
-        f.flush()
-        os.fsync(f.fileno())
+            f.write(json.dumps({
+                "id": ident, "receipt_id": receipt_id,
+                "claimed_at": int(time.time()),
+            }) + "\n")
+            f.flush()
+            os.fsync(f.fileno())
+    except OSError as e:
+        raise ClaimSetUnavailable(str(e)) from e
     return True, ident
 
 
@@ -511,9 +550,10 @@ def release(ident: str) -> None:
                 "released_at": int(time.time()),
             }) + "\n")
     except OSError:
-        # Best effort — a stuck claim costs one customer a retry with a
-        # fresh signature; a lost claim risks unbounded free anchors.
-        # Fail in the safe direction, same call lightning.release() makes.
+        # Best effort, in the safe direction (same call lightning.release()
+        # makes): a claim that stays standing reads as delivered, so its
+        # charged payment is answered 401 until the next boot releases it
+        # (release_stranded_claims); a lost claim would risk free anchors.
         pass
 
 
@@ -526,7 +566,8 @@ def _ledger_path() -> Path:
 def record_settlement(*, ident: str, receipt_id: str, amount_atomic: str,
                        asset_addr: str, network_id: str, tx_hash: str | None,
                        payer: str | None, settled: bool, reason: str = "",
-                       delivered: bool = False, digest: str = "") -> None:
+                       delivered: bool = False, digest: str = "",
+                       request_digest: str = "") -> None:
     """Append one row per settle() attempt, written the moment the
     facilitator answers — before any anchor, so `receipt_id` is empty on
     the charge row; mark_delivered() appends the row that names the
@@ -553,9 +594,14 @@ def record_settlement(*, ident: str, receipt_id: str, amount_atomic: str,
             "settled": settled,
             "delivered": delivered,
             "reason": reason,
-            # Binds a later redemption to the request that paid; see
-            # payment_digest(). Empty only on rows written before it existed.
+            # Tells two signed payloads sharing a nonce apart; public
+            # on-chain once settled, so it binds nothing on its own. See
+            # payment_digest().
             "digest": digest,
+            # Binds a redemption to the REQUEST that paid; nothing on-chain
+            # contains it. See request_digest(). A charge row without it is
+            # redeemable by no request at all.
+            "request_digest": request_digest,
         }, separators=(",", ":")) + "\n")
         f.flush()
         os.fsync(f.fileno())
@@ -586,7 +632,7 @@ NO_ANSWER_REASON = "no answer from the facilitator; on-chain outcome unknown"
 
 
 def record_attempt(*, ident: str, digest: str, amount_atomic: str, asset_addr: str,
-                   network_id: str, payer: str | None) -> None:
+                   network_id: str, payer: str | None, request_digest: str = "") -> None:
     """A settle() call that got NO answer. The transfer may or may not have
     landed, so this row counts for nothing as payment (settled=false) — but
     it is the only record that the office asked the network to move this
@@ -594,12 +640,30 @@ def record_attempt(*, ident: str, digest: str, amount_atomic: str, asset_addr: s
     then reads differently from a refusal with no such history."""
     record_settlement(ident=ident, receipt_id="", amount_atomic=amount_atomic,
                       asset_addr=asset_addr, network_id=network_id, tx_hash=None,
-                      payer=payer, settled=False, reason=NO_ANSWER_REASON, digest=digest)
+                      payer=payer, settled=False, reason=NO_ANSWER_REASON, digest=digest,
+                      request_digest=request_digest)
+
+
+# Identifiers whose settle() SUCCEEDED but whose charge row could not be
+# written. Process-lifetime only (the disk that should hold it is the thing
+# that failed), so it is a bonus signal: the refusal wording in app.py never
+# claims "nothing was charged" on its own, and does not depend on this.
+_UNRECORDED_SETTLEMENTS: set[str] = set()
+
+
+def note_unrecorded_settlement(ident: str) -> None:
+    """settle() succeeded and record_settlement() raised: remember it so
+    the next refusal of the same authorization says an earlier attempt
+    existed instead of contradicting the 503 that carried the tx id."""
+    _UNRECORDED_SETTLEMENTS.add(ident)
 
 
 def unanswered_attempt(ident: str) -> bool:
-    """True iff a settle() for this identifier once got no answer and no
-    successful settlement has been recorded since."""
+    """True iff a settle() for this identifier once got no answer (or
+    succeeded without a written record, this process) and no successful
+    settlement has been recorded since."""
+    if ident in _UNRECORDED_SETTLEMENTS:
+        return True
     path = _ledger_path()
     if not path.exists():
         return False
@@ -655,19 +719,22 @@ def mark_delivered(ident: str, receipt_id: str) -> None:
         amount_atomic=paid.get("amount_atomic", ""), asset_addr=paid.get("asset", ""),
         network_id=paid.get("network", ""), tx_hash=paid.get("tx_hash"),
         payer=paid.get("payer"), settled=True, delivered=True,
-        digest=paid.get("digest", ""))
+        digest=paid.get("digest", ""), request_digest=paid.get("request_digest", ""))
 
 
-def settlement_state(ident: str, digest: str = "") -> tuple[str, dict | None]:
+def settlement_state(ident: str, digest: str = "",
+                     request_digest: str = "") -> tuple[str, dict | None]:
     """Where a payment identifier stands, before any facilitator call:
 
-        ("foreign", record)    settled, but by a DIFFERENT signed payload
-                               than the one presented (digest mismatch):
-                               a stranger holding the nonce — a replay
-                               answer, never a redemption. A charge row
-                               with no digest (written before digests
-                               existed) can only be redeemed by nobody, so
-                               it is foreign to every request as well.
+        ("foreign", record)    settled, but the request presented is not
+                               the one that paid: a different signed
+                               payload (digest mismatch) or — the binding
+                               that matters, since the signed payload is
+                               public on-chain once settled — a different
+                               request body (request_digest mismatch). A
+                               replay answer that names no receipt, never
+                               a redemption. A charge row missing either
+                               digest is foreign to every request.
 
         ("unpaid", None)       settle() has never succeeded for it: a fresh
                                payment — app.py must verify(), then settle(),
@@ -691,7 +758,8 @@ def settlement_state(ident: str, digest: str = "") -> tuple[str, dict | None]:
     record = {"success": True, "transaction": row.get("tx_hash"),
               "network": row.get("network"), "payer": row.get("payer"),
               "errorReason": None}
-    if not digest or row.get("digest") != digest:
+    if (not digest or row.get("digest") != digest
+            or not request_digest or row.get("request_digest") != request_digest):
         return "foreign", record
     delivered = is_claimed(ident)
     if delivered:
@@ -712,7 +780,16 @@ def release_stranded_claims() -> int:
     back (review of a2d37d2, 2026-09-30). No anchor is in flight when the
     server starts, so a standing claim with no delivery row at boot is
     exactly that case. Returns the number released; counts only, no ids,
-    go to the log."""
+    go to the log.
+
+    ASSUMES ONE SERVER PROCESS PER DATA DIRECTORY, which is the production
+    shape (one Fly machine, one volume; a deploy stops the old process
+    before the new one starts). A second process booting on a shared data
+    dir would release a claim the first holds mid-anchor, and the identical
+    request could then buy a second anchor on one payment. Do not run two
+    servers on one data dir without replacing this with a liveness check.
+    Not age-gated on purpose: a crash followed by a restart seconds later
+    is the common case, and its fresh claim must be released too."""
     cpath = _claim_path()
     if not cpath.exists():
         return 0
