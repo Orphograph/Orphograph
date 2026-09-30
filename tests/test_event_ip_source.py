@@ -17,21 +17,13 @@ These tests pin:
 from __future__ import annotations
 
 import json
-import os
-import socket
-import subprocess
-import sys
-import time
-import urllib.error
-import urllib.request
 from pathlib import Path
 
 import pytest
 
+import _srv
 import app
 from rate_limit import truncate_ip
-
-REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
 # --------------------------------------------------------------------------
@@ -195,64 +187,24 @@ def test_the_two_resolvers_disagree_by_design():
 # End-to-end: the wiring, not just the resolver
 # --------------------------------------------------------------------------
 
-def _free_port() -> int:
-    s = socket.socket()
-    s.bind(("127.0.0.1", 0))
-    p = s.getsockname()[1]
-    s.close()
-    return p
-
-
 @pytest.fixture(scope="module")
 def live_server(tmp_path_factory):
     """Server with the production proxy posture (ORPHO_TRUST_PROXY_HEADERS=1)."""
-    port = _free_port()
     data_dir = tmp_path_factory.mktemp("data")
-    env = {
-        **os.environ,
-        "PORT": str(port),
-        "HOST": "127.0.0.1",
-        "ORPHO_DATA_DIR": str(data_dir),
-        "ORPHO_TRUST_PROXY_HEADERS": "1",
-        "RATE_LIMIT_PER_DAY": "100000",
-    }
-    proc = subprocess.Popen(
-        [sys.executable, str(REPO_ROOT / "server" / "app.py")],
-        env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-    )
-    base = f"http://127.0.0.1:{port}"
-    deadline = time.time() + 10
-    while time.time() < deadline:
-        try:
-            with urllib.request.urlopen(base + "/api/health", timeout=1) as r:
-                if r.status == 200:
-                    break
-        except Exception:
-            time.sleep(0.2)
-    else:
-        proc.kill()
-        pytest.fail("server did not start in 10s")
-    yield base, Path(data_dir)
-    proc.terminate()
-    try:
-        proc.wait(timeout=5)
-    except subprocess.TimeoutExpired:
-        proc.kill()
+    for base in _srv.server_processes(
+            data_dir, stub_calendars=True,
+            ORPHO_TRUST_PROXY_HEADERS="1",
+            RATE_LIMIT_PER_DAY="100000",
+    ):
+        yield base, Path(data_dir)
 
 
 def _post_event(base: str, page: str, headers: dict):
     body = json.dumps({"event": "page_view", "page": page}).encode("utf-8")
-    req = urllib.request.Request(
-        base + "/api/event", data=body, method="POST",
-        headers={"Content-Type": "application/json", **headers},
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=5) as r:
-            return r.status
-    except urllib.error.HTTPError as e:
-        return e.code
-    except OSError as e:
-        pytest.skip(f"network unreachable in this env: {e!r}")
+    return _srv.request(
+        base, "/api/event", "POST", body,
+        {"Content-Type": "application/json", **headers}, timeout=5,
+    )[0]
 
 
 def _rows_for(data_dir: Path, page: str) -> list[dict]:

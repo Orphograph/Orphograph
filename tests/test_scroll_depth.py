@@ -18,16 +18,11 @@ Layers, mirroring the funnel-whitelist test:
 from __future__ import annotations
 
 import json
-import os
-import socket
-import subprocess
-import sys
-import time
-import urllib.error
-import urllib.request
 from pathlib import Path
 
 import pytest
+
+import _srv
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 WEB_DIR = REPO_ROOT / "web"
@@ -129,76 +124,32 @@ def test_scroll_script_loads_after_event_js(page):
 
 # ── Layer 4: live HTTP — scroll_50 accepted (204), unknown still 400 ────────
 
-def _free_port() -> int:
-    s = socket.socket()
-    s.bind(("127.0.0.1", 0))
-    p = s.getsockname()[1]
-    s.close()
-    return p
-
-
 @pytest.fixture(scope="module")
 def live_server(tmp_path_factory):
-    port = _free_port()
     data_dir = tmp_path_factory.mktemp("data")
-    env = {
-        **os.environ,
-        "PORT": str(port),
-        "HOST": "127.0.0.1",
-        "ORPHO_DATA_DIR": str(data_dir),
-        "RATE_LIMIT_PER_DAY": "100000",
-    }
-    proc = subprocess.Popen(
-        [sys.executable, str(REPO_ROOT / "server" / "app.py")],
-        env=env,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
-    base = f"http://127.0.0.1:{port}"
-    deadline = time.time() + 10
-    while time.time() < deadline:
-        try:
-            with urllib.request.urlopen(base + "/api/health", timeout=1) as r:
-                if r.status == 200:
-                    break
-        except Exception:
-            time.sleep(0.2)
-    else:
-        proc.kill()
-        pytest.fail("server did not start in 10s")
-    yield base, Path(data_dir)
-    proc.terminate()
-    try:
-        proc.wait(timeout=5)
-    except subprocess.TimeoutExpired:
-        proc.kill()
+    for base in _srv.server_processes(
+            data_dir, stub_calendars=True, RATE_LIMIT_PER_DAY="100000"):
+        yield base, Path(data_dir)
 
 
-def _post_json(url: str, body: dict):
+def _post_json(base: str, path: str, body: dict):
     data = json.dumps(body).encode("utf-8")
-    req = urllib.request.Request(
-        url, data=data, headers={"Content-Type": "application/json"}, method="POST"
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=5) as r:
-            return r.status, r.read()
-    except urllib.error.HTTPError as e:
-        return e.code, e.read()
-    except OSError as e:
-        pytest.skip(f"network unreachable in this env: {e!r}")
+    status, raw, _ = _srv.request(
+        base, path, "POST", data, {"Content-Type": "application/json"}, timeout=5)
+    return status, raw
 
 
 @pytest.mark.parametrize("event", SCROLL_EVENTS)
 def test_scroll_event_returns_204(live_server, event):
     base, _ = live_server
-    status, raw = _post_json(base + "/api/event", {"event": event, "page": "/"})
+    status, raw = _post_json(base, "/api/event", {"event": event, "page": "/"})
     assert status == 204, f"{event} must be accepted (204), got {status}: {raw[:200]!r}"
 
 
 def test_scroll_event_is_durable(live_server):
     """A scroll_50 beacon lands as a real row the founder can query."""
     base, data_dir = live_server
-    status, _ = _post_json(base + "/api/event", {"event": "scroll_50", "page": "landing-v2"})
+    status, _ = _post_json(base, "/api/event", {"event": "scroll_50", "page": "landing-v2"})
     assert status == 204
     rows = [
         json.loads(ln)
@@ -213,5 +164,5 @@ def test_scroll_event_is_durable(live_server):
 def test_unknown_event_still_rejected(live_server):
     """Adding the depth events must not weaken the allowlist."""
     base, _ = live_server
-    status, _ = _post_json(base + "/api/event", {"event": "scroll_37", "page": "/"})
+    status, _ = _post_json(base, "/api/event", {"event": "scroll_37", "page": "/"})
     assert status == 400, f"unknown event must still 400, got {status}"

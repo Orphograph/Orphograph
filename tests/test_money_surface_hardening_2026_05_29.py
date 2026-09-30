@@ -11,74 +11,24 @@ Regression tests for the 2026-05-29 money-surface hardening pass (Tier 2/3):
 """
 from __future__ import annotations
 
-import os
-import socket
-import subprocess
-import sys
-import time
-import urllib.error
-import urllib.request
-from pathlib import Path
-
 import pytest
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-
-
-def _free_port() -> int:
-    s = socket.socket()
-    s.bind(("127.0.0.1", 0))
-    p = s.getsockname()[1]
-    s.close()
-    return p
+import _srv
 
 
 @pytest.fixture(scope="module")
 def server(tmp_path_factory):
-    port = _free_port()
     data_dir = tmp_path_factory.mktemp("hardening_data")
-    env = {
-        **os.environ,
-        "PORT": str(port),
-        "HOST": "127.0.0.1",
-        "ORPHO_DATA_DIR": str(data_dir),
-        "ORPHO_COOKIE_SECURE": "0",
-        "RATE_LIMIT_PER_DAY": "100000",   # don't trip limits during these probes
-    }
-    proc = subprocess.Popen(
-        [sys.executable, str(REPO_ROOT / "server" / "app.py")],
-        env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+    yield from _srv.server_processes(
+        data_dir, stub_calendars=True,
+        ORPHO_COOKIE_SECURE="0",
+        RATE_LIMIT_PER_DAY="100000",   # don't trip limits during these probes
     )
-    base = f"http://127.0.0.1:{port}"
-    deadline = time.time() + 10
-    while time.time() < deadline:
-        try:
-            urllib.request.urlopen(base + "/api/health", timeout=1).read()
-            break
-        except Exception:
-            time.sleep(0.2)
-    else:
-        proc.kill()
-        pytest.fail("server did not start")
-    yield base
-    proc.terminate()
-    try:
-        proc.wait(timeout=5)
-    except subprocess.TimeoutExpired:
-        proc.kill()
 
 
-def _post(url, body=b"{}", headers=None, timeout=5):
+def _post(base, path, body=b"{}", headers=None, timeout=5):
     hdrs = {"Content-Type": "application/json", **(headers or {})}
-    req = urllib.request.Request(url, data=body, method="POST", headers=hdrs)
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as r:
-            r.read()
-            return r.status
-    except urllib.error.HTTPError as e:
-        return e.code
-    except Exception:
-        return -1
+    return _srv.request(base, path, "POST", body, hdrs, timeout=timeout)[0]
 
 
 # --------------------------------------------------------------- btc/claim crash
@@ -92,13 +42,13 @@ def test_btc_claim_is_gone_and_still_does_not_500(server):
     tightened: a retired route must still never 500, and must not fall through
     to some other handler. Full coverage of the retirement lives in
     tests/test_direct_btc_rail_is_gone.py."""
-    code = _post(f"{server}/api/btc/claim", body=b'{"email":"x@example.com"}')
+    code = _post(server, "/api/btc/claim", body=b'{"email":"x@example.com"}')
     assert code != 500, "btc/claim must not 500 (NameError regression)"
     assert code == 410, f"retired rail must answer 410, got {code}"
 
 
 def test_btc_claim_empty_body_is_gone_and_does_not_500(server):
-    code = _post(f"{server}/api/btc/claim", body=b"{}")
+    code = _post(server, "/api/btc/claim", body=b"{}")
     assert code != 500
     assert code == 410
 
@@ -109,7 +59,7 @@ def test_affiliate_payout_fails_closed_not_500(server):
     """Dispatched-but-undefined handler used to AttributeError → 500; it then
     failed closed with 503. Since 2026-09-27 the program is retired (10A):
     410, and still never auto-grants value."""
-    code = _post(f"{server}/api/me/affiliate/payout",
+    code = _post(server, "/api/me/affiliate/payout",
                  body=b'{"method":"credits"}')
     assert code != 500, "affiliate payout must not 500 (missing-handler regression)"
     assert code == 410

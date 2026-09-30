@@ -17,27 +17,21 @@ Design notes:
     test_money_surface_hardening_2026_05_29.py), seeded via ORPHO_DATA_DIR.
   * RESEND_API_KEY is left UNSET, so mailer is inert: a real "send" emits
     `[email:inert] would send to=...` to stderr and the handler logs
-    `[recover] resent crypto claim_code ...`. We capture server stderr to a
-    file and assert on those lines to distinguish send vs. no-send WITHOUT
-    delivering real email.
+    `[recover] resent crypto claim_code ...`. tests/_srv.py captures the
+    server's output to a file and we assert on those lines to distinguish
+    send vs. no-send WITHOUT delivering real email.
   * "No new positive ledger row" is asserted by counting positive-delta rows
     in the ledger before and after the request.
 """
 from __future__ import annotations
 
 import json
-import os
-import socket
-import subprocess
-import sys
 import time
-import urllib.error
-import urllib.request
 from pathlib import Path
 
 import pytest
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+import _srv
 
 # A claim code already minted for a crypto order. Email is the address on file.
 # With a "-": real ids are np_<plan>_ + token_urlsafe(10), and about 1 in 5
@@ -48,14 +42,6 @@ CLAIM_CODE = "pk_existing_crypto_code_001"
 CREDIT_DELTA = 10
 # Webhook source format: "nowpayments:<invoice_or_order>:<order_id>".
 LEDGER_SOURCE = f"nowpayments:inv_777:{ORDER_ID}"
-
-
-def _free_port() -> int:
-    s = socket.socket()
-    s.bind(("127.0.0.1", 0))
-    p = s.getsockname()[1]
-    s.close()
-    return p
 
 
 def _count_positive_rows(ledger_path: Path) -> int:
@@ -78,7 +64,6 @@ def _count_positive_rows(ledger_path: Path) -> int:
 
 @pytest.fixture(scope="module")
 def server(tmp_path_factory):
-    port = _free_port()
     data_dir = tmp_path_factory.mktemp("recover_crypto_data")
     ledger_path = data_dir / "credit_ledger.jsonl"
     # Seed ONE positive ledger row for ORDER_ID, exactly as the webhook would.
@@ -91,62 +76,23 @@ def server(tmp_path_factory):
     }
     ledger_path.write_text(json.dumps(seed, separators=(",", ":")) + "\n")
 
-    stderr_log = data_dir / "server.stderr.log"
-    env = {
-        **os.environ,
-        "PORT": str(port),
-        "HOST": "127.0.0.1",
-        "ORPHO_DATA_DIR": str(data_dir),
-        "ORPHO_COOKIE_SECURE": "0",
-        "RATE_LIMIT_PER_DAY": "100000",
-    }
-    # RESEND_API_KEY must be UNSET so the mailer is inert (no real send).
-    env.pop("RESEND_API_KEY", None)
-
-    err_fh = stderr_log.open("wb")
-    proc = subprocess.Popen(
-        [sys.executable, str(REPO_ROOT / "server" / "app.py")],
-        env=env, stdout=subprocess.PIPE, stderr=err_fh,
-    )
-    base = f"http://127.0.0.1:{port}"
-    deadline = time.time() + 10
-    started = False
-    while time.time() < deadline:
-        try:
-            urllib.request.urlopen(base + "/api/health", timeout=1).read()
-            started = True
-            break
-        except Exception:
-            time.sleep(0.2)
-    if not started:
-        proc.kill()
-        err_fh.close()
-        pytest.fail("server did not start")
-
-    yield {"base": base, "ledger": ledger_path, "stderr_log": stderr_log}
-
-    proc.terminate()
-    try:
-        proc.wait(timeout=5)
-    except subprocess.TimeoutExpired:
-        proc.kill()
-    err_fh.close()
+    # _srv leaves RESEND_API_KEY unset, so the mailer is inert (no real send),
+    # and writes the server's stderr, with its stdout, to the one
+    # server-<port>.log in the data dir.
+    for base in _srv.server_processes(
+            data_dir, stub_calendars=True,
+            ORPHO_COOKIE_SECURE="0",
+            RATE_LIMIT_PER_DAY="100000",
+    ):
+        logs = list(data_dir.glob("server-*.log"))
+        assert len(logs) == 1, f"expected one server log, found {logs}"
+        yield {"base": base, "ledger": ledger_path, "stderr_log": logs[0]}
 
 
-def _post(url, payload, timeout=5):
-    body = json.dumps(payload).encode("utf-8")
-    req = urllib.request.Request(
-        url, data=body, method="POST",
-        headers={"Content-Type": "application/json"},
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as r:
-            return r.status, json.loads(r.read().decode("utf-8"))
-    except urllib.error.HTTPError as e:
-        try:
-            return e.code, json.loads(e.read().decode("utf-8"))
-        except Exception:
-            return e.code, {}
+def _post(base, path, payload, timeout=5):
+    """(status, parsed JSON object). A body that is not a JSON object comes
+    back as {"_raw": ...}, which no assertion below accepts."""
+    return _srv.post_json(base, path, payload, timeout=timeout)
 
 
 def _read_stderr(stderr_log: Path) -> str:
@@ -169,7 +115,7 @@ def test_matching_email_resends_existing_code_and_does_not_mint(server):
     err_before = len(_read_stderr(stderr_log))
 
     # Email differs only in case/whitespace from the ledger row -> must match.
-    status, body = _post(f"{base}/api/recover", {
+    status, body = _post(base, "/api/recover", {
         "stripe_session_id": ORDER_ID,
         "email": "  buyer@example.com  ",
     })
@@ -207,7 +153,7 @@ def test_wrong_email_generic_error_and_no_send(server):
     before = _count_positive_rows(ledger)
     err_before = len(_read_stderr(stderr_log))
 
-    status, body = _post(f"{base}/api/recover", {
+    status, body = _post(base, "/api/recover", {
         "stripe_session_id": ORDER_ID,
         "email": "attacker@evil.example",   # real order, wrong email
     })
@@ -238,7 +184,7 @@ def test_unknown_order_generic_error(server):
     before = _count_positive_rows(ledger)
     err_before = len(_read_stderr(stderr_log))
 
-    status, body = _post(f"{base}/api/recover", {
+    status, body = _post(base, "/api/recover", {
         "stripe_session_id": "np_does_not_exist_999",
         "email": "buyer@example.com",       # valid-but-irrelevant email
     })
@@ -258,7 +204,7 @@ def test_unknown_order_generic_error(server):
 def test_malformed_order_id_generic_error(server):
     """An np_ id with illegal chars collapses to the same generic 400."""
     base = server["base"]
-    status, body = _post(f"{base}/api/recover", {
+    status, body = _post(base, "/api/recover", {
         "stripe_session_id": "np_bad/../id",     # slash + dots not allowed
         "email": "buyer@example.com",
     })
@@ -270,7 +216,7 @@ def test_stripe_path_untouched_invalid_id_still_400(server):
     """Regression guard: a non-cs_/non-np_ id is still rejected generically,
     proving the Stripe shape check below the branch is intact."""
     base = server["base"]
-    status, body = _post(f"{base}/api/recover", {
+    status, body = _post(base, "/api/recover", {
         "stripe_session_id": "garbage_session",
         "email": "buyer@example.com",
     })
@@ -294,7 +240,7 @@ def test_prefix_substring_order_id_rejected(server):
     err_before = len(_read_stderr(stderr_log))
 
     # "np_pack10_" IS a substring of LEDGER_SOURCE but is NOT the exact order_id.
-    status, body = _post(f"{base}/api/recover", {
+    status, body = _post(base, "/api/recover", {
         "stripe_session_id": "np_pack10_",
         "email": LEDGER_EMAIL,            # the correct address on file
     })
