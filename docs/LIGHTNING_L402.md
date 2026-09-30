@@ -4,6 +4,13 @@ An AI agent with no account pays sats for exactly one anchor. This is the
 agent-pays loop: no signup, no card, no stored identity — a payment IS the
 authorization, and the resulting receipt verifies independently forever.
 
+**Not the same rail as x402** (server/x402.py): L402 pays in Bitcoin sats
+over Lightning; x402 pays in USDC on Base. Both sit on the SAME endpoint
+(`POST /api/anchor`), checked in the order pack token, L402, x402 — the
+first credential present wins, so a request never pays twice. Copy that
+mentions one payment rail should say so plainly rather than implying it is
+the only one.
+
 ## Protocol (standard L402 shape)
 
     POST /api/ln/quote            → 200 {invoice, macaroon, price_sats}
