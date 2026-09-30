@@ -43,6 +43,7 @@ import public_config  # noqa: E402
 import badge_svg  # noqa: E402
 import credits  # noqa: E402
 import lightning  # noqa: E402
+import x402  # noqa: E402
 import auth  # noqa: E402
 import gdpr  # noqa: E402
 import health  # noqa: E402
@@ -709,7 +710,11 @@ _AFFILIATE_RETIRED = {
 }
 
 
-def _json_response(handler: BaseHTTPRequestHandler, status: int, payload: dict) -> None:
+def _json_response(handler: BaseHTTPRequestHandler, status: int, payload: dict,
+                   *, headers: tuple = ()) -> None:
+    """`headers` are extra (name, value) pairs sent alongside the standard
+    ones — e.g. x402's PAYMENT-RESPONSE, mirroring _send_rate_limited's
+    identical parameter for the same reason (sign-out's Set-Cookie)."""
     body = json.dumps(payload, indent=2).encode("utf-8")
     ctype = "application/json; charset=utf-8"
     body, enc = _maybe_compress(handler, body, ctype)
@@ -720,6 +725,8 @@ def _json_response(handler: BaseHTTPRequestHandler, status: int, payload: dict) 
     if enc:
         handler.send_header("Content-Encoding", enc)
         handler.send_header("Vary", "Accept-Encoding")
+    for name, value in headers:
+        handler.send_header(name, value)
     _security_headers(handler)
     handler.end_headers()
     handler.wfile.write(body)
@@ -3128,6 +3135,48 @@ class Handler(BaseHTTPRequestHandler):
                     "hint": "each payment buys exactly one anchor — request "
                             "a new quote at POST /api/ln/quote"})
                 return
+        # x402 payment (server/x402.py): `PAYMENT-SIGNATURE` header (or the
+        # legacy `X-PAYMENT`), a signed USDC-on-Base authorization for
+        # exactly one anchor's price. Unlike L402, we do not settle here —
+        # only VERIFY (cheap, no chain write) — and only SETTLE once the
+        # anchor itself has actually succeeded, below. An on-chain transfer
+        # cannot be refunded the way a Pack credit or an L402 credential can,
+        # so nothing is charged for an anchor that never happened.
+        x402_payload = None
+        x402_requirements = None
+        x402_payer = None
+        if not pack_consumed and ln_payment_hash is None:
+            try:
+                x402_header = x402.parse_payment_header(self.headers)
+            except ValueError as e:
+                _json_response(self, 400, {"error": f"x402 payment rejected: {e}"})
+                return
+            if x402_header is not None:
+                _x402_version, x402_payload = x402_header
+                x402_requirements = x402.build_payment_requirements(
+                    f"{os.environ.get('SITE_URL', 'https://orphograph.com').rstrip('/')}/api/anchor")
+                try:
+                    verify_result = x402.verify(x402_payload, x402_requirements)
+                except x402.FacilitatorUnavailable as e:
+                    _json_response(self, 503, {
+                        "error": "cannot verify x402 payment",
+                        "detail": f"the payment facilitator is unreachable: {e}",
+                        "hint": "office-side fault; nothing was charged and "
+                                "no anchor was made. Retry shortly."})
+                    return
+                except x402.FacilitatorError as e:
+                    _json_response(self, 502, {
+                        "error": "x402 facilitator returned an unexpected answer",
+                        "detail": str(e)})
+                    return
+                if not verify_result.get("isValid"):
+                    _json_response(self, 402, {
+                        "error": "x402 payment rejected",
+                        "invalid_reason": verify_result.get("invalidReason"),
+                        "hint": "the payload did not verify against the "
+                                "current price — request a fresh challenge."})
+                    return
+                x402_payer = verify_result.get("payer")
         # API key path: alternative to session cookie / pack token. The key
         # owner must have an active subscription for the key to bypass limits.
         api_key = self.headers.get("X-Orpho-Api-Key", "").strip()
@@ -3149,8 +3198,27 @@ class Handler(BaseHTTPRequestHandler):
             _reject_private(self, pack_consumed, pack_token)
             return
         want_private = bool(payload.get("private", False))
-        if not pack_consumed and not subscription_active and ln_payment_hash is None:
+        if (not pack_consumed and not subscription_active and ln_payment_hash is None
+                and x402_payload is None):
             allowed, retry_after = _anchor_limiter.check(self._client_key())
+            if not allowed and x402.configured():
+                # x402 challenge: agents past the free tier can pay cents in
+                # USDC for one anchor, no account, no invoice round-trip —
+                # the standard the strategic plan is built around. Tried
+                # before the L402 challenge below since it needs no upstream
+                # call to build (the price/asset/pay-to are all local
+                # config), so it never fails the way an invoice-creation
+                # call can.
+                resource_url = f"{os.environ.get('SITE_URL', 'https://orphograph.com').rstrip('/')}/api/anchor"
+                body = json.dumps(x402.build_payment_required_body(resource_url)).encode("utf-8")
+                self.send_response(402)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header(x402.PAYMENT_REQUIRED_HEADER, "true")
+                self.send_header("Content-Length", str(len(body)))
+                _security_headers(self)
+                self.end_headers()
+                self.wfile.write(body)
+                return
             if (not allowed and lightning.configured()
                     and _ln_invoice_limiter.check(f"ln-invoice:{self._client_key()}")[0]):
                 # L402 challenge: agents past the free tier can pay sats for
@@ -3241,6 +3309,11 @@ class Handler(BaseHTTPRequestHandler):
             source = f"pack:{pack_token[:8]}"
         elif ln_payment_hash is not None:
             source = f"ln:{ln_payment_hash[:10]}"
+        elif x402_payload is not None:
+            # Verified but not yet settled — settlement happens after the
+            # anchor succeeds, below. `payer` came from the facilitator's
+            # own verify() answer, not from the (untrusted) request.
+            source = f"x402:{(x402_payer or 'unknown')[:10]}"
         elif api_key_active:
             source = f"api:{api_key[:10]}"
         elif subscription_active:
@@ -3270,6 +3343,23 @@ class Handler(BaseHTTPRequestHandler):
                     "hint": "office-side fault; nothing was charged and no "
                             "anchor was made."})
                 return
+        x402_claim_ident = None
+        if x402_payload is not None:
+            try:
+                claimed, x402_claim_ident = x402.claim(x402_payload)
+            except x402.ClaimSetUnavailable as e:
+                _json_response(self, 503, {
+                    "error": "cannot claim x402 payment",
+                    "detail": f"the payment-claim ledger is unwritable: {e}",
+                    "hint": "office-side fault; nothing was charged and no "
+                            "anchor was made."})
+                return
+            if not claimed:
+                _json_response(self, 401, {
+                    "error": "x402 payment rejected: authorization already used",
+                    "hint": "each signed authorization buys exactly one "
+                            "anchor — sign a fresh one for the next request."})
+                return
         try:
             owner_id = auth.email_id(subscriber_email) if subscriber_email else None
             record = engine.anchor_hash(
@@ -3298,9 +3388,12 @@ class Handler(BaseHTTPRequestHandler):
                 credits.refund_credit(pack_token)
             if ln_payment_hash is not None:
                 lightning.release(ln_payment_hash)
+            if x402_claim_ident is not None:
+                x402.release(x402_claim_ident)
             _json_response(self, 400, {"error": str(e),
                                        "credit_refunded": pack_consumed,
-                                       "ln_credential_released": ln_payment_hash is not None})
+                                       "ln_credential_released": ln_payment_hash is not None,
+                                       "x402_claim_released": x402_claim_ident is not None})
             return
         # homepage A/B: attribute the successful anchor to the visitor's arm
         _ab_arm = _ab_cookie_variant(self)
@@ -3341,6 +3434,35 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 lightning.release(ln_payment_hash)
                 credit_refunded = True
+        # x402 settlement: only NOW, after the anchor has actually happened.
+        # A worthless 0-calendar anchor is never charged for: the LOCAL
+        # claim is released (same fairness deal L402 gives above — the
+        # agent can retry with the same signature), and no on-chain
+        # settle() is attempted at all. A calendars_ok>0 anchor gets
+        # settled for real; if settlement itself fails (the facilitator
+        # down, or the chain rejects it) the anchor still stands — deleting
+        # a receipt is not a thing this system does — but no
+        # PAYMENT-RESPONSE success header is sent, so the caller's own
+        # tooling can see the payment did not land.
+        x402_settle_response = None
+        if x402_claim_ident is not None and record["calendars_ok"] == 0:
+            x402.release(x402_claim_ident)
+            credit_refunded = True
+        if x402_payload is not None and record["calendars_ok"] > 0:
+            try:
+                x402_settle_response = x402.settle(x402_payload, x402_requirements)
+            except (x402.FacilitatorUnavailable, x402.FacilitatorError) as e:
+                x402_settle_response = {"success": False, "errorReason": str(e)}
+            x402.record_settlement(
+                receipt_id=record["receipt_id"],
+                amount_atomic=x402_requirements["amount"],
+                asset_addr=x402_requirements["asset"],
+                network_id=x402_requirements["network"],
+                tx_hash=x402_settle_response.get("transaction"),
+                payer=x402_settle_response.get("payer") or x402_payer,
+                settled=bool(x402_settle_response.get("success")),
+                reason=x402_settle_response.get("errorReason") or "",
+            )
         # Receipt email: fires for any paid path (Pack consumed, active
         # subscription, or active API key). Previously this was Pack-only,
         # which silently dropped receipts for subscribers — exact 2026-05-18
@@ -3352,7 +3474,8 @@ class Handler(BaseHTTPRequestHandler):
             candidate = notify_email[:200].strip()
         if not candidate and subscription_active and subscriber_email:
             candidate = subscriber_email
-        is_paid_anchor = pack_consumed or subscription_active or api_key_active
+        is_paid_anchor = (pack_consumed or subscription_active or api_key_active
+                         or bool(x402_settle_response and x402_settle_response.get("success")))
         if candidate and is_paid_anchor and EMAIL_RE.match(candidate):
             mailer.send_receipt_email(candidate, record)
         # Webhook dispatch — fire-and-forget on background threads.
@@ -3405,6 +3528,8 @@ class Handler(BaseHTTPRequestHandler):
             demand_auth_path = "pack"
         elif ln_payment_hash is not None:
             demand_auth_path = "l402"
+        elif x402_payload is not None:
+            demand_auth_path = "x402"
         elif api_key_active:
             demand_auth_path = "api_key"
         elif subscription_active:
@@ -3452,7 +3577,13 @@ class Handler(BaseHTTPRequestHandler):
             "receipt_url": f"{site}/r/{rid}",
             "badge_url": f"{site}/api/badge/{rid}.svg",
             "verify_url": f"{site}/api/receipt/{rid}",
-        })
+            # Echoed only when x402 was the payment path, so every other
+            # caller's response body is byte-for-byte unchanged.
+            **({"x402_settled": x402_settle_response.get("success", False)}
+               if x402_settle_response is not None else {}),
+        }, headers=(
+            (x402.PAYMENT_RESPONSE_HEADER, x402.encode_payment_response_header(x402_settle_response)),
+        ) if x402_settle_response is not None and x402_settle_response.get("success") else ())
 
     def _handle_request_email_link(self) -> None:
         # Rate-limited by IP to prevent email bombing.
