@@ -722,6 +722,11 @@ def test_an_unreadable_payment_ledger_is_a_503_without_the_servers_paths(server,
     assert s == 503, b
     text = json.dumps(b)
     assert "x402_ledger.jsonl" not in text and tmp_path.name not in text, b
+    # Review of ca45f33 (MEDIUM): this answer comes before any money moves
+    # for THIS request, but the office cannot see the payment's history, so
+    # it must not claim nothing was ever charged.
+    assert "nothing was charged" not in text.lower(), b
+    assert "moved no money" in text.lower(), b
     assert _receipts_on_disk_for(tmp_path, HASH_B) == []
 
 
@@ -762,3 +767,229 @@ def test_a_malformed_inner_payload_is_a_400_not_a_dropped_connection(server, tmp
     # the server is still there, and the ordinary rail still works
     s2, _h2, b2 = _post(server, "/api/anchor", {"hash_hex": HASH_B}, _payment_headers(nonce="n25"))
     assert s2 == 200, b2
+
+
+# ── round 4 (review of ca45f33, wf_1f1cbe7e-d74) ─────────────────────────
+
+VICTIM_EMAIL = "victim@example.test"
+OTHER_EMAIL = "other@example.test"
+
+
+def _sha256_text(s: str) -> str:
+    import hashlib
+    return hashlib.sha256(s.encode()).hexdigest()
+
+
+def _append_jsonl(path: Path, *rows: dict) -> None:
+    with path.open("a") as f:
+        for r in rows:
+            f.write(json.dumps(r, separators=(",", ":")) + "\n")
+
+
+def _subscription_row(customer: str, sub: str, email: str, status: str = "active",
+                      event: str = "customer.subscription.created") -> dict:
+    import time
+    return {"ts": "2026-09-01T00:00:00+00:00", "event_type": event,
+            "stripe_customer": customer, "stripe_sub": sub, "email": email,
+            "status": status, "current_period_end": time.time() + 20 * 86400,
+            "cancel_at_period_end": False}
+
+
+def _cookie(sid: str) -> dict:
+    return {"Cookie": f"orpho_sid={sid}"}
+
+
+@pytest.fixture()
+def subscriber_server(tmp_path):
+    """Two signed-in subscribers, `sess-victim` and `sess-other`."""
+    import time
+    _append_jsonl(tmp_path / "auth_sessions.jsonl",
+                  {"event": "created", "session_hash": _sha256_text("sess-victim"),
+                   "email": VICTIM_EMAIL, "expires_unix": time.time() + 86400},
+                  {"event": "created", "session_hash": _sha256_text("sess-other"),
+                   "email": OTHER_EMAIL, "expires_unix": time.time() + 86400})
+    _append_jsonl(tmp_path / "stripe_customer_emails.jsonl",
+                  {"ts": "2026-09-01T00:00:00+00:00", "stripe_customer": "cus_v", "email": VICTIM_EMAIL},
+                  {"ts": "2026-09-01T00:00:00+00:00", "stripe_customer": "cus_o", "email": OTHER_EMAIL})
+    _append_jsonl(tmp_path / "subscriptions.jsonl",
+                  _subscription_row("cus_v", "sub_v", VICTIM_EMAIL),
+                  _subscription_row("cus_o", "sub_o", OTHER_EMAIL))
+    yield from _srv.server_processes(tmp_path, stub_calendars=True, stub_stripe=True,
+                                     STRIPE_SECRET_KEY="", **X402_ENV)
+
+
+def _hold(base: str, tmp_path: Path, body: dict, payload: dict, headers: dict | None = None) -> dict:
+    """Pay with every calendar refusing, so the charge is HELD."""
+    down = tmp_path / CALENDARS_DOWN
+    down.write_text("")
+    s, _h, b = _post(base, "/api/anchor", body, {**_headers_for(payload), **(headers or {})})
+    down.unlink()
+    assert s == 200 and b["x402_payment_held"] is True, b
+    return b
+
+
+def _receipt_json(tmp_path: Path, rid: str) -> dict:
+    return json.loads((tmp_path / "receipts" / rid / "receipt.json").read_text())
+
+
+def test_plain_verify_answers_speak_only_for_this_request(server, tmp_path):
+    """Review of ca45f33 (MEDIUM). With no attempt on record, a verify()
+    that does not answer said "nothing was charged" and a refusal said only
+    "request a fresh challenge". The office cannot know every earlier call
+    (a disk that failed to record one is exactly the case it cannot see), so
+    both answers now speak for this request only and point at the wallet."""
+    _exhaust_free_tier(server)
+    s, _h, b = _post(server, "/api/anchor", {"hash_hex": HASH_B},
+                     _payment_headers(nonce="n40", outcome="unreachable"))
+    assert s == 503, b
+    text = json.dumps(b).lower()
+    assert "nothing was charged" not in text, b
+    assert "moved no money" in text and "wallet" in text, b
+    s2, _h2, b2 = _post(server, "/api/anchor", {"hash_hex": HASH_B},
+                        _payment_headers(nonce="n41", outcome="invalid"))
+    assert s2 == 402, b2
+    text2 = json.dumps(b2).lower()
+    assert "moved no money" in text2 and "wallet" in text2, b2
+    assert "x402_earlier_attempt" not in b2
+
+
+def test_a_held_private_payment_stays_its_payers_whoever_redeems_it(subscriber_server, tmp_path):
+    """Review of ca45f33 (identity). The body is digest-bound; the session is
+    not. A second subscriber presenting the victim's identical private body
+    with the payload rebuilt from calldata redeemed the held payment, and the
+    paid private receipt was OWNED BY THE REDEEMER: the victim was told its id
+    and got a 404 for it. The owner is now the one recorded when the charge
+    was made."""
+    base = subscriber_server
+    victim = _signed_payload(nonce="n42", payer="0x4444444444444444444444444444444444444444")
+    body = {"hash_hex": HASH_E, "private": True}
+    _hold(base, tmp_path, body, victim, _cookie("sess-victim"))
+    s, _h, b = _post(base, "/api/anchor", body,
+                     {**_headers_for(_chain_observer_payload(victim)), **_cookie("sess-other")})
+    assert s == 200 and b["x402_payment_held"] is False, b
+    r1 = b["receipt_id"]
+    sv, _ = _srv.get_json(base, f"/api/receipt/{r1}", headers=_cookie("sess-victim"))
+    so, _ = _srv.get_json(base, f"/api/receipt/{r1}", headers=_cookie("sess-other"))
+    assert sv == 200, "the payer cannot see the private receipt they paid for"
+    assert so == 404, "the redeemer owns the payer's private receipt"
+    s2, _h2, b2 = _post(base, "/api/anchor", body, {**_headers_for(victim), **_cookie("sess-victim")})
+    assert s2 == 401 and b2.get("receipt_id") == r1, b2
+
+
+def test_a_held_redemption_never_files_the_redeemers_address(subscriber_server, tmp_path):
+    """Review of ca45f33 (identity). An anonymous payer's held payment,
+    redeemed by a signed-in subscriber with the identical body, persisted the
+    REDEEMER's address as the receipt's notify_email: receipt mail, the
+    anchor.created webhook and the Bitcoin-pin notice for the payer's anchor
+    went to a stranger. On a held redemption only the digest-bound body can
+    name an address."""
+    base = subscriber_server
+    _exhaust_free_tier(base)
+    victim = _signed_payload(nonce="n43", payer="0x5555555555555555555555555555555555555555")
+    body = {"hash_hex": HASH_E}
+    _hold(base, tmp_path, body, victim)
+    s, _h, b = _post(base, "/api/anchor", body,
+                     {**_headers_for(_chain_observer_payload(victim)), **_cookie("sess-other")})
+    assert s == 200 and b["x402_payment_held"] is False, b
+    assert "notify_email" not in _receipt_json(tmp_path, b["receipt_id"]), "the redeemer's address was filed"
+
+
+def test_the_payer_redeeming_their_own_held_payment_keeps_their_account_behaviour(subscriber_server, tmp_path):
+    """The honest caller on the same path: a subscriber whose own payment
+    was held, redeeming it under their own session, still gets the receipt
+    mailed to their account address, exactly as a first-try anchor would."""
+    base = subscriber_server
+    victim = _signed_payload(nonce="n44", payer="0x6666666666666666666666666666666666666666")
+    body = {"hash_hex": HASH_D}
+    _hold(base, tmp_path, body, victim, _cookie("sess-victim"))
+    s, _h, b = _post(base, "/api/anchor", body, {**_headers_for(victim), **_cookie("sess-victim")})
+    assert s == 200 and b["x402_payment_held"] is False, b
+    assert _receipt_json(tmp_path, b["receipt_id"]).get("notify_email") == VICTIM_EMAIL
+
+
+def test_a_held_private_payment_survives_the_subscription_lapsing(subscriber_server, tmp_path):
+    """Review of ca45f33 (LOW, a regression against 672be2f). The private
+    gate re-checked the CURRENT subscription on a held redemption: once the
+    payer's subscription ended, the identical request was refused (402) and
+    any other body was foreign (401, "sign a fresh one"), so no request could
+    redeem the charge. The charge was privacy-authorised when it was made."""
+    base = subscriber_server
+    victim = _signed_payload(nonce="n45", payer="0x7777777777777777777777777777777777777777")
+    body = {"hash_hex": HASH_D, "private": True}
+    _hold(base, tmp_path, body, victim, _cookie("sess-victim"))
+    _append_jsonl(tmp_path / "subscriptions.jsonl",
+                  _subscription_row("cus_v", "sub_v", VICTIM_EMAIL, status="canceled",
+                                    event="customer.subscription.deleted"))
+    s, _h, b = _post(base, "/api/anchor", body, {**_headers_for(victim), **_cookie("sess-victim")})
+    assert s == 200 and b["x402_payment_held"] is False, b
+    sv, _ = _srv.get_json(base, f"/api/receipt/{b['receipt_id']}", headers=_cookie("sess-victim"))
+    assert sv == 200
+    # A NEW private request from the lapsed account is still refused.
+    s2, _h2, b2 = _post(base, "/api/anchor", {"hash_hex": HASH_C, "private": True},
+                        {**_payment_headers(nonce="n46"), **_cookie("sess-victim")})
+    assert s2 == 402 and "private" in json.dumps(b2).lower(), b2
+
+
+def test_the_held_200_says_how_to_redeem(server, tmp_path):
+    """Review of ca45f33 (LOW). Redemption now needs the identical request;
+    the held 200 said only x402_payment_held: true, so a payer who resent
+    with any changed field was told "already used — sign a fresh one"."""
+    _exhaust_free_tier(server)
+    b = _hold(server, tmp_path, {"hash_hex": HASH_B}, _signed_payload(nonce="n47"))
+    hint = b.get("x402_hint", "")
+    assert "identical request" in hint and "held" in hint, b
+
+
+_FSYNC_FAULT = '''
+import errno, os
+_real = os.fsync
+def _path_of(fd):
+    try:
+        import fcntl
+        return fcntl.fcntl(fd, fcntl.F_GETPATH, b"\\0" * 1024).split(b"\\0", 1)[0].decode()
+    except Exception:
+        pass
+    try:
+        return os.readlink(f"/proc/self/fd/{fd}")
+    except OSError:
+        return ""
+def _fsync(fd):
+    dd = os.environ.get("ORPHO_DATA_DIR", "")
+    if dd and os.path.exists(os.path.join(dd, "fault_claim_fsync")) \\
+            and _path_of(fd).endswith("x402_claimed.jsonl"):
+        raise OSError(errno.EIO, "injected claim fsync failure")
+    return _real(fd)
+os.fsync = _fsync
+'''
+
+
+@pytest.fixture()
+def fsync_fault_server(tmp_path):
+    """A server whose os.fsync fails on the claim file while
+    <data>/fault_claim_fsync exists (macOS F_GETPATH, Linux /proc)."""
+    import os
+    site = tmp_path / "site"
+    site.mkdir()
+    (site / "sitecustomize.py").write_text(_FSYNC_FAULT)
+    pp = os.pathsep.join(p for p in (str(site), os.environ.get("PYTHONPATH", "")) if p)
+    yield from _srv.server_processes(tmp_path, stub_calendars=True, PYTHONPATH=pp, **X402_ENV)
+
+
+def test_a_claim_whose_fsync_fails_is_released_so_the_payment_stays_held(fsync_fault_server, tmp_path):
+    """Review of ca45f33 (LOW). claim() wrote its line, then fsync raised;
+    the 503 said "held — resubmit", but the written line stood, so the
+    resubmission read as delivered (401 "already used") and the charged
+    payment bought nothing until the next boot. The claim is released under
+    the same lock before the error propagates."""
+    base = fsync_fault_server
+    _exhaust_free_tier(base)
+    fault = tmp_path / "fault_claim_fsync"
+    fault.write_text("")
+    headers = _payment_headers(nonce="n48")
+    s, _h, b = _post(base, "/api/anchor", {"hash_hex": HASH_B}, headers)
+    assert s == 503 and "held" in json.dumps(b).lower(), b
+    assert len(_settled_rows(tmp_path)) == 1
+    fault.unlink()
+    s2, h2, b2 = _post(base, "/api/anchor", {"hash_hex": HASH_B}, headers)
+    assert s2 == 200 and b2["x402_payment_held"] is False, b2
+    assert _payment_response(h2)["transaction"] == _settled_rows(tmp_path)[0]["tx_hash"], "a second settle ran"

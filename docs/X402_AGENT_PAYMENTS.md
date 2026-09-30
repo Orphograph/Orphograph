@@ -61,6 +61,26 @@ from the chain can do with a held payment is make the exact anchor its
 payer asked for: same hash, same label, same metadata. A held payment
 cannot be redeemed for a different hash; that is the price of the binding.
 
+The body is not secret either, once a receipt is shared: a non-private
+receipt serves its hash, label and metadata publicly, and the held 200
+hands out that receipt's URL. So the binding does not rest on anyone being
+unable to rebuild the body. It rests on what a redemption can produce:
+the exact anchor the payer asked for, filed under whoever the charge was
+made for. The charge row records the payer's account identity (an HMAC id,
+never an address) when the charge is made, and a held redemption uses that
+identity for a private receipt's owner, the receipt email and the
+`anchor.created` webhook, never the identity of whoever presents the
+request. A held private payment also stays redeemable after the payer's
+subscription lapses: it was authorised as private when it was charged.
+
+Accepted residual, stated rather than hidden: anyone who can rebuild both
+the payload (from the chain) and the body (from a shared receipt) can
+confirm which receipt a payment bought, because the replay 401 names it to
+the identical request. No public route finds a receipt by its hash (every
+receipt route takes a receipt id), so this needs a receipt that was
+already shared, and it links a payment to a receipt the viewer can already
+see.
+
 (An earlier version of this rail, never deployed, bound redemption to a
 digest of the signature and authorization on the premise that only the
 payer holds the signature. That premise is false for this scheme, for the

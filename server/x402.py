@@ -455,12 +455,21 @@ def request_digest(request_body: dict) -> str:
     parsed request body (canonical JSON, keys sorted, so key order does not
     matter and every value does).
 
-    Nothing here is on-chain: the payer sent it to us over TLS, and the
-    settling transaction carries only the authorization. So the most
-    anyone holding a rebuilt payload can do with a held payment is make
-    the exact anchor its payer asked for — same hash, same label, same
-    metadata — never their own. Only the digest is stored, never the body,
-    so no request metadata enters the payment ledger.
+    Nothing here is on-chain. That does NOT make the body secret: a
+    non-private receipt serves hash_hex, the label and the rest of the body
+    publicly at /api/receipt/<id>, and the held 0-calendar 200 hands out
+    that receipt's URL. Review of ca45f33 (2026-09-30) rebuilt a victim's
+    body from a shared receipt. What the binding guarantees is therefore
+    narrower and still holds: the most anyone holding a rebuilt payload
+    and body can do with a held payment is make the exact anchor its payer
+    asked for — same hash, same label, same metadata — never their own,
+    and it is owned by, and mailed to, whoever it was charged for (the
+    stored owner_id; see record_settlement). Accepted residual, stated in
+    docs/X402_AGENT_PAYMENTS.md: whoever can rebuild the body can confirm
+    which receipt a payment bought (the replay 401 names it). No public
+    route finds a receipt by hash, so this needs a receipt already shared.
+    Only the digest is stored, never the body, so no request metadata
+    enters the payment ledger.
     """
     return hashlib.sha256(json.dumps(
         request_body, sort_keys=True, separators=(",", ":"), ensure_ascii=True,
@@ -531,8 +540,24 @@ def claim(payment_payload: dict, receipt_id: str = "") -> tuple[bool, str]:
                 "id": ident, "receipt_id": receipt_id,
                 "claimed_at": int(time.time()),
             }) + "\n")
-            f.flush()
-            os.fsync(f.fileno())
+            try:
+                f.flush()
+                os.fsync(f.fileno())
+            except OSError:
+                # The claim line may already be on disk; left standing it
+                # reads as DELIVERED and the 503 below ("held — resubmit")
+                # would be false (review of ca45f33). Release it under the
+                # same lock, best effort; if even that fails, boot-time
+                # release_stranded_claims() covers it.
+                try:
+                    f.write(json.dumps({
+                        "id": ident, "released": True,
+                        "released_at": int(time.time()),
+                    }) + "\n")
+                    f.flush()
+                except OSError:
+                    pass
+                raise
     except OSError as e:
         raise ClaimSetUnavailable(str(e)) from e
     return True, ident
@@ -567,7 +592,7 @@ def record_settlement(*, ident: str, receipt_id: str, amount_atomic: str,
                        asset_addr: str, network_id: str, tx_hash: str | None,
                        payer: str | None, settled: bool, reason: str = "",
                        delivered: bool = False, digest: str = "",
-                       request_digest: str = "") -> None:
+                       request_digest: str = "", owner_id: str = "") -> None:
     """Append one row per settle() attempt, written the moment the
     facilitator answers — before any anchor, so `receipt_id` is empty on
     the charge row; mark_delivered() appends the row that names the
@@ -602,6 +627,12 @@ def record_settlement(*, ident: str, receipt_id: str, amount_atomic: str,
             # contains it. See request_digest(). A charge row without it is
             # redeemable by no request at all.
             "request_digest": request_digest,
+            # Who the charge was made FOR: auth.email_id() of the payer's
+            # session / API key (the HMAC id, never the email), "" when
+            # anonymous. A held redemption files the receipt under this,
+            # not under whoever presents the identical request (review of
+            # ca45f33).
+            "owner_id": owner_id,
         }, separators=(",", ":")) + "\n")
         f.flush()
         os.fsync(f.fileno())
@@ -719,7 +750,15 @@ def mark_delivered(ident: str, receipt_id: str) -> None:
         amount_atomic=paid.get("amount_atomic", ""), asset_addr=paid.get("asset", ""),
         network_id=paid.get("network", ""), tx_hash=paid.get("tx_hash"),
         payer=paid.get("payer"), settled=True, delivered=True,
-        digest=paid.get("digest", ""), request_digest=paid.get("request_digest", ""))
+        digest=paid.get("digest", ""), request_digest=paid.get("request_digest", ""),
+        owner_id=paid.get("owner_id", ""))
+
+
+def charge_owner(ident: str) -> str:
+    """The owner_id recorded when this payment was charged ("" when the
+    payer was anonymous, or the row predates the field). Raises
+    ClaimSetUnavailable like paid_record()."""
+    return (paid_record(ident) or {}).get("owner_id") or ""
 
 
 def settlement_state(ident: str, digest: str = "",
