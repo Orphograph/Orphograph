@@ -3135,6 +3135,32 @@ class Handler(BaseHTTPRequestHandler):
                     "hint": "each payment buys exactly one anchor — request "
                             "a new quote at POST /api/ln/quote"})
                 return
+        # Subscription and private-receipt checks come BEFORE any payment
+        # step: they need no facilitator, and a request they will refuse
+        # must never be charged first (review of a2d37d2, 2026-09-30:
+        # `private: true` from a non-subscriber was settled, then refused
+        # with a body that said nothing about the charge).
+        # API key path: alternative to session cookie / pack token. The key
+        # owner must have an active subscription for the key to bypass limits.
+        api_key = self.headers.get("X-Orpho-Api-Key", "").strip()
+        api_key_email = api_keys.email_for_key(api_key) if api_key else None
+        api_key_active = bool(api_key_email and _subscription_active_for(api_key_email))
+        # Authenticated subscribers bypass the free-tier rate limit.
+        subscriber_email = api_key_email or (self._session_email() if not pack_consumed else None)
+        subscription_active = api_key_active or _subscription_active_for(subscriber_email)
+        # Private receipts: subscriber-only feature. Anonymous and pack-only
+        # anchors cannot be marked private (no owner_id to gate by).
+        #
+        # FAIL CLOSED. This used to be `bool(...) and subscription_active`,
+        # which silently PUBLISHED a receipt the caller had explicitly asked
+        # to keep private — no error, no warning, nothing in the response.
+        # Publishing is not undoable; retrying without `private` costs the
+        # caller one line. So when the request cannot be honoured we decline
+        # to anchor at all and say why.
+        if bool(payload.get("private", False)) and not subscription_active:
+            _reject_private(self, pack_consumed, pack_token)
+            return
+        want_private = bool(payload.get("private", False))
         # x402 payment (server/x402.py): `PAYMENT-SIGNATURE` header (or the
         # legacy `X-PAYMENT`), a signed USDC-on-Base authorization for
         # exactly one anchor's price. Same rule as L402 above: the payment
@@ -3163,8 +3189,11 @@ class Handler(BaseHTTPRequestHandler):
                 x402_requirements = x402.build_payment_requirements(
                     f"{os.environ.get('SITE_URL', 'https://orphograph.com').rstrip('/')}/api/anchor")
                 x402_ident = x402.payment_identifier(x402_payload)
+                # The digest of the SIGNED part binds a redemption to the
+                # request that paid; the nonce alone is public on-chain.
+                x402_digest = x402.payment_digest(x402_payload)
                 try:
-                    x402_state, x402_paid = x402.settlement_state(x402_ident)
+                    x402_state, x402_paid = x402.settlement_state(x402_ident, x402_digest)
                 except x402.ClaimSetUnavailable as e:
                     _json_response(self, 503, {
                         "error": "cannot read x402 settlement state",
@@ -3172,13 +3201,23 @@ class Handler(BaseHTTPRequestHandler):
                         "hint": "office-side fault; nothing was charged and "
                                 "no anchor was made. Retry shortly."})
                     return
-                if x402_state == "delivered":
-                    # Already bought its anchor. Same answer the atomic
-                    # claim below gives a concurrent duplicate.
+                if x402_state in ("delivered", "foreign"):
+                    # Already bought its anchor, or presented by someone
+                    # who holds the nonce but not the signature that paid
+                    # ("foreign"). One status and one error for both. Only
+                    # the rightful payer's replay ("delivered": the digest
+                    # matched) is told the receipt its payment bought, in
+                    # case the first response never reached it; the nonce
+                    # is public on-chain, so naming the receipt to a
+                    # "foreign" presenter would hand anyone watching the
+                    # chain the payment -> receipt link.
+                    bought = ((x402_paid or {}).get("receipt_id")
+                              if x402_state == "delivered" else None)
                     _json_response(self, 401, {
                         "error": "x402 payment rejected: authorization already used",
                         "hint": "each signed authorization buys exactly one "
-                                "anchor — sign a fresh one for the next request."})
+                                "anchor — sign a fresh one for the next request.",
+                        **({"receipt_id": bought} if bought else {})})
                     return
                 if x402_state == "unpaid":
                     try:
@@ -3204,38 +3243,96 @@ class Handler(BaseHTTPRequestHandler):
                         return
                     x402_payer = verify_result.get("payer")
                     # Settle NOW. A facilitator that does not answer leaves
-                    # the on-chain outcome unknown, so nothing is written:
-                    # a row here would either block a legitimate retry or
-                    # call an unproven transfer a charge. A refusal is
-                    # recorded (settled=false) for the audit trail only; it
-                    # counts for nothing and the same payload may try again.
+                    # the on-chain outcome unknown: an audit-only attempt
+                    # row is written (settled=false; it never counts as a
+                    # charge and never blocks the retry). A refusal is
+                    # recorded the same way (settled=false, the network's
+                    # reason); it counts for nothing and the same payload
+                    # may try again.
                     try:
                         x402_paid = x402.settle(x402_payload, x402_requirements)
                     except x402.FacilitatorUnavailable as e:
+                        # The transfer may or may not have landed. The
+                        # attempt is recorded (it counts for nothing as
+                        # payment) so a later refusal of this authorization
+                        # as "used" is not answered as if nothing had ever
+                        # been asked of the network.
+                        try:
+                            x402.record_attempt(
+                                ident=x402_ident, digest=x402_digest,
+                                amount_atomic=x402_requirements["amount"],
+                                asset_addr=x402_requirements["asset"],
+                                network_id=x402_requirements["network"],
+                                payer=x402_payer)
+                        except OSError as e2:
+                            sys.stderr.write(f"[x402] attempt row not written: {e2}\n")
                         _json_response(self, 503, {
                             "error": "cannot settle x402 payment",
                             "detail": f"the payment facilitator did not answer "
                                       f"the settlement call: {e}",
-                            "hint": "office-side fault; no anchor was made and "
-                                    "no charge was recorded. Retry shortly."})
+                            "hint": "office-side fault; no anchor was made. Whether "
+                                    "the transfer landed is unknown: resubmit the "
+                                    "identical payload. If the network then refuses "
+                                    "it as used, your wallet shows whether the "
+                                    "transfer to the pay-to address happened; "
+                                    "contact support with it before signing a "
+                                    "fresh authorization."})
                         return
                     except x402.FacilitatorError as e:
                         _json_response(self, 502, {
                             "error": "x402 facilitator returned an unexpected answer",
                             "detail": str(e)})
                         return
-                    x402.record_settlement(
-                        ident=x402_ident,
-                        receipt_id="",
-                        amount_atomic=x402_requirements["amount"],
-                        asset_addr=x402_requirements["asset"],
-                        network_id=x402_requirements["network"],
-                        tx_hash=x402_paid.get("transaction"),
-                        payer=x402_paid.get("payer") or x402_payer,
-                        settled=bool(x402_paid.get("success")),
-                        reason=x402_paid.get("errorReason") or "",
-                    )
+                    try:
+                        x402.record_settlement(
+                            ident=x402_ident,
+                            receipt_id="",
+                            amount_atomic=x402_requirements["amount"],
+                            asset_addr=x402_requirements["asset"],
+                            network_id=x402_requirements["network"],
+                            tx_hash=x402_paid.get("transaction"),
+                            payer=x402_paid.get("payer") or x402_payer,
+                            settled=bool(x402_paid.get("success")),
+                            reason=x402_paid.get("errorReason") or "",
+                            digest=x402_digest,
+                        )
+                    except OSError as e:
+                        # The one row that proves the charge could not be
+                        # written. For a refusal that row was audit only,
+                        # so the 402 below still stands. For a SUCCESS the
+                        # money has moved and the office holds no record of
+                        # it: no anchor is made on a charge that cannot be
+                        # held or redeemed, and the answer carries the
+                        # transaction id, which is the customer's proof.
+                        sys.stderr.write(f"[x402] settlement row not written "
+                                         f"(settled={bool(x402_paid.get('success'))}): {e}\n")
+                        if x402_paid.get("success"):
+                            _json_response(self, 503, {
+                                "error": "x402 payment settled but could not be recorded",
+                                "detail": f"the payment ledger is unwritable: {e}",
+                                "x402_transaction": x402_paid.get("transaction"),
+                                "hint": "office-side fault; the transfer landed but "
+                                        "no anchor was made. Keep the transaction id "
+                                        "and contact support with it; the network "
+                                        "will refuse this authorization if resubmitted."})
+                            return
                     if not x402_paid.get("success"):
+                        try:
+                            earlier = x402.unanswered_attempt(x402_ident)
+                        except x402.ClaimSetUnavailable:
+                            earlier = True   # unknown history reads as the careful case
+                        if earlier:
+                            _json_response(self, 402, {
+                                "error": "x402 payment rejected: settlement failed",
+                                "settle_reason": x402_paid.get("errorReason"),
+                                "x402_earlier_attempt": True,
+                                "hint": "an earlier settlement attempt for this "
+                                        "authorization got no answer, and the network "
+                                        "now refuses it. No anchor was made. If your "
+                                        "wallet shows the transfer to the pay-to "
+                                        "address, contact support with the transaction "
+                                        "id before signing a fresh authorization."})
+                            return
                         _json_response(self, 402, {
                             "error": "x402 payment rejected: settlement failed",
                             "settle_reason": x402_paid.get("errorReason"),
@@ -3248,27 +3345,6 @@ class Handler(BaseHTTPRequestHandler):
                     # verify() or settle() — a spent nonce can only fail
                     # there, and the money was collected once already.
                     x402_payer = x402_paid.get("payer")
-        # API key path: alternative to session cookie / pack token. The key
-        # owner must have an active subscription for the key to bypass limits.
-        api_key = self.headers.get("X-Orpho-Api-Key", "").strip()
-        api_key_email = api_keys.email_for_key(api_key) if api_key else None
-        api_key_active = bool(api_key_email and _subscription_active_for(api_key_email))
-        # Authenticated subscribers bypass the free-tier rate limit.
-        subscriber_email = api_key_email or (self._session_email() if not pack_consumed else None)
-        subscription_active = api_key_active or _subscription_active_for(subscriber_email)
-        # Private receipts: subscriber-only feature. Anonymous and pack-only
-        # anchors cannot be marked private (no owner_id to gate by).
-        #
-        # FAIL CLOSED. This used to be `bool(...) and subscription_active`,
-        # which silently PUBLISHED a receipt the caller had explicitly asked
-        # to keep private — no error, no warning, nothing in the response.
-        # Publishing is not undoable; retrying without `private` costs the
-        # caller one line. So when the request cannot be honoured we decline
-        # to anchor at all and say why.
-        if bool(payload.get("private", False)) and not subscription_active:
-            _reject_private(self, pack_consumed, pack_token)
-            return
-        want_private = bool(payload.get("private", False))
         if (not pack_consumed and not subscription_active and ln_payment_hash is None
                 and x402_payload is None):
             allowed, retry_after = _anchor_limiter.check(self._client_key())
@@ -3477,6 +3553,34 @@ class Handler(BaseHTTPRequestHandler):
                                                         "with a valid request"}
                                           if x402_claim_ident is not None else {})})
             return
+        except BaseException:
+            # Any other failure between the claim and delivery (a disk
+            # error inside the engine, a thread killed mid-anchor) used to
+            # leave the claim standing, which reads as DELIVERED: a charged
+            # payment answered 401 for ever (review of a2d37d2, 2026-09-30).
+            # Release it and let the error propagate; the charge stays held.
+            if x402_claim_ident is not None:
+                x402.release(x402_claim_ident)
+            raise
+        # x402 delivery, decided the moment the anchor exists and before any
+        # of the slower post-processing below: the payment was settled
+        # BEFORE the anchor, so the only question left is whether it has
+        # now been DELIVERED. A calendars_ok>0 anchor closes it — the claim
+        # stands, further resubmissions are replays, and the ledger links
+        # the charge to the receipt it bought. A worthless 0-calendar anchor
+        # (no Bitcoin commitment, can never upgrade) is handled further down
+        # with the pack/L402 refunds: the claim is released and the charge
+        # stays held for the same payload to redeem.
+        x402_delivered = False
+        if x402_claim_ident is not None and record["calendars_ok"] > 0:
+            x402_delivered = True
+            try:
+                x402.mark_delivered(x402_claim_ident, record["receipt_id"])
+            except (x402.ClaimSetUnavailable, OSError) as e:
+                # The claim standing is the decision; this row is the
+                # audit link. The customer keeps the receipt either way.
+                sys.stderr.write(f"[x402] delivery row not written for "
+                                 f"{record['receipt_id']}: {e}\n")
         # homepage A/B: attribute the successful anchor to the visitor's arm
         _ab_arm = _ab_cookie_variant(self)
         if _ab_arm and _ab_counts_this_visitor(self):
@@ -3516,30 +3620,15 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 lightning.release(ln_payment_hash)
                 credit_refunded = True
-        # x402 delivery. The payment was settled BEFORE the anchor, so the
-        # only question left is whether it has now been DELIVERED. A
-        # worthless 0-calendar anchor (no Bitcoin commitment, can never
-        # upgrade) does not count: the claim is released and the charge
-        # stays held — the same fairness deal L402 gives above, except that
-        # the money is already collected, so the same payload goes straight
-        # to another anchor attempt (no second verify() or settle(); a spent
-        # nonce can only fail there). A calendars_ok>0 anchor closes it: the
-        # claim stands, further resubmissions are replays, and the ledger
-        # links the charge to the receipt it bought.
-        x402_delivered = False
-        if x402_claim_ident is not None:
-            if record["calendars_ok"] == 0:
-                x402.release(x402_claim_ident)
-                credit_refunded = True
-            else:
-                x402_delivered = True
-                try:
-                    x402.mark_delivered(x402_claim_ident, record["receipt_id"])
-                except (x402.ClaimSetUnavailable, OSError) as e:
-                    # The claim standing is the decision; this row is the
-                    # audit link. The customer keeps the receipt either way.
-                    sys.stderr.write(f"[x402] delivery row not written for "
-                                     f"{record['receipt_id']}: {e}\n")
+        # x402: a worthless 0-calendar anchor does not count as delivery —
+        # the same fairness deal L402 gives above, except that the money is
+        # already collected, so the claim is released and the charge stays
+        # HELD for the same payload to redeem (no second verify() or
+        # settle(); a spent nonce can only fail there). Delivery itself was
+        # marked right after the anchor, above.
+        if x402_claim_ident is not None and record["calendars_ok"] == 0:
+            x402.release(x402_claim_ident)
+            credit_refunded = True
         # Receipt email: fires for any paid path (Pack consumed, active
         # subscription, or active API key). Previously this was Pack-only,
         # which silently dropped receipts for subscribers — exact 2026-05-18
@@ -6862,6 +6951,14 @@ def main() -> int:
     _start_upgrade_scheduler()
     _start_cadence_scheduler()
     _start_funnel_digest_scheduler()
+    # No anchor is in flight yet, so an x402 claim standing with no delivery
+    # row is a payment a crash stranded; release it so its payload can redeem.
+    try:
+        stranded = x402.release_stranded_claims()
+        if stranded:
+            sys.stderr.write(f"[x402] released {stranded} stranded claim(s) at boot\n")
+    except x402.ClaimSetUnavailable as e:
+        sys.stderr.write(f"[x402] could not reconcile claims at boot: {e}\n")
     server = ThreadingHTTPServer((HOST, PORT), Handler)
     # The port actually bound (PORT=0 lets the OS choose, as the test harness
     # does); for any fixed PORT this is the same number.

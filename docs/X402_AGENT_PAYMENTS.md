@@ -31,7 +31,38 @@ claim the nonce atomically (our own single-use lock, the same one
 `lightning.claim()` gives L402 — verify() alone is not single-use) → do the
 actual anchor. A payment that has not settled buys nothing: a refused
 settlement is a 402 with no receipt anywhere, an unreachable facilitator a
-503 with nothing recorded, and either payload can be resubmitted.
+503 with no charge — only an audit row saying the settlement call got no
+answer, which never blocks a resubmission of the identical payload. If the
+network then refuses that resubmission as "used", the 402 says an earlier
+attempt existed (`x402_earlier_attempt: true`) instead of claiming nothing
+was ever charged; the payer's wallet is the arbiter, and support has the
+row.
+
+One more office-side failure is answered by name: a settlement that
+succeeded but whose ledger row could not be written is a 503 carrying
+`x402_transaction` (the on-chain transaction id — the customer's proof) and
+no anchor; the charge cannot be held or redeemed without its row, so the
+hint says to contact support with that id rather than resubmit. A paid 200
+always carries `x402_settled: true`.
+
+Redemption is bound to the payload that paid, not to the nonce: the ledger
+row carries a digest of the signature and authorization, and a payload
+that matches the nonce but not the digest is answered exactly like a
+replay (401, no receipt named). The nonce is public on-chain once settled;
+without this a stranger could redeem someone else's held payment. For the
+same reason the replay 401 names the receipt a payment already bought
+ONLY to the payload that paid.
+
+A crash between the claim and delivery used to leave the claim standing,
+which reads as delivered: the charged payment answered 401 for ever. Now
+any failure inside the anchor releases the claim (the charge stays held),
+and at boot — when no anchor can be in flight — every standing claim
+without a delivery row is released. One bounded consequence, stated
+rather than hidden: if the anchor succeeded and the delivery row itself
+could not be written (the ledger file unwritable seconds after it took the
+charge row), the next boot releases that claim too, and the payload that
+paid can redeem it for a second anchor. The cost is one anchor's price,
+to the payer who did pay, on a disk that is already failing.
 
 The first cut settled AFTER the anchor, so that nothing would be charged
 for an anchor that never happened. That handed out real receipts on

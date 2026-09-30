@@ -402,6 +402,36 @@ def payment_identifier(payment_payload: dict) -> str:
     return f"payload:{digest}"
 
 
+def payment_digest(payment_payload: dict) -> str:
+    """What binds a redemption to the request that PAID: a digest of the
+    signed part of the payload (the signature and the authorization it
+    covers), hex lower-cased so re-casing cannot make two of one.
+
+    The identifier above is the nonce, and a nonce is public once the
+    authorization is on-chain. A held payment used to be redeemable by
+    anyone who presented that nonce with any signature and any address
+    (review of a2d37d2, 2026-09-30: reproduced, a stranger anchored their
+    own hash on a victim's settled USDC and the victim's own resubmission
+    was then a replay). Only the payer holds the signature, so only the
+    payer can produce this digest.
+    """
+    inner = payment_payload.get("payload") or {}
+    def _norm(v):
+        if isinstance(v, str):
+            return v.lower()
+        if isinstance(v, dict):
+            return {k: _norm(x) for k, x in v.items()}
+        if isinstance(v, list):
+            return [_norm(x) for x in v]
+        return v
+    signed = {"signature": _norm(inner.get("signature")),
+              "authorization": _norm(inner.get("authorization"))}
+    if not signed["signature"] and not signed["authorization"]:
+        signed = _norm(payment_payload)
+    return hashlib.sha256(
+        json.dumps(signed, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
 class ClaimSetUnavailable(RuntimeError):
     """A settlement-state ledger (claims or settlements) exists but could
     not be read, so the state is UNKNOWN. Mirrors lightning.SpentSetUnavailable:
@@ -496,7 +526,7 @@ def _ledger_path() -> Path:
 def record_settlement(*, ident: str, receipt_id: str, amount_atomic: str,
                        asset_addr: str, network_id: str, tx_hash: str | None,
                        payer: str | None, settled: bool, reason: str = "",
-                       delivered: bool = False) -> None:
+                       delivered: bool = False, digest: str = "") -> None:
     """Append one row per settle() attempt, written the moment the
     facilitator answers — before any anchor, so `receipt_id` is empty on
     the charge row; mark_delivered() appends the row that names the
@@ -523,6 +553,9 @@ def record_settlement(*, ident: str, receipt_id: str, amount_atomic: str,
             "settled": settled,
             "delivered": delivered,
             "reason": reason,
+            # Binds a later redemption to the request that paid; see
+            # payment_digest(). Empty only on rows written before it existed.
+            "digest": digest,
         }, separators=(",", ":")) + "\n")
         f.flush()
         os.fsync(f.fileno())
@@ -547,6 +580,48 @@ def _last_settled_row(fh, ident: str) -> dict | None:
         if row.get("id") == ident and row.get("settled"):
             found = row
     return found
+
+
+NO_ANSWER_REASON = "no answer from the facilitator; on-chain outcome unknown"
+
+
+def record_attempt(*, ident: str, digest: str, amount_atomic: str, asset_addr: str,
+                   network_id: str, payer: str | None) -> None:
+    """A settle() call that got NO answer. The transfer may or may not have
+    landed, so this row counts for nothing as payment (settled=false) — but
+    it is the only record that the office asked the network to move this
+    customer's money. A later refusal of the same authorization as "used"
+    then reads differently from a refusal with no such history."""
+    record_settlement(ident=ident, receipt_id="", amount_atomic=amount_atomic,
+                      asset_addr=asset_addr, network_id=network_id, tx_hash=None,
+                      payer=payer, settled=False, reason=NO_ANSWER_REASON, digest=digest)
+
+
+def unanswered_attempt(ident: str) -> bool:
+    """True iff a settle() for this identifier once got no answer and no
+    successful settlement has been recorded since."""
+    path = _ledger_path()
+    if not path.exists():
+        return False
+    seen = False
+    try:
+        with file_lock.locked(path, mode="r", exclusive=False) as f:
+            for line in f:
+                if not line.strip():
+                    continue
+                try:
+                    row = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if row.get("id") != ident:
+                    continue
+                if row.get("settled"):
+                    seen = False
+                elif row.get("reason") == NO_ANSWER_REASON:
+                    seen = True
+    except OSError as e:
+        raise ClaimSetUnavailable(str(e)) from e
+    return seen
 
 
 def paid_record(ident: str) -> dict | None:
@@ -579,11 +654,20 @@ def mark_delivered(ident: str, receipt_id: str) -> None:
         ident=ident, receipt_id=receipt_id,
         amount_atomic=paid.get("amount_atomic", ""), asset_addr=paid.get("asset", ""),
         network_id=paid.get("network", ""), tx_hash=paid.get("tx_hash"),
-        payer=paid.get("payer"), settled=True, delivered=True)
+        payer=paid.get("payer"), settled=True, delivered=True,
+        digest=paid.get("digest", ""))
 
 
-def settlement_state(ident: str) -> tuple[str, dict | None]:
+def settlement_state(ident: str, digest: str = "") -> tuple[str, dict | None]:
     """Where a payment identifier stands, before any facilitator call:
+
+        ("foreign", record)    settled, but by a DIFFERENT signed payload
+                               than the one presented (digest mismatch):
+                               a stranger holding the nonce — a replay
+                               answer, never a redemption. A charge row
+                               with no digest (written before digests
+                               existed) can only be redeemed by nobody, so
+                               it is foreign to every request as well.
 
         ("unpaid", None)       settle() has never succeeded for it: a fresh
                                payment — app.py must verify(), then settle(),
@@ -607,9 +691,63 @@ def settlement_state(ident: str) -> tuple[str, dict | None]:
     record = {"success": True, "transaction": row.get("tx_hash"),
               "network": row.get("network"), "payer": row.get("payer"),
               "errorReason": None}
-    if is_claimed(ident):
+    if not digest or row.get("digest") != digest:
+        return "foreign", record
+    delivered = is_claimed(ident)
+    if delivered:
+        # The delivery row (last settled row, delivered=true) names the
+        # receipt the payment bought, so the rightful payer's replay can be
+        # answered with it even when the first response was lost.
+        record["receipt_id"] = row.get("receipt_id") or ""
         return "delivered", record
     return "held", record
+
+
+def release_stranded_claims() -> int:
+    """Release every standing claim that never reached delivery.
+
+    A claim is taken just before the anchor; delivery appends a
+    delivered=true row. If the process died in between, the claim stood
+    for ever and the customer's charged payment answered 401 with no way
+    back (review of a2d37d2, 2026-09-30). No anchor is in flight when the
+    server starts, so a standing claim with no delivery row at boot is
+    exactly that case. Returns the number released; counts only, no ids,
+    go to the log."""
+    cpath = _claim_path()
+    if not cpath.exists():
+        return 0
+    delivered: set[str] = set()
+    lpath = _ledger_path()
+    if lpath.exists():
+        try:
+            with file_lock.locked(lpath, mode="r", exclusive=False) as f:
+                for line in f:
+                    try:
+                        row = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if row.get("settled") and row.get("delivered"):
+                        delivered.add(row.get("id"))
+        except OSError as e:
+            raise ClaimSetUnavailable(str(e)) from e
+    states: dict[str, str] = {}
+    try:
+        with file_lock.locked(cpath, mode="r", exclusive=False) as f:
+            for line in f:
+                try:
+                    row = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                ident = row.get("id")
+                if not isinstance(ident, str):
+                    continue
+                states[ident] = "released" if row.get("released") else "claimed"
+    except OSError as e:
+        raise ClaimSetUnavailable(str(e)) from e
+    stranded = [i for i, st in states.items() if st == "claimed" and i not in delivered]
+    for ident in stranded:
+        release(ident)
+    return len(stranded)
 
 
 def iter_ledger_rows():
