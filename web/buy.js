@@ -81,7 +81,7 @@ async function showStripeConfirmation(sessionId) {
     if (h) h.textContent = "Payment pending.";
     if (p) p.textContent =
       "Stripe reports this session is " + paymentStatus + ". " +
-      "Bank payments can take a few business days to clear. " +
+      "Payments of this kind can take a few business days to clear. " +
       (mode === "subscription"
         ? "A welcome email with sign-in steps is on its way; use the email you paid with."
         : "Your Pack code is emailed as soon as Stripe confirms the payment, and nothing is needed from you until then.");

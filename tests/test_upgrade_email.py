@@ -114,14 +114,21 @@ class UpgradeEmailTest(unittest.TestCase):
         self.tmp = Path(tempfile.mkdtemp(prefix="orpho_upgrade_email_"))
         self.receipts = self.tmp / "receipts"
         self.receipts.mkdir(parents=True)
-        # Force the mailer into "live" mode so it tries Resend (we mock urlopen).
-        os.environ["RESEND_API_KEY"] = "test_key_not_real"
         # Reload modules against the temp data dir.
         for m in ("upgrade_worker", "mailer", "auth", "engine"):
             sys.modules.pop(m, None)
-        os.environ["ORPHO_DATA_DIR"] = str(self.tmp)
-        os.environ["ORPHO_RECEIPTS_DIR"] = str(self.receipts)
-        os.environ["ORPHO_UPGRADE_LOG"] = str(self.tmp / "upgrade_log.jsonl")
+        # patch.dict puts the environment back as it found it. tearDown used
+        # to pop these four, which left the rest of the run with no data
+        # directory set at all.
+        env = mock.patch.dict(os.environ, {
+            # Force the mailer into "live" mode so it tries Resend (we mock urlopen).
+            "RESEND_API_KEY": "test_key_not_real",
+            "ORPHO_DATA_DIR": str(self.tmp),
+            "ORPHO_RECEIPTS_DIR": str(self.receipts),
+            "ORPHO_UPGRADE_LOG": str(self.tmp / "upgrade_log.jsonl"),
+        })
+        env.start()
+        self.addCleanup(env.stop)
         import upgrade_worker  # noqa: F401
         import mailer  # noqa: F401
         self.upgrade_worker = upgrade_worker
@@ -129,11 +136,6 @@ class UpgradeEmailTest(unittest.TestCase):
 
     def tearDown(self) -> None:
         shutil.rmtree(self.tmp, ignore_errors=True)
-        # Don't leak the fake key into sibling tests.
-        os.environ.pop("RESEND_API_KEY", None)
-        os.environ.pop("ORPHO_DATA_DIR", None)
-        os.environ.pop("ORPHO_RECEIPTS_DIR", None)
-        os.environ.pop("ORPHO_UPGRADE_LOG", None)
 
     # ---- helpers -------------------------------------------------------
 

@@ -6,81 +6,51 @@ hangs, never echoes the input back into a server-side execution
 path. We want failures to look like crisp 4xx codes with no
 process state change.
 
-Spun up in-process; uses the same `live_server` fixture as test_ui.py.
+Spun up as a subprocess through tests/_srv.py.
 """
 from __future__ import annotations
 
+import http.client
 import json
-import os
-import socket
-import subprocess
 import sys
 import time
-import urllib.error
 import urllib.parse
-import urllib.request
 from pathlib import Path
 
 import pytest
 
+import _srv
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
-
-
-def _free_port() -> int:
-    s = socket.socket()
-    s.bind(("127.0.0.1", 0))
-    p = s.getsockname()[1]
-    s.close()
-    return p
 
 
 @pytest.fixture(scope="module")
 def server(tmp_path_factory):
-    port = _free_port()
     data_dir = tmp_path_factory.mktemp("attack_data")
-    env = {
-        **os.environ,
-        "PORT": str(port),
-        "HOST": "127.0.0.1",
-        "ORPHO_DATA_DIR": str(data_dir),
-        "ORPHO_COOKIE_SECURE": "0",
+    yield from _srv.server_processes(
+        data_dir, stub_calendars=True,
+        ORPHO_COOKIE_SECURE="0",
         # Free-tier free-tier daily cap is 3 in production; the attack-fuzz
         # tests need to burst many malformed requests without tripping it.
-        "RATE_LIMIT_PER_DAY": "100000",
-    }
-    proc = subprocess.Popen(
-        [sys.executable, str(REPO_ROOT / "server" / "app.py")],
-        env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        RATE_LIMIT_PER_DAY="100000",
     )
-    base = f"http://127.0.0.1:{port}"
-    deadline = time.time() + 10
-    while time.time() < deadline:
-        try:
-            urllib.request.urlopen(base + "/api/health", timeout=1).read()
-            break
-        except Exception:
-            time.sleep(0.2)
-    else:
-        proc.kill()
-        pytest.fail("server did not start")
-    yield base
-    proc.terminate()
-    try: proc.wait(timeout=5)
-    except subprocess.TimeoutExpired: proc.kill()
 
 
-def _status(url, method="GET", body=None, headers=None, timeout=5):
-    """Return status code; treat HTTPError as a valid status."""
+def _status(base, path, method="GET", body=None, headers=None, timeout=5):
+    """Return status code; a 4xx or 5xx is a valid status. A server that
+    stopped answering raises _srv.ServerGone with its output."""
     if body is not None and not isinstance(body, (bytes, bytearray)):
         body = body.encode() if isinstance(body, str) else None
-    req = urllib.request.Request(url, data=body, method=method, headers=headers or {})
+    return _srv.request(base, path, method, body, headers, timeout=timeout)[0]
+
+
+def _status_or_dropped(base, path, **kw):
+    """_status, or -1 when the server closed the connection instead of
+    answering. Only for a body far over the cap, where dropping the upload
+    mid-stream is a correct rejection."""
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as r:
-            r.read()
-            return r.status
-    except urllib.error.HTTPError as e:
-        return e.code
-    except Exception:
+        return _status(base, path, **kw)
+    except _srv.ServerGone:
         return -1
 
 
@@ -106,7 +76,7 @@ def _status(url, method="GET", body=None, headers=None, timeout=5):
 def test_receipt_id_attacks_get_400_not_500(server, rid):
     encoded = urllib.parse.quote(rid, safe="")
     for prefix in ("/api/verify/", "/api/receipt/", "/r/"):
-        code = _status(f"{server}{prefix}{encoded}")
+        code = _status(server, f"{prefix}{encoded}")
         # Acceptable: 400 (bad shape), 404 (not found), 403 (forbidden).
         # Never 5xx, never 200 for these attack inputs.
         assert code in (400, 404, 403), f"{prefix}{rid!r} returned {code}"
@@ -116,8 +86,8 @@ def test_receipt_id_attacks_get_400_not_500(server, rid):
 
 def test_anchor_rejects_oversized_body(server):
     body = b"x" * (10 * 1024 * 1024)
-    code = _status(f"{server}/api/anchor", method="POST", body=body,
-                   headers={"Content-Type": "application/json"})
+    code = _status_or_dropped(server, "/api/anchor", method="POST", body=body,
+                              headers={"Content-Type": "application/json"})
     # Server may either return 400 cleanly OR drop the connection mid-upload
     # (-1) once it sees Content-Length way over the cap. Both are correct
     # rejections.
@@ -126,22 +96,16 @@ def test_anchor_rejects_oversized_body(server):
 
 def test_webhook_rejects_oversized_body(server):
     body = b"x" * (1 * 1024 * 1024)
-    code = _status(f"{server}/api/stripe/webhook", method="POST", body=body,
-                   headers={"Stripe-Signature": "t=0,v1=x"})
+    code = _status_or_dropped(server, "/api/stripe/webhook", method="POST", body=body,
+                              headers={"Stripe-Signature": "t=0,v1=x"})
     assert code in (400, 503, -1)
 
 
 # ── Malformed Content-Length ─────────────────────────────────────────────
 
 def test_anchor_with_bogus_content_length(server):
-    req = urllib.request.Request(f"{server}/api/anchor",
-                                  data=b"{}", method="POST",
-                                  headers={"Content-Length": "junk"})
-    try:
-        urllib.request.urlopen(req, timeout=5).read()
-        code = 200
-    except urllib.error.HTTPError as e:
-        code = e.code
+    code = _status(server, "/api/anchor", method="POST", body=b"{}",
+                   headers={"Content-Length": "junk"})
     assert code == 400
 
 
@@ -156,7 +120,7 @@ def test_anchor_with_bogus_content_length(server):
     (b'{}', 400),
 ])
 def test_anchor_malformed_json(server, body, expected):
-    code = _status(f"{server}/api/anchor", method="POST", body=body,
+    code = _status(server, "/api/anchor", method="POST", body=body,
                    headers={"Content-Type": "application/json"})
     assert code == expected
 
@@ -175,7 +139,7 @@ def test_anchor_malformed_json(server, body, expected):
 ])
 def test_email_link_rejects_malformed_address_silently(server, email):
     body = json.dumps({"email": email}).encode()
-    code = _status(f"{server}/api/auth/email-link", method="POST", body=body,
+    code = _status(server, "/api/auth/email-link", method="POST", body=body,
                    headers={"Content-Type": "application/json"})
     # Per the implementation we return 200 with a neutral message to avoid
     # enumeration. The success/failure path doesn't differ from the client's
@@ -197,7 +161,7 @@ def test_email_link_rejects_malformed_address_silently(server, email):
 ])
 def test_redeem_link_with_garbage_token(server, token):
     encoded = urllib.parse.quote(token, safe="")
-    code = _status(f"{server}/a/{encoded}")
+    code = _status(server, f"/a/{encoded}")
     assert code in (400, 404)
 
 
@@ -214,7 +178,7 @@ def test_redeem_link_with_garbage_token(server, token):
 ])
 def test_webhook_rejects_bad_signature(server, sig):
     body = b'{"type":"checkout.session.completed"}'
-    code = _status(f"{server}/api/stripe/webhook", method="POST", body=body,
+    code = _status(server, "/api/stripe/webhook", method="POST", body=body,
                    headers={"Content-Type": "application/json",
                             "Stripe-Signature": sig})
     # Without STRIPE_WEBHOOK_SECRET set, server returns 503; with it set,
@@ -244,19 +208,19 @@ def test_no_crlf_injection_via_url(server, payload):
     # urllib refuses to send literal CRLF in URLs, which IS the defense at
     # the client layer. We test the already-encoded variants here; the
     # server must handle them as benign query strings.
-    code = _status(f"{server}{payload}")
+    code = _status(server, payload)
     assert code in (200, 400, 404), f"{payload!r} returned {code}"
 
 
 def test_literal_crlf_in_url_is_blocked_at_client_layer():
     """Sanity check: urllib's own URL parsing refuses literal CRLF, which
     is the first layer of defense before our server sees anything."""
-    import http.client
-    import urllib.error
+    # OSError covers URLError. Nothing listens on port 1 and no server was
+    # spun on it, so _srv.request raises the client's own error unchanged.
     try:
-        urllib.request.urlopen("http://127.0.0.1:1/path\r\nX-Injected: yes", timeout=0.1)
+        _srv.request("http://127.0.0.1:1", "/path\r\nX-Injected: yes", timeout=0.1)
         assert False, "urllib unexpectedly accepted CRLF in URL"
-    except (http.client.InvalidURL, urllib.error.URLError, ValueError, OSError):
+    except (http.client.InvalidURL, ValueError, OSError):
         pass  # rejected as expected
 
 
@@ -269,56 +233,31 @@ def test_rate_limit_eventually_blocks(tmp_path_factory):
     is reached deterministically without depending on the test-module server
     (which uses RATE_LIMIT_PER_DAY=100000 for fuzz throughput).
     """
-    import os, subprocess, time, urllib.request
-    port = _free_port()
     data_dir = tmp_path_factory.mktemp("rl_block")
-    env = {
-        **os.environ,
-        "PORT": str(port),
-        "HOST": "127.0.0.1",
-        "ORPHO_DATA_DIR": str(data_dir),
-        "ORPHO_COOKIE_SECURE": "0",
-        "RATE_LIMIT_PER_DAY": "3",  # production default — must trip within 20 attempts
-    }
-    proc = subprocess.Popen(
-        [sys.executable, str(REPO_ROOT / "server" / "app.py")],
-        env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-    )
-    base = f"http://127.0.0.1:{port}"
-    deadline = time.time() + 10
-    while time.time() < deadline:
-        try:
-            urllib.request.urlopen(base + "/api/health", timeout=1).read()
-            break
-        except Exception:
-            time.sleep(0.2)
-    else:
-        proc.kill()
-        pytest.fail("rate-limit server did not start")
-    try:
+    for base in _srv.server_processes(
+            data_dir, stub_calendars=True,
+            ORPHO_COOKIE_SECURE="0",
+            RATE_LIMIT_PER_DAY="3",  # production default — must trip within 20 attempts
+    ):
         body = json.dumps({"hash_hex": "00" * 32}).encode()
         saw_429 = False
         for _ in range(20):
-            code = _status(f"{base}/api/anchor", method="POST", body=body,
+            code = _status(base, "/api/anchor", method="POST", body=body,
                            headers={"Content-Type": "application/json"})
             if code == 429:
                 saw_429 = True
                 break
         assert saw_429, "expected to hit rate limit within 20 attempts"
-    finally:
-        proc.terminate()
-        try: proc.wait(timeout=5)
-        except subprocess.TimeoutExpired: proc.kill()
 
 
 # ── Sample receipt absolutely never returns 500 ──────────────────────────
 
 def test_sample_receipt_is_resilient(server):
-    code = _status(f"{server}/sample/index.json")
+    code = _status(server, "/sample/index.json")
     assert code == 200
-    code = _status(f"{server}/sample/sample.txt")
+    code = _status(server, "/sample/sample.txt")
     assert code == 200
-    code = _status(f"{server}/sample/a.ots")
+    code = _status(server, "/sample/a.ots")
     assert code == 200
 
 
@@ -332,5 +271,5 @@ def test_sample_receipt_is_resilient(server):
     "orpho_sid=<script>",
 ])
 def test_session_cookie_tampering_returns_401(server, cookie_val):
-    code = _status(f"{server}/api/me", headers={"Cookie": cookie_val})
+    code = _status(server, "/api/me", headers={"Cookie": cookie_val})
     assert code == 401, f"cookie {cookie_val!r} returned {code}"

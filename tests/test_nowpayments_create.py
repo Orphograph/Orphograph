@@ -17,95 +17,48 @@ Money-safety regressions locked in by the 2026-06-01 pre-launch audit:
 from __future__ import annotations
 
 import json
-import os
-import socket
-import subprocess
 import sys
-import time
-import urllib.error
-import urllib.request
 from pathlib import Path
 
 import pytest
+
+import _srv
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "server"))
 
 
-def _free_port() -> int:
-    s = socket.socket()
-    s.bind(("127.0.0.1", 0))
-    p = s.getsockname()[1]
-    s.close()
-    return p
-
-
 def _start_server(data_dir: Path, rate_per_day: str):
-    """Start app.py as a subprocess with NOWPayments 'configured' (a dummy key
-    makes is_configured() True so the create handler runs past the config gate;
-    blank-email requests 400 before any network call to NOWPayments)."""
-    port = _free_port()
-    env = {
-        **os.environ,
-        "PORT": str(port),
-        "HOST": "127.0.0.1",
-        "ORPHO_DATA_DIR": str(data_dir),
-        "ORPHO_COOKIE_SECURE": "0",
-        "RATE_LIMIT_PER_DAY": rate_per_day,
-        "CHECKOUT_RATE_PER_HOUR": "10",  # pinned: an inherited value moves the ceiling
-        "NOWPAYMENTS_API_KEY": "test_dummy_key_not_real",
-    }
-    proc = subprocess.Popen(
-        [sys.executable, str(REPO_ROOT / "server" / "app.py")],
-        env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+    """Start the server as a subprocess with NOWPayments 'configured' (a dummy
+    key makes is_configured() True so the create handler runs past the config
+    gate; blank-email requests 400 before any network call to NOWPayments).
+    Yields its base URL and stops it when the caller is done."""
+    yield from _srv.server_processes(
+        data_dir, stub_calendars=True,
+        ORPHO_COOKIE_SECURE="0",
+        RATE_LIMIT_PER_DAY=rate_per_day,
+        CHECKOUT_RATE_PER_HOUR="10",  # pinned: an inherited value moves the ceiling
+        NOWPAYMENTS_API_KEY="test_dummy_key_not_real",
     )
-    base = f"http://127.0.0.1:{port}"
-    deadline = time.time() + 10
-    while time.time() < deadline:
-        try:
-            urllib.request.urlopen(base + "/api/health", timeout=1).read()
-            break
-        except Exception:
-            time.sleep(0.2)
-    else:
-        proc.kill()
-        pytest.fail("server did not start")
-    return proc, base
 
 
-def _stop(proc):
-    proc.terminate()
-    try:
-        proc.wait(timeout=5)
-    except subprocess.TimeoutExpired:
-        proc.kill()
-
-
-def _post(url, obj):
+def _post(base, path, obj):
     body = json.dumps(obj).encode("utf-8")
-    req = urllib.request.Request(
-        url, data=body, method="POST",
-        headers={"Content-Type": "application/json"},
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=5) as r:
-            return r.getcode(), r.read()
-    except urllib.error.HTTPError as e:
-        return e.code, e.read()
+    status, raw, _ = _srv.request(
+        base, path, "POST", body, {"Content-Type": "application/json"}, timeout=5)
+    return status, raw
 
 
 @pytest.fixture()
 def server(tmp_path):
-    proc, base = _start_server(tmp_path, "100000")  # don't trip limits here
-    yield base
-    _stop(proc)
+    yield from _start_server(tmp_path, "100000")  # don't trip limits here
 
 
 @pytest.mark.parametrize("email", ["", "   ", "noatsign", "a@" + "x" * 260])
 def test_create_rejects_missing_or_invalid_email(server, email):
     """A crypto order with no deliverable email is a money-loss trap — reject 400."""
     code, body = _post(
-        server + "/api/nowpayments/create",
+        server, "/api/nowpayments/create",
         {"currency": "btc", "plan": "writer_pack", "email": email},
     )
     assert code == 400, f"expected 400 for email={email!r}, got {code}: {body[:200]!r}"
@@ -116,12 +69,11 @@ def test_create_is_rate_limited(tmp_path):
     """Checkout has its own bucket (10 at once, then 10 an hour per address):
     the eleventh create from the same client is throttled (429), so a loop
     cannot hammer the NOWPayments invoice API."""
-    proc, base = _start_server(tmp_path, "100000")
-    try:
+    for base in _start_server(tmp_path, "100000"):
         codes = []
         for _ in range(11):
             c, _b = _post(
-                base + "/api/nowpayments/create",
+                base, "/api/nowpayments/create",
                 {"currency": "btc", "plan": "writer_pack", "email": ""},
             )
             codes.append(c)
@@ -129,8 +81,6 @@ def test_create_is_rate_limited(tmp_path):
         # eleventh is denied by the limiter before reaching the body.
         assert codes[:10] == [400] * 10, codes
         assert codes[10] == 429, f"expected the 11th request 429, got {codes}"
-    finally:
-        _stop(proc)
 
 
 def test_support_lookup_surfaces_crypto_claim_codes(tmp_path, monkeypatch):

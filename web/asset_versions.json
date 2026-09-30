@@ -16,8 +16,8 @@
     "sha256": "4ae1f0690c6111fd2c4d1c8d8893a8a08b1cc3c08121351fe8c23da5831034ad"
   },
   "/account.js": {
-    "version": "4",
-    "sha256": "ec67096527a14b691f9132e8f4fafcd69ca449775615872a253625badaf76fa1"
+    "version": "5",
+    "sha256": "9f496e87a055bc835f3dbfa94b5d809594bbe52f5516239f7f77ce6819dfa16b"
   },
   "/anchor-output.css": {
     "version": "1",
@@ -136,8 +136,8 @@
     "sha256": "8320278272e94dbd095f639df4237fbc81a83a84df088cec5bf7ebd2e5449410"
   },
   "/buy.js": {
-    "version": "4",
-    "sha256": "b64026336c81e8f026cc8c8dc7cfc6e55e4ae63ec869036df0e2af9b26600940"
+    "version": "5",
+    "sha256": "1a13996559008b2bc106ad4224a865b6303b25ca1c4cb394ca78a2c9dabc93b7"
   },
   "/certificate.css": {
     "version": "5",

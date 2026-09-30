@@ -6,6 +6,12 @@ The page used to tell that buyer their access would "arrive shortly … check
 back in a few minutes", and it told a fully discounted buyer
 (payment_status "no_payment_required", delivered at once) that payment was
 pending. This runs the real web/buy.js in node against each status.
+
+2026-09-27: the pending text said "Bank payments can take a few business days
+to clear". The page is told a payment status, never a payment method, and the
+pending branch runs for every delayed method, so the page named a method it
+did not know. It now says what the clearing email already says: "payments of
+this kind".
 """
 from __future__ import annotations
 
@@ -61,6 +67,18 @@ def test_a_payment_still_clearing_is_told_it_takes_days(tmp_path):
     assert page["h"] == "Payment pending."
     assert "few business days" in page["p"] and "as soon as Stripe confirms" in page["p"]
     assert "few minutes" not in page["p"], page
+
+
+@pytest.mark.parametrize("mode", ["payment", "subscription"])
+def test_the_pending_text_names_no_payment_method(tmp_path, mode):
+    """The session lookup returns payment_status and no method, so the page
+    cannot know the buyer paid through a bank. Both the Pack and the
+    subscription variants share the sentence."""
+    page = _page(tmp_path, "unpaid", mode=mode)
+    assert page["h"] == "Payment pending.", page
+    assert "Bank payments" not in page["p"], page
+    assert "bank" not in page["p"].lower(), page
+    assert "Payments of this kind can take a few business days to clear." in page["p"], page
 
 
 @pytest.mark.parametrize("status", ["paid", "no_payment_required"])
