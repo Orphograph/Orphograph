@@ -23,6 +23,12 @@ sys.path.insert(0, str(ROOT / "tests"))
 STRIPE_CALLS = "stub_stripe_calls.jsonl"
 STRIPE_DOWN = "stub_stripe_down"
 STRIPE_ANSWERS = "stub_stripe_answers.json"
+# While <data dir>/stub_calendars_down exists, every stubbed calendar
+# refuses. --fail-calendars is fixed at launch; this is a total outage a
+# test can start and END on the same server, which the x402 rail needs: a
+# payment settled before the anchor must be shown held through an outage
+# and redeemed after it, on one process with one ledger.
+CALENDARS_DOWN = "stub_calendars_down"
 
 
 def _answers(path: Path) -> dict:
@@ -143,10 +149,12 @@ def main() -> int:
     if unknown:
         parser.error(f"--fail-calendars names no shipped calendar: {sorted(unknown)}")
 
+    calendars_down = Path(os.environ["ORPHO_DATA_DIR"]) / CALENDARS_DOWN
+
     def accepted(calendar_url: str, hash_bytes: bytes):
         if len(hash_bytes) != 32:
             return False, "hash must be exactly 32 bytes (SHA-256)"
-        if engine._calendar_short(calendar_url) in refused:
+        if engine._calendar_short(calendar_url) in refused or calendars_down.exists():
             return False, "HTTP 503: stubbed calendar outage"
         return True, PENDING_BODY
 
