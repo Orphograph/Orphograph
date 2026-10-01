@@ -8,12 +8,13 @@ and the line in an internal posting guide that states this very rule.
 
 The withdrawn-PAGE wire tests below (test_the_withdrawn_page_says_gone and
 its neighbors) are not insurance-specific: they drive server.app's
-WITHDRAWN_PATH_PREFIXES constant end to end, which today covers both
-/inspection (withdrawn 2026-09-18) and /practice (withdrawn 2026-09-19, a
+WITHDRAWN_PATH_PREFIXES constant end to end, which today covers
+/inspection (withdrawn 2026-09-18), /practice (withdrawn 2026-09-19, a
 separate medical/healthcare-audience page unrelated to this file's
-vocabulary scan). Both withdrawals answer through the same do_GET prefix
-check, so one parametrized test on one shared server covers both rather
-than duplicating a second server-spinning file. The vocabulary scan above
+vocabulary scan) and /verticals (retired 2026-09-28 with its renderer).
+All answer through the same do_GET prefix check, so one parametrized test
+on one shared server covers every one rather than duplicating a
+server-spinning file per withdrawal. The vocabulary scan above
 stays insurance-only and untouched: medical/clinical/patient vocabulary
 legitimately remains in this repo's disclaimer boilerplate, unlike
 "insurance" (see tests/test_no_healthcare_vertical_source.py for that
@@ -38,7 +39,7 @@ ROOT = _sitetext.ROOT
 # other file's later `import app`. A drift between this tuple and the real
 # constant would show up immediately as a WRONG SET of paths under test,
 # which is a visible, honest failure mode — not a silent one.
-WITHDRAWN_PREFIXES = ("/inspection", "/practice")
+WITHDRAWN_PREFIXES = ("/inspection", "/practice", "/verticals")
 WITHDRAWN_VARIANTS = [
     variant
     for prefix in WITHDRAWN_PREFIXES
@@ -152,10 +153,12 @@ def test_the_withdrawn_page_says_gone(base, path, method) -> None:
 
 @pytest.mark.parametrize("path", ("/verticals/inspection", "/verticals/inspection.html"))
 def test_the_config_rendered_vertical_is_not_served(base, path) -> None:
-    """The server renders /verticals/<slug> from config/ whenever config/ is
-    present — it is, in this test server, even though the image omits it."""
+    """The server used to render /verticals/<slug>.html from config/ whenever
+    config/ was present (it is, in this test server, even though the image
+    omits it). The renderer was retired on 2026-09-28 and the subtree says
+    Gone; the body must still carry none of the vocabulary."""
     status, body, _ = _srv.request(base, path)
-    assert status == 404, (path, status)
+    assert status == 410, (path, status)
     assert not _hits(body.decode("utf-8", "replace"))
 
 
@@ -168,16 +171,10 @@ def test_the_healthcare_config_rendered_vertical_is_not_served(base, path) -> No
     third fixture). Status only — _hits() above is insurance vocabulary and
     would not mean anything applied to a healthcare path.
 
-    Asymmetric by construction, not by oversight: do_GET's /verticals/
-    branch only fires when the path ends in .html
-    (`path.startswith("/verticals/") and path.endswith(".html")`), so
-    "/verticals/healthcare" (no extension) already 404s from the static
-    fallback regardless of whether config/verticals/healthcare.yml exists —
-    only the .html variant can distinguish "the config is gone" from "this
-    URL shape was never routed." Both are asserted for completeness; only
-    the .html one is a meaningful regression control."""
+    Both spellings answer 410 since /verticals was retired (2026-09-28):
+    the whole subtree is withdrawn, whatever config/ holds."""
     status, _body, _ = _srv.request(base, path)
-    assert status == 404, (path, status)
+    assert status == 410, (path, status)
 
 
 def test_the_generated_sitemap_does_not_list_it(base) -> None:

@@ -30,17 +30,16 @@ This gate's domain is:
      index-legacy[.html] both 404 unconditionally — see app.py's
      _PRIVATE_PATH_PREFIXES / _PRIVATE_PATH_EXACT) — reused here rather than
      re-guessed, so this test tracks that logic instead of drifting from it.
-     108 files pass that check (git ls-files and pathlib.rglob agree — see
+     106 files pass that check (git ls-files and pathlib.rglob agree — see
      test_domain_enumeration_methods_agree).
 
   2. server/*.py — every module, read as literal source text for a <script>
-     tag written straight into an HTML template string. Three modules build
-     full documents (app.py's error page, blog.py's post shell,
-     verticals.py's vertical-page template); the other 50 are scanned too,
-     on purpose: reading "only the templates I already know about" is
-     exactly the mistake the 2026-09-12 gap made. 53 files.
+     tag written straight into an HTML template string. Two modules build
+     full documents (app.py's error page, blog.py's post shell); the rest
+     are scanned too, on purpose: reading "only the templates I already
+     know about" is exactly the mistake the 2026-09-12 gap made. 49 files.
 
-  108 + 53 = 161 files scanned. N = 161 (independently recounted via
+  106 + 49 = 155 files scanned. N = 155 (independently recounted via
   `git ls-files` and via `pathlib.rglob`/`glob` in
   test_domain_enumeration_methods_agree; they must produce the same set).
 
@@ -59,10 +58,6 @@ This gate's domain is:
       element in rendered output. Pinned by
       test_markdown_renderer_cannot_emit_script below, not just asserted in
       this docstring.
-    - server/verticals.py's YAML-driven text fields (audience, FAQ, technical
-      detail, disclaimer): every one of them is routed through _esc() /
-      html.escape() before insertion (verified by reading verticals.py);
-      pinned by test_verticals_yaml_fields_cannot_emit_script below.
 
 ALLOWLIST
 ---------
@@ -105,7 +100,6 @@ SERVER_DIR = ROOT / "server"
 # tests/conftest.py puts server/ on sys.path before this module is imported.
 import app  # noqa: E402  (server/app.py)
 import blog  # noqa: E402  (server/blog.py)
-import verticals  # noqa: E402  (server/verticals.py)
 
 # ---------------------------------------------------------------------------
 # Allowlist — small, named, one reason each. See ALLOWLIST in the docstring.
@@ -292,21 +286,28 @@ class TestNoInlineScriptStatic(unittest.TestCase):
         below pass vacuously — exactly how the learn.html defect shipped
         past ~2299 green tests. Proves the scan is actually reading the
         files: it must find real src= script tags, real allowlisted
-        ld+json blocks, and at least one server-template reference."""
+        ld+json blocks, and the server modules that build whole documents.
+
+        The server half used to count src= script tags inside server/*.py.
+        The only module that wrote one, server/verticals.py, was deleted
+        when /verticals was retired (2026-09-28), so that count is zero by
+        design. What the control has to prove is unchanged: the scan reads
+        the server templates. It now counts the modules whose strings hold
+        an <html> document (app.py's error page, blog.py's post shell)."""
         total_script_tags = 0
         allowlisted_hits = 0
         src_hits = 0
-        server_hits = 0
+        server_documents = 0
         for label, path in _domain():
             text = path.read_text(encoding="utf-8", errors="ignore")
+            if label.startswith("server/") and re.search(r"<html\b", text, re.IGNORECASE):
+                server_documents += 1
             stripped = _TEXTAREA_BLOCK.sub("", text)
             for m in _SCRIPT_OPEN.finditer(stripped):
                 total_script_tags += 1
                 attrs = m.group(1)
                 if _SRC_ATTR.search(attrs):
                     src_hits += 1
-                    if label.startswith("server/"):
-                        server_hits += 1
                 type_m = _TYPE_ATTR.search(attrs)
                 script_type = type_m.group(1).strip().lower() if type_m else ""
                 if script_type in ALLOWED_INLINE_SCRIPT_TYPES:
@@ -321,11 +322,11 @@ class TestNoInlineScriptStatic(unittest.TestCase):
         self.assertGreater(allowlisted_hits, 20,
                            "scan found no allowlisted ld+json blocks — the "
                            "allowlist check is broken")
-        self.assertGreaterEqual(server_hits, 1,
-                                "scan found no src= script reference inside "
-                                "server/*.py — server templates are not "
-                                "being read (this is exactly the 2026-09-12 "
-                                "gap class)")
+        self.assertGreaterEqual(server_documents, 2,
+                                "scan read fewer than two server/*.py "
+                                "modules that build an <html> document — "
+                                "server templates are not being read (this "
+                                "is exactly the 2026-09-12 gap class)")
 
     def test_the_patterns_discriminate(self):
         """NEGATIVE CONTROL for the regexes themselves, on literal input."""
@@ -428,19 +429,6 @@ class TestNoInlineScriptStatic(unittest.TestCase):
         out = blog._render_markdown("before\n\n<script>alert(1)</script>\n\nafter")
         self.assertNotIn("<script", out.lower())
         self.assertIn("&lt;script&gt;", out)
-
-    def test_verticals_yaml_fields_cannot_emit_script(self):
-        """Pins the same reasoning for server/verticals.py's YAML-driven
-        text fields: every one is routed through _esc()/html.escape()."""
-        payload = '<script>alert(1)</script>'
-        self.assertNotIn("<script", verticals._esc(payload).lower())
-        self.assertNotIn("<script", verticals._disclaimer_html(payload).lower())
-        self.assertNotIn(
-            "<script",
-            verticals._audience_block({"audience": payload}).lower())
-        self.assertNotIn(
-            "<script",
-            verticals._bullet_section("X", [payload]).lower())
 
 
 if __name__ == "__main__":

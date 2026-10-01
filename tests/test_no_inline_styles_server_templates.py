@@ -3,9 +3,8 @@
 `tests/test_no_inline_styles.py` reads `web/**/*.html` only. The CSP applies to
 every response, including HTML assembled in Python. Found 2026-09-19: the live
 unsubscribe page carried an inline style block (fixed in the same change), and
-server/verticals.py still does. Nothing is broken in production today only
-because /verticals/* is not served there (the image ships without config/).
-Shipping those pages as they stand would ship them unstyled.
+server/verticals.py carried ten more. That module was deleted when /verticals
+was retired (founder decision 2026-09-28), so no module is pinned today.
 
 Reads STRING CONSTANTS through `ast`, never raw text:
   - the parser has already joined adjacent literals, so an attribute that
@@ -15,7 +14,7 @@ Reads STRING CONSTANTS through `ast`, never raw text:
   - comments and docstrings are not constants that reach a response, so prose
     about styles cannot turn the gate red (it did, once, on its first day).
 
-RATCHET, not allowlist: the known violator is pinned WITH ITS COUNT, so it
+RATCHET, not allowlist: a known violator is pinned WITH ITS COUNT, so it
 cannot grow inside the file either, and fixing it forces the pin's deletion.
 """
 from __future__ import annotations
@@ -29,10 +28,7 @@ ROOT = Path(__file__).resolve().parent.parent
 SERVER = ROOT / "server"
 
 # module -> (pinned count, why tolerated for now). Counts only go down.
-KNOWN_VIOLATORS = {
-    "verticals.py": (10, "not served in production (no config/ in the image); "
-                         "ship-or-retire is an open founder decision"),
-}
+KNOWN_VIOLATORS: dict[str, tuple[int, str]] = {}
 
 # Not HTTP responses. A CSP is a response header and does not govern mail
 # clients, which in practice REQUIRE inline styles. Exempt by category, named.

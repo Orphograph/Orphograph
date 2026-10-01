@@ -156,10 +156,6 @@ SELF_FILE_BASENAMES: frozenset[str] = frozenset({
     "compliance_scan.py",
     "test_compliance_scan.py",
     "AUTOMATION_README.md",  # documents the deny phrases verbatim (Series A / raised $ / valuation)
-    # This existing test enforces the same brand rule at the verticals
-    # layer; its regex constant intentionally lists every denied name as
-    # the literal pattern set. Same shape as ALL_CAPS_DENY in this file.
-    "test_verticals.py",
 })
 
 

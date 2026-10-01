@@ -68,13 +68,6 @@ from email_fold import fold_email  # noqa: E402
 import unsubscribe  # noqa: E402
 import waitlist  # noqa: E402
 import webhooks  # noqa: E402
-# Optional module — vertical landing pages. MUST NOT crash app startup if a
-# YAML backend is missing in the build. None disables /verticals/* routes.
-try:
-    import verticals  # noqa: E402
-except Exception as _e:  # noqa: BLE001
-    sys.stderr.write(f"[startup] verticals unavailable: {_e}\n")
-    verticals = None  # type: ignore[assignment]
 try:
     import payout_monitor  # noqa: E402
 except ImportError:  # pragma: no cover
@@ -1147,7 +1140,12 @@ _PRIVATE_PATH_EXACT = frozenset({"index-legacy"})
 # fell through to the static-file fallback and answered 404, not 410 --
 # live on production for /inspection/index and /inspection/index.css since
 # the day of that withdrawal (code review finding, 2026-09-19, PR #255).
-WITHDRAWN_PATH_PREFIXES = ("/inspection", "/practice")
+#
+# /verticals (founder decision 2026-09-28): /verticals/<slug>.html was rendered
+# from config/verticals/*.yml. Production answered 404 only because the image
+# ships without config/; any tree with config/ served the full pages. Retired
+# with its renderer, so the subtree says Gone wherever the server runs.
+WITHDRAWN_PATH_PREFIXES = ("/inspection", "/practice", "/verticals")
 
 
 def _is_withdrawn_path(path: str) -> bool:
@@ -1829,9 +1827,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):  # noqa: N802
         path = self.path.split("?", 1)[0]
-        # Withdrawn pages. Each sat in the sitemap (/inspection/ was also in the
-        # homepage footer), so say Gone rather than Not Found: crawlers drop a
-        # 410 and its cached snippet far sooner than a 404.
+        # Withdrawn pages. Each was public somewhere (a sitemap entry, the
+        # homepage footer, a direct URL), so say Gone rather than Not Found:
+        # crawlers drop a 410 and its cached snippet far sooner than a 404.
         if _is_withdrawn_path(path):
             self.send_error(410, "Gone")
             return
@@ -2735,29 +2733,6 @@ class Handler(BaseHTTPRequestHandler):
             # Post-payment landing for the NOWPayments success_url redirect.
             _serve_static(self, "/pay/success.html")
             return
-        # Vertical landing pages — rendered from config/verticals/<slug>.yml.
-        # Reachable by direct URL only; not linked from the homepage. This
-        # branch precedes the static fallback so /verticals/<slug>.html is
-        # served from the YAML rather than from the on-disk file (if any).
-        if path.startswith("/verticals/") and path.endswith(".html"):
-            if verticals is None:
-                self.send_error(404, "Vertical not found")
-                return
-            slug = path[len("/verticals/"):-len(".html")]
-            if slug and "/" not in slug:
-                body = verticals.render_html(slug)
-                if body is not None:
-                    payload = body.encode("utf-8")
-                    self.send_response(200)
-                    self.send_header("Content-Type", "text/html; charset=utf-8")
-                    self.send_header("Content-Length", str(len(payload)))
-                    self.send_header("Cache-Control", "public, max-age=600")
-                    _security_headers(self)
-                    self.end_headers()
-                    self.wfile.write(payload)
-                    return
-                self.send_error(404, "Vertical not found")
-                return
         # /docs/mcp is the URL developers reach for when they are already in
         # the docs, but the canonical MCP page is /mcp and has been since it
         # shipped. Two pages describing one product drift apart, so this is a
