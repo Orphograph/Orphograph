@@ -5067,17 +5067,17 @@ class Handler(BaseHTTPRequestHandler):
         from urllib.parse import parse_qs
         from_page = parse_qs(raw.decode("latin-1")).get("via") == ["page"]
         try:
-            # ensure_writable, before the already-suppressed shortcut in
-            # add(): with a ledger that could not be opened a new address got
-            # 503 and a suppressed one got success, which told anyone which
-            # one it was (the GET handler did this check until the write
-            # moved here, 2026-09-27). prove_write, for a ledger that opens
-            # and cannot be written (a full volume): add() answered a
-            # suppressed address without writing, so it got 200 where a new
-            # one got 503. Now it tries a write as long as the new one's row.
+            # reappend: add() answered an address already suppressed without
+            # writing, so when the ledger could not take a row (a full
+            # volume) it got 200 where a new one got 503, which told anyone
+            # who had unsubscribed. Now the address's row is appended whether
+            # or not one is there (any row suppresses), so both make the same
+            # write and are refused alike. The ledger is only appended to.
+            # ensure_writable is from before that, when only the new address
+            # opened the ledger; add() now opens it for both.
             unsubscribe.ensure_writable()
             unsubscribe.add(email, source="page_post" if from_page else "link_post",
-                            prove_write=True)
+                            reappend=True)
         except unsubscribe.SuppressionUnavailable:
             if from_page:
                 self._unsubscribe_page(

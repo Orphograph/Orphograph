@@ -7,16 +7,22 @@ itself failed (a full volume), an address that had already unsubscribed was
 answered 200 and a new one 503: while the volume was full, anyone could read
 who had unsubscribed.
 
-Now the POST asks add() to prove the write. With nothing to record it appends
-blank padding as long as the row a new address would write, through the same
-locked append, and cuts it off again. A failed write raises
-SuppressionUnavailable for both, and a proof that worked leaves the ledger
-byte for byte as it was. Other callers of add() write nothing, as before.
+Now the POST asks add() to append the address's row again. An address is
+suppressed if any row says so, so a second row changes nothing a reader sees,
+and the write is the same row a new address makes, under the same lock. A
+failed write raises SuppressionUnavailable for both. Other callers of add()
+write nothing for an address already there, as before.
 
-Why as long as the row, and not one byte: a full volume still has the unused
-rest of the ledger's last block. One byte fits there long after a row has
-stopped fitting (measured on a full 4096-byte-block volume, 2026-09-28), so a
-one-byte proof answered 200 where a new address got 503.
+0ce9aa3 got the same answer by appending blanks and cutting them off again
+with ftruncate. Shortening a consent ledger can cut off a row another writer
+appended in between, so that is gone (tests/test_unsubscribe_reappends.py
+holds that nothing in server/unsubscribe.py can shorten the file). The cost:
+the ledger grows by one row each time the POST is asked.
+
+Room for one byte is not room for a row: a full volume still has the unused
+rest of the ledger's last block, and one byte fits there long after a row has
+stopped fitting (measured on a full 4096-byte-block volume, 2026-09-28). The
+known address writes the whole row, so it is refused where a new one is.
 """
 from __future__ import annotations
 
@@ -114,7 +120,7 @@ def test_a_failed_write_refuses_an_address_already_in_the_ledger(ledger, monkeyp
     before = ledger.read_bytes()
     seen = _volume_with(monkeypatch, room=0)
     with pytest.raises(unsubscribe.SuppressionUnavailable):
-        unsubscribe.add(KNOWN, source="test", prove_write=True)
+        unsubscribe.add(KNOWN, source="test", reappend=True)
     assert seen, "refused without trying the write"
     assert ledger.read_bytes() == before
 
@@ -124,45 +130,47 @@ def test_a_failed_write_refuses_a_new_address(ledger, monkeypatch):
     import unsubscribe
     seen = _volume_with(monkeypatch, room=0)
     with pytest.raises(unsubscribe.SuppressionUnavailable):
-        unsubscribe.add(FRESH, source="test", prove_write=True)
+        unsubscribe.add(FRESH, source="test", reappend=True)
     assert seen
     assert not unsubscribe.is_unsubscribed(FRESH)
 
 
 def test_room_for_a_byte_is_not_room_for_a_row(ledger, monkeypatch):
-    """The proof is refused wherever the row would be: it tries as many bytes
-    as the row. A one-byte proof passed here and the new address did not."""
+    """The known address tries the same row, byte for byte, as a new one, so
+    it is refused wherever the new one is. A one-byte proof (an earlier
+    draft) passed here and the new address did not."""
     import unsubscribe
     before = ledger.read_bytes()
     seen = _volume_with(monkeypatch, room=8)
     with pytest.raises(unsubscribe.SuppressionUnavailable):
-        unsubscribe.add(KNOWN, source="link_post", prove_write=True)
+        unsubscribe.add(KNOWN, source="link_post", reappend=True)
     tried_for_known = sum(seen)
     ledger.write_bytes(before)          # the same ledger and the same room again
     seen = _volume_with(monkeypatch, room=8)
     with pytest.raises(unsubscribe.SuppressionUnavailable):
-        unsubscribe.add(FRESH, source="link_post", prove_write=True)
+        unsubscribe.add(FRESH, source="link_post", reappend=True)
     # The two addresses are equally long, so their rows are.
     assert len(KNOWN) == len(FRESH)
     assert tried_for_known == sum(seen)
     assert unsubscribe.is_unsubscribed(KNOWN) and not unsubscribe.is_unsubscribed(FRESH)
 
 
-def test_proving_the_write_leaves_the_ledger_as_it_was(ledger):
-    """Control: on a healthy ledger add() still says "already there", and the
-    ledger does not grow however often it is asked. Nothing limits how often
-    a stranger may POST, so the bound is this one: no growth at all."""
+def test_asking_again_appends_the_row_again(ledger):
+    """On a healthy ledger add() still says "already there", and each ask
+    appends one more row for the address after everything that was there.
+    Any row suppresses, so the address reads the same; nothing is rewritten."""
     import unsubscribe
     before = ledger.read_bytes()
     for _ in range(25):
-        assert unsubscribe.add(KNOWN, source="test", prove_write=True) is False
-    assert ledger.read_bytes() == before
+        assert unsubscribe.add(KNOWN, source="test", reappend=True) is False
+    assert ledger.read_bytes().startswith(before)
+    assert _rows(ledger) == [KNOWN] * 26
     assert unsubscribe.is_unsubscribed(KNOWN)
     assert not unsubscribe.is_unsubscribed(FRESH)
 
 
 def test_a_caller_that_does_not_ask_writes_nothing(ledger, monkeypatch):
-    """Control: add() without prove_write is what it was, on a healthy ledger
+    """Control: add() without reappend is what it was, on a healthy ledger
     and on a full volume."""
     import unsubscribe
     before = ledger.read_bytes()
@@ -174,10 +182,11 @@ def test_a_caller_that_does_not_ask_writes_nothing(ledger, monkeypatch):
     assert ledger.read_bytes() == before
 
 
-def test_the_proof_cuts_off_nothing_it_did_not_write(ledger, monkeypatch):
-    """The proof takes its padding off again by shortening the file. A writer
-    that does not take the lock (scripts/reply_router.py) can append in
-    between, and its row must survive: then the padding stays instead."""
+def test_a_row_another_writer_appends_in_between_is_kept(ledger, monkeypatch):
+    """A writer that does not take the lock (scripts/reply_router.py) can
+    append right after add() writes. 0ce9aa3 then shortened the file to take
+    its padding off, and a row written in between could be cut with it. Now
+    both rows stay, whole, in the order they were written."""
     import file_lock
     import unsubscribe
     other = json.dumps({"email": "stop-reply@example.test", "reason": "STOP_REPLY"}) + "\n"
@@ -186,10 +195,12 @@ def test_the_proof_cuts_off_nothing_it_did_not_write(ledger, monkeypatch):
         def __init__(self, real):
             self._real = real
 
-        def flush(self):
+        def write(self, text):
+            n = self._real.write(text)
             self._real.flush()
             with ledger.open("a") as unlocked:
                 unlocked.write(other)
+            return n
 
         def __getattr__(self, name):
             return getattr(self._real, name)
@@ -201,28 +212,50 @@ def test_the_proof_cuts_off_nothing_it_did_not_write(ledger, monkeypatch):
 
     before = ledger.read_bytes()
     monkeypatch.setattr(unsubscribe, "locked", locked)
-    assert unsubscribe.add(KNOWN, source="test", prove_write=True) is False
+    assert unsubscribe.add(KNOWN, source="test", reappend=True) is False
     after = ledger.read_bytes()
     assert after.startswith(before) and after.endswith(other.encode())
-    assert after[len(before):-len(other)].strip() == b"", "only blank padding between them"
+    assert _rows(ledger) == [KNOWN, KNOWN, "stop-reply@example.test"]
     assert unsubscribe.is_unsubscribed("stop-reply@example.test")
     assert unsubscribe.is_unsubscribed(KNOWN)
 
 
-def test_every_reader_of_the_ledger_skips_what_a_failed_proof_leaves(ledger, monkeypatch):
-    """A proof that fails part-way leaves blanks with no newline, and one cut
-    short by a crash leaves a whole blank line. The server's reader and the
-    two scripts that read the same file skip both."""
+def test_the_row_is_on_disk_before_the_lock_is_let_go(ledger, monkeypatch):
+    """file_lock.locked lets go of the lock before it closes the file, and a
+    row still in the file's buffer is written at close: after the next writer
+    may already have looked for a torn last line. add() flushes while it
+    holds the lock, so the row is on disk when the lock goes."""
+    import file_lock
+    import unsubscribe
+    under_lock: list[bytes] = []
+
+    @contextlib.contextmanager
+    def locked(path, *, mode="a", exclusive=True):
+        with file_lock.locked(path, mode=mode, exclusive=exclusive) as real:
+            yield real
+            under_lock.append(path.read_bytes())    # still locked, not yet closed
+
+    monkeypatch.setattr(unsubscribe, "locked", locked)
+    assert unsubscribe.add(KNOWN, source="test", reappend=True) is False
+    assert unsubscribe.add(FRESH, source="test") is True
+    assert len(under_lock) == 2
+    assert under_lock[0].count(KNOWN.encode()) == 2, "the row was still buffered"
+    assert FRESH.encode() in under_lock[1], "the row was still buffered"
+
+
+def test_every_reader_of_the_ledger_skips_what_a_failed_write_leaves(ledger, monkeypatch):
+    """A write that fails part-way leaves the start of a row with no newline.
+    It is no row, so it suppresses no one; the next row starts on a fresh
+    line; and the server's reader and the two scripts that read the same file
+    all read past it."""
     import file_lock
     import unsubscribe
     _volume_with(monkeypatch, room=8)
     with pytest.raises(unsubscribe.SuppressionUnavailable):
-        unsubscribe.add(KNOWN, source="test", prove_write=True)
+        unsubscribe.add(KNOWN, source="test", reappend=True)
     monkeypatch.setattr(unsubscribe, "locked", file_lock.locked)    # room again
-    assert ledger.read_bytes().endswith(b" " * 8), "control: the blanks are there"
-    assert unsubscribe.add(FRESH, source="test") is True        # a row after them
-    with ledger.open("a") as f:
-        f.write(" " * 40 + "\n" + "\n")
+    assert ledger.read_bytes().endswith(b'\n{"ts":"2'), "control: the torn start is there"
+    assert unsubscribe.add(FRESH, source="test") is True        # a row after it
     assert unsubscribe.add("last@example.test", source="test") is True
     everyone = {KNOWN, FRESH, "last@example.test"}
     assert all(unsubscribe.is_unsubscribed(e) for e in everyone)
@@ -235,9 +268,9 @@ def test_every_reader_of_the_ledger_skips_what_a_failed_proof_leaves(ledger, mon
     assert importer._suppressed_emails() == everyone
 
 
-def test_a_proof_on_a_torn_ledger_leaves_the_next_row_readable(tmp_path, monkeypatch):
-    """The torn-line guard still holds. The proof puts the ledger back as it
-    found it, torn line and all, and the next row starts on its own line."""
+def test_asking_again_on_a_torn_ledger_puts_the_row_on_its_own_line(tmp_path, monkeypatch):
+    """The torn-line guard holds for the row written again too: it starts on
+    its own line and reads back, and so does the next one."""
     import unsubscribe
     path = tmp_path / "suppressions.jsonl"
     path.write_text(
@@ -245,8 +278,9 @@ def test_a_proof_on_a_torn_ledger_leaves_the_next_row_readable(tmp_path, monkeyp
         '{"ts":"2026-09-27T00:00:01+00:00","em')                 # torn, no newline
     before = path.read_bytes()
     monkeypatch.setattr(unsubscribe, "SUPPRESS_PATH", path)
-    assert unsubscribe.add(KNOWN, source="test", prove_write=True) is False
-    assert path.read_bytes() == before
+    assert unsubscribe.add(KNOWN, source="test", reappend=True) is False
+    assert path.read_bytes().startswith(before)
+    assert json.loads(path.read_text().splitlines()[-1])["email"] == KNOWN
     assert unsubscribe.add(FRESH, source="test") is True
     assert unsubscribe.is_unsubscribed(FRESH), "recorded, and not readable back"
     assert unsubscribe.is_unsubscribed(KNOWN)
@@ -270,8 +304,9 @@ def _button(base: str, email: str):
 
 
 def test_a_second_unsubscribe_is_answered_like_the_first(tmp_path):
-    """Control: on a healthy ledger nothing a caller sees has changed, and
-    asking again, as mailbox providers do, adds nothing to the ledger."""
+    """On a healthy ledger nothing a caller sees has changed. Asking again,
+    as mailbox providers do, appends the address's row again (the same write
+    a new address makes) and changes nothing that was already there."""
     email = "twice@example.test"
     ledger = tmp_path / "suppressions.jsonl"
     for base in _srv.server_processes(tmp_path, stub_calendars=True):
@@ -285,8 +320,8 @@ def test_a_second_unsubscribe_is_answered_like_the_first(tmp_path):
         assert again[0] == 200 and b"Done" in again[1]
         for _ in range(12):
             assert _one_click(base, email) == first
-        assert _rows(ledger).count(email) == 1
-        assert ledger.read_bytes() == recorded
+        assert _rows(ledger) == [email] * 16, "one row for each of the 16 asks"
+        assert ledger.read_bytes().startswith(recorded)
         status, page, _headers = _srv.request(
             base, "/api/unsubscribe?e=" + quote(email), timeout=15)
         assert status == 200 and b'<form method="post"' in page, "the confirm page"
