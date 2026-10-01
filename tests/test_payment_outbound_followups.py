@@ -81,7 +81,11 @@ def fresh_app(tmp_path, monkeypatch):
     try:
         import app
         import engine
+        import lightning
         monkeypatch.setattr(engine, "_submit", lambda cal, h: (True, PENDING_BODY))
+        # Retired in production (lightning.LIGHTNING_RETIRED, 2026-09-28);
+        # these tests cover the armed code, on this fresh module copy only.
+        monkeypatch.setattr(lightning, "LIGHTNING_RETIRED", False)
         yield app
     finally:
         for m in _POLLUTED:

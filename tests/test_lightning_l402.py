@@ -40,6 +40,7 @@ _ENV = ("ORPHO_DATA_DIR", "HOST", "PORT", "ORPHO_COOKIE_SECURE",
 HASH_A = "aa" * 32
 HASH_B = "bb" * 32
 HASH_C = "cc" * 32
+HASH_D = "dd" * 32
 
 
 class TestL402(unittest.TestCase):
@@ -63,6 +64,11 @@ class TestL402(unittest.TestCase):
         import engine as engine_mod
         import lightning as lightning_mod
         from http.server import ThreadingHTTPServer
+        # The rail is retired in production (lightning.LIGHTNING_RETIRED,
+        # 2026-09-28). These tests keep the armed code honest so a re-arm is
+        # one line, so they lift the fence on this fresh module copy only;
+        # tearDownClass drops the copy with the rest of _POLLUTED.
+        lightning_mod.LIGHTNING_RETIRED = False
         cls.lightning = lightning_mod
         cls._orig_submit = engine_mod._submit
         engine_mod._submit = lambda cal, h: (True, PENDING_BODY)
@@ -176,6 +182,31 @@ class TestL402(unittest.TestCase):
             self.assertEqual(s, 429)
         finally:
             os.environ["ORPHO_LN_ALLOW_MOCK"] = old
+
+    def test_07_retired_rail_refuses_a_paid_credential_and_leaves_it_unspent(self):
+        """The strongest form of the retirement: a credential that really was
+        paid. Retired, it buys nothing, writes no receipt and is not marked
+        spent; re-armed, the same credential still buys its one anchor, which
+        proves the refusal left the payment untouched."""
+        self._exhaust_free_tier()
+        macaroon, preimage = self._paid_credential()
+        payment_hash = self.lightning.parse_macaroon(macaroon)["payment_hash"]
+        auth = {"Authorization": f"L402 {macaroon}:{preimage}"}
+        receipts = Path(self._tmp.name) / "receipts"
+        before = sorted(p.name for p in receipts.iterdir())
+        self.lightning.LIGHTNING_RETIRED = True
+        try:
+            s, _, b = self._post("/api/anchor", {"hash_hex": HASH_D}, auth)
+            qs, _, qb = self._post("/api/ln/quote", {})
+        finally:
+            self.lightning.LIGHTNING_RETIRED = False
+        self.assertEqual(s, 410, b)
+        self.assertIn("retired", b["error"].lower())
+        self.assertEqual(qs, 410, qb)
+        self.assertEqual(sorted(p.name for p in receipts.iterdir()), before)
+        self.assertFalse(self.lightning.is_spent(payment_hash))
+        s, _, b = self._post("/api/anchor", {"hash_hex": HASH_D}, auth)
+        self.assertEqual(s, 200, b)
 
 
 if __name__ == "__main__":

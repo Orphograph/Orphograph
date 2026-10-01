@@ -1223,8 +1223,9 @@ def _is_private_path(rel_path: str) -> bool:
 # and a caller reading 410 knows to stop rather than to retry.
 #
 # NOT retired here, and each a separate decision: OpenTimestamps Bitcoin
-# ANCHORING (the product), the L402/Lightning rail (/api/ln/quote — dormant),
-# and the hosted crypto processor (/pay/crypto, /api/nowpayments/* — live).
+# ANCHORING (the product), the L402/Lightning rail (/api/ln/quote — retired
+# on its own on 2026-09-28, see _LIGHTNING_RETIRED below), and the hosted
+# crypto processor (/pay/crypto, /api/nowpayments/* — live).
 # ASCII ONLY, and this is load-bearing. The reason phrase is written into the
 # HTTP status line, which the stdlib encodes latin-1; an em dash here raised
 # UnicodeEncodeError inside send_error and the server closed the connection
@@ -1287,6 +1288,33 @@ _NOINDEX_STATIC_FILES = frozenset({"lp/start.html"})
 def _send_robots_header(handler: BaseHTTPRequestHandler, target: Path) -> None:
     if target.relative_to(WEB_DIR).as_posix().lower() in _NOINDEX_STATIC_FILES:
         handler.send_header("X-Robots-Tag", "noindex")
+
+
+# ─── the retired Lightning (L402) rail ──────────────────────────────────────
+#
+# Founder decision 2026-09-28: retired until someone asks for it. Unlike the
+# direct-BTC rail above, the code is fenced, not deleted: the switch is
+# lightning.LIGHTNING_RETIRED, and while it is True POST /api/ln/quote and any
+# anchor request carrying an L402 credential answer 410 with this body. One
+# message for both, so a caller reads the same thing wherever it meets the
+# rail. ASCII only, as the BTC message above explains for status lines.
+_LIGHTNING_RETIRED = {
+    "error": "Lightning payments are retired.",
+    "detail": "Pay-per-anchor over Lightning (L402) has been withdrawn.",
+    "hint": "Pay by card checkout: Packs and the Standing Order at "
+            "https://orphograph.com/pricing",
+}
+# The anchor form adds what happened to THIS request. A caller who sent an
+# L402 credential beside a pack token or an x402 payment must be told that
+# neither was used, or it cannot know whether to resend.
+_LIGHTNING_RETIRED_ANCHOR = {
+    **_LIGHTNING_RETIRED,
+    "detail": "Pay-per-anchor over Lightning (L402) has been withdrawn. This "
+              "request was not anchored and nothing was charged: a pack token "
+              "or an x402 payment sent with it was not used. Resend it without "
+              "the Authorization: L402 header.",
+    "charged": False,
+}
 
 
 def _serve_static(handler: BaseHTTPRequestHandler, rel_path: str) -> None:
@@ -2986,6 +3014,31 @@ class Handler(BaseHTTPRequestHandler):
         except (OSError, ValueError):
             return 0
 
+    def _refuse_retired_l402(self) -> bool:
+        """True if the request carried an L402 credential and was answered 410.
+
+        Called first on every anchor endpoint, while lightning.LIGHTNING_RETIRED
+        holds. FIRST because the anchor handler spends a pack credit, and checks
+        and settles an x402 payment, before the place where it used to read
+        the L402 header: refusing any later would charge for a request that is
+        refused. It reads nothing of the credential either, since parsing a
+        macaroon creates the rail's secret file and the spent set is the rail's
+        own state; a retired rail touches neither.
+
+        The scheme is matched without regard to case, as HTTP auth schemes
+        are. The armed code matched only "L402 ", so a lowercase credential
+        used to fall through to the free tier or to x402 and be silently
+        ignored, which is the one thing a retired credential must not be.
+        """
+        if not lightning.LIGHTNING_RETIRED:
+            return False
+        scheme = self.headers.get("Authorization", "").strip().split(None, 1)
+        if not scheme or scheme[0].lower() != "l402":
+            return False
+        self._drain_request_body()
+        _json_response(self, 410, _LIGHTNING_RETIRED_ANCHOR)
+        return True
+
     def _anchor_payload(self, max_bytes: int):
         """Parse untrusted anchor input before charging any allowance."""
         # credit_refunded / max_bytes: keys these 400s carried before
@@ -3072,6 +3125,13 @@ class Handler(BaseHTTPRequestHandler):
         if _is_retired_btc_path(self.path.split("?", 1)[0]):
             self._drain_request_body()
             self.send_error(410, _RETIRED_BTC_MESSAGE)
+            return
+        # The retired Lightning quote, for the same reasons and in the same
+        # place: before the content-type gate, body drained first. JSON, not
+        # an error page, because its only callers are API clients.
+        if lightning.LIGHTNING_RETIRED and self.path.split("?", 1)[0] == "/api/ln/quote":
+            self._drain_request_body()
+            _json_response(self, 410, _LIGHTNING_RETIRED)
             return
         if self._reject_non_json_post():
             return
@@ -3175,6 +3235,8 @@ class Handler(BaseHTTPRequestHandler):
         if self.path != "/api/anchor":
             self.send_error(404, "not found")
             return
+        if self._refuse_retired_l402():
+            return
         # Admin toggle: disable anchoring if external services are down
         if ORPHO_DISABLE_ANCHORING:
             _json_response(self, 503, {
@@ -3198,6 +3260,8 @@ class Handler(BaseHTTPRequestHandler):
         # A valid, settled, UNSPENT credential buys exactly one anchor — the
         # agent-pays path (docs/LIGHTNING_L402.md). An invalid attempt fails
         # loudly with 401; it never silently falls through to the free tier.
+        # Reached only while the rail is armed; retired, _refuse_retired_l402
+        # answered 410 at the top of this route.
         ln_payment_hash = None
         auth_header = self.headers.get("Authorization", "").strip()
         if not pack_consumed and auth_header.startswith("L402 "):
@@ -3981,6 +4045,8 @@ class Handler(BaseHTTPRequestHandler):
         a backlog. API-key auth bypasses the rate limit; pack tokens consume
         one credit per item; subscribers anchor under their session.
         """
+        if self._refuse_retired_l402():
+            return
         if ORPHO_DISABLE_ANCHORING:
             _json_response(self, 503, {"error": "anchoring temporarily unavailable"})
             return
@@ -5171,8 +5237,9 @@ class Handler(BaseHTTPRequestHandler):
         """L402 quote: mint an invoice + macaroon for one pay-per-anchor.
 
         Proactive form of the 402 challenge — an agent can fetch payment
-        terms before burning a free-tier slot. 503 until the founder arms a
-        Lightning backend (fly secrets), so today's behavior is unchanged.
+        terms before burning a free-tier slot. Reached only while the rail
+        is armed: retired (lightning.LIGHTNING_RETIRED), do_POST answers 410
+        before this runs. Armed, it is 503 until a Lightning backend is set.
         """
         if not lightning.configured():
             _json_response(self, 503, {
@@ -5210,6 +5277,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def _handle_anchor_folder(self) -> None:
         """POST /api/anchor_folder, one request in flight per client address."""
+        # Before the in-flight slot: a refused request must not hold it.
+        if self._refuse_retired_l402():
+            return
         key = self._client_key()
         with _folder_in_flight_lock:
             busy = key in _folder_in_flight

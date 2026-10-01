@@ -7,9 +7,13 @@ and `tests/test_x402_payment_flow.py` for the proof.
 
 **Not the same rail as L402** (`docs/LIGHTNING_L402.md`): L402 pays in
 Bitcoin sats over Lightning; x402 pays in USDC on Base. Both sit on the
-SAME endpoint (`POST /api/anchor`), checked in order pack token → L402 →
-x402 — the first credential present wins, so a request is never charged
-twice.
+SAME endpoint (`POST /api/anchor`). **L402 was retired on 2026-09-28**; x402
+was not. While L402 is retired, a request carrying an
+`Authorization: L402 ...` credential is answered 410 before anything else
+on it is read, including an x402 payment header: the x402 payment is not
+verified, not settled and not charged, and the 410 body says so. Without an
+L402 credential the order is pack token → x402 — the first credential
+present wins, so a request is never charged twice.
 
 ## Protocol
 
@@ -130,8 +134,8 @@ This module never holds a wallet key and never signs anything; signing is
 entirely the agent's own client-side responsibility (the `x402` reference
 package, or any x402-compliant client).
 
-## Arming it (founder steps — until then every path falls through to L402,
-## then to the classic 429, exactly as before)
+## Arming it (founder steps — until then every path falls through to the
+## classic 429, exactly as before; L402 is retired and issues no challenge)
 
 Unarmed, the server does not read the payment header at all: no
 facilitator is called and no x402 ledger is touched (pinned by
@@ -162,7 +166,8 @@ therefore leaves them unredeemable until it is armed again; check
    one and will need a small addition for a keyed mainnet facilitator).
 6. Flip the public copy in the same PR as arming — the homepage, pricing
    page and API docs should say agents can pay in USDC, matching how
-   L402's own arming step (5) treats its public copy.
+   L402's own arming step (5) treats its public copy (L402 is retired; its
+   copy now only says so).
 
 ## What is NOT built yet (say so; do not imply otherwise)
 

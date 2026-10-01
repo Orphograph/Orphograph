@@ -8,8 +8,9 @@ Three shipped-capability claims went onto the public web surface (homepage,
   2. Zero-knowledge execution proof on agent-output receipts — every page that
      mentions it must carry BOTH scope caveats (fixed hash-chain procedure, not
      a specific AI model; development-grade proving-key ceremony).
-  3. Lightning pay-per-anchor is BUILT but NOT ARMED — "Lightning" may appear
-     on the public surface only adjacent to "coming"/"soon" wording.
+  3. Lightning pay-per-anchor was RETIRED on 2026-09-28. The copy that said
+     it was "coming" is gone; tests/test_lightning_rail_is_retired.py now
+     guards every file under web/ against offering it again.
 
 Text-only assertions over the shipped files; nothing here executes site code.
 Pure stdlib + pytest.
@@ -37,9 +38,6 @@ CAVEAT_CEREMONY = (
 
 # Any of these marks a page as "mentions the execution proof".
 EXEC_MARKER = re.compile(r"(?i)zero-knowledge|execution\s+proof|zk_proof|zk_provenance")
-
-LIGHTNING = re.compile(r"(?i)\blightning\b")
-COMING_ADJ = re.compile(r"(?i)\b(coming|soon)\b")
 
 # Pages that must carry the lineage-scope sentence.
 LINEAGE_PAGES = [
@@ -133,26 +131,13 @@ def test_execution_proof_copy_never_claims_model_identity() -> None:
         )
 
 
-# ── 3 · Lightning is "coming", never "available" ─────────────────────────────
-
-def test_lightning_only_ever_appears_adjacent_to_coming_wording() -> None:
-    found = False
-    for page in _public_surface():
-        text = _read(page)
-        for m in LIGHTNING.finditer(text):
-            found = True
-            window = text[max(0, m.start() - 160):m.end() + 160]
-            assert COMING_ADJ.search(window), (
-                f"{page.relative_to(ROOT)}: 'Lightning' appears without "
-                "'coming'/'soon' wording nearby — the endpoint is not armed "
-                "and must not be presented as available "
-                f"(context: …{window[:200]}…)"
-            )
-    assert found, (
-        "No public page mentions Lightning — the coming-soon copy this test "
-        "pins has been removed; update or retire the test."
-    )
-
+# ── 3 · Lightning is retired ─────────────────────────────────────────────────
+#
+# The "only adjacent to coming wording" scan that lived here was inverted when
+# the rail was retired: see tests/test_lightning_rail_is_retired.py, which
+# scans every file under web/ and carries its own planted controls. The
+# llms.txt bullet test below still holds: the retired endpoint keeps one
+# bullet, marked 410, and the free-tier note stays on /api/anchor.
 
 def _llms_bullets() -> list[str]:
     """llms.txt list items, each joined with its indented continuation lines."""

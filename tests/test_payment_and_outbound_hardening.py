@@ -452,9 +452,12 @@ def test_unparsable_resolver_answer_returns_the_code_and_logs_the_detail(monkeyp
 # ── 8. Lightning invoices ──────────────────────────────────────────────────
 
 def _ln_server(tmp_path, **env):
+    # arm_lightning: the rail is retired in production (2026-09-28); these
+    # cases cover the armed code a re-arm switches back on. The switch is a
+    # flag on the test launcher, which production cannot run (tests/_srv.py).
     closed = _srv.reserve_ports(1)[0]
-    return _srv.server_processes(tmp_path, stub_calendars=True, RATE_LIMIT_PER_DAY="1",
-                                 **_no_egress(closed), **env)
+    return _srv.server_processes(tmp_path, stub_calendars=True, arm_lightning=True,
+                                 RATE_LIMIT_PER_DAY="1", **_no_egress(closed), **env)
 
 
 MOCK_LN = {"ORPHO_LN_BACKEND": "mock", "ORPHO_LN_ALLOW_MOCK": "1"}
