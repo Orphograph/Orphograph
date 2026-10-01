@@ -133,6 +133,13 @@ package, or any x402-compliant client).
 ## Arming it (founder steps — until then every path falls through to L402,
 ## then to the classic 429, exactly as before)
 
+Unarmed, the server does not read the payment header at all: no
+facilitator is called and no x402 ledger is touched (pinned by
+`test_an_unarmed_rail_ignores_a_payment_header_and_calls_no_facilitator`).
+Disarming a rail that holds settled-but-undelivered (HELD) payments
+therefore leaves them unredeemable until it is armed again; check
+`x402_ledger.jsonl` for held charges before removing the pay-to address.
+
 1. **Testnet only until mainnet is explicitly approved.** Create a Base
    Sepolia address to receive payments (a fresh EOA is enough; no ETH is
    needed to RECEIVE — the facilitator pays gas to settle).

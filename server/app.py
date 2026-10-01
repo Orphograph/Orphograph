@@ -3215,7 +3215,8 @@ class Handler(BaseHTTPRequestHandler):
         # it for good once the subscription lapsed (review of ca45f33).
         x402_held_private_owner = ""
         if (bool(payload.get("private", False)) and not subscription_active
-                and not pack_consumed and ln_payment_hash is None):
+                and not pack_consumed and ln_payment_hash is None
+                and x402.configured()):
             try:
                 x402_held_private_owner = _x402_held_charge_owner(self.headers, payload)
             except x402.ClaimSetUnavailable as e:
@@ -3252,7 +3253,12 @@ class Handler(BaseHTTPRequestHandler):
         x402_paid = None   # the SettleResponse this anchor is paid by
         x402_state = None
         x402_charge_owner = ""   # owner_id recorded with the charge (held redemption)
-        if not pack_consumed and ln_payment_hash is None:
+        # Only an ARMED rail reads the header. Unarmed (production until the
+        # founder sets a pay-to address) the header is ignored and every path
+        # falls through exactly as before x402 existed; it used to build
+        # requirements with an empty pay-to and call the public facilitator
+        # for any request carrying the header (found live, 2026-09-30).
+        if not pack_consumed and ln_payment_hash is None and x402.configured():
             try:
                 x402_header = x402.parse_payment_header(self.headers)
             except ValueError as e:
