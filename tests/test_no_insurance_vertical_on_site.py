@@ -11,7 +11,8 @@ its neighbors) are not insurance-specific: they drive server.app's
 WITHDRAWN_PATH_PREFIXES constant end to end, which today covers
 /inspection (withdrawn 2026-09-18), /practice (withdrawn 2026-09-19, a
 separate medical/healthcare-audience page unrelated to this file's
-vocabulary scan) and /verticals (retired 2026-09-28 with its renderer).
+vocabulary scan), /verticals (retired 2026-09-28 with its renderer) and
+/one-pager and /vs/c2pa (retired the same day).
 All answer through the same do_GET prefix check, so one parametrized test
 on one shared server covers every one rather than duplicating a
 server-spinning file per withdrawal. The vocabulary scan above
@@ -39,7 +40,7 @@ ROOT = _sitetext.ROOT
 # other file's later `import app`. A drift between this tuple and the real
 # constant would show up immediately as a WRONG SET of paths under test,
 # which is a visible, honest failure mode — not a silent one.
-WITHDRAWN_PREFIXES = ("/inspection", "/practice", "/verticals")
+WITHDRAWN_PREFIXES = ("/inspection", "/practice", "/verticals", "/one-pager", "/vs/c2pa")
 WITHDRAWN_VARIANTS = [
     variant
     for prefix in WITHDRAWN_PREFIXES
@@ -111,8 +112,9 @@ def test_the_inspection_vertical_is_not_in_the_tree() -> None:
 def test_the_prefix_match_does_not_leak_to_a_similar_path() -> None:
     """Unit-level check of app._is_withdrawn_path, isolated from any server:
     a TRAILING double slash (/practice//, an empty path segment under the
-    prefix) is still withdrawn; a path that merely SHARES CHARACTERS with
-    the prefix is not.
+    prefix) is still withdrawn, and so is the flat-file spelling and a
+    same-named asset (prefix + ".html", prefix + ".css"); a path that merely
+    SHARES CHARACTERS with the prefix is not.
 
     Not covered here: a LEADING double slash (//practice/) never reaches
     this function as such — stdlib http.server's parse_request() already
@@ -128,6 +130,8 @@ def test_the_prefix_match_does_not_leak_to_a_similar_path() -> None:
         assert app._is_withdrawn_path(prefix + "/index")
         assert app._is_withdrawn_path(prefix + "/index.css")
         assert app._is_withdrawn_path(prefix + "/anything/deep")
+        assert app._is_withdrawn_path(prefix + ".html")
+        assert app._is_withdrawn_path(prefix + ".css")
         assert not app._is_withdrawn_path(prefix + "x")
         assert not app._is_withdrawn_path(prefix + "s")  # e.g. a plural, different page
 

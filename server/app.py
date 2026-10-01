@@ -1145,7 +1145,14 @@ _PRIVATE_PATH_EXACT = frozenset({"index-legacy"})
 # from config/verticals/*.yml. Production answered 404 only because the image
 # ships without config/; any tree with config/ served the full pages. Retired
 # with its renderer, so the subtree says Gone wherever the server runs.
-WITHDRAWN_PATH_PREFIXES = ("/inspection", "/practice", "/verticals")
+#
+# /one-pager and /vs/c2pa (founder decision 2026-09-28): indexable pages that
+# nothing linked to. Retired and their files deleted. Both were flat files
+# (web/one-pager.html beside web/one-pager.css), not directories, which is why
+# the match below also covers "<prefix>.": the .html spelling and the
+# stylesheet that sat beside the page.
+WITHDRAWN_PATH_PREFIXES = ("/inspection", "/practice", "/verticals",
+                           "/one-pager", "/vs/c2pa")
 
 
 def _is_withdrawn_path(path: str) -> bool:
@@ -1155,6 +1162,12 @@ def _is_withdrawn_path(path: str) -> bool:
     "/practice/index", "/practice/index.css" and "/practice//" (a TRAILING
     empty segment under the prefix) are all withdrawn. "/practicex" is a
     different path that merely shares the prefix's characters and is not.
+
+    OR startswith(prefix + "."): a page that was a flat file answered at
+    "/one-pager.html" too (a 301 to the clean URL) and had its stylesheet
+    at "/one-pager.css". The dot is what keeps this narrow: a bare
+    startswith(prefix) would also take a live sibling that merely extends
+    the name, and "/vs/c2pax" stays a different path.
     `path` is expected pre-normalised the way do_GET already normalises it
     (query string stripped); no further normalisation happens here.
 
@@ -1164,7 +1177,8 @@ def _is_withdrawn_path(path: str) -> bool:
     open-redirect mitigation upstream of this function), so this function
     never sees that shape from a real request.
     """
-    return any(path == p or path.startswith(p + "/") for p in WITHDRAWN_PATH_PREFIXES)
+    return any(path == p or path.startswith((p + "/", p + "."))
+               for p in WITHDRAWN_PATH_PREFIXES)
 
 
 def _is_private_path(rel_path: str) -> bool:

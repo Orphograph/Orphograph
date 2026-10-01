@@ -11,6 +11,9 @@ Founder decisions of 2026-09-28 about public pages, each landed on its own:
      working, but asks not to be indexed twice over: a robots meta tag for
      crawlers that read the page and an X-Robots-Tag header for those that
      only read headers (and for HEAD, which has no page to read).
+  C. /one-pager and /vs/c2pa: nothing linked to either. Retired, their files
+     deleted; the page, its trailing-slash and .html spellings and its
+     stylesheet all answer 410.
 
 A crawler drops a Gone page and its cached snippet far sooner than a Not
 Found, and a link checker reading 410 knows to stop rather than retry. HEAD
@@ -31,7 +34,7 @@ import _srv
 SECURITY_HEADERS = ("Strict-Transport-Security", "X-Content-Type-Options",
                     "X-Frame-Options", "Content-Security-Policy")
 
-RETIRED_PREFIXES = ("/verticals",)
+RETIRED_PREFIXES = ("/verticals", "/one-pager", "/vs/c2pa")
 
 RETIRED = [
     "/verticals",
@@ -42,9 +45,16 @@ RETIRED = [
     "/verticals/accounting.html",
     "/verticals/legal",
     "/verticals/deep/nested/path",
+    # Each page in every spelling the static handler used to answer: the
+    # clean URL, a trailing slash, the .html form (it 301ed to the clean URL)
+    # and the stylesheet that sat beside it with a ?v= pin.
+    "/one-pager", "/one-pager/", "/one-pager.html", "/one-pager.css",
+    "/vs/c2pa", "/vs/c2pa/", "/vs/c2pa.html", "/vs/c2pa.css",
 ]
 
-LIVE = ("/pricing", "/press-kit")
+# /lp/c2pa-alternative shares characters with a retired page and is a live,
+# listed page: a match that was too loose would retire it too.
+LIVE = ("/pricing", "/press-kit", "/lp/c2pa-alternative")
 
 # Served, but not to be indexed. The trailing-slash spelling resolves to the
 # same file, so it must carry the same answer.

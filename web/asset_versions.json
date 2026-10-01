@@ -375,10 +375,6 @@
     "version": "1",
     "sha256": "4990e7b4506b4bcfb68739d9056f157dc81a1666091a2481fc6899ee03cd3c4e"
   },
-  "/one-pager.css": {
-    "version": "1",
-    "sha256": "5aee07cb5bbda3cf4c6f447c8e2ec5702c2934248fdf63f44f09212b8d2f73b9"
-  },
   "/pack.css": {
     "version": "2",
     "sha256": "ee32756351838f550483722ec2c1c974f096aa7a6209df3247849d8a6200b1c7"
@@ -510,10 +506,6 @@
   "/verify-js.js": {
     "version": "2",
     "sha256": "fbcebcdc48c2aa09cc9bdd4dcfae6c6ab0f96143ad0a5b86ad7854281c8b92d1"
-  },
-  "/vs/c2pa.css": {
-    "version": "1",
-    "sha256": "b65fbcc1b7e02a8dcb91333be0aafcc6bd8e7a6b4c381bbd1c82050ec11b5312"
   },
   "/what-is-this.css": {
     "version": "1",

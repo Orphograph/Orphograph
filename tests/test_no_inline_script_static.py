@@ -30,7 +30,7 @@ This gate's domain is:
      index-legacy[.html] both 404 unconditionally — see app.py's
      _PRIVATE_PATH_PREFIXES / _PRIVATE_PATH_EXACT) — reused here rather than
      re-guessed, so this test tracks that logic instead of drifting from it.
-     106 files pass that check (git ls-files and pathlib.rglob agree — see
+     104 files pass that check (git ls-files and pathlib.rglob agree — see
      test_domain_enumeration_methods_agree).
 
   2. server/*.py — every module, read as literal source text for a <script>
@@ -39,7 +39,7 @@ This gate's domain is:
      are scanned too, on purpose: reading "only the templates I already
      know about" is exactly the mistake the 2026-09-12 gap made. 49 files.
 
-  106 + 49 = 155 files scanned. N = 155 (independently recounted via
+  104 + 49 = 153 files scanned. N = 153 (independently recounted via
   `git ls-files` and via `pathlib.rglob`/`glob` in
   test_domain_enumeration_methods_agree; they must produce the same set).
 

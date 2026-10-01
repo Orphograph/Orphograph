@@ -46,8 +46,6 @@ sys.path.insert(0, str(ROOT / "server"))
 # these is verified to have NO inbound link (see `inbound_links`); adding a link
 # to one of them is what turns this red, and the answer is then to list it.
 UNLINKED = {
-    "/one-pager": "no page on the site links to it; promote or noindex is an open founder decision (2026-09-19)",
-    "/vs/c2pa": "no page on the site links to it; promote or noindex is an open founder decision (2026-09-19)",
     "/press-kit/orphograph-brand-guide": "no page links to it; list it or give it a canonical is a founder decision (2026-09-20)",
 }
 
