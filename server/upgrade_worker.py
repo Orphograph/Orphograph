@@ -62,6 +62,12 @@ UPGRADE_SCHEMA = 2
 # Bound the append-only upgrade log: rotate to a single .1 backup past this
 # size so a long-stuck backlog can't grow it without limit.
 UPGRADE_LOG_MAX_BYTES = int(os.environ.get("ORPHO_UPGRADE_LOG_MAX_BYTES", str(5 * 1024 * 1024)))
+# A public receipt keeps `notify_email` only until its Bitcoin-pin notice is
+# settled (founder decision 2026-09-28; see _drop_settled_notify_email).
+# Receipts this worker already finished are skipped on every pass, so the
+# pass rewrites those that still hold one, at most this many per pass; the
+# rest wait for the next pass. Set 0 to stop the cleanup of skipped receipts.
+NOTIFY_CLEANUP_MAX_PER_PASS = int(os.environ.get("ORPHO_NOTIFY_CLEANUP_MAX_PER_PASS", "500"))
 
 try:
     import ots_timestamp  # noqa: E402
@@ -221,6 +227,89 @@ def _calendar_short(url: str) -> str:
     return url.split("//", 1)[1].split(".", 1)[0]
 
 
+def _holds_settled_notify_email(record: dict) -> bool:
+    return (not record.get("private") and "notify_email" in record
+            and bool(record.get("btc_pinned_at")))
+
+
+def _drop_settled_notify_email(record: dict) -> bool:
+    """Remove `notify_email` from a PUBLIC record whose pin notice is settled.
+    Returns True when the record changed.
+
+    The address exists for one notice, and this worker tries that notice on
+    one pass only: the pass that first sets btc_pinned_at (the
+    was_pinned_before guard in _upgrade_one). So once btc_pinned_at is on the
+    record, either pin_email_sent_at is beside it (sent) or the one attempt
+    failed and nothing will retry it. Only this worker sets btc_pinned_at. A
+    receipt still waiting for Bitcoin, frozen ones included (clearing the
+    freeze resumes them), keeps the address. Private receipts keep it too.
+    Nothing reads the address for ownership, renewal commitments or exports.
+    """
+    if not _holds_settled_notify_email(record):
+        return False
+    del record["notify_email"]
+    return True
+
+
+class _ChangedWhileWriting(Exception):
+    """receipt.json changed between our read and our rename."""
+
+
+def _file_stamp(path: Path) -> tuple[int, int, int]:
+    st = path.stat()
+    return st.st_ino, st.st_mtime_ns, st.st_size
+
+
+def _write_record(receipt_file: Path, record: dict,
+                  expect: tuple[int, int, int] | None = None) -> None:
+    """Replace receipt.json with one rename, so a crash mid-write cannot
+    leave a truncated receipt (write_text truncates first, then writes).
+
+    With `expect`, the rename happens only if the file still has the stamp
+    taken before it was read. The privacy toggle in app.py writes receipt.json
+    without this worker's lock; without the check, a record read a moment
+    before a toggle would be written back over it and undo the toggle.
+    The tmp name differs from the toggle's own `receipt.json.tmp`."""
+    tmp = receipt_file.with_name(f".{receipt_file.name}.{os.getpid()}.tmp")
+    try:
+        with open(tmp, "w", encoding="utf-8") as f:
+            f.write(json.dumps(record, indent=2))
+            f.flush()
+            os.fsync(f.fileno())
+        if expect is not None and _file_stamp(receipt_file) != expect:
+            raise _ChangedWhileWriting()
+        os.replace(tmp, receipt_file)
+    finally:
+        try:
+            tmp.unlink()
+        except FileNotFoundError:
+            pass
+
+
+def _drop_from_skipped(receipt_file: Path) -> bool | None:
+    """Remove a settled `notify_email` from a receipt this pass is skipping.
+
+    Re-reads the file rather than using the caller's copy: upgrade_all may
+    already have changed that copy in memory (the thaw of an old-schema
+    frozen record) and then skipped it, and only the address may change
+    here. Returns True when removed, None when the file on disk has nothing
+    to remove, False when the address is still there because the write
+    failed or the file changed under us. The next pass tries again; one
+    receipt never stops the pass."""
+    try:
+        stamp = _file_stamp(receipt_file)
+        record = json.loads(receipt_file.read_text())
+        if not isinstance(record, dict) or not _drop_settled_notify_email(record):
+            return None
+        _write_record(receipt_file, record, expect=stamp)
+    except _ChangedWhileWriting:
+        return False
+    except Exception as e:  # noqa: BLE001 — one receipt must not stop the pass
+        sys.stderr.write(f"[upgrade:notify_cleanup] {type(e).__name__}\n")
+        return False
+    return True
+
+
 def _send_pin_email_if_needed(record: dict) -> None:
     """Fire transactional pin-notification email exactly once per receipt.
 
@@ -229,7 +318,9 @@ def _send_pin_email_if_needed(record: dict) -> None:
       - btc_pinned_at was just set on this run (the transition itself)
       - pin_email_sent_at is not already on the record (idempotency)
       - Resend API returns 2xx; otherwise we log to stderr and leave
-        pin_email_sent_at unset so the next worker run can retry.
+        pin_email_sent_at unset. No later run retries: _upgrade_one calls
+        this only on the pass that sets btc_pinned_at, which is why
+        _drop_settled_notify_email treats btc_pinned_at as "settled".
 
     Crashes/exceptions from the mailer are swallowed — credit-grant
     integrity beats notification. Pin-email is best-effort.
@@ -391,7 +482,11 @@ def _upgrade_one(receipt_dir: Path, record: dict) -> dict:
     # checks pin_email_sent_at for belt-and-suspenders idempotency.
     if not was_pinned_before and record.get("btc_pinned_at"):
         _send_pin_email_if_needed(record)
-    (receipt_dir / "receipt.json").write_text(json.dumps(record, indent=2))
+    # The notice above was this record's one use of the address. A public
+    # receipt drops it in this same write; a partial one already notified
+    # drops it on its next pass here.
+    _drop_settled_notify_email(record)
+    _write_record(receipt_dir / "receipt.json", record)
     return {
         "receipt_id": record["receipt_id"],
         "status": status,
@@ -405,15 +500,33 @@ def _upgrade_one(receipt_dir: Path, record: dict) -> dict:
 def upgrade_all(min_age_sec: int = 3600) -> dict:
     """Walk receipts/, upgrade any whose .ots files are older than min_age_sec.
 
-    Skips already-pinned receipts.
+    Skips already-pinned receipts, except to remove a public receipt's
+    settled notify_email (at most NOTIFY_CLEANUP_MAX_PER_PASS per pass).
     """
     if not RECEIPTS_DIR.exists():
-        return {"scanned": 0, "upgraded": 0, "skipped": 0, "results": []}
+        return {"scanned": 0, "upgraded": 0, "skipped": 0, "notify_email_removed": 0,
+                "notify_email_remove_failed": 0, "results": []}
     now = time.time()
     scanned = 0
     upgraded = 0
     skipped = 0
     results = []
+    # Counts only: the log never names an address.
+    notify = {"removed": 0, "failed": 0}
+
+    def clean_skipped(record: dict, receipt_file: Path) -> None:
+        # A skipped receipt is otherwise never rewritten, so this is the only
+        # way the backlog of finished public receipts loses the address.
+        if not _holds_settled_notify_email(record):
+            return
+        if notify["removed"] + notify["failed"] >= NOTIFY_CLEANUP_MAX_PER_PASS:
+            return
+        outcome = _drop_from_skipped(receipt_file)
+        if outcome is True:
+            notify["removed"] += 1
+        elif outcome is False:
+            notify["failed"] += 1
+
     for receipt_dir in sorted(RECEIPTS_DIR.iterdir()):
         if not receipt_dir.is_dir():
             continue
@@ -438,6 +551,7 @@ def upgrade_all(min_age_sec: int = 3600) -> dict:
             if (record.get("status") == "pinned"
                     and int(record.get("upgrade_schema", 1) or 1) >= UPGRADE_SCHEMA):
                 skipped += 1
+                clean_skipped(record, receipt_file)
                 continue
             # A pinned record NOT yet stamped with the current schema may be a
             # pre-guard mislabel (garbage spliced in, status flipped). Let it flow
@@ -449,6 +563,7 @@ def upgrade_all(min_age_sec: int = 3600) -> dict:
                     # Frozen under the current logic: a genuinely stuck partial
                     # we've stopped polling (see MAX_UPGRADE_STALLS).
                     skipped += 1
+                    clean_skipped(record, receipt_file)
                     continue
                 # Frozen by an older worker whose polling was the problem.
                 # Thaw once; _upgrade_one stamps the schema so this cannot loop.
@@ -460,8 +575,12 @@ def upgrade_all(min_age_sec: int = 3600) -> dict:
             age = now - receipt_file.stat().st_mtime
             if age < min_age_sec:
                 skipped += 1
+                clean_skipped(record, receipt_file)
                 continue
+            had_notify_email = "notify_email" in record
             result = _upgrade_one(receipt_dir, record)
+            if had_notify_email and "notify_email" not in record:
+                notify["removed"] += 1
         results.append(result)
         if result["status"] in ("pinned", "partial"):
             upgraded += 1
@@ -470,6 +589,8 @@ def upgrade_all(min_age_sec: int = 3600) -> dict:
         "scanned": scanned,
         "upgraded": upgraded,
         "skipped": skipped,
+        "notify_email_removed": notify["removed"],
+        "notify_email_remove_failed": notify["failed"],
         "results": results,
     }
     _log(summary)

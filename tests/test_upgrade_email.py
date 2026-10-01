@@ -253,9 +253,12 @@ class UpgradeEmailTest(unittest.TestCase):
 
         self.assertEqual(result["status"], "pinned")
         on_disk = json.loads((rd / "receipt.json").read_text())
-        # Pin happened; email did NOT — next run can retry.
+        # Pin happened; email did NOT. No later run retries it (the send is
+        # tried only on the pass that sets btc_pinned_at), so a public
+        # receipt's notify_email goes in this same write.
         self.assertIn("btc_pinned_at", on_disk)
         self.assertNotIn("pin_email_sent_at", on_disk)
+        self.assertNotIn("notify_email", on_disk)
 
     def test_partial_transition_email_says_three_of_five(self):
         cals = [

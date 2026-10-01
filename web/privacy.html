@@ -31,7 +31,7 @@
 
 <section>
   <h1>Privacy Policy</h1>
-  <p class="muted">Last updated: 2026-09-11.</p>
+  <p class="muted">Last updated: 2026-09-30.</p>
 
   <h2>What we never see</h2>
   <p>
@@ -73,6 +73,15 @@
     <li>
       <strong>The anchored receipt itself</strong> — receipt ID, hash, timestamp,
       OTS proof files.
+    </li>
+    <li>
+      <strong>A notice address on a paid anchor</strong>, if you give one (a
+      subscriber who gives none uses the sign-in address). We email the
+      receipt there, and a notice when the receipt first reaches Bitcoin.
+      The address is stored with the receipt until that notice is sent, then
+      removed from a public receipt. A private receipt keeps it. It is never
+      shown on a receipt's public page, JSON or downloads; while it is
+      stored, the only place it appears is your own account's receipt export.
     </li>
   </ul>
 
@@ -144,6 +153,7 @@
     <li><strong>Anchor records</strong> (hashes, timestamps, OTS proofs): retained indefinitely. They are the product.</li>
     <li><strong>Free-tier receipts</strong>: retained on our servers, the same as paid receipts. Your local copy of the receipt JSON + .ots files also remains independently verifiable forever.</li>
     <li><strong>Email addresses</strong>: retained for the life of the associated Pack credit balance, plus 7 years for tax/refund records.</li>
+    <li><strong>Notice addresses on receipts</strong>: on a public receipt, until its Bitcoin notice is sent; on a private receipt, for as long as the receipt is kept.</li>
     <li><strong>Truncated IP prefixes in logs</strong>: 24 hours, then rotated.</li>
   </ul>
 
