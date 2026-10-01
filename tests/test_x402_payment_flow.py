@@ -1150,3 +1150,33 @@ def test_an_unreadable_claim_file_during_a_held_private_redemption_is_a_503_not_
     assert "identical request" in b.get("hint", ""), b
     assert "x402_ledger" not in json.dumps(b) and tmp_path.name not in json.dumps(b)
     assert _receipts_on_disk_for(tmp_path, HASH_E) == []
+
+
+@pytest.fixture()
+def unarmed_server(tmp_path):
+    """Production's state today: no pay-to address, no mock. The facilitator
+    URL points at a port nothing listens on, so any facilitator call the
+    server makes shows up as a 503 instead of reaching the network."""
+    yield from _srv.server_processes(tmp_path, stub_calendars=True,
+                                     RATE_LIMIT_PER_DAY="1",
+                                     ORPHO_X402_FACILITATOR_URL="http://127.0.0.1:9")
+
+
+def test_an_unarmed_rail_ignores_a_payment_header_and_calls_no_facilitator(unarmed_server, tmp_path):
+    """Found live after PR #279 deployed (2026-09-30). The header block ran
+    whenever a payment header was present, armed or not: an unarmed
+    production built requirements with an empty pay-to and called the
+    public facilitator for any request carrying the header, answering it
+    with an x402 error instead of what it gave before. The doc's rule is
+    that until the rail is armed every path falls through exactly as
+    before: the header is ignored, and nothing is called."""
+    s, _h, b = _post(unarmed_server, "/api/anchor", {"hash_hex": HASH_A},
+                     _payment_headers(nonce="u1"))
+    assert s == 200, b                       # the free anchor, as before x402
+    assert "x402_settled" not in b
+    assert not (tmp_path / "x402_ledger.jsonl").exists()
+    assert not (tmp_path / "x402_claimed.jsonl").exists()
+    s2, _h2, b2 = _post(unarmed_server, "/api/anchor", {"hash_hex": HASH_B},
+                        _payment_headers(nonce="u2"))
+    assert s2 == 429, b2                     # past the free tier: the classic 429
+    assert "accepts" not in b2               # and no x402 challenge while unarmed
