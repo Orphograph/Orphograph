@@ -3830,7 +3830,8 @@ class Handler(BaseHTTPRequestHandler):
                 "receipt_url": f"{os.environ.get('SITE_URL', 'https://orphograph.com').rstrip('/')}/r/{record['receipt_id']}",
             })
         # Persist notify_email so upgrade_worker can email the customer when
-        # the BTC pin actually lands (~1h later). This used to be nested
+        # the BTC pin actually lands (~1h later). The worker removes it from
+        # a public receipt once that notice is settled. This used to be nested
         # inside the subscriber-only branch above, so a PACK buyer who passed
         # notify_email — the exact audience docs/api.html documents the field
         # for, "Pack only — emails the receipt" — got the immediate receipt
