@@ -6374,17 +6374,30 @@ class Handler(BaseHTTPRequestHandler):
             return
         result = stripe_api.cancel_at_period_end(sub_id)
         if not result.get("ok") and _stripe_has_no_such_subscription(result):
-            # Deleted at Stripe with the webhook that would have said so
-            # missed. Stripe cannot bill it, and gives this answer on every
-            # try, so answering 503 left a past-due account unable to
-            # subscribe again: checkout refuses it until it cancels. It is
-            # recorded as ended, which is what it is.
-            subscriptions.record_not_at_stripe(current, email)
-            _json_response(self, 200, {
-                "ok": True,
-                "message": "This subscription had already ended, so it will not renew.",
-            })
-            return
+            # Stripe has no record of a subscription the ledger knows. Said
+            # out loud every time: a key from the wrong mode or the wrong
+            # account gives exactly this answer for a subscription that is
+            # live and billing. Ids only, never the address.
+            sys.stderr.write(
+                f"[subscriptions] ALERT: Stripe has no record of a subscription the "
+                f"ledger knows: {sub_id} (local status {current.get('status')!r}); "
+                f"check the Stripe key's mode and account\n")
+            if subscriptions.row_is_past_due(current):
+                # Deleted at Stripe with the webhook that would have said so
+                # missed. Stripe cannot bill it, and gives this answer on every
+                # try, so answering 503 left a past-due account unable to
+                # subscribe again: checkout refuses it until it cancels. It is
+                # recorded as ended, which is what it is.
+                subscriptions.record_not_at_stripe(current, email)
+                _json_response(self, 200, {
+                    "ok": True,
+                    "message": "This subscription had already ended, so it will not renew.",
+                })
+                return
+            # An ACTIVE row is never rewritten on this answer (bundle review
+            # round 1): ending it locally on a key mismatch would take the
+            # subscriber's access while Stripe kept charging. Fall through to
+            # the 503 the caller can retry, recording nothing.
         if not result.get("ok"):
             _json_response(self, 503, {"error": "stripe error", "detail": result.get("error")})
             return

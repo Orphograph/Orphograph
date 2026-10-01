@@ -546,3 +546,29 @@ def test_a_past_due_subscription_is_still_shown_after_an_abandoned_attempt(srv, 
     page = _page(tmp_path, me, status, answer)
     assert "past due" in page["status"].lower() and page["cancel_offered"] is True, page
     assert page["posted"] == ["/api/me/cancel-subscription"], page
+
+
+def test_cancel_never_ends_an_active_subscription_stripe_claims_not_to_have(srv):
+    """Bundle review round 1 (MEDIUM, reproduced). A Stripe key from the
+    wrong mode or the wrong account answers 404 resource_missing for a
+    subscription that is live and billing. The "not at Stripe" branch ended
+    such an ACTIVE subscriber's subscription locally: access gone, Stripe
+    still charging. It applies to a past-due row only; an active row
+    answers 503, records nothing, and the office gets an alert line."""
+    base, data = srv
+    ledger = data / "subscriptions.jsonl"
+    before = ledger.read_bytes()
+    _script_stripe(data, {"/subscriptions/sub_ana_paid": (
+        404, "resource_missing", "No such subscription: 'sub_ana_paid'")})
+    try:
+        status, answer, calls = _cancel(base, data, "ana")
+    finally:
+        _script_stripe(data, {})
+    assert status == 503, answer
+    assert [c["path"] for c in calls] == ["/subscriptions/sub_ana_paid"], calls
+    assert ledger.read_bytes() == before, "an active subscription was recorded as ended"
+    me = _me(base, "ana")
+    assert me["subscription_active"] is True, me
+    logs = "".join(p.read_text(errors="replace") for p in data.glob("server-*.log"))
+    assert "Stripe has no record of a subscription the ledger knows" in logs, "no alert"
+    assert "sub_ana_paid" in logs
