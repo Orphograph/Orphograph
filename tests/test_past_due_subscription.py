@@ -19,6 +19,17 @@ Only `past_due` is preferred. `incomplete` is not: such a row never ages out
 here, and preferring it let an abandoned attempt speak for the account (tried
 and removed 2026-09-27).
 
+Found in review of that change (ff7cbd5), each reproduced over HTTP first:
+
+  4. A past-due row whose subscription Stripe had since deleted stranded the
+     account: checkout refused it until it cancelled, and Cancel answered 503
+     because Stripe said it had no such subscription. That answer now ends
+     the subscription here.
+  5. With nothing active or past due, the newest row of all still spoke, so
+     an abandoned attempt after a cancellation named the attempt. An attempt
+     (`incomplete`, or `incomplete_expired` a day later) now never names the
+     account's subscription.
+
 Everything goes through the real routes of one real server process, with
 Stripe replaced inside it (tests/_run_server.py --stub-stripe records each
 call and sends nothing). The page is the real web/account.js run in node
@@ -51,6 +62,13 @@ ACCOUNTS = {
     "mia": ("mia@example.test", "Mia@Example.test"),    # pat's rows, stored in another case
     "leg": ("leg@example.test", "leg@example.test"),    # a past-due row naming no subscription
     "new": ("new@example.test", "new@example.test"),    # never subscribed
+    "old": ("old@example.test", "old@example.test"),    # past due, but Stripe no longer has it
+    "url": ("url@example.test", "url@example.test"),    # past due, Stripe refuses: wrong URL
+    "itm": ("itm@example.test", "itm@example.test"),    # past due, Stripe refuses: some other object
+    "abe": ("abe@example.test", "abe@example.test"),    # cancelled, then an abandoned attempt
+    "exp": ("exp@example.test", "exp@example.test"),    # cancelled, then an attempt that expired
+    "ixp": ("ixp@example.test", "ixp@example.test"),    # an expired attempt, nothing else
+    "due": ("due@example.test", "due@example.test"),    # past due, then an attempt that expired
 }
 # name -> its rows in ledger order, as (subscription, status)
 HISTORY = {
@@ -66,6 +84,16 @@ HISTORY = {
             ("sub_mia_due", "past_due"), ("sub_mia_other", "canceled")],
     "leg": [("", "past_due")],
     "new": [],
+    "old": [("sub_old_due", "active"), ("sub_old_due", "past_due")],
+    "url": [("sub_url_due", "active"), ("sub_url_due", "past_due")],
+    "itm": [("sub_itm_due", "active"), ("sub_itm_due", "past_due")],
+    "abe": [("sub_abe_paid", "active"), ("sub_abe_paid", "canceled"),
+            ("sub_abe_try", "incomplete")],
+    "exp": [("sub_exp_paid", "active"), ("sub_exp_paid", "canceled"),
+            ("sub_exp_try", "incomplete"), ("sub_exp_try", "incomplete_expired")],
+    "ixp": [("sub_ixp_try", "incomplete"), ("sub_ixp_try", "incomplete_expired")],
+    "due": [("sub_due_due", "active"), ("sub_due_due", "past_due"),
+            ("sub_due_try", "incomplete"), ("sub_due_try", "incomplete_expired")],
 }
 
 
@@ -122,6 +150,16 @@ def _stripe_calls(data: Path) -> list[dict]:
     if not path.exists():
         return []
     return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+
+
+def _script_stripe(data: Path, answers: dict) -> None:
+    """Have the stub answer a path with a real Stripe error, e.g.
+    {"/subscriptions/sub_x": (404, "resource_missing", "No such subscription")}.
+    An empty dict puts every path back to success."""
+    (data / "stub_stripe_answers.json").write_text(json.dumps({
+        path: {"status": status, "error": {"type": "invalid_request_error",
+                                           "code": code, "message": message}}
+        for path, (status, code, message) in answers.items()}))
 
 
 def _cancel(base: str, data: Path, name: str) -> tuple[int, dict, list[dict]]:
@@ -402,3 +440,109 @@ def test_a_mixed_case_address_reaches_the_same_rows(srv, tmp_path):
     assert "past due" in page["status"].lower() and page["cancel_offered"] is True, page
     status, answer, calls = _checkout(base, data, "mia", "pro")
     assert status == 409 and calls == [], (status, answer, calls)
+
+
+# --- (g) a subscription Stripe no longer has is ended ---------------------------------
+
+def test_cancel_ends_a_past_due_subscription_stripe_no_longer_has(srv):
+    """A past-due row whose subscription Stripe has since deleted (the webhook
+    that would have said so was missed). Checkout refuses until it is
+    cancelled, so Cancel answering 503 left the account with no way to
+    subscribe again. Stripe's "no such subscription" means nothing can be
+    billed, so it is recorded as ended."""
+    base, data = srv
+    status, answer, calls = _checkout(base, data, "old", "pro")
+    assert status == 409 and calls == [], (status, answer, calls)  # where it starts
+    _script_stripe(data, {"/subscriptions/sub_old_due": (
+        404, "resource_missing", "No such subscription: 'sub_old_due'")})
+    try:
+        status, answer, calls = _cancel(base, data, "old")
+    finally:
+        _script_stripe(data, {})
+    assert status == 200, answer
+    assert [c["path"] for c in calls] == ["/subscriptions/sub_old_due"], calls
+    # The shape a normal cancel answers, so the page shows it as done.
+    _status, normal, _calls = _cancel(base, data, "pat")
+    assert answer["ok"] is True and set(answer) == set(normal) == {"ok", "message"}, (answer, normal)
+    # Nothing is billed any more: no access, and no retry, is promised.
+    said = answer["message"].lower()
+    assert "access" not in said and "retried" not in said, answer
+    me = _me(base, "old")
+    assert me.get("subscription_past_due") is False and me["subscription_active"] is False, me
+    assert me["subscription_status"]["stripe_sub"] == "sub_old_due", me
+    assert me["subscription_status"]["status"] == "canceled", me
+    status, answer, calls = _checkout(base, data, "old", "pro")
+    assert status != 409, (status, answer)
+    assert [c["form"].get("mode") for c in calls] == ["subscription"], calls
+
+
+@pytest.mark.parametrize("name, http_status, code, message", [
+    # A 404 that is not Stripe saying "no such subscription": a wrong base
+    # URL or a proxy answers this way, and the subscription may be billing.
+    ("url", 404, "", "Unrecognized request URL (POST: /v1/subscriptions/sub_url_due)."),
+    # resource_missing about something that is not the subscription.
+    ("itm", 400, "resource_missing", "No such subscription item: 'si_itm'"),
+], ids=["404-without-the-code", "the-code-without-404"])
+def test_cancel_still_fails_when_stripe_refuses_for_another_reason(srv, name, http_status,
+                                                                   code, message):
+    """Control. Only both together read as ended; anything else Stripe
+    refuses may still be billing, so nothing is recorded."""
+    base, data = srv
+    ledger = data / "subscriptions.jsonl"
+    before = ledger.read_bytes()
+    _script_stripe(data, {f"/subscriptions/sub_{name}_due": (http_status, code, message)})
+    try:
+        status, answer, calls = _cancel(base, data, name)
+    finally:
+        _script_stripe(data, {})
+    assert status == 503 and len(calls) == 1, (status, answer, calls)
+    assert ledger.read_bytes() == before
+    assert _me(base, name).get("subscription_past_due") is True
+    status, answer, calls = _checkout(base, data, name, "pro")
+    assert status == 409 and calls == [], (status, answer, calls)
+
+
+# --- (h) an abandoned attempt is never named ------------------------------------------
+
+ABANDONED = pytest.mark.parametrize("name", ["abe", "exp"],
+                                    ids=["an-attempt-after-a-cancel", "an-expired-attempt-after-a-cancel"])
+
+
+@ABANDONED
+def test_an_abandoned_attempt_never_names_the_subscription(srv, name):
+    """With nothing active or past due, the newest row of all could be a
+    sign-up whose first payment never went through. It named itself as the
+    account's subscription, so Cancel (and the refund request and the support
+    lookup, which read the same choice) reached the attempt and not the
+    subscription that was paid for. Stripe moves such an attempt from
+    `incomplete` to `incomplete_expired` a day later; it is the same attempt."""
+    base, data = srv
+    me = _me(base, name)
+    assert (me["subscription_status"] or {}).get("stripe_sub") == f"sub_{name}_paid", me
+    assert me["subscription_status"]["status"] == "canceled", me
+    _status, _answer, calls = _cancel(base, data, name)
+    assert [c["path"] for c in calls] == [f"/subscriptions/sub_{name}_paid"], calls
+
+
+@pytest.mark.parametrize("name", ["inc", "ixp"], ids=["incomplete", "expired"])
+def test_an_account_with_only_an_abandoned_attempt_has_no_subscription(srv, name):
+    """Nothing was ever paid for, so there is nothing to show or cancel."""
+    base, data = srv
+    me = _me(base, name)
+    assert me["subscription_status"] is None, me
+    status, answer, calls = _cancel(base, data, name)
+    assert status == 404 and calls == [], (status, answer, calls)
+
+
+def test_a_past_due_subscription_is_still_shown_after_an_abandoned_attempt(srv, tmp_path):
+    """Control. A real past-due row still speaks, with Cancel, when an
+    abandoned attempt landed after it."""
+    base, data = srv
+    me = _me(base, "due")
+    assert (me["subscription_status"] or {}).get("stripe_sub") == "sub_due_due", me
+    assert me.get("subscription_past_due") is True, me
+    status, answer, calls = _cancel(base, data, "due")
+    assert status == 200 and [c["path"] for c in calls] == ["/subscriptions/sub_due_due"], calls
+    page = _page(tmp_path, me, status, answer)
+    assert "past due" in page["status"].lower() and page["cancel_offered"] is True, page
+    assert page["posted"] == ["/api/me/cancel-subscription"], page
