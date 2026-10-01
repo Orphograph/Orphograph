@@ -268,6 +268,11 @@ PROBES = [
     Probe("Security headers — landing",
           "GET", "/",
           check=check_security_headers),
+    # The waitlist confirmation link's page. Without a token it answers 400
+    # and writes nothing (a GET never writes; the page's button POSTs).
+    Probe("Waitlist confirm page (no token)",
+          "GET", "/api/waitlist/confirm",
+          expected_status=(400,)),
     # Newsletter signup (rate-limited but should accept)
     Probe("Waitlist signup",
           "POST", "/api/waitlist",

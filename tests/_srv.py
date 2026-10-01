@@ -105,7 +105,7 @@ def base_env(data_dir: str | os.PathLike, port: int, **extra: str) -> dict:
 
 def spin(data_dir: str | os.PathLike, n: int = 1, *,
          stub_calendars: bool = False, fail_calendars: str = "",
-         stub_stripe: bool = False, arm_lightning: bool = False,
+         stub_stripe: bool = False, arm_lightning: bool = False, capture_mail: bool = False,
          **env_extra: str):
     """Start n server processes on one data dir. Yields (bases, procs, logs).
 
@@ -123,6 +123,9 @@ def spin(data_dir: str | os.PathLike, n: int = 1, *,
     `arm_lightning` (also needs `stub_calendars`) lifts the retirement of the
     Lightning rail in the spun process only, for the tests of the armed code.
     Lightning secrets still have to be passed as env, as before.
+    `capture_mail` (also needs `stub_calendars`) records every email the
+    mailer would send in <data_dir>/stub_mail_sent.jsonl, full text included,
+    instead of sending it; see tests/_run_server.py.
     """
     procs, starting = [], []
     for i in range(n):
@@ -143,6 +146,8 @@ def spin(data_dir: str | os.PathLike, n: int = 1, *,
                 command += ["--stub-stripe"]
             if arm_lightning:
                 command += ["--arm-lightning"]
+            if capture_mail:
+                command += ["--capture-mail"]
         elif fail_calendars:
             raise ValueError("fail_calendars requires stub_calendars=True — "
                              "the real calendars cannot be shaped")
@@ -152,6 +157,9 @@ def spin(data_dir: str | os.PathLike, n: int = 1, *,
         elif arm_lightning:
             raise ValueError("arm_lightning requires stub_calendars=True — "
                              "only the test launcher can lift the retirement")
+        elif capture_mail:
+            raise ValueError("capture_mail requires stub_calendars=True — "
+                             "only the test launcher can capture mail")
         procs.append(subprocess.Popen(
             command,
             env=base_env(data_dir, 0, **env_extra),
@@ -242,7 +250,7 @@ def _kill_all(procs, logs) -> None:
 
 def server_processes(data_dir, n: int = 1, *,
                      stub_calendars: bool = False, fail_calendars: str = "",
-                     stub_stripe: bool = False, arm_lightning: bool = False,
+                     stub_stripe: bool = False, arm_lightning: bool = False, capture_mail: bool = False,
                      **env_extra: str):
     """Context-manager-ish generator for a pytest fixture:
 
@@ -253,7 +261,7 @@ def server_processes(data_dir, n: int = 1, *,
     bases, procs, logs = spin(
         data_dir, n=n, stub_calendars=stub_calendars,
         fail_calendars=fail_calendars, stub_stripe=stub_stripe,
-        arm_lightning=arm_lightning, **env_extra)
+        arm_lightning=arm_lightning, capture_mail=capture_mail, **env_extra)
     wait_ready(bases, procs, logs)
     try:
         yield bases[0] if n == 1 else bases

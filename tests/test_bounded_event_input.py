@@ -354,4 +354,7 @@ def test_waitlist_does_not_store_a_lone_surrogate(server):
         body=b'{"email":"ok@example.test"}', headers={'Content-Type': 'application/json'})
     assert status == 200 and b'On the list' in body
     assert b'ok@example.test' in stored.read_bytes()
-    assert stored.read_bytes().count(b'\n') == 1
+    # One signup row. Rows with an event (the confirmation email's send
+    # record, written after the answer) are not signups.
+    signups = [l for l in stored.read_bytes().splitlines() if b'"event"' not in l]
+    assert len(signups) == 1

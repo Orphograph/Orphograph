@@ -122,6 +122,63 @@ def _stub_stripe(data_dir: Path) -> None:
     stripe_api._request = recorded
 
 
+MAIL_SENT = "stub_mail_sent.jsonl"
+MAIL_DOWN = "stub_mail_down"
+_RESEND_EMAILS = "https://api.resend.com/emails"
+
+
+def _capture_mail(data_dir: Path) -> None:
+    """Record every email the mailer would hand to Resend, instead of sending it.
+
+    The inert mailer (no RESEND_API_KEY) logs only a masked address and the
+    subject, so a test could see THAT a mail went out but never read the link
+    in it. Here mailer._send runs for real (suppression gate, footer, payload)
+    and only its last step changes: the request it would POST to Resend is
+    appended to <data dir>/stub_mail_sent.jsonl. While <data dir>/stub_mail_down
+    exists the attempt is still recorded and then fails like an outage, so the
+    mailer's own retry and give-up path runs.
+
+    Only the mailer module's reference to urllib is replaced, and the stand-in
+    refuses every URL but Resend's send endpoint, so nothing in this process
+    can reach the network through it."""
+    import types
+    import urllib.error
+    import urllib.parse
+    import urllib.request
+
+    import mailer
+
+    sent = data_dir / MAIL_SENT
+    down = data_dir / MAIL_DOWN
+    lock = threading.Lock()
+
+    class _Accepted:
+        def read(self) -> bytes:
+            return b'{"id":"stub"}'
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc) -> bool:
+            return False
+
+    def urlopen(req, timeout=None):
+        if getattr(req, "full_url", None) != _RESEND_EMAILS:
+            raise urllib.error.URLError("capture-mail stub refuses this URL")
+        outage = down.exists()
+        with lock, sent.open("a") as f:
+            f.write(json.dumps({"payload": json.loads(req.data),
+                                "delivered": not outage}) + "\n")
+        if outage:
+            raise urllib.error.URLError("capture-mail stub: outage")
+        return _Accepted()
+
+    mailer.RESEND_API_KEY = "stub-placeholder"
+    mailer.urllib = types.SimpleNamespace(
+        parse=urllib.parse, error=urllib.error,
+        request=types.SimpleNamespace(Request=urllib.request.Request, urlopen=urlopen))
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--stub-calendars", action="store_true")
@@ -141,6 +198,7 @@ def main() -> int:
     # context (.dockerignore excludes tests/), so no secret, typo or stray
     # setting can reach it.
     parser.add_argument("--arm-lightning", action="store_true")
+    parser.add_argument("--capture-mail", action="store_true")
     args = parser.parse_args()
     if not args.stub_calendars:
         parser.error("this launcher requires --stub-calendars")
@@ -149,6 +207,8 @@ def main() -> int:
     if args.arm_lightning:
         import lightning
         lightning.LIGHTNING_RETIRED = False
+    if args.capture_mail:
+        _capture_mail(Path(os.environ["ORPHO_DATA_DIR"]))
 
     import engine
     # The one definition of the well-formed pending body the tests compare
