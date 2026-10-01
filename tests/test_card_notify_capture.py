@@ -228,10 +228,14 @@ class TestCaptureEndpoint(unittest.TestCase):
             p.unlink()
 
     def _rows(self):
+        """The signup rows. A signup also queues its confirmation email, whose
+        send record ({event: "confirm_sent"}) is appended after the answer,
+        possibly once the next test has begun. It is not a signup."""
         p = Path(os.environ["ORPHO_WAITLIST"])
         if not p.exists():
             return []
-        return [json.loads(l) for l in p.read_text().splitlines() if l.strip()]
+        rows = [json.loads(l) for l in p.read_text().splitlines() if l.strip()]
+        return [r for r in rows if "event" not in r]
 
     def test_happy_path_records_email_tier_ts(self):
         status, body = _post_json(self._base, "/api/waitlist",

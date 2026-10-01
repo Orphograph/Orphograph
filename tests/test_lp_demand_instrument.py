@@ -235,6 +235,31 @@ class TestReadout(unittest.TestCase):
         self.assertEqual(
             self.newsletter.audience_snapshot()["by_interest"].get("other"), 1)
 
+    def test_a_send_record_and_a_confirmation_are_not_more_asks(self):
+        """Double opt-in writes two more rows for one person: the record that
+        a confirmation email went out, and the confirmation. Neither is a
+        second ask, and the readout must not count either as one."""
+        self.waitlist.add("one@example.com", "agent_receipts")
+        with self.path.open("a") as f:
+            f.write(json.dumps({"ts": "2026-09-30T00:00:00+00:00", "email": "one@example.com",
+                                "interest": "agent_receipts", "event": "confirm_sent",
+                                "n": "nonce"}) + "\n")
+            f.write(json.dumps({"ts": "2026-09-30T00:01:00+00:00", "email": "one@example.com",
+                                "interest": "agent_receipts", "event": "confirmed"}) + "\n")
+        snap = self.newsletter.audience_snapshot()
+        self.assertEqual(snap["by_interest"], {"agent_receipts": 1})
+        self.assertEqual(snap["unique_signups"], 1)
+        self.assertEqual(snap["confirmed"], 1)
+        self.assertEqual(snap["pending"], 0)
+        self.assertEqual(snap["ledger_rows"], 3)
+
+    def test_confirming_twice_records_one_confirmation(self):
+        self.waitlist.add("twice@example.com", "personal")
+        self.assertIs(self.newsletter.mark_confirmed("twice@example.com", "personal"), True)
+        self.assertIs(self.newsletter.mark_confirmed("Twice@Example.com", "personal"), False)
+        rows = [json.loads(l) for l in self.path.read_text().splitlines()]
+        self.assertEqual([r.get("event") for r in rows], [None, "confirmed"])
+
     def test_malformed_ledger_line_does_not_take_down_the_readout(self):
         """A syntactically valid but non-object line sails past the decode
         guard and then blows up on .get(). That turned the whole readout into

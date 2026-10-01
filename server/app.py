@@ -22,6 +22,7 @@ import mimetypes
 mimetypes.add_type("font/woff2", ".woff2")  # serve self-hosted fonts with correct type (X-Content-Type-Options: nosniff is set)
 import os
 import posixpath
+import queue
 import re
 import secrets
 import sys
@@ -66,6 +67,7 @@ import subscriptions  # noqa: E402
 import teams  # noqa: E402
 from email_fold import fold_email  # noqa: E402
 import unsubscribe  # noqa: E402
+import newsletter  # noqa: E402
 import waitlist  # noqa: E402
 import webhooks  # noqa: E402
 # Optional module — vertical landing pages. MUST NOT crash app startup if a
@@ -414,6 +416,54 @@ _api_key_issue_limiter = TokenBucket(API_KEY_ISSUE_CAPACITY, API_KEY_ISSUE_REFIL
 EVENT_RATE_CAPACITY = 60
 EVENT_RATE_REFILL = 60 / 60.0  # 1 token/sec refill, burst 60
 _event_limiter = TokenBucket(EVENT_RATE_CAPACITY, EVENT_RATE_REFILL)
+
+# The waitlist confirm button (POST /api/waitlist/confirm). Each press reads
+# the waitlist ledger to find the confirmation its token names, so a tight
+# loop of presses is a loop of full ledger reads. Not _anchor_limiter: its
+# production budget is 3 a day per address prefix, and people confirming
+# from one office or one mobile network's shared NAT must not be refused for
+# hours. A person presses it once, maybe twice. Keyed per address prefix.
+# In-memory: a restart refilling it is harmless.
+WAITLIST_CONFIRM_CAPACITY = 20
+WAITLIST_CONFIRM_REFILL = 20 / 3600.0  # burst 20, then one every 3 minutes
+_waitlist_confirm_limiter = TokenBucket(WAITLIST_CONFIRM_CAPACITY, WAITLIST_CONFIRM_REFILL)
+
+# Waitlist confirmation emails go out on ONE worker thread, after the signup
+# has been answered. After, because the answer must not depend on whether an
+# address gets an email: a new address would wait on the mail round trip and
+# a listed one would not, the difference that once let /api/pack/recover's
+# timing say who had a pack. One worker, so a burst of signups queues instead
+# of fanning out into threads that all read and append the same ledger, and
+# jobs are decided in the order the signups were answered. Bounded: a full
+# queue means that signup gets no email, the safe way for a public form to
+# fail. Started on first use, so importing this module starts no thread.
+_WAITLIST_CONFIRM_QUEUE: "queue.Queue[tuple[str, str]]" = queue.Queue(maxsize=1000)
+_waitlist_confirm_worker_lock = threading.Lock()
+_waitlist_confirm_worker: threading.Thread | None = None
+
+
+def _run_waitlist_confirmations() -> None:
+    while True:
+        email, interest = _WAITLIST_CONFIRM_QUEUE.get()
+        try:
+            newsletter.request_confirmation(email, interest)
+        except Exception as e:  # noqa: BLE001  (one bad job must not stop the worker)
+            sys.stderr.write(f"[waitlist] confirmation email failed for "
+                             f"{auth.mask_email(email)}: {type(e).__name__}\n")
+
+
+def _queue_waitlist_confirmation(email: str, interest: str) -> None:
+    global _waitlist_confirm_worker
+    with _waitlist_confirm_worker_lock:
+        if _waitlist_confirm_worker is None or not _waitlist_confirm_worker.is_alive():
+            _waitlist_confirm_worker = threading.Thread(
+                target=_run_waitlist_confirmations, name="waitlist-confirm", daemon=True)
+            _waitlist_confirm_worker.start()
+    try:
+        _WAITLIST_CONFIRM_QUEUE.put_nowait((email, interest))
+    except queue.Full:
+        sys.stderr.write(f"[waitlist] confirmation queue full; no email to "
+                         f"{auth.mask_email(email)}\n")
 
 # Founder-token brute-force limiter (2026-07-18 latent-security pass).
 # Counts FAILED X-Orpho-Founder guesses per truncated client IP; a correct
@@ -2693,6 +2743,11 @@ class Handler(BaseHTTPRequestHandler):
             # for one-click via List-Unsubscribe-Post header.
             self._handle_unsubscribe_get()
             return
+        if path == "/api/waitlist/confirm":
+            # The link in the waitlist confirmation email. GET only shows the
+            # button; the button's POST confirms.
+            self._handle_waitlist_confirm_get()
+            return
         if path == "/api/founder/payout-status":
             # Founder-only — hot BTC balance + sweep recommendation.
             # Gated by ORPHO_FOUNDER_TOKEN env var (shared-secret in header).
@@ -3143,6 +3198,12 @@ class Handler(BaseHTTPRequestHandler):
             return
         if self.path.startswith("/api/unsubscribe"):
             self._handle_unsubscribe_post()
+            return
+        # The confirm button carries its token in the query string, as the
+        # unsubscribe button carries its address, so match the path alone.
+        path = self.path.split("?", 1)[0]
+        if path == "/api/waitlist/confirm":
+            self._handle_waitlist_confirm_post()
             return
         if self.path == "/api/event":
             self._handle_event()
@@ -4328,6 +4389,10 @@ class Handler(BaseHTTPRequestHandler):
             interest = "personal"
         waitlist.add(email.strip(), interest)
         _json_response(self, 200, {"ok": True, "message": "On the list."})
+        # Double opt-in: the confirmation email, if this address gets one, is
+        # decided and sent after the answer, so the answer is the same for
+        # every address (see _queue_waitlist_confirmation).
+        _queue_waitlist_confirmation(email.strip(), interest)
 
     # Neutral response for the pack-recovery endpoint. Identical wording is
     # returned whether or not the address has a pack on file so the endpoint
@@ -4403,7 +4468,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def _unsubscribe_page(self, status: int, title: str, heading: str,
                           meta: str, body_html: str) -> None:
-        """One page shape for the confirm, done and could-not-record answers.
+        """One page shape for the confirm, done and could-not-record answers,
+        of the unsubscribe link and of the waitlist confirmation link.
         Every value shown that came from the URL is escaped by the caller."""
         body = (
             "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
@@ -4471,6 +4537,88 @@ class Handler(BaseHTTPRequestHandler):
             "itself, not promotional.</p>"
             # One sentence whether or not the address was already there.
             "<p>Confirmed — this address is on the suppression list.</p>")
+
+    def _waitlist_confirm_token(self) -> str:
+        from urllib.parse import urlparse, parse_qs
+        return (parse_qs(urlparse(self.path).query).get("token") or [""])[0]
+
+    def _waitlist_confirm_refused(self) -> None:
+        """One answer for every link that is not a live confirmation: forged,
+        damaged, expired, or naming nothing this server sent. Nothing from the
+        URL is shown, so nothing in it can be reflected."""
+        self._unsubscribe_page(
+            400, "Link not valid", "This confirmation link is not valid.",
+            "Nothing was changed.",
+            "<p>It may have expired (a link works for 24 hours) or been copied "
+            "only in part. If it expired, signing up again on the site sends "
+            "a fresh one.</p>")
+
+    def _handle_waitlist_confirm_get(self) -> None:
+        """The page the waitlist confirmation email links to. Writes nothing.
+
+        Mail gateways and link scanners fetch the links in a message with GET,
+        so following this one must not confirm anyone (the same reason the
+        unsubscribe link only asks, 9A). The page has one button, which POSTs
+        to this same URL. The token is checked for its signature and expiry
+        only and never looked up, so the page is the same whether or not the
+        address has already confirmed, and reading it touches no ledger.
+        """
+        token = self._waitlist_confirm_token()
+        if newsletter.verify_confirm_token(token) is None:
+            self._waitlist_confirm_refused()
+            return
+        from html import escape as _h
+        from urllib.parse import quote as _q
+        # A token that verified is base64url and one dot; quoted and escaped
+        # anyway, as every value from the URL is.
+        action = _h("/api/waitlist/confirm?token=" + _q(token))
+        self._unsubscribe_page(
+            200, "Confirm", "Confirm your Orphograph waitlist signup?",
+            "One button below. Nothing changes until you press it.",
+            "<p>Pressing it adds this address to the Orphograph mailing list "
+            "for the updates you asked about. You can unsubscribe at any "
+            "time.</p>"
+            f"<form method=\"post\" action=\"{action}\">"
+            "<button type=\"submit\">Confirm</button></form>")
+
+    def _handle_waitlist_confirm_post(self) -> None:
+        """The confirm page's button. Records the confirmation once.
+
+        The same page answers a first press and a repeat, so pressing twice
+        changes nothing and says nothing new. Only a first confirmation adds
+        the contact to the mail audience (newsletter.add_confirmed_contact),
+        and that runs after the answer, so a slow or failing audience call
+        never changes it.
+        """
+        allowed, retry = _waitlist_confirm_limiter.check(
+            f"waitlist-confirm:{self._client_key()}")
+        if not allowed:
+            self._drain_request_body()
+            _send_rate_limited(self, int(retry) + 1, {"error": "too many requests"})
+            return
+        # The form has no fields; the token is in the query string.
+        self._drain_request_body()
+        try:
+            outcome = newsletter.confirm(self._waitlist_confirm_token())
+        except OSError:
+            self._unsubscribe_page(
+                503, "Not recorded", "We could not record this just now.",
+                "Nothing was changed.",
+                "<p>Please open the link again in a few minutes.</p>")
+            return
+        if outcome is None:
+            self._waitlist_confirm_refused()
+            return
+        state, email, interest = outcome
+        self._unsubscribe_page(
+            200, "Confirmed", "Thanks, you're confirmed.",
+            "This address is on the Orphograph mailing list.",
+            "<p>We will write only about what you signed up for. You can "
+            "unsubscribe at any time.</p>")
+        if state == "confirmed":
+            threading.Thread(target=newsletter.add_confirmed_contact,
+                             args=(email, interest), name="waitlist-audience",
+                             daemon=True).start()
 
     def _handle_payout_status(self) -> None:
         """JSON endpoint — founder-only view of hot BTC balance + sweep status.
