@@ -9,7 +9,8 @@ Compliance:
     LGPD (Brazil) Art. 18(IX): right to revoke consent. Instant.
     RFC 8058 / Gmail+Yahoo 2024 bulk-sender rules: one-click unsubscribe.
 
-Mechanism: append-only suppression ledger. mailer.py marketing path
+Mechanism: append-only suppression ledger. An address may have several
+rows; any one of them suppresses it. mailer.py marketing path
 consults is_unsubscribed(email) before sending. Transactional email
 (receipts, sign-in links, pack codes) is exempt — CAN-SPAM §7704(a)(5)(A)
 permits transactional mail without an unsubscribe.
@@ -18,7 +19,6 @@ from __future__ import annotations
 
 import json
 import os
-import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -45,33 +45,25 @@ def _norm(email: str) -> str:
     return (email or "").strip().lower()
 
 
-def _is_new(email: str) -> bool:
-    """A well-formed address that is not already suppressed."""
-    email = _norm(email)
-    if "@" not in email or len(email) > 320:
-        return False
-    return not is_unsubscribed(email)
+def _well_formed(email: str) -> bool:
+    return "@" in email and len(email) <= 320
 
 
 def ensure_writable() -> None:
     """Raise SuppressionUnavailable unless the ledger can be opened for
     appending right now. Writes nothing and takes no lock.
 
-    For the unsubscribe POST, which must refuse before `add`'s
-    already-suppressed shortcut: with a ledger that could not be opened a new
-    address got 503 and a suppressed one got success, which told anyone which
-    one it was. That case is all this closes. The file opening and the write
-    itself failing (a full volume) is closed by `add(prove_write=True)`,
-    which the POST passes: a suppressed address then tries a write as long as
-    a new one's row, and is refused where the row would be.
+    Written for the unsubscribe POST when `add` answered an address already
+    suppressed without opening the ledger: with a ledger that could not be
+    opened a new address got 503 and a suppressed one got success, which
+    told anyone which one it was. The POST now passes `add(reappend=True)`,
+    which opens the ledger and writes the row for both addresses, so for the
+    POST this is a second check of what `add` does next.
 
     No lock, because only whether the file can be opened matters here; `add`
-    takes the lock when it writes. Taking it made a POST for an address that
-    is already suppressed, the one mailbox providers retry, wait for whoever
-    held it (review, 2026-09-27). With prove_write that POST writes, so it
-    waits in `add` for the lock as a new address does; this check still does
-    not. The steps mirror file_lock.locked up to the lock and must stay in
-    step with it.
+    takes the lock when it writes. Taking it here made a POST wait for
+    whoever held it (review, 2026-09-27). The steps mirror file_lock.locked
+    up to the lock and must stay in step with it.
 
     Not file_lock.can_append: that is a pre-check that guesses, and it
     refuses a directory this process owns and `locked` repairs, so a one-click
@@ -105,49 +97,29 @@ def _ends_mid_line(path: Path) -> bool:
         return False
 
 
-def _prove_append(f, length: int) -> None:
-    """Append `length` blank bytes to the open ledger, then cut them off.
+def add(email: str, source: str = "user", reappend: bool = False) -> bool:
+    """Mark an email as unsubscribed. Returns whether it was new: a second
+    call returns False.
 
-    As long as the row, not one byte: a full volume still has the unused rest
-    of the file's last block, and one byte fits there long after a row has
-    stopped fitting (measured on a full volume, 2026-09-28). The answer has
-    to be the one a row would get.
+    `reappend` is for a caller that answers a stranger (the unsubscribe
+    POST): it appends the row whether or not the address already has one.
+    Without it, an address already suppressed is answered before the ledger
+    is touched, so on a full volume it got success where a new one got
+    SuppressionUnavailable, which told anyone which one it was. Any row
+    suppresses, so a second row changes nothing a reader sees, and the write
+    is the same row a new address makes, under the same lock: a failed write
+    raises for both.
 
-    Cut off again, because nothing limits how often a stranger may POST and
-    the ledger is read through on every marketing send. Only when the file is
-    exactly that much longer than it was: a writer that does not take the
-    lock (scripts/reply_router.py) may have appended in between, and then the
-    blanks stay rather than its row being cut. Blanks also stay when the
-    write fails part-way. Every reader skips them, and `_ends_mid_line`
-    starts the next row on a fresh line.
-
-    Not covered: a filesystem that reports a full volume only when the file
-    is closed (a network mount). The blanks are gone again by then."""
-    before = os.fstat(f.fileno()).st_size
-    f.write(" " * (length - 1) + "\n")
-    f.flush()
-    try:
-        if os.fstat(f.fileno()).st_size == before + length:
-            os.ftruncate(f.fileno(), before)
-    except OSError as e:
-        # The write is proven, which is what was asked. The blanks stay.
-        print(f"[unsubscribe] proof left in the ledger: {type(e).__name__}",
-              file=sys.stderr, flush=True)
-
-
-def add(email: str, source: str = "user", prove_write: bool = False) -> bool:
-    """Mark an email as unsubscribed. Idempotent — second call returns False.
-
-    `prove_write` is for a caller that answers a stranger (the unsubscribe
-    POST). With nothing to record this returned before it touched the ledger,
-    so on a full volume an address already suppressed got success and a new
-    one SuppressionUnavailable, which told anyone which one it was. With
-    prove_write it tries the write a new address would make, under the same
-    lock, and a failed write raises for both. The ledger is left as it was."""
-    new = _is_new(email)
-    if not new and not prove_write:
-        return False
+    The ledger is only ever appended to. 0ce9aa3 got the same answer by
+    appending blanks and cutting them off with ftruncate, and a row that a
+    writer taking no lock (scripts/reply_router.py) appended in between could
+    be cut off with them. The cost of appending is a row for every POST."""
     email = _norm(email)
+    if not _well_formed(email):
+        return False
+    new = not is_unsubscribed(email)
+    if not new and not reappend:
+        return False
     row = json.dumps({
         "ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "email": email,
@@ -160,10 +132,12 @@ def add(email: str, source: str = "user", prove_write: bool = False) -> bool:
             # is told it worked. Start on a fresh line.
             if _ends_mid_line(SUPPRESS_PATH):
                 row = "\n" + row
-            if new:
-                f.write(row)
-            else:
-                _prove_append(f, len(row))
+            f.write(row)
+            # Onto the disk while the lock is held. `locked` lets go of the
+            # lock before it closes the file, and closing is where a buffered
+            # row would otherwise be written: after the next writer has
+            # already looked for a torn last line.
+            f.flush()
     except OSError as e:
         # Not recorded. The caller must be able to SAY so: an OSError escaping
         # here closed the socket with no response, and someone unsubscribing
