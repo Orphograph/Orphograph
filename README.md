@@ -1,11 +1,17 @@
 # orphograph
 
-Anchor any file to the Bitcoin blockchain in about ten seconds.
-For photographers, journalists, indie creators, and developers who need to
-prove a file existed before a given moment — especially before an AI model
-saw it. Files never leave the browser; only the 32-byte SHA-256 fingerprint
-is submitted. Free tier (3 anchors/24h), $19 Writer Pack (10 anchors), $9/mo
-Standing Order (unlimited), $19/mo Creator (capture-time app + API + verifier badge).
+Bitcoin-anchored receipts that a relying party can verify **without the
+issuer**. Checking a file against its saved proof needs only the MIT verifier
+in this repository, with no account and no network call; confirming the
+timestamp against Bitcoin needs any OpenTimestamps client and a Bitcoin node,
+not Orphograph. The service can be unreachable or gone. It is for
+photographers, journalists, indie creators, and developers who need to prove a
+file existed before a given moment, especially before an AI model saw it, and
+anchoring a file takes about ten seconds. Files never leave the browser: only
+their fingerprints are sent, and only the 32-byte SHA-256 is committed to
+Bitcoin. Free tier (3 anchors every 24 hours), $19 Writer Pack (10 anchors),
+$29 Pack of Fifty (50 anchors), $9/mo Standing Order (unrestricted anchoring,
+private receipts, vault, API).
 
 ---
 
