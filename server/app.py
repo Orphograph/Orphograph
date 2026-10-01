@@ -913,6 +913,7 @@ def _build_sitemap() -> str:
         ("/badge-demo", "0.4"),
         ("/press", "0.4"),
         ("/press-kit", "0.4"),
+        ("/press-kit/orphograph-brand-guide", "0.3"),
         ("/roadmap", "0.4"),
         ("/changelog", "0.4"),
         ("/access", "0.6"),

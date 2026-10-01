@@ -45,9 +45,12 @@ sys.path.insert(0, str(ROOT / "server"))
 # Indexable pages kept out of the sitemap on purpose. Path -> why. Every one of
 # these is verified to have NO inbound link (see `inbound_links`); adding a link
 # to one of them is what turns this red, and the answer is then to list it.
-UNLINKED = {
-    "/press-kit/orphograph-brand-guide": "no page links to it; list it or give it a canonical is a founder decision (2026-09-20)",
-}
+#
+# Empty since the founder decisions of 2026-09-28: /one-pager and /vs/c2pa were
+# retired (they answer 410), /lp/start went noindex, and the brand guide is
+# linked from the press kit and listed. A new entry needs a reason that
+# `inbound_links` can check.
+UNLINKED: dict[str, str] = {}
 
 
 class _Page(HTMLParser):
@@ -221,12 +224,15 @@ def test_every_exemption_is_still_true():
     assert stale == [], f"exempt paths that are now listed, noindex, or gone: {stale}"
 
 
-@pytest.mark.parametrize("path", sorted(UNLINKED))
-def test_an_exempt_page_really_has_no_inbound_link(path):
+def test_an_exempt_page_really_has_no_inbound_link():
     """"No page links to it" is the stated reason. When one does, the reason is
-    false and the page is a linked, indexable, unlisted page: the /pricing defect."""
-    linkers = inbound_links(WEB, ROOT / "server", path)
-    assert linkers == [], f"{path} is linked from {linkers}: list it in the sitemap"
+    false and the page is a linked, indexable, unlisted page: the /pricing defect.
+
+    One test over the table, not one per entry: with the table empty a
+    parametrized test collects as a skip, and the suite allows none."""
+    linked = {path: linkers for path in sorted(UNLINKED)
+              if (linkers := inbound_links(WEB, ROOT / "server", path))}
+    assert linked == {}, f"exempt pages that are linked (list them in the sitemap): {linked}"
 
 
 # --- the guard is looking at something ----------------------------------------

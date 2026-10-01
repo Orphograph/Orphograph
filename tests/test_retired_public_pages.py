@@ -14,6 +14,8 @@ Founder decisions of 2026-09-28 about public pages, each landed on its own:
   C. /one-pager and /vs/c2pa: nothing linked to either. Retired, their files
      deleted; the page, its trailing-slash and .html spellings and its
      stylesheet all answer 410.
+  D. /press-kit/orphograph-brand-guide was indexable and linked from
+     nothing. The press kit page links it and the sitemap lists it.
 
 A crawler drops a Gone page and its cached snippet far sooner than a Not
 Found, and a link checker reading 410 knows to stop rather than retry. HEAD
@@ -127,6 +129,23 @@ def _sitemap_paths(base: str) -> set[str]:
     # A reader that matched nothing would find no retired path forever.
     assert len(paths) >= 70, f"only {len(paths)} sitemap entries were read"
     return paths
+
+
+BRAND_GUIDE = "/press-kit/orphograph-brand-guide"
+
+
+def test_the_press_kit_page_links_the_brand_guide(base) -> None:
+    status, body, _ = _srv.request(base, "/press-kit")
+    assert status == 200
+    hrefs = re.findall(r'<a\b[^>]*\bhref="([^"]+)"', body.decode("utf-8"))
+    assert BRAND_GUIDE in hrefs, "the press kit page does not link the brand guide"
+    status, _body, headers = _srv.request(base, BRAND_GUIDE)
+    assert status == 200, status
+    assert headers.get("X-Robots-Tag") is None
+
+
+def test_the_served_sitemap_lists_the_brand_guide(base) -> None:
+    assert BRAND_GUIDE in _sitemap_paths(base)
 
 
 def test_the_served_sitemap_lists_no_retired_page(base) -> None:
