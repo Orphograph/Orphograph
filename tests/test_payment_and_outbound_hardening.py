@@ -726,3 +726,31 @@ def test_stripe_message_with_a_newline_stays_on_one_log_line(monkeypatch, capsys
     assert not any(line.startswith("[stripe_api] ALERT") for line in lines), lines
     # The message is still all there, escaped.
     assert "Invalid email address: a\\n[stripe_api] ALERT" in lines[1], lines[1]
+
+
+def test_privacy_toggle_waits_for_the_upgrade_workers_receipt_lock(main_server):
+    """Bundle review round 1 (LOW, reproduced). The upgrade worker holds the
+    receipt's .upgrade.lock across its read, the calendar round-trips and its
+    write (now also the notify_email cleanup); the toggle took no lock, so a
+    toggle landing inside that window was written over and undone. The toggle
+    now takes the same lock, waits a bounded time, and answers 503 (retry)
+    rather than racing; nothing is written while the worker holds it."""
+    import fcntl
+    base, data = main_server
+    path = f"/api/me/receipt/{PRIVACY_RID}/privacy"
+    status, raw, _ = _post(base, path, {"private": False}, _as(OWNER))
+    assert status == 200 and _receipt_private(data) is False, raw
+    rfile = data / "receipts" / PRIVACY_RID / "receipt.json"
+    before = rfile.read_bytes()
+    lock_path = data / "receipts" / PRIVACY_RID / ".upgrade.lock"
+    with open(lock_path, "a") as held:
+        fcntl.flock(held.fileno(), fcntl.LOCK_EX)     # the worker, mid-upgrade
+        status, raw, _ = _post(base, path, {"private": True}, _as(OWNER))
+        assert status == 503, (status, raw)
+        assert "retry" in json.loads(raw).get("error", "").lower(), raw
+        assert rfile.read_bytes() == before, "the toggle wrote while the worker held the lock"
+        fcntl.flock(held.fileno(), fcntl.LOCK_UN)
+    status, raw, _ = _post(base, path, {"private": True}, _as(OWNER))
+    assert status == 200 and _receipt_private(data) is True, raw
+    status, raw, _ = _post(base, path, {"private": False}, _as(OWNER))   # leave it as found
+    assert status == 200 and _receipt_private(data) is False, raw

@@ -442,6 +442,10 @@ UNSUB_POST_CAPACITY = 20
 UNSUB_POST_REFILL = 10 / 3600.0  # burst 20 per address, then one every 6 minutes
 _unsub_post_limiter = TokenBucket(UNSUB_POST_CAPACITY, UNSUB_POST_REFILL)
 
+# How long the receipt privacy toggle waits for the upgrade worker's
+# per-receipt lock before answering 503 (retry); see the toggle handler.
+PRIVACY_TOGGLE_LOCK_WAIT_SEC = 3.0
+
 # Waitlist confirmation emails go out on ONE worker thread, after the signup
 # has been answered. After, because the answer must not depend on whether an
 # address gets an email: a new address would wait on the mail round trip and
@@ -5015,6 +5019,29 @@ class Handler(BaseHTTPRequestHandler):
         if not rfile.exists():
             _json_response(self, 404, {"error": "receipt not found"})
             return
+        # The read-modify-write runs under the receipt's .upgrade.lock, the
+        # lock the upgrade worker holds across its read, the calendar
+        # round-trips and its write (now also the notify_email cleanup).
+        # Without it a toggle landing inside that window was written over and
+        # undone (bundle review round 1). The worker can hold the lock for a
+        # network round-trip, so the wait is bounded: a busy receipt answers
+        # 503 (retry) instead of tying up this thread.
+        from file_lock import try_locked
+        deadline = time.monotonic() + PRIVACY_TOGGLE_LOCK_WAIT_SEC
+        while True:
+            with try_locked(rfile.parent / ".upgrade.lock") as held:
+                if held is not None:
+                    self._toggle_receipt_privacy_locked(rfile, rid, email, want_private)
+                    return
+            if time.monotonic() >= deadline:
+                _json_response(self, 503, {"error": "receipt is being updated; retry shortly"})
+                return
+            time.sleep(0.05)
+
+    def _toggle_receipt_privacy_locked(self, rfile: Path, rid: str, email: str,
+                                       want_private: bool) -> None:
+        """The privacy toggle's read-modify-write. Caller holds the receipt's
+        .upgrade.lock."""
         try:
             rec = json.loads(rfile.read_text())
         except (OSError, json.JSONDecodeError):

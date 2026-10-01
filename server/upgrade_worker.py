@@ -266,9 +266,10 @@ def _write_record(receipt_file: Path, record: dict,
     leave a truncated receipt (write_text truncates first, then writes).
 
     With `expect`, the rename happens only if the file still has the stamp
-    taken before it was read. The privacy toggle in app.py writes receipt.json
-    without this worker's lock; without the check, a record read a moment
-    before a toggle would be written back over it and undo the toggle.
+    taken before it was read. The privacy toggle in app.py now takes this
+    worker's per-receipt .upgrade.lock (bundle review round 1); the stamp
+    check stays as a second guard against any other writer, so a record read
+    a moment before a write is never put back over it.
     The tmp name differs from the toggle's own `receipt.json.tmp`."""
     tmp = receipt_file.with_name(f".{receipt_file.name}.{os.getpid()}.tmp")
     try:
