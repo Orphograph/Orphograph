@@ -230,13 +230,13 @@ def test_one_address_posted_in_a_loop_is_rate_limited_but_other_addresses_are_no
     email = "looped@example.test"
     for base in _srv.server_processes(data_dir, stub_calendars=True):
         answers = []
-        for _ in range(11):
+        for _ in range(21):
             status, body, headers = _srv.request(
                 base, "/api/unsubscribe?e=" + quote(email), method="POST",
                 body=b"List-Unsubscribe=One-Click", headers=ONE_CLICK, timeout=30)
             answers.append((status, headers.get("Retry-After")))
-        assert [s for s, _ in answers[:10]] == [200] * 10, answers
-        assert answers[10][0] == 429 and answers[10][1], answers   # honest: retry later
+        assert [s for s, _ in answers[:20]] == [200] * 20, answers
+        assert answers[20][0] == 429 and answers[20][1], answers   # honest: retry later
         # many recipients from the same server are not throttled
         for i in range(12):
             status, _b, _h = _srv.request(
@@ -244,4 +244,4 @@ def test_one_address_posted_in_a_loop_is_rate_limited_but_other_addresses_are_no
                 body=b"List-Unsubscribe=One-Click", headers=ONE_CLICK, timeout=30)
             assert status == 200, (i, status)
     rows = [json.loads(line) for line in ledger.read_text().splitlines() if line.strip()]
-    assert [r["email"] for r in rows].count(email) == 10, "the limited POST still wrote a row"
+    assert [r["email"] for r in rows].count(email) == 20, "the limited POST still wrote a row"

@@ -435,9 +435,11 @@ _waitlist_confirm_limiter = TokenBucket(WAITLIST_CONFIRM_CAPACITY, WAITLIST_CONF
 # of POSTs for ONE address is what grew the file, while a mailbox provider's
 # one-click POSTs for many different recipients come from one server and must
 # stay unthrottled (RFC 8058). A person presses it once or twice; the burst
-# also covers a provider retrying. In-memory: a restart refilling it is fine.
-UNSUB_POST_CAPACITY = 10
-UNSUB_POST_REFILL = 10 / 3600.0  # burst 10 per address, then one every 6 minutes
+# covers a provider asking again and again (test_unsubscribe_failed_write
+# asks 16 times and must get the same answer each time). In-memory: a
+# restart refilling it is fine.
+UNSUB_POST_CAPACITY = 20
+UNSUB_POST_REFILL = 10 / 3600.0  # burst 20 per address, then one every 6 minutes
 _unsub_post_limiter = TokenBucket(UNSUB_POST_CAPACITY, UNSUB_POST_REFILL)
 
 # Waitlist confirmation emails go out on ONE worker thread, after the signup
