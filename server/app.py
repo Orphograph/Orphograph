@@ -57,6 +57,14 @@ try:
 except Exception as _e:  # noqa: BLE001
     sys.stderr.write(f"[startup] manifest_signature unavailable: {_e}\n")
     manifest_signature = None  # type: ignore[assignment]
+# Same rule for the Standing Record's office-signature check, which is built
+# on manifest_signature. Without it the page lists nothing, which is the safe
+# side: it never lists a row it could not check.
+try:
+    import standing_record  # noqa: E402
+except Exception as _e:  # noqa: BLE001
+    sys.stderr.write(f"[startup] standing_record unavailable: {_e}\n")
+    standing_record = None  # type: ignore[assignment]
 import stats  # noqa: E402
 import stripe_api  # noqa: E402
 import stripe_webhook  # noqa: E402
@@ -5398,6 +5406,31 @@ class Handler(BaseHTTPRequestHandler):
             client_label = client_label[:200]
         else:
             client_label = None
+        # Optional office signature over (client_label, root) for the public
+        # Standing Record; only scripts/weekly_anchor.py sends one. Checking
+        # it here means a bad one costs its sender a 400 instead of sitting on
+        # disk. What decides the page is the check made again every time the
+        # list is built (server/standing_record.py), never this one.
+        office_sig_hex = payload.get("office_signature")
+        if office_sig_hex is not None:
+            if standing_record is None or not standing_record.backend_available():
+                _reject(503, {
+                    "error": "office signature verification unavailable in this build",
+                    "detail": "Anchor without office_signature, or use a build with Ed25519 support.",
+                })
+                return
+            office_sig = standing_record.parse_signature(office_sig_hex)
+            if office_sig is None:
+                _reject(400, {"error": "office_signature must be 128 lowercase hex characters"})
+                return
+            if client_label is None or not standing_record.verifies(
+                    client_label, root_hex, office_sig):
+                _reject(400, {
+                    "error": "office_signature does not verify",
+                    "detail": ("It must be an office key's signature over this "
+                               "request's client_label and the manifest root."),
+                })
+                return
         # Fail closed — see _reject_private. This path is where it bit us:
         # the daily repo anchor asks for private and has been publishing.
         # _reject refunds the pack credit and is the folder path's refunding
@@ -5487,6 +5520,7 @@ class Handler(BaseHTTPRequestHandler):
         record["kind"] = "folder"
         record["leaf_count"] = len(leaves)
         record["merkle_algorithm"] = merkle.ALGORITHM
+        office_signed = False
         try:
             rfile = engine.RECEIPTS_DIR / rid / "receipt.json"
             on_disk = json.loads(rfile.read_text())
@@ -5498,7 +5532,10 @@ class Handler(BaseHTTPRequestHandler):
             if sig_verified is not None:
                 on_disk["signature_verified"] = sig_verified
                 on_disk["signer_kid"] = signer_kid
+            if office_sig_hex is not None:
+                on_disk[standing_record.FIELD] = office_sig_hex
             rfile.write_text(json.dumps(on_disk, indent=2))
+            office_signed = office_sig_hex is not None
         except OSError:
             pass
         # Mirror committed lineage onto the persisted receipt (design §2.4).
@@ -5539,6 +5576,10 @@ class Handler(BaseHTTPRequestHandler):
         if sig_verified is not None:
             response_body["signature_verified"] = sig_verified
             response_body["signer_kid"] = signer_kid
+        if office_signed:
+            # The weekly job treats a missing flag as a failed run: a server
+            # that dropped the signature made a row the page will never list.
+            response_body["office_signed"] = True
         if want_public_paths:
             response_body["paths_public"] = True
 
@@ -6701,18 +6742,22 @@ _WEEKLY_CACHE: dict = {"ts": 0.0, "rows": []}
 
 
 def _list_weekly_anchors(limit: int = 16) -> list[dict]:
-    """Latest public weekly self-anchors (client_label weekly-*), 300s cache.
+    """The latest weekly anchors the office itself made, 300s cache.
 
     The office re-anchors its own foundations on a schedule
     (scripts/weekly_anchor.py); this powers the public /standing-record page.
+    A "weekly-" label is not enough: anyone can choose a label. Which rows
+    qualify, and why, is in server/standing_record.py.
     """
     import time as _time
     now = _time.time()
     if now - _WEEKLY_CACHE["ts"] < 300:
         return _WEEKLY_CACHE["rows"]
-    rows: list[dict] = []
-    receipts_dir = engine.RECEIPTS_DIR
-    if receipts_dir.exists():
+
+    def _weekly_receipts():
+        receipts_dir = engine.RECEIPTS_DIR
+        if not receipts_dir.exists():
+            return
         for child in receipts_dir.iterdir():
             if not child.is_dir():
                 continue
@@ -6723,17 +6768,17 @@ def _list_weekly_anchors(limit: int = 16) -> list[dict]:
                 rec = json.loads(rfile.read_text())
             except (OSError, json.JSONDecodeError):
                 continue
-            label = str(rec.get("client_label") or "")
-            if not label.startswith("weekly-") or rec.get("private"):
-                continue
-            rows.append({
-                "receipt_id": rec.get("receipt_id"),
-                "client_label": label,
-                "created_at": rec.get("created_at"),
-                "btc_pinned_at": rec.get("btc_pinned_at"),
-            })
-    rows.sort(key=lambda x: x.get("created_at") or "", reverse=True)
-    _WEEKLY_CACHE.update(ts=now, rows=rows[:limit])
+            if isinstance(rec, dict) and str(rec.get("client_label") or "").startswith("weekly-"):
+                yield rec
+
+    office_rows = standing_record.listed(_weekly_receipts(), limit) if standing_record else []
+    rows = [{
+        "receipt_id": rec.get("receipt_id"),
+        "client_label": rec.get("client_label"),
+        "created_at": rec.get("created_at"),
+        "btc_pinned_at": rec.get("btc_pinned_at"),
+    } for rec in office_rows]
+    _WEEKLY_CACHE.update(ts=now, rows=rows)
     return _WEEKLY_CACHE["rows"]
 
 
