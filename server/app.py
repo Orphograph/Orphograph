@@ -6077,6 +6077,18 @@ class Handler(BaseHTTPRequestHandler):
             _json_response(self, 404, {"error": "no active subscription found"})
             return
         result = stripe_api.cancel_at_period_end(sub_id)
+        if not result.get("ok") and _stripe_has_no_such_subscription(result):
+            # Deleted at Stripe with the webhook that would have said so
+            # missed. Stripe cannot bill it, and gives this answer on every
+            # try, so answering 503 left a past-due account unable to
+            # subscribe again: checkout refuses it until it cancels. It is
+            # recorded as ended, which is what it is.
+            subscriptions.record_not_at_stripe(current, email)
+            _json_response(self, 200, {
+                "ok": True,
+                "message": "This subscription had already ended, so it will not renew.",
+            })
+            return
         if not result.get("ok"):
             _json_response(self, 503, {"error": "stripe error", "detail": result.get("error")})
             return
