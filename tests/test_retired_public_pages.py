@@ -1,4 +1,5 @@
-"""Retired public pages answer 410 Gone, through a real server.
+"""Retired public pages answer 410 Gone, and a page kept out of search says
+so, through a real server.
 
 Founder decisions of 2026-09-28 about public pages, each landed on its own:
 
@@ -6,6 +7,10 @@ Founder decisions of 2026-09-28 about public pages, each landed on its own:
      production it answered 404 only because the image ships without
      config/; any tree that had config/ served the full pages. Retired: the
      whole /verticals subtree answers 410.
+  B. /lp/start is a paid-traffic landing page nothing links to. It keeps
+     working, but asks not to be indexed twice over: a robots meta tag for
+     crawlers that read the page and an X-Robots-Tag header for those that
+     only read headers (and for HEAD, which has no page to read).
 
 A crawler drops a Gone page and its cached snippet far sooner than a Not
 Found, and a link checker reading 410 knows to stop rather than retry. HEAD
@@ -41,6 +46,11 @@ RETIRED = [
 
 LIVE = ("/pricing", "/press-kit")
 
+# Served, but not to be indexed. The trailing-slash spelling resolves to the
+# same file, so it must carry the same answer.
+NOINDEX = ("/lp/start", "/lp/start/")
+NOINDEX_META = re.compile(r'<meta\s+name="robots"\s+content="noindex"\s*/?>', re.I)
+
 
 @pytest.fixture(scope="module")
 def base(tmp_path_factory):
@@ -68,6 +78,37 @@ def test_control_a_live_page_still_answers(base, path, method) -> None:
     assert _missing_security_headers(headers) == [], (method, path)
 
 
+@pytest.mark.parametrize("method", ("GET", "HEAD"))
+@pytest.mark.parametrize("path", NOINDEX)
+def test_the_paid_traffic_landing_page_asks_not_to_be_indexed(base, path, method) -> None:
+    status, body, headers = _srv.request(base, path, method)
+    assert status == 200, (method, path, status)
+    assert headers.get("X-Robots-Tag") == "noindex", (method, path, headers.get("X-Robots-Tag"))
+    assert _missing_security_headers(headers) == [], (method, path)
+    if method == "GET":
+        assert NOINDEX_META.search(body.decode("utf-8")), "the page lost its robots meta tag"
+
+
+def test_a_revalidated_landing_page_keeps_the_header(base) -> None:
+    """A crawler that cached the page revalidates with If-None-Match and gets
+    a 304. The 304 must not drop the directive the 200 carried."""
+    status, _body, headers = _srv.request(base, "/lp/start")
+    assert status == 200 and headers.get("ETag")
+    status, _body, headers = _srv.request(base, "/lp/start",
+                                          headers={"If-None-Match": headers["ETag"]})
+    assert status == 304, status
+    assert headers.get("X-Robots-Tag") == "noindex"
+
+
+def test_control_an_indexable_landing_page_carries_no_robots_header(base) -> None:
+    """The header belongs to /lp/start alone. Sent anywhere else it would
+    quietly pull an indexed page out of search."""
+    for path in ("/lp/agent-receipts", "/pricing", "/"):
+        status, _body, headers = _srv.request(base, path)
+        assert status == 200, (path, status)
+        assert headers.get("X-Robots-Tag") is None, (path, headers.get("X-Robots-Tag"))
+
+
 def _sitemap_paths(base: str) -> set[str]:
     status, body, _ = _srv.request(base, "/sitemap.xml")
     assert status == 200
@@ -83,3 +124,5 @@ def test_the_served_sitemap_lists_no_retired_page(base) -> None:
     retired = sorted(p for p in listed
                      if any(p == r or p.startswith((r + "/", r + ".")) for r in RETIRED_PREFIXES))
     assert retired == [], f"the sitemap still lists retired pages: {retired}"
+    noindexed = sorted(p for p in listed if p.rstrip("/") in {n.rstrip("/") for n in NOINDEX})
+    assert noindexed == [], f"the sitemap lists a noindex page: {noindexed}"

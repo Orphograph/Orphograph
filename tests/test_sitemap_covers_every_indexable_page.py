@@ -48,7 +48,6 @@ sys.path.insert(0, str(ROOT / "server"))
 UNLINKED = {
     "/one-pager": "no page on the site links to it; promote or noindex is an open founder decision (2026-09-19)",
     "/vs/c2pa": "no page on the site links to it; promote or noindex is an open founder decision (2026-09-19)",
-    "/lp/start": "a paid-traffic landing page no other page links to; list it or noindex it is a founder decision (2026-09-20)",
     "/press-kit/orphograph-brand-guide": "no page links to it; list it or give it a canonical is a founder decision (2026-09-20)",
 }
 
@@ -239,8 +238,10 @@ def test_the_scan_reads_a_real_domain():
     targets = indexable_targets(WEB)
     assert len(targets) >= 80, f"only {len(targets)} indexable pages found"
     assert "/" in targets and "/pricing" in targets
-    assert "/lp/start" in targets, "a page with no canonical must be read by its served path"
+    assert "/press-kit/orphograph-brand-guide" in targets, \
+        "a page with no canonical must be read by its served path"
     assert "/founder/admin" not in targets and "/account" not in targets, "noindex pages are excluded"
+    assert "/lp/start" not in targets, "noindex pages are excluded"
 
 
 # --- controls: plant the defect, see it caught ---------------------------------

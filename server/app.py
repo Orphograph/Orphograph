@@ -1250,6 +1250,22 @@ def _is_retired_btc_path(path: str) -> bool:
     return any(p.startswith(pre) for pre in _RETIRED_BTC_PREFIXES)
 
 
+# Static pages that are served but must stay out of search. Founder decision
+# 2026-09-28: /lp/start is a paid-traffic landing page nothing links to, so it
+# keeps working and asks not to be indexed. The page carries a robots meta tag
+# too; the header is for crawlers that read headers only, and for HEAD, which
+# has no page to read. Keyed on the file the request resolves to, not on the
+# URL, so every spelling that serves the page (/lp/start, /lp/start/) carries
+# it. Lower-case, because a case-insensitive disk (a Mac dev box) serves
+# /LP/Start from the same file.
+_NOINDEX_STATIC_FILES = frozenset({"lp/start.html"})
+
+
+def _send_robots_header(handler: BaseHTTPRequestHandler, target: Path) -> None:
+    if target.relative_to(WEB_DIR).as_posix().lower() in _NOINDEX_STATIC_FILES:
+        handler.send_header("X-Robots-Tag", "noindex")
+
+
 def _serve_static(handler: BaseHTTPRequestHandler, rel_path: str) -> None:
     if rel_path in ("", "/"):
         rel_path = "index.html"
@@ -1329,6 +1345,7 @@ def _serve_static(handler: BaseHTTPRequestHandler, rel_path: str) -> None:
         handler.send_response(304)
         handler.send_header("ETag", etag)
         handler.send_header("Cache-Control", _static_cache_control(target.suffix, rel_path))
+        _send_robots_header(handler, target)
         _security_headers(handler)
         handler.end_headers()
         return
@@ -1348,6 +1365,7 @@ def _serve_static(handler: BaseHTTPRequestHandler, rel_path: str) -> None:
     if enc:
         handler.send_header("Content-Encoding", enc)
         handler.send_header("Vary", "Accept-Encoding")
+    _send_robots_header(handler, target)
     _security_headers(handler)
     handler.end_headers()
     handler.wfile.write(data)
