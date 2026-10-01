@@ -500,3 +500,24 @@ def test_the_published_health_example_reports_the_rail_retired() -> None:
     docs = (WEB / "docs" / "api.html").read_text(encoding="utf-8")
     assert re.search(r'^\s*"lightning":\s*\{"rail": "retired", "configured": false\},?\s*$',
                      docs, re.MULTILINE), "docs/api.html health example lacks the lightning block"
+
+
+@pytest.mark.parametrize("path, n_leaves", [("/api/anchor_folder", 55_000), ("/api/anchor/batch", 600)])
+def test_the_retired_answer_reaches_a_client_that_sent_a_large_body(tmp_path, path, n_leaves) -> None:
+    """Bundle review round 1 (LOW, reproduced). The L402 refusal drained only
+    MAX_BODY_BYTES (4096) of the body, while the folder route takes up to 8
+    MiB and the batch route 64 KiB: the unread rest made the close an RST, and
+    the client saw a reset instead of the documented 410. The refusal drains
+    with the route's own cap."""
+    if path == "/api/anchor_folder":
+        body = json.dumps({"merkle_root": "ab" * 32, "leaves": [
+            {"path": f"dir/file-{i}.txt", "sha256": f"{i:064x}"} for i in range(1, n_leaves)]}).encode()
+    else:
+        body = json.dumps({"hashes": [{"hash_hex": f"{i:064x}"} for i in range(1, n_leaves)]}).encode()
+    assert len(body) > 4096
+    for base in _srv.server_processes(tmp_path, stub_calendars=True):
+        for _ in range(5):
+            status, raw, _h = _srv.request(base, path, "POST", body=body, headers={
+                "Content-Type": "application/json", "Authorization": "L402 abc:def"}, timeout=30)
+            assert status == 410, (status, raw[:120])
+            _assert_retired_body(json.loads(raw))

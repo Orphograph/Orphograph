@@ -3048,7 +3048,7 @@ class Handler(BaseHTTPRequestHandler):
         })
         return True
 
-    def _drain_request_body(self) -> int:
+    def _drain_request_body(self, max_bytes: int = MAX_BODY_BYTES) -> int:
         """Read and discard a bounded request body before answering an error.
 
         Returns the number of bytes consumed (for tests; callers ignore it).
@@ -3074,7 +3074,7 @@ class Handler(BaseHTTPRequestHandler):
             declared = int(self.headers.get("Content-Length") or 0)
         except (TypeError, ValueError):
             return 0
-        to_drain = min(max(declared, 0), MAX_BODY_BYTES)
+        to_drain = min(max(declared, 0), max_bytes)
         if to_drain <= 0:
             return 0
         try:
@@ -3082,8 +3082,14 @@ class Handler(BaseHTTPRequestHandler):
         except (OSError, ValueError):
             return 0
 
-    def _refuse_retired_l402(self) -> bool:
+    def _refuse_retired_l402(self, max_bytes: int = MAX_BODY_BYTES) -> bool:
         """True if the request carried an L402 credential and was answered 410.
+
+        `max_bytes` is the calling route's own body cap: drained only to
+        MAX_BODY_BYTES, a large folder or batch body left unread data at
+        close, the close became an RST, and the client saw a reset instead of
+        this 410 (bundle review round 1). It reads no more than the route
+        itself would.
 
         Called first on every anchor endpoint, while lightning.LIGHTNING_RETIRED
         holds. FIRST because the anchor handler spends a pack credit, and checks
@@ -3103,7 +3109,7 @@ class Handler(BaseHTTPRequestHandler):
         scheme = self.headers.get("Authorization", "").strip().split(None, 1)
         if not scheme or scheme[0].lower() != "l402":
             return False
-        self._drain_request_body()
+        self._drain_request_body(max_bytes)
         _json_response(self, 410, _LIGHTNING_RETIRED_ANCHOR)
         return True
 
@@ -4120,7 +4126,7 @@ class Handler(BaseHTTPRequestHandler):
         a backlog. API-key auth bypasses the rate limit; pack tokens consume
         one credit per item; subscribers anchor under their session.
         """
-        if self._refuse_retired_l402():
+        if self._refuse_retired_l402(MAX_BATCH_BODY_BYTES):
             return
         if ORPHO_DISABLE_ANCHORING:
             _json_response(self, 503, {"error": "anchoring temporarily unavailable"})
@@ -5462,7 +5468,7 @@ class Handler(BaseHTTPRequestHandler):
     def _handle_anchor_folder(self) -> None:
         """POST /api/anchor_folder, one request in flight per client address."""
         # Before the in-flight slot: a refused request must not hold it.
-        if self._refuse_retired_l402():
+        if self._refuse_retired_l402(MAX_FOLDER_MANIFEST_BYTES):
             return
         key = self._client_key()
         with _folder_in_flight_lock:
