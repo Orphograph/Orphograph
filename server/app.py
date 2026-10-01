@@ -429,6 +429,17 @@ WAITLIST_CONFIRM_CAPACITY = 20
 WAITLIST_CONFIRM_REFILL = 20 / 3600.0  # burst 20, then one every 3 minutes
 _waitlist_confirm_limiter = TokenBucket(WAITLIST_CONFIRM_CAPACITY, WAITLIST_CONFIRM_REFILL)
 
+# The unsubscribe POST appends a suppression row on every press (re-append, so
+# a known and an unknown address make the same write), and every marketing
+# send scans that ledger. Keyed per (address prefix, folded address): a loop
+# of POSTs for ONE address is what grew the file, while a mailbox provider's
+# one-click POSTs for many different recipients come from one server and must
+# stay unthrottled (RFC 8058). A person presses it once or twice; the burst
+# also covers a provider retrying. In-memory: a restart refilling it is fine.
+UNSUB_POST_CAPACITY = 10
+UNSUB_POST_REFILL = 10 / 3600.0  # burst 10 per address, then one every 6 minutes
+_unsub_post_limiter = TokenBucket(UNSUB_POST_CAPACITY, UNSUB_POST_REFILL)
+
 # Waitlist confirmation emails go out on ONE worker thread, after the signup
 # has been answered. After, because the answer must not depend on whether an
 # address gets an email: a new address would wait on the mail round trip and
@@ -5275,6 +5286,15 @@ class Handler(BaseHTTPRequestHandler):
         email = self._parse_unsub_email()
         if not email:
             _json_response(self, 400, {"error": "invalid email"})
+            return
+        allowed, retry = _unsub_post_limiter.check(
+            f"unsub-post:{self._client_key()}:{fold_email(email)}")
+        if not allowed:
+            # Before any write. The address already has the rows this burst
+            # wrote, so it is suppressed; the answer says retry, never "done",
+            # because a burst that failed to write (a full volume) lands here too.
+            self._drain_request_body()
+            _send_rate_limited(self, int(retry) + 1, {"error": "too many requests"})
             return
         # Drain body without reading large payloads. The address is always
         # the query string's; the body only says whether our confirm page sent

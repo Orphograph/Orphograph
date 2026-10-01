@@ -214,3 +214,34 @@ def _all_at_once(jobs: list[str], email: str) -> None:
         t.join(timeout=90)
     assert not any(t.is_alive() for t in threads), "a POST never came back"
     assert answers == [(200, {"ok": True})] * len(jobs), answers
+
+
+def test_one_address_posted_in_a_loop_is_rate_limited_but_other_addresses_are_not(tmp_path):
+    """Review of the re-append change (cycle 8): every POST now appends a row,
+    and every marketing send scans the whole suppression ledger, so a
+    stranger looping the POST for one address grew the file without bound
+    and slowed every send. The limit is per (client prefix, address): a
+    person presses unsubscribe once or twice, and a mailbox provider's
+    one-click POSTs for MANY different recipients from one server stay
+    unthrottled (RFC 8058 unsubscribes must keep working)."""
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    ledger = data_dir / "suppressions.jsonl"
+    email = "looped@example.test"
+    for base in _srv.server_processes(data_dir, stub_calendars=True):
+        answers = []
+        for _ in range(11):
+            status, body, headers = _srv.request(
+                base, "/api/unsubscribe?e=" + quote(email), method="POST",
+                body=b"List-Unsubscribe=One-Click", headers=ONE_CLICK, timeout=30)
+            answers.append((status, headers.get("Retry-After")))
+        assert [s for s, _ in answers[:10]] == [200] * 10, answers
+        assert answers[10][0] == 429 and answers[10][1], answers   # honest: retry later
+        # many recipients from the same server are not throttled
+        for i in range(12):
+            status, _b, _h = _srv.request(
+                base, "/api/unsubscribe?e=" + quote(f"other-{i}@example.test"), method="POST",
+                body=b"List-Unsubscribe=One-Click", headers=ONE_CLICK, timeout=30)
+            assert status == 200, (i, status)
+    rows = [json.loads(line) for line in ledger.read_text().splitlines() if line.strip()]
+    assert [r["email"] for r in rows].count(email) == 10, "the limited POST still wrote a row"
