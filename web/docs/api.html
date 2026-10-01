@@ -555,6 +555,7 @@ print(receipt["status"], receipt.get("btc_pinned_at"))</pre>
     {"url": "https://btc.calendar.catallaxy.com", "reachable": true}
   ],
   "payout":     {"rail": "retired", "configured": false},
+  "lightning":  {"rail": "retired", "configured": false},
   "checked_at": "2026-05-14T14:00:30+00:00"
 }</pre>
 
@@ -562,7 +563,9 @@ print(receipt["status"], receipt.get("btc_pinned_at"))</pre>
     The data here is intentionally non-sensitive: counts and timestamps,
     not contents. The <code>payout</code> block reports only that the direct
     Bitcoin rail is retired — actual balances are not exposed on this
-    endpoint, and never were. There is no <code>btc_oracle</code> block: the
+    endpoint, and never were. The Lightning (L402) rail is retired too, and
+    the <code>lightning</code> block reports it retired the same way. There
+    is no <code>btc_oracle</code> block: the
     price feed existed to quote BTC orders, so it was removed with the rail
     on 2026-09-19 rather than left reporting <code>available: false</code>
     on every request forever.
@@ -823,12 +826,8 @@ print(f"{health['counts']['receipts_on_disk']} receipts, uptime {health['uptime_
   certified sense.
 </p>
 
-<h3 id="lightning">Coming: pay-per-anchor over Lightning</h3>
-<p>
-  Pay-per-anchor over Lightning for agents — no account needed — is coming.
-  It is not available today; the endpoint will be documented here when it
-  opens.
-</p>
+<h3 id="lightning">Retired: Lightning payments</h3>
+<p>Lightning (L402) payments are retired. <code>POST /api/ln/quote</code> answers 410 Gone, and so does an anchor request that carries an <code>Authorization: L402</code> header: it is not anchored and nothing is charged. Pay by card on the <a href="/pricing">schedule of fees</a>.</p>
 
 <h2 id="changelog">Changelog</h2>
 <table class="api-table">

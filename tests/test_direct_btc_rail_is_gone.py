@@ -35,8 +35,9 @@ indistinguishable from a grep that cannot reach its files.
 
 What is deliberately NOT touched, and must not be swept up here:
   * Bitcoin ANCHORING via OpenTimestamps — the product itself.
-  * The L402 / Lightning rail (server/lightning.py, /api/ln/quote) — dormant,
-    a separate decision. tests/test_capability_copy.py still pins its copy.
+  * The L402 / Lightning rail (server/lightning.py, /api/ln/quote) — a
+    separate decision. It was retired on its own on 2026-09-28, fenced rather
+    than deleted; tests/test_lightning_rail_is_retired.py pins that.
   * The hosted crypto processor (/pay/crypto, /api/nowpayments/*) — untouched,
     and it is the checkout the retired offers now point at.
 """
@@ -124,7 +125,7 @@ DELETED_FILES = (
 # Kept on purpose — assert them, so a later sweep deleting one is a decision
 # rather than a side effect.
 KEPT_FILES = (
-    SERVER / "lightning.py",          # L402: dormant, separate decision
+    SERVER / "lightning.py",          # L402: retired 2026-09-28, but fenced, not deleted
     SERVER / "nowpayments_api.py",    # hosted processor: the live crypto path
     SERVER / "nowpayments_webhook.py",
     SERVER / "ots_timestamp.py",      # Bitcoin ANCHORING: the product
@@ -955,7 +956,7 @@ def test_the_offer_scan_does_not_fire_on_the_product_or_the_kept_rails() -> None
         "You do not need a Bitcoin wallet. You do not need to pay a miner.",
         "Pay with crypto",                                  # hosted processor
         "Pay in BTC, ETH, USDC, SOL and more",              # hosted processor
-        "Lightning L402 pay-per-anchor is coming",          # dormant L402 rail
+        "Lightning L402 pay-per-anchor is coming",          # the L402 rail's old copy
     )
     for line in must_not_fire:
         low = line.lower()

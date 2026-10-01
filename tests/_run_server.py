@@ -133,11 +133,22 @@ def main() -> int:
     # reached" can only be told apart by shaping WHICH ones succeed.
     parser.add_argument("--fail-calendars", default="")
     parser.add_argument("--stub-stripe", action="store_true")
+    # Lifts lightning.LIGHTNING_RETIRED in this process only, so the armed
+    # rail's tests keep proving the code a re-arm would switch back on. A flag
+    # on this launcher and not an environment variable on purpose: production
+    # starts server/app.py through scripts/init_volume.sh, and this file is
+    # neither copied into the image (Dockerfile COPY lines) nor in its build
+    # context (.dockerignore excludes tests/), so no secret, typo or stray
+    # setting can reach it.
+    parser.add_argument("--arm-lightning", action="store_true")
     args = parser.parse_args()
     if not args.stub_calendars:
         parser.error("this launcher requires --stub-calendars")
     if args.stub_stripe:
         _stub_stripe(Path(os.environ["ORPHO_DATA_DIR"]))
+    if args.arm_lightning:
+        import lightning
+        lightning.LIGHTNING_RETIRED = False
 
     import engine
     # The one definition of the well-formed pending body the tests compare

@@ -36,6 +36,10 @@ try:
     import mailer  # type: ignore
 except ImportError:  # pragma: no cover
     mailer = None  # type: ignore
+try:
+    import lightning  # type: ignore
+except ImportError:  # pragma: no cover
+    lightning = None  # type: ignore
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = Path(os.environ.get("ORPHO_DATA_DIR", str(ROOT / "data") if (ROOT / "data").is_dir() else str(ROOT)))
@@ -123,6 +127,22 @@ def _payout_snapshot() -> dict:
     return {"rail": "retired", "configured": False}
 
 
+def _lightning_snapshot() -> dict:
+    """The Lightning (L402) rail was retired on 2026-09-28.
+
+    Reported in the same shape as the retired direct-BTC rail under "payout",
+    so a reader of /api/health sees both retirements the same way. Read from
+    lightning.LIGHTNING_RETIRED rather than written as a constant here, so the
+    day the rail is re-armed this block says so without a second edit.
+    """
+    if lightning is None:  # pragma: no cover
+        return {"rail": "unavailable", "configured": False}
+    if lightning.LIGHTNING_RETIRED:
+        return {"rail": "retired", "configured": False}
+    armed = lightning.configured()
+    return {"rail": "armed" if armed else "unconfigured", "configured": armed}
+
+
 def _email_snapshot() -> dict:
     """Whether transactional email (claim codes, receipts, sign-in links) can be
     delivered. The mailer is INERT without RESEND_API_KEY, so resend_configured
@@ -166,6 +186,7 @@ def _compute_snapshot() -> dict:
         },
         "calendars": _check_calendars_parallel(list(engine.CALENDARS)),
         "payout": _payout_snapshot(),
+        "lightning": _lightning_snapshot(),
         "checkout": _checkout_snapshot(),
         "email": _email_snapshot(),
         "reconciliation": _reconciliation_snapshot(),

@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """lightning.py — L402 pay-per-anchor rail (Lightning, no accounts, no token).
 
+RETIRED 2026-09-28 (LIGHTNING_RETIRED below). Everything described here is
+fenced off in production and kept so the rail can be re-armed on request.
+
 An AI agent with no Orphograph account pays sats for exactly one anchor:
 
     1. POST /api/ln/quote  (or hit /api/anchor past the free tier)
@@ -49,8 +52,20 @@ MACAROON_TTL_SEC = int(os.environ.get("ORPHO_LN_MACAROON_TTL", "3600"))
 _SPENT_FILE = "ln_spent.jsonl"
 _SECRET_FILE = "ln_macaroon_secret"
 
+# RETIRED 2026-09-28. Founder decision on "arm one crypto rail, or retire
+# both": the Lightning rail is retired until someone asks for it. It was never
+# armed in production. While this is True, configured() is False whatever the
+# environment holds, so a stray ORPHO_LN_* secret cannot half-arm the rail;
+# server/app.py answers 410 to POST /api/ln/quote and to any anchor request
+# carrying an L402 credential, before any anchor or payment work, and never
+# issues an L402 challenge. The code below is kept, not deleted, so re-arming
+# is this line plus the steps in docs/LIGHTNING_L402.md.
+LIGHTNING_RETIRED = True
+
 
 def configured() -> bool:
+    if LIGHTNING_RETIRED:
+        return False
     backend = os.environ.get("ORPHO_LN_BACKEND", "").strip().lower()
     if backend == "lnbits":
         return bool(os.environ.get("ORPHO_LN_LNBITS_URL")
