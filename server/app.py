@@ -5781,10 +5781,17 @@ class Handler(BaseHTTPRequestHandler):
             if sig_verified is not None:
                 on_disk["signature_verified"] = sig_verified
                 on_disk["signer_kid"] = signer_kid
-            if office_sig_hex is not None:
+            # The office signature is recorded only on an anchor a calendar
+            # accepted. A 0-calendar receipt has no Bitcoin commitment and
+            # never will; signed, it became the day's listed row and hid the
+            # good same-day rerun, because "earliest signed row wins" (which
+            # keeps a copied signature from taking over) chose it (bundle
+            # review round 1). Unsigned, the job's missing-flag check fails
+            # that run and the rerun is the only signed row.
+            office_signed = office_sig_hex is not None and record["calendars_ok"] > 0
+            if office_signed:
                 on_disk[standing_record.FIELD] = office_sig_hex
             rfile.write_text(json.dumps(on_disk, indent=2))
-            office_signed = office_sig_hex is not None
         except OSError:
             pass
         # Mirror committed lineage onto the persisted receipt (design §2.4).

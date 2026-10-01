@@ -282,12 +282,19 @@ def main() -> int:
                            sign_for_standing_record(label, manifest["root_hex"], seed))
     rid = result.get("receipt_id")
     err = result.get("error")
-    if rid and not result.get("office_signed"):
+    cal_ok = result.get("calendars_ok", 0)
+    cal_total = result.get("calendars_total", 0)
+    if rid and not cal_ok:
+        # No calendar accepted it: no Bitcoin commitment, ever. The server
+        # does not sign such a receipt, so it is never listed; rerun when the
+        # calendars answer.
+        err = (f"no calendar accepted the anchor (0/{cal_total}); it has no "
+               f"Bitcoin commitment and is not on the Standing Record. Rerun "
+               f"when the calendars answer.")
+    elif rid and not result.get("office_signed"):
         err = ("the server made the receipt but did not record the office "
                "signature, so the Standing Record will not list it (is the "
                "server older than this job?)")
-    cal_ok = result.get("calendars_ok", 0)
-    cal_total = result.get("calendars_total", 0)
     if rid:
         sys.stderr.write(
             f"[weekly_anchor]   folder root {manifest['root_hex'][:16]}… "

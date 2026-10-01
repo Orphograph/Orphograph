@@ -252,3 +252,47 @@ def test_the_default_path_is_under_home_and_its_directory_is_made_private(tmp_pa
 def test_public_without_a_key_fails(tmp_path):
     r = _office_key(["public"], tmp_path, tmp_path / "absent")
     assert r.returncode != 0 and r.stdout == b""
+
+
+def test_a_zero_calendar_run_is_a_failed_run_and_the_same_day_rerun_is_the_listed_one(monkeypatch, tmp_path):
+    """Bundle review round 1 (LOW, reproduced). With every calendar down the
+    folder anchor still answered 200 and stored the office signature, so a
+    0/5 receipt (no Bitcoin commitment, ever) became the signed row for the
+    day; a rerun the same day signs the identical statement, and "earliest
+    signed row wins" (which stops a copied signature from taking over) then
+    hid the good rerun. The server now records the office signature only
+    when a calendar accepted the anchor, and the job treats 0 calendars as a
+    failed run, so the rerun is the only signed row."""
+    import time
+    import _srv
+    data = tmp_path / "data"
+    data.mkdir()
+    seed = hashlib.sha256(b"test-only office seed, never pinned in the repo").digest()
+    key = tmp_path / "office_seed"
+    _write_key(key, seed)
+    pub = standing_record.public_key(seed).hex()
+    monkeypatch.setattr(standing_record, "PINNED_OFFICE_KEYS", (pub,))
+    monkeypatch.setattr(weekly_anchor, "LOG_PATH", tmp_path / "weekly_anchor_log.jsonl")
+    monkeypatch.setenv("ORPHO_OFFICE_KEY_PATH", str(key))
+
+    def run(base):
+        monkeypatch.setattr(weekly_anchor, "BASE_URL", base)
+        rc = weekly_anchor.main()
+        return rc, json.loads(weekly_anchor.LOG_PATH.read_text().splitlines()[-1])
+
+    for base in _srv.server_processes(data, stub_calendars=True,
+                                      fail_calendars="a,b,alice,finney,btc",
+                                      ORPHO_OFFICE_PUBLIC_KEYS=pub):
+        rc1, row1 = run(base)
+    assert row1["calendars_ok"] == 0 and row1["receipt_id"], row1
+    assert rc1 != 0, "a run no calendar accepted reported success"
+    dud = json.loads((data / "receipts" / row1["receipt_id"] / "receipt.json").read_text())
+    assert standing_record.FIELD not in dud, "a 0-calendar anchor carries the office signature"
+    time.sleep(1.1)
+    for base in _srv.server_processes(data, stub_calendars=True, ORPHO_OFFICE_PUBLIC_KEYS=pub):
+        rc2, row2 = run(base)
+        assert rc2 == 0 and row2["calendars_ok"] > 0 and row2["office_signed"], row2
+        assert row2["root_hex"] == row1["root_hex"], "the two runs must sign the same statement"
+        code, listing = _srv.get_json(base, "/api/standing-record")
+        assert code == 200
+        assert [r["receipt_id"] for r in listing["anchors"]] == [row2["receipt_id"]], listing
