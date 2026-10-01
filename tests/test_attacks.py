@@ -10,7 +10,9 @@ Spun up as a subprocess through tests/_srv.py.
 """
 from __future__ import annotations
 
+import hashlib
 import http.client
+import io
 import json
 import sys
 import time
@@ -44,16 +46,6 @@ def _status(base, path, method="GET", body=None, headers=None, timeout=5):
     return _srv.request(base, path, method, body, headers, timeout=timeout)[0]
 
 
-def _status_or_dropped(base, path, **kw):
-    """_status, or -1 when the server closed the connection instead of
-    answering. Only for a body far over the cap, where dropping the upload
-    mid-stream is a correct rejection."""
-    try:
-        return _status(base, path, **kw)
-    except _srv.ServerGone:
-        return -1
-
-
 # ── Path traversal on receipt-id-shaped routes ───────────────────────────
 
 @pytest.mark.parametrize("rid", [
@@ -83,22 +75,80 @@ def test_receipt_id_attacks_get_400_not_500(server, rid):
 
 
 # ── Oversized bodies ─────────────────────────────────────────────────────
+#
+# Each capped route compares the DECLARED Content-Length with its cap before
+# it reads a byte of the body, and answers 400 {"error": "invalid body size"}
+# through _json_response, which sends the security headers. So these tests
+# declare a body over the cap and send none of it.
+#
+# Sending the real bytes cannot show that answer. The handler replies from
+# the headers alone and closes the socket with the upload still unread, and
+# closing over unread data makes the kernel send RST, which can destroy the
+# 400 before the client reads it. Handler._drain_request_body states that as
+# the trade the cap makes, so it is not a fault. But it makes a real upload
+# useless as a test: the reset looks exactly like a handler that crashed. The
+# earlier versions of these tests accepted any dropped connection as a pass,
+# saw nothing but resets on a healthy server, and passed just the same
+# against a handler that raised on every large body.
 
-def test_anchor_rejects_oversized_body(server):
-    body = b"x" * (10 * 1024 * 1024)
-    code = _status_or_dropped(server, "/api/anchor", method="POST", body=body,
-                              headers={"Content-Type": "application/json"})
-    # Server may either return 400 cleanly OR drop the connection mid-upload
-    # (-1) once it sees Content-Length way over the cap. Both are correct
-    # rejections.
-    assert code in (400, -1)
+SECURITY_HEADERS = (
+    "Strict-Transport-Security",
+    "Content-Security-Policy",
+    "X-Content-Type-Options",
+    "X-Frame-Options",
+    "Referrer-Policy",
+)
 
 
-def test_webhook_rejects_oversized_body(server):
-    body = b"x" * (1 * 1024 * 1024)
-    code = _status_or_dropped(server, "/api/stripe/webhook", method="POST", body=body,
-                              headers={"Stripe-Signature": "t=0,v1=x"})
-    assert code in (400, 503, -1)
+def _declare_oversized(base, path, declared, headers=""):
+    """POST that declares `declared` body bytes and sends none of them.
+    Returns (status, headers, JSON body) as the client received them."""
+    raw = _srv.raw_request(base, path, "POST", headers=(
+        f"Content-Type: application/json\r\nContent-Length: {declared}\r\n{headers}"))
+    assert raw, (f"POST {path} declaring {declared} bytes: the server closed "
+                 "the connection without answering")
+    head, _, body = raw.partition(b"\r\n\r\n")
+    status_line, _, header_block = head.partition(b"\r\n")
+    status = int(status_line.split(b" ", 2)[1])
+    received = http.client.parse_headers(io.BytesIO(header_block + b"\r\n\r\n"))
+    return status, received, json.loads(body)
+
+
+def _assert_refused_for_size(status, received, body):
+    assert status == 400, (status, body)
+    # The error key, not just the status: these routes send other 400s too (a
+    # body that is not JSON, a bad signature), and only this one names the size.
+    assert body.get("error") == "invalid body size", body
+    assert received.get("Content-Type", "").startswith("application/json")
+    missing = [name for name in SECURITY_HEADERS if not received.get(name)]
+    assert not missing, f"the size refusal was sent without {missing}"
+
+
+@pytest.mark.parametrize("declared", [10 * 1024 * 1024, 4096 + 1])
+def test_anchor_answers_an_oversized_body_with_invalid_body_size(server, declared):
+    status, received, body = _declare_oversized(server, "/api/anchor", declared)
+    _assert_refused_for_size(status, received, body)
+    assert body.get("max_bytes") == 4096, body
+    # A body the route accepts is still served afterwards, so the refusal did
+    # not take the route or the server down with it.
+    hash_hex = hashlib.sha256(f"oversized-{declared}".encode()).hexdigest()
+    _srv.ok_json(*_srv.anchor(server, {"hash_hex": hash_hex}))
+
+
+@pytest.mark.parametrize("declared", [1024 * 1024, 256 * 1024 + 1])
+def test_webhook_answers_an_oversized_body_with_invalid_body_size(server, declared):
+    status, received, body = _declare_oversized(server, "/api/stripe/webhook", declared,
+                                                "Stripe-Signature: t=0,v1=x\r\n")
+    _assert_refused_for_size(status, received, body)
+    # The same request at a size the route accepts gets past the cap to the
+    # next gate. This server has no STRIPE_WEBHOOK_SECRET, so that gate is the
+    # 503. It shows the 400 above came from the size, and that the server is
+    # still answering.
+    code = _status(server, "/api/stripe/webhook", method="POST",
+                   body=b'{"type":"checkout.session.completed"}',
+                   headers={"Content-Type": "application/json",
+                            "Stripe-Signature": "t=0,v1=x"})
+    assert code == 503
 
 
 # ── Malformed Content-Length ─────────────────────────────────────────────
