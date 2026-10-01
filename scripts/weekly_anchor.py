@@ -83,7 +83,6 @@ ARTIFACTS = [
     "web/favicon.png",
     "web/index.html",
     "web/method/architecture.html",
-    "web/vs/c2pa.html",
     "web/continuity.html",
     "web/roadmap.html",
     "CODEOWNERS",

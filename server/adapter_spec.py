@@ -9,7 +9,9 @@ canonicalization / disclosure / accepted_signers); otherwise it is "landing-only
 profiles and proves each produces a schema-valid AttestationRecord — so a new
 vertical onboards as data, not code.
 
-stdlib + PyYAML (already installed), mirroring verticals.py's loader.
+stdlib + PyYAML (already installed). The /verticals landing pages that
+first read these files were retired on 2026-09-28; this module is now the
+only reader of config/verticals/.
 """
 from __future__ import annotations
 

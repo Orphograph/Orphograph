@@ -76,13 +76,6 @@ from email_fold import fold_email  # noqa: E402
 import unsubscribe  # noqa: E402
 import waitlist  # noqa: E402
 import webhooks  # noqa: E402
-# Optional module — vertical landing pages. MUST NOT crash app startup if a
-# YAML backend is missing in the build. None disables /verticals/* routes.
-try:
-    import verticals  # noqa: E402
-except Exception as _e:  # noqa: BLE001
-    sys.stderr.write(f"[startup] verticals unavailable: {_e}\n")
-    verticals = None  # type: ignore[assignment]
 try:
     import payout_monitor  # noqa: E402
 except ImportError:  # pragma: no cover
@@ -928,6 +921,7 @@ def _build_sitemap() -> str:
         ("/badge-demo", "0.4"),
         ("/press", "0.4"),
         ("/press-kit", "0.4"),
+        ("/press-kit/orphograph-brand-guide", "0.3"),
         ("/roadmap", "0.4"),
         ("/changelog", "0.4"),
         ("/access", "0.6"),
@@ -1155,7 +1149,19 @@ _PRIVATE_PATH_EXACT = frozenset({"index-legacy"})
 # fell through to the static-file fallback and answered 404, not 410 --
 # live on production for /inspection/index and /inspection/index.css since
 # the day of that withdrawal (code review finding, 2026-09-19, PR #255).
-WITHDRAWN_PATH_PREFIXES = ("/inspection", "/practice")
+#
+# /verticals (founder decision 2026-09-28): /verticals/<slug>.html was rendered
+# from config/verticals/*.yml. Production answered 404 only because the image
+# ships without config/; any tree with config/ served the full pages. Retired
+# with its renderer, so the subtree says Gone wherever the server runs.
+#
+# /one-pager and /vs/c2pa (founder decision 2026-09-28): indexable pages that
+# nothing linked to. Retired and their files deleted. Both were flat files
+# (web/one-pager.html beside web/one-pager.css), not directories, which is why
+# the match below also covers "<prefix>.": the .html spelling and the
+# stylesheet that sat beside the page.
+WITHDRAWN_PATH_PREFIXES = ("/inspection", "/practice", "/verticals",
+                           "/one-pager", "/vs/c2pa")
 
 
 def _is_withdrawn_path(path: str) -> bool:
@@ -1165,6 +1171,12 @@ def _is_withdrawn_path(path: str) -> bool:
     "/practice/index", "/practice/index.css" and "/practice//" (a TRAILING
     empty segment under the prefix) are all withdrawn. "/practicex" is a
     different path that merely shares the prefix's characters and is not.
+
+    OR startswith(prefix + "."): a page that was a flat file answered at
+    "/one-pager.html" too (a 301 to the clean URL) and had its stylesheet
+    at "/one-pager.css". The dot is what keeps this narrow: a bare
+    startswith(prefix) would also take a live sibling that merely extends
+    the name, and "/vs/c2pax" stays a different path.
     `path` is expected pre-normalised the way do_GET already normalises it
     (query string stripped); no further normalisation happens here.
 
@@ -1174,7 +1186,8 @@ def _is_withdrawn_path(path: str) -> bool:
     open-redirect mitigation upstream of this function), so this function
     never sees that shape from a real request.
     """
-    return any(path == p or path.startswith(p + "/") for p in WITHDRAWN_PATH_PREFIXES)
+    return any(path == p or path.startswith((p + "/", p + "."))
+               for p in WITHDRAWN_PATH_PREFIXES)
 
 
 def _is_private_path(rel_path: str) -> bool:
@@ -1260,6 +1273,22 @@ def _is_retired_btc_path(path: str) -> bool:
     return any(p.startswith(pre) for pre in _RETIRED_BTC_PREFIXES)
 
 
+# Static pages that are served but must stay out of search. Founder decision
+# 2026-09-28: /lp/start is a paid-traffic landing page nothing links to, so it
+# keeps working and asks not to be indexed. The page carries a robots meta tag
+# too; the header is for crawlers that read headers only, and for HEAD, which
+# has no page to read. Keyed on the file the request resolves to, not on the
+# URL, so every spelling that serves the page (/lp/start, /lp/start/) carries
+# it. Lower-case, because a case-insensitive disk (a Mac dev box) serves
+# /LP/Start from the same file.
+_NOINDEX_STATIC_FILES = frozenset({"lp/start.html"})
+
+
+def _send_robots_header(handler: BaseHTTPRequestHandler, target: Path) -> None:
+    if target.relative_to(WEB_DIR).as_posix().lower() in _NOINDEX_STATIC_FILES:
+        handler.send_header("X-Robots-Tag", "noindex")
+
+
 def _serve_static(handler: BaseHTTPRequestHandler, rel_path: str) -> None:
     if rel_path in ("", "/"):
         rel_path = "index.html"
@@ -1339,6 +1368,7 @@ def _serve_static(handler: BaseHTTPRequestHandler, rel_path: str) -> None:
         handler.send_response(304)
         handler.send_header("ETag", etag)
         handler.send_header("Cache-Control", _static_cache_control(target.suffix, rel_path))
+        _send_robots_header(handler, target)
         _security_headers(handler)
         handler.end_headers()
         return
@@ -1358,6 +1388,7 @@ def _serve_static(handler: BaseHTTPRequestHandler, rel_path: str) -> None:
     if enc:
         handler.send_header("Content-Encoding", enc)
         handler.send_header("Vary", "Accept-Encoding")
+    _send_robots_header(handler, target)
     _security_headers(handler)
     handler.end_headers()
     handler.wfile.write(data)
@@ -1837,9 +1868,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):  # noqa: N802
         path = self.path.split("?", 1)[0]
-        # Withdrawn pages. Each sat in the sitemap (/inspection/ was also in the
-        # homepage footer), so say Gone rather than Not Found: crawlers drop a
-        # 410 and its cached snippet far sooner than a 404.
+        # Withdrawn pages. Each was public somewhere (a sitemap entry, the
+        # homepage footer, a direct URL), so say Gone rather than Not Found:
+        # crawlers drop a 410 and its cached snippet far sooner than a 404.
         if _is_withdrawn_path(path):
             self.send_error(410, "Gone")
             return
@@ -2743,29 +2774,6 @@ class Handler(BaseHTTPRequestHandler):
             # Post-payment landing for the NOWPayments success_url redirect.
             _serve_static(self, "/pay/success.html")
             return
-        # Vertical landing pages — rendered from config/verticals/<slug>.yml.
-        # Reachable by direct URL only; not linked from the homepage. This
-        # branch precedes the static fallback so /verticals/<slug>.html is
-        # served from the YAML rather than from the on-disk file (if any).
-        if path.startswith("/verticals/") and path.endswith(".html"):
-            if verticals is None:
-                self.send_error(404, "Vertical not found")
-                return
-            slug = path[len("/verticals/"):-len(".html")]
-            if slug and "/" not in slug:
-                body = verticals.render_html(slug)
-                if body is not None:
-                    payload = body.encode("utf-8")
-                    self.send_response(200)
-                    self.send_header("Content-Type", "text/html; charset=utf-8")
-                    self.send_header("Content-Length", str(len(payload)))
-                    self.send_header("Cache-Control", "public, max-age=600")
-                    _security_headers(self)
-                    self.end_headers()
-                    self.wfile.write(payload)
-                    return
-                self.send_error(404, "Vertical not found")
-                return
         # /docs/mcp is the URL developers reach for when they are already in
         # the docs, but the canonical MCP page is /mcp and has been since it
         # shipped. Two pages describing one product drift apart, so this is a

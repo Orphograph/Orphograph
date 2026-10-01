@@ -66,6 +66,7 @@ EXPECTED_URLS = [
     "https://orphograph.com/badge-demo",
     "https://orphograph.com/press",
     "https://orphograph.com/press-kit",
+    "https://orphograph.com/press-kit/orphograph-brand-guide",
     "https://orphograph.com/roadmap",
     "https://orphograph.com/changelog",
     "https://orphograph.com/access",

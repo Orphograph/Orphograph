@@ -76,7 +76,7 @@ def test_every_offline_verification_claim_says_what_runs_offline() -> None:
                 f"check needs an OpenTimestamps client and a node): …{context}…"
             )
             qualified += 1
-    # Floor: the accurate wording (faq, llms.txt, mcp, one-pager, terms) must
+    # Floor: the accurate wording (faq, llms.txt, mcp, learn, terms) must
     # still match, or the pattern has stopped seeing anything at all.
     assert qualified >= 5, f"only {qualified} qualified claims matched"
 
