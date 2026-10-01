@@ -373,3 +373,92 @@ def test_the_confirm_route_is_in_the_route_lists(monkeypatch):
     ours = {"newsletter", "waitlist", "request_confirmation", "mark_confirmed", "confirm",
             "add_confirmed_contact", "_queue_waitlist_confirmation"}
     assert entries and not [e for e in entries if ours & set(e)], entries
+
+
+# --- bundle review round 1 -------------------------------------------------------
+
+def _all_mails(data_dir: Path) -> list[dict]:
+    p = data_dir / "stub_mail_sent.jsonl"
+    return [json.loads(line) for line in p.read_text().splitlines() if line.strip()] if p.exists() else []
+
+
+def _parsed_rows(data_dir: Path) -> list[dict]:
+    """Rows that parse; a torn or glued line is skipped, as the readers do."""
+    out = []
+    p = data_dir / "waitlist.jsonl"
+    for line in (p.read_text().splitlines() if p.exists() else []):
+        try:
+            out.append(json.loads(line))
+        except json.JSONDecodeError:
+            pass
+    return out
+
+
+def test_confirming_after_unsubscribing_adds_nothing(server):
+    """Review round 1 (LOW, reproduced): the button wrote a confirmed row and
+    told a person who had since unsubscribed that they were on the list."""
+    base, data_dir = server
+    email = "confirm-after-unsub@example.test"
+    path = _path(_signed_up(server, email))
+    _settle(base, data_dir)
+    status, _b, _h = _srv.request(base, "/api/unsubscribe?e=" + quote(email), method="POST",
+                                  body=b"via=page", headers=FORM, timeout=15)
+    assert status == 200
+    pressed = _press(base, path)
+    assert pressed[0] == 200, pressed[1]
+    page = pressed[1].decode()
+    assert "unsubscribed" in page.lower() and "mailing list" not in page.lower(), page
+    assert not [r for r in _rows(data_dir) if r.get("event") == "confirmed" and r.get("email") == email]
+
+
+def test_a_display_name_or_quoted_spelling_gets_no_email_and_no_row(server):
+    """Review round 1 (LOW, reproduced): "x<victim@...>", "<victim@...>" and
+    '"victim"@...' passed EMAIL_RE, were not recognised as the suppressed
+    victim, and each was sent a confirmation that the mail provider delivered
+    to the victim. Only a bare address is taken; the answer is the one every
+    invalid address gets."""
+    base, data_dir = server
+    victim = "dn-victim@example.test"
+    status, _b, _h = _srv.request(base, "/api/unsubscribe?e=" + quote(victim), method="POST",
+                                  body=b"via=page", headers=FORM, timeout=15)
+    assert status == 200
+    invalid = _signup(base, "not-an-address")
+    for spelling in ("x<dn-victim@example.test>", "<dn-victim@example.test>",
+                     '"dn-victim"@example.test'):
+        answer = _signup(base, spelling)
+        assert answer[:2] == invalid[:2], (spelling, answer[:2])
+    _settle(base, data_dir)
+    assert not [m for m in _all_mails(data_dir)
+                if any("dn-victim" in a.lower() for a in m["payload"]["to"])], "the victim was mailed"
+    assert not [r for r in _parsed_rows(data_dir) if "dn-victim" in str(r.get("email", ""))]
+
+
+def test_a_forged_link_on_a_fresh_server_creates_no_secret(tmp_path):
+    """Review round 1 (LOW): a well-shaped forged token made GET/HEAD read the
+    HMAC secret, and reading it CREATES it on a fresh data directory; a GET
+    must not write. No token can verify before any was minted."""
+    forged = "eyJ4IjoxfQ." + "A" * 43
+    for base in _srv.server_processes(tmp_path, stub_calendars=True):
+        assert not (tmp_path / ".hmac_secret").exists(), "precondition: a fresh data dir"
+        get = _srv.request(base, CONFIRM + "?token=" + forged, timeout=15)
+        head = _srv.request(base, CONFIRM + "?token=" + forged, method="HEAD", timeout=15)
+        assert get[0] == head[0] == 400
+        assert not (tmp_path / ".hmac_secret").exists(), "a GET created the HMAC secret"
+
+
+def test_a_torn_last_line_does_not_swallow_the_next_signup(tmp_path):
+    """Review round 1 (LOW, reproduced): a write that failed part-way leaves a
+    line with no newline; the next waitlist row was glued onto it and lost
+    while the person was told it worked. Every waitlist writer starts on a
+    fresh line, as unsubscribe.add does."""
+    (tmp_path / "waitlist.jsonl").write_text(
+        '{"ts":"2026-09-01T00:00:00+00:00","email":"before@example.test","interest":"personal"}\n'
+        '{"ts":"2026-09-02T00:00:00+00:00","email":"torn@exa')
+    email = "after-the-tear@example.test"
+    for base in _srv.server_processes(tmp_path, stub_calendars=True, capture_mail=True):
+        status, _b, _h = _signup(base, email)
+        assert status == 200
+        _wait_for_mail(tmp_path, email)
+    rows = [r for r in _parsed_rows(tmp_path) if r.get("email") == email]
+    assert any(r.get("event") is None for r in rows), "the signup row was glued onto the torn line"
+    assert any(r.get("event") == "confirm_sent" for r in rows)

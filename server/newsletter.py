@@ -69,7 +69,7 @@ import mailer as _mailer  # noqa: E402  — _send + footer compliance
 import unsubscribe as _unsubscribe  # noqa: E402  — suppression list
 import waitlist as _waitlist  # noqa: E402  — ledger path + interests
 from email_fold import fold_email  # noqa: E402
-from file_lock import locked  # noqa: E402
+from file_lock import ends_mid_line, locked  # noqa: E402
 
 RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
 ORPHO_AUDIENCE_ID = os.environ.get("ORPHO_AUDIENCE_ID", "")
@@ -140,7 +140,13 @@ def verify_confirm_token(token) -> dict | None:
         return None
     if _b64url_encode(body) != body_b64 or _b64url_encode(sig) != sig_b64:
         return None
-    expected = hmac.new(_auth._hmac_secret(), _TOKEN_LABEL + body, hashlib.sha256).digest()
+    # Never create the secret here: this runs on the confirm page's GET, and
+    # a GET must not write. With no secret yet, no token was ever minted, so
+    # none verifies (bundle review round 1).
+    secret = _auth.existing_hmac_secret()
+    if secret is None:
+        return None
+    expected = hmac.new(secret, _TOKEN_LABEL + body, hashlib.sha256).digest()
     if not hmac.compare_digest(sig, expected):
         return None
     try:
@@ -391,6 +397,8 @@ def request_confirmation(email: str, interest: str) -> bool:
     if not isinstance(email, str) or "@" not in email or len(email) > 320:
         return False
     email = email.strip()
+    if not is_bare_address(email):
+        return False
     interest = interest if interest in _waitlist.ALLOWED_INTERESTS else "other"
     try:
         if _unsubscribe.is_unsubscribed(email):
@@ -415,9 +423,10 @@ def request_confirmation(email: str, interest: str) -> bool:
                 if sent_at is None or now - sent_at < CONFIRM_RESEND_SEC:
                     return False
         f.seek(0, os.SEEK_END)
-        f.write(json.dumps({"ts": _now_iso(), "email": email, "interest": interest,
-                            "event": "confirm_sent", "n": nonce},
-                           separators=(",", ":")) + "\n")
+        f.write(("\n" if ends_mid_line(_waitlist.WAITLIST_PATH) else "")
+                + json.dumps({"ts": _now_iso(), "email": email, "interest": interest,
+                              "event": "confirm_sent", "n": nonce},
+                             separators=(",", ":")) + "\n")
     token, _expires = make_confirm_token(nonce)
     send_confirmation_email(email, interest, token)
     return True
@@ -438,7 +447,7 @@ def mark_confirmed(email: str, interest: str) -> bool:
                for row in _rows(f)):
             return False
         f.seek(0, os.SEEK_END)
-        f.write(json.dumps({
+        f.write(("\n" if ends_mid_line(_waitlist.WAITLIST_PATH) else "") + json.dumps({
             "ts": _now_iso(),
             "email": email.strip(),
             "interest": interest if interest in _waitlist.ALLOWED_INTERESTS else "other",
@@ -448,9 +457,13 @@ def mark_confirmed(email: str, interest: str) -> bool:
 
 
 def confirm(token) -> tuple[str, str, str] | None:
-    """The confirm button. Returns ("confirmed" | "already", email, interest),
-    or None when the token is forged, expired, or names no confirmation this
-    ledger sent. Raises OSError when the ledger cannot be read or written.
+    """The confirm button. Returns ("confirmed" | "already" | "unsubscribed",
+    email, interest), or None when the token is forged, expired, or names no
+    confirmation this ledger sent. Raises OSError when the ledger or the
+    suppression list cannot be read or written.
+
+    An address that unsubscribed after its confirmation email went out is
+    never confirmed: the press writes nothing (bundle review round 1).
     """
     claims = verify_confirm_token(token)
     if claims is None or not _waitlist.WAITLIST_PATH.exists():
@@ -463,7 +476,22 @@ def confirm(token) -> tuple[str, str, str] | None:
         return None
     email = sent["email"]
     interest = sent.get("interest") if sent.get("interest") in _waitlist.ALLOWED_INTERESTS else "other"
+    try:
+        if _unsubscribe.is_unsubscribed(email):
+            return "unsubscribed", email, interest
+    except _unsubscribe.SuppressionUnavailable as e:
+        raise OSError(str(e)) from e   # unknown consent is not consent: the 503 page
     return ("confirmed" if mark_confirmed(email, interest) else "already"), email, interest
+
+
+def is_bare_address(email: str) -> bool:
+    """Only a bare addr-spec. "x<victim@...>", "<victim@...>" and
+    '"victim"@...' pass the server's shape check, are not recognised as the
+    suppressed victim, and a mail provider delivers them to the victim
+    (bundle review round 1)."""
+    from email.utils import parseaddr
+    return (isinstance(email, str) and not any(c in email for c in '<>"')
+            and parseaddr(email)[1] == email)
 
 
 def add_confirmed_contact(email: str, interest: str) -> bool:

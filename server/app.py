@@ -4483,7 +4483,11 @@ class Handler(BaseHTTPRequestHandler):
         # A lone surrogate (JSON "\ud800") matches EMAIL_RE but is not text:
         # it cannot be encoded, so it is never stored or mailed.
         if (not isinstance(email, str) or not EMAIL_RE.match(email.strip())
-                or not _utf8_encodable(email)):
+                or not _utf8_encodable(email)
+                # A display-name or quoted spelling of an address passes
+                # EMAIL_RE, is not recognised as the suppressed mailbox, and
+                # is delivered to it (bundle review round 1): bare only.
+                or not newsletter.is_bare_address(email.strip())):
             # Don't leak whether the address was valid.
             _json_response(self, 200, {"ok": True})
             return
@@ -4712,6 +4716,15 @@ class Handler(BaseHTTPRequestHandler):
             self._waitlist_confirm_refused()
             return
         state, email, interest = outcome
+        if state == "unsubscribed":
+            # Unsubscribed after the confirmation email went out: nothing is
+            # added, and the page says so (bundle review round 1).
+            self._unsubscribe_page(
+                200, "Not added", "This address is unsubscribed.",
+                "Nothing was added.",
+                "<p>It stays off our mail. To hear from us after all, sign up "
+                "again from the site.</p>")
+            return
         self._unsubscribe_page(
             200, "Confirmed", "Thanks, you're confirmed.",
             "This address is on the Orphograph mailing list.",
