@@ -16,17 +16,12 @@ pack-access suite does.
 """
 from __future__ import annotations
 
-import os
 import re
-import socket
-import subprocess
-import sys
-import time
-import urllib.error
-import urllib.request
 from pathlib import Path
 
 import pytest
+
+import _srv
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 WEB = REPO_ROOT / "web"
@@ -124,65 +119,25 @@ def test_footer_links_to_access():
 
 # ─────────────────────────────── http: route + sitemap ────────────────────
 
-def _free_port() -> int:
-    s = socket.socket()
-    s.bind(("127.0.0.1", 0))
-    p = s.getsockname()[1]
-    s.close()
-    return p
-
-
 @pytest.fixture(scope="module")
 def server(tmp_path_factory):
     data_dir = tmp_path_factory.mktemp("access_hub_data")
-    port = _free_port()
-    env = {
-        **os.environ,
-        "PORT": str(port),
-        "HOST": "127.0.0.1",
-        "ORPHO_DATA_DIR": str(data_dir),
-        "ORPHO_COOKIE_SECURE": "0",
-    }
-    env.pop("RESEND_API_KEY", None)
-    proc = subprocess.Popen(
-        [sys.executable, str(REPO_ROOT / "server" / "app.py")],
-        env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-    )
-    base = f"http://127.0.0.1:{port}"
-    deadline = time.time() + 10
-    while time.time() < deadline:
-        try:
-            urllib.request.urlopen(base + "/api/health", timeout=1).read()
-            break
-        except Exception:
-            time.sleep(0.2)
-    else:
-        proc.kill()
-        pytest.fail("server did not start")
-    yield base
-    proc.terminate()
-    try:
-        proc.wait(timeout=5)
-    except subprocess.TimeoutExpired:
-        proc.kill()
+    yield from _srv.server_processes(data_dir, stub_calendars=True)
 
 
-def _get(url, timeout=5):
-    try:
-        with urllib.request.urlopen(url, timeout=timeout) as r:
-            return r.status, r.read().decode("utf-8", "replace")
-    except urllib.error.HTTPError as e:
-        return e.code, e.read().decode("utf-8", "replace")
+def _get(base, path, timeout=5):
+    status, body, _ = _srv.request(base, path, timeout=timeout)
+    return status, body.decode("utf-8", "replace")
 
 
 def test_access_route_200(server):
-    status, body = _get(server + "/access")
+    status, body = _get(server, "/access")
     assert status == 200
     assert "Access your account" in body
     assert 'href="/pack"' in body and 'href="/signin"' in body
 
 
 def test_access_in_sitemap(server):
-    status, body = _get(server + "/sitemap.xml")
+    status, body = _get(server, "/sitemap.xml")
     assert status == 200
     assert "/access</loc>" in body

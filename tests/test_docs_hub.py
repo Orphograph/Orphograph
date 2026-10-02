@@ -26,17 +26,12 @@ suite does.
 from __future__ import annotations
 
 import html
-import os
 import re
-import socket
-import subprocess
-import sys
-import time
-import urllib.error
-import urllib.request
 from pathlib import Path
 
 import pytest
+
+import _srv
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 WEB = REPO_ROOT / "web"
@@ -180,61 +175,22 @@ def test_docs_index_links_every_docs_page() -> None:
 
 # ─────────────────────────────── route checks ─────────────────────────────
 
-def _free_port() -> int:
-    s = socket.socket()
-    s.bind(("127.0.0.1", 0))
-    p = s.getsockname()[1]
-    s.close()
-    return p
-
-
 @pytest.fixture(scope="module")
 def server(tmp_path_factory):
     data_dir = tmp_path_factory.mktemp("docs_hub_data")
-    port = _free_port()
-    env = {
-        **os.environ,
-        "PORT": str(port),
-        "HOST": "127.0.0.1",
-        "ORPHO_DATA_DIR": str(data_dir),
-        "ORPHO_COOKIE_SECURE": "0",
-    }
-    env.pop("RESEND_API_KEY", None)
-    proc = subprocess.Popen(
-        [sys.executable, str(REPO_ROOT / "server" / "app.py")],
-        env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-    )
-    base = f"http://127.0.0.1:{port}"
-    deadline = time.time() + 10
-    while time.time() < deadline:
-        try:
-            urllib.request.urlopen(base + "/api/health", timeout=1).read()
-            break
-        except Exception:
-            time.sleep(0.2)
-    else:
-        proc.kill()
-        pytest.fail("server did not start")
-    yield base
-    proc.terminate()
-    try:
-        proc.wait(timeout=5)
-    except subprocess.TimeoutExpired:
-        proc.kill()
+    yield from _srv.server_processes(
+        data_dir, stub_calendars=True, ORPHO_COOKIE_SECURE="0")
 
 
-def _get(url, timeout=5):
-    try:
-        with urllib.request.urlopen(url, timeout=timeout) as r:
-            return r.status, r.read().decode("utf-8", "replace")
-    except urllib.error.HTTPError as e:
-        return e.code, e.read().decode("utf-8", "replace")
+def _get(base, path, timeout=5):
+    status, body, _ = _srv.request(base, path, timeout=timeout)
+    return status, body.decode("utf-8", "replace")
 
 
 @pytest.mark.parametrize("path", ["/docs", "/docs/cli", "/docs/sdk"])
 def test_docs_routes_serve_200(server, path: str) -> None:
     """All three 404'd in production before 2026-08-25."""
-    status, body = _get(server + path)
+    status, body = _get(server, path)
     assert status == 200, f"{path} returned {status}"
     assert "Orphograph" in body
 
@@ -243,28 +199,20 @@ def test_docs_pages_that_already_worked_still_work(server) -> None:
     """Regression guard: the hub must not shadow the existing docs pages."""
     for path in ("/docs/api", "/docs/webhooks", "/docs/install",
                  "/docs/quickstart", "/docs/verify", "/mcp"):
-        status, _ = _get(server + path)
+        status, _ = _get(server, path)
         assert status == 200, f"{path} regressed to {status}"
 
 
 def test_docs_mcp_redirects_to_canonical_mcp(server) -> None:
     """One product, one page. /docs/mcp is a 301, not a second MCP page."""
-    class _NoRedirect(urllib.request.HTTPRedirectHandler):
-        def redirect_request(self, *a, **kw):
-            return None
-
-    opener = urllib.request.build_opener(_NoRedirect)
-    try:
-        r = opener.open(server + "/docs/mcp", timeout=5)
-        status, location = r.status, r.headers.get("Location")
-    except urllib.error.HTTPError as e:
-        status, location = e.code, e.headers.get("Location")
+    status, _, headers = _srv.request(server, "/docs/mcp", timeout=5)
+    location = headers.get("Location")
     assert status == 301, f"expected 301, got {status}"
     assert location == "/mcp", location
 
 
 def test_new_docs_pages_are_in_the_sitemap(server) -> None:
-    status, body = _get(server + "/sitemap.xml")
+    status, body = _get(server, "/sitemap.xml")
     assert status == 200
     for loc in ("/docs</loc>", "/docs/cli</loc>", "/docs/sdk</loc>"):
         assert loc in body, f"sitemap missing {loc}"
@@ -279,7 +227,7 @@ _AGENT_TOOLS = ("anchor_output", "anchor_file", "anchor_folder",
 
 
 def test_docs_agents_serves_200_and_names_every_tool(server) -> None:
-    status, body = _get(server + "/docs/agents")
+    status, body = _get(server, "/docs/agents")
     assert status == 200, f"/docs/agents returned {status}"
     for tool in _AGENT_TOOLS:
         assert tool in body, f"/docs/agents does not name {tool}"
@@ -288,9 +236,8 @@ def test_docs_agents_serves_200_and_names_every_tool(server) -> None:
 
 def test_docs_agents_head_matches_get(server) -> None:
     """Scanners and link checkers use HEAD; parity is the 2026-08-07 lesson."""
-    req = urllib.request.Request(server + "/docs/agents", method="HEAD")
-    with urllib.request.urlopen(req, timeout=5) as r:
-        assert r.status == 200
+    status, _, _ = _srv.request(server, "/docs/agents", method="HEAD", timeout=5)
+    assert status == 200
 
 
 def test_docs_agents_batch_cap_matches_the_server_constant() -> None:
@@ -309,6 +256,6 @@ def test_docs_agents_batch_cap_matches_the_server_constant() -> None:
 
 
 def test_docs_agents_is_in_the_sitemap(server) -> None:
-    status, body = _get(server + "/sitemap.xml")
+    status, body = _get(server, "/sitemap.xml")
     assert status == 200
     assert "/docs/agents</loc>" in body

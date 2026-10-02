@@ -30,7 +30,7 @@ jobs:
         with:
           python-version: '3.11'
       # Install OPTIONAL deps so test_manifest_signature.py (cryptography) and
-      # test_verticals.py (PyYAML) can run. The production image is stdlib-only
+      # the config/verticals readers (PyYAML) can run. The production image is stdlib-only
       # — server/app.py wraps these imports in try/except so prod stays up
       # without them, but CI exercises the full code path.
       - run: pip install --upgrade pip && pip install pytest cryptography PyYAML

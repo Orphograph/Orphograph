@@ -23,17 +23,11 @@ on (or invents) real post styling.
 """
 from __future__ import annotations
 
-import http.client
-import os
-import socket
-import subprocess
-import sys
-import time
-import urllib.error
-import urllib.request
 from pathlib import Path
 
 import pytest
+
+import _srv
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 BLOG_WEB_DIR = REPO_ROOT / "web" / "blog"
@@ -42,14 +36,6 @@ BLOG_WEB_DIR = REPO_ROOT / "web" / "blog"
 # prefix keeps it obviously synthetic and last in directory listings.
 FIXTURE_CSS_NAME = "zz-css-route-fixture.css"
 FIXTURE_CSS_BODY = "/* test fixture — safe to delete */ .zz-fixture{color:#000}\n"
-
-
-def _free_port() -> int:
-    s = socket.socket()
-    s.bind(("127.0.0.1", 0))
-    p = s.getsockname()[1]
-    s.close()
-    return p
 
 
 @pytest.fixture(scope="module")
@@ -65,62 +51,33 @@ def fixture_css():
 
 @pytest.fixture(scope="module")
 def live_server(tmp_path_factory, fixture_css):
-    port = _free_port()
     data_dir = tmp_path_factory.mktemp("data")
-    env = {
-        **os.environ,
-        "PORT": str(port),
-        "HOST": "127.0.0.1",
-        "ORPHO_DATA_DIR": str(data_dir),
-        "RATE_LIMIT_PER_DAY": "100000",
-    }
-    proc = subprocess.Popen(
-        [sys.executable, str(REPO_ROOT / "server" / "app.py")],
-        env=env,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
-    base = f"http://127.0.0.1:{port}"
-    deadline = time.time() + 10
-    while time.time() < deadline:
-        try:
-            with urllib.request.urlopen(base + "/api/health", timeout=1) as r:
-                if r.status == 200:
-                    break
-        except Exception:
-            time.sleep(0.2)
-    else:
-        proc.kill()
-        pytest.fail("server did not start in 10s")
-    yield base
-    proc.terminate()
-    try:
-        proc.wait(timeout=5)
-    except subprocess.TimeoutExpired:
-        proc.kill()
+    yield from _srv.server_processes(
+        data_dir, stub_calendars=True, RATE_LIMIT_PER_DAY="100000")
 
 
 def _get(base: str, path: str):
     """GET returning (status, headers, body) without raising on 4xx/5xx."""
-    try:
-        with urllib.request.urlopen(base + path, timeout=5) as r:
-            return r.status, dict(r.headers), r.read()
-    except urllib.error.HTTPError as e:
-        return e.code, dict(e.headers), e.read()
+    status, body, headers = _srv.request(base, path, timeout=5)
+    return status, headers, body
+
+
+def _get_page(base: str, path: str):
+    """_get, taking the one 301 that moves a `.html` URL to its extensionless
+    path. urlopen took that hop unseen; _srv.request never follows a
+    redirect, so the page a reader lands on is fetched here."""
+    status, headers, body = _get(base, path)
+    if status == 301 and headers.get("Location", "").startswith("/"):
+        return _get(base, headers["Location"])
+    return status, headers, body
 
 
 def _raw_get(base: str, raw_path: str):
     """GET with the path sent byte-for-byte (no client-side ../ collapsing)."""
-    host = base.split("://", 1)[1]
-    conn = http.client.HTTPConnection(host, timeout=5)
-    try:
-        conn.putrequest("GET", raw_path, skip_host=True)
-        conn.putheader("Host", host)
-        conn.endheaders()
-        resp = conn.getresponse()
-        return resp.status, resp.read()
-    finally:
-        conn.close()
+    raw = _srv.raw_request(base, raw_path, timeout=5)
+    assert raw, "the server closed the connection without answering"
+    head, _, body = raw.partition(b"\r\n\r\n")
+    return int(head.split(b" ", 2)[1]), body
 
 
 # ── 1. Existing stylesheet serves as text/css ──────────────────────────────
@@ -163,7 +120,7 @@ def test_blog_css_inner_dots_rejected(live_server):
 # ── 4. Pre-existing blog surfaces unchanged ────────────────────────────────
 
 def test_blog_static_html_post_still_serves(live_server):
-    status, headers, _ = _get(live_server, "/blog/prove-you-wrote-it-not-ai.html")
+    status, headers, _ = _get_page(live_server, "/blog/prove-you-wrote-it-not-ai.html")
     assert status == 200
     assert headers.get("Content-Type", "").startswith("text/html")
 

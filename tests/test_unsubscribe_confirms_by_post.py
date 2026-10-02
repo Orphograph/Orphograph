@@ -118,11 +118,16 @@ def test_a_one_click_post_is_recorded_in_a_directory_the_writer_repairs(tmp_path
         sub.chmod(0o700)
 
 
-def test_a_held_lock_does_not_delay_an_already_unsubscribed_address(tmp_path, monkeypatch):
+def test_the_writability_check_does_not_wait_for_the_ledger_lock(tmp_path, monkeypatch):
     """The writability check took the ledger's exclusive lock, and that lock
-    waits. A POST for an address that is already suppressed writes nothing,
+    waits. A POST for an address that is already suppressed wrote nothing,
     and it is the one mailbox providers retry, yet it waited for whoever held
-    the lock (reproduced in review: a 4 s hold delayed the answer 4 s)."""
+    the lock (reproduced in review: a 4 s hold delayed the answer 4 s).
+
+    Since 2026-09-28 that POST appends the address's row again
+    (test_unsubscribe_failed_write.py), so it waits in add() for the lock as
+    a new address does. The check itself still takes none, which is what this
+    holds."""
     import fcntl
     import threading
     import unsubscribe

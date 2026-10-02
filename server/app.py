@@ -22,6 +22,7 @@ import mimetypes
 mimetypes.add_type("font/woff2", ".woff2")  # serve self-hosted fonts with correct type (X-Content-Type-Options: nosniff is set)
 import os
 import posixpath
+import queue
 import re
 import secrets
 import sys
@@ -57,6 +58,14 @@ try:
 except Exception as _e:  # noqa: BLE001
     sys.stderr.write(f"[startup] manifest_signature unavailable: {_e}\n")
     manifest_signature = None  # type: ignore[assignment]
+# Same rule for the Standing Record's office-signature check, which is built
+# on manifest_signature. Without it the page lists nothing, which is the safe
+# side: it never lists a row it could not check.
+try:
+    import standing_record  # noqa: E402
+except Exception as _e:  # noqa: BLE001
+    sys.stderr.write(f"[startup] standing_record unavailable: {_e}\n")
+    standing_record = None  # type: ignore[assignment]
 import stats  # noqa: E402
 import stripe_api  # noqa: E402
 import stripe_webhook  # noqa: E402
@@ -66,15 +75,9 @@ import subscriptions  # noqa: E402
 import teams  # noqa: E402
 from email_fold import fold_email  # noqa: E402
 import unsubscribe  # noqa: E402
+import newsletter  # noqa: E402
 import waitlist  # noqa: E402
 import webhooks  # noqa: E402
-# Optional module — vertical landing pages. MUST NOT crash app startup if a
-# YAML backend is missing in the build. None disables /verticals/* routes.
-try:
-    import verticals  # noqa: E402
-except Exception as _e:  # noqa: BLE001
-    sys.stderr.write(f"[startup] verticals unavailable: {_e}\n")
-    verticals = None  # type: ignore[assignment]
 try:
     import payout_monitor  # noqa: E402
 except ImportError:  # pragma: no cover
@@ -342,8 +345,10 @@ _status_limiter = TokenBucket(STATUS_RATE_CAPACITY, STATUS_RATE_REFILL)
 # account's Stripe read limit (100/s) is shared with checkout and the webhook.
 # A buyer loads the page a handful of times, so the burst stays small: at 5,
 # twenty prefixes are needed to reach Stripe's per-second limit even briefly
-# (the old 3/day bucket needed 34). No ceiling shared across callers: one
-# would let a few prefixes lock every buyer out.
+# (the old 3/day bucket needed 34). A HEAD has a bucket of its own, the same
+# size (see _lookup_allowed), so a prefix sending both can make 10 reads and
+# ten prefixes are needed. No ceiling shared across callers: one would let a
+# few prefixes lock every buyer out.
 SESSION_LOOKUP_CAPACITY = 5
 SESSION_LOOKUP_REFILL = 5 / 3600.0
 _session_lookup_limiter = TokenBucket(SESSION_LOOKUP_CAPACITY, SESSION_LOOKUP_REFILL)
@@ -412,6 +417,71 @@ _api_key_issue_limiter = TokenBucket(API_KEY_ISSUE_CAPACITY, API_KEY_ISSUE_REFIL
 EVENT_RATE_CAPACITY = 60
 EVENT_RATE_REFILL = 60 / 60.0  # 1 token/sec refill, burst 60
 _event_limiter = TokenBucket(EVENT_RATE_CAPACITY, EVENT_RATE_REFILL)
+
+# The waitlist confirm button (POST /api/waitlist/confirm). Each press reads
+# the waitlist ledger to find the confirmation its token names, so a tight
+# loop of presses is a loop of full ledger reads. Not _anchor_limiter: its
+# production budget is 3 a day per address prefix, and people confirming
+# from one office or one mobile network's shared NAT must not be refused for
+# hours. A person presses it once, maybe twice. Keyed per address prefix.
+# In-memory: a restart refilling it is harmless.
+WAITLIST_CONFIRM_CAPACITY = 20
+WAITLIST_CONFIRM_REFILL = 20 / 3600.0  # burst 20, then one every 3 minutes
+_waitlist_confirm_limiter = TokenBucket(WAITLIST_CONFIRM_CAPACITY, WAITLIST_CONFIRM_REFILL)
+
+# The unsubscribe POST appends a suppression row on every press (re-append, so
+# a known and an unknown address make the same write), and every marketing
+# send scans that ledger. Keyed per (address prefix, folded address): a loop
+# of POSTs for ONE address is what grew the file, while a mailbox provider's
+# one-click POSTs for many different recipients come from one server and must
+# stay unthrottled (RFC 8058). A person presses it once or twice; the burst
+# covers a provider asking again and again (test_unsubscribe_failed_write
+# asks 16 times and must get the same answer each time). In-memory: a
+# restart refilling it is fine.
+UNSUB_POST_CAPACITY = 20
+UNSUB_POST_REFILL = 10 / 3600.0  # burst 20 per address, then one every 6 minutes
+_unsub_post_limiter = TokenBucket(UNSUB_POST_CAPACITY, UNSUB_POST_REFILL)
+
+# How long the receipt privacy toggle waits for the upgrade worker's
+# per-receipt lock before answering 503 (retry); see the toggle handler.
+PRIVACY_TOGGLE_LOCK_WAIT_SEC = 3.0
+
+# Waitlist confirmation emails go out on ONE worker thread, after the signup
+# has been answered. After, because the answer must not depend on whether an
+# address gets an email: a new address would wait on the mail round trip and
+# a listed one would not, the difference that once let /api/pack/recover's
+# timing say who had a pack. One worker, so a burst of signups queues instead
+# of fanning out into threads that all read and append the same ledger, and
+# jobs are decided in the order the signups were answered. Bounded: a full
+# queue means that signup gets no email, the safe way for a public form to
+# fail. Started on first use, so importing this module starts no thread.
+_WAITLIST_CONFIRM_QUEUE: "queue.Queue[tuple[str, str]]" = queue.Queue(maxsize=1000)
+_waitlist_confirm_worker_lock = threading.Lock()
+_waitlist_confirm_worker: threading.Thread | None = None
+
+
+def _run_waitlist_confirmations() -> None:
+    while True:
+        email, interest = _WAITLIST_CONFIRM_QUEUE.get()
+        try:
+            newsletter.request_confirmation(email, interest)
+        except Exception as e:  # noqa: BLE001  (one bad job must not stop the worker)
+            sys.stderr.write(f"[waitlist] confirmation email failed for "
+                             f"{auth.mask_email(email)}: {type(e).__name__}\n")
+
+
+def _queue_waitlist_confirmation(email: str, interest: str) -> None:
+    global _waitlist_confirm_worker
+    with _waitlist_confirm_worker_lock:
+        if _waitlist_confirm_worker is None or not _waitlist_confirm_worker.is_alive():
+            _waitlist_confirm_worker = threading.Thread(
+                target=_run_waitlist_confirmations, name="waitlist-confirm", daemon=True)
+            _waitlist_confirm_worker.start()
+    try:
+        _WAITLIST_CONFIRM_QUEUE.put_nowait((email, interest))
+    except queue.Full:
+        sys.stderr.write(f"[waitlist] confirmation queue full; no email to "
+                         f"{auth.mask_email(email)}\n")
 
 # Founder-token brute-force limiter (2026-07-18 latent-security pass).
 # Counts FAILED X-Orpho-Founder guesses per truncated client IP; a correct
@@ -944,6 +1014,7 @@ def _build_sitemap() -> str:
         ("/badge-demo", "0.4"),
         ("/press", "0.4"),
         ("/press-kit", "0.4"),
+        ("/press-kit/orphograph-brand-guide", "0.3"),
         ("/roadmap", "0.4"),
         ("/changelog", "0.4"),
         ("/access", "0.6"),
@@ -1171,7 +1242,19 @@ _PRIVATE_PATH_EXACT = frozenset({"index-legacy"})
 # fell through to the static-file fallback and answered 404, not 410 --
 # live on production for /inspection/index and /inspection/index.css since
 # the day of that withdrawal (code review finding, 2026-09-19, PR #255).
-WITHDRAWN_PATH_PREFIXES = ("/inspection", "/practice")
+#
+# /verticals (founder decision 2026-09-28): /verticals/<slug>.html was rendered
+# from config/verticals/*.yml. Production answered 404 only because the image
+# ships without config/; any tree with config/ served the full pages. Retired
+# with its renderer, so the subtree says Gone wherever the server runs.
+#
+# /one-pager and /vs/c2pa (founder decision 2026-09-28): indexable pages that
+# nothing linked to. Retired and their files deleted. Both were flat files
+# (web/one-pager.html beside web/one-pager.css), not directories, which is why
+# the match below also covers "<prefix>.": the .html spelling and the
+# stylesheet that sat beside the page.
+WITHDRAWN_PATH_PREFIXES = ("/inspection", "/practice", "/verticals",
+                           "/one-pager", "/vs/c2pa")
 
 
 def _is_withdrawn_path(path: str) -> bool:
@@ -1181,6 +1264,12 @@ def _is_withdrawn_path(path: str) -> bool:
     "/practice/index", "/practice/index.css" and "/practice//" (a TRAILING
     empty segment under the prefix) are all withdrawn. "/practicex" is a
     different path that merely shares the prefix's characters and is not.
+
+    OR startswith(prefix + "."): a page that was a flat file answered at
+    "/one-pager.html" too (a 301 to the clean URL) and had its stylesheet
+    at "/one-pager.css". The dot is what keeps this narrow: a bare
+    startswith(prefix) would also take a live sibling that merely extends
+    the name, and "/vs/c2pax" stays a different path.
     `path` is expected pre-normalised the way do_GET already normalises it
     (query string stripped); no further normalisation happens here.
 
@@ -1190,7 +1279,8 @@ def _is_withdrawn_path(path: str) -> bool:
     open-redirect mitigation upstream of this function), so this function
     never sees that shape from a real request.
     """
-    return any(path == p or path.startswith(p + "/") for p in WITHDRAWN_PATH_PREFIXES)
+    return any(path == p or path.startswith((p + "/", p + "."))
+               for p in WITHDRAWN_PATH_PREFIXES)
 
 
 def _is_private_path(rel_path: str) -> bool:
@@ -1226,8 +1316,9 @@ def _is_private_path(rel_path: str) -> bool:
 # and a caller reading 410 knows to stop rather than to retry.
 #
 # NOT retired here, and each a separate decision: OpenTimestamps Bitcoin
-# ANCHORING (the product), the L402/Lightning rail (/api/ln/quote — dormant),
-# and the hosted crypto processor (/pay/crypto, /api/nowpayments/* — live).
+# ANCHORING (the product), the L402/Lightning rail (/api/ln/quote — retired
+# on its own on 2026-09-28, see _LIGHTNING_RETIRED below), and the hosted
+# crypto processor (/pay/crypto, /api/nowpayments/* — live).
 # ASCII ONLY, and this is load-bearing. The reason phrase is written into the
 # HTTP status line, which the stdlib encodes latin-1; an em dash here raised
 # UnicodeEncodeError inside send_error and the server closed the connection
@@ -1274,6 +1365,49 @@ def _is_retired_btc_path(path: str) -> bool:
     if p in _RETIRED_BTC_EXACT:
         return True
     return any(p.startswith(pre) for pre in _RETIRED_BTC_PREFIXES)
+
+
+# Static pages that are served but must stay out of search. Founder decision
+# 2026-09-28: /lp/start is a paid-traffic landing page nothing links to, so it
+# keeps working and asks not to be indexed. The page carries a robots meta tag
+# too; the header is for crawlers that read headers only, and for HEAD, which
+# has no page to read. Keyed on the file the request resolves to, not on the
+# URL, so every spelling that serves the page (/lp/start, /lp/start/) carries
+# it. Lower-case, because a case-insensitive disk (a Mac dev box) serves
+# /LP/Start from the same file.
+_NOINDEX_STATIC_FILES = frozenset({"lp/start.html"})
+
+
+def _send_robots_header(handler: BaseHTTPRequestHandler, target: Path) -> None:
+    if target.relative_to(WEB_DIR).as_posix().lower() in _NOINDEX_STATIC_FILES:
+        handler.send_header("X-Robots-Tag", "noindex")
+
+
+# ─── the retired Lightning (L402) rail ──────────────────────────────────────
+#
+# Founder decision 2026-09-28: retired until someone asks for it. Unlike the
+# direct-BTC rail above, the code is fenced, not deleted: the switch is
+# lightning.LIGHTNING_RETIRED, and while it is True POST /api/ln/quote and any
+# anchor request carrying an L402 credential answer 410 with this body. One
+# message for both, so a caller reads the same thing wherever it meets the
+# rail. ASCII only, as the BTC message above explains for status lines.
+_LIGHTNING_RETIRED = {
+    "error": "Lightning payments are retired.",
+    "detail": "Pay-per-anchor over Lightning (L402) has been withdrawn.",
+    "hint": "Pay by card checkout: Packs and the Standing Order at "
+            "https://orphograph.com/pricing",
+}
+# The anchor form adds what happened to THIS request. A caller who sent an
+# L402 credential beside a pack token or an x402 payment must be told that
+# neither was used, or it cannot know whether to resend.
+_LIGHTNING_RETIRED_ANCHOR = {
+    **_LIGHTNING_RETIRED,
+    "detail": "Pay-per-anchor over Lightning (L402) has been withdrawn. This "
+              "request was not anchored and nothing was charged: a pack token "
+              "or an x402 payment sent with it was not used. Resend it without "
+              "the Authorization: L402 header.",
+    "charged": False,
+}
 
 
 def _serve_static(handler: BaseHTTPRequestHandler, rel_path: str) -> None:
@@ -1355,6 +1489,7 @@ def _serve_static(handler: BaseHTTPRequestHandler, rel_path: str) -> None:
         handler.send_response(304)
         handler.send_header("ETag", etag)
         handler.send_header("Cache-Control", _static_cache_control(target.suffix, rel_path))
+        _send_robots_header(handler, target)
         _security_headers(handler)
         handler.end_headers()
         return
@@ -1374,6 +1509,7 @@ def _serve_static(handler: BaseHTTPRequestHandler, rel_path: str) -> None:
     if enc:
         handler.send_header("Content-Encoding", enc)
         handler.send_header("Vary", "Accept-Encoding")
+    _send_robots_header(handler, target)
     _security_headers(handler)
     handler.end_headers()
     handler.wfile.write(data)
@@ -1708,6 +1844,24 @@ class Handler(BaseHTTPRequestHandler):
         )
         return truncate_ip(chosen)
 
+    def _lookup_allowed(self, limiter: TokenBucket, key: str) -> tuple[bool, float]:
+        """Spend one token for a read-only lookup: (allowed, retry_seconds).
+
+        do_HEAD runs the GET routing, so a HEAD used to spend from the bucket
+        of the GET it mirrors. Link scanners and uptime probes send HEAD, and
+        one on the buyer's network used up the budget the buyer's
+        confirmation page polls with. A HEAD spends from a key of its own on
+        the same limiter, so it cannot touch the GET budget and is bounded
+        the same way: the lookup behind it (a Stripe read, for the session
+        route) runs whatever the method.
+
+        Not for the founder-token failure limiters: a guess is a guess
+        whatever the method.
+        """
+        if self._is_head():
+            key = f"head:{key}"
+        return limiter.check(key)
+
     def _record_demand(self, event: str, *, auth_path: str, surface: str,
                        outcome: str, api_key: str = "",
                        authenticated: bool = False, paid: bool = False) -> None:
@@ -1835,9 +1989,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):  # noqa: N802
         path = self.path.split("?", 1)[0]
-        # Withdrawn pages. Each sat in the sitemap (/inspection/ was also in the
-        # homepage footer), so say Gone rather than Not Found: crawlers drop a
-        # 410 and its cached snippet far sooner than a 404.
+        # Withdrawn pages. Each was public somewhere (a sitemap entry, the
+        # homepage footer, a direct URL), so say Gone rather than Not Found:
+        # crawlers drop a 410 and its cached snippet far sooner than a 404.
         if _is_withdrawn_path(path):
             self.send_error(410, "Gone")
             return
@@ -2433,6 +2587,9 @@ class Handler(BaseHTTPRequestHandler):
                 "signed_in": True,
                 "plan": plan_label,
                 "subscription_active": sub_active,
+                # The account's own subscription, which Cancel acts on. It
+                # gives no access; the page says so and offers Cancel.
+                "subscription_past_due": subscriptions.row_is_past_due(sub_status),
                 "subscription_status": sub_status or None,
                 "days_remaining": days_remaining,
                 "anchor_count": anchor_count,
@@ -2454,7 +2611,8 @@ class Handler(BaseHTTPRequestHandler):
             if not RECEIPT_ID_RE.match(order_id):
                 _json_response(self, 400, {"error": "invalid order id"})
                 return
-            allowed, retry = _status_limiter.check(f"orderstat:{self._client_key()}")
+            allowed, retry = self._lookup_allowed(
+                _status_limiter, f"orderstat:{self._client_key()}")
             if not allowed:
                 _send_rate_limited(self, int(retry) + 1, {"error": "too many requests"})
                 return
@@ -2695,6 +2853,11 @@ class Handler(BaseHTTPRequestHandler):
             # for one-click via List-Unsubscribe-Post header.
             self._handle_unsubscribe_get()
             return
+        if path == "/api/waitlist/confirm":
+            # The link in the waitlist confirmation email. GET only shows the
+            # button; the button's POST confirms.
+            self._handle_waitlist_confirm_get()
+            return
         if path == "/api/founder/payout-status":
             # Founder-only — hot BTC balance + sweep recommendation.
             # Gated by ORPHO_FOUNDER_TOKEN env var (shared-secret in header).
@@ -2737,29 +2900,6 @@ class Handler(BaseHTTPRequestHandler):
             # Post-payment landing for the NOWPayments success_url redirect.
             _serve_static(self, "/pay/success.html")
             return
-        # Vertical landing pages — rendered from config/verticals/<slug>.yml.
-        # Reachable by direct URL only; not linked from the homepage. This
-        # branch precedes the static fallback so /verticals/<slug>.html is
-        # served from the YAML rather than from the on-disk file (if any).
-        if path.startswith("/verticals/") and path.endswith(".html"):
-            if verticals is None:
-                self.send_error(404, "Vertical not found")
-                return
-            slug = path[len("/verticals/"):-len(".html")]
-            if slug and "/" not in slug:
-                body = verticals.render_html(slug)
-                if body is not None:
-                    payload = body.encode("utf-8")
-                    self.send_response(200)
-                    self.send_header("Content-Type", "text/html; charset=utf-8")
-                    self.send_header("Content-Length", str(len(payload)))
-                    self.send_header("Cache-Control", "public, max-age=600")
-                    _security_headers(self)
-                    self.end_headers()
-                    self.wfile.write(payload)
-                    return
-                self.send_error(404, "Vertical not found")
-                return
         # /docs/mcp is the URL developers reach for when they are already in
         # the docs, but the canonical MCP page is /mcp and has been since it
         # shipped. Two pages describing one product drift apart, so this is a
@@ -2938,7 +3078,7 @@ class Handler(BaseHTTPRequestHandler):
         })
         return True
 
-    def _drain_request_body(self) -> int:
+    def _drain_request_body(self, max_bytes: int = MAX_BODY_BYTES) -> int:
         """Read and discard a bounded request body before answering an error.
 
         Returns the number of bytes consumed (for tests; callers ignore it).
@@ -2964,13 +3104,47 @@ class Handler(BaseHTTPRequestHandler):
             declared = int(self.headers.get("Content-Length") or 0)
         except (TypeError, ValueError):
             return 0
-        to_drain = min(max(declared, 0), MAX_BODY_BYTES)
+        to_drain = min(max(declared, 0), max_bytes)
         if to_drain <= 0:
             return 0
         try:
             return len(self.rfile.read(to_drain) or b"")
         except (OSError, ValueError):
             return 0
+
+    def _refuse_retired_l402(self, max_bytes: int = MAX_BODY_BYTES) -> bool:
+        """True if the request carried an L402 credential and was answered 410.
+
+        `max_bytes` is the calling route's own body cap: drained only to
+        MAX_BODY_BYTES, a large folder or batch body left unread data at
+        close, the close became an RST, and the client saw a reset instead of
+        this 410 (bundle review round 1). It reads no more than the route
+        itself would.
+
+        Called first on every anchor endpoint, while lightning.LIGHTNING_RETIRED
+        holds. FIRST because the anchor handler spends a pack credit, and checks
+        and settles an x402 payment, before the place where it used to read
+        the L402 header: refusing any later would charge for a request that is
+        refused. It reads nothing of the credential either, since parsing a
+        macaroon creates the rail's secret file and the spent set is the rail's
+        own state; a retired rail touches neither.
+
+        The scheme is matched without regard to case, as HTTP auth schemes
+        are. The armed code matched only "L402 ", so a lowercase credential
+        used to fall through to the free tier or to x402 and be silently
+        ignored, which is the one thing a retired credential must not be.
+        """
+        if not lightning.LIGHTNING_RETIRED:
+            return False
+        # Every Authorization line, not the first: headers.get() returns only
+        # the first, so `Bearer x` then `L402 ...` beside an x402 payment used
+        # to settle and anchor (bundle review round 2).
+        schemes = [v.strip().split(None, 1)[:1] for v in (self.headers.get_all("Authorization") or [])]
+        if not any(s and s[0].lower() == "l402" for s in schemes):
+            return False
+        self._drain_request_body(max_bytes)
+        _json_response(self, 410, _LIGHTNING_RETIRED_ANCHOR)
+        return True
 
     def _anchor_payload(self, max_bytes: int):
         """Parse untrusted anchor input before charging any allowance."""
@@ -3059,6 +3233,13 @@ class Handler(BaseHTTPRequestHandler):
             self._drain_request_body()
             self.send_error(410, _RETIRED_BTC_MESSAGE)
             return
+        # The retired Lightning quote, for the same reasons and in the same
+        # place: before the content-type gate, body drained first. JSON, not
+        # an error page, because its only callers are API clients.
+        if lightning.LIGHTNING_RETIRED and self.path.split("?", 1)[0] == "/api/ln/quote":
+            self._drain_request_body()
+            _json_response(self, 410, _LIGHTNING_RETIRED)
+            return
         if self._reject_non_json_post():
             return
         if self.path == "/api/stripe/webhook":
@@ -3146,6 +3327,12 @@ class Handler(BaseHTTPRequestHandler):
         if self.path.startswith("/api/unsubscribe"):
             self._handle_unsubscribe_post()
             return
+        # The confirm button carries its token in the query string, as the
+        # unsubscribe button carries its address, so match the path alone.
+        path = self.path.split("?", 1)[0]
+        if path == "/api/waitlist/confirm":
+            self._handle_waitlist_confirm_post()
+            return
         if self.path == "/api/event":
             self._handle_event()
             return
@@ -3160,6 +3347,8 @@ class Handler(BaseHTTPRequestHandler):
             return
         if self.path != "/api/anchor":
             self.send_error(404, "not found")
+            return
+        if self._refuse_retired_l402():
             return
         # Admin toggle: disable anchoring if external services are down
         if ORPHO_DISABLE_ANCHORING:
@@ -3184,6 +3373,8 @@ class Handler(BaseHTTPRequestHandler):
         # A valid, settled, UNSPENT credential buys exactly one anchor — the
         # agent-pays path (docs/LIGHTNING_L402.md). An invalid attempt fails
         # loudly with 401; it never silently falls through to the free tier.
+        # Reached only while the rail is armed; retired, _refuse_retired_l402
+        # answered 410 at the top of this route.
         ln_payment_hash = None
         auth_header = self.headers.get("Authorization", "").strip()
         if not pack_consumed and auth_header.startswith("L402 "):
@@ -3856,7 +4047,8 @@ class Handler(BaseHTTPRequestHandler):
                 "receipt_url": f"{os.environ.get('SITE_URL', 'https://orphograph.com').rstrip('/')}/r/{record['receipt_id']}",
             })
         # Persist notify_email so upgrade_worker can email the customer when
-        # the BTC pin actually lands (~1h later). This used to be nested
+        # the BTC pin actually lands (~1h later). The worker removes it from
+        # a public receipt once that notice is settled. This used to be nested
         # inside the subscriber-only branch above, so a PACK buyer who passed
         # notify_email — the exact audience docs/api.html documents the field
         # for, "Pack only — emails the receipt" — got the immediate receipt
@@ -3985,6 +4177,8 @@ class Handler(BaseHTTPRequestHandler):
         a backlog. API-key auth bypasses the rate limit; pack tokens consume
         one credit per item; subscribers anchor under their session.
         """
+        if self._refuse_retired_l402(MAX_BATCH_BODY_BYTES):
+            return
         if ORPHO_DISABLE_ANCHORING:
             _json_response(self, 503, {"error": "anchoring temporarily unavailable"})
             return
@@ -4346,7 +4540,11 @@ class Handler(BaseHTTPRequestHandler):
         # A lone surrogate (JSON "\ud800") matches EMAIL_RE but is not text:
         # it cannot be encoded, so it is never stored or mailed.
         if (not isinstance(email, str) or not EMAIL_RE.match(email.strip())
-                or not _utf8_encodable(email)):
+                or not _utf8_encodable(email)
+                # A display-name or quoted spelling of an address passes
+                # EMAIL_RE, is not recognised as the suppressed mailbox, and
+                # is delivered to it (bundle review round 1): bare only.
+                or not newsletter.is_bare_address(email.strip())):
             # Don't leak whether the address was valid.
             _json_response(self, 200, {"ok": True})
             return
@@ -4354,6 +4552,10 @@ class Handler(BaseHTTPRequestHandler):
             interest = "personal"
         waitlist.add(email.strip(), interest)
         _json_response(self, 200, {"ok": True, "message": "On the list."})
+        # Double opt-in: the confirmation email, if this address gets one, is
+        # decided and sent after the answer, so the answer is the same for
+        # every address (see _queue_waitlist_confirmation).
+        _queue_waitlist_confirmation(email.strip(), interest)
 
     # Neutral response for the pack-recovery endpoint. Identical wording is
     # returned whether or not the address has a pack on file so the endpoint
@@ -4429,7 +4631,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def _unsubscribe_page(self, status: int, title: str, heading: str,
                           meta: str, body_html: str) -> None:
-        """One page shape for the confirm, done and could-not-record answers.
+        """One page shape for the confirm, done and could-not-record answers,
+        of the unsubscribe link and of the waitlist confirmation link.
         Every value shown that came from the URL is escaped by the caller."""
         body = (
             "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
@@ -4497,6 +4700,96 @@ class Handler(BaseHTTPRequestHandler):
             "itself, not promotional.</p>"
             # One sentence whether or not the address was already there.
             "<p>Confirmed — this address is on the suppression list.</p>")
+
+    def _waitlist_confirm_token(self) -> str:
+        from urllib.parse import urlparse, parse_qs
+        return (parse_qs(urlparse(self.path).query).get("token") or [""])[0]
+
+    def _waitlist_confirm_refused(self) -> None:
+        """One answer for every link that is not a live confirmation: forged,
+        damaged, expired, or naming nothing this server sent. Nothing from the
+        URL is shown, so nothing in it can be reflected."""
+        self._unsubscribe_page(
+            400, "Link not valid", "This confirmation link is not valid.",
+            "Nothing was changed.",
+            "<p>It may have expired (a link works for 24 hours) or been copied "
+            "only in part. If it expired, signing up again on the site sends "
+            "a fresh one.</p>")
+
+    def _handle_waitlist_confirm_get(self) -> None:
+        """The page the waitlist confirmation email links to. Writes nothing.
+
+        Mail gateways and link scanners fetch the links in a message with GET,
+        so following this one must not confirm anyone (the same reason the
+        unsubscribe link only asks, 9A). The page has one button, which POSTs
+        to this same URL. The token is checked for its signature and expiry
+        only and never looked up, so the page is the same whether or not the
+        address has already confirmed, and reading it touches no ledger.
+        """
+        token = self._waitlist_confirm_token()
+        if newsletter.verify_confirm_token(token) is None:
+            self._waitlist_confirm_refused()
+            return
+        from html import escape as _h
+        from urllib.parse import quote as _q
+        # A token that verified is base64url and one dot; quoted and escaped
+        # anyway, as every value from the URL is.
+        action = _h("/api/waitlist/confirm?token=" + _q(token))
+        self._unsubscribe_page(
+            200, "Confirm", "Confirm your Orphograph waitlist signup?",
+            "One button below. Nothing changes until you press it.",
+            "<p>Pressing it adds this address to the Orphograph mailing list "
+            "for the updates you asked about. You can unsubscribe at any "
+            "time.</p>"
+            f"<form method=\"post\" action=\"{action}\">"
+            "<button type=\"submit\">Confirm</button></form>")
+
+    def _handle_waitlist_confirm_post(self) -> None:
+        """The confirm page's button. Records the confirmation once.
+
+        The same page answers a first press and a repeat, so pressing twice
+        changes nothing and says nothing new. Only a first confirmation adds
+        the contact to the mail audience (newsletter.add_confirmed_contact),
+        and that runs after the answer, so a slow or failing audience call
+        never changes it.
+        """
+        allowed, retry = _waitlist_confirm_limiter.check(
+            f"waitlist-confirm:{self._client_key()}")
+        if not allowed:
+            self._drain_request_body()
+            _send_rate_limited(self, int(retry) + 1, {"error": "too many requests"})
+            return
+        # The form has no fields; the token is in the query string.
+        self._drain_request_body()
+        try:
+            outcome = newsletter.confirm(self._waitlist_confirm_token())
+        except OSError:
+            self._unsubscribe_page(
+                503, "Not recorded", "We could not record this just now.",
+                "Nothing was changed.",
+                "<p>Please open the link again in a few minutes.</p>")
+            return
+        if outcome is None:
+            self._waitlist_confirm_refused()
+            return
+        state, email, interest = outcome
+        if state == "unsubscribed":
+            # Unsubscribed after the confirmation email went out: nothing is
+            # added, and the page says so (bundle review round 1).
+            self._unsubscribe_page(
+                200, "Not added", "This address is unsubscribed.",
+                "Nothing was added.",
+                "<p>It stays off our mail.</p>")
+            return
+        self._unsubscribe_page(
+            200, "Confirmed", "Thanks, you're confirmed.",
+            "This address is on the Orphograph mailing list.",
+            "<p>We will write only about what you signed up for. You can "
+            "unsubscribe at any time.</p>")
+        if state == "confirmed":
+            threading.Thread(target=newsletter.add_confirmed_contact,
+                             args=(email, interest), name="waitlist-audience",
+                             daemon=True).start()
 
     def _handle_payout_status(self) -> None:
         """JSON endpoint — founder-only view of hot BTC balance + sweep status.
@@ -4772,6 +5065,50 @@ class Handler(BaseHTTPRequestHandler):
         if not rfile.exists():
             _json_response(self, 404, {"error": "receipt not found"})
             return
+        # Ownership first, without the lock: waiting on the lock first told a
+        # stranger a busy receipt exists (503 where it is otherwise 404), and
+        # created lock files in other accounts' receipt dirs (bundle review
+        # round 2). The locked step re-reads and re-checks it.
+        try:
+            unlocked_rec = json.loads(rfile.read_text())
+        except (OSError, json.JSONDecodeError):
+            _json_response(self, 500, {"error": "could not read receipt"})
+            return
+        if not _receipt_belongs_to(unlocked_rec, email):
+            _json_response(self, 404, {"error": "receipt not found"})
+            return
+        # The read-modify-write runs under the receipt's .upgrade.lock, the
+        # lock the upgrade worker holds across its read, the calendar
+        # round-trips and its write (now also the notify_email cleanup).
+        # Without it a toggle landing inside that window was written over and
+        # undone (bundle review round 1). The worker can hold the lock for a
+        # network round-trip, so the wait is bounded: a busy receipt answers
+        # 503 (retry) instead of tying up this thread.
+        from contextlib import ExitStack
+        from file_lock import try_locked
+        deadline = time.monotonic() + PRIVACY_TOGGLE_LOCK_WAIT_SEC
+        while True:
+            with ExitStack() as stack:
+                # Opening the lock file can fail (a directory the server cannot
+                # create a file in); that raised out of the handler and the
+                # client got no answer at all (bundle review round 2).
+                try:
+                    held = stack.enter_context(try_locked(rfile.parent / ".upgrade.lock"))
+                except OSError:
+                    _json_response(self, 500, {"error": "could not update receipt"})
+                    return
+                if held is not None:
+                    self._toggle_receipt_privacy_locked(rfile, rid, email, want_private)
+                    return
+            if time.monotonic() >= deadline:
+                _json_response(self, 503, {"error": "receipt is being updated; retry shortly"})
+                return
+            time.sleep(0.05)
+
+    def _toggle_receipt_privacy_locked(self, rfile: Path, rid: str, email: str,
+                                       want_private: bool) -> None:
+        """The privacy toggle's read-modify-write. Caller holds the receipt's
+        .upgrade.lock."""
         try:
             rec = json.loads(rfile.read_text())
         except (OSError, json.JSONDecodeError):
@@ -4871,7 +5208,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             ledger_path = Path(os.environ.get(
                 "ORPHO_REFUND_LEDGER",
-                str(ROOT / "data" / "refund_requests.jsonl"),
+                str(DATA_DIR / "refund_requests.jsonl"),
             ))
             if ledger_path.exists():
                 pending = 0
@@ -5065,6 +5402,15 @@ class Handler(BaseHTTPRequestHandler):
         if not email:
             _json_response(self, 400, {"error": "invalid email"})
             return
+        allowed, retry = _unsub_post_limiter.check(
+            f"unsub-post:{self._client_key()}:{fold_email(email)}")
+        if not allowed:
+            # Before any write. The address already has the rows this burst
+            # wrote, so it is suppressed; the answer says retry, never "done",
+            # because a burst that failed to write (a full volume) lands here too.
+            self._drain_request_body()
+            _send_rate_limited(self, int(retry) + 1, {"error": "too many requests"})
+            return
         # Drain body without reading large payloads. The address is always
         # the query string's; the body only says whether our confirm page sent
         # it (`via=page`), which decides the answer's shape, never whose
@@ -5079,15 +5425,17 @@ class Handler(BaseHTTPRequestHandler):
         from urllib.parse import parse_qs
         from_page = parse_qs(raw.decode("latin-1")).get("via") == ["page"]
         try:
-            # Checked before the already-suppressed shortcut in add(): with a
-            # ledger that could not be opened a new address got 503 and a
-            # suppressed one got success, which told anyone which one it was
-            # (the GET handler did this check until the write moved here,
-            # 2026-09-27). Not covered: the file opens and the write itself
-            # fails (a full volume). add() then still answers a suppressed
-            # address 200 and a new one 503.
+            # reappend: add() answered an address already suppressed without
+            # writing, so when the ledger could not take a row (a full
+            # volume) it got 200 where a new one got 503, which told anyone
+            # who had unsubscribed. Now the address's row is appended whether
+            # or not one is there (any row suppresses), so both make the same
+            # write and are refused alike. The ledger is only appended to.
+            # ensure_writable is from before that, when only the new address
+            # opened the ledger; add() now opens it for both.
             unsubscribe.ensure_writable()
-            unsubscribe.add(email, source="page_post" if from_page else "link_post")
+            unsubscribe.add(email, source="page_post" if from_page else "link_post",
+                            reappend=True)
         except unsubscribe.SuppressionUnavailable:
             if from_page:
                 self._unsubscribe_page(
@@ -5173,8 +5521,9 @@ class Handler(BaseHTTPRequestHandler):
         """L402 quote: mint an invoice + macaroon for one pay-per-anchor.
 
         Proactive form of the 402 challenge — an agent can fetch payment
-        terms before burning a free-tier slot. 503 until the founder arms a
-        Lightning backend (fly secrets), so today's behavior is unchanged.
+        terms before burning a free-tier slot. Reached only while the rail
+        is armed: retired (lightning.LIGHTNING_RETIRED), do_POST answers 410
+        before this runs. Armed, it is 503 until a Lightning backend is set.
         """
         if not lightning.configured():
             _json_response(self, 503, {
@@ -5212,6 +5561,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def _handle_anchor_folder(self) -> None:
         """POST /api/anchor_folder, one request in flight per client address."""
+        # Before the in-flight slot: a refused request must not hold it.
+        if self._refuse_retired_l402(MAX_FOLDER_MANIFEST_BYTES):
+            return
         key = self._client_key()
         with _folder_in_flight_lock:
             busy = key in _folder_in_flight
@@ -5416,6 +5768,31 @@ class Handler(BaseHTTPRequestHandler):
             client_label = client_label[:200]
         else:
             client_label = None
+        # Optional office signature over (client_label, root) for the public
+        # Standing Record; only scripts/weekly_anchor.py sends one. Checking
+        # it here means a bad one costs its sender a 400 instead of sitting on
+        # disk. What decides the page is the check made again every time the
+        # list is built (server/standing_record.py), never this one.
+        office_sig_hex = payload.get("office_signature")
+        if office_sig_hex is not None:
+            if standing_record is None or not standing_record.backend_available():
+                _reject(503, {
+                    "error": "office signature verification unavailable in this build",
+                    "detail": "Anchor without office_signature, or use a build with Ed25519 support.",
+                })
+                return
+            office_sig = standing_record.parse_signature(office_sig_hex)
+            if office_sig is None:
+                _reject(400, {"error": "office_signature must be 128 lowercase hex characters"})
+                return
+            if client_label is None or not standing_record.verifies(
+                    client_label, root_hex, office_sig):
+                _reject(400, {
+                    "error": "office_signature does not verify",
+                    "detail": ("It must be an office key's signature over this "
+                               "request's client_label and the manifest root."),
+                })
+                return
         # Fail closed — see _reject_private. This path is where it bit us:
         # the daily repo anchor asks for private and has been publishing.
         # _reject refunds the pack credit and is the folder path's refunding
@@ -5505,6 +5882,7 @@ class Handler(BaseHTTPRequestHandler):
         record["kind"] = "folder"
         record["leaf_count"] = len(leaves)
         record["merkle_algorithm"] = merkle.ALGORITHM
+        office_signed = False
         try:
             rfile = engine.RECEIPTS_DIR / rid / "receipt.json"
             on_disk = json.loads(rfile.read_text())
@@ -5516,7 +5894,22 @@ class Handler(BaseHTTPRequestHandler):
             if sig_verified is not None:
                 on_disk["signature_verified"] = sig_verified
                 on_disk["signer_kid"] = signer_kid
+            # The office signature is recorded only on an anchor a calendar
+            # accepted. A 0-calendar receipt has no Bitcoin commitment and
+            # never will; signed, it became the day's listed row and hid the
+            # good same-day rerun, because "earliest signed row wins" (which
+            # keeps a copied signature from taking over) chose it (bundle
+            # review round 1). Unsigned, the job's missing-flag check fails
+            # that run and the rerun is the only signed row.
+            signing = office_sig_hex is not None and record["calendars_ok"] > 0
+            if signing:
+                on_disk[standing_record.FIELD] = office_sig_hex
             rfile.write_text(json.dumps(on_disk, indent=2))
+            # Only once the write landed: a swallowed OSError (disk full, EIO)
+            # used to leave the flag true with no signature on disk, and the
+            # weekly job logged success for a row that is never listed
+            # (bundle review round 2).
+            office_signed = signing
         except OSError:
             pass
         # Mirror committed lineage onto the persisted receipt (design §2.4).
@@ -5557,6 +5950,10 @@ class Handler(BaseHTTPRequestHandler):
         if sig_verified is not None:
             response_body["signature_verified"] = sig_verified
             response_body["signer_kid"] = signer_kid
+        if office_signed:
+            # The weekly job treats a missing flag as a failed run: a server
+            # that dropped the signature made a row the page will never list.
+            response_body["office_signed"] = True
         if want_public_paths:
             response_body["paths_public"] = True
 
@@ -5851,9 +6248,11 @@ class Handler(BaseHTTPRequestHandler):
                 f"email={auth.mask_email(provided_email)} — likely webhook race or fulfillment gap\n"
             )
             try:
+                # In the data directory, not under the source tree: a
+                # server given its own data directory keeps the log there.
                 gap_path = Path(os.environ.get(
                     "ORPHO_RECOVERY_GAP_LOG",
-                    str(ROOT / "data" / "recovery_gaps.jsonl"),
+                    str(DATA_DIR / "recovery_gaps.jsonl"),
                 ))
                 gap_path.parent.mkdir(parents=True, exist_ok=True)
                 with gap_path.open("a") as f:
@@ -5988,10 +6387,11 @@ class Handler(BaseHTTPRequestHandler):
         if isinstance(payload.get("reason"), str):
             reason = payload["reason"][:500].strip()
         sub_id = subscriptions.stripe_subscription_id_for(email)
-        # Append to ledger.
+        # Append to ledger. It lives in the data directory, the same file
+        # the founder's morning summary counts.
         ledger_path = Path(os.environ.get(
             "ORPHO_REFUND_LEDGER",
-            str(ROOT / "data" / "refund_requests.jsonl"),
+            str(DATA_DIR / "refund_requests.jsonl"),
         ))
         ledger_path.parent.mkdir(parents=True, exist_ok=True)
         row = {
@@ -6090,18 +6490,50 @@ class Handler(BaseHTTPRequestHandler):
             return
         if self._sub_change_limited(email):
             return
-        sub_id = subscriptions.stripe_subscription_id_for(email)
+        # Read once: the id sent to Stripe and the words sent back must be
+        # about the same subscription.
+        current = subscriptions.status_for(email) or {}
+        sub_id = current.get("stripe_sub") or ""
         if not sub_id:
             _json_response(self, 404, {"error": "no active subscription found"})
             return
         result = stripe_api.cancel_at_period_end(sub_id)
+        if not result.get("ok") and _stripe_has_no_such_subscription(result):
+            # Stripe has no record of a subscription the ledger knows. Said
+            # out loud every time: a key from the wrong mode or the wrong
+            # account gives exactly this answer for a subscription that is
+            # live and billing. Ids only, never the address.
+            sys.stderr.write(
+                f"[subscriptions] ALERT: Stripe has no record of a subscription the "
+                f"ledger knows: {sub_id} (local status {current.get('status')!r}); "
+                f"check the Stripe key's mode and account\n")
+            if subscriptions.row_is_past_due(current):
+                # Deleted at Stripe with the webhook that would have said so
+                # missed. Stripe cannot bill it, and gives this answer on every
+                # try, so answering 503 left a past-due account unable to
+                # subscribe again: checkout refuses it until it cancels. It is
+                # recorded as ended, which is what it is.
+                subscriptions.record_not_at_stripe(current, email)
+                _json_response(self, 200, {
+                    "ok": True,
+                    "message": "This subscription had already ended, so it will not renew.",
+                })
+                return
+            # An ACTIVE row is never rewritten on this answer (bundle review
+            # round 1): ending it locally on a key mismatch would take the
+            # subscriber's access while Stripe kept charging. Fall through to
+            # the 503 the caller can retry, recording nothing.
         if not result.get("ok"):
             _json_response(self, 503, {"error": "stripe error", "detail": result.get("error")})
             return
-        _json_response(self, 200, {
-            "ok": True,
-            "message": "Subscription will end at the period boundary; you keep access until then.",
-        })
+        message = "Subscription will end at the period boundary; you keep access until then."
+        if subscriptions.row_is_past_due(current):
+            # A past-due subscription gives no access, so none is promised.
+            # The request ends it at the period boundary; it does not take
+            # back the payment that is already due.
+            message = ("Subscription will end at the period boundary and will not renew. "
+                       "The payment that is past due may still be retried until then.")
+        _json_response(self, 200, {"ok": True, "message": message})
 
     def _handle_reactivate_subscription(self) -> None:
         email = self._session_email()
@@ -6297,7 +6729,8 @@ class Handler(BaseHTTPRequestHandler):
         # Light rate-limit so this can't be used as a session-id oracle. After
         # the shape check: a malformed id costs nothing, so a page that sent a
         # bad value does not spend the buyer's budget for a real lookup.
-        allowed, retry = _session_lookup_limiter.check(f"stripe-session:{self._client_key()}")
+        allowed, retry = self._lookup_allowed(
+            _session_lookup_limiter, f"stripe-session:{self._client_key()}")
         if not allowed:
             _send_rate_limited(self, int(retry) + 1, {"error": "rate limit exceeded"})
             return
@@ -6396,6 +6829,17 @@ class Handler(BaseHTTPRequestHandler):
                 _json_response(self, 409, {
                     "error": "This account already has an active subscription.",
                     "detail": "Manage it from your account page; nothing was charged.",
+                })
+                return
+            # A past-due subscription is one whose payment is still being
+            # retried: a second one would be billed on top of it the day the
+            # retry succeeds (founder decision 2026-09-28). The buy page shows
+            # `error` alone, so the way out is named there.
+            if holder and subscriptions.is_past_due(holder):
+                _json_response(self, 409, {
+                    "error": ("This account has a subscription that is past due. "
+                              "You can cancel it from your account page."),
+                    "detail": "Nothing was charged.",
                 })
                 return
         price_id = os.environ.get(price_env, "")
@@ -6697,18 +7141,22 @@ _WEEKLY_CACHE: dict = {"ts": 0.0, "rows": []}
 
 
 def _list_weekly_anchors(limit: int = 16) -> list[dict]:
-    """Latest public weekly self-anchors (client_label weekly-*), 300s cache.
+    """The latest weekly anchors the office itself made, 300s cache.
 
     The office re-anchors its own foundations on a schedule
     (scripts/weekly_anchor.py); this powers the public /standing-record page.
+    A "weekly-" label is not enough: anyone can choose a label. Which rows
+    qualify, and why, is in server/standing_record.py.
     """
     import time as _time
     now = _time.time()
     if now - _WEEKLY_CACHE["ts"] < 300:
         return _WEEKLY_CACHE["rows"]
-    rows: list[dict] = []
-    receipts_dir = engine.RECEIPTS_DIR
-    if receipts_dir.exists():
+
+    def _weekly_receipts():
+        receipts_dir = engine.RECEIPTS_DIR
+        if not receipts_dir.exists():
+            return
         for child in receipts_dir.iterdir():
             if not child.is_dir():
                 continue
@@ -6719,17 +7167,17 @@ def _list_weekly_anchors(limit: int = 16) -> list[dict]:
                 rec = json.loads(rfile.read_text())
             except (OSError, json.JSONDecodeError):
                 continue
-            label = str(rec.get("client_label") or "")
-            if not label.startswith("weekly-") or rec.get("private"):
-                continue
-            rows.append({
-                "receipt_id": rec.get("receipt_id"),
-                "client_label": label,
-                "created_at": rec.get("created_at"),
-                "btc_pinned_at": rec.get("btc_pinned_at"),
-            })
-    rows.sort(key=lambda x: x.get("created_at") or "", reverse=True)
-    _WEEKLY_CACHE.update(ts=now, rows=rows[:limit])
+            if isinstance(rec, dict) and str(rec.get("client_label") or "").startswith("weekly-"):
+                yield rec
+
+    office_rows = standing_record.listed(_weekly_receipts(), limit) if standing_record else []
+    rows = [{
+        "receipt_id": rec.get("receipt_id"),
+        "client_label": rec.get("client_label"),
+        "created_at": rec.get("created_at"),
+        "btc_pinned_at": rec.get("btc_pinned_at"),
+    } for rec in office_rows]
+    _WEEKLY_CACHE.update(ts=now, rows=rows)
     return _WEEKLY_CACHE["rows"]
 
 

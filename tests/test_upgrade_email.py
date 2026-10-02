@@ -114,14 +114,36 @@ class UpgradeEmailTest(unittest.TestCase):
         self.tmp = Path(tempfile.mkdtemp(prefix="orpho_upgrade_email_"))
         self.receipts = self.tmp / "receipts"
         self.receipts.mkdir(parents=True)
-        # Force the mailer into "live" mode so it tries Resend (we mock urlopen).
-        os.environ["RESEND_API_KEY"] = "test_key_not_real"
-        # Reload modules against the temp data dir.
+        # Reload modules against the temp data dir, and put sys.modules back
+        # afterwards. The reimports keep this test's RESEND_API_KEY and temp
+        # paths baked in, and so does every module they import fresh: mailer
+        # pulls in referrals, which binds the temp auth. A later test that
+        # imported mailer then derived its referral code through that stale
+        # auth and never loaded the real secret (an order-only failure in
+        # test_srv_binds_its_own_port, bundle review round 2).
+        before = dict(sys.modules)
+
+        def _restore_modules() -> None:
+            for name in [n for n in sys.modules if n not in before]:
+                del sys.modules[name]
+            for name, module in before.items():
+                if sys.modules.get(name) is not module:
+                    sys.modules[name] = module
+        self.addCleanup(_restore_modules)
         for m in ("upgrade_worker", "mailer", "auth", "engine"):
             sys.modules.pop(m, None)
-        os.environ["ORPHO_DATA_DIR"] = str(self.tmp)
-        os.environ["ORPHO_RECEIPTS_DIR"] = str(self.receipts)
-        os.environ["ORPHO_UPGRADE_LOG"] = str(self.tmp / "upgrade_log.jsonl")
+        # patch.dict puts the environment back as it found it. tearDown used
+        # to pop these four, which left the rest of the run with no data
+        # directory set at all.
+        env = mock.patch.dict(os.environ, {
+            # Force the mailer into "live" mode so it tries Resend (we mock urlopen).
+            "RESEND_API_KEY": "test_key_not_real",
+            "ORPHO_DATA_DIR": str(self.tmp),
+            "ORPHO_RECEIPTS_DIR": str(self.receipts),
+            "ORPHO_UPGRADE_LOG": str(self.tmp / "upgrade_log.jsonl"),
+        })
+        env.start()
+        self.addCleanup(env.stop)
         import upgrade_worker  # noqa: F401
         import mailer  # noqa: F401
         self.upgrade_worker = upgrade_worker
@@ -129,11 +151,6 @@ class UpgradeEmailTest(unittest.TestCase):
 
     def tearDown(self) -> None:
         shutil.rmtree(self.tmp, ignore_errors=True)
-        # Don't leak the fake key into sibling tests.
-        os.environ.pop("RESEND_API_KEY", None)
-        os.environ.pop("ORPHO_DATA_DIR", None)
-        os.environ.pop("ORPHO_RECEIPTS_DIR", None)
-        os.environ.pop("ORPHO_UPGRADE_LOG", None)
 
     # ---- helpers -------------------------------------------------------
 
@@ -251,9 +268,12 @@ class UpgradeEmailTest(unittest.TestCase):
 
         self.assertEqual(result["status"], "pinned")
         on_disk = json.loads((rd / "receipt.json").read_text())
-        # Pin happened; email did NOT — next run can retry.
+        # Pin happened; email did NOT. No later run retries it (the send is
+        # tried only on the pass that sets btc_pinned_at), so a public
+        # receipt's notify_email goes in this same write.
         self.assertIn("btc_pinned_at", on_disk)
         self.assertNotIn("pin_email_sent_at", on_disk)
+        self.assertNotIn("notify_email", on_disk)
 
     def test_partial_transition_email_says_three_of_five(self):
         cals = [
