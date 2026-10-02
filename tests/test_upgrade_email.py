@@ -114,7 +114,22 @@ class UpgradeEmailTest(unittest.TestCase):
         self.tmp = Path(tempfile.mkdtemp(prefix="orpho_upgrade_email_"))
         self.receipts = self.tmp / "receipts"
         self.receipts.mkdir(parents=True)
-        # Reload modules against the temp data dir.
+        # Reload modules against the temp data dir, and put sys.modules back
+        # afterwards. The reimports keep this test's RESEND_API_KEY and temp
+        # paths baked in, and so does every module they import fresh: mailer
+        # pulls in referrals, which binds the temp auth. A later test that
+        # imported mailer then derived its referral code through that stale
+        # auth and never loaded the real secret (an order-only failure in
+        # test_srv_binds_its_own_port, bundle review round 2).
+        before = dict(sys.modules)
+
+        def _restore_modules() -> None:
+            for name in [n for n in sys.modules if n not in before]:
+                del sys.modules[name]
+            for name, module in before.items():
+                if sys.modules.get(name) is not module:
+                    sys.modules[name] = module
+        self.addCleanup(_restore_modules)
         for m in ("upgrade_worker", "mailer", "auth", "engine"):
             sys.modules.pop(m, None)
         # patch.dict puts the environment back as it found it. tearDown used
