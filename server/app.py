@@ -691,13 +691,13 @@ def _x402_had_earlier_attempt(ident: str) -> bool:
 # one that sends no Fetch Metadata still sends Origin on a POST (the reference
 # middleware likewise shows browsers a paywall page, not the 402). Our own
 # shipped clients, by User-Agent: USB capture, the watch folder, the
-# marketplace skill, the MCP server, the SDKs and the ACP seller all branch
-# on 429, and copies already installed cannot be updated (review of 9b909c1:
-# USB capture marked every file failed against the 402). Claiming one of
-# these only opts a caller out of paying.
+# marketplace skill, the MCP server, the SDKs, the ACP seller and the GitHub
+# Action all branch on 429, and copies already installed cannot be updated
+# (review of 9b909c1: USB capture marked every file failed against the 402).
+# Claiming one of these only opts a caller out of paying.
 _X402_FIRST_PARTY_UA = ("orphograph-usb/", "orphograph-watch-folder/", "orphograph-skill/",
                         "orphographmcp/", "orphograph-python-sdk/", "orphograph-node/",
-                        "orphographacp/")
+                        "orphographacp/", "orphograph-github-action/")
 
 
 def _x402_classic_caller(handler: BaseHTTPRequestHandler) -> bool:
@@ -7143,6 +7143,12 @@ def main() -> int:
     _start_upgrade_scheduler()
     _start_cadence_scheduler()
     _start_funnel_digest_scheduler()
+    # A pay-to address with an asset whose EIP-712 domain is unknown leaves the
+    # rail unarmed (no facilitator could verify it); say so, or the founder sees
+    # only `x402.armed: false` in /api/health with no reason.
+    if os.environ.get("ORPHO_X402_PAY_TO_ADDRESS", "").strip() and x402.asset_domain() is None:
+        sys.stderr.write("[x402] NOT ARMED: ORPHO_X402_ASSET has no known EIP-712 domain; "
+                         "set ORPHO_X402_ASSET_NAME and ORPHO_X402_ASSET_VERSION\n")
     # No anchor is in flight yet, so an x402 claim standing with no delivery
     # row is a payment a crash stranded; release it so its payload can redeem.
     try:

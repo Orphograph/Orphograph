@@ -1287,6 +1287,7 @@ def test_an_unknown_asset_without_a_domain_does_not_arm_the_rail(monkeypatch):
     {"User-Agent": "orphograph-python-sdk/0.1.1"},
     {"User-Agent": "orphograph-node/0.1.0"},
     {"User-Agent": "OrphographACP/1.0 (+https://orphograph.com)"},
+    {"User-Agent": "orphograph-github-action/1.0"},
 ])
 def test_our_own_clients_and_pages_keep_the_classic_429(server, headers):
     """Review of 9b909c1. The repo's shipped clients branch on 429 (USB

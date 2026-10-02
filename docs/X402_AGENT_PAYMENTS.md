@@ -125,14 +125,21 @@ collected — no second settle() — and after that it is a replay like any
 other. Both facts live on disk: the charge in `x402_ledger.jsonl`, the
 delivery as the claim in `x402_claimed.jsonl`.
 
-Who gets the 402: anyone past the free tier except a browser on our own
-pages. Those fetches carry `Sec-Fetch-Site: same-origin`, which the browser
-adds itself, and they keep the classic 429 every page already handles (the
-reference middleware likewise shows browsers a paywall page, not the 402).
-Sending that header only opts a caller out of paying. Before 2026-10-02 the
-header carried the literal "true", which no v2 client can read: a v2 client
-takes the requirements from the header only, and falls back to the body for
-v1 alone (`x402_http_client_base.py`).
+Who gets the 402: anyone past the free tier except our own pages and our
+own shipped clients. Our pages: a browser marks its fetches
+`Sec-Fetch-Site: same-origin`, and one with no Fetch Metadata still sends a
+matching `Origin` on a POST. Our clients, by User-Agent prefix: USB capture,
+the watch folder, the marketplace skill, the MCP server, both SDKs, the ACP
+seller and the GitHub Action, all of which handle the 429 and some of which
+are installed copies that cannot be updated. Both keep the classic 429
+they already handle (the reference middleware likewise shows browsers a
+paywall page, not the 402). Sending one of those headers only opts a caller
+out of paying.
+
+Before 2026-10-02 the PAYMENT-REQUIRED header carried the literal "true",
+which no v2 client can read: a v2 client takes the requirements from the
+header only, and falls back to the body for v1 alone
+(`x402_http_client_base.py`).
 
 ## Custody posture (stated plainly)
 
@@ -162,6 +169,11 @@ therefore leaves them unredeemable until it is armed again; check
    Base Sepolia USDC contract, confirmed against Circle's own docs:
    `0x036CbD53842c5426634e7929541eC2318f3dCF7e`), `ORPHO_X402_FACILITATOR_URL`
    (default `https://x402.org/facilitator`, free and public).
+   Requirements carry the asset's EIP-712 domain (`extra.name`,
+   `extra.version`), which the exact-EVM facilitators require. Base Sepolia
+   USDC (`USDC`, `2`) and Base USDC (`USD Coin`, `2`) are built in; any other
+   asset also needs `ORPHO_X402_ASSET_NAME` and `ORPHO_X402_ASSET_VERSION`, or
+   the rail stays unarmed and the server logs `[x402] NOT ARMED` at boot.
 4. Verify: hit `/api/anchor` past the free tier with no payment header,
    confirm the 402 body's `accepts[0].payTo` matches the address above;
    sign a real testnet authorization (the `x402` PyPI package's client
