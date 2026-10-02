@@ -45,6 +45,7 @@ WEB = ROOT / "web"
 sys.path.insert(0, str(ROOT / "server"))
 # The constant and configured() only. Every server below is its own process
 # and reads its own copy of the module.
+import api_keys  # noqa: E402
 import lightning  # noqa: E402
 import x402 as x402_const  # noqa: E402
 
@@ -85,7 +86,7 @@ def _seed_subscriber(data: Path) -> None:
         email=SUB_EMAIL, status="active", stripe_sub="sub_lnretire")])
     _write_jsonl(data / "api_keys.jsonl", [dict(
         event="issued", email=SUB_EMAIL,
-        key_hash=hashlib.sha256(API_KEY.encode()).hexdigest(), key_prefix=API_KEY[:14])])
+        key_hash=api_keys._hash(API_KEY), key_prefix=API_KEY[:14])])
 
 
 def _no_egress(closed_port: int) -> dict:
