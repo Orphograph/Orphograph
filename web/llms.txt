@@ -31,6 +31,12 @@ and credit packs raise the limit via an API key issued from the account page.
 - POST https://orphograph.com/api/ln/quote: retired, answers 410 Gone. Lightning
   (L402) payments are retired, and an anchor request carrying an L402 header
   answers 410 too. Pay by card: https://orphograph.com/pricing
+- x402 pay-per-anchor for agents (USDC on Base Sepolia, the TEST network, for
+  now): past the free tier POST /api/anchor answers 402 with a PAYMENT-REQUIRED
+  header; resend the same request with PAYMENT-SIGNATURE (or the legacy X-PAYMENT
+  header name; the payload is x402 v2 either way) carrying a signed EIP-3009
+  authorization for that exact amount. One authorization = one anchor. Test
+  USDC has no value; mainnet later.
 - POST https://orphograph.com/api/anchor_folder — anchor a folder manifest: an
   RFC 6962 Merkle root plus a {leaves} list of relative paths and per-file digests
 - GET https://orphograph.com/api/verify/<receipt_id> — receipt status: calendar

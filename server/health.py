@@ -54,6 +54,15 @@ _cached_at: float = 0.0
 _boot_time: float = time.time()
 
 
+
+def _x402_state() -> dict:
+    try:
+        import x402
+    except Exception:  # pragma: no cover - the module ships with the server
+        return {"armed": False, "network": None}
+    armed = x402.configured()
+    return {"armed": armed, "network": x402.network() if armed else None}
+
 def _last_line_ts(path: Path) -> str | None:
     if not path.exists() or path.stat().st_size == 0:
         return None
@@ -171,6 +180,10 @@ def _compute_snapshot() -> dict:
         "boot_at": datetime.fromtimestamp(_boot_time, timezone.utc).isoformat(timespec="seconds"),
         "uptime_sec": int(time.time() - _boot_time),
         "data_dir": str(DATA_DIR),
+        # Whether the x402 rail is armed, and on which network: the one
+        # observable proof of arming (secrets are not readable from outside).
+        # The pay-to address is not repeated here; it is in every 402.
+        "x402": _x402_state(),
         "counts": {
             "receipts_on_disk": receipts_count,
         },

@@ -22,7 +22,7 @@ def test_three_doctrine_points_are_present():
 
 def test_agent_payment_is_described_as_not_open_and_carries_no_price():
     sec = _section()
-    assert "It is not open" in sec, "no pay-per-anchor counter is open; the page must say so"
+    assert "It is not open" in sec, "no real-money pay-per-anchor counter is open; the page must say so"
     # The Lightning rail this point used to name was retired on 2026-09-28.
     assert "Lightning" not in sec, "the doctrine still names the retired Lightning rail"
     for token in ("sats", "$", "USD"):
