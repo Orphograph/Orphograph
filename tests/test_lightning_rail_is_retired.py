@@ -395,6 +395,38 @@ def test_l402_beside_an_x402_payment_is_refused_before_any_charge(tmp_path) -> N
         assert headers.get("WWW-Authenticate") is None
 
 
+
+def test_an_l402_credential_on_a_second_authorization_line_is_refused_too(tmp_path) -> None:
+    """Bundle review round 2 (merge seam): the refusal read only the FIRST
+    Authorization line, so `Authorization: Bearer x` followed by
+    `Authorization: L402 ...` beside an x402 payment settled and anchored,
+    which docs/LIGHTNING_L402.md and docs/X402_AGENT_PAYMENTS.md both say
+    cannot happen. Every Authorization line is checked now. The same x402
+    payment, sent alone afterwards, still pays: the mock refuses a settled
+    nonce twice, so that 200 proves the refused request never settled."""
+    for base in _srv.server_processes(tmp_path, stub_calendars=True, **X402_ENV):
+        first, body, _h = _post(base, "/api/anchor", {"hash_hex": "f0" * 32})
+        assert first == 200, body   # the one free anchor
+        pay = _x402_headers("lnretire-dup1")
+        lines = ("Authorization: Bearer not-a-credential\r\n"
+                 f"Authorization: {JUNK_L402}\r\n"
+                 + "".join(f"{k}: {v}\r\n" for k, v in pay.items())
+                 + "Content-Type: application/json\r\n")
+        raw = _srv.raw_request(base, "/api/anchor", "POST", headers=lines,
+                               body=json.dumps({"hash_hex": "f1" * 32}).encode())
+        head, _sep, payload = raw.partition(b"\r\n\r\n")
+        assert int(head.split()[1]) == 410, raw[:400]
+        body = json.loads(payload)
+        _assert_retired_body(body)
+        assert body.get("charged") is False, body
+        assert _x402_rows(tmp_path) == [], "an x402 payment was settled for a refused request"
+        assert _receipts_for(tmp_path, "f1" * 32) == []
+        _assert_no_lightning_state(tmp_path)
+
+        status, body, headers = _post(base, "/api/anchor", {"hash_hex": "f1" * 32}, pay)
+        assert status == 200, (status, body)
+        assert headers.get(x402_const.PAYMENT_RESPONSE_HEADER)
+
 # ── 4b · the published copy ────────────────────────────────────────────────
 
 # Bare "sats" is not a token: the founder panel formats the retired direct

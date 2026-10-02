@@ -3136,8 +3136,11 @@ class Handler(BaseHTTPRequestHandler):
         """
         if not lightning.LIGHTNING_RETIRED:
             return False
-        scheme = self.headers.get("Authorization", "").strip().split(None, 1)
-        if not scheme or scheme[0].lower() != "l402":
+        # Every Authorization line, not the first: headers.get() returns only
+        # the first, so `Bearer x` then `L402 ...` beside an x402 payment used
+        # to settle and anchor (bundle review round 2).
+        schemes = [v.strip().split(None, 1)[:1] for v in (self.headers.get_all("Authorization") or [])]
+        if not any(s and s[0].lower() == "l402" for s in schemes):
             return False
         self._drain_request_body(max_bytes)
         _json_response(self, 410, _LIGHTNING_RETIRED_ANCHOR)
@@ -4776,8 +4779,7 @@ class Handler(BaseHTTPRequestHandler):
             self._unsubscribe_page(
                 200, "Not added", "This address is unsubscribed.",
                 "Nothing was added.",
-                "<p>It stays off our mail. To hear from us after all, sign up "
-                "again from the site.</p>")
+                "<p>It stays off our mail.</p>")
             return
         self._unsubscribe_page(
             200, "Confirmed", "Thanks, you're confirmed.",
@@ -5063,6 +5065,18 @@ class Handler(BaseHTTPRequestHandler):
         if not rfile.exists():
             _json_response(self, 404, {"error": "receipt not found"})
             return
+        # Ownership first, without the lock: waiting on the lock first told a
+        # stranger a busy receipt exists (503 where it is otherwise 404), and
+        # created lock files in other accounts' receipt dirs (bundle review
+        # round 2). The locked step re-reads and re-checks it.
+        try:
+            unlocked_rec = json.loads(rfile.read_text())
+        except (OSError, json.JSONDecodeError):
+            _json_response(self, 500, {"error": "could not read receipt"})
+            return
+        if not _receipt_belongs_to(unlocked_rec, email):
+            _json_response(self, 404, {"error": "receipt not found"})
+            return
         # The read-modify-write runs under the receipt's .upgrade.lock, the
         # lock the upgrade worker holds across its read, the calendar
         # round-trips and its write (now also the notify_email cleanup).
@@ -5070,10 +5084,19 @@ class Handler(BaseHTTPRequestHandler):
         # undone (bundle review round 1). The worker can hold the lock for a
         # network round-trip, so the wait is bounded: a busy receipt answers
         # 503 (retry) instead of tying up this thread.
+        from contextlib import ExitStack
         from file_lock import try_locked
         deadline = time.monotonic() + PRIVACY_TOGGLE_LOCK_WAIT_SEC
         while True:
-            with try_locked(rfile.parent / ".upgrade.lock") as held:
+            with ExitStack() as stack:
+                # Opening the lock file can fail (a directory the server cannot
+                # create a file in); that raised out of the handler and the
+                # client got no answer at all (bundle review round 2).
+                try:
+                    held = stack.enter_context(try_locked(rfile.parent / ".upgrade.lock"))
+                except OSError:
+                    _json_response(self, 500, {"error": "could not update receipt"})
+                    return
                 if held is not None:
                     self._toggle_receipt_privacy_locked(rfile, rid, email, want_private)
                     return
@@ -5878,10 +5901,15 @@ class Handler(BaseHTTPRequestHandler):
             # keeps a copied signature from taking over) chose it (bundle
             # review round 1). Unsigned, the job's missing-flag check fails
             # that run and the rerun is the only signed row.
-            office_signed = office_sig_hex is not None and record["calendars_ok"] > 0
-            if office_signed:
+            signing = office_sig_hex is not None and record["calendars_ok"] > 0
+            if signing:
                 on_disk[standing_record.FIELD] = office_sig_hex
             rfile.write_text(json.dumps(on_disk, indent=2))
+            # Only once the write landed: a swallowed OSError (disk full, EIO)
+            # used to leave the flag true with no signature on disk, and the
+            # weekly job logged success for a row that is never listed
+            # (bundle review round 2).
+            office_signed = signing
         except OSError:
             pass
         # Mirror committed lineage onto the persisted receipt (design §2.4).

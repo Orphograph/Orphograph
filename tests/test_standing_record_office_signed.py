@@ -298,3 +298,42 @@ def test_a_normal_listing_checks_one_signature_per_row_shown(counted):
     assert len(rows) == 16
     assert rows[0]["receipt_id"] == "unit000000000029"
     assert counted["n"] == 16
+
+
+# The receipt rewrite that stores the office signature fails inside the
+# server, and only that write: the engine's first write of receipt.json has no
+# "kind": "folder" yet, so it goes through.
+_REWRITE_FAULT = (
+    "import errno, pathlib\n"
+    "_real = pathlib.Path.write_text\n"
+    "def _write_text(self, data, *a, **k):\n"
+    "    if self.name == 'receipt.json' and '\"kind\": \"folder\"' in str(data):\n"
+    "        raise OSError(errno.ENOSPC, 'No space left on device (test fault)')\n"
+    "    return _real(self, data, *a, **k)\n"
+    "pathlib.Path.write_text = _write_text\n")
+
+
+@pytest.mark.parametrize("fault", [False, True], ids=["control-write-ok", "rewrite-fails"])
+def test_office_signed_is_answered_only_when_the_signature_is_on_disk(tmp_path, fault):
+    """Bundle review round 2: 2139219 set office_signed before the receipt
+    rewrite, whose OSError is swallowed, so a failed write (disk full, EIO)
+    still answered office_signed: true with no signature on disk. The weekly
+    job reads that flag as its only alarm for a run the Standing Record will
+    never list, so it logged success. The flag now follows the write."""
+    data = tmp_path / "data"
+    data.mkdir()
+    env = {"ORPHO_OFFICE_PUBLIC_KEYS": _public_hex(OFFICE_SEED)}
+    if fault:
+        hook = tmp_path / "fault"
+        hook.mkdir()
+        (hook / "sitecustomize.py").write_text(_REWRITE_FAULT)
+        env.update(PYTHONPATH=str(hook), PYTHONDONTWRITEBYTECODE="1")
+    for base in _srv.server_processes(data, stub_calendars=True, **env):
+        m = _manifest(f"rewrite-{fault}")
+        label = "weekly-2026-10-11-17-artifacts"
+        code, rec = _folder(base, m, label, _sign(OFFICE_SEED, label, m["root_hex"]))
+        rec = _srv.ok_json(code, rec)
+        assert rec["calendars_ok"] > 0, rec
+        on_disk = json.loads((data / "receipts" / rec["receipt_id"] / "receipt.json").read_text())
+        assert (standing_record.FIELD in on_disk) is (not fault), "the fault did not act as planned"
+        assert rec.get("office_signed") is (None if fault else True), rec

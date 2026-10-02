@@ -408,6 +408,10 @@ def test_confirming_after_unsubscribing_adds_nothing(server):
     assert pressed[0] == 200, pressed[1]
     page = pressed[1].decode()
     assert "unsubscribed" in page.lower() and "mailing list" not in page.lower(), page
+    # Review round 2 (LOW, reproduced): the page said "sign up again from the
+    # site", which can never work: suppression is permanent and a suppressed
+    # address gets no confirmation email.
+    assert "sign up" not in " ".join(page.lower().split()), page
     assert not [r for r in _rows(data_dir) if r.get("event") == "confirmed" and r.get("email") == email]
 
 
