@@ -109,7 +109,15 @@ _LEDGER_FILE = "x402_ledger.jsonl"
 
 def _data_dir() -> Path:
     # Re-read the env each call: tests point ORPHO_DATA_DIR at temp dirs.
-    return Path(os.environ.get("ORPHO_DATA_DIR", "."))
+    # Without the env var, the same rule as engine.DATA_DIR (ROOT/data when it
+    # exists, else ROOT) -- never the process's working directory, where a
+    # charge ledger could land outside the persistent volume and be lost on
+    # the next deploy (drift audit, 2026-10-01; production sets the var).
+    env = os.environ.get("ORPHO_DATA_DIR")
+    if env:
+        return Path(env)
+    root = Path(__file__).resolve().parent.parent
+    return root / "data" if (root / "data").is_dir() else root
 
 
 def configured() -> bool:
@@ -180,6 +188,17 @@ def build_payment_required_body(resource_url: str, *, error: str | None = None) 
         "accepts": [build_payment_requirements(resource_url)],
         "extensions": None,
     }
+
+
+def encode_payment_required_header(payment_required: dict) -> str:
+    """The PAYMENT-REQUIRED header value: the PaymentRequired object as
+    base64 JSON, None fields left out, exactly as the reference server builds
+    it (python/x402/http/utils.py encode_payment_required_header). A v2
+    client reads the requirements only from this header; it used to carry
+    the literal "true", and no real v2 client could have paid (found
+    2026-10-02 reading the reference client, x402_http_client_base.py)."""
+    clean = {k: v for k, v in payment_required.items() if v is not None}
+    return base64.b64encode(json.dumps(clean, separators=(",", ":")).encode()).decode()
 
 
 # ── parsing the agent's retry (agent -> server) ─────────────────────────────

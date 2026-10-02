@@ -3491,7 +3491,12 @@ class Handler(BaseHTTPRequestHandler):
         if (not pack_consumed and not subscription_active and ln_payment_hash is None
                 and x402_payload is None):
             allowed, retry_after = _anchor_limiter.check(self._client_key())
-            if not allowed and x402.configured():
+            # Our own pages' fetches carry Sec-Fetch-Site: same-origin (the
+            # browser adds it); they keep the classic 429 every page handles,
+            # as the reference middleware shows browsers a paywall page rather
+            # than the 402. An agent or SDK gets the x402 challenge.
+            same_origin_page = self.headers.get("Sec-Fetch-Site", "").strip().lower() == "same-origin"
+            if not allowed and x402.configured() and not same_origin_page:
                 # x402 challenge: agents past the free tier can pay cents in
                 # USDC for one anchor, no account, no invoice round-trip —
                 # the standard the strategic plan is built around. Tried
@@ -3500,10 +3505,25 @@ class Handler(BaseHTTPRequestHandler):
                 # config), so it never fails the way an invoice-creation
                 # call can.
                 resource_url = f"{os.environ.get('SITE_URL', 'https://orphograph.com').rstrip('/')}/api/anchor"
-                body = json.dumps(x402.build_payment_required_body(resource_url)).encode("utf-8")
+                required = x402.build_payment_required_body(
+                    resource_url, error="free-tier limit reached: pay for this anchor with x402, "
+                                        "or wait for the limit to reset")
+                retry_seconds = int(retry_after) + 1
+                # The body is the PaymentRequired object plus what the classic
+                # 429 says, so a caller that does not speak x402 (an SDK, a
+                # script) still learns the limit and when to retry.
+                body = json.dumps({
+                    **required,
+                    "limit_per_day": ANCHOR_RATE_CAPACITY,
+                    "retry_after_seconds": retry_seconds,
+                    "hint": "Buy a Pack or subscribe to skip rate limits, or pay for this "
+                            "one anchor with x402 (USDC, test network for now).",
+                }).encode("utf-8")
                 self.send_response(402)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
-                self.send_header(x402.PAYMENT_REQUIRED_HEADER, "true")
+                self.send_header(x402.PAYMENT_REQUIRED_HEADER, x402.encode_payment_required_header(required))
+                self.send_header("Retry-After", str(retry_seconds))
+                self.send_header("Cache-Control", "no-store")
                 self.send_header("Content-Length", str(len(body)))
                 _security_headers(self)
                 self.end_headers()

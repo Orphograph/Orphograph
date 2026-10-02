@@ -178,9 +178,17 @@
       above &mdash; <code>bitcoin_timestamp_receipt</code> and <code>verify_receipt</code>.
       Verification stays free with the open tools; the paid piece is an agent doing the office
       work for another agent.</li>
+      <li><strong>Or pay over plain HTTP, on the test network today.</strong> With
+      <a href="https://www.x402.org/">x402</a> (USDC on Base), an agent past the free tier gets a
+      <code>402</code> from <code>POST /api/anchor</code> whose <code>PAYMENT-REQUIRED</code> header
+      carries the price and the pay-to address; it signs an EIP-3009 USDC authorization for that
+      exact amount and resends the same request with a <code>PAYMENT-SIGNATURE</code> header; the
+      answer is the receipt plus a <code>PAYMENT-RESPONSE</code> header carrying the settlement.
+      One authorization buys one anchor. It runs on <strong>Base Sepolia, the test network</strong>,
+      while the first real payments are verified: test USDC has no value, and mainnet opens later.</li>
       <li><strong>The proof stays on Bitcoin, not on whoever hosts the marketplace.</strong> Once Bitcoin has attested it, if the
       marketplace or the chain it settles on goes away, the receipt still points at a Bitcoin
-      block. Same doctrine as the five calendars: the office and the platform are both allowed
+      block. Same doctrine as the calendars: the office and the platform are both allowed
       to disappear.</li>
     </ul>
   </section>

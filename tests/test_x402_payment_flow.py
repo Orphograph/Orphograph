@@ -143,7 +143,19 @@ def test_past_free_tier_returns_x402_challenge(server):
     _exhaust_free_tier(server)
     s, h, b = _post(server, "/api/anchor", {"hash_hex": HASH_B})
     assert s == 402, b
-    assert h.get(x402_const.PAYMENT_REQUIRED_HEADER) == "true"
+    # The header IS the requirements, base64 JSON, exactly as the reference
+    # server sends it (x402 http/utils.py encode_payment_required_header): a
+    # v2 client reads the requirements only from here. It used to say "true",
+    # which this test pinned, and no real v2 client could have paid.
+    hdr = h.get(x402_const.PAYMENT_REQUIRED_HEADER)
+    decoded = json.loads(base64.b64decode(hdr))
+    assert decoded["x402Version"] == 2 and decoded["accepts"][0]["payTo"] == PAY_TO
+    for field in ("scheme", "network", "asset", "amount", "payTo", "maxTimeoutSeconds"):
+        assert field in decoded["accepts"][0], field
+    assert None not in decoded.values()
+    # A caller that does not speak x402 still gets the classic answer's facts.
+    assert h.get("Retry-After") and h.get("Cache-Control") == "no-store"
+    assert b["retry_after_seconds"] >= 1 and b["limit_per_day"] >= 1 and "Pack" in b["hint"]
     assert b["x402Version"] == 2
     req = b["accepts"][0]
     assert req["scheme"] == "exact"
@@ -1180,3 +1192,54 @@ def test_an_unarmed_rail_ignores_a_payment_header_and_calls_no_facilitator(unarm
                         _payment_headers(nonce="u2"))
     assert s2 == 429, b2                     # past the free tier: the classic 429
     assert "accepts" not in b2               # and no x402 challenge while unarmed
+
+
+def _health(base: str) -> dict:
+    status, raw, _h = _srv.request(base, "/api/health", "GET", None, {})
+    assert status == 200
+    return json.loads(raw)
+
+
+def test_health_says_whether_x402_is_armed_and_on_which_network(server, unconfigured_server):
+    """Arming is a secret on the server, and secrets cannot be read from
+    outside; health is the one observable proof that the rail is (or is not)
+    live, and on which network. Testnet first: Base Sepolia."""
+    assert _health(server)["x402"] == {"armed": True, "network": "eip155:84532"}
+    assert _health(unconfigured_server)["x402"] == {"armed": False, "network": None}
+
+
+def test_x402_ledgers_never_fall_back_to_the_working_directory(tmp_path, monkeypatch):
+    """Without ORPHO_DATA_DIR the charge ledger used to go to the process's
+    working directory, which in a container can sit outside the persistent
+    volume: a deploy would then lose the record of money taken. It follows
+    engine.DATA_DIR's rule instead (production sets the variable)."""
+    monkeypatch.delenv("ORPHO_DATA_DIR", raising=False)
+    monkeypatch.chdir(tmp_path)
+    d = x402_const._data_dir()
+    assert d.is_absolute() and tmp_path not in [d, *d.parents], d
+    repo = Path(__file__).resolve().parent.parent
+    assert d in (repo / "data", repo)
+
+
+def test_the_agent_docs_say_x402_is_testnet_and_drop_the_five_calendars_claim():
+    web = Path(__file__).resolve().parent.parent / "web"
+    agents = (web / "docs" / "agents.html").read_text()
+    assert "Base Sepolia" in agents and "test network" in agents
+    assert "five calendars" not in agents
+    llms = (web / "llms.txt").read_text()
+    assert "x402" in llms and "TEST network" in llms
+
+
+
+def test_our_own_pages_still_get_the_classic_429_past_the_free_tier(server):
+    """A browser on orphograph.com marks its fetches Sec-Fetch-Site:
+    same-origin. Those keep the classic 429 every page already handles (the
+    reference middleware likewise shows browsers a paywall page, not the
+    402): arming x402 must not break the site for people. Anyone else, an
+    agent or an SDK, gets the x402 challenge."""
+    _exhaust_free_tier(server)
+    s, h, b = _post(server, "/api/anchor", {"hash_hex": HASH_B}, {"Sec-Fetch-Site": "same-origin"})
+    assert s == 429, b
+    assert "accepts" not in b and x402_const.PAYMENT_REQUIRED_HEADER not in h
+    s2, _h2, b2 = _post(server, "/api/anchor", {"hash_hex": HASH_B})
+    assert s2 == 402, b2

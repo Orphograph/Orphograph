@@ -14,8 +14,12 @@ twice.
 ## Protocol
 
     POST /api/anchor (past free tier, x402 armed)
-                                  → 402 PaymentRequired (JSON body: price,
-                                    asset, network, pay-to address)
+                                  → 402 PaymentRequired: the PAYMENT-REQUIRED
+                                    header is the requirements as base64 JSON
+                                    (price, asset, network, pay-to address),
+                                    exactly as the reference server sends it;
+                                    the JSON body repeats them plus the classic
+                                    limit fields and Retry-After
     agent signs an EIP-3009 authorization for that exact amount
     POST /api/anchor
       PAYMENT-SIGNATURE: <base64 PaymentPayload>   (or legacy X-PAYMENT)
@@ -120,6 +124,15 @@ resubmitted once calendars answer, goes straight to another anchor attempt on th
 collected — no second settle() — and after that it is a replay like any
 other. Both facts live on disk: the charge in `x402_ledger.jsonl`, the
 delivery as the claim in `x402_claimed.jsonl`.
+
+Who gets the 402: anyone past the free tier except a browser on our own
+pages. Those fetches carry `Sec-Fetch-Site: same-origin`, which the browser
+adds itself, and they keep the classic 429 every page already handles (the
+reference middleware likewise shows browsers a paywall page, not the 402).
+Sending that header only opts a caller out of paying. Before 2026-10-02 the
+header carried the literal "true", which no v2 client can read: a v2 client
+takes the requirements from the header only, and falls back to the body for
+v1 alone (`x402_http_client_base.py`).
 
 ## Custody posture (stated plainly)
 
