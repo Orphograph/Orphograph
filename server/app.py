@@ -686,6 +686,32 @@ def _x402_had_earlier_attempt(ident: str) -> bool:
         return True   # unknown history reads as the careful case
 
 
+# Callers that get the classic 429 past the free tier even with x402 armed.
+# Our own pages: a browser marks its fetches Sec-Fetch-Site: same-origin, and
+# one that sends no Fetch Metadata still sends Origin on a POST (the reference
+# middleware likewise shows browsers a paywall page, not the 402). Our own
+# shipped clients, by User-Agent: USB capture, the watch folder, the
+# marketplace skill, the MCP server, the SDKs, the ACP seller and the GitHub
+# Action all branch on 429, and copies already installed cannot be updated
+# (review of 9b909c1: USB capture marked every file failed against the 402).
+# Claiming one of these only opts a caller out of paying.
+_X402_FIRST_PARTY_UA = ("orphograph-usb/", "orphograph-watch-folder/", "orphograph-skill/",
+                        "orphographmcp/", "orphograph-python-sdk/", "orphograph-node/",
+                        "orphographacp/", "orphograph-github-action/")
+
+
+def _x402_classic_caller(handler: BaseHTTPRequestHandler) -> bool:
+    fetch_site = handler.headers.get("Sec-Fetch-Site", "").strip().lower()
+    if fetch_site == "same-origin":
+        return True
+    if not fetch_site:
+        origin = handler.headers.get("Origin", "").strip().rstrip("/").lower()
+        site = os.environ.get("SITE_URL", "https://orphograph.com").strip().rstrip("/").lower()
+        if origin and origin == site:
+            return True
+    return handler.headers.get("User-Agent", "").strip().lower().startswith(_X402_FIRST_PARTY_UA)
+
+
 def _reject_private(handler: BaseHTTPRequestHandler, pack_consumed: bool,
                     pack_token: str | None) -> None:
     """Decline an anchor that asked for `private` we cannot grant.
@@ -3491,7 +3517,10 @@ class Handler(BaseHTTPRequestHandler):
         if (not pack_consumed and not subscription_active and ln_payment_hash is None
                 and x402_payload is None):
             allowed, retry_after = _anchor_limiter.check(self._client_key())
-            if not allowed and x402.configured():
+            # Our own pages and our own shipped clients keep the classic 429
+            # they handle; an agent or any other client gets the x402
+            # challenge (see _x402_classic_caller).
+            if not allowed and x402.configured() and not _x402_classic_caller(self):
                 # x402 challenge: agents past the free tier can pay cents in
                 # USDC for one anchor, no account, no invoice round-trip —
                 # the standard the strategic plan is built around. Tried
@@ -3500,10 +3529,25 @@ class Handler(BaseHTTPRequestHandler):
                 # config), so it never fails the way an invoice-creation
                 # call can.
                 resource_url = f"{os.environ.get('SITE_URL', 'https://orphograph.com').rstrip('/')}/api/anchor"
-                body = json.dumps(x402.build_payment_required_body(resource_url)).encode("utf-8")
+                required = x402.build_payment_required_body(
+                    resource_url, error="free-tier limit reached: pay for this anchor with x402, "
+                                        "or wait for the limit to reset")
+                retry_seconds = int(retry_after) + 1
+                # The body is the PaymentRequired object plus what the classic
+                # 429 says, so a caller that does not speak x402 (an SDK, a
+                # script) still learns the limit and when to retry.
+                body = json.dumps({
+                    **required,
+                    "limit_per_day": ANCHOR_RATE_CAPACITY,
+                    "retry_after_seconds": retry_seconds,
+                    "hint": "Buy a Pack or subscribe to skip rate limits, or pay for this "
+                            "one anchor with x402 (USDC, test network for now).",
+                }).encode("utf-8")
                 self.send_response(402)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
-                self.send_header(x402.PAYMENT_REQUIRED_HEADER, "true")
+                self.send_header(x402.PAYMENT_REQUIRED_HEADER, x402.encode_payment_required_header(required))
+                self.send_header("Retry-After", str(retry_seconds))
+                self.send_header("Cache-Control", "no-store")
                 self.send_header("Content-Length", str(len(body)))
                 _security_headers(self)
                 self.end_headers()
@@ -7099,6 +7143,12 @@ def main() -> int:
     _start_upgrade_scheduler()
     _start_cadence_scheduler()
     _start_funnel_digest_scheduler()
+    # A pay-to address with an asset whose EIP-712 domain is unknown leaves the
+    # rail unarmed (no facilitator could verify it); say so, or the founder sees
+    # only `x402.armed: false` in /api/health with no reason.
+    if os.environ.get("ORPHO_X402_PAY_TO_ADDRESS", "").strip() and x402.asset_domain() is None:
+        sys.stderr.write("[x402] NOT ARMED: ORPHO_X402_ASSET has no known EIP-712 domain; "
+                         "set ORPHO_X402_ASSET_NAME and ORPHO_X402_ASSET_VERSION\n")
     # No anchor is in flight yet, so an x402 claim standing with no delivery
     # row is a payment a crash stranded; release it so its payload can redeem.
     try:
