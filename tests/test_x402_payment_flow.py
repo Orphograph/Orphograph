@@ -1243,3 +1243,64 @@ def test_our_own_pages_still_get_the_classic_429_past_the_free_tier(server):
     assert "accepts" not in b and x402_const.PAYMENT_REQUIRED_HEADER not in h
     s2, _h2, b2 = _post(server, "/api/anchor", {"hash_hex": HASH_B})
     assert s2 == 402, b2
+
+
+def test_requirements_carry_the_assets_eip712_domain(server):
+    """Review of 9b909c1 (HIGH, reproduced with the reference facilitator
+    code). The exact-EVM facilitators reject requirements without the
+    asset's EIP-712 domain (extra.name / extra.version) before they look at
+    the signature (missing_eip712_domain), and the reference TS client
+    refuses to sign without it. Base Sepolia USDC is name "USDC", version
+    "2" (reference mechanisms/evm constants)."""
+    _exhaust_free_tier(server)
+    s, h, b = _post(server, "/api/anchor", {"hash_hex": HASH_B})
+    assert s == 402, b
+    for accepts in (json.loads(base64.b64decode(h[x402_const.PAYMENT_REQUIRED_HEADER]))["accepts"], b["accepts"]):
+        assert accepts[0]["extra"].get("name") == "USDC", accepts[0]["extra"]
+        assert accepts[0]["extra"].get("version") == "2", accepts[0]["extra"]
+    req = x402_const.build_payment_requirements("https://orphograph.com/api/anchor")
+    assert req["extra"]["name"] == "USDC" and req["extra"]["version"] == "2", "what /verify and /settle are sent"
+
+
+def test_an_unknown_asset_without_a_domain_does_not_arm_the_rail(monkeypatch):
+    """A rail that advertises requirements no facilitator can verify is
+    worse than no rail: with an asset whose EIP-712 domain is unknown and
+    not given, the rail stays unarmed."""
+    monkeypatch.setenv("ORPHO_X402_PAY_TO_ADDRESS", PAY_TO)
+    monkeypatch.delenv("ORPHO_X402_BACKEND", raising=False)
+    monkeypatch.setenv("ORPHO_X402_ASSET", "0x" + "12" * 20)
+    monkeypatch.delenv("ORPHO_X402_ASSET_NAME", raising=False)
+    monkeypatch.delenv("ORPHO_X402_ASSET_VERSION", raising=False)
+    assert x402_const.configured() is False
+    monkeypatch.setenv("ORPHO_X402_ASSET_NAME", "Some Token")
+    monkeypatch.setenv("ORPHO_X402_ASSET_VERSION", "1")
+    assert x402_const.configured() is True
+    assert x402_const.build_payment_requirements("u")["extra"]["name"] == "Some Token"
+
+
+@pytest.mark.parametrize("headers", [
+    {"Origin": "https://orphograph.com"},                 # a browser that sends no Fetch Metadata
+    {"User-Agent": "orphograph-usb/0.1"},
+    {"User-Agent": "orphograph-watch-folder/1.0"},
+    {"User-Agent": "orphograph-skill/0.1"},
+    {"User-Agent": "OrphographMCP/0.1 (+https://orphograph.com/mcp.html)"},
+    {"User-Agent": "orphograph-python-sdk/0.1.1"},
+    {"User-Agent": "orphograph-node/0.1.0"},
+    {"User-Agent": "OrphographACP/1.0 (+https://orphograph.com)"},
+])
+def test_our_own_clients_and_pages_keep_the_classic_429(server, headers):
+    """Review of 9b909c1. The repo's shipped clients branch on 429 (USB
+    capture marked every file failed against the 402), and copies already
+    installed cannot be updated; a browser without Fetch Metadata still
+    sends Origin on a POST. All of them keep the classic 429."""
+    _exhaust_free_tier(server)
+    s, h, b = _post(server, "/api/anchor", {"hash_hex": HASH_B}, headers)
+    assert s == 429, (headers, s, b)
+    assert x402_const.PAYMENT_REQUIRED_HEADER not in h
+
+
+def test_a_stranger_origin_or_an_unknown_client_gets_the_402(server):
+    _exhaust_free_tier(server)
+    for headers in ({"Origin": "https://evil.example"}, {"User-Agent": "python-httpx/0.27"}, {}):
+        s, _h, b = _post(server, "/api/anchor", {"hash_hex": HASH_B}, headers)
+        assert s == 402, (headers, s, b)

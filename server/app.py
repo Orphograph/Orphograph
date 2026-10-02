@@ -686,6 +686,32 @@ def _x402_had_earlier_attempt(ident: str) -> bool:
         return True   # unknown history reads as the careful case
 
 
+# Callers that get the classic 429 past the free tier even with x402 armed.
+# Our own pages: a browser marks its fetches Sec-Fetch-Site: same-origin, and
+# one that sends no Fetch Metadata still sends Origin on a POST (the reference
+# middleware likewise shows browsers a paywall page, not the 402). Our own
+# shipped clients, by User-Agent: USB capture, the watch folder, the
+# marketplace skill, the MCP server, the SDKs and the ACP seller all branch
+# on 429, and copies already installed cannot be updated (review of 9b909c1:
+# USB capture marked every file failed against the 402). Claiming one of
+# these only opts a caller out of paying.
+_X402_FIRST_PARTY_UA = ("orphograph-usb/", "orphograph-watch-folder/", "orphograph-skill/",
+                        "orphographmcp/", "orphograph-python-sdk/", "orphograph-node/",
+                        "orphographacp/")
+
+
+def _x402_classic_caller(handler: BaseHTTPRequestHandler) -> bool:
+    fetch_site = handler.headers.get("Sec-Fetch-Site", "").strip().lower()
+    if fetch_site == "same-origin":
+        return True
+    if not fetch_site:
+        origin = handler.headers.get("Origin", "").strip().rstrip("/").lower()
+        site = os.environ.get("SITE_URL", "https://orphograph.com").strip().rstrip("/").lower()
+        if origin and origin == site:
+            return True
+    return handler.headers.get("User-Agent", "").strip().lower().startswith(_X402_FIRST_PARTY_UA)
+
+
 def _reject_private(handler: BaseHTTPRequestHandler, pack_consumed: bool,
                     pack_token: str | None) -> None:
     """Decline an anchor that asked for `private` we cannot grant.
@@ -3491,12 +3517,10 @@ class Handler(BaseHTTPRequestHandler):
         if (not pack_consumed and not subscription_active and ln_payment_hash is None
                 and x402_payload is None):
             allowed, retry_after = _anchor_limiter.check(self._client_key())
-            # Our own pages' fetches carry Sec-Fetch-Site: same-origin (the
-            # browser adds it); they keep the classic 429 every page handles,
-            # as the reference middleware shows browsers a paywall page rather
-            # than the 402. An agent or SDK gets the x402 challenge.
-            same_origin_page = self.headers.get("Sec-Fetch-Site", "").strip().lower() == "same-origin"
-            if not allowed and x402.configured() and not same_origin_page:
+            # Our own pages and our own shipped clients keep the classic 429
+            # they handle; an agent or any other client gets the x402
+            # challenge (see _x402_classic_caller).
+            if not allowed and x402.configured() and not _x402_classic_caller(self):
                 # x402 challenge: agents past the free tier can pay cents in
                 # USDC for one anchor, no account, no invoice round-trip —
                 # the standard the strategic plan is built around. Tried

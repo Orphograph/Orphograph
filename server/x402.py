@@ -103,6 +103,18 @@ NETWORK_BASE_MAINNET = "eip155:8453"
 USDC_BASE_SEPOLIA = "0x036CbD53842c5426634e7929541eC2318f3dCF7e"
 USDC_BASE_MAINNET = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"  # not used until mainnet is approved
 
+# The EIP-712 domain (name, version) of each known asset, as the reference
+# implementation lists them (python/x402/mechanisms/evm constants). The
+# exact-EVM facilitators reject requirements without extra.name and
+# extra.version before they look at the signature (missing_eip712_domain),
+# and the reference TS client will not sign without them (review of
+# 9b909c1, 2026-10-02: reproduced against the reference facilitator code).
+# Another asset needs ORPHO_X402_ASSET_NAME and ORPHO_X402_ASSET_VERSION.
+_EIP712_DOMAINS = {
+    USDC_BASE_SEPOLIA.lower(): ("USDC", "2"),
+    USDC_BASE_MAINNET.lower(): ("USD Coin", "2"),
+}
+
 MAX_TIMEOUT_SECONDS = 60
 _LEDGER_FILE = "x402_ledger.jsonl"
 
@@ -130,7 +142,9 @@ def configured() -> bool:
     backend = os.environ.get("ORPHO_X402_BACKEND", "").strip().lower()
     if backend == "mock":
         return os.environ.get("ORPHO_X402_ALLOW_MOCK") == "1"
-    return bool(os.environ.get("ORPHO_X402_PAY_TO_ADDRESS", "").strip())
+    # Fail closed: requirements without the asset's EIP-712 domain cannot be
+    # verified by any facilitator, so such a rail is not armed at all.
+    return bool(os.environ.get("ORPHO_X402_PAY_TO_ADDRESS", "").strip()) and asset_domain() is not None
 
 
 def network() -> str:
@@ -139,6 +153,15 @@ def network() -> str:
 
 def asset() -> str:
     return os.environ.get("ORPHO_X402_ASSET", USDC_BASE_SEPOLIA).strip()
+
+
+def asset_domain():
+    """(name, version) of the asset's EIP-712 domain, or None if unknown."""
+    name = os.environ.get("ORPHO_X402_ASSET_NAME", "").strip()
+    version = os.environ.get("ORPHO_X402_ASSET_VERSION", "").strip()
+    if name and version:
+        return name, version
+    return _EIP712_DOMAINS.get(asset().lower())
 
 
 def facilitator_url() -> str:
@@ -174,7 +197,8 @@ def build_payment_requirements(resource_url: str) -> dict:
         "amount": price_atomic(),
         "payTo": pay_to(),
         "maxTimeoutSeconds": MAX_TIMEOUT_SECONDS,
-        "extra": {"resource": resource_url},
+        "extra": {"resource": resource_url,
+                  **(dict(zip(("name", "version"), asset_domain())) if asset_domain() else {})},
     }
 
 
