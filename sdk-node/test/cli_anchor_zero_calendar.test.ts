@@ -111,9 +111,15 @@ test("a stray positional (a URL meant for --server) exits 2 before any request",
 });
 
 // Round 2: a value flag with no value fell through to the live default too.
-for (const argv of [["--server"], ["--server="], ["--server", ""], ["--server-url", "--label", "x"],
-                    ["--server", "--server-url", "STUB"], ["--server=", "--server-url=STUB"],
-                    ["--server", "STUB", "--server-url", "http://127.0.0.1:9"]]) {
+// Round 6: each row names the refusal it expects, so the http(s) check
+// cannot stand in for the empty-value or two-server checks.
+const NEEDS_VALUE = /needs a value/;
+for (const [argv, refusal] of [
+  [["--server"], NEEDS_VALUE], [["--server="], NEEDS_VALUE], [["--server", ""], NEEDS_VALUE],
+  [["--server-url", "--label", "x"], NEEDS_VALUE], [["--server", "--server-url", "STUB"], NEEDS_VALUE],
+  [["--server=", "--server-url=STUB"], NEEDS_VALUE],
+  [["--server", "STUB", "--server-url", "http://127.0.0.1:9"], /name different servers/],
+] as const) {
   test(`a server flag with no usable value (${JSON.stringify(argv)}) exits 2 before any request`, async () => {
     let requests = 0;
     const server = createServer((req, res) => { requests += 1; res.writeHead(500); res.end(); });
@@ -131,6 +137,7 @@ for (const argv of [["--server"], ["--server="], ["--server", ""], ["--server-ur
       });
       assert.equal(run.code, 2, run.stderr);
       assert.equal(requests, 0);
+      assert.match(run.stderr, refusal as RegExp);
       assert.doesNotMatch(run.stderr, /egress blocked/);
     } finally {
       server.close();
@@ -274,6 +281,18 @@ for (const [name, argvFor, refusal] of [
     assert.doesNotMatch(run.stderr, /egress blocked/);
   });
 }
+
+test("a --server with surrounding spaces is that server; an unused ORPHO_SERVER_URL is not read", async () => {
+  // Round 6: both used to exit 2 in Node while the Python CLI accepted them.
+  const spaced = await runWithStub((s) => ["anchor", folderWithOneFile(), "--server", ` ${s} `]);
+  assert.equal(spaced.code, 0, spaced.stderr);
+  assert.equal(spaced.urls.length, 1);
+  const overridden = await runWithStub((s) => ["anchor", folderWithOneFile(), "--server", s], () => ({ ORPHO_SERVER_URL: "localhost:9" }));
+  assert.equal(overridden.code, 0, overridden.stderr);
+  assert.equal(overridden.urls.length, 1);
+  const help = await runWithStub(() => ["--help"], () => ({ ORPHO_SERVER_URL: "localhost:9" }));
+  assert.equal(help.code, 0, help.stderr);
+});
 
 test("ORPHO_SERVER_URL without a scheme exits 2 before any request", async () => {
   const run = await runWithStub(() => ["anchor", folderWithOneFile()], (s) => ({ ORPHO_SERVER_URL: s.replace("http://", "") }));

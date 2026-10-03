@@ -109,8 +109,10 @@ Flags:
 
 - `--server URL` (or `--server-url URL`, or environment variable
   `ORPHO_SERVER_URL`) overrides the default `https://orphograph.com`
-  endpoint. It must start with `http://` or `https://`; an empty or other
-  value is an error, not the default.
+  endpoint. It must start with `http://` or `https://`. An empty `--server`
+  or `--server-url` is an error, not the default; an empty or blank
+  `ORPHO_SERVER_URL` counts as unset. The variable is not read when a flag
+  names the server.
 - `--api-key KEY` (or environment variable `ORPHO_API_KEY`) attaches an
   API key as the `X-Orpho-Api-Key` request header. An explicit empty
   `--api-key ""` sends no key.

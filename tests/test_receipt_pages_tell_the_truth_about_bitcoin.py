@@ -469,12 +469,16 @@ const fetch = async (u) => String(u).startsWith("/api/me")
   ? { ok: false, status: 401, json: async () => ({}) } : { ok: true, status: 200, json: async () => body };
 const window = { location: { pathname: path, search: "", hash: "", href: "http://127.0.0.1" + path, origin: "http://127.0.0.1", replace() {} },
   print() {}, addEventListener() {} };
-// Page timers are queued and run after the first render (round 5: a line
-// rewritten from a timer was invisible when timers were dropped).
-const timers = [];
+// Page timers are queued, then run until none is left (round 5: a line
+// rewritten from a timer was invisible when timers were dropped). Cleared
+// timers do not run; a timer that throws, or a queue that never drains, is a
+// failure (round 6).
+const timers = new Map();
+let nextTimer = 1;
+const arm = (f) => { const id = nextTimer++; timers.set(id, f); return id; };
 const ctx = { document, fetch, window, location: window.location, navigator: {}, console,
-  setTimeout: (f) => { timers.push(f); return timers.length; }, clearTimeout() {},
-  setInterval: (f) => { timers.push(f); return timers.length; }, clearInterval() {},
+  setTimeout: arm, clearTimeout: (id) => timers.delete(id),
+  setInterval: arm, clearInterval: (id) => timers.delete(id),
   URLSearchParams, Intl, Date, encodeURIComponent, JSON, Math, Number, String, isNaN, Promise, Array, Object, Set, Map,
   TextEncoder, crypto: {}, history: { replaceState() {} } };
 ctx.globalThis = ctx; ctx.self = ctx;
@@ -482,18 +486,27 @@ vm.createContext(ctx);
 vm.runInContext(fs.readFileSync(file, "utf8"), ctx, { filename: file });
 await new Promise((r) => setImmediate(r));
 await new Promise((r) => setTimeout(r, 30));
-for (let round = 0; round < 3 && timers.length; round++) {
-  for (const f of timers.splice(0)) { try { f(); } catch (_) { /* a print or button reset */ } }
-  await new Promise((r) => setTimeout(r, 10));
+function snapshot() {
+  const out = {};
+  for (const k of ["#status", "#btc", "#verdict-headline", "#verdict-sub", "#fact-btc", "#explorer-grid"]) {
+    if (reg.has(k)) out[k] = reg.get(k).textContent;
+  }
+  const m = /Bitcoin chain(.*?)(How verification works|$)/.exec(out["#explorer-grid"] || "");
+  out["card"] = m ? m[1] : null;
+  delete out["#explorer-grid"];
+  return out;
 }
-const out = {};
-for (const k of ["#status", "#btc", "#verdict-headline", "#verdict-sub", "#fact-btc", "#explorer-grid"]) {
-  if (reg.has(k)) out[k] = reg.get(k).textContent;
+// What a browser shows first, and after every timer has run.
+const first = snapshot();
+let rounds = 0;
+while (timers.size) {
+  if (++rounds > 50) throw new Error("page timers never drain");
+  const due = [...timers];
+  timers.clear();
+  for (const [, f] of due) f();
+  await new Promise((r) => setTimeout(r, 5));
 }
-const m = /Bitcoin chain(.*?)(How verification works|$)/.exec(out["#explorer-grid"] || "");
-out["card"] = m ? m[1] : null;
-delete out["#explorer-grid"];
-process.stdout.write(JSON.stringify(out));
+process.stdout.write(JSON.stringify({ first, settled: snapshot() }));
 """
 
 _SAYS_NONE = re.compile(r"no bitcoin commitment|never be pinned|^none", re.I)
@@ -527,14 +540,20 @@ def test_every_bitcoin_line_of_the_page_agrees(tmp_path, page, calendars_ok):
            "calendars_total": 5, "calendars_submitted_total": 5}
     if calendars_ok is not _MISSING:
         rec["calendars_ok"] = calendars_ok
-    lines = _page_lines(tmp_path, page, rec)
+    both = _page_lines(tmp_path, page, rec)
     expected = {"#status", "#btc", "card"} | ({"#verdict-headline", "#verdict-sub", "#fact-btc"} if page == "receipt.js" else set())
-    assert expected <= {k for k, v in lines.items() if v}, lines
     none = calendars_ok == 0        # only an explicit integer 0 ("0" != 0 in Python too)
-    for key in expected:
-        text = lines[key]
-        says_none, says_pending = (_SUB_NONE, _SUB_PENDING) if key == "#verdict-sub" else (_SAYS_NONE, _SAYS_PENDING)
-        if none:
-            assert says_none.search(text) and not says_pending.search(text), (key, text)
-        else:
-            assert says_pending.search(text) and not says_none.search(text), (key, text)
+    for when, lines in both.items():           # first paint, then after timers
+        assert expected <= {k for k, v in lines.items() if v}, (when, lines)
+        for key in expected:
+            text = lines[key]
+            # The second line has its own wording to match; what it must NOT
+            # say is checked against both vocabularies (round 6).
+            says_none = _SUB_NONE if key == "#verdict-sub" else _SAYS_NONE
+            says_pending = _SUB_PENDING if key == "#verdict-sub" else _SAYS_PENDING
+            if none:
+                assert says_none.search(text), (when, key, text)
+                assert not (_SAYS_PENDING.search(text) or _SUB_PENDING.search(text)), (when, key, text)
+            else:
+                assert says_pending.search(text), (when, key, text)
+                assert not (_SAYS_NONE.search(text) or _SUB_NONE.search(text)), (when, key, text)

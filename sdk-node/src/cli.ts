@@ -117,10 +117,11 @@ function sameServer(a: string, b: string): boolean {
 // ORPHO_SERVER_URL is the Python CLI's environment form, and both packages
 // install a command named `orphograph`; ignoring it sent a shell set up for
 // one CLI to the live default with the other. Empty means unset.
+// The value that will be used: a flag if one is given, else ORPHO_SERVER_URL
+// (as in the Python CLI, the variable is not read when a flag names the server).
 function badServer(flags: Record<string, string | boolean>): string | undefined {
-  for (const v of [flags["server"], flags["server-url"]]) {
-    if (typeof v === "string" && !SERVER_URL.test(v)) return v;
-  }
+  const named = [flags["server"], flags["server-url"]].filter((v): v is string => typeof v === "string");
+  if (named.length > 0) return named.find((v) => !SERVER_URL.test(v.trim()));
   const env = process.env.ORPHO_SERVER_URL;
   if (env && env.trim().length > 0 && !SERVER_URL.test(env.trim())) return `ORPHO_SERVER_URL=${env}`;
   return undefined;
@@ -128,7 +129,7 @@ function badServer(flags: Record<string, string | boolean>): string | undefined 
 
 function getServer(flags: Record<string, string | boolean>): string {
   const v = flags["server"] ?? flags["server-url"];
-  if (typeof v === "string") return v;
+  if (typeof v === "string") return v.trim();
   const env = process.env.ORPHO_SERVER_URL;
   return env && env.trim().length > 0 ? env.trim() : DEFAULT_SERVER_URL;
 }
@@ -302,14 +303,14 @@ async function main(): Promise<number> {
     printUsage();
     return 2;
   }
-  const notUrl = subcommand === "verify-inclusion" ? undefined : badServer(args.flags);
+  const notUrl = ["anchor", "verify", "proof"].includes(subcommand) ? badServer(args.flags) : undefined;
   if (notUrl !== undefined) {
     process.stderr.write(`not an http(s) server URL: ${notUrl}\n`);
     printUsage();
     return 2;
   }
   if (typeof args.flags["server"] === "string" && typeof args.flags["server-url"] === "string"
-      && !sameServer(args.flags["server"], args.flags["server-url"])) {
+      && !sameServer(args.flags["server"].trim(), args.flags["server-url"].trim())) {
     process.stderr.write("--server and --server-url name different servers; give one\n");
     printUsage();
     return 2;
