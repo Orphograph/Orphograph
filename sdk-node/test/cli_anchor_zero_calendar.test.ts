@@ -10,6 +10,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawn } from "node:child_process";
+import { MerkleTree } from "../dist/merkle.js";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 
@@ -159,17 +160,129 @@ test("the egress guard itself blocks an https request", async () => {
   assert.match(run.stderr, /egress blocked by test guard/);
 });
 
-test("a receipt id that starts with '-' is still an argument, not an option", async () => {
-  // token_urlsafe ids start with "-" about one time in 64; only one- or
-  // two-letter dash forms are refused. Port 9 is closed, so this run ends on
-  // the connection, never on argument parsing.
-  const run = await new Promise<{ code: number | null; stderr: string }>((r) => {
-    const child = spawn(process.execPath, ["--import", GUARD, CLI, "proof", "-abcDEFghiJKLmno", "a.txt",
-      "--server", "http://127.0.0.1:9"]);
-    let stderr = "";
-    child.stderr.on("data", (c) => (stderr += c));
-    child.on("close", (code) => r({ code, stderr }));
+// A stub on 127.0.0.1 that records every request line and answers a 1-calendar
+// receipt (POST) or an inclusion proof (GET), and one CLI run against it.
+async function runWithStub(argvFor: (stub: string) => string[], envFor: (stub: string) => Record<string, string> = () => ({})):
+    Promise<{ code: number | null; stdout: string; stderr: string; urls: string[]; keyed: boolean[] }> {
+  const urls: string[] = [];
+  const keyed: boolean[] = [];
+  const server = createServer((req, res) => {
+    urls.push(req.url ?? "");
+    keyed.push("x-orpho-api-key" in req.headers);
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", () => {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      if (req.method === "POST") {
+        const manifest = JSON.parse(body).manifest;
+        res.end(JSON.stringify({ receipt_id: "RSTUB0001", root_hex: manifest.root_hex,
+          leaf_count: manifest.leaves.length, calendars_ok: 1, calendars_total: 5 }));
+      } else {
+        res.end(JSON.stringify({ proof: [], root_hex: "00".repeat(32), path: "x" }));
+      }
+    });
   });
-  assert.doesNotMatch(run.stderr, /unknown option|unexpected argument/);
-  assert.doesNotMatch(run.stderr, /egress blocked/);
+  await new Promise<void>((r) => server.listen(0, "127.0.0.1", () => r()));
+  const stub = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  const env = envFor(stub);
+  const childEnv: Record<string, string | undefined> = { ...process.env };
+  delete childEnv.ORPHO_API_KEY;
+  Object.assign(childEnv, env);
+  if (!("ORPHO_SERVER_URL" in env)) delete childEnv.ORPHO_SERVER_URL;
+  try {
+    return await new Promise((r) => {
+      const child = spawn(process.execPath, ["--import", GUARD, CLI, ...argvFor(stub)], { env: childEnv });
+      let stdout = "", stderr = "";
+      child.stdout.on("data", (c) => (stdout += c));
+      child.stderr.on("data", (c) => (stderr += c));
+      child.on("close", (code) => r({ code, stdout, stderr, urls, keyed }));
+    });
+  } finally {
+    server.close();
+  }
+}
+
+function folderWithOneFile(): string {
+  const dir = mkdtempSync(join(tmpdir(), "orpho-cli-"));
+  writeFileSync(join(dir, "a.txt"), "a");
+  return dir;
+}
+
+// Round 3: this test used to aim at a closed port and only check that stderr
+// had no refusal message, so a parser that dropped the id passed it.
+test("a receipt id that starts with '-' reaches the named server as the id", async () => {
+  const run = await runWithStub((s) => ["proof", "-abcDEFghiJKLmno", "a.txt", "--server", s]);
+  assert.equal(run.code, 0, run.stderr);
+  assert.equal(run.urls.length, 1);
+  assert.match(run.urls[0], /receipt_id=-abcDEFghiJKLmno/);
+  assert.match(run.urls[0], /path=a\.txt/);
+});
+
+test("after a bare --, a receipt id starting with -- and a rel_path -x are arguments", async () => {
+  const a = await runWithStub((s) => ["proof", "--server", s, "--", "--abcDEFghiJKLmn", "a.txt"]);
+  assert.equal(a.code, 0, a.stderr);
+  assert.match(a.urls[0] ?? "", /receipt_id=--abcDEFghiJKLmn/);
+  const b = await runWithStub((s) => ["proof", "--server", s, "AbcDEFghi_JK-mno", "--", "-x"]);
+  assert.equal(b.code, 0, b.stderr);
+  assert.match(b.urls[0] ?? "", /path=-x/);
+  // Without the --, -x is still refused before any request.
+  const c = await runWithStub((s) => ["proof", "--server", s, "AbcDEFghi_JK-mno", "-x"]);
+  assert.equal(c.code, 2, c.stderr);
+  assert.equal(c.urls.length, 0);
+});
+
+test("verify-inclusion (offline) takes a rel_path -x as a path", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "orpho-dash-"));
+  writeFileSync(join(dir, "-x"), "dash file");
+  writeFileSync(join(dir, "b.txt"), "b");
+  const tree = await MerkleTree.fromFolder(dir);
+  const proofFile = join(mkdtempSync(join(tmpdir(), "orpho-proof-")), "p.json");
+  writeFileSync(proofFile, JSON.stringify({ proof: tree.inclusionProof("-x"), root_hex: tree.rootHex() }));
+  const run = await runWithStub(() => ["verify-inclusion", join(dir, "-x"), "-x", proofFile]);
+  assert.equal(run.code, 0, run.stderr);
+  assert.equal(JSON.parse(run.stdout).ok, true);
+  assert.equal(run.urls.length, 0);
+});
+
+for (const [name, argvFor] of [
+  ["a URL in the receipt id slot of verify", (s: string) => ["verify", folderWithOneFile(), s]],
+  ["a URL in the rel_path slot of proof", (s: string) => ["proof", "AbcDEFghi_JK-mno", s]],
+  ["--__proto__ URL", (s: string) => ["anchor", folderWithOneFile(), "--__proto__", s]],
+  ["a valueless --api-key", (s: string) => ["anchor", folderWithOneFile(), "--server", s, "--api-key"]],
+  ["a valueless --label", (s: string) => ["anchor", folderWithOneFile(), "--server", s, "--label"]],
+] as const) {
+  test(`${name} exits 2 before any request`, async () => {
+    const run = await runWithStub(argvFor);
+    assert.equal(run.code, 2, run.stderr);
+    assert.equal(run.urls.length, 0);
+    assert.doesNotMatch(run.stderr, /egress blocked/);
+  });
+}
+
+test("an explicit empty --api-key means no key, as in the Python CLI", async () => {
+  // A dummy value, not a key: the stub records only whether a key header came.
+  const env = () => ({ ORPHO_API_KEY: "dummy-not-a-key" });
+  const run = await runWithStub((s) => ["anchor", folderWithOneFile(), "--server", s, "--api-key", ""], env);
+  assert.equal(run.code, 0, run.stderr);
+  assert.deepEqual(run.keyed, [false]);
+  // Control: without the flag, the environment key is sent.
+  const withEnv = await runWithStub((s) => ["anchor", folderWithOneFile(), "--server", s], env);
+  assert.deepEqual(withEnv.keyed, [true]);
+});
+
+test("--server and --server-url naming one server (trailing slash aside) are accepted", async () => {
+  const run = await runWithStub((s) => ["anchor", folderWithOneFile(), "--server", s, "--server-url", s + "/"]);
+  assert.equal(run.code, 0, run.stderr);
+  assert.equal(run.urls.length, 1);
+});
+
+test("ORPHO_SERVER_URL is used when no --server is given", async () => {
+  // The Python CLI's environment form; both packages install `orphograph`.
+  const run = await runWithStub(() => ["anchor", folderWithOneFile()], (s) => ({ ORPHO_SERVER_URL: s }));
+  assert.equal(run.code, 0, run.stderr);
+  assert.equal(run.urls.length, 1);
+  // Control: without it, the run heads for the default server (the guard stops it).
+  const bare = await runWithStub(() => ["anchor", folderWithOneFile()]);
+  assert.equal(bare.urls.length, 0);
+  assert.match(bare.stderr, /egress blocked/);
 });

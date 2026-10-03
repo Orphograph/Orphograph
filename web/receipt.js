@@ -85,6 +85,14 @@ function calendarCounts(rec) {
   };
 }
 
+// The only two readings of calendars_ok on this page. Every line (status,
+// verdict, facts strip, #btc, Bitcoin card) goes through these, so the lines
+// cannot disagree: only an explicit 0 means "no Bitcoin commitment"; a record
+// with no calendars_ok field (an older server) is not a refusal. A test fails
+// on any other comparison of calendars_ok in this file.
+function noCommitment(rec) { return rec.calendars_ok === 0; }
+function someCalendarAccepted(rec) { return (rec.calendars_ok || 0) > 0; }
+
 // The status sentence, from the record alone (run under node by
 // tests/test_receipt_pages_tell_the_truth_about_bitcoin.py).
 //
@@ -108,7 +116,7 @@ function receiptStatusLine(rec) {
       ? `Anchored to Bitcoin · ${stamped} stamped`
       : `Anchored to Bitcoin · ${confirmed} confirmed`;
   }
-  if (raw === "pending" && rec.calendars_ok === 0) {
+  if (raw === "pending" && noCommitment(rec)) {
     return "No Bitcoin commitment · no valid calendar proof for this receipt";
   }
   if (raw === "pending") return `Pending Bitcoin confirmation · ${stamped} stamped`;
@@ -124,11 +132,11 @@ function receiptVerdictCopy(rec, when) {
     return { kind: "anchored", headline: `This file existed on or before ${when}.`,
       sub: "Anchored in the Bitcoin blockchain — verifiable by anyone, no account, no trust in Orphograph required. This fingerprint now lives in the most heavily verified public record in human history; it will outlive every company involved, including ours." };
   }
-  if ((rec.calendars_ok || 0) > 0) {
+  if (someCalendarAccepted(rec)) {
     return { kind: "pending", headline: `Sealed ${when} — awaiting Bitcoin confirmation.`,
       sub: "The seal is in place; the Bitcoin anchor lands from about an hour to several days after anchoring. Refresh this page later to see it confirmed." };
   }
-  if (rec.calendars_ok === 0) {
+  if (noCommitment(rec)) {
     return { kind: "none", headline: `Recorded ${when} — no Bitcoin commitment.`,
       sub: "No calendar accepted this fingerprint, so this receipt has no Bitcoin commitment and never will. Anchor the file again to get one." };
   }
@@ -141,7 +149,7 @@ function receiptBtcFact(rec, fmt) {
     const d = new Date(rec.btc_pinned_at);
     return "Pinned " + (isNaN(d.getTime()) ? rec.btc_pinned_at : fmt(d));
   }
-  if (rec.calendars_ok === 0) return "None — no valid calendar proof";
+  if (noCommitment(rec)) return "None — no valid calendar proof";
   return "Pending — an hour to several days";
 }
 
@@ -262,7 +270,7 @@ function renderExplorerGrid(rec) {
     }, "blockstream.info →"));
     btcCard.appendChild(links);
   } else {
-    btcCard.appendChild(el("p", { className: "muted small", textContent: rec.calendars_ok !== 0
+    btcCard.appendChild(el("p", { className: "muted small", textContent: !noCommitment(rec)
       ? "Pending — Bitcoin confirmation can take from about an hour to several days. Once pinned, this card will link directly to the Bitcoin block and transaction containing the Merkle root that commits your hash."
       : "No Bitcoin commitment — no valid calendar proof exists for this receipt, so it will never be pinned." }));
   }
@@ -424,7 +432,7 @@ async function main() {
   if (rec.btc_pinned_at) {
     renderTimeInto($("#btc"), rec.btc_pinned_at);
   } else {
-    $("#btc").textContent = rec.calendars_ok !== 0
+    $("#btc").textContent = !noCommitment(rec)
       ? "pending — confirmation can take from about an hour to several days"
       : "none — with no valid calendar proof, this receipt will never be pinned";
   }

@@ -5,6 +5,7 @@
 //   orphograph anchor <folder> [--server URL] [--api-key KEY] [--label TEXT]
 //   orphograph verify <folder> <receipt_id> [--server URL]
 //   orphograph proof  <receipt_id> <rel_path> [--server URL]
+//   (a bare -- ends the options; ORPHO_SERVER_URL is used when no --server is given)
 //   orphograph verify-inclusion <local_file> <rel_path> <proof.json> <root_hex>
 //
 // `anchor` and `verify` connect to the hosted service. `verify-inclusion`
@@ -25,15 +26,26 @@ import type { ProofStep } from "./merkle.js";
 
 interface ParsedArgs {
   positional: string[];
+  // How many leading positionals came before a bare "--". Everything after
+  // "--" is an argument even if it starts with "-" (a rel_path "-x", a
+  // receipt id "--a…").
+  beforeDashDash: number;
   flags: Record<string, string | boolean>;
 }
 
 function parseArgs(argv: string[]): ParsedArgs {
   const positional: string[] = [];
-  const flags: Record<string, string | boolean> = {};
+  // No prototype: "--__proto__ URL" must land as an own (unknown) key, not
+  // vanish into Object.prototype and leave the default server in place.
+  const flags: Record<string, string | boolean> = Object.create(null);
+  let beforeDashDash = -1;
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
-    if (a.startsWith("--")) {
+    if (beforeDashDash !== -1) {
+      positional.push(a);
+    } else if (a === "--") {
+      beforeDashDash = positional.length;
+    } else if (a.startsWith("--")) {
       const eq = a.indexOf("=");
       if (eq !== -1) {
         flags[a.slice(2, eq)] = a.slice(eq + 1);
@@ -51,7 +63,7 @@ function parseArgs(argv: string[]): ParsedArgs {
       positional.push(a);
     }
   }
-  return { positional, flags };
+  return { positional, beforeDashDash: beforeDashDash === -1 ? positional.length : beforeDashDash, flags };
 }
 
 // Every option a subcommand reads. An unknown one used to be dropped without a
@@ -62,29 +74,51 @@ const KNOWN_FLAGS = new Set(["server", "server-url", "api-key", "label"]);
 // Positionals each subcommand reads. An extra one (a stray URL meant for
 // --server) is an error too, for the same reason. Short options (-s) are not
 // options here at all; a 16-character receipt id may start with "-", so only
-// one- or two-letter forms are refused as unknown options.
+// one- or two-letter forms are refused as unknown options, and only before a
+// bare "--" and only on subcommands that make a request (verify-inclusion is
+// offline, so a real rel_path "-x" is just a path there).
 const MAX_POSITIONAL: Record<string, number> = { anchor: 1, verify: 2, proof: 2, "verify-inclusion": 4 };
 const SHORT_OPTION = /^-[A-Za-z]{1,2}$/;
+// The server's receipt id format. A URL in the receipt id slot (`verify <dir>
+// <URL>`, with the server forgotten) is refused here instead of being sent as
+// an id to the default server.
+const RECEIPT_ID = /^[A-Za-z0-9_-]{1,64}$/;
+// A manifest rel_path never holds "://"; one that does is a server URL in the
+// wrong slot (`proof <id> <URL>`).
+const LOOKS_LIKE_URL = /^[A-Za-z][A-Za-z0-9+.-]*:\/\//;
 
-// A value flag given with no value (`--server` at the end, `--server=`, or an
+// A server flag given with no value (`--server` at the end, `--server=`, or an
 // unset variable in `--server "$URL"`) is refused too: an empty server fell
-// through to the live default exactly like an unknown flag did.
+// through to the live default exactly like an unknown flag did. --api-key and
+// --label only need a value after them; an explicit empty --api-key means no
+// key (ORPHO_API_KEY is not read then), as in the Python CLI.
 function badFlagValue(flags: Record<string, string | boolean>): string | undefined {
-  for (const k of ["server", "server-url", "api-key"]) {
+  for (const k of ["server", "server-url"]) {
     if (k in flags && (typeof flags[k] !== "string" || flags[k] === "")) return k;
   }
-  if ("label" in flags && typeof flags["label"] !== "string") return "label";
+  for (const k of ["api-key", "label"]) {
+    if (k in flags && typeof flags[k] !== "string") return k;
+  }
   return undefined;
 }
 
+function sameServer(a: string, b: string): boolean {
+  return a.replace(/\/+$/, "") === b.replace(/\/+$/, "");
+}
+
+// ORPHO_SERVER_URL is the Python CLI's environment form, and both packages
+// install a command named `orphograph`; ignoring it sent a shell set up for
+// one CLI to the live default with the other. Empty means unset.
 function getServer(flags: Record<string, string | boolean>): string {
   const v = flags["server"] ?? flags["server-url"];
-  return typeof v === "string" ? v : DEFAULT_SERVER_URL;
+  if (typeof v === "string") return v;
+  const env = process.env.ORPHO_SERVER_URL;
+  return env && env.trim().length > 0 ? env.trim() : DEFAULT_SERVER_URL;
 }
 
 function getApiKey(flags: Record<string, string | boolean>): string | undefined {
   const v = flags["api-key"];
-  if (typeof v === "string") return v;
+  if (typeof v === "string") return v.length > 0 ? v : undefined;
   const env = process.env.ORPHO_API_KEY;
   return env && env.length > 0 ? env : undefined;
 }
@@ -98,8 +132,11 @@ function printUsage(): void {
     "  orphograph proof  <receipt_id> <rel_path> [--server URL]",
     "  orphograph verify-inclusion <local_file> <rel_path> <proof.json> [root_hex]",
     "",
+    "  A bare -- ends the options: orphograph proof <receipt_id> -- -x",
+    "",
     "Environment:",
-    "  ORPHO_API_KEY  optional API key sent as X-Orpho-Api-Key.",
+    "  ORPHO_SERVER_URL  server to use when no --server is given.",
+    "  ORPHO_API_KEY     optional API key sent as X-Orpho-Api-Key.",
     "",
     "Privacy: file contents are read locally and never transmitted.",
     "Only the manifest (paths, sizes and SHA-256 digests) and any label cross the network.",
@@ -234,7 +271,9 @@ async function main(): Promise<number> {
   const subcommand = argv[0];
   const args = parseArgs(argv.slice(1));
   const unknown = Object.keys(args.flags).filter((k) => !KNOWN_FLAGS.has(k));
-  const short = args.positional.find((p) => SHORT_OPTION.test(p));
+  const short = subcommand === "verify-inclusion"
+    ? undefined
+    : args.positional.slice(0, args.beforeDashDash).find((p) => SHORT_OPTION.test(p));
   if (unknown.length > 0 || short) {
     process.stderr.write(`unknown option ${unknown.length > 0 ? "--" + unknown[0] : short}\n`);
     printUsage();
@@ -247,7 +286,7 @@ async function main(): Promise<number> {
     return 2;
   }
   if (typeof args.flags["server"] === "string" && typeof args.flags["server-url"] === "string"
-      && args.flags["server"] !== args.flags["server-url"]) {
+      && !sameServer(args.flags["server"], args.flags["server-url"])) {
     process.stderr.write("--server and --server-url name different servers; give one\n");
     printUsage();
     return 2;
@@ -255,6 +294,18 @@ async function main(): Promise<number> {
   const max = MAX_POSITIONAL[subcommand];
   if (max !== undefined && args.positional.length > max) {
     process.stderr.write(`unexpected argument: ${args.positional[max]}\n`);
+    printUsage();
+    return 2;
+  }
+  const idSlot = subcommand === "verify" ? 1 : subcommand === "proof" ? 0 : -1;
+  const id = idSlot >= 0 ? args.positional[idSlot] : undefined;
+  if (id !== undefined && !RECEIPT_ID.test(id)) {
+    process.stderr.write(`not a receipt id: ${id}\n`);
+    printUsage();
+    return 2;
+  }
+  if (subcommand === "proof" && args.positional[1] !== undefined && LOOKS_LIKE_URL.test(args.positional[1])) {
+    process.stderr.write(`rel_path looks like a server URL: ${args.positional[1]} (use --server)\n`);
     printUsage();
     return 2;
   }

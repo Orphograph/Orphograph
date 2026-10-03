@@ -37,7 +37,8 @@ from ._client import DEFAULT_SERVER_URL, OrphographError
 
 
 def _env_server() -> str:
-    return os.environ.get("ORPHO_SERVER_URL", DEFAULT_SERVER_URL)
+    # Empty means unset, as for ORPHO_API_KEY.
+    return os.environ.get("ORPHO_SERVER_URL", "").strip() or DEFAULT_SERVER_URL
 
 
 def _env_api_key() -> Optional[str]:
@@ -164,6 +165,12 @@ def _load_proof(proof_json: str, root_override: Optional[str]) -> tuple:
 def main(argv: Optional[List[str]] = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
+    # An empty --server-url (an unset variable in `--server-url "$URL"`) fell
+    # through to ORPHO_SERVER_URL or the live default: the caller named a
+    # server and got another one. verify-inclusion makes no request.
+    if args.command != "verify-inclusion" and args.server_url is not None and not args.server_url.strip():
+        print("orphograph: --server-url is empty; give a URL or leave the option out.", file=sys.stderr)
+        return 2
     server_url = args.server_url or _env_server()
     api_key = args.api_key if args.api_key is not None else _env_api_key()
 

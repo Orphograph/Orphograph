@@ -145,7 +145,7 @@
   },
   "/certificate.js": {
     "version": "7",
-    "sha256": "1e60d74a791488b833ec5368985c6c79d788124acba87492af2c14b9562ef46e"
+    "sha256": "e9f2fbf93280319f91d7a50d25865043aa75527606f599916fc91f0311764c96"
   },
   "/changelog.css": {
     "version": "1",
@@ -413,7 +413,7 @@
   },
   "/receipt.js": {
     "version": "11",
-    "sha256": "29295c14a5171dbc96a9495bd7751fccd8d653c321bbb5d1abf16839e594e392"
+    "sha256": "b89c24b58795126ec44da75b147c13421d2a2c3013acd6142fff408b2ee8ef09"
   },
   "/recover.css": {
     "version": "2",

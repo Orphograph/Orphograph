@@ -172,8 +172,11 @@ class TestNoPagePromisesItsOwnReceipt(unittest.TestCase):
         self.assertIn('"private": private', src)
         # Review rounds 1-2 of PR #284: spelling checks ("web/", "*.html")
         # passed exclusions such as "*.htm*", "*html", "?eb/*" and
-        # "**/*.html". Ask the matcher the job actually uses instead.
-        self.assertEqual(_pages_the_daily_anchor_drops(_exclude_patterns(src)), [],
+        # "**/*.html". Ask the matcher the job actually uses instead. Round 3:
+        # reading the first EXCLUDE_PATTERNS literal missed a later `+=` and
+        # patterns added at the call site, so record the exclude list the
+        # job's build_manifest really passes.
+        self.assertEqual(_pages_the_daily_anchor_drops(_exclude_the_job_passes(JOB)), [],
                          "the daily anchor would drop these pages, which say they are covered")
 
     def test_the_exclusion_check_catches_patterns_that_drop_pages(self):
@@ -181,14 +184,51 @@ class TestNoPagePromisesItsOwnReceipt(unittest.TestCase):
         for pattern in ("*.html", "*.htm*", "*html", "?eb/*", "web/*", "**/*.html", "web*"):
             self.assertTrue(_pages_the_daily_anchor_drops((pattern,)), pattern)
 
+    def test_the_recorded_exclude_list_sees_later_and_call_site_additions(self):
+        # Positive control for the recording: planted copies of the job.
+        import tempfile
+        src = JOB.read_text()
+        call = "exclude=list(EXCLUDE_PATTERNS)"
+        self.assertEqual(src.count(call), 1)
+        plants = {"augmented": src + '\nEXCLUDE_PATTERNS += ("*.html",)\n',
+                  "call-site": src.replace(call, call + ' + ["web/*"]')}
+        for name, planted in plants.items():
+            with tempfile.TemporaryDirectory() as d:
+                copy = Path(d) / "auto_anchor_repo.py"
+                copy.write_text(planted)
+                self.assertTrue(_pages_the_daily_anchor_drops(_exclude_the_job_passes(copy)), name)
 
-def _exclude_patterns(src: str) -> tuple:
-    import ast
-    for node in ast.walk(ast.parse(src)):
-        targets = getattr(node, "targets", None) or [getattr(node, "target", None)]
-        if any(getattr(t, "id", None) == "EXCLUDE_PATTERNS" for t in targets if t is not None):
-            return tuple(ast.literal_eval(node.value))
-    raise AssertionError("EXCLUDE_PATTERNS not found in auto_anchor_repo.py")
+
+JOB = ROOT / "scripts" / "auto_anchor_repo.py"
+
+
+def _exclude_the_job_passes(job: Path) -> list:
+    """Load the job and run its build_manifest with MerkleTree.from_folder
+    replaced by a recorder, so nothing is walked or sent."""
+    import importlib.util
+    import sys
+    from unittest import mock
+    sys.path.insert(0, str(ROOT / "server"))
+    spec = importlib.util.spec_from_file_location("_auto_anchor_repo_under_test", job)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+
+    class _Recorded(Exception):
+        pass
+
+    seen = {}
+
+    def record(root, exclude=None, **kwargs):
+        seen["exclude"] = list(exclude or [])
+        raise _Recorded
+
+    with mock.patch.object(mod.merkle.MerkleTree, "from_folder", side_effect=record):
+        try:
+            mod.build_manifest(ROOT)
+        except _Recorded:
+            pass
+    assert "exclude" in seen, "build_manifest no longer calls MerkleTree.from_folder"
+    return seen["exclude"]
 
 
 def _pages_the_daily_anchor_drops(patterns) -> list:

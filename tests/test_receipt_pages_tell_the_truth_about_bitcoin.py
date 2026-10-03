@@ -48,7 +48,10 @@ def _friendly_status(rec: dict) -> str:
     src = CERT_JS.read_text(encoding="utf-8")
     m = re.search(r"^function friendlyStatus\(rec\) \{.*?^\}", src, re.S | re.M)
     assert m, "friendlyStatus not found in certificate.js"
-    driver = m.group(0) + "\nprocess.stdout.write(friendlyStatus(JSON.parse(process.argv[1])));\n"
+    helper = re.search(r"^function noCommitment\(rec\) \{.*?\}$", src, re.M)
+    assert helper, "noCommitment not found in certificate.js"
+    driver = (helper.group(0) + "\n" + m.group(0)
+              + "\nprocess.stdout.write(friendlyStatus(JSON.parse(process.argv[1])));\n")
     proc = subprocess.run([node, "-e", driver, json.dumps(rec)],
                           capture_output=True, text=True, timeout=60)
     assert proc.returncode == 0, proc.stderr
@@ -385,3 +388,41 @@ def test_homepage_folder_card_tells_a_root_with_no_commitment_so(tmp_path, calen
         assert "no bitcoin commitment" in text and "commitment expected" not in text, text[:400]
     else:
         assert "commitment expected" in text and "no bitcoin commitment" not in text, text[:400]
+
+
+# Round 3 of PR #284: the #btc row and the Bitcoin card had no test, so the
+# lines could drift apart again. Each page now reads calendars_ok only through
+# its helpers; any other comparison of it (or of a count derived from it, the
+# forms earlier versions used) fails here.
+_CAL_COMPARE = re.compile(
+    r"calendars_ok\s*\)?\s*([!=]==?|[<>]=?)|\(\s*rec\.calendars_ok\s*\|\|\s*0\s*\)\s*[<>]"
+    r"|serversOk\s*([!=]==?|[<>]=?)\s*\d|\bcok\s*([!=]==?|[<>]=?)\s*\d")
+_CAL_HELPERS = re.compile(r"^function (noCommitment|someCalendarAccepted)\(rec\) \{.*\}$", re.M)
+
+
+def _calendar_comparisons_outside_helpers(src: str) -> list:
+    body = _CAL_HELPERS.sub("", src)
+    return [m.group(0) for m in _CAL_COMPARE.finditer(body)]
+
+
+@pytest.mark.parametrize("page", ["receipt.js", "certificate.js"])
+def test_every_line_of_the_page_reads_calendars_ok_through_one_helper(page):
+    src = (WEB / page).read_text(encoding="utf-8")
+    assert "function noCommitment(rec) { return rec.calendars_ok === 0; }" in src
+    assert _calendar_comparisons_outside_helpers(src) == [], page
+
+
+def test_the_helper_check_sees_the_forms_earlier_versions_used():
+    for old in ('textContent: rec.calendars_ok > 0 ? "Pending" : "None"',
+                'else if (!(rec.calendars_ok > 0)) $("#btc")',
+                '$("#btc").textContent = _c.serversOk > 0',
+                'if (calendarCounts(rec).serversOk === 0) return "None"',
+                'if (raw === "pending" && cok === 0) return',
+                'if ((rec.calendars_ok || 0) > 0) {',
+                'textContent: rec.calendars_ok !== 0'):
+        assert _calendar_comparisons_outside_helpers(old), old
+    # Not comparisons: counts printed on the page.
+    for fine in ('`${rec.calendars_ok || 0} of ${rec.calendars_total || 5} OTS proofs valid`',
+                 'serversOk: num(rec.calendars_ok, okFiles.length),',
+                 '`${c.serversOk} of ${c.serversTotal} calendar servers · `'):
+        assert not _calendar_comparisons_outside_helpers(fine), fine
