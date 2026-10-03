@@ -85,9 +85,15 @@ const SHORT_OPTION = /^-[A-Za-z]{1,2}$/;
 const RECEIPT_ID = /^[A-Za-z0-9_-]{1,64}$/;
 // A server URL anywhere but after --server / --server-url is a server the
 // caller meant to name: `proof <id> <URL>`, `proof <id> -sURL`, `proof <id> --
-// --server=URL`. Normalised rel paths and receipt ids never hold "://", so any
-// argument that does is refused on the subcommands that make a request.
-const HOLDS_URL = /:\/\//;
+// --server=URL`. Receipt ids and normalised rel paths never hold a scheme, so
+// an argument that holds one (two or more letters, then "://") is refused on
+// the subcommands that make a request. Two or more letters, so a Windows
+// drive path such as C://Users/me is still a folder.
+const HOLDS_URL = /[A-Za-z][A-Za-z0-9+.-]+:\/\//;
+// The only servers a caller can name: http(s) URLs. Anything else (a bare
+// host:port) is refused, so "a server URL" always holds "://" and the rule
+// above sees every one of them.
+const SERVER_URL = /^https?:\/\//i;
 
 // A server flag given with no value (`--server` at the end, `--server=`, or an
 // unset variable in `--server "$URL"`) is refused too: an empty server fell
@@ -111,6 +117,15 @@ function sameServer(a: string, b: string): boolean {
 // ORPHO_SERVER_URL is the Python CLI's environment form, and both packages
 // install a command named `orphograph`; ignoring it sent a shell set up for
 // one CLI to the live default with the other. Empty means unset.
+function badServer(flags: Record<string, string | boolean>): string | undefined {
+  for (const v of [flags["server"], flags["server-url"]]) {
+    if (typeof v === "string" && !SERVER_URL.test(v)) return v;
+  }
+  const env = process.env.ORPHO_SERVER_URL;
+  if (env && env.trim().length > 0 && !SERVER_URL.test(env.trim())) return `ORPHO_SERVER_URL=${env}`;
+  return undefined;
+}
+
 function getServer(flags: Record<string, string | boolean>): string {
   const v = flags["server"] ?? flags["server-url"];
   if (typeof v === "string") return v;
@@ -284,6 +299,12 @@ async function main(): Promise<number> {
   const missing = badFlagValue(args.flags);
   if (missing) {
     process.stderr.write(`option --${missing} needs a value\n`);
+    printUsage();
+    return 2;
+  }
+  const notUrl = subcommand === "verify-inclusion" ? undefined : badServer(args.flags);
+  if (notUrl !== undefined) {
+    process.stderr.write(`not an http(s) server URL: ${notUrl}\n`);
     printUsage();
     return 2;
   }

@@ -6,7 +6,7 @@
 // a stub on 127.0.0.1; nothing leaves the machine.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawn } from "node:child_process";
@@ -244,27 +244,52 @@ test("verify-inclusion (offline) takes a rel_path -x as a path", async () => {
   assert.equal(run.urls.length, 0);
 });
 
-for (const [name, argvFor] of [
-  ["a URL in the receipt id slot of verify", (s: string) => ["verify", folderWithOneFile(), s]],
-  ["a URL in the rel_path slot of proof", (s: string) => ["proof", "AbcDEFghi_JK-mno", s]],
+// Each row names the refusal it expects (round 5: a row that checked only
+// "exit 2, no request" passed with the URL rule removed, because the folder
+// "--server=http://…" does not exist and the run failed on it instead).
+const URL_ARG = /looks like a server URL/;
+for (const [name, argvFor, refusal] of [
+  ["a URL in the receipt id slot of verify", (s: string) => ["verify", folderWithOneFile(), s], URL_ARG],
+  ["a URL in the folder slot of verify", (s: string) => ["verify", s, "AbcDEFghi_JK-mno"], URL_ARG],
+  ["a URL in the rel_path slot of proof", (s: string) => ["proof", "AbcDEFghi_JK-mno", s], URL_ARG],
   // Round 4: a URL stuck to a short option, or after a bare "--".
-  ["proof <id> -sURL", (s: string) => ["proof", "AbcDEFghi_JK-mno", "-s" + s]],
-  ["proof <id> -s=URL", (s: string) => ["proof", "AbcDEFghi_JK-mno", "-s=" + s]],
-  ["proof <id> -- --server=URL", (s: string) => ["proof", "AbcDEFghi_JK-mno", "--", "--server=" + s]],
-  ["proof -- <id> --server-url=URL", (s: string) => ["proof", "--", "AbcDEFghi_JK-mno", "--server-url=" + s]],
-  ["anchor -- --server=URL", (s: string) => ["anchor", "--", "--server=" + s]],
-  ["a receipt id outside the server's format", (s: string) => ["verify", folderWithOneFile(), "not an id", "--server", s]],
-  ["--__proto__ URL", (s: string) => ["anchor", folderWithOneFile(), "--__proto__", s]],
-  ["a valueless --api-key", (s: string) => ["anchor", folderWithOneFile(), "--server", s, "--api-key"]],
-  ["a valueless --label", (s: string) => ["anchor", folderWithOneFile(), "--server", s, "--label"]],
+  ["proof <id> -sURL", (s: string) => ["proof", "AbcDEFghi_JK-mno", "-s" + s], URL_ARG],
+  ["proof <id> -s=URL", (s: string) => ["proof", "AbcDEFghi_JK-mno", "-s=" + s], URL_ARG],
+  ["proof <id> -- --server=URL", (s: string) => ["proof", "AbcDEFghi_JK-mno", "--", "--server=" + s], URL_ARG],
+  ["proof -- <id> --server-url=URL", (s: string) => ["proof", "--", "AbcDEFghi_JK-mno", "--server-url=" + s], URL_ARG],
+  ["anchor -- --server=URL", (s: string) => ["anchor", "--", "--server=" + s], URL_ARG],
+  // Round 5: a server named without a scheme is refused, so every server URL
+  // holds "://" and the rule above sees it in any slot.
+  ["--server host:port", (s: string) => ["anchor", folderWithOneFile(), "--server", s.replace("http://", "")], /not an http\(s\) server URL/],
+  ["a receipt id outside the server's format", (s: string) => ["verify", folderWithOneFile(), "not an id", "--server", s], /not a receipt id/],
+  ["--__proto__ URL", (s: string) => ["anchor", folderWithOneFile(), "--__proto__", s], /unknown option --__proto__/],
+  ["a valueless --api-key", (s: string) => ["anchor", folderWithOneFile(), "--server", s, "--api-key"], /--api-key needs a value/],
+  ["a valueless --label", (s: string) => ["anchor", folderWithOneFile(), "--server", s, "--label"], /--label needs a value/],
 ] as const) {
   test(`${name} exits 2 before any request`, async () => {
     const run = await runWithStub(argvFor);
     assert.equal(run.code, 2, run.stderr);
     assert.equal(run.urls.length, 0);
+    assert.match(run.stderr, refusal as RegExp);
     assert.doesNotMatch(run.stderr, /egress blocked/);
   });
 }
+
+test("ORPHO_SERVER_URL without a scheme exits 2 before any request", async () => {
+  const run = await runWithStub(() => ["anchor", folderWithOneFile()], (s) => ({ ORPHO_SERVER_URL: s.replace("http://", "") }));
+  assert.equal(run.code, 2, run.stderr);
+  assert.equal(run.urls.length, 0);
+  assert.match(run.stderr, /not an http\(s\) server URL/);
+});
+
+test("a Windows-style drive path (C://x) is still a folder, not a URL", async () => {
+  const base = mkdtempSync(join(tmpdir(), "orpho-drive-"));
+  mkdirSync(join(base, "C:", "x"), { recursive: true });
+  writeFileSync(join(base, "C:", "x", "a.txt"), "a");
+  const run = await runWithStub((s) => ["anchor", join(base, "C:") + "//x", "--server", s]);
+  assert.equal(run.code, 0, run.stderr);
+  assert.equal(run.urls.length, 1);
+});
 
 test("an explicit empty --api-key means no key, as in the Python CLI", async () => {
   // A dummy value, not a key: the stub records only whether a key header came.

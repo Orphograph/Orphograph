@@ -433,7 +433,9 @@ def test_the_helper_check_sees_the_forms_earlier_versions_used():
 # reads, so it cannot by itself keep the #btc row and the Bitcoin card in step
 # with the status line. This drives the real pages: each script runs whole in
 # a node vm with a fake DOM and a fetch stub that answers the record (no
-# network module is reachable from the vm), and every Bitcoin line is read.
+# network module is reachable from the vm), page timers are run, and each
+# Bitcoin line is read: #status, #btc, the Bitcoin card, and on the receipt
+# page the verdict headline, the verdict's second line and the facts cell.
 _PAGE_DOM_DRIVER = r"""
 import vm from "node:vm";
 import fs from "node:fs";
@@ -467,7 +469,12 @@ const fetch = async (u) => String(u).startsWith("/api/me")
   ? { ok: false, status: 401, json: async () => ({}) } : { ok: true, status: 200, json: async () => body };
 const window = { location: { pathname: path, search: "", hash: "", href: "http://127.0.0.1" + path, origin: "http://127.0.0.1", replace() {} },
   print() {}, addEventListener() {} };
-const ctx = { document, fetch, window, location: window.location, navigator: {}, console, setTimeout: () => 0, clearTimeout() {},
+// Page timers are queued and run after the first render (round 5: a line
+// rewritten from a timer was invisible when timers were dropped).
+const timers = [];
+const ctx = { document, fetch, window, location: window.location, navigator: {}, console,
+  setTimeout: (f) => { timers.push(f); return timers.length; }, clearTimeout() {},
+  setInterval: (f) => { timers.push(f); return timers.length; }, clearInterval() {},
   URLSearchParams, Intl, Date, encodeURIComponent, JSON, Math, Number, String, isNaN, Promise, Array, Object, Set, Map,
   TextEncoder, crypto: {}, history: { replaceState() {} } };
 ctx.globalThis = ctx; ctx.self = ctx;
@@ -475,8 +482,12 @@ vm.createContext(ctx);
 vm.runInContext(fs.readFileSync(file, "utf8"), ctx, { filename: file });
 await new Promise((r) => setImmediate(r));
 await new Promise((r) => setTimeout(r, 30));
+for (let round = 0; round < 3 && timers.length; round++) {
+  for (const f of timers.splice(0)) { try { f(); } catch (_) { /* a print or button reset */ } }
+  await new Promise((r) => setTimeout(r, 10));
+}
 const out = {};
-for (const k of ["#status", "#btc", "#verdict-headline", "#fact-btc", "#explorer-grid"]) {
+for (const k of ["#status", "#btc", "#verdict-headline", "#verdict-sub", "#fact-btc", "#explorer-grid"]) {
   if (reg.has(k)) out[k] = reg.get(k).textContent;
 }
 const m = /Bitcoin chain(.*?)(How verification works|$)/.exec(out["#explorer-grid"] || "");
@@ -487,6 +498,9 @@ process.stdout.write(JSON.stringify(out));
 
 _SAYS_NONE = re.compile(r"no bitcoin commitment|never be pinned|^none", re.I)
 _SAYS_PENDING = re.compile(r"pending|awaiting|in progress", re.I)
+# The verdict's second line words both cases its own way.
+_SUB_NONE = re.compile(r"never will|no bitcoin commitment", re.I)
+_SUB_PENDING = re.compile(r"\blands\b|not yet been confirmed", re.I)
 
 
 def _page_lines(tmp_path, page: str, rec: dict) -> dict:
@@ -514,12 +528,13 @@ def test_every_bitcoin_line_of_the_page_agrees(tmp_path, page, calendars_ok):
     if calendars_ok is not _MISSING:
         rec["calendars_ok"] = calendars_ok
     lines = _page_lines(tmp_path, page, rec)
-    expected = {"#status", "#btc", "card"} | ({"#verdict-headline", "#fact-btc"} if page == "receipt.js" else set())
+    expected = {"#status", "#btc", "card"} | ({"#verdict-headline", "#verdict-sub", "#fact-btc"} if page == "receipt.js" else set())
     assert expected <= {k for k, v in lines.items() if v}, lines
     none = calendars_ok == 0        # only an explicit integer 0 ("0" != 0 in Python too)
     for key in expected:
         text = lines[key]
+        says_none, says_pending = (_SUB_NONE, _SUB_PENDING) if key == "#verdict-sub" else (_SAYS_NONE, _SAYS_PENDING)
         if none:
-            assert _SAYS_NONE.search(text) and not _SAYS_PENDING.search(text), (key, text)
+            assert says_none.search(text) and not says_pending.search(text), (key, text)
         else:
-            assert _SAYS_PENDING.search(text) and not _SAYS_NONE.search(text), (key, text)
+            assert says_pending.search(text) and not says_none.search(text), (key, text)

@@ -101,6 +101,36 @@ class UrlInAnArgumentSlotTest(unittest.TestCase):
                 self.assertFalse(ip.called or vf.called or af.called, argv)
                 self.assertIn("looks like a server URL", err.getvalue())
 
+    def test_a_server_without_a_scheme_or_a_bad_id_exits_two_before_any_request(self):
+        # Round 5: only http(s) servers can be named, so every server URL holds
+        # "://" and the slot rule sees it; receipt ids follow the server's format.
+        stop = AssertionError("request made")
+        with tempfile.TemporaryDirectory() as d:
+            cases = [(["--server-url", "127.0.0.1:9", "anchor", d], {}, "not an http(s) server URL"),
+                     (["anchor", d], {"ORPHO_SERVER_URL": "localhost:9"}, "not an http(s) server URL"),
+                     (["verify", d, "127.0.0.1:9"], {}, "not a receipt id"),
+                     (["inclusion-proof", "not an id", "a.txt"], {}, "not a receipt id"),
+                     (["inclusion-proof", "AbcDEFghi_JK-mno\n", "a.txt"], {}, "not a receipt id")]
+            for argv, env, message in cases:
+                err = io.StringIO()
+                with mock.patch.dict("os.environ", env), \
+                        mock.patch.object(_cli, "inclusion_proof", side_effect=stop) as ip, \
+                        mock.patch.object(_cli, "verify_folder", side_effect=stop) as vf, \
+                        mock.patch.object(_cli, "anchor_folder", side_effect=stop) as af, \
+                        redirect_stdout(io.StringIO()), redirect_stderr(err):
+                    rc = _cli.main(argv)
+                self.assertEqual(rc, 2, (argv, err.getvalue()))
+                self.assertFalse(ip.called or vf.called or af.called, argv)
+                self.assertIn(message, err.getvalue(), argv)
+
+    def test_a_windows_style_drive_path_is_still_a_folder(self):
+        result = {"receipt_id": "RDRIVE001", "calendars_ok": 1, "calendars_total": 5}
+        with mock.patch.object(_cli, "anchor_folder", return_value=result) as af, \
+                redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+            rc = _cli.main(["--server-url", "http://127.0.0.1:9", "anchor", "C://Users/me/proj"])
+        self.assertEqual(rc, 0)
+        self.assertTrue(af.called)
+
     def test_an_ordinary_path_still_reaches_the_client(self):
         proof = {"receipt_id": "AbcDEFghi_JK-mno", "path": "sub/a:b.txt", "proof": [], "root_hex": "0" * 64}
         with mock.patch.object(_cli, "inclusion_proof", return_value=proof) as ip, \

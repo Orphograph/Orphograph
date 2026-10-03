@@ -29,11 +29,20 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 from typing import List, Optional
 
 from . import anchor_folder, inclusion_proof, verify_folder, verify_inclusion
 from ._client import DEFAULT_SERVER_URL, OrphographError
+
+
+# A scheme (two or more letters, then "://") in an argument slot is a server
+# URL in the wrong place; two or more letters so C://Users/me is a folder.
+# Only http(s) servers can be named, so every server URL holds "://".
+_HOLDS_URL = re.compile(r"[A-Za-z][A-Za-z0-9+.-]+://")
+_SERVER_URL = re.compile(r"^https?://", re.I)
+_RECEIPT_ID = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 
 
 def _env_server() -> str:
@@ -173,13 +182,20 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 2
     # A server URL in an argument slot (`inclusion-proof <id> <URL>`, the
     # option forgotten) was sent as an id or path to the default server.
-    # Receipt ids and normalised rel paths never hold "://".
     if args.command != "verify-inclusion":
         for name in ("folder", "receipt_id", "path"):
             value = getattr(args, name, None)
-            if isinstance(value, str) and "://" in value:
+            if isinstance(value, str) and _HOLDS_URL.search(value):
                 print(f"orphograph: {name} looks like a server URL; give it as --server-url URL.", file=sys.stderr)
                 return 2
+        receipt_id = getattr(args, "receipt_id", None)
+        if isinstance(receipt_id, str) and not _RECEIPT_ID.fullmatch(receipt_id):
+            print(f"orphograph: not a receipt id: {receipt_id}", file=sys.stderr)
+            return 2
+        named = args.server_url if args.server_url is not None else os.environ.get("ORPHO_SERVER_URL", "").strip()
+        if named and not _SERVER_URL.match(named.strip()):
+            print(f"orphograph: not an http(s) server URL: {named}", file=sys.stderr)
+            return 2
     server_url = args.server_url or _env_server()
     api_key = args.api_key if args.api_key is not None else _env_api_key()
 

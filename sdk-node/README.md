@@ -109,7 +109,8 @@ Flags:
 
 - `--server URL` (or `--server-url URL`, or environment variable
   `ORPHO_SERVER_URL`) overrides the default `https://orphograph.com`
-  endpoint. An empty `--server` is an error, not the default.
+  endpoint. It must start with `http://` or `https://`; an empty or other
+  value is an error, not the default.
 - `--api-key KEY` (or environment variable `ORPHO_API_KEY`) attaches an
   API key as the `X-Orpho-Api-Key` request header. An explicit empty
   `--api-key ""` sends no key.
@@ -117,8 +118,8 @@ Flags:
   (truncated to 200 characters by the server).
 - Any other option or an extra argument stops the CLI with exit code 2
   before any request. On `anchor`, `verify` and `proof`, so do a separate
-  short option such as `-s` and any argument that holds `://` (a server URL
-  belongs after `--server`). A bare `--` ends the options, so a path or
+  short option such as `-s` and any argument that holds a URL scheme such as
+  `http://` (a server URL belongs after `--server`). A bare `--` ends the options, so a path or
   receipt id that starts with `-` can follow it:
   `npx orphograph proof <receipt_id> -- -x`.
 
