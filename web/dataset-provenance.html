@@ -56,7 +56,7 @@
 <main class="arch-wrap">
 
   <p class="recipient-label">For ML &amp; data teams</p>
-  <h1>Verify a dataset-bundle commitment — and its Bitcoin time bound.</h1>
+  <h1>Verify a dataset-bundle commitment and its Bitcoin time bound.</h1>
   <p class="arch-lede">
     Audits and release reviews often ask: <em>which bytes were committed, and by when?</em> Orphograph binds a dataset, supporting documents, and an acquisition log into one Merkle root. Dataset file bytes stay local; online anchoring submits manifest paths, digests, sizes, and the root. The receipt tests integrity and a Bitcoin time bound, not legal provenance or model use.
   </p>
@@ -73,7 +73,7 @@
     <h2>What it does NOT prove</h2>
     <div class="arch-rule"></div>
     <p><strong>It does not prove the data was lawfully sourced, licensed, or owned.</strong> A receipt records that bytes existed at a moment; it does not establish the legal right to those bytes. That is a separate question for your counsel and the relevant forum.</p>
-    <p><strong>It does not prove the acquisition log is truthful.</strong> The log is committed as written. A current digest/root match and confirmed proof establish the committed bytes and Bitcoin time bound — not that the log is accurate, complete, or continuously unchanged.</p>
+    <p><strong>It does not prove the acquisition log is truthful.</strong> The log is committed as written. A current digest/root match and confirmed proof establish the committed bytes and Bitcoin time bound, not that the log is accurate, complete, or continuously unchanged.</p>
     <p><strong>It does not prove authorship.</strong> A fingerprint binds a file to a date, not to an author. Provenance tooling that claims otherwise is a liability; this does not.</p>
     <p><strong>It does not prove training or release use.</strong> Inclusion in a committed bundle does not show that a model consumed the data, that a named model was produced from it, or that the bundle was the one approved or deployed.</p>
   </section>
@@ -81,9 +81,9 @@
   <section>
     <h2>How it works</h2>
     <div class="arch-rule"></div>
-    <p><strong>1 — Assemble a bundle.</strong> A folder with your dataset under <code>data/</code>, your license and consent documents under <code>licenses/</code>, and an <code>acquisition_log</code> describing where each source came from, when, and under what terms.</p>
-    <p><strong>2 — Hash it locally.</strong> Every file is SHA-256'd on your machine and combined into an RFC&nbsp;6962-style Merkle tree. Online mode sends the manifest — literal relative paths, digests, sizes, and the root — but not dataset file bytes. Path names may be confidential and should be sanitized before submission. <code>--offline</code> writes an unanchored certificate and manifest and makes no anchoring request.</p>
-    <p><strong>3 — Retain the outputs.</strong> The CLI writes <code>certificate.json</code>, <code>certificate.txt</code>, and <code>manifest.json</code>. When the request succeeds, the certificate records the returned receipt identifiers. Supporting documents are represented by paths and digests; the CLI does not upload or publish their contents. <a href="/certificate/DatasetProvenanceSample">See a sample certificate →</a></p>
+    <p><strong>1. Assemble a bundle.</strong> A folder with your dataset under <code>data/</code>, your license and consent documents under <code>licenses/</code>, and an <code>acquisition_log</code> describing where each source came from, when, and under what terms.</p>
+    <p><strong>2. Hash it locally.</strong> Every file is SHA-256'd on your machine and combined into an RFC&nbsp;6962-style Merkle tree. Online mode sends the manifest (literal relative paths, digests, sizes, and the root) but not dataset file bytes. Path names may be confidential and should be sanitized before submission. <code>--offline</code> writes an unanchored certificate and manifest and makes no anchoring request.</p>
+    <p><strong>3. Retain the outputs.</strong> The CLI writes <code>certificate.json</code>, <code>certificate.txt</code>, and <code>manifest.json</code>. When the request succeeds, the certificate records the returned receipt identifiers. Supporting documents are represented by paths and digests; the CLI does not upload or publish their contents. <a href="/certificate/DatasetProvenanceSample">See a sample certificate →</a></p>
   </section>
 
   <section>

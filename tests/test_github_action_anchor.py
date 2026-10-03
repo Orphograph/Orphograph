@@ -101,17 +101,24 @@ def test_incomplete_anchoring_does_not_fail_the_job_unless_asked(tmp_path):
         assert [r["file"] for r in rows] == ["dist/a.bin"], "partial results are still written"
 
 
+def _receipt_ids(data):
+    return {p.parent.name for p in (data / "receipts").glob("*/receipt.json")}
+
+
 def test_a_run_costs_one_anchor_per_matched_file(tmp_path):
-    # Two anchors allowed, two files matched. A run that made any further
-    # anchoring request of its own would be rate limited here, and would cost
-    # a paying user a credit they did not ask to spend.
+    # Any further anchoring request of the action's own would cost a paying
+    # user a credit they did not ask to spend. The allowance here is wide, so
+    # such a request succeeds and leaves a receipt behind; counting receipts
+    # on the server catches it even when the action ignores the answer.
     workspace, data = make_workspace(tmp_path, ["a.bin", "b.bin"])
-    for base in _srv.server_processes(data, stub_calendars=True, RATE_LIMIT_PER_DAY="2"):
+    for base in _srv.server_processes(data, stub_calendars=True, RATE_LIMIT_PER_DAY="50"):
+        before = _receipt_ids(data)
         out = run_action(base, workspace, ORPHO_FAIL_ON_ERROR="true")
         assert out.returncode == 0, (out.stdout, out.stderr)
         rows = json.loads((workspace / "orphograph-receipts.json").read_text())
         assert [r["file"] for r in rows] == ["dist/a.bin", "dist/b.bin"]
         assert "Not anchored" not in (workspace / "step_summary.md").read_text()
+        assert _receipt_ids(data) - before == {r["receipt_id"] for r in rows}
 
 
 def _declared(section):

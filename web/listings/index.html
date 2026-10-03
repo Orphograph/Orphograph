@@ -50,7 +50,7 @@
     <h2>What this means for you</h2>
     <div class="arch-rule"></div>
     <ul class="means">
-      <li>Your listing photos never leave your device.</li>
+      <li>Photo bytes are hashed on your device rather than uploaded; the manifest sent for anchoring contains relative paths, file digests, sizes, and the root.</li>
       <li>One receipt covers the listing as of the chosen anchor date.</li>
       <li>Show one photo later without showing the rest.</li>
     </ul>
@@ -60,7 +60,7 @@
     <h2>How it works</h2>
     <div class="arch-rule"></div>
     <p>Each image gets a fingerprint — a 64-character code that changes if a single byte of the file changes. The fingerprints are computed on your own machine, not uploaded.</p>
-    <p>The fingerprints for the listing date are combined into one fingerprint for the whole folder. That combined fingerprint is the only thing the office sees.</p>
+    <p>The fingerprints and relative paths are combined into one fingerprint for the whole folder. The anchoring request includes the manifest metadata and root, but not the photo bytes.</p>
     <p>The combined fingerprint is anchored to the Bitcoin chain. Anyone, on any future date, can confirm the folder existed by the moment of that block — and that a single image was part of it — without ever seeing the other photos.</p>
   </section>
 
@@ -75,7 +75,7 @@
       <div class="sub">Selective disclosure after closing</div>
       <p>Eight months after closing, the buyer alleges that the basement showed a water stain at listing time. The agent produces an inclusion proof for the four basement photographs in the listing-walk folder anchored on the day the listing went active. Other rooms in the seller's house, and the agent's other active listings on the same day, are not exposed by the proof. The receipt does not establish that the property was free of defects; it establishes that the disclosed photographs, under the recorded relative paths, were part of the anchored listing-walk set as of the recorded Bitcoin block.</p>
       <div class="sub">What the office records</div>
-      <p>The office persists, per anchored listing folder, the Merkle root, the canonical ordering rule applied, the per-leaf relative paths, the per-file SHA-256 digests, the per-file byte sizes, the Bitcoin attestation for the root, and, when supplied, an optional agent signature under a did:key identifier or a capture-credential issued under a published trust list. Real-estate-license-number metadata, where supplied, is recorded as an attribute on the signature, not as a claim of accreditation by the office.</p>
+      <p>The folder receipt records the Merkle root, ordering rule, per-leaf relative paths, SHA-256 digests, byte sizes, and available OpenTimestamps attestations. An optional valid <code>did:key</code> signature can show that the corresponding private key signed the manifest. Orphograph does not establish who controls that key, validate a real-estate license, or certify that the signer is the listing agent.</p>
     </details>
   </section>
 
@@ -83,7 +83,7 @@
     <h2>Questions</h2>
     <div class="arch-rule"></div>
     <h3>Where do my listing photos go?</h3>
-    <p>Nowhere. The fingerprints are computed on your own machine. The office only ever sees the combined fingerprint for the folder.</p>
+    <p>The photo bytes remain on your machine. The service receives the folder manifest metadata and root, including literal relative paths, so use non-sensitive filenames or renamed copies where path disclosure matters.</p>
     <h3>Does this cure a defective disclosure form?</h3>
     <p>No. The receipt records that a particular set of images existed by the time of the recorded Bitcoin block. The disclosure form itself remains the responsibility of the agent and counsel.</p>
     <h3>Can I anchor multiple dates in one listing's life?</h3>

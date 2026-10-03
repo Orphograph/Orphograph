@@ -67,9 +67,10 @@ python3 orphograph-watch.py ~/Deliveries</pre>
       <h2>GitHub Action</h2>
       <p>Request one receipt per matched build artifact. Successful rows are
       written to the job summary and <code>orphograph-receipts.json</code> in the
-      workspace. The default <code>fail_on_error: true</code> fails the job when
-      anchoring or manifest generation is incomplete; set it to
-      <code>false</code> only when receipts are advisory.</p>
+      workspace. The default is <code>fail_on_error: false</code>, so the job
+      continues when anchoring is incomplete and the summary lists what was not
+      anchored. Set it to <code>true</code> when a release must not ship
+      without its receipts.</p>
       <pre>- uses: Orphograph/Orphograph/integrations/github-action@master
   with:
     paths: "dist/*"</pre>

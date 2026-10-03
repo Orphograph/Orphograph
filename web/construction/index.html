@@ -44,7 +44,7 @@
     <h2>What this means for you</h2>
     <div class="arch-rule"></div>
     <ul class="means">
-      <li>Your photos never leave your device.</li>
+      <li>Photo bytes are hashed on your device rather than uploaded; the manifest sent for anchoring contains relative paths, file digests, sizes, and the root.</li>
       <li>One receipt covers the whole job-site visit.</li>
       <li>Show one photo later without showing the rest.</li>
     </ul>
@@ -54,7 +54,7 @@
     <h2>How it works</h2>
     <div class="arch-rule"></div>
     <p>Each photo gets a fingerprint — a 64-character code that changes if a single byte of the file changes. The fingerprints are computed on your own machine, not uploaded.</p>
-    <p>The fingerprints for the day are combined into one fingerprint for the whole folder. That combined fingerprint is the only thing the office sees.</p>
+    <p>The fingerprints and relative paths are combined into one fingerprint for the whole folder. The anchoring request includes the manifest metadata and root, but not the photo bytes.</p>
     <p>The combined fingerprint is anchored to the Bitcoin chain. Anyone, on any future date, can confirm the folder existed by the moment of that block — and that a single image was part of it — without ever seeing the other photos.</p>
   </section>
 
@@ -68,9 +68,9 @@
       <p>The office never sees the photographs. The desktop or browser tool computes a SHA-256 fingerprint of each file, binds the file's relative path into a leaf hash under RFC 6962 domain separation, and assembles the leaves into a Merkle tree whose root is submitted to the OpenTimestamps calendars. The bytes of the photographs themselves do not cross the wire.</p>
       <p>The root is then anchored to a Bitcoin block, and an OpenTimestamps proof for that root is delivered back to the contractor. The proof is sufficient, on its own, to demonstrate that the anchored folder existed by the time of the recorded block.</p>
       <div class="sub">Selective disclosure in the field</div>
-      <p>A claim arises months after the slab pour that the rebar spacing was non-compliant on a specific date. The contractor produces the single photograph of the rebar mat under the slab, together with an inclusion proof — approximately log2 N sibling hashes — that demonstrates the image was a leaf of the anchored end-of-day folder for that exact date. The remaining contents of the folder are not exposed by the proof.</p>
+      <p>A claim arises months after the slab pour that the rebar spacing was non-compliant on a specific date. The contractor produces the single photograph of the rebar mat under the slab, together with an inclusion proof (approximately log2 N sibling hashes) that demonstrates the image was a leaf of the anchored end-of-day folder no later than its recorded Bitcoin block. The remaining contents of the folder are not exposed by the proof. The receipt does not establish the day the photograph was taken; it establishes that the image, under its recorded relative path, existed by the time of that block.</p>
       <div class="sub">What the office records</div>
-      <p>The office persists, per anchored folder, the Merkle root, the canonical ordering rule applied, the per-leaf relative paths, the per-file SHA-256 digests, the per-file byte sizes, the Bitcoin attestation for the root, and, when supplied, an optional device signature under a did:key identifier or a capture-credential issued under a published trust list. A contractor for whom path names are themselves sensitive may anchor under a hash-labeled scheme in which the recorded path is the file's own digest.</p>
+      <p>The folder receipt records the Merkle root, ordering rule, per-leaf relative paths, SHA-256 digests, byte sizes, and available OpenTimestamps attestations. An optional valid <code>did:key</code> signature can show that the corresponding private key signed the manifest. Orphograph does not establish who controls that key, or identify the person or device that took a photograph. Where path names are themselves sensitive, rename or copy the files to non-sensitive paths before anchoring.</p>
     </details>
   </section>
 
@@ -78,7 +78,7 @@
     <h2>Questions</h2>
     <div class="arch-rule"></div>
     <h3>Where do my photos go?</h3>
-    <p>Nowhere. The fingerprints are computed on your own machine. The office only ever sees the combined fingerprint for the folder.</p>
+    <p>The photo bytes remain on your machine. The service receives the folder manifest metadata and root, including literal relative paths, so use non-sensitive filenames or renamed copies where path disclosure matters.</p>
     <h3>What does one receipt cover?</h3>
     <p>One day's photos for one job site, sealed as one set. Per-phase or per-milestone folders are also fine.</p>
     <h3>Can I show just one photo later?</h3>
