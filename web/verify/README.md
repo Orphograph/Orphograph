@@ -95,7 +95,7 @@ verifier checks SHA-256 only, which is still NIST-acceptable.
 
 The `.ots` files in a fresh receipt are "calendar-pending" — they
 prove your hash was submitted to an OpenTimestamps calendar, which
-will batch it into a Bitcoin transaction within ~1 hour.
+will batch it into a Bitcoin transaction (calendars publish about once an hour), and that transaction can take from about an hour to several days to be mined.
 
 To upgrade a receipt to a fully block-attested Bitcoin proof, run:
 

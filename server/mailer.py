@@ -660,10 +660,27 @@ def send_receipt_email(to: str, receipt: dict) -> bool:
             "A second notice will be issued upon Bitcoin commitment. Until "
             "then, this receipt and the original file together comprise the "
             "evidentiary set; please retain both.\n")
+    # calendars_ok 0: no calendar accepted the hash, so the receipt has no
+    # Bitcoin commitment and never gets one. Telling that customer the
+    # attestations are complete and a second notice will follow is false
+    # (cycle 9). The anchor refunded a Pack credit if one was spent.
+    no_commitment = receipt.get("calendars_ok") == 0
+    if no_commitment:
+        status_text = (
+            "No calendar accepted this fingerprint, so this receipt has no "
+            "Bitcoin commitment and will not get one. Anchor it again later; "
+            "a Pack credit spent on it was refunded.")
+        retain = ("No second notice will follow for this receipt. To anchor the "
+                  "folder again later, keep its files; the manifest is rebuilt "
+                  "from them.\n" if is_folder else
+                  "No second notice will follow for this receipt.\n")
+    else:
+        status_text = (
+            "Calendar attestations are complete; commitment to Bitcoin confirms "
+            "from about an hour to several days later, once the calendars' "
+            "aggregation batch is written on-chain.")
     text = (
-        f"The instrument has been registered. Calendar attestations are "
-        f"complete; commitment to Bitcoin typically confirms within a few "
-        f"hours, once the calendars' aggregation batch is written on-chain.\n\n"
+        f"The instrument has been registered. {status_text}\n\n"
         f"  Receipt          {rid}\n"
         f"  {digest_label}  {hash_hex}\n"
         f"  Registered (UTC) {created_at}\n"
@@ -676,9 +693,7 @@ def send_receipt_email(to: str, receipt: dict) -> bool:
         f"<h2 style=\"font-family:Georgia,'Times New Roman',serif;margin:0 0 14px;"
         f"color:#1a1a1a;font-weight:500;font-size:20px;letter-spacing:0.01em;\">"
         f"Receipt issued.</h2>"
-        f"<p style=\"color:#444;\">Calendar attestations are complete; "
-        f"commitment to Bitcoin typically confirms within a few hours, "
-        f"once the calendars&rsquo; aggregation batch is written on-chain.</p>"
+        f"<p style=\"color:#444;\">{status_text.replace(chr(39), '&rsquo;')}</p>"
         f"<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" "
         f"style=\"margin:18px 0;border-collapse:collapse;font-size:14px;\">"
         f"<tr><td style=\"padding:4px 14px 4px 0;color:#666;vertical-align:top;\">Receipt</td>"
@@ -697,10 +712,11 @@ def send_receipt_email(to: str, receipt: dict) -> bool:
         f"font-family:Georgia,'Times New Roman',serif;font-size:14px;"
         f"letter-spacing:0.03em;\">"
         f"View the full receipt →</a></p>"
-        f"<p style=\"color:#444;font-size:14px;\">A second notice will be "
-        f"issued upon Bitcoin commitment. Until then, this receipt and "
-        f"the original file together comprise the evidentiary set; please "
-        f"retain both.</p>"
+        + (f"<p style=\"color:#444;font-size:14px;\">{retain.strip()}</p>" if no_commitment else
+           f"<p style=\"color:#444;font-size:14px;\">A second notice will be "
+           f"issued upon Bitcoin commitment. Until then, this receipt and "
+           f"the original file together comprise the evidentiary set; please "
+           f"retain both.</p>")
     )
     attachments = None
     if _receipt_pdf is not None:

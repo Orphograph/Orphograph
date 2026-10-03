@@ -85,6 +85,74 @@ function calendarCounts(rec) {
   };
 }
 
+// The only two readings of calendars_ok on this page. Every line (status,
+// verdict, facts strip, #btc, Bitcoin card) goes through these, so the lines
+// cannot disagree: only an explicit 0 means "no Bitcoin commitment"; a record
+// with no calendars_ok field (an older server) is not a refusal. The tests run
+// this whole file under node and check that every one of those lines agrees.
+function noCommitment(rec) { return rec.calendars_ok === 0; }
+function someCalendarAccepted(rec) { return (rec.calendars_ok || 0) > 0; }
+
+// The status sentence, from the record alone (run under node by
+// tests/test_receipt_pages_tell_the_truth_about_bitcoin.py).
+//
+// CONFIRMED is driven by the Bitcoin-pinned counts, never by proof validity:
+// a stamped-but-pending proof is not a confirmation. A record with no valid
+// calendar proof (no calendar accepted the hash) has no Bitcoin commitment
+// and never gets one, so it is not "pending". Only an explicit calendars_ok of
+// 0 means that; every helper on this page reads it the same way.
+function receiptStatusLine(rec) {
+  const raw = rec.status || "pending";
+  const c = calendarCounts(rec);
+  const stamped =
+    `${c.serversOk} of ${c.serversTotal} calendar servers · ` +
+    `${c.distinctOk} of ${c.distinctTotal} calendars`;
+  const confirmed = c.serversPinned === null
+    ? null
+    : `${c.serversPinned} of ${c.serversTotal} calendar servers · ` +
+      `${c.distinctPinned} of ${c.distinctTotal} calendars`;
+  if (raw === "pinned" || raw === "partial") {
+    return confirmed === null
+      ? `Anchored to Bitcoin · ${stamped} stamped`
+      : `Anchored to Bitcoin · ${confirmed} confirmed`;
+  }
+  if (raw === "pending" && noCommitment(rec)) {
+    return "No Bitcoin commitment · no valid calendar proof for this receipt";
+  }
+  if (raw === "pending") return `Pending Bitcoin confirmation · ${stamped} stamped`;
+  return `${raw} (${stamped} stamped)`;
+}
+
+// The verdict banner's copy and the facts-strip Bitcoin cell, from the record
+// alone (run under node by the tests, like receiptStatusLine). A record whose
+// calendars_ok is 0 has no Bitcoin commitment and never gets one: it is not
+// "awaiting" or "in progress" (cycle 9).
+function receiptVerdictCopy(rec, when) {
+  if (rec.btc_pinned_at) {
+    return { kind: "anchored", headline: `This file existed on or before ${when}.`,
+      sub: "Anchored in the Bitcoin blockchain — verifiable by anyone, no account, no trust in Orphograph required. This fingerprint now lives in the most heavily verified public record in human history; it will outlive every company involved, including ours." };
+  }
+  if (someCalendarAccepted(rec)) {
+    return { kind: "pending", headline: `Sealed ${when} — awaiting Bitcoin confirmation.`,
+      sub: "The seal is in place; the Bitcoin anchor lands from about an hour to several days after anchoring. Refresh this page later to see it confirmed." };
+  }
+  if (noCommitment(rec)) {
+    return { kind: "none", headline: `Recorded ${when} — no Bitcoin commitment.`,
+      sub: "No calendar accepted this fingerprint, so this receipt has no Bitcoin commitment and never will. Anchor the file again to get one." };
+  }
+  return { kind: "pending", headline: `Sealed ${when} — confirmation in progress.`,
+    sub: "The record exists but its proofs have not yet been confirmed. Check back shortly." };
+}
+
+function receiptBtcFact(rec, fmt) {
+  if (rec.btc_pinned_at) {
+    const d = new Date(rec.btc_pinned_at);
+    return "Pinned " + (isNaN(d.getTime()) ? rec.btc_pinned_at : fmt(d));
+  }
+  if (noCommitment(rec)) return "None — no valid calendar proof";
+  return "Pending — an hour to several days";
+}
+
 function el(tag, attrs, ...children) {
   const node = document.createElement(tag);
   if (attrs) {
@@ -202,7 +270,9 @@ function renderExplorerGrid(rec) {
     }, "blockstream.info →"));
     btcCard.appendChild(links);
   } else {
-    btcCard.appendChild(el("p", { className: "muted small", textContent: "Pending — Bitcoin confirmation can take from about an hour to several days. Once pinned, this card will link directly to the Bitcoin block and transaction containing the Merkle root that commits your hash." }));
+    btcCard.appendChild(el("p", { className: "muted small", textContent: !noCommitment(rec)
+      ? "Pending — Bitcoin confirmation can take from about an hour to several days. Once pinned, this card will link directly to the Bitcoin block and transaction containing the Merkle root that commits your hash."
+      : "No Bitcoin commitment — no valid calendar proof exists for this receipt, so it will never be pinned." }));
   }
   grid.appendChild(btcCard);
 
@@ -258,28 +328,12 @@ function renderVerdict(rec) {
   // so "checked just now" is literally true.
   const checkedLine = "Record re-checked just now, at " + _fmtLocal(new Date()) + ".";
 
-  if (rec.btc_pinned_at) {
-    setVerdict(
-      `This file existed on or before ${when}.`,
-      "Anchored in the Bitcoin blockchain — verifiable by anyone, no account, no trust in Orphograph required. This fingerprint now lives in the most heavily verified public record in human history; it will outlive every company involved, including ours.",
-      checkedLine
-    );
-    document.getElementById("verdict").classList.add("verdict-anchored");
-  } else if ((rec.calendars_ok || 0) > 0) {
-    setVerdict(
-      `Sealed ${when} — awaiting Bitcoin confirmation.`,
-      "The seal is in place; the Bitcoin anchor usually lands within hours. Refresh this page later to see it confirmed.",
-      checkedLine
-    );
-    document.getElementById("verdict").classList.add("verdict-pending");
-  } else {
-    setVerdict(
-      `Sealed ${when} — confirmation in progress.`,
-      "The record exists but its proofs have not yet been confirmed. Check back shortly.",
-      checkedLine
-    );
-    document.getElementById("verdict").classList.add("verdict-pending");
-  }
+  const v = receiptVerdictCopy(rec, when);
+  setVerdict(v.headline, v.sub, checkedLine);
+  // "none" keeps the pending stripe: there is no failure style, and the copy
+  // carries the meaning.
+  document.getElementById("verdict").classList.add(
+    v.kind === "anchored" ? "verdict-anchored" : "verdict-pending");
 }
 
 // Facts strip — dates in explicit UTC so two skeptics in two time zones
@@ -291,14 +345,7 @@ function renderFacts(rec) {
     sealed.textContent = isNaN(d.getTime()) ? (rec.created_at || "—") : _fmtUtc(d);
   }
   const btc = $("#fact-btc");
-  if (btc) {
-    if (rec.btc_pinned_at) {
-      const d = new Date(rec.btc_pinned_at);
-      btc.textContent = "Pinned " + (isNaN(d.getTime()) ? rec.btc_pinned_at : _fmtUtc(d));
-    } else {
-      btc.textContent = "Pending — usually within hours";
-    }
-  }
+  if (btc) btc.textContent = receiptBtcFact(rec, _fmtUtc);
   const cals = $("#fact-cals");
   if (cals) {
     const c = calendarCounts(rec);
@@ -376,28 +423,8 @@ async function main() {
   // and bob) and it is the DISTINCT count the durability threshold measures —
   // three server acknowledgements can rest on two calendars under one
   // operator's domain.
-  //
-  // CONFIRMED is driven by the Bitcoin-pinned counts, never by proof validity:
-  // a stamped-but-pending proof is not a confirmation.
-  const _rawStatus = rec.status || "pending";
   const _c = calendarCounts(rec);
-  const _stamped =
-    `${_c.serversOk} of ${_c.serversTotal} calendar servers · ` +
-    `${_c.distinctOk} of ${_c.distinctTotal} calendars`;
-  const _confirmed = _c.serversPinned === null
-    ? null
-    : `${_c.serversPinned} of ${_c.serversTotal} calendar servers · ` +
-      `${_c.distinctPinned} of ${_c.distinctTotal} calendars`;
-  let _friendly;
-  if (_rawStatus === "pinned" || _rawStatus === "partial") {
-    _friendly = _confirmed === null
-      ? `Anchored to Bitcoin · ${_stamped} stamped`
-      : `Anchored to Bitcoin · ${_confirmed} confirmed`;
-  } else if (_rawStatus === "pending") {
-    _friendly = `Pending Bitcoin confirmation · ${_stamped} stamped`;
-  } else {
-    _friendly = `${_rawStatus} (${_stamped} stamped)`;
-  }
+  const _friendly = receiptStatusLine(rec);
   $("#status").textContent = _friendly;
   $("#cals").textContent =
     `${_c.serversOk} of ${_c.serversTotal} OTS proofs valid · ` +
@@ -405,7 +432,9 @@ async function main() {
   if (rec.btc_pinned_at) {
     renderTimeInto($("#btc"), rec.btc_pinned_at);
   } else {
-    $("#btc").textContent = "pending — confirmation can take from about an hour to several days";
+    $("#btc").textContent = !noCommitment(rec)
+      ? "pending — confirmation can take from about an hour to several days"
+      : "none — with no valid calendar proof, this receipt will never be pinned";
   }
   renderTimePairInto($("#created"), "Anchored", rec.created_at);
 

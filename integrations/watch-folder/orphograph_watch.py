@@ -234,6 +234,15 @@ def run_scan(root, args, state, pause):
             log("network error (%s); backing off %.0fs" % (e, pause["backoff"]))
             continue
 
+        if result.get("calendars_ok") == 0:
+            # No calendar accepted the hash: the receipt has no Bitcoin
+            # commitment and never gets one. Recording the file would mark it
+            # done; keep it queued and back off as for a paused server.
+            pause["until"] = time.time() + 300
+            log("no calendar accepted %s (receipt %s has no Bitcoin commitment); "
+                "it stays queued, retrying in 5min" % (rel, result.get("receipt_id", "")))
+            continue
+
         pause["backoff"] = 0  # success resets exponential backoff
         receipt_id = result.get("receipt_id", "")
         receipt_url = "https://orphograph.com/r/%s" % receipt_id

@@ -107,11 +107,23 @@ npx orphograph verify-inclusion /path/to/sub/photo.jpg sub/photo.jpg proof.json 
 
 Flags:
 
-- `--server URL` overrides the default `https://orphograph.com` endpoint.
+- `--server URL` (or `--server-url URL`, or environment variable
+  `ORPHO_SERVER_URL`) overrides the default `https://orphograph.com`
+  endpoint. It must start with `http://` or `https://`. An empty `--server`
+  or `--server-url` is an error, not the default; an empty or blank
+  `ORPHO_SERVER_URL` counts as unset. The variable is not read when a flag
+  names the server.
 - `--api-key KEY` (or environment variable `ORPHO_API_KEY`) attaches an
-  API key as the `X-Orpho-Api-Key` request header.
+  API key as the `X-Orpho-Api-Key` request header. An explicit empty
+  `--api-key ""` sends no key.
 - `--label TEXT` records a free-form client label on the receipt
   (truncated to 200 characters by the server).
+- Any other option or an extra argument stops the CLI with exit code 2
+  before any request. On `anchor`, `verify` and `proof`, so do a separate
+  short option such as `-s` and any argument that holds a URL scheme such as
+  `http://` (a server URL belongs after `--server`). A bare `--` ends the options, so a path or
+  receipt id that starts with `-` can follow it:
+  `npx orphograph proof <receipt_id> -- -x`.
 
 ## What crosses the network
 

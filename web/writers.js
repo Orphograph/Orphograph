@@ -337,6 +337,23 @@ async function anchorChain() {
     return;
   }
 
+  // calendars_ok 0: no calendar accepted the root, so this receipt has no
+  // Bitcoin commitment and never gets one. Leave the chain un-anchored: the
+  // same button retries it (the root is the same), and the stored session and
+  // manifest never say "anchored" for it.
+  if (!record || typeof record !== "object" || !record.receipt_id) {
+    setStatus("writers-status", "Anchor response had no receipt. Press Anchor again to retry.", "err");
+    if (btn) btn.disabled = false;
+    return;
+  }
+  if (record.calendars_ok === 0) {
+    setStatus("writers-status",
+      "Not anchored: no calendar accepted the Merkle root, so this receipt has no Bitcoin commitment. Press Anchor again to retry.",
+      "err");
+    if (btn) btn.disabled = false;
+    return;
+  }
+
   state.anchored = true;
   state.receipt = record;
   persistDraftSession();
@@ -360,14 +377,9 @@ async function anchorChain() {
     receiptBox.hidden = false;
   }
 
-  // calendars_ok 0: no calendar accepted the root, so this receipt has no
-  // Bitcoin commitment and never gets one (review of #283).
-  const committed = record && record.calendars_ok > 0;
   setStatus("writers-status",
-    committed
-      ? "Anchored. Merkle root submitted to the calendars. From about an hour to several days from now, it will be committed in a Bitcoin block."
-      : "Not anchored: no calendar accepted the Merkle root, so this receipt has no Bitcoin commitment. Try again later.",
-    committed ? "ok" : "err");
+    "Anchored. Merkle root submitted to the calendars. From about an hour to several days from now, it will be committed in a Bitcoin block.",
+    "ok");
 }
 
 function downloadManifest() {

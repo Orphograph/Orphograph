@@ -166,7 +166,7 @@ function renderExplorerGrid(rec) {
     links.appendChild(el("a", { href: "https://blockstream.info/", target: "_blank", rel: "noopener noreferrer", className: "btn-link" }, "blockstream.info →"));
     btcCard.appendChild(links);
   } else {
-    btcCard.appendChild(el("p", { className: "muted small", textContent: rec.calendars_ok > 0
+    btcCard.appendChild(el("p", { className: "muted small", textContent: !noCommitment(rec)
       ? "Pending — Bitcoin confirmation can take from about an hour to several days. Once pinned, this links to the block and transaction committing the Merkle root."
       : "No Bitcoin commitment — no valid calendar proof exists for this root, so it will never be pinned." }));
   }
@@ -450,6 +450,12 @@ function renderLineage(rec) {
 }
 
 // ─── status copy (shared with receipt.js) ────────────────────────────────
+// The only reading of "no Bitcoin commitment" on this page: an explicit
+// calendars_ok of 0 (a missing field is an older server, not a refusal). The
+// status line, #btc and the Bitcoin card all use it; the tests run this whole
+// file under node and check that those lines agree.
+function noCommitment(rec) { return rec.calendars_ok === 0; }
+
 function friendlyStatus(rec) {
   const raw = rec.status || "pending";
   const cok = rec.calendars_ok || 0, ctot = rec.calendars_total || 5;
@@ -457,7 +463,7 @@ function friendlyStatus(rec) {
   if (raw === "partial") return `Anchored to Bitcoin · ${cok} of ${ctot} calendars confirmed`;
   // No valid calendar proof (e.g. no calendar accepted the root): this
   // receipt has no Bitcoin commitment and never will, so it is not "pending".
-  if (raw === "pending" && cok === 0) return "No Bitcoin commitment · no valid calendar proof for this root";
+  if (raw === "pending" && noCommitment(rec)) return "No Bitcoin commitment · no valid calendar proof for this root";
   if (raw === "pending") return `Pending Bitcoin confirmation · ${cok} of ${ctot} calendars stamped`;
   return `${raw} (${cok}/${ctot} calendars)`;
 }
@@ -499,7 +505,7 @@ async function main() {
   $("#status").textContent = friendlyStatus(rec);
   $("#cals").textContent = `${rec.calendars_ok || 0} of ${rec.calendars_total || 5} OTS proofs valid`;
   if (rec.btc_pinned_at) renderTimeInto($("#btc"), rec.btc_pinned_at);
-  else if (!(rec.calendars_ok > 0)) $("#btc").textContent = "none — with no valid calendar proof, this root will never be pinned";
+  else if (noCommitment(rec)) $("#btc").textContent = "none — with no valid calendar proof, this root will never be pinned";
   else $("#btc").textContent = "pending — confirmation can take from about an hour to several days";
 
   // Version history (edit-lineage) — no-op unless rec.lineage is present.

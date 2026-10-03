@@ -88,6 +88,20 @@ def build_memory_manifest(workspace: str) -> str:
     return json.dumps(manifest, sort_keys=True, separators=(",", ":"))
 
 
+def _json_object(raw: bytes) -> dict:
+    """A 200 body as a dict, or an error record. A proxy or challenge page can
+    answer 200 with HTML, and a misconfigured base URL with any JSON at all;
+    both used to end the CLI in a traceback with nothing recorded."""
+    text = raw.decode("utf-8", errors="replace")
+    try:
+        value = json.loads(text or "{}")
+    except ValueError:
+        value = None
+    if isinstance(value, dict):
+        return value
+    return {"error": "bad_response", "status": 200, "body": text[:400]}
+
+
 def post_anchor(base, sha256_hex, sha512_hex, label=None,
                 api_key=None, pack_token=None) -> dict:
     payload = {"hash_hex": sha256_hex, "sha512_hex": sha512_hex}
@@ -104,7 +118,7 @@ def post_anchor(base, sha256_hex, sha512_hex, label=None,
                                  headers=headers, method="POST")
     try:
         with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT_SEC) as resp:
-            return json.loads(resp.read().decode("utf-8", errors="replace") or "{}")
+            return _json_object(resp.read())
     except urllib.error.HTTPError as e:
         return {"error": "http_error", "status": e.code,
                 "body": e.read().decode("utf-8", errors="replace")[:400]}
@@ -119,7 +133,7 @@ def get_verify(base, receipt_id: str) -> dict:
     req = urllib.request.Request(url, headers=headers)
     try:
         with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT_SEC) as resp:
-            return json.loads(resp.read().decode("utf-8", errors="replace") or "{}")
+            return _json_object(resp.read())
     except urllib.error.HTTPError as e:
         return {"error": "http_error", "status": e.code}
     except urllib.error.URLError as e:

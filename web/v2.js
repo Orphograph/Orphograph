@@ -649,6 +649,9 @@
       const j = await r.json();
       const ok = j.calendars_ok || 0;
       const total = j.calendars_total || 5;
+      // Only an explicit 0 is a refusal; an answer without the field (an older
+      // server) is not read as "no calendar accepted" (review of PR #284).
+      const noCommitment = j.calendars_ok === 0;
 
       setStatusSimple(
         "Instrument issued.",
@@ -669,7 +672,7 @@
       a.style.color = "var(--accent)";
       a.textContent = "View receipt → /r/" + j.receipt_id;
       p.appendChild(a);
-      p.appendChild(document.createTextNode(ok > 0
+      p.appendChild(document.createTextNode(!noCommitment
         ? "  ·  Bitcoin confirmation can take from about an hour to several days."
         : "  ·  No calendar accepted this fingerprint, so this receipt has no Bitcoin commitment. Try again later."
       ));
@@ -699,16 +702,25 @@
         created_at: j.created_at,
         calendars_ok: ok,
         calendars_total: total,
-        status: j.status || "pending",
+        // calendars_ok 0: no Bitcoin commitment, ever, so not "pending".
+        status: !noCommitment ? (j.status || "pending") : "no commitment",
       };
       saveRecentReceipt(recordForStorage);
       renderRecentReceipts();
       clearAnchorState();
-      showStatusBanner(
-        "Receipt issued. Watching for Bitcoin confirmation…",
-        "success"
-      );
-      startPinPolling(j.receipt_id);
+      if (!noCommitment) {
+        showStatusBanner(
+          "Receipt issued. Watching for Bitcoin confirmation…",
+          "success"
+        );
+        startPinPolling(j.receipt_id);
+      } else {
+        // Nothing will ever pin, so there is nothing to watch for.
+        showStatusBanner(
+          "No calendar accepted this fingerprint, so nothing was committed to Bitcoin. Try again later.",
+          "error"
+        );
+      }
     } catch (e) {
       setStatusSimple("Network error.", String(e && e.message ? e.message : e), "error");
       showStatusBanner("Anchor failed: " + String(e && e.message ? e.message : e), "error");

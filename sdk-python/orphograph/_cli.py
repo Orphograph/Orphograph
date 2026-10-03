@@ -29,6 +29,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 from typing import List, Optional
 
@@ -36,8 +37,17 @@ from . import anchor_folder, inclusion_proof, verify_folder, verify_inclusion
 from ._client import DEFAULT_SERVER_URL, OrphographError
 
 
+# A scheme (two or more letters, then "://") in an argument slot is a server
+# URL in the wrong place; two or more letters so C://Users/me is a folder.
+# Only http(s) servers can be named, so every server URL holds "://".
+_HOLDS_URL = re.compile(r"[A-Za-z][A-Za-z0-9+.-]+://")
+_SERVER_URL = re.compile(r"^https?://", re.I)
+_RECEIPT_ID = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+
+
 def _env_server() -> str:
-    return os.environ.get("ORPHO_SERVER_URL", DEFAULT_SERVER_URL)
+    # Empty means unset, as for ORPHO_API_KEY.
+    return os.environ.get("ORPHO_SERVER_URL", "").strip() or DEFAULT_SERVER_URL
 
 
 def _env_api_key() -> Optional[str]:
@@ -164,6 +174,28 @@ def _load_proof(proof_json: str, root_override: Optional[str]) -> tuple:
 def main(argv: Optional[List[str]] = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
+    # An empty --server-url (an unset variable in `--server-url "$URL"`) fell
+    # through to ORPHO_SERVER_URL or the live default: the caller named a
+    # server and got another one. verify-inclusion makes no request.
+    if args.command != "verify-inclusion" and args.server_url is not None and not args.server_url.strip():
+        print("orphograph: --server-url is empty; give a URL or leave the option out.", file=sys.stderr)
+        return 2
+    # A server URL in an argument slot (`inclusion-proof <id> <URL>`, the
+    # option forgotten) was sent as an id or path to the default server.
+    if args.command != "verify-inclusion":
+        for name in ("folder", "receipt_id", "path"):
+            value = getattr(args, name, None)
+            if isinstance(value, str) and _HOLDS_URL.search(value):
+                print(f"orphograph: {name} looks like a server URL; give it as --server-url URL.", file=sys.stderr)
+                return 2
+        receipt_id = getattr(args, "receipt_id", None)
+        if isinstance(receipt_id, str) and not _RECEIPT_ID.fullmatch(receipt_id):
+            print(f"orphograph: not a receipt id: {receipt_id}", file=sys.stderr)
+            return 2
+        named = args.server_url if args.server_url is not None else os.environ.get("ORPHO_SERVER_URL", "").strip()
+        if named and not _SERVER_URL.match(named.strip()):
+            print(f"orphograph: not an http(s) server URL: {named}", file=sys.stderr)
+            return 2
     server_url = args.server_url or _env_server()
     api_key = args.api_key if args.api_key is not None else _env_api_key()
 
@@ -195,6 +227,16 @@ def main(argv: Optional[List[str]] = None) -> int:
                 exclude=args.exclude,
             )
             sys.stdout.write(json.dumps(result) + "\n")
+            # calendars_ok 0: no calendar accepted the root, so this receipt
+            # has no Bitcoin commitment and never gets one. Exiting 0 let a CI
+            # gate pass it. 2, not 1: exit 1 is the verify MISMATCH verdict.
+            if not result.get("receipt_id"):
+                sys.stderr.write("orphograph: the service answered without a receipt.\n")
+                return 2
+            if result.get("calendars_ok") == 0:
+                sys.stderr.write("orphograph: no calendar accepted the root; this receipt "
+                                 "has no Bitcoin commitment. Try again later.\n")
+                return 2
             return 0
         if args.command == "verify":
             ok = verify_folder(

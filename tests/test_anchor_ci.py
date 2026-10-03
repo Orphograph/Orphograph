@@ -106,3 +106,55 @@ def test_write_github_output_noop_without_env(monkeypatch):
 
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-q"]))
+
+
+# Cycle 9 (post-merge review of #283): the repo's other reusable action had both
+# client defects #283 fixed in integrations/github-action. A 200 with
+# calendars_ok 0 (no Bitcoin commitment, ever) exited 0 with ok: true and wrote
+# receipt outputs; a 200 that is not a JSON object crashed it.
+
+@pytest.mark.parametrize("answer", [
+    {"receipt_id": "RCI0000000001", "calendars_ok": 0},
+    [], None, {"receipt_id": ""},
+], ids=["no-calendar", "list", "null", "empty-id"])
+def test_an_answer_that_is_not_an_anchor_fails(answer):
+    code, res = ci.run({"ORPHO_TEXT": "release notes"},
+                       anchor_fn=lambda *a: (True, answer))
+    assert code == 1 and res["ok"] is False, res
+
+
+@pytest.mark.parametrize("calendars_ok", [1, None], ids=["one-calendar", "field-absent"])
+def test_a_committed_or_older_answer_still_passes(calendars_ok):
+    answer = {"receipt_id": "RCI0000000002"}
+    if calendars_ok is not None:
+        answer["calendars_ok"] = calendars_ok
+    code, res = ci.run({"ORPHO_TEXT": "release notes"}, anchor_fn=lambda *a: (True, answer))
+    assert code == 0 and res["ok"] is True, res
+
+
+def test_a_200_that_is_not_json_is_a_failure_not_a_crash(monkeypatch):
+    class _Resp:
+        def read(self):
+            return b"<html>challenge</html>"
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    monkeypatch.setattr(ci.urllib.request, "urlopen", lambda req, timeout=None: _Resp())
+    ok, resp = ci.anchor("http://127.0.0.1:9", "0" * 64, "0" * 128, "", "")
+    assert ok is False and "error" in resp, resp
+
+
+
+def test_an_error_body_that_is_not_an_object_is_a_failure_not_a_crash(monkeypatch):
+    import io
+    import urllib.error
+
+    def raise_http(req, timeout=None):
+        raise urllib.error.HTTPError("http://127.0.0.1:9/api/anchor", 503, "busy", {}, io.BytesIO(b'["busy"]'))
+    monkeypatch.setattr(ci.urllib.request, "urlopen", raise_http)
+    ok, resp = ci.anchor("http://127.0.0.1:9", "0" * 64, "0" * 128, "", "")
+    assert ok is False and resp["status_code"] == 503, resp

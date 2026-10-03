@@ -147,6 +147,13 @@ def _anchor(base: str, api_key: str, path: Path) -> dict:
         return json.loads(resp.read().decode("utf-8"))
 
 
+# A file no calendar accepted waits this long before it is posted again. Without
+# it the next scan (POLL_SEC) re-posted it, minting another worthless receipt
+# every few seconds for as long as the outage lasted (review of PR #284).
+REFUSED_RETRY_SEC = 300
+_REFUSED_UNTIL: dict[str, float] = {}
+
+
 def _process(base: str, api_key: str, path: Path, state_path: Path,
              verbose: bool = True) -> tuple[bool, str]:
     """Anchor a single file and write the receipt next to it.
@@ -155,6 +162,9 @@ def _process(base: str, api_key: str, path: Path, state_path: Path,
     sidecar = path.with_suffix(path.suffix + ".orpho.json")
     if sidecar.exists():
         return True, "already has receipt sidecar; skipping"
+    wait = _REFUSED_UNTIL.get(str(path), 0) - time.time()
+    if wait > 0:
+        return False, f"no calendar accepted it last time; will retry in {wait:.0f}s"
 
     try:
         size = path.stat().st_size
@@ -177,6 +187,15 @@ def _process(base: str, api_key: str, path: Path, state_path: Path,
         return False, msg
     except (urllib.error.URLError, OSError) as e:
         return False, f"{type(e).__name__}: {e}"
+
+    # calendars_ok 0: no calendar accepted the hash, so this receipt has no
+    # Bitcoin commitment and never gets one. Writing the sidecar would mark
+    # the file done forever; leave it for the next scan instead.
+    if receipt.get("calendars_ok") == 0:
+        _REFUSED_UNTIL[str(path)] = time.time() + REFUSED_RETRY_SEC
+        return False, ("no calendar accepted the hash (receipt "
+                       f"{receipt.get('receipt_id')} has no Bitcoin commitment); "
+                       f"will retry in {REFUSED_RETRY_SEC}s")
 
     sidecar.write_text(json.dumps(receipt, indent=2))
     _record_state(state_path, {

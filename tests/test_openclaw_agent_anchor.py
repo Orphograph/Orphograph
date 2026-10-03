@@ -16,6 +16,11 @@ SPEC = importlib.util.spec_from_file_location("openclaw_agent_anchor", MODULE_PA
 anchor = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(anchor)
 
+# Captured before the autouse fixture blocks the transport, for the tests that
+# drive the real request/response handling with a stubbed urlopen.
+REAL_POST_ANCHOR = anchor.post_anchor
+REAL_GET_VERIFY = anchor.get_verify
+
 
 @pytest.fixture(autouse=True)
 def _no_network_no_stray_files(tmp_path, monkeypatch):
@@ -244,3 +249,42 @@ def test_an_answer_with_no_receipt_is_not_an_anchor(monkeypatch, capsys):
 
     assert run_main(monkeypatch, ["anchor-text"], stdin="payload") == 1
     assert "no receipt" in json.loads(capsys.readouterr().out)["not_anchored"]
+
+
+
+class _Resp:
+    def __init__(self, body: bytes):
+        self._body = body
+
+    def read(self):
+        return self._body
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+
+@pytest.mark.parametrize("body", [b"[]", b"null", b'"ok"', b"<html>challenge</html>"],
+                         ids=["list", "null", "string", "not-json"])
+def test_a_200_that_is_not_a_json_object_is_an_error_record(body, monkeypatch, capsys, tmp_path):
+    # Cycle 9: a proxy or challenge page answering 200 ended the CLI in a
+    # traceback (JSONDecodeError / AttributeError), with no JSON record and no
+    # ledger row. It is an error record now, saved, and the exit is 1.
+    monkeypatch.setattr(anchor, "post_anchor", REAL_POST_ANCHOR)
+    monkeypatch.setattr(anchor.urllib.request, "urlopen", lambda req, timeout=None: _Resp(body))
+
+    assert run_main(monkeypatch, ["--base", "http://127.0.0.1:9", "anchor-text"], stdin="payload") == 1
+    out = json.loads(capsys.readouterr().out)
+    assert out["response"]["error"] == "bad_response", out
+    ledger = tmp_path / ".orphograph" / "receipts.jsonl"
+    assert ledger.exists() and ledger.read_text().strip(), "the attempt is still recorded"
+
+
+def test_verify_on_a_200_that_is_not_a_json_object_fails_cleanly(monkeypatch, capsys):
+    monkeypatch.setattr(anchor, "get_verify", REAL_GET_VERIFY)
+    monkeypatch.setattr(anchor.urllib.request, "urlopen", lambda req, timeout=None: _Resp(b"<html>"))
+
+    assert run_main(monkeypatch, ["--base", "http://127.0.0.1:9", "verify", "r1"]) == 1
+    assert json.loads(capsys.readouterr().out)["error"] == "bad_response"

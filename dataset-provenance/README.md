@@ -64,7 +64,7 @@ python3 provenance.py verify --cert out/certificate.json --bundle my-dataset
 
 # No local certificate? Verify the bundle against the LIVE anchored receipt
 # (only the receipt id crosses the network — the bundle never does)
-python3 provenance.py verify --receipt <receipt-id> --bundle my-dataset
+python3 provenance.py verify --receipt=<receipt-id> --bundle my-dataset   # '=' keeps an id that starts with '-' from reading as an option
 
 # Prove one file belongs to the certified set (Merkle inclusion proof)
 python3 provenance.py verify --cert out/certificate.json --bundle my-dataset \

@@ -427,11 +427,17 @@ def _render_certificate_text(cert: dict) -> str:
 # --------------------------------------------------------------------------- verify
 
 def _fetch_receipt_root(api: str, rid: str) -> "tuple[str | None, str | None]":
-    """Fetch a live receipt and return (root_hex, error).
+    """Fetch a live receipt and return (root_hex, error)."""
+    root, _rec, err = _fetch_receipt(api, rid)
+    return root, err
+
+
+def _fetch_receipt(api: str, rid: str) -> "tuple[str | None, dict | None, str | None]":
+    """Fetch a live receipt and return (root_hex, record, error).
 
     Only the receipt id crosses the network — never the bundle. Confirms the
     receipt exists and is a folder (dataset) anchor, and returns its Merkle
-    root (the receipt's hash_hex).
+    root (the receipt's hash_hex) with the record it came from.
     """
     url = f"{api.rstrip('/')}/api/receipt/{rid}"
     req = urllib.request.Request(
@@ -441,19 +447,19 @@ def _fetch_receipt_root(api: str, rid: str) -> "tuple[str | None, str | None]":
             rec = json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
         if e.code == 404:
-            return None, f"receipt not found: {rid}"
-        return None, f"HTTP {e.code} fetching receipt {rid}"
+            return None, None, f"receipt not found: {rid}"
+        return None, None, f"HTTP {e.code} fetching receipt {rid}"
     except (urllib.error.URLError, TimeoutError, OSError, json.JSONDecodeError) as e:
-        return None, f"could not fetch receipt {rid}: {e}"
-    if rec.get("found") is False:
-        return None, f"receipt not found: {rid}"
+        return None, None, f"could not fetch receipt {rid}: {e}"
+    if not isinstance(rec, dict) or rec.get("found") is False:
+        return None, None, f"receipt not found: {rid}"
     kind = rec.get("kind")
     if kind and kind != "folder":
-        return None, f"receipt {rid} is a {kind} receipt, not a dataset (folder) anchor"
+        return None, None, f"receipt {rid} is a {kind} receipt, not a dataset (folder) anchor"
     root = rec.get("hash_hex")
     if not root:
-        return None, f"receipt {rid} has no root hash"
-    return root, None
+        return None, None, f"receipt {rid} has no root hash"
+    return root, rec, None
 
 
 def _fetch_receipt_leaves(api: str, rid: str) -> "list | None":
@@ -513,7 +519,7 @@ def cmd_verify(args: argparse.Namespace) -> int:
     # receipt (only the receipt id crosses the network; the bundle never does).
     cert_path = None
     if args.receipt:
-        expected_root, err = _fetch_receipt_root(args.api, args.receipt)
+        expected_root, live_rec, err = _fetch_receipt(args.api, args.receipt)
         if err:
             print(f"error: {err}", file=sys.stderr)
             return 2
@@ -601,6 +607,13 @@ def cmd_verify(args: argparse.Namespace) -> int:
         except (ValueError, KeyError, FileNotFoundError) as e:
             ok = False
             print(f"FAIL  inclusion — {args.file}: {e}")
+
+    # 4. A live receipt no calendar accepted has no Bitcoin commitment and never
+    #    gets one: the bytes may match its root, but nothing bounds them in time.
+    if args.receipt and live_rec is not None and live_rec.get("calendars_ok") == 0:
+        ok = False
+        print("FAIL  time bound — no calendar accepted this root; the receipt has "
+              "no Bitcoin commitment")
 
     print("")
     print("RESULT: VERIFIED" if ok else "RESULT: FAILED")
