@@ -10,7 +10,7 @@
 <link rel="stylesheet" href="/style.css?v=8">
 <meta name="copyright" content="© 2026 Orphograph. MIT — see /LICENSE">
 <link rel="canonical" href="https://orphograph.com/privacy">
-<meta name="description" content="Orphograph's privacy policy: your files never leave your device. A single file sends only its cryptographic fingerprints (SHA-256, optional SHA-512 sibling) and a label if you attach one; a folder anchor also sends its manifest of relative paths and sizes. Only a SHA-256 (a file's, or a folder's Merkle root) is anchored to Bitcoin. What we collect, what we never see, and your rights.">
+<meta name="description" content="Orphograph's privacy policy: your files never leave your device. A single file sends only its cryptographic fingerprints (SHA-256, optional SHA-512 sibling) and a short label; a folder anchor also sends its manifest of relative paths and sizes. Only a SHA-256 (a file's, or a folder's Merkle root) is anchored to Bitcoin. What we collect, what we never see, and your rights.">
 </head>
 <body class="orpho">
 
@@ -36,7 +36,7 @@
   <h2>What we never see</h2>
   <p>
     <strong>Your files do not reach our server.</strong> Hashing happens in your
-    browser via <code>crypto.subtle</code>. For a single file, what crosses the network is the 32-byte SHA-256 digest, an optional SHA-512 sibling digest (recorded on the receipt but never anchored) and a label only if you attach one. A folder anchor also sends its manifest; see What we collect. A digest cannot be reversed into your file; nobody can do that.
+    browser via <code>crypto.subtle</code>. For a single file, what crosses the network is the 32-byte SHA-256 digest, an optional SHA-512 sibling digest (recorded on the receipt but never anchored) and a short label: one you attach, or a fixed tag naming the page you anchored from. A folder anchor also sends its manifest; see What we collect. A digest cannot be reversed into your file; nobody can do that.
     The privacy claim is enforced by the structure of the protocol, not by our
     promise to behave.
   </p>
@@ -45,8 +45,7 @@
   <ul>
     <li>
       <strong>The fingerprints you submit</strong> — the SHA-256 digest, the
-      optional SHA-512 sibling — plus the optional client label (filename,
-      max 200 chars) you choose to attach.
+      optional SHA-512 sibling — plus a client label (max 200 chars): one you choose to attach, such as a filename, or a fixed tag naming the page you anchored from.
     </li>
     <li>
       <strong>Folder manifests, when you anchor a folder</strong> — each file's
@@ -127,9 +126,7 @@
 
   <h2>Cookies and local storage</h2>
   <p>
-    We use one <code>localStorage</code> entry, <code>orpho_pack_token</code>,
-    to remember your active Pack claim code across page loads. It's local to
-    your browser; we never read it from the server. Clear it any time via the
+    We keep a few things in your browser's <code>localStorage</code>, on your device only: your active Pack claim code (<code>orpho_pack_token</code>), the receipts you anchored recently on this device (<code>orpho_recent_receipts</code>: receipt id, a short hash prefix and any label), the state of an anchor in progress so a reload can resume it (<code>orpho_anchor_state</code>, which can include the file's name), a referral code from a link you followed (<code>orpho_ref_code</code>), and, on the Writers page, its session notes (<code>orpho_writer_sessions</code>). The server cannot read any of it; the page sends your Pack code to the server only to show its remaining balance or to spend it on an anchor. Clear it any time via the
     "remove" button on the Pack banner or your browser's site-data controls.
   </p>
 

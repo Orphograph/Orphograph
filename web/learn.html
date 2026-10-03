@@ -109,7 +109,7 @@
   <ul>
     <li>The SHA-256 (and SHA-512) hash that was anchored</li>
     <li>How many of the five calendars confirmed it (e.g. <strong>5/5 OK</strong>)</li>
-    <li>The <strong>BTC pinned at</strong> field — when this office <em>observed</em> that your hash had been committed to a Bitcoin block, written by the polling worker at the moment it noticed (usually within an hour). It is our observation time, not the block's own timestamp: two receipts anchored days apart can share a BTC-pinned time one second apart because the same polling pass upgraded both. The authoritative time is the Bitcoin block itself — read it with <code>ots verify</code></li>
+    <li>The <strong>BTC pinned at</strong> field — when this office <em>observed</em> that your hash had been committed to a Bitcoin block, written by the polling worker at the moment it noticed (from about an hour to several days after anchoring). It is our observation time, not the block's own timestamp: two receipts anchored days apart can share a BTC-pinned time one second apart because the same polling pass upgraded both. The authoritative time is the Bitcoin block itself — read it with <code>ots verify</code></li>
     <li>A re-hash widget: drop the original file on the page, your browser re-computes the SHA-256, and the page reports ✓ match or ✗ mismatch</li>
     <li>Download links for all five <code>.ots</code> proof files</li>
   </ul>
@@ -273,7 +273,7 @@ Success! Bitcoin block 949114 attests existence as of 2026-05-12 18:34:43 UTC</p
   <dd>A small (~1–2 KB) binary file containing the Merkle path from your hash up to a known Bitcoin transaction. It is the portable proof — keep it next to your original file forever.</dd>
 
   <dt>Block-pinned</dt>
-  <dd>The state where the calendar's Bitcoin transaction has been mined into a block. Until that happens (usually within an hour), the receipt status reads "pending."</dd>
+  <dd>The state where the calendar's Bitcoin transaction has been mined into a block. Until that happens (from about an hour to several days after anchoring), the receipt status reads "pending."</dd>
 
   <dt>Receipt ID</dt>
   <dd>The short, URL-safe identifier (e.g. <code>o3WGD22T4UwqfCrb</code>) for one anchoring event on Orphograph. Bookmarkable; resolves to a public receipt page.</dd>

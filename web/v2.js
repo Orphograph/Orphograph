@@ -670,7 +670,7 @@
       a.textContent = "View receipt → /r/" + j.receipt_id;
       p.appendChild(a);
       p.appendChild(document.createTextNode(
-        "  ·  Bitcoin confirmation arrives within ~1 hour."
+        "  ·  Bitcoin confirmation can take from about an hour to several days."
       ));
       status.appendChild(p);
 

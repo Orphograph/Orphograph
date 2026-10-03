@@ -37,7 +37,7 @@
       "name": "How long until my file's hash is provably in a Bitcoin block?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Calendars batch-broadcast roughly hourly. Your receipt is immediately useful as a calendar-attested proof and upgrades to a full block-attested proof within about an hour, sometimes sooner."
+        "text": "Calendars batch-broadcast roughly hourly. Your receipt is immediately useful as a calendar-attested proof and upgrades to a full block-attested proof from about an hour to several days later."
       }
     },
     {
@@ -183,7 +183,7 @@
   <p>Calendars aggregate thousands of user hashes into one Merkle root and pay for one Bitcoin transaction. Your hash inherits the timestamp via its Merkle path. Marginal cost per receipt is effectively zero.</p>
 
   <h3>How long until my hash is provably in a block?</h3>
-  <p>Calendars batch-broadcast roughly hourly. The receipt is immediately useful as a calendar-attested proof and upgrades to a full block-attested proof within about an hour.</p>
+  <p>Calendars batch-broadcast roughly hourly. The receipt is immediately useful as a calendar-attested proof and upgrades to a full block-attested proof from about an hour to several days later.</p>
 
   <h3>What exactly gets written to Bitcoin?</h3>
   <p>An <code>OP_RETURN</code> output carrying a 32-byte Merkle root. Your hash is one leaf in that tree. The <code>.ots</code> file records the path from your hash to the root.</p>

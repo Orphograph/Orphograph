@@ -17,6 +17,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 import _srv
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -155,3 +157,36 @@ def test_a_receipt_no_calendar_accepted_is_not_counted_as_anchored(tmp_path):
         rows = json.loads((workspace / "orphograph-receipts.json").read_text())
         assert rows == [], rows
         assert "Not anchored" in (workspace / "step_summary.md").read_text()
+
+
+
+@pytest.mark.parametrize("rid", [None, ""], ids=["null", "empty"])
+def test_a_null_receipt_id_is_an_unexpected_answer(tmp_path, rid):
+    """Review round 4: only a missing key was refused; a 200 carrying
+    receipt_id null or "" was written as a receipt named "None" or ""."""
+    import http.server
+    import threading
+
+    class OneAnswer(http.server.BaseHTTPRequestHandler):
+        def do_POST(self):
+            self.rfile.read(int(self.headers.get("Content-Length", 0)))
+            body = json.dumps({"receipt_id": rid, "calendars_ok": 1}).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *a):
+            pass
+
+    stub = http.server.HTTPServer(("127.0.0.1", 0), OneAnswer)
+    threading.Thread(target=stub.serve_forever, daemon=True).start()
+    try:
+        workspace, _data = make_workspace(tmp_path, ["a.bin"])
+        out = run_action(f"http://127.0.0.1:{stub.server_port}", workspace,
+                         ORPHO_FAIL_ON_ERROR="true")
+        assert out.returncode == 1, (out.stdout, out.stderr)
+        assert json.loads((workspace / "orphograph-receipts.json").read_text()) == []
+    finally:
+        stub.shutdown()

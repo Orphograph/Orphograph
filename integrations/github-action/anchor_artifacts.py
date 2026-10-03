@@ -229,7 +229,7 @@ def main() -> int:
                 stopped_reason = fatal
                 break
             continue
-        if body is None or "receipt_id" not in body:
+        if body is None or not body.get("receipt_id"):
             errors.append("%s: unexpected API response" % path)
             continue
 

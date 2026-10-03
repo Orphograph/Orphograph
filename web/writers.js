@@ -361,7 +361,7 @@ async function anchorChain() {
   }
 
   setStatus("writers-status",
-    "Anchored. Merkle root submitted to 5 calendars. Within ~1 hour it will be committed in a Bitcoin block.",
+    "Anchored. Merkle root submitted to 5 calendars. From about an hour to several days from now, it will be committed in a Bitcoin block.",
     "ok");
 }
 

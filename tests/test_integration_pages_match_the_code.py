@@ -79,6 +79,11 @@ UNSUPPORTED = (
     "only those fingerprints are committed",
     "only those fingerprints are transmitted to the office",
     "the bundle's --name are sent",
+    # Review round 4.
+    "the digest is what travels",
+    "only the 64-hex digest",
+    "we use one localstorage entry",
+    "air-gapped mode builds the receipt",
 )
 
 # True of a single file's bytes and said on single-file pages, so it is not in
@@ -315,3 +320,10 @@ def test_a_dataset_root_no_calendar_accepted_is_unanchored(tmp_path):
     _assert_unanchored_and_exit_zero(run, out)
     cert = json.loads((out / "certificate.json").read_text())
     assert "no calendar" in json.dumps(cert["anchor"]).lower(), cert["anchor"]
+
+
+
+def test_the_mcp_folder_tool_is_not_said_to_carry_lineage(server):
+    # Review round 4: the tool's inputs are path and label; the manifest it
+    # builds has no parent block, so it cannot commit to a parent receipt.
+    assert "may commit to a parent receipt" not in plain(served(server, "/mcp")).lower()

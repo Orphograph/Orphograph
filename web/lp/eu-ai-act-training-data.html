@@ -36,7 +36,7 @@
       "name": "Does our training data leave our environment?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "No. Every file is hashed locally with SHA-256 and combined into a Merkle tree on your machine. Only the manifest (relative paths, digests and sizes), the root and the bundle's --name (or its --label, when given) are sent to be anchored; a public receipt shows that label. An air-gapped mode builds the receipt and certificate without sending anything at all."
+        "text": "No. Every file is hashed locally with SHA-256 and combined into a Merkle tree on your machine. Only the manifest (relative paths, digests and sizes), the root and the bundle's --name (or its --label, when given) are sent to be anchored; a public receipt shows that label. An air-gapped mode builds the certificate and manifest without sending anything at all; there is no receipt until the bundle is anchored."
       }
     },
     {
@@ -133,7 +133,7 @@ python3 provenance.py verify --cert out/certificate.json --bundle ./my-dataset</
       <p>No. Compliance turns on your full quality-management system, conformity assessment, bias analysis, and the rest of the Act's obligations. A dataset receipt is evidence, not a conformity assessment: it proves the documentation you are required to keep existed in an exact form by a date and has not changed since. It supports Article 10, Annex IV, and Article 53 documentation — it does not substitute for any of them.</p>
 
       <h3>Does our training data leave our environment?</h3>
-      <p>No. Every file is hashed locally with SHA-256 and combined into a Merkle tree on your machine. Only the manifest (relative paths, digests and sizes), the root and the bundle's --name (or its --label, when given) are sent to be anchored; a public receipt shows that label. An air-gapped mode builds the receipt and certificate without sending anything at all.</p>
+      <p>No. Every file is hashed locally with SHA-256 and combined into a Merkle tree on your machine. Only the manifest (relative paths, digests and sizes), the root and the bundle's --name (or its --label, when given) are sent to be anchored; a public receipt shows that label. An air-gapped mode builds the certificate and manifest without sending anything at all; there is no receipt until the bundle is anchored.</p>
 
       <h3>The Act requires keeping documentation for 10 years. What if Orphograph is gone by then?</h3>
       <p>The receipt is an open format: an RFC&nbsp;6962-style Merkle manifest plus OpenTimestamps proofs committed to the Bitcoin blockchain. Verification needs only the manifest, the <code>.ots</code> files, and the public chain — none of which depend on Orphograph existing. An MIT-licensed verifier is published for exactly this reason.</p>
