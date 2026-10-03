@@ -60,7 +60,12 @@ def anchor(endpoint: str, sha256: str, sha512: str, label: str, api_key: str,
         endpoint.rstrip("/") + "/api/anchor", data=data, method="POST", headers=headers)
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
-            return True, json.loads(resp.read().decode())
+            raw = resp.read().decode("utf-8", errors="replace")
+        try:
+            return True, json.loads(raw)
+        except ValueError:
+            # A proxy or challenge page answering 200: a failure, not a crash.
+            return False, {"error": "the server's answer was not JSON", "body": raw[:200]}
     except urllib.error.HTTPError as e:
         try:
             d = json.loads(e.read().decode())
@@ -104,6 +109,14 @@ def run(env: dict, anchor_fn=anchor) -> tuple[int, dict]:
     ok, resp = anchor_fn(endpoint, s256, s512, label, api_key)
     if not ok:
         return 1, {"ok": False, "error": resp.get("error", resp), "sha256": s256}
+    if not isinstance(resp, dict) or not resp.get("receipt_id"):
+        return 1, {"ok": False, "error": "unexpected answer: no receipt", "sha256": s256}
+    if resp.get("calendars_ok") == 0:
+        # No calendar accepted the hash: the receipt has no Bitcoin
+        # commitment and never gets one, so it is not an anchor.
+        return 1, {"ok": False, "sha256": s256, "receipt_id": resp["receipt_id"],
+                   "error": "no calendar accepted the hash; this receipt has no "
+                            "Bitcoin commitment. Try again later."}
     rid = resp.get("receipt_id", "")
     return 0, {
         "ok": True, "receipt_id": rid,

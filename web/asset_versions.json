@@ -208,8 +208,8 @@
     "sha256": "682a8060a13f55f1fd4f736ba024b84d4163bf912f9765687bcf272e66eb1b2c"
   },
   "/folder.js": {
-    "version": "2",
-    "sha256": "e13066c4284f453f2f17b3c56e0d1a7ff389d40119668ee784900eb157a76979"
+    "version": "3",
+    "sha256": "9a493c47d96d6c5bf274aedf1e600bcae6c0844b6eeac33ffa3cbc36d69aab0d"
   },
   "/founder/admin.css": {
     "version": "3",
@@ -413,7 +413,7 @@
   },
   "/receipt.js": {
     "version": "11",
-    "sha256": "2ff5d34c32fff0996fcc636f370d8b1f59ea0b3f76507cdae5fad4a7401ebb07"
+    "sha256": "e22b3cab75f6da2243bc87c704a730b0b657b9a87691a992ebb510a541d1097c"
   },
   "/recover.css": {
     "version": "2",
@@ -488,8 +488,8 @@
     "sha256": "42591a6aeb2c7a86c5f01380b4f7fc935fae67b461ce39edb6faf1579df03321"
   },
   "/v2.js": {
-    "version": "11",
-    "sha256": "506583fd6f52c12bef5cc5132b5ebc42b5e291910496e1f8244bd7bc2104c491"
+    "version": "12",
+    "sha256": "923ecb725d8958f54e7bce0365158b18ba219a495c4648d39ca84098317f1e97"
   },
   "/v2/app.js": {
     "version": "4",
@@ -524,7 +524,7 @@
     "sha256": "12cf4c84d5f01b8f3c053ef879f53064e6bc6dbabbc47a66df73a5c1cf333a74"
   },
   "/writers.js": {
-    "version": "3",
-    "sha256": "8518370f14f597b93e73d6b3e32282a826c65dd5629dcdc3a724b9bab8e6f2b5"
+    "version": "4",
+    "sha256": "e181eeecf079a23253c44db268aa08a179db5e9742d7d5b296bbc6c26bc19f01"
   }
 }

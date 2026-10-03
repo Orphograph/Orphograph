@@ -95,8 +95,7 @@ block of work on top of it. After six blocks, the probability of a
 rollback is, in practice, indistinguishable from zero — given
 sixteen years of empirical data showing no rollback at that depth.
 
-This is also why timestamping receipts say "block-pinned after one
-hour." That hour is the six-block confirmation window. After it,
+That window is about an hour of blocks after the one that holds the commitment, and the commitment itself can take from about an hour to several days to be mined. After it,
 the block is treated as permanent.
 
 ## Why a block height beats other anchors

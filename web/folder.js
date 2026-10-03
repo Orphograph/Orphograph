@@ -271,7 +271,7 @@ function _renderReceipt(host, record, files, oversizeSkipped) {
 
   const eta = document.createElement("p");
   eta.className = "folder-receipt-eta muted small";
-  eta.textContent = "Bitcoin commitment expected within ≈1 hour.";
+  eta.textContent = "Bitcoin commitment expected from about an hour to several days from now.";
   card.appendChild(eta);
 
   // Link to the hosted provenance certificate — a shareable, print-to-PDF

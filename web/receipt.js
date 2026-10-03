@@ -299,7 +299,7 @@ function renderVerdict(rec) {
   } else if ((rec.calendars_ok || 0) > 0) {
     setVerdict(
       `Sealed ${when} — awaiting Bitcoin confirmation.`,
-      "The seal is in place; the Bitcoin anchor usually lands within hours. Refresh this page later to see it confirmed.",
+      "The seal is in place; the Bitcoin anchor lands from about an hour to several days after anchoring. Refresh this page later to see it confirmed.",
       checkedLine
     );
     document.getElementById("verdict").classList.add("verdict-pending");
@@ -327,7 +327,7 @@ function renderFacts(rec) {
       const d = new Date(rec.btc_pinned_at);
       btc.textContent = "Pinned " + (isNaN(d.getTime()) ? rec.btc_pinned_at : _fmtUtc(d));
     } else {
-      btc.textContent = "Pending — usually within hours";
+      btc.textContent = "Pending — an hour to several days";
     }
   }
   const cals = $("#fact-cals");

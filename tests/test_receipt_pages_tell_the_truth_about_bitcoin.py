@@ -31,7 +31,13 @@ RECEIPT_JS = WEB / "receipt.js"
 HOUR_PROMISE = re.compile(
     r"\b(within|in) (about |roughly |around |~ ?|approximately )?(1|one|an) hour"
     r"|pending \(~ ?1 ?hour\)|~ ?1 ?hour after anchoring|wait ~ ?1 ?hour"
-    r"|upgrade after (1|one|an) hour")
+    r"|upgrade after (1|one|an) hour"
+    # Cycle 9 (post-merge review): "About an hour." as an answer, "over the
+    # following hour", "≈1 hour", "~ one hour to the block", "block-pinned
+    # after one hour", and "within (a few) hours" / "usually within hours".
+    r"|>\s*about an hour\.|over the following hour|≈ ?1 ?hour|~ ?one hour to the block"
+    r"|block-pinned after one hour|(confirms|committed[^.]{0,60}|lands|arrives) within (a few )?hours"
+    r"|usually within hours")
 
 
 def _friendly_status(rec: dict) -> str:
@@ -65,8 +71,9 @@ def test_no_page_or_script_promises_pinning_within_an_hour():
     offenders = []
     # content/blog/*.md too: /blog/<slug> renders it when no static page
     # exists, and /blog/atom.xml is always built from it.
+    # server/mailer.py too: the customer emails carry the same promise.
     for p in sorted(list(WEB.rglob("*.js")) + list(WEB.rglob("*.html"))
-                    + list((ROOT / "content").rglob("*.md"))):
+                    + list((ROOT / "content").rglob("*.md")) + [ROOT / "server" / "mailer.py"]):
         rel = p.relative_to(ROOT).as_posix()
         if "/_mockups/" in rel or rel.endswith("index-legacy.html") or "/dist/" in rel:
             continue
@@ -87,7 +94,16 @@ def test_the_hour_scan_sees_the_sentence_it_was_written_for():
                 "Bitcoin commitment: pending (~1 hour)",
                 "# Wait ~1 hour for the calendar to publish its Bitcoin tx.",
                 "# upgrade after 1 hour to get the full Bitcoin merkle proof:",
-                "(~1 hour after anchoring)"):
+                "(~1 hour after anchoring)",
+                "<p>About an hour. Orphograph fetches the upgraded proof",
+                "The block-pinning upgrade happens automatically over the following hour;",
+                "Bitcoin commitment expected within ≈1 hour.",
+                "~ one hour to the block",
+                'timestamping receipts say "block-pinned after one hour."',
+                "commitment to Bitcoin typically confirms within a few hours,",
+                "typically committed to the Bitcoin chain within hours;",
+                "The seal is in place; the Bitcoin anchor usually lands within hours.",
+                "Pending — usually within hours"):
         assert HOUR_PROMISE.search(old.lower()), old
 
 
@@ -126,3 +142,156 @@ def test_a_receipt_with_no_calendar_proof_is_not_called_pending():
 def test_a_receipt_with_one_calendar_proof_is_still_pending():
     text = _receipt_status({"status": "pending", "calendars_ok": 1, "calendars_submitted_total": 5})
     assert text.startswith("Pending Bitcoin confirmation"), text
+
+
+WRITERS_JS = WEB / "writers.js"
+
+# Loads the real writers.js in a node vm with a fake DOM, adds one version, and
+# anchors the chain once per calendars_ok value in argv[2] ("0,1"), reporting
+# what the page shows and stores after each attempt.
+_WRITERS_DRIVER = r"""
+const fs = require("fs"), vm = require("vm");
+const [src, seq] = process.argv.slice(2);
+function mk(id) {
+  const cls = new Set();
+  return { id, hidden: true, disabled: false, textContent: "", value: "", href: "",
+    classList: { add: (c) => cls.add(c), remove: (...c) => c.forEach((x) => cls.delete(x)), has: (c) => cls.has(c) },
+    addEventListener() {}, removeAttribute() {}, appendChild() {}, removeChild() {}, click() {} };
+}
+const els = {}, docL = {}, store = {};
+const document = { getElementById: (id) => (els[id] = els[id] || mk(id)), querySelector: () => null,
+  addEventListener: (ev, fn) => { (docL[ev] = docL[ev] || []).push(fn); }, createElement: () => mk("x"),
+  body: { appendChild() {}, removeChild() {} } };
+const localStorage = { getItem: (k) => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); },
+  removeItem: (k) => { delete store[k]; } };
+const answers = seq.split(",").map(Number);
+let call = 0;
+const fetch = async () => { const ok = answers[call++];
+  return { ok: true, status: 200, statusText: "OK",
+    json: async () => ({ receipt_id: "RWRITERS0000001", hash_hex: "x", calendars_ok: ok, calendars_total: 5 }) }; };
+const ctx = { document, localStorage, fetch, console, setTimeout, TextEncoder, crypto: globalThis.crypto, btoa,
+  confirm: () => true, URL, Blob: function () {} };
+ctx.window = ctx;
+vm.createContext(ctx);
+vm.runInContext(fs.readFileSync(src, "utf8") +
+  "\n;globalThis.__anchor = anchorChain; globalThis.__state = () => state; globalThis.__manifest = buildManifest;", ctx);
+(async () => {
+  (docL.DOMContentLoaded || []).forEach((f) => f());
+  ctx.__state().versions.push({ sha256: "a".repeat(64), sha512: "b".repeat(128), length: 3,
+    timestamp_local: new Date().toISOString() });
+  const out = [];
+  for (let i = 0; i < answers.length; i++) {
+    await ctx.__anchor();
+    const stored = JSON.parse(localStorage.getItem("orpho_writer_sessions") || "{}");
+    out.push({ status: els["writers-status"].textContent, anchored: ctx.__state().anchored,
+      button_disabled: els["anchor-chain-btn"].disabled, manifest_anchored: ctx.__manifest().anchored,
+      stored_anchored: Object.values(stored).map((m) => m.anchored) });
+  }
+  process.stdout.write(JSON.stringify({ posts: call, out }));
+})();
+"""
+
+
+def _writers(seq: str, tmp_path) -> dict:
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("node not on PATH: this check runs the real writers.js")
+    driver = tmp_path / "writers_driver.js"
+    driver.write_text(_WRITERS_DRIVER)
+    proc = subprocess.run([node, str(driver), str(WRITERS_JS), seq], capture_output=True, text=True, timeout=60)
+    assert proc.returncode == 0, proc.stderr
+    return json.loads(proc.stdout)
+
+
+def test_writers_leaves_a_chain_no_calendar_accepted_retryable(tmp_path):
+    """Cycle 9 (post-merge review of #283): with calendars_ok 0 the page said
+    "Not anchored ... try again" but had already marked the chain anchored,
+    disabled the button and stored anchored: true. Now it stays un-anchored,
+    and pressing Anchor again anchors the same chain."""
+    run = _writers("0,1", tmp_path)
+    first, second = run["out"]
+    assert "not anchored" in first["status"].lower() and "anchor again" in first["status"].lower(), first
+    assert first["anchored"] is False and first["button_disabled"] is False, first
+    assert first["manifest_anchored"] is False and True not in first["stored_anchored"], first
+    assert run["posts"] == 2 and second["anchored"] is True, run
+    assert second["status"].startswith("Anchored."), second
+
+
+V2_JS = WEB / "v2.js"
+
+# Loads the real homepage script in a node vm with a fake DOM, drops one file,
+# answers /api/anchor with calendars_ok = argv[2], and reports the banner, the
+# stored recent-receipt status and how many polling intervals were started.
+_V2_DRIVER = r"""
+const fs = require("fs"), vm = require("vm");
+const [src, cal] = process.argv.slice(2);
+class El {
+  constructor(tag, id) { this.tagName = tag; this.id = id || ""; this.children = []; this._t = ""; this.style = {};
+    this.dataset = {}; this.hidden = false; this.className = ""; this._l = {}; this.files = null; this.value = "";
+    const s = new Set(); this.classList = { add: (c) => s.add(c), remove: (c) => s.delete(c), contains: (c) => s.has(c), toggle() {} }; }
+  get firstChild() { return this.children[0] || null; }
+  get textContent() { return this._t + this.children.map((c) => c.textContent).join(""); }
+  set textContent(v) { this._t = String(v); this.children = []; }
+  appendChild(c) { this.children.push(c); return c; } removeChild(c) { this.children = this.children.filter((x) => x !== c); return c; }
+  addEventListener(ev, fn) { (this._l[ev] = this._l[ev] || []).push(fn); }
+  setAttribute() {} removeAttribute() {} getAttribute() { return null; } querySelector() { return null; }
+  querySelectorAll() { return []; } closest() { return null; } click() {} focus() {}
+  insertBefore(c) { return this.appendChild(c); } prepend(c) { this.children.unshift(c); }
+}
+const known = {};
+["drop", "drop-input", "drop-btn", "status", "sticky-status"].forEach((id) => { known[id] = new El("div", id); });
+const document = { getElementById: (id) => known[id] || null, querySelector: () => null, querySelectorAll: () => [],
+  createElement: (t) => new El(t), createTextNode: (t) => ({ textContent: String(t), children: [] }),
+  addEventListener() {}, body: new El("body"), documentElement: new El("html") };
+const store = {};
+const localStorage = { getItem: (k) => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); },
+  removeItem: (k) => { delete store[k]; } };
+const fetch = async (url) => String(url) === "/api/anchor"
+  ? { ok: true, status: 200, json: async () => ({ receipt_id: "RHOMEPAGE000001", calendars_ok: Number(cal), calendars_total: 5 }), text: async () => "" }
+  : { ok: false, status: 404, json: async () => ({}), text: async () => "" };
+let intervals = 0;
+const ctx = { document, localStorage, sessionStorage: localStorage, fetch, console, setTimeout, clearTimeout,
+  setInterval: () => { intervals += 1; return intervals; }, clearInterval() {}, TextEncoder, crypto: globalThis.crypto,
+  Intl, URL, URLSearchParams, Blob: function () {}, navigator: {}, history: { replaceState() {} },
+  location: { search: "", pathname: "/", href: "https://example.test/", hash: "" } };
+ctx.window = ctx;
+vm.createContext(ctx);
+vm.runInContext(fs.readFileSync(src, "utf8"), ctx);
+(async () => {
+  const input = known["drop-input"];
+  const bytes = new TextEncoder().encode("hello");
+  input.files = [{ name: "f.txt", size: bytes.length, arrayBuffer: async () => bytes.buffer }];
+  input._l.change.forEach((f) => f());
+  await new Promise((r) => setTimeout(r, 300));
+  const recent = JSON.parse(store["orpho_recent_receipts"] || "[]");
+  process.stdout.write(JSON.stringify({ banner: known["sticky-status"].textContent, status: known.status.textContent,
+    intervals, recent_status: recent.length ? recent[0].status : null }));
+})().catch((e) => { process.stderr.write(String(e && e.stack)); process.exit(2); });
+"""
+
+
+def _homepage(calendars_ok: int, tmp_path) -> dict:
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("node not on PATH: this check runs the real v2.js")
+    driver = tmp_path / "v2_driver.js"
+    driver.write_text(_V2_DRIVER)
+    proc = subprocess.run([node, str(driver), str(V2_JS), str(calendars_ok)], capture_output=True, text=True, timeout=60)
+    assert proc.returncode == 0, proc.stderr
+    return json.loads(proc.stdout)
+
+
+def test_homepage_does_not_watch_for_a_pin_that_never_comes(tmp_path):
+    """Cycle 9 (post-merge review of #283): with calendars_ok 0 the homepage
+    still showed "Watching for Bitcoin confirmation…", started polling for a
+    pin that can never come, and stored the receipt as "pending"."""
+    run = _homepage(0, tmp_path)
+    assert "watching" not in run["banner"].lower() and "no calendar accepted" in run["banner"].lower(), run
+    assert run["intervals"] == 0, run
+    assert run["recent_status"] == "no commitment", run
+
+
+def test_homepage_still_watches_a_committed_receipt(tmp_path):
+    run = _homepage(1, tmp_path)
+    assert "watching for bitcoin confirmation" in run["banner"].lower(), run
+    assert run["intervals"] == 1 and run["recent_status"] == "pending", run

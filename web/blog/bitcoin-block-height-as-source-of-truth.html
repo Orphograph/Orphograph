@@ -121,7 +121,7 @@
   <h2>What a six-block confirmation means in practice</h2>
   <p>Most timestamping services, including Orphograph, treat a block as &quot;deeply confirmed&quot; once six additional blocks have been mined on top of it. That is roughly one hour of additional work.</p>
   <p>The convention exists because of probability. The chance of a block being rolled back declines exponentially with each additional block of work on top of it. After six blocks, the probability of a rollback is, in practice, indistinguishable from zero — given sixteen years of empirical data showing no rollback at that depth.</p>
-  <p>This is also why timestamping receipts say &quot;block-pinned after one hour.&quot; That hour is the six-block confirmation window. After it, the block is treated as permanent.</p>
+  <p>That window is about an hour of blocks after the one that holds the commitment, and the commitment itself can take from about an hour to several days to be mined. After it, the block is treated as permanent.</p>
   <h2>Why a block height beats other anchors</h2>
   <p>Compare a Bitcoin block height to the alternatives:</p>
   <p>A timestamp on a private database depends on the operator not editing the row. The operator can edit the row at any time. The row is gone the day the company shuts down.</p>

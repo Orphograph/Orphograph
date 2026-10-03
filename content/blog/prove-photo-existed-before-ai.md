@@ -88,8 +88,7 @@ browser-based workflow:
    The image bytes never reach our server.
 3. You get a receipt — JSON file + 5 OpenTimestamps proofs —
    downloadable as a single bundle.
-4. The block-pinning upgrade happens automatically server-side
-   over the following hour; the receipt updates from "pending" to
+4. The block-pinning upgrade happens automatically server-side, from about an hour to several days later; the receipt updates from "pending" to
    "block-pinned at block N."
 
 You can verify the receipt later with [a ~100-line Python

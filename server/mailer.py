@@ -677,7 +677,7 @@ def send_receipt_email(to: str, receipt: dict) -> bool:
         f"color:#1a1a1a;font-weight:500;font-size:20px;letter-spacing:0.01em;\">"
         f"Receipt issued.</h2>"
         f"<p style=\"color:#444;\">Calendar attestations are complete; "
-        f"commitment to Bitcoin typically confirms within a few hours, "
+        f"commitment to Bitcoin confirms from about an hour to several days later,  "
         f"once the calendars&rsquo; aggregation batch is written on-chain.</p>"
         f"<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" "
         f"style=\"margin:18px 0;border-collapse:collapse;font-size:14px;\">"

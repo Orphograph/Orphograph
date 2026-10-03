@@ -699,16 +699,25 @@
         created_at: j.created_at,
         calendars_ok: ok,
         calendars_total: total,
-        status: j.status || "pending",
+        // calendars_ok 0: no Bitcoin commitment, ever, so not "pending".
+        status: ok > 0 ? (j.status || "pending") : "no commitment",
       };
       saveRecentReceipt(recordForStorage);
       renderRecentReceipts();
       clearAnchorState();
-      showStatusBanner(
-        "Receipt issued. Watching for Bitcoin confirmation…",
-        "success"
-      );
-      startPinPolling(j.receipt_id);
+      if (ok > 0) {
+        showStatusBanner(
+          "Receipt issued. Watching for Bitcoin confirmation…",
+          "success"
+        );
+        startPinPolling(j.receipt_id);
+      } else {
+        // Nothing will ever pin, so there is nothing to watch for.
+        showStatusBanner(
+          "No calendar accepted this fingerprint, so nothing was committed to Bitcoin. Try again later.",
+          "error"
+        );
+      }
     } catch (e) {
       setStatusSimple("Network error.", String(e && e.message ? e.message : e), "error");
       showStatusBanner("Anchor failed: " + String(e && e.message ? e.message : e), "error");
