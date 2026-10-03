@@ -347,7 +347,9 @@ def test_dataset_verify_fails_the_time_bound_of_a_root_no_calendar_accepted(tmp_
         assert run.returncode == 0, (run.stdout, run.stderr)
         anchor = json.loads((out / "certificate.json").read_text())["anchor"]
         rid = anchor.get("receipt_id") or re.search(r"receipt (\S+) has no Bitcoin", anchor["note"]).group(1)
-        check = run_dataset_cli(base, "verify", "--bundle", str(bundle), "--receipt", rid)
+        # "--receipt=<id>": an id from token_urlsafe starts with "-" about one
+        # time in 64, and argparse reads "--receipt -abc" as a missing value.
+        check = run_dataset_cli(base, "verify", "--bundle", str(bundle), f"--receipt={rid}")
     assert check.returncode == expect_rc, (check.stdout, check.stderr)
     assert "PASS  bundle integrity" in check.stdout, check.stdout
     assert ("FAIL  time bound" in check.stdout) is (expect_rc == 1), check.stdout
