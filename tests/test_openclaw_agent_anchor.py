@@ -30,6 +30,11 @@ def _no_network_no_stray_files(tmp_path, monkeypatch):
     def blocked(*args, **kwargs):
         raise AssertionError("the CLI reached its transport without a stub")
 
+    # main() reads these as argparse defaults; one exported in the
+    # developer's shell changed what the tests ran (review of the rescue
+    # branch: ORPHO_PACK_TOKEN made the credential test exit 2).
+    for name in ("ORPHO_API_KEY", "ORPHO_PACK_TOKEN", "ORPHO_BASE_URL"):
+        monkeypatch.delenv(name, raising=False)
     monkeypatch.setattr(anchor, "post_anchor", blocked)
     monkeypatch.setattr(anchor, "get_verify", blocked)
     monkeypatch.setattr(anchor.urllib.request, "urlopen", blocked)
@@ -196,3 +201,16 @@ def test_anchor_text_rejects_empty_stdin(monkeypatch):
     with pytest.raises(SystemExit) as exc:
         run_main(monkeypatch, ["anchor-text"], stdin=" \n")
     assert exc.value.code == 2
+
+
+@pytest.mark.parametrize("given", ["", "does-not-exist.bin"], ids=["empty", "missing"])
+def test_verify_with_a_file_it_cannot_read_fails(given, monkeypatch, capsys):
+    # Review of the rescue branch: `--file ""` skipped the comparison (a
+    # truthiness check) and the exit code read the missing local_match as a
+    # pass, so `verify "$RID" --file "$UNSET"` exited 0 like a real match.
+    monkeypatch.setattr(anchor, "get_verify", lambda base, receipt: {"hash_hex": "0" * 64})
+
+    assert run_main(monkeypatch, ["verify", "r1", "--file", given]) == 1
+    out = json.loads(capsys.readouterr().out)
+    assert out["local_match"] is False
+    assert "cannot read --file" in out["local_error"]

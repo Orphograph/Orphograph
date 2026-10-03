@@ -51,7 +51,7 @@
     <div class="arch-rule"></div>
     <ul class="means">
       <li>Workpaper bytes are hashed on your device rather than uploaded; folder manifest metadata includes relative paths, digests, sizes, and the root.</li>
-      <li>One successful receipt commits to the submitted folder manifest.</li>
+      <li>One successful receipt commits to every workpaper's relative path and digest.</li>
       <li>Verify one disclosed schedule without supplying the other workpaper files.</li>
     </ul>
   </section>
@@ -59,7 +59,7 @@
   <section>
     <h2>How it works</h2>
     <div class="arch-rule"></div>
-    <p>Each workpaper gets a fingerprint — a 64-character code that changes if a single byte of the file changes. The fingerprints are computed on your own machine, not uploaded.</p>
+    <p>Each workpaper gets a fingerprint — a 64-character code that changes if a single byte of the file changes. The fingerprints are computed on your own machine; the files themselves are not uploaded.</p>
     <p>The fingerprints and relative paths are combined into one fingerprint for the whole folder. The anchoring request includes manifest metadata and the root, but not the workpaper bytes.</p>
     <p>Once an OpenTimestamps proof is confirmed against Bitcoin, a verifier can test a disclosed schedule and its recorded path against the receipt. The proof supports the Bitcoin block-time bound, not an independently verified close or partner-sign-off date.</p>
   </section>
@@ -75,7 +75,7 @@
       <div class="sub">Selective disclosure under partner-level review</div>
       <p>Two years after a return is filed, a partner-level review questions one schedule. The firm produces an inclusion proof for that schedule in the anchored closed-workpaper folder for the relevant period. The unrelated reconciliations, the client's other accounts, and the firm's other clients' workpapers from the same period are not exposed by the proof. The receipt does not establish that the schedule was correctly prepared; it establishes that the schedule, under the recorded relative path, existed by the time of the recorded Bitcoin block.</p>
       <div class="sub">What the office records</div>
-      <p>The folder receipt records the Merkle root, ordering rule, per-leaf relative paths, SHA-256 digests, byte sizes, and available OpenTimestamps attestations. An optional valid <code>did:key</code> signature can show that the corresponding private key signed the manifest. Orphograph does not establish who controls that key, validate a CPA license, or certify partner authority.</p>
+      <p>The folder receipt records the Merkle root, per-leaf relative paths, SHA-256 digests, byte sizes, and available OpenTimestamps attestations. The root commits to each relative path and file digest; the byte sizes are recorded beside them but are not part of what the root commits to. An optional valid <code>did:key</code> signature can show that the corresponding private key signed the manifest. Orphograph does not establish who controls that key, validate a CPA license, or certify partner authority.</p>
     </details>
   </section>
 

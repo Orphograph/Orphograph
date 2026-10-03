@@ -160,11 +160,19 @@ def main() -> int:
 
     if args.cmd == "verify":
         result = get_verify(args.base, args.receipt_id)
-        if args.file and "error" not in result:
-            local256, _ = hash_file(args.file)
-            result["local_sha256"] = local256
-            result["local_match"] = (local256 == result.get("hash_hex")
-                                     or local256 == result.get("sha256"))
+        # `is not None`: `--file ""` (an unset variable) used to skip the
+        # comparison and exit 0 like a match. A file that cannot be read is a
+        # failed comparison, reported in the JSON, not a traceback.
+        if args.file is not None and "error" not in result:
+            try:
+                local256, _ = hash_file(args.file)
+            except OSError as e:
+                result["local_error"] = "cannot read --file: %s" % (e.strerror or e)
+                result["local_match"] = False
+            else:
+                result["local_sha256"] = local256
+                result["local_match"] = (local256 == result.get("hash_hex")
+                                         or local256 == result.get("sha256"))
         print(json.dumps(result, indent=2, sort_keys=True))
         return 0 if "error" not in result and result.get("local_match") is not False else 1
 

@@ -42,6 +42,33 @@ UNSUPPORTED = (
     # A receipt bounds when the folder existed. It says nothing about the day
     # a photo in it was taken.
     "folder for that exact date",
+    "as of the filing date",
+    # Review of this branch: the same class on pages the first pass did not
+    # read, and rewordings of it. A folder or dataset anchor sends paths,
+    # digests and sizes; no tool offers a hash-labeled path scheme; the
+    # manifest has no ordering field; sizes are recorded but not committed.
+    "office sees only",
+    "sees only the combined",
+    "only fingerprints travel",
+    "only fingerprints leave",
+    "only fingerprints are anchored",
+    "paths, and contents never leave",
+    "hash-labeled paths",
+    "hash-only labeling",
+    "ordering rule",
+    "computed on your own machine, not uploaded",
+    "commits to the submitted",
+)
+
+# True of a single file's bytes and said on single-file pages, so it is not in
+# the list above; on a folder page it reads as "nothing leaves", and paths do.
+FOLDER_ONLY_UNSUPPORTED = ("never leave your device",)
+
+# Every other served page that describes folder or dataset anchoring.
+CLASS_ROUTES = (
+    "/mcp", "/lp/eu-ai-act-training-data", "/certificate/DatasetProvenanceSample",
+    "/method/", "/method/folder-merkle", "/method/why-filenames-are-not-stored",
+    "/dataset-provenance", "/integrations",
 )
 
 
@@ -83,8 +110,37 @@ def test_the_scan_finds_the_sentences_it_was_written_for():
 def test_folder_pages_say_what_is_sent(server, route):
     page = served(server, route)
     assert unsupported_in(page) == []
-    assert "relative paths" in plain(page).lower(), (
+    text = plain(page).lower()
+    assert not [p for p in FOLDER_ONLY_UNSUPPORTED if p in text], route
+    assert "relative paths" in text, (
         f"{route} does not tell the reader that file paths are sent")
+
+
+@pytest.mark.parametrize("route", CLASS_ROUTES)
+def test_no_page_about_folders_says_only_the_fingerprint_leaves(server, route):
+    assert unsupported_in(served(server, route)) == []
+
+
+def test_the_filename_page_says_a_folder_sends_its_paths(server):
+    # Its single-file argument ("the filename is never transmitted") is true;
+    # without the folder caveat it read as true of every anchor.
+    text = plain(served(server, "/method/why-filenames-are-not-stored")).lower()
+    assert "never transmitted" in text
+    assert "relative path" in text and "folder" in text
+
+
+def test_the_wider_scan_catches_the_sentences_master_carried():
+    # Positive control for the review's additions, on master's own wording.
+    for old, phrase in (
+        ("the file stays on the agent's machine, only fingerprints travel.", "only fingerprints travel"),
+        ("# Anchor a dataset bundle (only fingerprints leave the machine)", "only fingerprints leave"),
+        ("only the fingerprint travels; names, paths, and contents never leave your device.",
+         "paths, and contents never leave"),
+        ("may anchor under hash-labeled paths, as noted above", "hash-labeled paths"),
+        ("anchored exhibit folder as of the filing date six months earlier", "as of the filing date"),
+        ("The office sees only the combined fingerprint.", "office sees only"),
+    ):
+        assert phrase in unsupported_in(f"<p>{old}</p>"), old
 
 
 def _bundle(tmp_path) -> Path:
@@ -185,3 +241,21 @@ def test_the_integrations_page_states_the_action_default(server):
         f"the page states {stated}, action.yml defaults to {default!r}")
     # The release manifest was never shipped; the page must not describe it.
     assert "manifest generation" not in page
+
+
+
+def test_a_dataset_root_no_calendar_accepted_is_unanchored(tmp_path):
+    """Review of the rescue branch: the CLI marked any receipt "anchored",
+    including a 200 with calendars_ok 0, which has no Bitcoin commitment and
+    never gets one; a gate written as the dataset page says passed it."""
+    bundle = _bundle(tmp_path)
+    out = tmp_path / "out-no-calendar"
+    data = tmp_path / "data"
+    data.mkdir()
+    for base in _srv.server_processes(data, stub_calendars=True,
+                                      fail_calendars="a,b,alice,finney,btc"):
+        run = run_dataset_cli(base, "anchor", "--bundle", str(bundle),
+                              "--name", "T", "--out", str(out))
+    _assert_unanchored_and_exit_zero(run, out)
+    cert = json.loads((out / "certificate.json").read_text())
+    assert "no calendar" in json.dumps(cert["anchor"]).lower(), cert["anchor"]

@@ -111,7 +111,7 @@
 
     <h2>Run it as a pipeline step</h2>
     <p>The reference CLI anchors a bundle as a build step — a training run's data manifest becomes a dated, verifiable artifact alongside the model weights.</p>
-    <pre><code># Anchor a dataset bundle (only fingerprints leave the machine)
+    <pre><code># Anchor a dataset bundle (file bytes stay local; paths, digests, sizes and the --name are sent)
 python3 provenance.py anchor --bundle ./my-dataset --name "My Dataset v1"
 
 # Air-gapped: build the receipt + certificate, anchor nothing

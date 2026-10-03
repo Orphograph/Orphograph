@@ -234,6 +234,13 @@ def main() -> int:
             continue
 
         receipt_id = str(body["receipt_id"])
+        # A 200 with calendars_ok 0 is a receipt with no Bitcoin commitment,
+        # and it never gets one; counted as anchored, fail_on_error: true
+        # still shipped the release (review of the rescue branch).
+        if body.get("calendars_ok") == 0:
+            errors.append("%s: no calendar accepted the hash (receipt %s has no "
+                          "Bitcoin commitment)" % (path, receipt_id))
+            continue
         row = {
             "file": path,
             "sha256": sha256_hex,

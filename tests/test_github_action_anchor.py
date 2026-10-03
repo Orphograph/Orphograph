@@ -139,3 +139,19 @@ def test_the_action_interface_a_pinned_workflow_relies_on():
     assert inputs["base_url"] == "https://orphograph.com"
     assert inputs["api_key"] == "" and inputs["pack_token"] == ""
     assert "receipts" in _declared("outputs")
+
+
+
+def test_a_receipt_no_calendar_accepted_is_not_counted_as_anchored(tmp_path):
+    """Review of the rescue branch: a 200 with calendars_ok 0 is a receipt
+    with no Bitcoin commitment that never gets one, and the action counted it
+    as anchored, so `fail_on_error: true` still shipped the release."""
+    workspace, data = make_workspace(tmp_path, ["a.bin"])
+    for base in _srv.server_processes(data, stub_calendars=True,
+                                      fail_calendars="a,b,alice,finney,btc",
+                                      RATE_LIMIT_PER_DAY="50"):
+        out = run_action(base, workspace, ORPHO_FAIL_ON_ERROR="true")
+        assert out.returncode == 1, (out.stdout, out.stderr)
+        rows = json.loads((workspace / "orphograph-receipts.json").read_text())
+        assert rows == [], rows
+        assert "Not anchored" in (workspace / "step_summary.md").read_text()

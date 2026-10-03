@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import ast
 import re
+import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -88,10 +89,14 @@ def _keys_set_by_tests() -> set[str]:
 
 
 def _product_source() -> str:
+    """The product as code: Python files lose their docstrings and comments,
+    so a name only listed in prose (a module docstring naming its knobs) is
+    not counted as read (review of the rescue branch)."""
     parts = []
     for glob in PRODUCT_GLOBS:
         for p in REPO_ROOT.glob(glob):
-            parts.append(p.read_text(encoding="utf-8", errors="replace"))
+            text = p.read_text(encoding="utf-8", errors="replace")
+            parts.append(_code_only(text) if p.suffix == ".py" else text)
     return "\n".join(parts)
 
 
@@ -144,3 +149,22 @@ def test_the_scanner_can_see_a_real_knob() -> None:
     over an empty set."""
     assert "ORPHO_DATA_DIR" in _keys_set_by_tests(), "scanner sees no test-set keys"
     assert "ORPHO_DATA_DIR" in _product_source(), "scanner sees no product source"
+
+
+
+def test_a_name_only_in_product_prose_is_not_counted_as_read(tmp_path, monkeypatch) -> None:
+    """Review of the rescue branch: the product side was scanned as raw text,
+    so a name listed in a module docstring or a comment counted as read and a
+    knob the code no longer reads would pass. The product is read as code."""
+    mod = tmp_path / "integrations" / "x"
+    mod.mkdir(parents=True)
+    (mod / "tool.py").write_text(
+        '"""Configured by ORPHO_ONLY_IN_A_DOCSTRING."""\n'
+        "# ORPHO_ONLY_IN_A_COMMENT\n"
+        "import os\n"
+        "REAL = os.environ.get('ORPHO_READ_FOR_REAL')\n")
+    monkeypatch.setattr(sys.modules[__name__], "REPO_ROOT", tmp_path)
+    product = _product_source()
+    assert "ORPHO_READ_FOR_REAL" in product
+    assert "ORPHO_ONLY_IN_A_DOCSTRING" not in product
+    assert "ORPHO_ONLY_IN_A_COMMENT" not in product

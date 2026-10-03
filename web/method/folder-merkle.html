@@ -103,7 +103,7 @@
     <p>The leaf hash binds the file's relative path together with the file's content fingerprint. The construction is:</p>
 <pre><code>leaf = SHA-256( 0x00 || utf8(rel_path) || 0x00 || sha256(file_bytes) )</code></pre>
     <p>The interior <code>0x00</code> separator between the path and the file digest is a second domain marker and removes ambiguity between paths of differing length. The consequence is deliberate: two receipts produced for the same byte sequence under different filenames yield different leaves and therefore different roots. The protocol treats the relative path as evidentiary metadata, not as an arbitrary label. A photograph filed as <code>2026-05-20/IMG_0042.cr3</code> and the same bytes filed as <code>misc.cr3</code> are, under the folder receipt, distinguishable artifacts.</p>
-    <p>Customers who consider the path itself to be sensitive may anchor under a hash-only labeling scheme, in which the recorded path is the file's own digest. The protocol does not require any particular naming policy; it records, faithfully, the policy the customer chose.</p>
+    <p>Customers who consider the path itself to be sensitive can rename or copy the files to neutral names, such as each file's own digest, before anchoring; no Orphograph tool does that renaming for them. The protocol does not require any particular naming policy; it records, faithfully, the paths it is given.</p>
   </section>
 
   <section>
@@ -124,7 +124,7 @@
     <h2>7 · What the customer submits, what crosses the wire</h2>
     <div class="arch-rule"></div>
     <p>The browser, or the local command-line tool, computes every leaf hash and every interior node hash on the customer's machine. The data that crosses the wire to the office consists of the manifest — the ordered list of relative paths, per-file SHA-256 fingerprints, per-file leaf hashes, and per-file byte sizes — together with the resulting root. The file content itself is never transmitted. The office never holds, copies, or observes the bytes of any file in the anchored set.</p>
-    <p>A trade-off attends this design: the path names and the file sizes are part of the receipt that the office persists, and are therefore visible to the office in the way ordinary receipt metadata is visible. Customers for whom path names are themselves sensitive may anchor under hash-labeled paths, as noted above, in which case the manifest carries no human-readable filename information at all.</p>
+    <p>A trade-off attends this design: the path names and the file sizes are part of the receipt that the office persists, and are therefore visible to the office in the way ordinary receipt metadata is visible. Customers for whom path names are themselves sensitive can rename or copy the files to neutral names before anchoring, as noted above; the manifest then carries only those names.</p>
   </section>
 
   <section>

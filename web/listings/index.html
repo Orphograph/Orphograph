@@ -59,7 +59,7 @@
   <section>
     <h2>How it works</h2>
     <div class="arch-rule"></div>
-    <p>Each image gets a fingerprint — a 64-character code that changes if a single byte of the file changes. The fingerprints are computed on your own machine, not uploaded.</p>
+    <p>Each image gets a fingerprint — a 64-character code that changes if a single byte of the file changes. The fingerprints are computed on your own machine; the files themselves are not uploaded.</p>
     <p>The fingerprints and relative paths are combined into one fingerprint for the whole folder. The anchoring request includes the manifest metadata and root, but not the photo bytes.</p>
     <p>The combined fingerprint is anchored to the Bitcoin chain. Anyone, on any future date, can confirm the folder existed by the moment of that block — and that a single image was part of it — without ever seeing the other photos.</p>
   </section>
@@ -75,7 +75,7 @@
       <div class="sub">Selective disclosure after closing</div>
       <p>Eight months after closing, the buyer alleges that the basement showed a water stain at listing time. The agent produces an inclusion proof for the four basement photographs in the listing-walk folder anchored on the day the listing went active. Other rooms in the seller's house, and the agent's other active listings on the same day, are not exposed by the proof. The receipt does not establish that the property was free of defects; it establishes that the disclosed photographs, under the recorded relative paths, were part of the anchored listing-walk set as of the recorded Bitcoin block.</p>
       <div class="sub">What the office records</div>
-      <p>The folder receipt records the Merkle root, ordering rule, per-leaf relative paths, SHA-256 digests, byte sizes, and available OpenTimestamps attestations. An optional valid <code>did:key</code> signature can show that the corresponding private key signed the manifest. Orphograph does not establish who controls that key, validate a real-estate license, or certify that the signer is the listing agent.</p>
+      <p>The folder receipt records the Merkle root, per-leaf relative paths, SHA-256 digests, byte sizes, and available OpenTimestamps attestations. The root commits to each relative path and file digest; the byte sizes are recorded beside them but are not part of what the root commits to. An optional valid <code>did:key</code> signature can show that the corresponding private key signed the manifest. Orphograph does not establish who controls that key, validate a real-estate license, or certify that the signer is the listing agent.</p>
     </details>
   </section>
 

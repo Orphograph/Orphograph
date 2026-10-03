@@ -183,6 +183,14 @@ def cmd_anchor(args: argparse.Namespace) -> int:
               file=sys.stderr)
         return 3
 
+    # A 200 with calendars_ok 0 has no Bitcoin commitment and never gets one;
+    # calling it anchored let a gate on anchor.status pass it (review of the
+    # rescue branch).
+    if receipt and receipt.get("calendars_ok") == 0:
+        anchor_error = ("no calendar accepted the root (receipt %s has no Bitcoin "
+                        "commitment)" % receipt.get("receipt_id"))
+        receipt = None
+
     cert = _build_certificate(
         name=args.name, created_at=created_at, root_hex=root_hex,
         manifest=manifest, buckets=buckets, receipt=receipt,
