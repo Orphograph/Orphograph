@@ -92,7 +92,7 @@ prove which block contains your hash. The receipt is the index.
 
 ## Step 3: wait for the block
 
-Within roughly one hour the calendar's Merkle root is included in a
+From about an hour to several days later, the calendar's Merkle root is included in a
 Bitcoin block. The receipt's status updates from "pending" to
 "block-pinned at block N." From this point forward the proof is
 self-contained: anyone with a Bitcoin node can verify that your

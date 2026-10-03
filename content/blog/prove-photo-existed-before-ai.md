@@ -62,7 +62,7 @@ OpenTimestamps is a brilliant protocol, but it's a CLI:
 ```bash
 pip install opentimestamps-client
 ots stamp photo.jpg
-# ... wait ~1 hour for the BTC calendar to publish the block ...
+# ... wait (an hour to several days) for the BTC calendar to publish the block ...
 ots upgrade photo.jpg.ots
 ots verify photo.jpg.ots
 ```
@@ -110,7 +110,7 @@ pip install opentimestamps-client
 # anchor:
 ots stamp my_photo.jpg
 # returns my_photo.jpg.ots — save it next to the photo
-# upgrade after 1 hour to get the BTC merkle proof:
+# upgrade once the calendar has published (an hour to several days) to get the BTC merkle proof:
 ots upgrade my_photo.jpg.ots
 # verify any time:
 ots verify my_photo.jpg.ots

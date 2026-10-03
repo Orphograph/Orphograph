@@ -62,7 +62,10 @@ def test_a_root_one_calendar_accepted_is_still_pending():
 
 def test_no_page_or_script_promises_pinning_within_an_hour():
     offenders = []
-    for p in sorted(list(WEB.rglob("*.js")) + list(WEB.rglob("*.html"))):
+    # content/blog/*.md too: /blog/<slug> renders it when no static page
+    # exists, and /blog/atom.xml is always built from it.
+    for p in sorted(list(WEB.rglob("*.js")) + list(WEB.rglob("*.html"))
+                    + list((ROOT / "content").rglob("*.md"))):
         rel = p.relative_to(ROOT).as_posix()
         if "/_mockups/" in rel or rel.endswith("index-legacy.html") or "/dist/" in rel:
             continue

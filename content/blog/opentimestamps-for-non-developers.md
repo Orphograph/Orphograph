@@ -173,7 +173,7 @@ pip install opentimestamps-client
 ots stamp my_photo.jpg
 # → produces my_photo.jpg.ots (the proof file)
 
-# Wait ~1 hour for the calendar to publish its Bitcoin tx.
+# Wait for the calendar to publish its Bitcoin tx.
 
 # Upgrade the .ots to include the full Bitcoin merkle proof:
 ots upgrade my_photo.jpg.ots
