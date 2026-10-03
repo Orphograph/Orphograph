@@ -81,3 +81,26 @@ def test_watch_folder_files_only_a_committed_receipt(tmp_path, monkeypatch, cale
     assert anchored == (1 if expect_filed else 0)
     if not expect_filed:
         assert pause["until"] > time.time(), "a refused anchor backs off before retrying"
+
+
+def test_folder_watch_waits_before_reposting_a_refused_file(tmp_path, monkeypatch):
+    """Review of PR #284: a refused file was posted again on every scan (10 s),
+    each post minting another worthless receipt for as long as the outage
+    lasted. It now waits REFUSED_RETRY_SEC before the next attempt."""
+    photo = tmp_path / "shot.jpg"
+    photo.write_bytes(b"shot-content")
+    state = tmp_path / "state.jsonl"
+    calls = []
+    monkeypatch.setattr(fw, "_anchor", lambda base, key, path: calls.append(1) or _receipt(0))
+    monkeypatch.setattr(fw, "_REFUSED_UNTIL", {})
+    clock = [1000.0]
+    monkeypatch.setattr(fw.time, "time", lambda: clock[0])
+
+    fw._process("https://test.invalid", "orpho_x", photo, state, verbose=False)
+    clock[0] += 10                                   # the next scan
+    ok, msg = fw._process("https://test.invalid", "orpho_x", photo, state, verbose=False)
+    assert len(calls) == 1 and ok is False and "retry" in msg, (calls, msg)
+    clock[0] += fw.REFUSED_RETRY_SEC                 # the wait is over
+    monkeypatch.setattr(fw, "_anchor", lambda base, key, path: calls.append(1) or _receipt(1))
+    ok, _ = fw._process("https://test.invalid", "orpho_x", photo, state, verbose=False)
+    assert len(calls) == 2 and ok is True

@@ -114,6 +114,36 @@ function receiptStatusLine(rec) {
   return `${raw} (${stamped} stamped)`;
 }
 
+// The verdict banner's copy and the facts-strip Bitcoin cell, from the record
+// alone (run under node by the tests, like receiptStatusLine). A record whose
+// calendars_ok is 0 has no Bitcoin commitment and never gets one: it is not
+// "awaiting" or "in progress" (cycle 9).
+function receiptVerdictCopy(rec, when) {
+  if (rec.btc_pinned_at) {
+    return { kind: "anchored", headline: `This file existed on or before ${when}.`,
+      sub: "Anchored in the Bitcoin blockchain — verifiable by anyone, no account, no trust in Orphograph required. This fingerprint now lives in the most heavily verified public record in human history; it will outlive every company involved, including ours." };
+  }
+  if ((rec.calendars_ok || 0) > 0) {
+    return { kind: "pending", headline: `Sealed ${when} — awaiting Bitcoin confirmation.`,
+      sub: "The seal is in place; the Bitcoin anchor lands from about an hour to several days after anchoring. Refresh this page later to see it confirmed." };
+  }
+  if (rec.calendars_ok === 0) {
+    return { kind: "none", headline: `Recorded ${when} — no Bitcoin commitment.`,
+      sub: "No calendar accepted this fingerprint, so this receipt has no Bitcoin commitment and never will. Anchor the file again to get one." };
+  }
+  return { kind: "pending", headline: `Sealed ${when} — confirmation in progress.`,
+    sub: "The record exists but its proofs have not yet been confirmed. Check back shortly." };
+}
+
+function receiptBtcFact(rec, fmt) {
+  if (rec.btc_pinned_at) {
+    const d = new Date(rec.btc_pinned_at);
+    return "Pinned " + (isNaN(d.getTime()) ? rec.btc_pinned_at : fmt(d));
+  }
+  if (calendarCounts(rec).serversOk === 0) return "None — no valid calendar proof";
+  return "Pending — an hour to several days";
+}
+
 function el(tag, attrs, ...children) {
   const node = document.createElement(tag);
   if (attrs) {
@@ -289,28 +319,12 @@ function renderVerdict(rec) {
   // so "checked just now" is literally true.
   const checkedLine = "Record re-checked just now, at " + _fmtLocal(new Date()) + ".";
 
-  if (rec.btc_pinned_at) {
-    setVerdict(
-      `This file existed on or before ${when}.`,
-      "Anchored in the Bitcoin blockchain — verifiable by anyone, no account, no trust in Orphograph required. This fingerprint now lives in the most heavily verified public record in human history; it will outlive every company involved, including ours.",
-      checkedLine
-    );
-    document.getElementById("verdict").classList.add("verdict-anchored");
-  } else if ((rec.calendars_ok || 0) > 0) {
-    setVerdict(
-      `Sealed ${when} — awaiting Bitcoin confirmation.`,
-      "The seal is in place; the Bitcoin anchor lands from about an hour to several days after anchoring. Refresh this page later to see it confirmed.",
-      checkedLine
-    );
-    document.getElementById("verdict").classList.add("verdict-pending");
-  } else {
-    setVerdict(
-      `Sealed ${when} — confirmation in progress.`,
-      "The record exists but its proofs have not yet been confirmed. Check back shortly.",
-      checkedLine
-    );
-    document.getElementById("verdict").classList.add("verdict-pending");
-  }
+  const v = receiptVerdictCopy(rec, when);
+  setVerdict(v.headline, v.sub, checkedLine);
+  // "none" keeps the pending stripe: there is no failure style, and the copy
+  // carries the meaning.
+  document.getElementById("verdict").classList.add(
+    v.kind === "anchored" ? "verdict-anchored" : "verdict-pending");
 }
 
 // Facts strip — dates in explicit UTC so two skeptics in two time zones
@@ -322,14 +336,7 @@ function renderFacts(rec) {
     sealed.textContent = isNaN(d.getTime()) ? (rec.created_at || "—") : _fmtUtc(d);
   }
   const btc = $("#fact-btc");
-  if (btc) {
-    if (rec.btc_pinned_at) {
-      const d = new Date(rec.btc_pinned_at);
-      btc.textContent = "Pinned " + (isNaN(d.getTime()) ? rec.btc_pinned_at : _fmtUtc(d));
-    } else {
-      btc.textContent = "Pending — an hour to several days";
-    }
-  }
+  if (btc) btc.textContent = receiptBtcFact(rec, _fmtUtc);
   const cals = $("#fact-cals");
   if (cals) {
     const c = calendarCounts(rec);

@@ -39,6 +39,17 @@ class ZeroCalendarTest(unittest.TestCase):
         self.assertEqual(json.loads(out)["receipt_id"], "RZEROCAL03")   # still printed
         self.assertIn("no calendar accepted", err)
 
+    def test_an_answer_with_no_receipt_exits_two(self):
+        # Review of PR #284: an empty 200 printed receipt_id null and exited 0.
+        with tempfile.TemporaryDirectory() as d:
+            Path(d, "a.txt").write_text("a")
+            out, err = io.StringIO(), io.StringIO()
+            with mock.patch.object(_cli, "anchor_folder", return_value={"receipt_id": None}), \
+                    redirect_stdout(out), redirect_stderr(err):
+                rc = _cli.main(["--server-url", "http://127.0.0.1:9", "anchor", d])
+        self.assertEqual(rc, 2, (out.getvalue(), err.getvalue()))
+        self.assertIn("without a receipt", err.getvalue())
+
     def test_one_calendar_or_an_older_answer_exits_zero(self):
         for calendars_ok in (1, None):
             rc, out, err = _run(calendars_ok)

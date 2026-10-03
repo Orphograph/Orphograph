@@ -198,6 +198,9 @@ def main(argv: Optional[List[str]] = None) -> int:
             # calendars_ok 0: no calendar accepted the root, so this receipt
             # has no Bitcoin commitment and never gets one. Exiting 0 let a CI
             # gate pass it. 2, not 1: exit 1 is the verify MISMATCH verdict.
+            if not result.get("receipt_id"):
+                sys.stderr.write("orphograph: the service answered without a receipt.\n")
+                return 2
             if result.get("calendars_ok") == 0:
                 sys.stderr.write("orphograph: no calendar accepted the root; this receipt "
                                  "has no Bitcoin commitment. Try again later.\n")

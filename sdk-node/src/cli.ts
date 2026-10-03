@@ -54,8 +54,14 @@ function parseArgs(argv: string[]): ParsedArgs {
   return { positional, flags };
 }
 
+// Every option a subcommand reads. An unknown one used to be dropped without a
+// word, so a typo or the Python CLI's --server-url sent the request to the
+// live service instead of the server the caller named (cycle 9: three real
+// anchors that way). Unknown options now stop the CLI before any request.
+const KNOWN_FLAGS = new Set(["server", "server-url", "api-key", "label"]);
+
 function getServer(flags: Record<string, string | boolean>): string {
-  const v = flags["server"];
+  const v = flags["server"] ?? flags["server-url"];
   return typeof v === "string" ? v : DEFAULT_SERVER_URL;
 }
 
@@ -70,6 +76,7 @@ function printUsage(): void {
   const usage = [
     "Usage:",
     "  orphograph anchor <folder> [--server URL] [--api-key KEY] [--label TEXT]",
+    "  (--server-url is accepted for --server; any other option is an error)",
     "  orphograph verify <folder> <receipt_id> [--server URL]",
     "  orphograph proof  <receipt_id> <rel_path> [--server URL]",
     "  orphograph verify-inclusion <local_file> <rel_path> <proof.json> [root_hex]",
@@ -78,7 +85,7 @@ function printUsage(): void {
     "  ORPHO_API_KEY  optional API key sent as X-Orpho-Api-Key.",
     "",
     "Privacy: file contents are read locally and never transmitted.",
-    "Only the manifest (paths plus SHA-256 digests) crosses the network.",
+    "Only the manifest (paths, sizes and SHA-256 digests) and any label cross the network.",
   ].join("\n");
   process.stderr.write(usage + "\n");
 }
@@ -101,6 +108,10 @@ async function cmdAnchor(args: ParsedArgs): Promise<number> {
   // calendars_ok 0: no calendar accepted the root, so this receipt has no
   // Bitcoin commitment and never gets one. Exiting 0 let a CI gate pass it.
   // 2, not 1: exit 1 is the verify MISMATCH verdict (same rule as the Python CLI).
+  if (!result.receipt_id) {
+    process.stderr.write("orphograph: the service answered without a receipt.\n");
+    return 2;
+  }
   if (result.calendars_ok === 0) {
     process.stderr.write(
       "orphograph: no calendar accepted the root; this receipt has no Bitcoin commitment. Try again later.\n",
@@ -205,6 +216,12 @@ async function main(): Promise<number> {
   const argv = process.argv.slice(2);
   const subcommand = argv[0];
   const args = parseArgs(argv.slice(1));
+  const unknown = Object.keys(args.flags).filter((k) => !KNOWN_FLAGS.has(k));
+  if (unknown.length > 0) {
+    process.stderr.write(`unknown option --${unknown[0]}\n`);
+    printUsage();
+    return 2;
+  }
   try {
     switch (subcommand) {
       case "anchor":

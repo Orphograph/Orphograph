@@ -71,6 +71,9 @@ def anchor(endpoint: str, sha256: str, sha512: str, label: str, api_key: str,
             d = json.loads(e.read().decode())
         except Exception:
             d = {"error": f"HTTP {e.code}"}
+        if not isinstance(d, dict):
+            # A JSON list or string error body crashed the next line.
+            d = {"error": f"HTTP {e.code}", "body": d}
         d["status_code"] = e.code
         return False, d
     except (urllib.error.URLError, socket.timeout, OSError) as e:

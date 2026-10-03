@@ -37,7 +37,7 @@ HOUR_PROMISE = re.compile(
     # after one hour", and "within (a few) hours" / "usually within hours".
     r"|>\s*about an hour\.|over the following hour|≈ ?1 ?hour|~ ?one hour to the block"
     r"|block-pinned after one hour|(confirms|committed[^.]{0,60}|lands|arrives) within (a few )?hours"
-    r"|usually within hours")
+    r"|usually within hours|by approximately one hour")
 
 
 def _friendly_status(rec: dict) -> str:
@@ -73,7 +73,8 @@ def test_no_page_or_script_promises_pinning_within_an_hour():
     # exists, and /blog/atom.xml is always built from it.
     # server/mailer.py too: the customer emails carry the same promise.
     for p in sorted(list(WEB.rglob("*.js")) + list(WEB.rglob("*.html"))
-                    + list((ROOT / "content").rglob("*.md")) + [ROOT / "server" / "mailer.py"]):
+                    + list((ROOT / "content").rglob("*.md")) + list(WEB.rglob("*.md"))
+                    + [ROOT / "server" / "mailer.py"]):
         rel = p.relative_to(ROOT).as_posix()
         if "/_mockups/" in rel or rel.endswith("index-legacy.html") or "/dist/" in rel:
             continue
@@ -103,7 +104,9 @@ def test_the_hour_scan_sees_the_sentence_it_was_written_for():
                 "commitment to Bitcoin typically confirms within a few hours,",
                 "typically committed to the Bitcoin chain within hours;",
                 "The seal is in place; the Bitcoin anchor usually lands within hours.",
-                "Pending — usually within hours"):
+                "Pending — usually within hours",
+                "this follows issuance by approximately one hour,",
+                "will batch it into a Bitcoin transaction within ~1 hour."):
         assert HOUR_PROMISE.search(old.lower()), old
 
 
@@ -295,3 +298,82 @@ def test_homepage_still_watches_a_committed_receipt(tmp_path):
     run = _homepage(1, tmp_path)
     assert "watching for bitcoin confirmation" in run["banner"].lower(), run
     assert run["intervals"] == 1 and run["recent_status"] == "pending", run
+
+
+def _receipt_js_call(expr: str, rec: dict) -> str:
+    """Evaluate expr(rec) with the declarations at the top of the real receipt.js."""
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("node not on PATH: this check runs the real receipt.js")
+    src = RECEIPT_JS.read_text(encoding="utf-8")
+    head = src[: src.index("function el(tag, attrs")]
+    driver = head + f"\nconst rec = JSON.parse(process.argv[1]);\nprocess.stdout.write(JSON.stringify({expr}));\n"
+    proc = subprocess.run([node, "-e", driver, json.dumps(rec)], capture_output=True, text=True, timeout=60)
+    assert proc.returncode == 0, proc.stderr
+    return json.loads(proc.stdout)
+
+
+@pytest.mark.parametrize("calendars_ok,expect_none", [(0, True), (1, False), (None, False)],
+                         ids=["no-calendar", "one-calendar", "field-absent"])
+def test_the_receipt_verdict_and_facts_tell_a_root_with_no_commitment_so(calendars_ok, expect_none):
+    """Cycle 9 (review of PR #284): the verdict banner said "confirmation in
+    progress … Check back shortly" and the facts strip "Pending — an hour to
+    several days" for a receipt no calendar accepted."""
+    rec = {"status": "pending", "created_at": "2026-10-03T05:00:00Z", "calendars_submitted_total": 5}
+    if calendars_ok is not None:
+        rec["calendars_ok"] = calendars_ok
+    verdict = _receipt_js_call('receiptVerdictCopy(rec, "October 3, 2026")', rec)
+    fact = _receipt_js_call("receiptBtcFact(rec, (d) => d.toISOString())", rec)
+    if expect_none:
+        assert "no bitcoin commitment" in (verdict["headline"] + verdict["sub"]).lower(), verdict
+        assert "check back" not in verdict["sub"].lower() and fact.startswith("None"), (verdict, fact)
+    else:
+        assert verdict["kind"] == "pending" and "no bitcoin commitment" not in verdict["headline"].lower(), verdict
+        if calendars_ok == 1:
+            assert fact.startswith("Pending"), fact
+
+
+
+FOLDER_JS = WEB / "folder.js"
+
+_FOLDER_DRIVER = r"""
+const fs = require("fs"), vm = require("vm");
+const [src, cal] = process.argv.slice(2);
+class El {
+  constructor() { this.children = []; this._t = ""; this.hidden = true; this.className = ""; this.style = {}; this.dataset = {}; }
+  get textContent() { return this._t + this.children.map((c) => c.textContent).join(""); }
+  set textContent(v) { this._t = String(v); this.children = []; }
+  appendChild(c) { this.children.push(c); return c; } replaceChildren() { this.children = []; this._t = ""; }
+  addEventListener() {} setAttribute() {} removeAttribute() {}
+}
+const document = { querySelector: () => null, getElementById: () => null, createElement: () => new El(),
+  createTextNode: (t) => ({ _t: String(t), textContent: String(t), children: [] }), addEventListener() {} };
+const ctx = { document, console, TextEncoder, crypto: globalThis.crypto, URL, setTimeout };
+ctx.window = ctx; ctx.addEventListener = () => {};
+vm.createContext(ctx);
+const code = fs.readFileSync(src, "utf8").replace(/^export /gm, "").replace(/^import .*$/gm, "");
+vm.runInContext(code + "\n;globalThis.__render = _renderReceipt;", ctx);
+const host = new El();
+ctx.__render(host, { receipt_id: "RFOLDER0000001", root_hex: "ab".repeat(32), calendars_ok: Number(cal),
+  calendars_total: 5, kind: "folder" }, [{ path: "a.csv", digest: "cd".repeat(32) }], 0);
+process.stdout.write(JSON.stringify(host.textContent));
+"""
+
+
+@pytest.mark.parametrize("calendars_ok", [0, 1])
+def test_homepage_folder_card_tells_a_root_with_no_commitment_so(tmp_path, calendars_ok):
+    """Cycle 9 (review of PR #284): the folder card always said "A folder receipt
+    has been issued" and "Bitcoin commitment expected …", also for a root no
+    calendar accepted."""
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("node not on PATH: this check runs the real folder.js")
+    driver = tmp_path / "folder_driver.js"
+    driver.write_text(_FOLDER_DRIVER)
+    proc = subprocess.run([node, str(driver), str(FOLDER_JS), str(calendars_ok)], capture_output=True, text=True, timeout=60)
+    assert proc.returncode == 0, proc.stderr
+    text = json.loads(proc.stdout).lower()
+    if calendars_ok == 0:
+        assert "no bitcoin commitment" in text and "commitment expected" not in text, text[:400]
+    else:
+        assert "commitment expected" in text and "no bitcoin commitment" not in text, text[:400]

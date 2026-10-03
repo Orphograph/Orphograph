@@ -115,6 +115,13 @@ PER_PAGE_PROMISES = (
     "itself anchored on publication",
     "receipt identifier for this revision is recorded in the footer",
     "their receipts are appended",
+    # Review of PR #284: the footer form of the same promise, on /continuity
+    # and /faq.
+    "listed in the footer",
+    "listed in the page footer",
+    "receipt for the latest revision",
+    # Not "are themselves anchored": revisions ARE anchored, as part of the
+    # daily repository root (/changelog, /docs/webhooks say only that).
 )
 
 
@@ -150,6 +157,10 @@ class TestNoPagePromisesItsOwnReceipt(unittest.TestCase):
             "and the <br>receipt is replaced accordingly.",
             "This page is itself anchored at the time of issuance.",
             "The page is itself anchored on publication and is intended",
+            "Revisions to this document are themselves anchored; the receipt for the "
+            "latest revision is listed in the footer.",
+            "Updates to this page are themselves anchored; the receipt is listed in the "
+            "page footer of the latest revision.",
         ):
             self.assertTrue(_per_page_promises_in(old), old)
 
@@ -160,4 +171,8 @@ class TestNoPagePromisesItsOwnReceipt(unittest.TestCase):
         self.assertIn("daily folder anchor", src)
         self.assertIn('"private": private', src)
         excluded = re.search(r"EXCLUDE_PATTERNS[^=]*=\s*\((.*?)\)", src, re.S).group(1)
-        self.assertNotIn("web/", excluded, "the pages must be inside the anchored tree")
+        for pattern in re.findall(r'"([^"]+)"', excluded):
+            # Review of PR #284: checking only the literal "web/" let an
+            # exclusion of every page (*.html, web, web*) pass.
+            self.assertFalse(pattern.startswith("web") or pattern in ("*.html", "*.htm", "*"),
+                             f"{pattern!r} would drop the pages from the anchored tree")

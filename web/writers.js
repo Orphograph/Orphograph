@@ -341,7 +341,12 @@ async function anchorChain() {
   // Bitcoin commitment and never gets one. Leave the chain un-anchored: the
   // same button retries it (the root is the same), and the stored session and
   // manifest never say "anchored" for it.
-  if (record && record.calendars_ok === 0) {
+  if (!record || typeof record !== "object" || !record.receipt_id) {
+    setStatus("writers-status", "Anchor response had no receipt. Press Anchor again to retry.", "err");
+    if (btn) btn.disabled = false;
+    return;
+  }
+  if (record.calendars_ok === 0) {
     setStatus("writers-status",
       "Not anchored: no calendar accepted the Merkle root, so this receipt has no Bitcoin commitment. Press Anchor again to retry.",
       "err");

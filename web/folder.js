@@ -233,7 +233,12 @@ function _renderReceipt(host, record, files, oversizeSkipped) {
 
   const title = document.createElement("h3");
   title.className = "folder-receipt-title";
-  title.textContent = "A folder receipt has been issued";
+  // calendars_ok 0: no calendar accepted the root, so this receipt has no
+  // Bitcoin commitment and never gets one (cycle 9).
+  const noCommitment = record.calendars_ok === 0;
+  title.textContent = noCommitment
+    ? "A folder receipt was recorded, with no Bitcoin commitment"
+    : "A folder receipt has been issued";
   card.appendChild(title);
 
   const idRow = document.createElement("p");
@@ -271,7 +276,9 @@ function _renderReceipt(host, record, files, oversizeSkipped) {
 
   const eta = document.createElement("p");
   eta.className = "folder-receipt-eta muted small";
-  eta.textContent = "Bitcoin commitment expected from about an hour to several days from now.";
+  eta.textContent = noCommitment
+    ? "No calendar accepted this folder's root, so it has no Bitcoin commitment and will not get one. Anchor the folder again later."
+    : "Bitcoin commitment expected from about an hour to several days from now.";
   card.appendChild(eta);
 
   // Link to the hosted provenance certificate — a shareable, print-to-PDF
