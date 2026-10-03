@@ -178,6 +178,14 @@ def _process(base: str, api_key: str, path: Path, state_path: Path,
     except (urllib.error.URLError, OSError) as e:
         return False, f"{type(e).__name__}: {e}"
 
+    # calendars_ok 0: no calendar accepted the hash, so this receipt has no
+    # Bitcoin commitment and never gets one. Writing the sidecar would mark
+    # the file done forever; leave it for the next scan instead.
+    if receipt.get("calendars_ok") == 0:
+        return False, ("no calendar accepted the hash (receipt "
+                       f"{receipt.get('receipt_id')} has no Bitcoin commitment); "
+                       "will retry on the next scan")
+
     sidecar.write_text(json.dumps(receipt, indent=2))
     _record_state(state_path, {
         "ts": _now_iso(),

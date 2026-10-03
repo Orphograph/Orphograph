@@ -329,3 +329,25 @@ def test_the_mcp_folder_tool_is_not_said_to_carry_lineage(server):
     # Review round 4: the tool's inputs are path and label; the manifest it
     # builds has no parent block, so it cannot commit to a parent receipt.
     assert "may commit to a parent receipt" not in plain(served(server, "/mcp")).lower()
+
+
+@pytest.mark.parametrize("fail_calendars,expect_rc", [("a,b,alice,finney,btc", 1), ("", 0)],
+                         ids=["no-calendar", "control-committed"])
+def test_dataset_verify_fails_the_time_bound_of_a_root_no_calendar_accepted(tmp_path, fail_calendars, expect_rc):
+    """Cycle 9: `verify --receipt` printed RESULT: VERIFIED for a receipt no
+    calendar accepted. The bundle does match its root, but the receipt has no
+    Bitcoin commitment, so nothing bounds the bytes in time."""
+    bundle = _bundle(tmp_path)
+    out = tmp_path / "out"
+    data = tmp_path / "data"
+    data.mkdir()
+    env = {"fail_calendars": fail_calendars} if fail_calendars else {}
+    for base in _srv.server_processes(data, stub_calendars=True, RATE_LIMIT_PER_DAY="50", **env):
+        run = run_dataset_cli(base, "anchor", "--bundle", str(bundle), "--name", "T", "--out", str(out))
+        assert run.returncode == 0, (run.stdout, run.stderr)
+        anchor = json.loads((out / "certificate.json").read_text())["anchor"]
+        rid = anchor.get("receipt_id") or re.search(r"receipt (\S+) has no Bitcoin", anchor["note"]).group(1)
+        check = run_dataset_cli(base, "verify", "--bundle", str(bundle), "--receipt", rid)
+    assert check.returncode == expect_rc, (check.stdout, check.stderr)
+    assert "PASS  bundle integrity" in check.stdout, check.stdout
+    assert ("FAIL  time bound" in check.stdout) is (expect_rc == 1), check.stdout

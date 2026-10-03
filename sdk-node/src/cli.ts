@@ -98,6 +98,15 @@ async function cmdAnchor(args: ParsedArgs): Promise<number> {
         : undefined,
   });
   process.stdout.write(JSON.stringify(result) + "\n");
+  // calendars_ok 0: no calendar accepted the root, so this receipt has no
+  // Bitcoin commitment and never gets one. Exiting 0 let a CI gate pass it.
+  // 2, not 1: exit 1 is the verify MISMATCH verdict (same rule as the Python CLI).
+  if (result.calendars_ok === 0) {
+    process.stderr.write(
+      "orphograph: no calendar accepted the root; this receipt has no Bitcoin commitment. Try again later.\n",
+    );
+    return 2;
+  }
   return 0;
 }
 
