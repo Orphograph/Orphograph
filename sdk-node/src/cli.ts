@@ -59,6 +59,23 @@ function parseArgs(argv: string[]): ParsedArgs {
 // live service instead of the server the caller named (cycle 9: three real
 // anchors that way). Unknown options now stop the CLI before any request.
 const KNOWN_FLAGS = new Set(["server", "server-url", "api-key", "label"]);
+// Positionals each subcommand reads. An extra one (a stray URL meant for
+// --server) is an error too, for the same reason. Short options (-s) are not
+// options here at all; a 16-character receipt id may start with "-", so only
+// one- or two-letter forms are refused as unknown options.
+const MAX_POSITIONAL: Record<string, number> = { anchor: 1, verify: 2, proof: 2, "verify-inclusion": 4 };
+const SHORT_OPTION = /^-[A-Za-z]{1,2}$/;
+
+// A value flag given with no value (`--server` at the end, `--server=`, or an
+// unset variable in `--server "$URL"`) is refused too: an empty server fell
+// through to the live default exactly like an unknown flag did.
+function badFlagValue(flags: Record<string, string | boolean>): string | undefined {
+  for (const k of ["server", "server-url", "api-key"]) {
+    if (k in flags && (typeof flags[k] !== "string" || flags[k] === "")) return k;
+  }
+  if ("label" in flags && typeof flags["label"] !== "string") return "label";
+  return undefined;
+}
 
 function getServer(flags: Record<string, string | boolean>): string {
   const v = flags["server"] ?? flags["server-url"];
@@ -76,7 +93,7 @@ function printUsage(): void {
   const usage = [
     "Usage:",
     "  orphograph anchor <folder> [--server URL] [--api-key KEY] [--label TEXT]",
-    "  (--server-url is accepted for --server; any other option is an error)",
+    "  (--server-url is accepted for --server; any other option, or an extra argument, is an error)",
     "  orphograph verify <folder> <receipt_id> [--server URL]",
     "  orphograph proof  <receipt_id> <rel_path> [--server URL]",
     "  orphograph verify-inclusion <local_file> <rel_path> <proof.json> [root_hex]",
@@ -217,8 +234,27 @@ async function main(): Promise<number> {
   const subcommand = argv[0];
   const args = parseArgs(argv.slice(1));
   const unknown = Object.keys(args.flags).filter((k) => !KNOWN_FLAGS.has(k));
-  if (unknown.length > 0) {
-    process.stderr.write(`unknown option --${unknown[0]}\n`);
+  const short = args.positional.find((p) => SHORT_OPTION.test(p));
+  if (unknown.length > 0 || short) {
+    process.stderr.write(`unknown option ${unknown.length > 0 ? "--" + unknown[0] : short}\n`);
+    printUsage();
+    return 2;
+  }
+  const missing = badFlagValue(args.flags);
+  if (missing) {
+    process.stderr.write(`option --${missing} needs a value\n`);
+    printUsage();
+    return 2;
+  }
+  if (typeof args.flags["server"] === "string" && typeof args.flags["server-url"] === "string"
+      && args.flags["server"] !== args.flags["server-url"]) {
+    process.stderr.write("--server and --server-url name different servers; give one\n");
+    printUsage();
+    return 2;
+  }
+  const max = MAX_POSITIONAL[subcommand];
+  if (max !== undefined && args.positional.length > max) {
+    process.stderr.write(`unexpected argument: ${args.positional[max]}\n`);
     printUsage();
     return 2;
   }

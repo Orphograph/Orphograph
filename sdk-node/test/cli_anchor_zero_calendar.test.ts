@@ -83,12 +83,59 @@ test("a root one calendar accepted still exits 0", async () => {
 // knew only --server, dropped the unknown flag without a word, and anchored on
 // the live service three times. Unknown options now stop the CLI before any
 // network call, and --server-url (the Python CLI's spelling) is accepted.
-test("an unknown option exits 2 before any request", async () => {
-  const run = await anchorAgainst(1, "--sever");
+for (const [flag, message] of [["--sever", /unknown option --sever/], ["-s", /unknown option -s/]]) {
+  test(`an unknown option (${flag}) exits 2 before any request`, async () => {
+    const run = await anchorAgainst(1, flag as string);
+    assert.equal(run.code, 2, run.stderr);
+    assert.match(run.stderr, message as RegExp);
+    assert.equal(run.requests, 0);
+    // Not even an attempt: the egress guard would turn one into an exit 2
+    // too, so "exit 2" alone cannot tell "refused" from "tried and blocked".
+    assert.doesNotMatch(run.stderr, /egress blocked/);
+  });
+}
+
+test("a stray positional (a URL meant for --server) exits 2 before any request", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "orpho-stray-"));
+  writeFileSync(join(dir, "a.txt"), "a");
+  const run = await new Promise<{ code: number | null; stderr: string }>((r) => {
+    const child = spawn(process.execPath, ["--import", GUARD, CLI, "anchor", dir, "http://127.0.0.1:9"]);
+    let stderr = "";
+    child.stderr.on("data", (c) => (stderr += c));
+    child.on("close", (code) => r({ code, stderr }));
+  });
   assert.equal(run.code, 2, run.stderr);
-  assert.match(run.stderr, /unknown option --sever/);
-  assert.equal(run.requests, 0);
+  assert.match(run.stderr, /unexpected argument/);
+  assert.doesNotMatch(run.stderr, /egress blocked/);
 });
+
+// Round 2: a value flag with no value fell through to the live default too.
+for (const argv of [["--server"], ["--server="], ["--server", ""], ["--server-url", "--label", "x"],
+                    ["--server", "--server-url", "STUB"], ["--server=", "--server-url=STUB"],
+                    ["--server", "STUB", "--server-url", "http://127.0.0.1:9"]]) {
+  test(`a server flag with no usable value (${JSON.stringify(argv)}) exits 2 before any request`, async () => {
+    let requests = 0;
+    const server = createServer((req, res) => { requests += 1; res.writeHead(500); res.end(); });
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", () => r()));
+    const stub = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    const dir = mkdtempSync(join(tmpdir(), "orpho-noval-"));
+    writeFileSync(join(dir, "a.txt"), "a");
+    try {
+      const run = await new Promise<{ code: number | null; stderr: string }>((r) => {
+        const child = spawn(process.execPath, ["--import", GUARD, CLI, "anchor", dir,
+          ...argv.map((a) => a.replace("STUB", stub))]);
+        let stderr = "";
+        child.stderr.on("data", (c) => (stderr += c));
+        child.on("close", (code) => r({ code, stderr }));
+      });
+      assert.equal(run.code, 2, run.stderr);
+      assert.equal(requests, 0);
+      assert.doesNotMatch(run.stderr, /egress blocked/);
+    } finally {
+      server.close();
+    }
+  });
+}
 
 test("--server-url is accepted as --server", async () => {
   const run = await anchorAgainst(1, "--server-url");
@@ -96,17 +143,33 @@ test("--server-url is accepted as --server", async () => {
   assert.equal(run.requests, 1);
 });
 
-test("the egress guard itself blocks the live service", async () => {
-  // Negative control for the guard: with no server flag the CLI targets its
-  // default (the live service), and the guard must stop that request.
+test("the egress guard itself blocks an https request", async () => {
+  // Negative control for the guard, aimed at a reserved name (.invalid never
+  // resolves), not the live service: if the guard stopped working, this run
+  // fails on DNS instead of anchoring anywhere real.
   const dir = mkdtempSync(join(tmpdir(), "orpho-guard-ctl-"));
   writeFileSync(join(dir, "a.txt"), "a");
   const run = await new Promise<{ code: number | null; stderr: string }>((r) => {
-    const child = spawn(process.execPath, ["--import", GUARD, CLI, "anchor", dir]);
+    const child = spawn(process.execPath, ["--import", GUARD, CLI, "anchor", dir, "--server", "https://guard-control.invalid"]);
     let stderr = "";
     child.stderr.on("data", (c) => (stderr += c));
     child.on("close", (code) => r({ code, stderr }));
   });
   assert.equal(run.code, 2, run.stderr);
   assert.match(run.stderr, /egress blocked by test guard/);
+});
+
+test("a receipt id that starts with '-' is still an argument, not an option", async () => {
+  // token_urlsafe ids start with "-" about one time in 64; only one- or
+  // two-letter dash forms are refused. Port 9 is closed, so this run ends on
+  // the connection, never on argument parsing.
+  const run = await new Promise<{ code: number | null; stderr: string }>((r) => {
+    const child = spawn(process.execPath, ["--import", GUARD, CLI, "proof", "-abcDEFghiJKLmno", "a.txt",
+      "--server", "http://127.0.0.1:9"]);
+    let stderr = "";
+    child.stderr.on("data", (c) => (stderr += c));
+    child.on("close", (code) => r({ code, stderr }));
+  });
+  assert.doesNotMatch(run.stderr, /unknown option|unexpected argument/);
+  assert.doesNotMatch(run.stderr, /egress blocked/);
 });

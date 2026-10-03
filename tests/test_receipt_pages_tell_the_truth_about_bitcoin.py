@@ -147,6 +147,12 @@ def test_a_receipt_with_one_calendar_proof_is_still_pending():
     assert text.startswith("Pending Bitcoin confirmation"), text
 
 
+def test_a_receipt_without_a_calendars_ok_field_is_still_pending():
+    # An older answer with no calendars_ok field is not a refusal.
+    assert _receipt_status({"status": "pending"}).startswith("Pending Bitcoin confirmation")
+    assert _friendly_status({"status": "pending"}).startswith("Pending Bitcoin confirmation")
+
+
 WRITERS_JS = WEB / "writers.js"
 
 # Loads the real writers.js in a node vm with a fake DOM, adds one version, and
@@ -329,8 +335,10 @@ def test_the_receipt_verdict_and_facts_tell_a_root_with_no_commitment_so(calenda
         assert "check back" not in verdict["sub"].lower() and fact.startswith("None"), (verdict, fact)
     else:
         assert verdict["kind"] == "pending" and "no bitcoin commitment" not in verdict["headline"].lower(), verdict
-        if calendars_ok == 1:
-            assert fact.startswith("Pending"), fact
+        # Round 2: the facts strip read "None" for a record with no
+        # calendars_ok field while the banner kept "in progress". Only an
+        # explicit 0 means no commitment, on every line of the page.
+        assert fact.startswith("Pending"), fact
 
 
 

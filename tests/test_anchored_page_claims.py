@@ -170,9 +170,31 @@ class TestNoPagePromisesItsOwnReceipt(unittest.TestCase):
         src = (ROOT / "scripts" / "auto_anchor_repo.py").read_text()
         self.assertIn("daily folder anchor", src)
         self.assertIn('"private": private', src)
-        excluded = re.search(r"EXCLUDE_PATTERNS[^=]*=\s*\((.*?)\)", src, re.S).group(1)
-        for pattern in re.findall(r'"([^"]+)"', excluded):
-            # Review of PR #284: checking only the literal "web/" let an
-            # exclusion of every page (*.html, web, web*) pass.
-            self.assertFalse(pattern.startswith("web") or pattern in ("*.html", "*.htm", "*"),
-                             f"{pattern!r} would drop the pages from the anchored tree")
+        # Review rounds 1-2 of PR #284: spelling checks ("web/", "*.html")
+        # passed exclusions such as "*.htm*", "*html", "?eb/*" and
+        # "**/*.html". Ask the matcher the job actually uses instead.
+        self.assertEqual(_pages_the_daily_anchor_drops(_exclude_patterns(src)), [],
+                         "the daily anchor would drop these pages, which say they are covered")
+
+    def test_the_exclusion_check_catches_patterns_that_drop_pages(self):
+        # Positive control: each of these drops at least one page.
+        for pattern in ("*.html", "*.htm*", "*html", "?eb/*", "web/*", "**/*.html", "web*"):
+            self.assertTrue(_pages_the_daily_anchor_drops((pattern,)), pattern)
+
+
+def _exclude_patterns(src: str) -> tuple:
+    import ast
+    for node in ast.walk(ast.parse(src)):
+        targets = getattr(node, "targets", None) or [getattr(node, "target", None)]
+        if any(getattr(t, "id", None) == "EXCLUDE_PATTERNS" for t in targets if t is not None):
+            return tuple(ast.literal_eval(node.value))
+    raise AssertionError("EXCLUDE_PATTERNS not found in auto_anchor_repo.py")
+
+
+def _pages_the_daily_anchor_drops(patterns) -> list:
+    import sys
+    sys.path.insert(0, str(ROOT / "server"))
+    import merkle
+    pages = [p.relative_to(ROOT).as_posix() for p in (ROOT / "web").rglob("*.html")
+             if "/_mockups/" not in p.as_posix()]
+    return [rel for rel in pages if merkle._matches_any(rel, list(patterns))]

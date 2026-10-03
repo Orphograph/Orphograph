@@ -91,7 +91,8 @@ function calendarCounts(rec) {
 // CONFIRMED is driven by the Bitcoin-pinned counts, never by proof validity:
 // a stamped-but-pending proof is not a confirmation. A record with no valid
 // calendar proof (no calendar accepted the hash) has no Bitcoin commitment
-// and never gets one, so it is not "pending".
+// and never gets one, so it is not "pending". Only an explicit calendars_ok of
+// 0 means that; every helper on this page reads it the same way.
 function receiptStatusLine(rec) {
   const raw = rec.status || "pending";
   const c = calendarCounts(rec);
@@ -107,7 +108,7 @@ function receiptStatusLine(rec) {
       ? `Anchored to Bitcoin · ${stamped} stamped`
       : `Anchored to Bitcoin · ${confirmed} confirmed`;
   }
-  if (raw === "pending" && c.serversOk === 0) {
+  if (raw === "pending" && rec.calendars_ok === 0) {
     return "No Bitcoin commitment · no valid calendar proof for this receipt";
   }
   if (raw === "pending") return `Pending Bitcoin confirmation · ${stamped} stamped`;
@@ -140,7 +141,7 @@ function receiptBtcFact(rec, fmt) {
     const d = new Date(rec.btc_pinned_at);
     return "Pinned " + (isNaN(d.getTime()) ? rec.btc_pinned_at : fmt(d));
   }
-  if (calendarCounts(rec).serversOk === 0) return "None — no valid calendar proof";
+  if (rec.calendars_ok === 0) return "None — no valid calendar proof";
   return "Pending — an hour to several days";
 }
 
@@ -261,7 +262,7 @@ function renderExplorerGrid(rec) {
     }, "blockstream.info →"));
     btcCard.appendChild(links);
   } else {
-    btcCard.appendChild(el("p", { className: "muted small", textContent: calendarCounts(rec).serversOk > 0
+    btcCard.appendChild(el("p", { className: "muted small", textContent: rec.calendars_ok !== 0
       ? "Pending — Bitcoin confirmation can take from about an hour to several days. Once pinned, this card will link directly to the Bitcoin block and transaction containing the Merkle root that commits your hash."
       : "No Bitcoin commitment — no valid calendar proof exists for this receipt, so it will never be pinned." }));
   }
@@ -423,7 +424,7 @@ async function main() {
   if (rec.btc_pinned_at) {
     renderTimeInto($("#btc"), rec.btc_pinned_at);
   } else {
-    $("#btc").textContent = _c.serversOk > 0
+    $("#btc").textContent = rec.calendars_ok !== 0
       ? "pending — confirmation can take from about an hour to several days"
       : "none — with no valid calendar proof, this receipt will never be pinned";
   }
