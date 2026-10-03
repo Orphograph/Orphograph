@@ -35,6 +35,10 @@ PRODUCT_GLOBS = (
     "server/*.py", "capture/*.py", "mcp/*.py", "web/mcp/*.py", "tools/*.py",
     "sdk-python/orphograph/*.py", "sdk/orphograph/*.py", "zk-provenance/*.py",
     "scripts/*.py", "dist/orphograph-verify/*.py", "web/*.js", "sdk-node/src/*.ts",
+    # The GitHub Action and the agent CLI ship from here; workflows pin
+    # integrations/github-action@master. Left out, the action's own
+    # ORPHO_FAIL_ON_ERROR read as phantom (2026-10-02).
+    "integrations/*/*.py",
 )
 
 # Names set by tests that the product does not read, frozen 2026-08-26.
