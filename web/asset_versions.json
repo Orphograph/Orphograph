@@ -488,8 +488,8 @@
     "sha256": "42591a6aeb2c7a86c5f01380b4f7fc935fae67b461ce39edb6faf1579df03321"
   },
   "/v2.js": {
-    "version": "10",
-    "sha256": "c2f74e9e99fda071802f89beecf489f8f34fe4b6411a3df658343a0e1f8a04fc"
+    "version": "11",
+    "sha256": "506583fd6f52c12bef5cc5132b5ebc42b5e291910496e1f8244bd7bc2104c491"
   },
   "/v2/app.js": {
     "version": "4",
@@ -524,7 +524,7 @@
     "sha256": "12cf4c84d5f01b8f3c053ef879f53064e6bc6dbabbc47a66df73a5c1cf333a74"
   },
   "/writers.js": {
-    "version": "2",
-    "sha256": "d0aac1d5d9179851bc361e99d0c945f7cd9015bae049162d008e653e17bc1778"
+    "version": "3",
+    "sha256": "8518370f14f597b93e73d6b3e32282a826c65dd5629dcdc3a724b9bab8e6f2b5"
   }
 }

@@ -160,7 +160,7 @@ def test_a_receipt_no_calendar_accepted_is_not_counted_as_anchored(tmp_path):
 
 
 
-@pytest.mark.parametrize("rid", [None, ""], ids=["null", "empty"])
+@pytest.mark.parametrize("rid", [None, "", "NOT_AN_OBJECT"], ids=["null", "empty", "list-body"])
 def test_a_null_receipt_id_is_an_unexpected_answer(tmp_path, rid):
     """Review round 4: only a missing key was refused; a 200 carrying
     receipt_id null or "" was written as a receipt named "None" or ""."""
@@ -170,7 +170,8 @@ def test_a_null_receipt_id_is_an_unexpected_answer(tmp_path, rid):
     class OneAnswer(http.server.BaseHTTPRequestHandler):
         def do_POST(self):
             self.rfile.read(int(self.headers.get("Content-Length", 0)))
-            body = json.dumps({"receipt_id": rid, "calendars_ok": 1}).encode()
+            body = json.dumps([] if rid == "NOT_AN_OBJECT"
+                              else {"receipt_id": rid, "calendars_ok": 1}).encode()
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))
@@ -187,6 +188,7 @@ def test_a_null_receipt_id_is_an_unexpected_answer(tmp_path, rid):
         out = run_action(f"http://127.0.0.1:{stub.server_port}", workspace,
                          ORPHO_FAIL_ON_ERROR="true")
         assert out.returncode == 1, (out.stdout, out.stderr)
+        assert "Traceback" not in out.stderr, out.stderr   # review round 5: a list body crashed it
         assert json.loads((workspace / "orphograph-receipts.json").read_text()) == []
     finally:
         stub.shutdown()

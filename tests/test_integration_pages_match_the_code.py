@@ -84,6 +84,8 @@ UNSUPPORTED = (
     "only the 64-hex digest",
     "we use one localstorage entry",
     "air-gapped mode builds the receipt",
+    # Review round 5: the lede still left out the folder tool's manifest.
+    "only its fingerprints, and a label if the agent gives one, cross the wire",
 )
 
 # True of a single file's bytes and said on single-file pages, so it is not in

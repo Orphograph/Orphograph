@@ -22,6 +22,16 @@ ROOT = Path(__file__).resolve().parent.parent
 WEB = ROOT / "web"
 CERT_JS = WEB / "certificate.js"
 
+# Promises that a receipt is pinned in about an hour. Review round 5: the
+# first pattern missed "within roughly an hour" and "~1 hour" forms. Not
+# matched, because they are true: "6 subsequent blocks (~1 hour)" (block
+# depth), "batch-broadcast roughly hourly" (calendar cadence), a payment
+# confirming "~1 hour on-chain".
+HOUR_PROMISE = re.compile(
+    r"\b(within|in) (about |roughly |around |~ ?|approximately )?(1|one|an) hour"
+    r"|pending \(~ ?1 ?hour\)|~ ?1 ?hour after anchoring|wait ~ ?1 ?hour"
+    r"|upgrade after (1|one|an) hour")
+
 
 def _friendly_status(rec: dict) -> str:
     """Run the real friendlyStatus from certificate.js under node."""
@@ -57,7 +67,7 @@ def test_no_page_or_script_promises_pinning_within_an_hour():
         if "/_mockups/" in rel or rel.endswith("index-legacy.html") or "/dist/" in rel:
             continue
         text = re.sub(r"\s+", " ", p.read_text(encoding="utf-8", errors="replace")).lower()
-        if re.search(r"within (about |~|approximately )?(1|one|an) hour", text):
+        if HOUR_PROMISE.search(text):
             offenders.append(rel)
     assert not offenders, ("Bitcoin pinning took 1.3 h to 128 h at launch; these still "
                            "promise it within an hour: " + ", ".join(offenders))
@@ -67,5 +77,19 @@ def test_the_hour_scan_sees_the_sentence_it_was_written_for():
     # Positive control on the shipped wording.
     for old in ("Bitcoin confirmation arrives within ~1 hour.",
                 "pending — block-pinning happens within ~1 hour",
-                "a real Bitcoin transaction (usually within ~1 hour)"):
-        assert re.search(r"within (about |~|approximately )?(1|one|an) hour", old.lower()), old
+                "a real Bitcoin transaction (usually within ~1 hour)",
+                "Within roughly an hour, it is committed inside a Bitcoin block.",
+                "receipts upgrade to a Bitcoin commitment in roughly one hour.",
+                "Bitcoin commitment: pending (~1 hour)",
+                "# Wait ~1 hour for the calendar to publish its Bitcoin tx.",
+                "# upgrade after 1 hour to get the full Bitcoin merkle proof:",
+                "(~1 hour after anchoring)"):
+        assert HOUR_PROMISE.search(old.lower()), old
+
+
+
+def test_the_hour_scan_leaves_true_hour_statements_alone():
+    for true in ("the block has accumulated 6 subsequent blocks (~1 hour)",
+                 "Calendars batch-broadcast roughly hourly.",
+                 "The claim code is emailed the moment your payment confirms (~1 hour on-chain)."):
+        assert not HOUR_PROMISE.search(true.lower()), true

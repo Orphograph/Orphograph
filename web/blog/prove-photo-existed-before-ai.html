@@ -111,7 +111,7 @@
   <p>OpenTimestamps is a strong protocol, but the default interface is a CLI:</p>
   <pre><code>pip install opentimestamps-client
   ots stamp photo.jpg
-  # ... wait ~1 hour for the calendar to publish the block ...
+  # ... wait for the calendar to publish the block (an hour to several days) ...
   ots upgrade photo.jpg.ots
   ots verify photo.jpg.ots</code></pre>
   <p>A reader who is comfortable in a Python shell can stop here and run it directly. For the working photographer who does not live in <code>pip install</code>, the CLI is a wall — a Python environment, a working build chain for native bindings, terminal comfort, and the discipline to file <code>.ots</code> files alongside RAW photos. Most photographers will not do any of that. So most photos go unanchored, and the AI-vs-real disputes happen with no usable evidence on either side.</p>
@@ -130,7 +130,7 @@
   # anchor:
   ots stamp my_photo.jpg
   # returns my_photo.jpg.ots — save it next to the photo
-  # upgrade after 1 hour to get the full Bitcoin merkle proof:
+  # upgrade once the calendar has published (an hour to several days) to get the full Bitcoin merkle proof:
   ots upgrade my_photo.jpg.ots
   # verify any time:
   ots verify my_photo.jpg.ots</code></pre>

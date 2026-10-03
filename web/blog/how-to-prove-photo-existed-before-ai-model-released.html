@@ -115,7 +115,7 @@
   <p>You get back a receipt bundle: a JSON file plus five <code>.ots</code> proof files, one per calendar. The bundle downloads as a single zip.</p>
   <p>Save the zip to your photo backup right now. If you lose the receipt, the anchor still exists on Bitcoin, but you have no way to prove which block contains your hash. The receipt is the index.</p>
   <h2>Step 3: wait for the block</h2>
-  <p>Within roughly one hour the calendar&#x27;s Merkle root is included in a Bitcoin block. The receipt&#x27;s status updates from &quot;pending&quot; to &quot;block-pinned at block N.&quot; From this point forward the proof is self-contained: anyone with a Bitcoin node can verify that your hash is committed to block N, mined at a specific timestamp.</p>
+  <p>From about an hour to several days later, the calendar&#x27;s Merkle root is included in a Bitcoin block. The receipt&#x27;s status updates from &quot;pending&quot; to &quot;block-pinned at block N.&quot; From this point forward the proof is self-contained: anyone with a Bitcoin node can verify that your hash is committed to block N, mined at a specific timestamp.</p>
   <p>You can see what a finished receipt looks like at <a href="https://orphograph.com/r/o3WGD22T4UwqfCrb">https://orphograph.com/r/o3WGD22T4UwqfCrb</a> — the genesis receipt, public, pinned to a real Bitcoin block.</p>
   <h2>Step 4: verify it yourself</h2>
   <p>This is the step most photographers skip, and it is the most important one. A receipt you have never verified is a receipt you do not actually trust. Run the verification once, on your own machine, so you know what the output looks like:</p>
