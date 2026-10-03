@@ -202,7 +202,7 @@ function renderExplorerGrid(rec) {
     }, "blockstream.info →"));
     btcCard.appendChild(links);
   } else {
-    btcCard.appendChild(el("p", { className: "muted small", textContent: "Pending — Bitcoin block-pinning happens within ~1 hour of anchoring. Once pinned, this card will link directly to the Bitcoin block and transaction containing the Merkle root that commits your hash." }));
+    btcCard.appendChild(el("p", { className: "muted small", textContent: "Pending — Bitcoin confirmation can take from about an hour to several days. Once pinned, this card will link directly to the Bitcoin block and transaction containing the Merkle root that commits your hash." }));
   }
   grid.appendChild(btcCard);
 
@@ -405,7 +405,7 @@ async function main() {
   if (rec.btc_pinned_at) {
     renderTimeInto($("#btc"), rec.btc_pinned_at);
   } else {
-    $("#btc").textContent = "pending — block-pinning happens within ~1 hour";
+    $("#btc").textContent = "pending — confirmation can take from about an hour to several days";
   }
   renderTimePairInto($("#created"), "Anchored", rec.created_at);
 

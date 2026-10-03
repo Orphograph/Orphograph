@@ -144,8 +144,8 @@
     "sha256": "a831d5740e2c9286873e933dbe85d90756350282fa2a2a670f6a284e2ef3f8df"
   },
   "/certificate.js": {
-    "version": "5",
-    "sha256": "e8b40cc10c0905a9fd3409b2590b5b75a94ccf01762e377e951f51edcccf2271"
+    "version": "6",
+    "sha256": "4c1a02534ec3bb955c3e327375e46058ead6197a5beae826c211e644f932a060"
   },
   "/changelog.css": {
     "version": "1",
@@ -412,8 +412,8 @@
     "sha256": "b4ec3bb15e88b287a225d760a08f594c81fcb58bdacee4317bfd1419000f2094"
   },
   "/receipt.js": {
-    "version": "9",
-    "sha256": "8d092c7d21c7d9f251df6d8d1b01e7f9630ec5cde2cad3c4694f95547694dbb9"
+    "version": "10",
+    "sha256": "d66bd02a777c12b885fc7786750205df6b246d47ded229e0da0d3535430a9f3e"
   },
   "/recover.css": {
     "version": "2",
@@ -488,8 +488,8 @@
     "sha256": "42591a6aeb2c7a86c5f01380b4f7fc935fae67b461ce39edb6faf1579df03321"
   },
   "/v2.js": {
-    "version": "9",
-    "sha256": "f99ba914d0a8c592c2e70c219c623ace1be827a21b4d244b02ff160a5746a6ba"
+    "version": "11",
+    "sha256": "506583fd6f52c12bef5cc5132b5ebc42b5e291910496e1f8244bd7bc2104c491"
   },
   "/v2/app.js": {
     "version": "4",
@@ -524,7 +524,7 @@
     "sha256": "12cf4c84d5f01b8f3c053ef879f53064e6bc6dbabbc47a66df73a5c1cf333a74"
   },
   "/writers.js": {
-    "version": "1",
-    "sha256": "37d2f3ce505882e7ef2595573428c9c7c22a687c9b510f5fda6726f8090333c9"
+    "version": "3",
+    "sha256": "8518370f14f597b93e73d6b3e32282a826c65dd5629dcdc3a724b9bab8e6f2b5"
   }
 }

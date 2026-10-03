@@ -669,8 +669,9 @@
       a.style.color = "var(--accent)";
       a.textContent = "View receipt → /r/" + j.receipt_id;
       p.appendChild(a);
-      p.appendChild(document.createTextNode(
-        "  ·  Bitcoin confirmation arrives within ~1 hour."
+      p.appendChild(document.createTextNode(ok > 0
+        ? "  ·  Bitcoin confirmation can take from about an hour to several days."
+        : "  ·  No calendar accepted this fingerprint, so this receipt has no Bitcoin commitment. Try again later."
       ));
       status.appendChild(p);
 

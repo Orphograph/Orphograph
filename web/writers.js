@@ -360,9 +360,14 @@ async function anchorChain() {
     receiptBox.hidden = false;
   }
 
+  // calendars_ok 0: no calendar accepted the root, so this receipt has no
+  // Bitcoin commitment and never gets one (review of #283).
+  const committed = record && record.calendars_ok > 0;
   setStatus("writers-status",
-    "Anchored. Merkle root submitted to 5 calendars. Within ~1 hour it will be committed in a Bitcoin block.",
-    "ok");
+    committed
+      ? "Anchored. Merkle root submitted to the calendars. From about an hour to several days from now, it will be committed in a Bitcoin block."
+      : "Not anchored: no calendar accepted the Merkle root, so this receipt has no Bitcoin commitment. Try again later.",
+    committed ? "ok" : "err");
 }
 
 function downloadManifest() {

@@ -183,6 +183,14 @@ def cmd_anchor(args: argparse.Namespace) -> int:
               file=sys.stderr)
         return 3
 
+    # A 200 with calendars_ok 0 has no Bitcoin commitment and never gets one;
+    # calling it anchored let a gate on anchor.status pass it (review of the
+    # rescue branch).
+    if receipt and receipt.get("calendars_ok") == 0:
+        anchor_error = ("no calendar accepted the root (receipt %s has no Bitcoin "
+                        "commitment)" % receipt.get("receipt_id"))
+        receipt = None
+
     cert = _build_certificate(
         name=args.name, created_at=created_at, root_hex=root_hex,
         manifest=manifest, buckets=buckets, receipt=receipt,
@@ -384,7 +392,10 @@ def _render_certificate_text(cert: dict) -> str:
         L.append(f"Hosted view:    {a['certificate_url']}")
         L.append(f"Receipt JSON:   {a['receipt_url']}")
     else:
-        L.append(f"Anchored:       NOT YET — {a.get('note', 'unanchored')}")
+        # A root no calendar accepted is never anchored; "NOT YET" promised a
+        # later commitment it cannot get (review round 2 of the rescue branch).
+        state = "NO" if str(a.get("note", "")).startswith("no calendar accepted") else "NOT YET"
+        L.append(f"Anchored:       {state} — {a.get('note', 'unanchored')}")
     L.append("")
     if cert["license_documents"]:
         L.append("LICENSE / CONSENT DOCUMENTS (sha256)")

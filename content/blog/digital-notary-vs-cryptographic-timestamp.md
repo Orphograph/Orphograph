@@ -186,8 +186,7 @@ is the load-bearing piece.
 
 Orphograph is a cryptographic timestamping service. The browser
 computes a hash, submits it to five OpenTimestamps calendar
-servers, and returns a receipt that anchors to Bitcoin within an
-hour. The receipt verifies against any Bitcoin node, with or
+servers, and returns a receipt that anchors to Bitcoin from about an hour to several days later. The receipt verifies against any Bitcoin node, with or
 without Orphograph's servers.
 
 Orphograph is not a notary public, not a qualified trust service

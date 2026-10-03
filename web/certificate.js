@@ -166,7 +166,9 @@ function renderExplorerGrid(rec) {
     links.appendChild(el("a", { href: "https://blockstream.info/", target: "_blank", rel: "noopener noreferrer", className: "btn-link" }, "blockstream.info →"));
     btcCard.appendChild(links);
   } else {
-    btcCard.appendChild(el("p", { className: "muted small", textContent: "Pending — Bitcoin block-pinning happens within ~1 hour of anchoring. Once pinned, this links to the block and transaction committing the Merkle root." }));
+    btcCard.appendChild(el("p", { className: "muted small", textContent: rec.calendars_ok > 0
+      ? "Pending — Bitcoin confirmation can take from about an hour to several days. Once pinned, this links to the block and transaction committing the Merkle root."
+      : "No Bitcoin commitment — no valid calendar proof exists for this root, so it will never be pinned." }));
   }
   grid.appendChild(btcCard);
   const otsCard = el("div", { className: "explorer-card" });
@@ -453,6 +455,9 @@ function friendlyStatus(rec) {
   const cok = rec.calendars_ok || 0, ctot = rec.calendars_total || 5;
   if (raw === "pinned") return `Anchored to Bitcoin · all ${ctot} calendars confirmed`;
   if (raw === "partial") return `Anchored to Bitcoin · ${cok} of ${ctot} calendars confirmed`;
+  // No valid calendar proof (e.g. no calendar accepted the root): this
+  // receipt has no Bitcoin commitment and never will, so it is not "pending".
+  if (raw === "pending" && cok === 0) return "No Bitcoin commitment · no valid calendar proof for this root";
   if (raw === "pending") return `Pending Bitcoin confirmation · ${cok} of ${ctot} calendars stamped`;
   return `${raw} (${cok}/${ctot} calendars)`;
 }
@@ -494,7 +499,8 @@ async function main() {
   $("#status").textContent = friendlyStatus(rec);
   $("#cals").textContent = `${rec.calendars_ok || 0} of ${rec.calendars_total || 5} OTS proofs valid`;
   if (rec.btc_pinned_at) renderTimeInto($("#btc"), rec.btc_pinned_at);
-  else $("#btc").textContent = "pending — block-pinning happens within ~1 hour";
+  else if (!(rec.calendars_ok > 0)) $("#btc").textContent = "none — with no valid calendar proof, this root will never be pinned";
+  else $("#btc").textContent = "pending — confirmation can take from about an hour to several days";
 
   // Version history (edit-lineage) — no-op unless rec.lineage is present.
   renderLineage(rec);

@@ -73,6 +73,13 @@ def hash_file(path: str) -> tuple:
     return h256.hexdigest(), h512.hexdigest()
 
 
+def receipt_url(base_url: str, receipt_id: str) -> str:
+    # The link names the server that issued the receipt. It used to name
+    # orphograph.com whatever base_url was, so a run against any other host
+    # wrote links that led nowhere.
+    return base_url.rstrip("/") + "/r/" + receipt_id
+
+
 def build_headers() -> dict:
     headers = {
         "Content-Type": "application/json",
@@ -222,16 +229,23 @@ def main() -> int:
                 stopped_reason = fatal
                 break
             continue
-        if body is None or "receipt_id" not in body:
+        if not isinstance(body, dict) or not body.get("receipt_id"):
             errors.append("%s: unexpected API response" % path)
             continue
 
         receipt_id = str(body["receipt_id"])
+        # A 200 with calendars_ok 0 is a receipt with no Bitcoin commitment,
+        # and it never gets one; counted as anchored, fail_on_error: true
+        # still shipped the release (review of the rescue branch).
+        if body.get("calendars_ok") == 0:
+            errors.append("%s: no calendar accepted the hash (receipt %s has no "
+                          "Bitcoin commitment)" % (path, receipt_id))
+            continue
         row = {
             "file": path,
             "sha256": sha256_hex,
             "receipt_id": receipt_id,
-            "receipt_url": "https://orphograph.com/r/" + receipt_id,
+            "receipt_url": receipt_url(base_url, receipt_id),
         }
         rows.append(row)
         log("anchored %s -> %s (calendars %s/%s)" % (

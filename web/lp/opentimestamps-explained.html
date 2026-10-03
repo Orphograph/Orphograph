@@ -61,7 +61,7 @@
       "name": "How long does a fresh receipt take to become fully Bitcoin-attested?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Calendars broadcast roughly hourly. Your receipt is useful immediately as a calendar-attested proof, and upgrades to a full Bitcoin block-attested proof within about an hour. Orphograph stores the upgraded proof so you don't have to re-fetch it manually."
+        "text": "Calendars broadcast roughly hourly. Your receipt is useful immediately as a calendar-attested proof, and upgrades to a full Bitcoin block-attested proof from about an hour to several days later. Orphograph stores the upgraded proof so you don't have to re-fetch it manually."
       }
     }
   ]
@@ -147,7 +147,7 @@
 <p>
   When you first anchor, your receipt is "calendar-attested" — a
   signed promise from the calendar that your hash will land in a future
-  Bitcoin block. Within roughly an hour, the calendar's batch
+  Bitcoin block. From about an hour to several days later, the calendar's batch
   transaction is mined, and your receipt upgrades to "block-attested"
   — the proof now references a real Bitcoin block height and the
   calendar drops out of the trust path entirely. Orphograph fetches the

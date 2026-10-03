@@ -5,9 +5,9 @@
 <title>Orphograph — One receipt per filing. Show one exhibit later.</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#f6f1e3">
-<meta name="description" content="A matter's exhibits as of a filing date are sealed together as one receipt. Any single exhibit can be proven part of that set on any future date, without disclosing the rest.">
+<meta name="description" content="Hash a matter's exhibit folder into one receipt. Verify later that a disclosed exhibit matches a leaf in that anchored set without supplying the other exhibit files.">
 <meta property="og:title" content="Orphograph — One receipt per filing">
-<meta property="og:description" content="Seal a matter's exhibits at the moment of filing. Show one exhibit later without showing the rest.">
+<meta property="og:description" content="Commit an exhibit-folder manifest to one receipt and verify a disclosed exhibit against that set later.">
 <meta property="og:url" content="https://orphograph.com/matters/">
 <meta property="og:type" content="article">
 <meta property="og:image" content="https://orphograph.com/og-image.png?v=8">
@@ -43,25 +43,25 @@
   <p class="arch-kicker">For solo and small-firm counsel</p>
   <h1>One receipt covers a whole exhibit set. Show one exhibit later without showing the rest.</h1>
   <p class="arch-lede">
-    A matter's exhibits as of a filing date are sealed together in one step. Any single exhibit can be proven part of that set on any future date.
+    Hash a matter's exhibit folder in one step. After the timestamp confirms, a recipient can verify that a disclosed exhibit matches a leaf in that anchored set.
   </p>
 
   <section>
     <h2>What this means for you</h2>
     <div class="arch-rule"></div>
     <ul class="means">
-      <li>Your exhibits never leave your device.</li>
-      <li>One receipt covers the whole exhibit set at the moment of filing.</li>
-      <li>Show one exhibit later without showing the rest.</li>
+      <li>Exhibit bytes are hashed on your device rather than uploaded; the manifest sent for anchoring contains relative paths, file digests, sizes, and the root.</li>
+      <li>One successful folder receipt commits to every exhibit's relative path and digest.</li>
+      <li>Verify one disclosed exhibit without supplying the other exhibit files.</li>
     </ul>
   </section>
 
   <section>
     <h2>How it works</h2>
     <div class="arch-rule"></div>
-    <p>Each exhibit gets a fingerprint — a 64-character code that changes if a single byte of the file changes. The fingerprints are computed on your own machine, not uploaded.</p>
-    <p>The fingerprints for the filing are combined into one fingerprint for the whole folder. That combined fingerprint is the only thing the office sees.</p>
-    <p>The combined fingerprint is anchored to the Bitcoin chain. Anyone, on any future date, can confirm the folder existed by the moment of that block — and that a single exhibit was part of it — without ever seeing the other exhibits.</p>
+    <p>Each exhibit gets a fingerprint — a 64-character code that changes if a single byte of the file changes. The fingerprints are computed on your own machine; the files themselves are not uploaded.</p>
+    <p>The fingerprints and relative paths are combined into one fingerprint for the whole folder. The anchoring request includes the manifest metadata and root, but not the exhibit bytes.</p>
+    <p>Once an OpenTimestamps proof is confirmed against Bitcoin, a verifier can test the disclosed exhibit and its recorded path against the receipt. The proof's Bitcoin block time is the supported time bound; a filing date entered by a user is not independently verified.</p>
   </section>
 
   <section>
@@ -70,12 +70,12 @@
     <details>
       <summary>Show the cryptographic detail</summary>
       <div class="sub">The matter folder, as an anchored unit</div>
-      <p>The natural unit is one folder per filing, anchored at the moment of filing. The folder contains the documentary exhibits, the photographs, the screenshots, the recordings, and any other artifact the firm intends to introduce in connection with the filing. Successive filings produce successive anchored folders, each one a snapshot of the exhibit set as it stood at that date.</p>
-      <p>The desktop or browser tool computes a SHA-256 fingerprint of each artifact, binds the artifact's relative path into a leaf hash, and assembles the leaves into a Merkle tree whose root is submitted to the OpenTimestamps calendars. The artifacts themselves never leave the firm's device. For documents the firm considers confidential at the path level, the folder may be anchored under a hash-labeled scheme in which the recorded path is the artifact's own digest, leaving no human-readable filename in the manifest.</p>
+      <p>The suggested workflow is one folder submission per filing. The folder can contain documentary exhibits, photographs, screenshots, recordings, and other artifacts the firm intends to introduce. Successive successful submissions produce separate commitments; the receipt time does not independently establish when a filing occurred.</p>
+      <p>The desktop or browser tool computes a SHA-256 fingerprint of each artifact, binds the artifact's literal relative path into a leaf hash, and assembles the leaves into a Merkle tree whose root is submitted to the OpenTimestamps calendars. Artifact bytes are not uploaded, but relative paths, digests, sizes, and the root are manifest metadata and can themselves be sensitive. Rename or copy files to non-sensitive paths before anchoring when filenames are confidential.</p>
       <div class="sub">Selective disclosure at trial</div>
-      <p>Opposing counsel moves to exclude a single text-message screenshot on grounds of post-hoc fabrication. The firm produces an inclusion proof that the screenshot was a leaf of the anchored exhibit folder as of the filing date six months earlier. The remaining exhibits — those not yet introduced, or those that pertain to other strategic threads — are not exposed by the proof. The receipt does not establish that the screenshot is genuine; it establishes that the bytes of the screenshot, under the recorded relative path, existed by the time of the recorded Bitcoin block.</p>
+      <p>Opposing counsel moves to exclude a single text-message screenshot on grounds of post-hoc fabrication. The firm produces an inclusion proof that the screenshot was a leaf of the anchored exhibit folder no later than the attesting Bitcoin block. The other exhibit files are not needed to verify that proof. The receipt does not establish that the screenshot is genuine or that it was filed on a claimed date; it establishes the byte-and-path commitment's Bitcoin time bound.</p>
       <div class="sub">What the office records</div>
-      <p>The office persists, per anchored filing, the Merkle root, the canonical ordering rule applied, the per-leaf relative paths, the per-file SHA-256 digests, the per-file byte sizes, the Bitcoin attestation for the root, and, when supplied, an optional attorney signature under a did:key identifier or a capture-credential issued under a published trust list. Bar-number metadata, where supplied, is recorded as an attribute on the signature, not as a claim of accreditation by the office.</p>
+      <p>The folder receipt records the Merkle root, per-leaf relative paths, SHA-256 digests, byte sizes, and available OpenTimestamps attestations. The root commits to each relative path and file digest; the byte sizes are recorded beside them but are not part of what the root commits to. An optional valid <code>did:key</code> signature can show that the corresponding private key signed the manifest. Orphograph does not establish who controls that key, validate bar status, or certify that the signer is counsel.</p>
     </details>
   </section>
 
@@ -83,11 +83,11 @@
     <h2>Questions</h2>
     <div class="arch-rule"></div>
     <h3>Where do my exhibits go?</h3>
-    <p>Nowhere. The fingerprints are computed on your own machine. The office only ever sees the combined fingerprint for the folder.</p>
+    <p>The exhibit bytes remain on your machine. The service receives the folder manifest metadata and root, including literal relative paths, so use non-sensitive filenames or renamed copies where path disclosure matters.</p>
     <h3>Is this a chain-of-custody affidavit?</h3>
     <p>No. The receipt records that a particular byte sequence under a particular relative path was anchored by a particular Bitcoin block. The chain-of-custody narrative remains the province of counsel and the witness.</p>
     <h3>Can I anchor under sealed or confidential filenames?</h3>
-    <p>Yes. The folder may be anchored under a hash-labeled scheme in which the recorded path is the artifact's own digest, in which case the manifest carries no human-readable filename information at all.</p>
+    <p>The current folder format binds literal relative paths, so filenames are not confidential from the manifest recipient or service. Use renamed copies with non-sensitive relative paths before anchoring; keep the private mapping under your own controls.</p>
     <h3>Does this establish authenticity?</h3>
     <p>The receipt establishes that the disclosed artifact existed by the time of the recorded Bitcoin block and was a leaf of the anchored set. Authenticity in the evidentiary sense is a separate determination governed by the applicable rules of evidence and the court.</p>
   </section>
