@@ -173,6 +173,21 @@ def _http(method: str, path: str, body: dict | None = None) -> dict:
 # ── tools ──────────────────────────────────────────────────────────
 
 
+def _no_calendar_accepted(result: dict) -> dict | None:
+    """The refusal for a 200 with calendars_ok 0: a receipt with no Bitcoin
+    commitment that never gets one. Counted as not anchored, as the GitHub
+    Action and the agent and dataset CLIs count it. A missing field (an older
+    server) is not a refusal."""
+    if result.get("calendars_ok") == 0:
+        return {"ok": False,
+                "error": "no calendar accepted the hash: this receipt has no "
+                         "Bitcoin commitment and never will; try again later",
+                "receipt_id": result.get("receipt_id", ""),
+                "calendars_ok": 0,
+                "calendars_total": result.get("calendars_total")}
+    return None
+
+
 def tool_anchor_file(args: dict) -> dict:
     path = args.get("path")
     if not isinstance(path, str) or not path:
@@ -198,6 +213,9 @@ def tool_anchor_file(args: dict) -> dict:
             "error": result.get("error"),
             "detail": result.get("body") or result.get("reason"),
         }
+    refused = _no_calendar_accepted(result)
+    if refused:
+        return refused
     rid = result.get("receipt_id", "")
     return {
         "ok": True,
@@ -207,6 +225,11 @@ def tool_anchor_file(args: dict) -> dict:
         "sha512_hex": sha512_hex,
         "calendars_ok": result.get("calendars_ok"),
         "calendars_total": result.get("calendars_total"),
+        # Distinct upstream calendars, which is what low_redundancy measures:
+        # five servers reach four calendars, and three acknowledgements can
+        # rest on two of them under one operator.
+        "calendars_distinct_ok": result.get("calendars_distinct_ok"),
+        "calendars_distinct_total": result.get("calendars_distinct_total"),
         "low_redundancy": result.get("low_redundancy", False),
         "pack_consumed": result.get("pack_consumed", False),
         "pack_remaining": result.get("pack_remaining", 0),
@@ -335,6 +358,9 @@ def tool_anchor_folder(args: dict) -> dict:
     if result.get("error"):
         return {"ok": False, "error": result.get("error"),
                 "detail": result.get("body") or result.get("reason")}
+    refused = _no_calendar_accepted(result)
+    if refused:
+        return refused
     rid = result.get("receipt_id", "")
     return {
         "ok": True,
@@ -343,8 +369,13 @@ def tool_anchor_folder(args: dict) -> dict:
         "root_hex": manifest["root_hex"],
         "file_count": len(manifest["leaves"]),
         "size_bytes": total,
+        "calendars_ok": result.get("calendars_ok"),
+        "calendars_distinct_ok": result.get("calendars_distinct_ok"),
+        "calendars_distinct_total": result.get("calendars_distinct_total"),
+        "low_redundancy": result.get("low_redundancy", False),
         "note": ("No file body left this device — only the manifest (relative "
-                 "paths + SHA-256 digests + the Merkle root) was transmitted."),
+                 "paths + file sizes + SHA-256 digests + the Merkle root) and "
+                 "any label were transmitted."),
     }
 
 
@@ -387,6 +418,9 @@ def tool_anchor_output(args: dict) -> dict:
             "error": result.get("error"),
             "detail": result.get("body") or result.get("reason"),
         }
+    refused = _no_calendar_accepted(result)
+    if refused:
+        return refused
     rid = result.get("receipt_id", "")
     return {
         "ok": True,
@@ -396,6 +430,11 @@ def tool_anchor_output(args: dict) -> dict:
         "sha512_hex": sha512_hex,
         "calendars_ok": result.get("calendars_ok"),
         "calendars_total": result.get("calendars_total"),
+        # Distinct upstream calendars, which is what low_redundancy measures:
+        # five servers reach four calendars, and three acknowledgements can
+        # rest on two of them under one operator.
+        "calendars_distinct_ok": result.get("calendars_distinct_ok"),
+        "calendars_distinct_total": result.get("calendars_distinct_total"),
         "low_redundancy": result.get("low_redundancy", False),
         "pack_consumed": result.get("pack_consumed", False),
         "pack_remaining": result.get("pack_remaining", 0),
