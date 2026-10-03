@@ -97,3 +97,67 @@ class TestAnchoredPageClaims(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# Cycle 9 (vacuous-pass lens): the guard above matched three August wordings on
+# web/method only, and passed while five method pages said "the receipt id is
+# recorded once issuance completes" and /mcp, /continuity, /legal and
+# /about-the-office said they were "anchored on issuance" with receipts
+# "replaced accordingly". Nothing issues per-page receipts: the daily repo
+# anchor (scripts/auto_anchor_repo.py) makes one private root for the whole
+# tree. These are every wording of that promise, read on every page.
+PER_PAGE_PROMISES = (
+    "recorded once issuance completes",
+    "receipt is replaced accordingly",
+    "anchored on issuance",
+    "anchored at issuance",
+    "anchored at the time of issuance",
+    "itself anchored on publication",
+    "receipt identifier for this revision is recorded in the footer",
+    "their receipts are appended",
+)
+
+
+def _plain(markup: str) -> str:
+    return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", markup)).lower()
+
+
+def _per_page_promises_in(markup: str) -> list:
+    text = _plain(markup)
+    return [p for p in PER_PAGE_PROMISES if p in text]
+
+
+class TestNoPagePromisesItsOwnReceipt(unittest.TestCase):
+
+    def test_no_served_page_promises_a_per_page_receipt(self):
+        offenders = {}
+        for p in sorted((ROOT / "web").rglob("*.html")):
+            rel = p.relative_to(ROOT).as_posix()
+            if "/_mockups/" in rel or rel.endswith("index-legacy.html"):
+                continue
+            hits = _per_page_promises_in(p.read_text(errors="ignore"))
+            if hits:
+                offenders[rel] = hits
+        self.assertEqual(offenders, {}, "no mechanism issues or replaces per-page receipts")
+
+    def test_the_scan_catches_the_shipped_wordings(self):
+        # Positive control: the sentences master carried on 2026-10-02.
+        for old in (
+            "Publication receipt for this revision: pending Bitcoin commitment "
+            "(the receipt id is recorded once issuance completes).",
+            "The page is published as defensive prior art and is itself anchored on issuance.",
+            "This page is anchored at issuance. Updates to this page are themselves anchored, "
+            "and the <br>receipt is replaced accordingly.",
+            "This page is itself anchored at the time of issuance.",
+            "The page is itself anchored on publication and is intended",
+        ):
+            self.assertTrue(_per_page_promises_in(old), old)
+
+    def test_the_daily_anchor_these_pages_now_cite_is_real(self):
+        # The new copy says the source is anchored daily as one private root;
+        # that rests on the job's own definition. A page claim follows the code.
+        src = (ROOT / "scripts" / "auto_anchor_repo.py").read_text()
+        self.assertIn("daily folder anchor", src)
+        self.assertIn('"private": private', src)
+        excluded = re.search(r"EXCLUDE_PATTERNS[^=]*=\s*\((.*?)\)", src, re.S).group(1)
+        self.assertNotIn("web/", excluded, "the pages must be inside the anchored tree")
