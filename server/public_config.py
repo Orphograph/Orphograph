@@ -184,8 +184,12 @@ def config_warnings(cfg: dict | None = None) -> list[str]:
     # Note on crypto: checkout is served by the hosted processor (multi-coin,
     # incl. BTC). There is no second crypto path — the native exact-amount BTC
     # flow was RETIRED on 2026-09-19 and BTC_PAYMENTS_ENABLED is read by
-    # nothing; setting it does not turn anything on. Card checkout (Stripe) is
-    # independent. We therefore do not warn on crypto-flag combinations here;
-    # absence of crypto is a valid card-only configuration.
+    # nothing; setting it does not turn anything on. The Lightning (L402) rail
+    # was RETIRED on 2026-09-28 the same way: while lightning.LIGHTNING_RETIRED
+    # holds, ORPHO_LN_* secrets arm nothing, so like the BTC flag they earn no
+    # key in this public config and no warning; /api/health reports the rail
+    # as {"rail": "retired"}. Card checkout (Stripe) is independent. We
+    # therefore do not warn on crypto-flag combinations here; absence of
+    # crypto is a valid card-only configuration.
 
     return warnings

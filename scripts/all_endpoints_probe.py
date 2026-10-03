@@ -251,6 +251,12 @@ PROBES = [
           "POST", "/api/anchor",
           body={},
           expected_status=(400, 429)),
+    # Lightning (L402) rail retired 2026-09-28: the quote endpoint answers
+    # 410 whatever secrets are set (server/lightning.py LIGHTNING_RETIRED).
+    Probe("Lightning quote (retired)",
+          "POST", "/api/ln/quote",
+          body={},
+          expected_status=(410,)),
     # Sanity: no secrets in landing
     Probe("Landing — no secret leak",
           "GET", "/",
@@ -262,6 +268,11 @@ PROBES = [
     Probe("Security headers — landing",
           "GET", "/",
           check=check_security_headers),
+    # The waitlist confirmation link's page. Without a token it answers 400
+    # and writes nothing (a GET never writes; the page's button POSTs).
+    Probe("Waitlist confirm page (no token)",
+          "GET", "/api/waitlist/confirm",
+          expected_status=(400,)),
     # Newsletter signup (rate-limited but should accept)
     Probe("Waitlist signup",
           "POST", "/api/waitlist",

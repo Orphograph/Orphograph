@@ -14,7 +14,7 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 
-from file_lock import locked
+from file_lock import ends_mid_line, locked
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = Path(os.environ.get("ORPHO_DATA_DIR", str(ROOT / "data") if (ROOT / "data").is_dir() else str(ROOT)))
@@ -44,7 +44,9 @@ def add(email: str, interest: str) -> bool:
     if interest not in ALLOWED_INTERESTS:
         interest = "other"
     with locked(WAITLIST_PATH, mode="a", exclusive=True) as f:
-        f.write(json.dumps({
+        # A torn last line (a write that failed part-way) would swallow this
+        # row while the person is told it worked (bundle review round 1).
+        f.write(("\n" if ends_mid_line(WAITLIST_PATH) else "") + json.dumps({
             "ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "email": email.strip(),
             "interest": interest,

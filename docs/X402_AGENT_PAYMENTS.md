@@ -7,15 +7,23 @@ and `tests/test_x402_payment_flow.py` for the proof.
 
 **Not the same rail as L402** (`docs/LIGHTNING_L402.md`): L402 pays in
 Bitcoin sats over Lightning; x402 pays in USDC on Base. Both sit on the
-SAME endpoint (`POST /api/anchor`), checked in order pack token → L402 →
-x402 — the first credential present wins, so a request is never charged
-twice.
+SAME endpoint (`POST /api/anchor`). **L402 was retired on 2026-09-28**; x402
+was not. While L402 is retired, a request carrying an
+`Authorization: L402 ...` credential is answered 410 before anything else
+on it is read, including an x402 payment header: the x402 payment is not
+verified, not settled and not charged, and the 410 body says so. Without an
+L402 credential the order is pack token → x402 — the first credential
+present wins, so a request is never charged twice.
 
 ## Protocol
 
     POST /api/anchor (past free tier, x402 armed)
-                                  → 402 PaymentRequired (JSON body: price,
-                                    asset, network, pay-to address)
+                                  → 402 PaymentRequired: the PAYMENT-REQUIRED
+                                    header is the requirements as base64 JSON
+                                    (price, asset, network, pay-to address),
+                                    exactly as the reference server sends it;
+                                    the JSON body repeats them plus the classic
+                                    limit fields and Retry-After
     agent signs an EIP-3009 authorization for that exact amount
     POST /api/anchor
       PAYMENT-SIGNATURE: <base64 PaymentPayload>   (or legacy X-PAYMENT)
@@ -121,6 +129,22 @@ collected — no second settle() — and after that it is a replay like any
 other. Both facts live on disk: the charge in `x402_ledger.jsonl`, the
 delivery as the claim in `x402_claimed.jsonl`.
 
+Who gets the 402: anyone past the free tier except our own pages and our
+own shipped clients. Our pages: a browser marks its fetches
+`Sec-Fetch-Site: same-origin`, and one with no Fetch Metadata still sends a
+matching `Origin` on a POST. Our clients, by User-Agent prefix: USB capture,
+the watch folder, the marketplace skill, the MCP server, both SDKs, the ACP
+seller and the GitHub Action, all of which handle the 429 and some of which
+are installed copies that cannot be updated. Both keep the classic 429
+they already handle (the reference middleware likewise shows browsers a
+paywall page, not the 402). Sending one of those headers only opts a caller
+out of paying.
+
+Before 2026-10-02 the PAYMENT-REQUIRED header carried the literal "true",
+which no v2 client can read: a v2 client takes the requirements from the
+header only, and falls back to the body for v1 alone
+(`x402_http_client_base.py`).
+
 ## Custody posture (stated plainly)
 
 Inbound payments only. Verification and settlement happen at the
@@ -130,8 +154,15 @@ This module never holds a wallet key and never signs anything; signing is
 entirely the agent's own client-side responsibility (the `x402` reference
 package, or any x402-compliant client).
 
-## Arming it (founder steps — until then every path falls through to L402,
-## then to the classic 429, exactly as before)
+## Arming it (founder steps — until then every path falls through to the
+## classic 429, exactly as before; L402 is retired and issues no challenge)
+
+Unarmed, the server does not read the payment header at all: no
+facilitator is called and no x402 ledger is touched (pinned by
+`test_an_unarmed_rail_ignores_a_payment_header_and_calls_no_facilitator`).
+Disarming a rail that holds settled-but-undelivered (HELD) payments
+therefore leaves them unredeemable until it is armed again; check
+`x402_ledger.jsonl` for held charges before removing the pay-to address.
 
 1. **Testnet only until mainnet is explicitly approved.** Create a Base
    Sepolia address to receive payments (a fresh EOA is enough; no ETH is
@@ -142,6 +173,11 @@ package, or any x402-compliant client).
    Base Sepolia USDC contract, confirmed against Circle's own docs:
    `0x036CbD53842c5426634e7929541eC2318f3dCF7e`), `ORPHO_X402_FACILITATOR_URL`
    (default `https://x402.org/facilitator`, free and public).
+   Requirements carry the asset's EIP-712 domain (`extra.name`,
+   `extra.version`), which the exact-EVM facilitators require. Base Sepolia
+   USDC (`USDC`, `2`) and Base USDC (`USD Coin`, `2`) are built in; any other
+   asset also needs `ORPHO_X402_ASSET_NAME` and `ORPHO_X402_ASSET_VERSION`, or
+   the rail stays unarmed and the server logs `[x402] NOT ARMED` at boot.
 4. Verify: hit `/api/anchor` past the free tier with no payment header,
    confirm the 402 body's `accepts[0].payTo` matches the address above;
    sign a real testnet authorization (the `x402` PyPI package's client
@@ -155,7 +191,8 @@ package, or any x402-compliant client).
    one and will need a small addition for a keyed mainnet facilitator).
 6. Flip the public copy in the same PR as arming — the homepage, pricing
    page and API docs should say agents can pay in USDC, matching how
-   L402's own arming step (5) treats its public copy.
+   L402's own arming step (5) treats its public copy (L402 is retired; its
+   copy now only says so).
 
 ## What is NOT built yet (say so; do not imply otherwise)
 

@@ -41,12 +41,37 @@ def locked(path: Path, *, mode: str = "a", exclusive: bool = True) -> Iterator[I
     try:
         fcntl.flock(f.fileno(), fcntl.LOCK_EX if exclusive else fcntl.LOCK_SH)
         yield f
+        # Onto the disk while the lock is held. The lock is let go below,
+        # BEFORE the file is closed, and closing is where a buffered row
+        # would otherwise be written: after the next writer has already
+        # taken the lock and looked at the file (bundle review round 1). A
+        # failure here reaches the caller; a read-mode flush is a no-op.
+        f.flush()
     finally:
+        try:
+            f.flush()    # the body raised: still under the lock, best effort
+        except Exception:
+            pass
         try:
             fcntl.flock(f.fileno(), fcntl.LOCK_UN)
         except OSError:
             pass
         f.close()
+
+
+def ends_mid_line(path: Path) -> bool:
+    """Does the file end without a newline (a torn last line)? An appender
+    that finds one starts its row on a fresh line, or the row is glued onto
+    the torn one and never read back."""
+    try:
+        with path.open("rb") as f:
+            f.seek(0, os.SEEK_END)
+            if f.tell() == 0:
+                return False
+            f.seek(-1, os.SEEK_END)
+            return f.read(1) != b"\n"
+    except OSError:
+        return False
 
 
 def can_append(path: Path) -> bool:
@@ -94,7 +119,12 @@ def try_locked(path: Path, *, mode: str = "a") -> Iterator[IO | None]:
         return
     try:
         yield f
+        f.flush()        # under the lock, as locked() does
     finally:
+        try:
+            f.flush()
+        except Exception:
+            pass
         try:
             fcntl.flock(f.fileno(), fcntl.LOCK_UN)
         except OSError:

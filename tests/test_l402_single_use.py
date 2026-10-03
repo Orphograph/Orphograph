@@ -93,6 +93,10 @@ class TestL402SingleUse(unittest.TestCase):
             sys.modules.pop(m, None)
         import app, engine, lightning
         from http.server import ThreadingHTTPServer
+        # Retired in production (lightning.LIGHTNING_RETIRED, 2026-09-28).
+        # The single-use proof is about the armed code a re-arm switches back
+        # on, so the fence is lifted on this fresh module copy only.
+        lightning.LIGHTNING_RETIRED = False
         cls._orig_submit = engine._submit
         # Succeed by default: that is the normal case, and it is the only one
         # in which the credential is genuinely consumed. A stub that always

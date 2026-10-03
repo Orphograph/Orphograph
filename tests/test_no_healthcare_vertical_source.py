@@ -23,7 +23,12 @@ withdrawn on the same branch, same day; see
 tests/test_no_healthcare_practice_page.py for its source-tree guard and
 tests/test_no_insurance_vertical_on_site.py for the shared wire-level check
 that /practice/ (and /inspection/, and anything under either) answers 410,
-plus the /verticals/healthcare(.html) 404 check on that same shared server.
+plus the /verticals/healthcare(.html) check on that same shared server.
+
+The /verticals renderer that served these configs was retired on 2026-09-28
+and server/verticals.py deleted with it. config/verticals/*.yml stays: it is
+still read by server/adapter_spec.py (tests/test_adapter_spec.py), so a
+healthcare config re-added there is still a healthcare vertical re-added.
 
 Two INDEPENDENT guards below, deliberately not one:
   - VOCABULARY (SLUG_VOCAB): scans `slug`, `nav_label`, `title`, `route` and
@@ -47,11 +52,23 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-import verticals  # tests/conftest.py puts server/ on sys.path
+import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
 CONFIG_DIR = ROOT / "config" / "verticals"
 HEALTHCARE_YML = CONFIG_DIR / "healthcare.yml"
+
+
+def _load_configs() -> dict[str, dict]:
+    """slug -> parsed config, read the way the deleted server/verticals.py
+    read them (a config's own `slug`, else its file stem), so a config that
+    names itself differently from its file is still scanned under that name."""
+    loaded: dict[str, dict] = {}
+    for yml in sorted(CONFIG_DIR.glob("*.yml")):
+        data = yaml.safe_load(yml.read_text(encoding="utf-8"))
+        if isinstance(data, dict):
+            loaded[data.get("slug") or yml.stem] = data
+    return loaded
 
 # Widened 2026-09-19 (code review finding 2, PR #255): the original
 # `health.?care|\bmedical\b|\bclinical\b|\bhipaa\b|\bpatients?\b` missed
@@ -93,16 +110,15 @@ def test_no_config_verticals_entry_names_healthcare_by_any_name():
 
 
 def test_no_vertical_config_declares_a_healthcare_slug():
-    """Load through the real module (server/verticals.py), not a bare YAML
-    parse — that is the surface /verticals/<slug>.html actually serves from.
-    Scans SCANNED_FIELDS only (never `disclaimer` — see module docstring)."""
-    verticals.reload()
-    slugs = verticals.all_slugs()
+    """Scans SCANNED_FIELDS only (never `disclaimer` — see module docstring)."""
+    configs = _load_configs()
+    assert configs, f"no config loaded from {CONFIG_DIR}: the scan is not looking"
+    slugs = sorted(configs)
     bad_slugs = [s for s in slugs if SLUG_VOCAB.search(s)]
     assert not bad_slugs, f"a loaded vertical slug names healthcare/medical: {bad_slugs}"
     bad_fields: dict[str, list[tuple[str, str]]] = {}
     for slug in slugs:
-        cfg = verticals.get(slug) or {}
+        cfg = configs[slug]
         for field in SCANNED_FIELDS:
             value = str(cfg.get(field, ""))
             if SLUG_VOCAB.search(value):
@@ -130,10 +146,8 @@ def test_no_vertical_config_route_names_a_withdrawn_prefix():
     # convention keeps `import app` out of module scope. See
     # tests/test_no_insurance_vertical_on_site.py for the longer version
     # of this rationale.
-    verticals.reload()
     bad: dict[str, str] = {}
-    for slug in verticals.all_slugs():
-        cfg = verticals.get(slug) or {}
+    for slug, cfg in _load_configs().items():
         route = str(cfg.get("route", "")).rstrip("/")
         if route and app._is_withdrawn_path(route):
             bad[slug] = route
@@ -182,9 +196,9 @@ def test_the_scan_can_see_what_it_hunts():
 
     # False-positive control: none of the four surviving configs' SCANNED
     # fields (never disclaimer) trip the widened vocabulary.
-    verticals.reload()
+    configs = _load_configs()
     for slug in ("construction", "legal", "realestate", "accounting"):
-        cfg = verticals.get(slug)
+        cfg = configs.get(slug)
         assert cfg is not None, f"{slug} failed to load"
         assert not SLUG_VOCAB.search(slug), slug
         for field in SCANNED_FIELDS:

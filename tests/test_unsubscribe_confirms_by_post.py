@@ -124,7 +124,7 @@ def test_the_writability_check_does_not_wait_for_the_ledger_lock(tmp_path, monke
     and it is the one mailbox providers retry, yet it waited for whoever held
     the lock (reproduced in review: a 4 s hold delayed the answer 4 s).
 
-    Since 2026-09-28 that POST tries a write to prove the ledger can take one
+    Since 2026-09-28 that POST appends the address's row again
     (test_unsubscribe_failed_write.py), so it waits in add() for the lock as
     a new address does. The check itself still takes none, which is what this
     holds."""

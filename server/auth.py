@@ -72,6 +72,26 @@ def _load_or_create_hmac_secret() -> bytes:
 _HMAC_SECRET_CACHE: bytes | None = None
 
 
+def existing_hmac_secret() -> bytes | None:
+    """The installation secret if it already exists, else None. Never
+    creates it: for a reader that runs on a GET (which must not write) and
+    has nothing to check before any secret was ever made, e.g. a token that
+    could only have been signed with it."""
+    global _HMAC_SECRET_CACHE
+    if _HMAC_SECRET_CACHE is not None:
+        return _HMAC_SECRET_CACHE
+    env_secret = os.environ.get("ORPHO_HMAC_SECRET", "")
+    if env_secret:
+        return env_secret.encode("utf-8")
+    try:
+        if HMAC_SECRET_PATH.exists():
+            _HMAC_SECRET_CACHE = HMAC_SECRET_PATH.read_bytes()
+            return _HMAC_SECRET_CACHE
+    except OSError:
+        pass
+    return None
+
+
 def _hmac_secret() -> bytes:
     global _HMAC_SECRET_CACHE
     if _HMAC_SECRET_CACHE is None:

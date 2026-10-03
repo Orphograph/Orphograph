@@ -20,12 +20,14 @@ def test_three_doctrine_points_are_present():
     assert "The proof stays on Bitcoin, not on whoever hosts the marketplace." in sec
 
 
-def test_lightning_is_described_as_not_open_and_carries_no_price():
+def test_agent_payment_is_described_as_not_open_and_carries_no_price():
     sec = _section()
-    assert "It is not open" in sec, "Lightning pay-per-anchor is dormant; the page must say so"
+    assert "It is not open" in sec, "no real-money pay-per-anchor counter is open; the page must say so"
+    # The Lightning rail this point used to name was retired on 2026-09-28.
+    assert "Lightning" not in sec, "the doctrine still names the retired Lightning rail"
     for token in ("sats", "$", "USD"):
         assert token not in sec.split("<strong>One tool", 1)[0], (
-            f"the Lightning point must not imply a price ({token!r}) before the fee "
+            f"the payment point must not imply a price ({token!r}) before the fee "
             "schedule publishes one")
 
 

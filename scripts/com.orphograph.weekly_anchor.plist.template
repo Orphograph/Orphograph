@@ -14,6 +14,12 @@ Install:
   launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.orphograph.weekly_anchor.plist
   launchctl enable gui/$(id -u)/com.orphograph.weekly_anchor
 
+Signing key: the job signs every anchor and refuses to run without the
+office key at ~/.orphograph/office_signing_key. On a new machine run
+`python3 scripts/office_key.py generate` once and pin the public key it
+prints in server/standing_record.py, or the Standing Record will not list
+what the job anchors.
+
 Sequoia note: if `launchctl bootstrap` returns IO error 5, fall back to
 running the script via a nohup-Python sleeper loop. The script itself
 does not depend on launchd.

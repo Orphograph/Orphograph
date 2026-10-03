@@ -36,6 +36,10 @@ try:
     import mailer  # type: ignore
 except ImportError:  # pragma: no cover
     mailer = None  # type: ignore
+try:
+    import lightning  # type: ignore
+except ImportError:  # pragma: no cover
+    lightning = None  # type: ignore
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = Path(os.environ.get("ORPHO_DATA_DIR", str(ROOT / "data") if (ROOT / "data").is_dir() else str(ROOT)))
@@ -49,6 +53,15 @@ _cached: dict | None = None
 _cached_at: float = 0.0
 _boot_time: float = time.time()
 
+
+
+def _x402_state() -> dict:
+    try:
+        import x402
+    except Exception:  # pragma: no cover - the module ships with the server
+        return {"armed": False, "network": None}
+    armed = x402.configured()
+    return {"armed": armed, "network": x402.network() if armed else None}
 
 def _last_line_ts(path: Path) -> str | None:
     if not path.exists() or path.stat().st_size == 0:
@@ -123,6 +136,22 @@ def _payout_snapshot() -> dict:
     return {"rail": "retired", "configured": False}
 
 
+def _lightning_snapshot() -> dict:
+    """The Lightning (L402) rail was retired on 2026-09-28.
+
+    Reported in the same shape as the retired direct-BTC rail under "payout",
+    so a reader of /api/health sees both retirements the same way. Read from
+    lightning.LIGHTNING_RETIRED rather than written as a constant here, so the
+    day the rail is re-armed this block says so without a second edit.
+    """
+    if lightning is None:  # pragma: no cover
+        return {"rail": "unavailable", "configured": False}
+    if lightning.LIGHTNING_RETIRED:
+        return {"rail": "retired", "configured": False}
+    armed = lightning.configured()
+    return {"rail": "armed" if armed else "unconfigured", "configured": armed}
+
+
 def _email_snapshot() -> dict:
     """Whether transactional email (claim codes, receipts, sign-in links) can be
     delivered. The mailer is INERT without RESEND_API_KEY, so resend_configured
@@ -151,6 +180,10 @@ def _compute_snapshot() -> dict:
         "boot_at": datetime.fromtimestamp(_boot_time, timezone.utc).isoformat(timespec="seconds"),
         "uptime_sec": int(time.time() - _boot_time),
         "data_dir": str(DATA_DIR),
+        # Whether the x402 rail is armed, and on which network: the one
+        # observable proof of arming (secrets are not readable from outside).
+        # The pay-to address is not repeated here; it is in every 402.
+        "x402": _x402_state(),
         "counts": {
             "receipts_on_disk": receipts_count,
         },
@@ -166,6 +199,7 @@ def _compute_snapshot() -> dict:
         },
         "calendars": _check_calendars_parallel(list(engine.CALENDARS)),
         "payout": _payout_snapshot(),
+        "lightning": _lightning_snapshot(),
         "checkout": _checkout_snapshot(),
         "email": _email_snapshot(),
         "reconciliation": _reconciliation_snapshot(),

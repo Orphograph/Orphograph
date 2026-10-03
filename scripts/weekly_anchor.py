@@ -16,6 +16,13 @@ all of them in one request — the root is what lands on Bitcoin, and an
 inclusion proof (served from the persisted manifest) proves any single
 artifact belongs to that dated root.
 
+Signed: the public Standing Record lists a new row only when it carries the
+office's Ed25519 signature over its label and root (server/standing_record.py),
+so every run signs with the key at $ORPHO_OFFICE_KEY_PATH (default
+~/.orphograph/office_signing_key, made by scripts/office_key.py). A run that
+cannot sign, or whose key is not pinned, stops before anchoring: an anchor
+the page would hide is worse than a loud failed run.
+
 Output: appends a JSONL row per run to outbox/weekly_anchor_log.jsonl.
 
 Stdlib only. The RFC 6962 tree is built with the repo's own canonical
@@ -38,6 +45,8 @@ ROOT = Path(__file__).resolve().parent.parent
 BASE_URL = os.environ.get("ORPHO_BASE_URL", "https://orphograph.com").rstrip("/")
 API_KEY = os.environ.get("ORPHO_API_KEY", "").strip()
 LOG_PATH = ROOT / "outbox" / "weekly_anchor_log.jsonl"
+# Read when a run starts, not at import, so a test can point it elsewhere.
+DEFAULT_KEY_PATH = "~/.orphograph/office_signing_key"
 
 # Canonical RFC 6962 Merkle implementation — the same module the server uses
 # to recompute and verify the root. Importing it (rather than reimplementing)
@@ -45,6 +54,9 @@ LOG_PATH = ROOT / "outbox" / "weekly_anchor_log.jsonl"
 # anchor never 400s on a root mismatch. server/merkle.py is stdlib-only.
 sys.path.insert(0, str(ROOT / "server"))
 import merkle  # noqa: E402
+# The statement the server checks before listing a row. Importing it is what
+# keeps the bytes signed here identical to the bytes verified there.
+import standing_record  # noqa: E402
 
 HEADERS = {
     "Content-Type": "application/json",
@@ -71,7 +83,6 @@ ARTIFACTS = [
     "web/favicon.png",
     "web/index.html",
     "web/method/architecture.html",
-    "web/vs/c2pa.html",
     "web/continuity.html",
     "web/roadmap.html",
     "CODEOWNERS",
@@ -175,9 +186,56 @@ def build_manifest(leaves_in: list[dict]) -> dict:
     return manifest
 
 
-def anchor_folder(manifest: dict, label: str) -> dict:
+class OfficeKeyError(RuntimeError):
+    """The run cannot sign, so it must not anchor."""
+
+
+def office_key_path() -> Path:
+    return Path(os.environ.get("ORPHO_OFFICE_KEY_PATH") or DEFAULT_KEY_PATH).expanduser()
+
+
+def load_office_seed(path: Path) -> bytes:
+    """The 32-byte office seed, once its public key is known to be pinned.
+
+    Every reason the page would hide this run's row stops the run here,
+    before anything is sent. The messages name the path and the public key,
+    never the seed.
+    """
+    try:
+        seed = path.read_bytes()
+    except FileNotFoundError:
+        raise OfficeKeyError(
+            f"office signing key not found at {path}. Make it once with "
+            "'python3 scripts/office_key.py generate' and pin the public key "
+            "it prints in server/standing_record.py") from None
+    except OSError as e:
+        raise OfficeKeyError(
+            f"cannot read the office signing key at {path}: {e.strerror}") from None
+    if len(seed) != 32:
+        raise OfficeKeyError(f"the office signing key at {path} is not a 32-byte key file")
+    pub = standing_record.public_key(seed).hex()
+    if pub not in standing_record.PINNED_OFFICE_KEYS:
+        raise OfficeKeyError(
+            f"the office signing key at {path} has public key {pub}, which is "
+            "not pinned in server/standing_record.py, so the page would not "
+            "list this anchor")
+    return seed
+
+
+def sign_for_standing_record(label: str, root_hex: str, seed: bytes) -> str:
+    """The office signature (hex) the server checks before listing this row."""
+    return standing_record.sign(label, root_hex, seed)
+
+
+def _append_log(row: dict) -> None:
+    with LOG_PATH.open("a") as f:
+        f.write(json.dumps(row, separators=(",", ":")) + "\n")
+
+
+def anchor_folder(manifest: dict, label: str, office_signature: str) -> dict:
     """POST the manifest to /api/anchor_folder. Returns the parsed response."""
-    body = json.dumps({"manifest": manifest, "client_label": label}).encode("utf-8")
+    body = json.dumps({"manifest": manifest, "client_label": label,
+                       "office_signature": office_signature}).encode("utf-8")
     headers = dict(HEADERS)
     pack_token = os.environ.get("ORPHO_WEEKLY_PACK_TOKEN", "").strip()
     if pack_token:
@@ -205,6 +263,13 @@ def main() -> int:
     sys.stderr.write(
         f"[weekly_anchor] {run_ts} starting (git HEAD: {head[:12] or '(n/a)'})\n"
     )
+    try:
+        seed = load_office_seed(office_key_path())
+    except OfficeKeyError as e:
+        sys.stderr.write(f"[weekly_anchor] FAILED: {e}\n")
+        _append_log({"ts": run_ts, "mode": "folder", "receipt_id": None,
+                     "error": str(e), "git_head": head or None})
+        return 2
 
     leaves = collect_leaves(ROOT, ARTIFACTS, head)
     if not leaves:
@@ -213,11 +278,23 @@ def main() -> int:
     manifest = build_manifest(leaves)
     label = f"weekly-{run_ts[:10]}-{len(leaves)}-artifacts"
 
-    result = anchor_folder(manifest, label)
+    result = anchor_folder(manifest, label,
+                           sign_for_standing_record(label, manifest["root_hex"], seed))
     rid = result.get("receipt_id")
     err = result.get("error")
     cal_ok = result.get("calendars_ok", 0)
     cal_total = result.get("calendars_total", 0)
+    if rid and not cal_ok:
+        # No calendar accepted it: no Bitcoin commitment, ever. The server
+        # does not sign such a receipt, so it is never listed; rerun when the
+        # calendars answer.
+        err = (f"no calendar accepted the anchor (0/{cal_total}); it has no "
+               f"Bitcoin commitment and is not on the Standing Record. Rerun "
+               f"when the calendars answer.")
+    elif rid and not result.get("office_signed"):
+        err = ("the server made the receipt but did not record the office "
+               "signature, so the Standing Record will not list it (is the "
+               "server older than this job?)")
     if rid:
         sys.stderr.write(
             f"[weekly_anchor]   folder root {manifest['root_hex'][:16]}… "
@@ -237,14 +314,17 @@ def main() -> int:
         "error": err,
         "calendars_ok": cal_ok,
         "calendars_total": cal_total,
+        "office_signed": bool(result.get("office_signed")),
         "git_head": head or None,
         "leaves": [{"path": lf["path"], "sha256": lf["file_sha256_hex"]} for lf in leaves],
     }
-    with LOG_PATH.open("a") as f:
-        f.write(json.dumps(row, separators=(",", ":")) + "\n")
+    _append_log(row)
 
     if not rid:
         sys.stderr.write("[weekly_anchor] FAILED: anchor did not succeed\n")
+        return 1
+    if err:
+        sys.stderr.write(f"[weekly_anchor] FAILED: {err}\n")
         return 1
     sys.stderr.write(
         f"[weekly_anchor] done; 1 folder receipt over {len(leaves)} artifacts "

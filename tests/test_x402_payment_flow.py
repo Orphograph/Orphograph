@@ -143,7 +143,19 @@ def test_past_free_tier_returns_x402_challenge(server):
     _exhaust_free_tier(server)
     s, h, b = _post(server, "/api/anchor", {"hash_hex": HASH_B})
     assert s == 402, b
-    assert h.get(x402_const.PAYMENT_REQUIRED_HEADER) == "true"
+    # The header IS the requirements, base64 JSON, exactly as the reference
+    # server sends it (x402 http/utils.py encode_payment_required_header): a
+    # v2 client reads the requirements only from here. It used to say "true",
+    # which this test pinned, and no real v2 client could have paid.
+    hdr = h.get(x402_const.PAYMENT_REQUIRED_HEADER)
+    decoded = json.loads(base64.b64decode(hdr))
+    assert decoded["x402Version"] == 2 and decoded["accepts"][0]["payTo"] == PAY_TO
+    for field in ("scheme", "network", "asset", "amount", "payTo", "maxTimeoutSeconds"):
+        assert field in decoded["accepts"][0], field
+    assert None not in decoded.values()
+    # A caller that does not speak x402 still gets the classic answer's facts.
+    assert h.get("Retry-After") and h.get("Cache-Control") == "no-store"
+    assert b["retry_after_seconds"] >= 1 and b["limit_per_day"] >= 1 and "Pack" in b["hint"]
     assert b["x402Version"] == 2
     req = b["accepts"][0]
     assert req["scheme"] == "exact"
@@ -1150,3 +1162,146 @@ def test_an_unreadable_claim_file_during_a_held_private_redemption_is_a_503_not_
     assert "identical request" in b.get("hint", ""), b
     assert "x402_ledger" not in json.dumps(b) and tmp_path.name not in json.dumps(b)
     assert _receipts_on_disk_for(tmp_path, HASH_E) == []
+
+
+@pytest.fixture()
+def unarmed_server(tmp_path):
+    """Production's state today: no pay-to address, no mock. The facilitator
+    URL points at a port nothing listens on, so any facilitator call the
+    server makes shows up as a 503 instead of reaching the network."""
+    yield from _srv.server_processes(tmp_path, stub_calendars=True,
+                                     RATE_LIMIT_PER_DAY="1",
+                                     ORPHO_X402_FACILITATOR_URL="http://127.0.0.1:9")
+
+
+def test_an_unarmed_rail_ignores_a_payment_header_and_calls_no_facilitator(unarmed_server, tmp_path):
+    """Found live after PR #279 deployed (2026-09-30). The header block ran
+    whenever a payment header was present, armed or not: an unarmed
+    production built requirements with an empty pay-to and called the
+    public facilitator for any request carrying the header, answering it
+    with an x402 error instead of what it gave before. The doc's rule is
+    that until the rail is armed every path falls through exactly as
+    before: the header is ignored, and nothing is called."""
+    s, _h, b = _post(unarmed_server, "/api/anchor", {"hash_hex": HASH_A},
+                     _payment_headers(nonce="u1"))
+    assert s == 200, b                       # the free anchor, as before x402
+    assert "x402_settled" not in b
+    assert not (tmp_path / "x402_ledger.jsonl").exists()
+    assert not (tmp_path / "x402_claimed.jsonl").exists()
+    s2, _h2, b2 = _post(unarmed_server, "/api/anchor", {"hash_hex": HASH_B},
+                        _payment_headers(nonce="u2"))
+    assert s2 == 429, b2                     # past the free tier: the classic 429
+    assert "accepts" not in b2               # and no x402 challenge while unarmed
+
+
+def _health(base: str) -> dict:
+    status, raw, _h = _srv.request(base, "/api/health", "GET", None, {})
+    assert status == 200
+    return json.loads(raw)
+
+
+def test_health_says_whether_x402_is_armed_and_on_which_network(server, unconfigured_server):
+    """Arming is a secret on the server, and secrets cannot be read from
+    outside; health is the one observable proof that the rail is (or is not)
+    live, and on which network. Testnet first: Base Sepolia."""
+    assert _health(server)["x402"] == {"armed": True, "network": "eip155:84532"}
+    assert _health(unconfigured_server)["x402"] == {"armed": False, "network": None}
+
+
+def test_x402_ledgers_never_fall_back_to_the_working_directory(tmp_path, monkeypatch):
+    """Without ORPHO_DATA_DIR the charge ledger used to go to the process's
+    working directory, which in a container can sit outside the persistent
+    volume: a deploy would then lose the record of money taken. It follows
+    engine.DATA_DIR's rule instead (production sets the variable)."""
+    monkeypatch.delenv("ORPHO_DATA_DIR", raising=False)
+    monkeypatch.chdir(tmp_path)
+    d = x402_const._data_dir()
+    assert d.is_absolute() and tmp_path not in [d, *d.parents], d
+    repo = Path(__file__).resolve().parent.parent
+    assert d in (repo / "data", repo)
+
+
+def test_the_agent_docs_say_x402_is_testnet_and_drop_the_five_calendars_claim():
+    web = Path(__file__).resolve().parent.parent / "web"
+    agents = (web / "docs" / "agents.html").read_text()
+    assert "Base Sepolia" in agents and "test network" in agents
+    assert "five calendars" not in agents
+    llms = (web / "llms.txt").read_text()
+    assert "x402" in llms and "TEST network" in llms
+
+
+
+def test_our_own_pages_still_get_the_classic_429_past_the_free_tier(server):
+    """A browser on orphograph.com marks its fetches Sec-Fetch-Site:
+    same-origin. Those keep the classic 429 every page already handles (the
+    reference middleware likewise shows browsers a paywall page, not the
+    402): arming x402 must not break the site for people. Anyone else, an
+    agent or an SDK, gets the x402 challenge."""
+    _exhaust_free_tier(server)
+    s, h, b = _post(server, "/api/anchor", {"hash_hex": HASH_B}, {"Sec-Fetch-Site": "same-origin"})
+    assert s == 429, b
+    assert "accepts" not in b and x402_const.PAYMENT_REQUIRED_HEADER not in h
+    s2, _h2, b2 = _post(server, "/api/anchor", {"hash_hex": HASH_B})
+    assert s2 == 402, b2
+
+
+def test_requirements_carry_the_assets_eip712_domain(server):
+    """Review of 9b909c1 (HIGH, reproduced with the reference facilitator
+    code). The exact-EVM facilitators reject requirements without the
+    asset's EIP-712 domain (extra.name / extra.version) before they look at
+    the signature (missing_eip712_domain), and the reference TS client
+    refuses to sign without it. Base Sepolia USDC is name "USDC", version
+    "2" (reference mechanisms/evm constants)."""
+    _exhaust_free_tier(server)
+    s, h, b = _post(server, "/api/anchor", {"hash_hex": HASH_B})
+    assert s == 402, b
+    for accepts in (json.loads(base64.b64decode(h[x402_const.PAYMENT_REQUIRED_HEADER]))["accepts"], b["accepts"]):
+        assert accepts[0]["extra"].get("name") == "USDC", accepts[0]["extra"]
+        assert accepts[0]["extra"].get("version") == "2", accepts[0]["extra"]
+    req = x402_const.build_payment_requirements("https://orphograph.com/api/anchor")
+    assert req["extra"]["name"] == "USDC" and req["extra"]["version"] == "2", "what /verify and /settle are sent"
+
+
+def test_an_unknown_asset_without_a_domain_does_not_arm_the_rail(monkeypatch):
+    """A rail that advertises requirements no facilitator can verify is
+    worse than no rail: with an asset whose EIP-712 domain is unknown and
+    not given, the rail stays unarmed."""
+    monkeypatch.setenv("ORPHO_X402_PAY_TO_ADDRESS", PAY_TO)
+    monkeypatch.delenv("ORPHO_X402_BACKEND", raising=False)
+    monkeypatch.setenv("ORPHO_X402_ASSET", "0x" + "12" * 20)
+    monkeypatch.delenv("ORPHO_X402_ASSET_NAME", raising=False)
+    monkeypatch.delenv("ORPHO_X402_ASSET_VERSION", raising=False)
+    assert x402_const.configured() is False
+    monkeypatch.setenv("ORPHO_X402_ASSET_NAME", "Some Token")
+    monkeypatch.setenv("ORPHO_X402_ASSET_VERSION", "1")
+    assert x402_const.configured() is True
+    assert x402_const.build_payment_requirements("u")["extra"]["name"] == "Some Token"
+
+
+@pytest.mark.parametrize("headers", [
+    {"Origin": "https://orphograph.com"},                 # a browser that sends no Fetch Metadata
+    {"User-Agent": "orphograph-usb/0.1"},
+    {"User-Agent": "orphograph-watch-folder/1.0"},
+    {"User-Agent": "orphograph-skill/0.1"},
+    {"User-Agent": "OrphographMCP/0.1 (+https://orphograph.com/mcp.html)"},
+    {"User-Agent": "orphograph-python-sdk/0.1.1"},
+    {"User-Agent": "orphograph-node/0.1.0"},
+    {"User-Agent": "OrphographACP/1.0 (+https://orphograph.com)"},
+    {"User-Agent": "orphograph-github-action/1.0"},
+])
+def test_our_own_clients_and_pages_keep_the_classic_429(server, headers):
+    """Review of 9b909c1. The repo's shipped clients branch on 429 (USB
+    capture marked every file failed against the 402), and copies already
+    installed cannot be updated; a browser without Fetch Metadata still
+    sends Origin on a POST. All of them keep the classic 429."""
+    _exhaust_free_tier(server)
+    s, h, b = _post(server, "/api/anchor", {"hash_hex": HASH_B}, headers)
+    assert s == 429, (headers, s, b)
+    assert x402_const.PAYMENT_REQUIRED_HEADER not in h
+
+
+def test_a_stranger_origin_or_an_unknown_client_gets_the_402(server):
+    _exhaust_free_tier(server)
+    for headers in ({"Origin": "https://evil.example"}, {"User-Agent": "python-httpx/0.27"}, {}):
+        s, _h, b = _post(server, "/api/anchor", {"hash_hex": HASH_B}, headers)
+        assert s == 402, (headers, s, b)

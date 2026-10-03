@@ -49,6 +49,12 @@ EXPORT_FIELDS = frozenset({
     # folder receipts
     "kind", "leaf_count", "merkle_algorithm", "paths_public",
     "private",
+    # The office's signature over (client_label, hash_hex) on its weekly
+    # Standing Record anchors. Shipped so anyone can check it against the
+    # public key pinned in server/standing_record.py without trusting the
+    # page. It carries nothing personal, and copying it gains nothing: the
+    # page shows each signed statement once, at its earliest receipt.
+    "office_signature",
 })
 # `source` is renewal CORE (renewal.CORE_ALWAYS): an offline renewal check
 # re-hashes it, so a bundle whose receipt carries renewal records must ship

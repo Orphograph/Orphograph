@@ -33,6 +33,7 @@ import hashlib
 import hmac
 import io
 import json
+import os
 import re
 import socket
 import time
@@ -452,9 +453,12 @@ def test_unparsable_resolver_answer_returns_the_code_and_logs_the_detail(monkeyp
 # ── 8. Lightning invoices ──────────────────────────────────────────────────
 
 def _ln_server(tmp_path, **env):
+    # arm_lightning: the rail is retired in production (2026-09-28); these
+    # cases cover the armed code a re-arm switches back on. The switch is a
+    # flag on the test launcher, which production cannot run (tests/_srv.py).
     closed = _srv.reserve_ports(1)[0]
-    return _srv.server_processes(tmp_path, stub_calendars=True, RATE_LIMIT_PER_DAY="1",
-                                 **_no_egress(closed), **env)
+    return _srv.server_processes(tmp_path, stub_calendars=True, arm_lightning=True,
+                                 RATE_LIMIT_PER_DAY="1", **_no_egress(closed), **env)
 
 
 MOCK_LN = {"ORPHO_LN_BACKEND": "mock", "ORPHO_LN_ALLOW_MOCK": "1"}
@@ -723,3 +727,82 @@ def test_stripe_message_with_a_newline_stays_on_one_log_line(monkeypatch, capsys
     assert not any(line.startswith("[stripe_api] ALERT") for line in lines), lines
     # The message is still all there, escaped.
     assert "Invalid email address: a\\n[stripe_api] ALERT" in lines[1], lines[1]
+
+
+def test_privacy_toggle_waits_for_the_upgrade_workers_receipt_lock(main_server):
+    """Bundle review round 1 (LOW, reproduced). The upgrade worker holds the
+    receipt's .upgrade.lock across its read, the calendar round-trips and its
+    write (now also the notify_email cleanup); the toggle took no lock, so a
+    toggle landing inside that window was written over and undone. The toggle
+    now takes the same lock, waits a bounded time, and answers 503 (retry)
+    rather than racing; nothing is written while the worker holds it."""
+    import fcntl
+    base, data = main_server
+    path = f"/api/me/receipt/{PRIVACY_RID}/privacy"
+    status, raw, _ = _post(base, path, {"private": False}, _as(OWNER))
+    assert status == 200 and _receipt_private(data) is False, raw
+    rfile = data / "receipts" / PRIVACY_RID / "receipt.json"
+    before = rfile.read_bytes()
+    lock_path = data / "receipts" / PRIVACY_RID / ".upgrade.lock"
+    with open(lock_path, "a") as held:
+        fcntl.flock(held.fileno(), fcntl.LOCK_EX)     # the worker, mid-upgrade
+        status, raw, _ = _post(base, path, {"private": True}, _as(OWNER))
+        assert status == 503, (status, raw)
+        assert "retry" in json.loads(raw).get("error", "").lower(), raw
+        assert rfile.read_bytes() == before, "the toggle wrote while the worker held the lock"
+        fcntl.flock(held.fileno(), fcntl.LOCK_UN)
+    status, raw, _ = _post(base, path, {"private": True}, _as(OWNER))
+    assert status == 200 and _receipt_private(data) is True, raw
+    status, raw, _ = _post(base, path, {"private": False}, _as(OWNER))   # leave it as found
+    assert status == 200 and _receipt_private(data) is False, raw
+
+
+def test_a_non_owner_gets_404_even_while_the_worker_holds_the_lock(main_server):
+    """Bundle review round 2 (LOW, reproduced). The lock wait ran before the
+    ownership check, so while the upgrade worker held a receipt's lock another
+    subscriber got 503 "being updated" for it, where any other time (and for
+    an id that does not exist) the answer is 404: it told a stranger that the
+    receipt exists. Ownership is checked first now, without the lock."""
+    import fcntl
+    base, data = main_server
+    path = f"/api/me/receipt/{PRIVACY_RID}/privacy"
+    idle, raw, _ = _post(base, path, {"private": True}, _as(HOOKS))
+    assert idle == 404, raw
+    rfile = data / "receipts" / PRIVACY_RID / "receipt.json"
+    before = rfile.read_bytes()
+    with open(data / "receipts" / PRIVACY_RID / ".upgrade.lock", "a") as held:
+        fcntl.flock(held.fileno(), fcntl.LOCK_EX)     # the worker, mid-upgrade
+        busy, raw, _ = _post(base, path, {"private": True}, _as(HOOKS))
+        fcntl.flock(held.fileno(), fcntl.LOCK_UN)
+    assert busy == 404, (busy, raw)
+    assert rfile.read_bytes() == before
+
+
+def test_a_receipt_dir_that_cannot_take_a_lock_file_gets_a_json_answer(main_server):
+    """Bundle review round 2 (LOW, reproduced). The toggle opens
+    <receipt>/.upgrade.lock to take the worker's lock; that open sat outside
+    any error handling, so a directory the server cannot create a file in
+    (read-only remount, a root-owned dir) raised out of the handler and the
+    client got no HTTP answer at all. It answers 500 JSON now, as a failed
+    write always did."""
+    base, data = main_server
+    rid = "PrivNoLockDir001"
+    rd = data / "receipts" / rid
+    rd.mkdir(parents=True)
+    (rd / "receipt.json").write_text(json.dumps({
+        "receipt_id": rid, "created_at": "2026-09-23T00:00:00Z",
+        "hash_hex": "cd" * 32, "source": "session", "private": False,
+        "account_id": _account(OWNER), "calendars_ok": 0, "calendars_total": 5}))
+    os.chmod(rd, 0o500)
+    try:
+        try:
+            (rd / ".probe").touch()
+        except OSError:
+            pass
+        else:
+            pytest.skip("this user can write a 0500 directory (root); the fault cannot be planted")
+        status, raw, _ = _post(base, f"/api/me/receipt/{rid}/privacy", {"private": True}, _as(OWNER))
+        assert status == 500, (status, raw)
+        assert json.loads(raw).get("error"), raw
+    finally:
+        os.chmod(rd, 0o700)
