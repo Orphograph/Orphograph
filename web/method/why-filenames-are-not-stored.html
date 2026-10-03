@@ -5,7 +5,7 @@
 <title>Orphograph — Why filenames are not stored</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#f6f1e3">
-<meta name="description" content="A structural account of why filenames are excluded from the receipt: filenames are identifiers, not content; the office's privacy contract is structural, not promissory; the alternative architecture is enumerated and rejected. Published as defensive prior art.">
+<meta name="description" content="A structural account of why a single-file receipt carries no filename: filenames are identifiers, not content; the office's privacy contract is structural, not promissory; the alternative architecture is enumerated and rejected. Published as defensive prior art.">
 <meta property="og:title" content="Orphograph — Why filenames are not stored">
 <meta property="og:description" content="A structural privacy contract: what is not received cannot be disclosed.">
 <meta property="og:url" content="https://orphograph.com/method/why-filenames-are-not-stored">
@@ -73,7 +73,7 @@
   <p class="u-eyebrow">Method · Filenames</p>
   <h1>Why filenames are not stored.</h1>
   <p class="arch-lede">
-    The protocol distinguishes, in a manner deliberate and structural, between the content of a file and the labels by which a file is referred to in conversation. The content is what the receipt attests. The labels are not received, and are therefore not stored, and could not be disclosed even were disclosure compelled. The following describes the reasoning, the consequences, and the alternatives considered and rejected.
+    The protocol distinguishes, in a manner deliberate and structural, between the content of a file and the labels by which a file is referred to in conversation. The content is what the receipt attests. For a single file anchored in the browser the labels are not received, and are therefore not stored, and could not be disclosed even were disclosure compelled. (A caller may attach a label of their own choosing through the API, and a folder anchor sends each file's relative path by design; see section 2.) The following describes the reasoning, the consequences, and the alternatives considered and rejected.
   </p>
 
   <section>
@@ -104,7 +104,7 @@
   <section>
     <h2>4 · The cost of not storing filenames</h2>
     <div class="arch-rule"></div>
-    <p>The structural exclusion has a cost, and the office is unwilling to leave it understated. A customer who anchors many files cannot, from the office's records alone, recover the human-readable name by which any given receipt corresponds to any given file. The receipt records a fingerprint, not a name; to make the receipt useful in conversation — "the receipt for the third draft of chapter seven" — the customer must maintain their own correspondence between receipt identifiers and the files those identifiers describe.</p>
+    <p>The structural exclusion has a cost, and the office is unwilling to leave it understated. A customer who anchors many single files without labels cannot, from the office's records alone, recover the human-readable name by which any given receipt corresponds to any given file. The receipt records a fingerprint, not a name; to make the receipt useful in conversation — "the receipt for the third draft of chapter seven" — the customer must maintain their own correspondence between receipt identifiers and the files those identifiers describe.</p>
     <p>The /account vault is provided as a convenience for this purpose. Receipts issued to an authenticated account are stored under the account's HMAC-keyed identifier; the vault lists those receipts, their <code>created_at</code> timestamps, their fingerprints, and whatever <em>client_label</em> the customer chose to attach. The customer may, at their option, populate the client label with as much or as little human-readable detail as they wish; the office's holdings remain the same in either case.</p>
     <p>For customers whose practice involves many files, a sensible discipline is to keep a private ledger — a text file, a spreadsheet, or a directory listing — that maps the customer's chosen filenames to the corresponding receipt identifiers. The ledger lives on the customer's own machine, under the customer's own control, and exits the office's threat model entirely.</p>
   </section>
@@ -112,7 +112,7 @@
   <section>
     <h2>5 · The alternative architecture, considered and rejected</h2>
     <div class="arch-rule"></div>
-    <p>The alternative — to accept and persist filenames alongside receipts — was considered at length and rejected. The enumeration below records the failure modes that would attend that architecture, and explains why each is judged to outweigh the convenience the alternative would confer.</p>
+    <p>For single-file receipts, the alternative — to accept and persist filenames alongside receipts — was considered at length and rejected. A folder receipt binds relative paths on purpose, because there the path is part of the evidence. The enumeration below records the failure modes that would attend that architecture, and explains why each is judged to outweigh the convenience the alternative would confer.</p>
     <p><strong>Disclosure surface.</strong> Every datum the office holds is a datum the office may be compelled, by lawful process or by adversarial breach, to surrender. Filenames frequently contain matter the customer would consider sensitive: project names, client names, internal codenames, dated draft markers, jurisdictional indicators, intimate annotations of the customer's working habits. The architecture that holds them is the architecture that may be made to disclose them. The architecture that does not hold them is the architecture that cannot.</p>
     <p><strong>Search-warrant exposure.</strong> A subpoena directed at the office asks for what the office holds. If the office holds filenames, the office must produce them; if the office does not, the office cannot. The distinction matters in the design of the instrument. A receipt that travels with a filename attached travels with a beacon for forensic correlation; a receipt that does not, does not.</p>
     <p><strong>Accidental publication.</strong> Every operational error — a misconfigured log, a debug page left visible, a mis-applied access control, a vendor's index of public objects — risks exposing what the office holds. Holdings that include filenames are holdings that may be inadvertently published in human-readable form. The architecture that excludes them excludes the failure mode entirely.</p>

@@ -58,6 +58,18 @@ UNSUPPORTED = (
     "ordering rule",
     "computed on your own machine, not uploaded",
     "commits to the submitted",
+    # Review round 2: the universal wordings left on pages round 1 edited,
+    # and "only" lists of what is sent that left out sizes or the public
+    # label. Meta descriptions are scanned too (see unsupported_in).
+    "only the fingerprint crosses the wire",
+    "the fingerprint is the only artefact that leaves",
+    "fingerprints are transmitted, and only those",
+    "only cryptographic fingerprints (sha-256, optional sha-512 sibling) cross the wire",
+    "only the fingerprints are submitted",
+    "only the manifest — relative paths, digests, and the root",
+    "only the manifest of relative paths, digests, and the root is submitted",
+    "only the bundle's manifest (paths, digests and sizes) and its root are sent",
+    "why filenames are excluded from the receipt",
 )
 
 # True of a single file's bytes and said on single-file pages, so it is not in
@@ -68,7 +80,7 @@ FOLDER_ONLY_UNSUPPORTED = ("never leave your device",)
 CLASS_ROUTES = (
     "/mcp", "/lp/eu-ai-act-training-data", "/certificate/DatasetProvenanceSample",
     "/method/", "/method/folder-merkle", "/method/why-filenames-are-not-stored",
-    "/dataset-provenance", "/integrations",
+    "/dataset-provenance", "/integrations", "/", "/privacy", "/docs/agents",
 )
 
 
@@ -77,7 +89,9 @@ def plain(markup: str) -> str:
 
 
 def unsupported_in(markup: str) -> list[str]:
-    text = plain(markup).lower()
+    # The rendered text, and the raw markup too: a meta description or a
+    # JSON-LD answer is read by search engines and lives inside tags.
+    text = plain(markup).lower() + " \n " + re.sub(r"\s+", " ", markup).lower()
     return [phrase for phrase in UNSUPPORTED if phrase in text]
 
 
@@ -123,10 +137,40 @@ def test_no_page_about_folders_says_only_the_fingerprint_leaves(server, route):
 
 def test_the_filename_page_says_a_folder_sends_its_paths(server):
     # Its single-file argument ("the filename is never transmitted") is true;
-    # without the folder caveat it read as true of every anchor.
+    # without the folder caveat it read as true of every anchor. Round 2: the
+    # caveat alone left the lede, the cost paragraph and the rejected
+    # alternative stating it universally, so each keeps its qualifier.
     text = plain(served(server, "/method/why-filenames-are-not-stored")).lower()
     assert "never transmitted" in text
     assert "relative path" in text and "folder" in text
+    for qualifier in ("for a single file anchored in the browser the labels are not received",
+                      "who anchors many single files without labels",
+                      "for single-file receipts, the alternative"):
+        assert qualifier in text, qualifier
+
+
+def test_the_privacy_policy_lists_what_a_folder_anchor_sends(server):
+    text = plain(served(server, "/privacy")).lower()
+    assert "folder manifests" in text and "relative path" in text and "byte size" in text
+
+
+def test_the_dataset_name_is_public_and_the_page_says_so(tmp_path, server):
+    # The behaviour: the CLI sends --name as the receipt label, and an
+    # anonymous read of a public receipt returns it.
+    bundle = _bundle(tmp_path)
+    out = tmp_path / "out"
+    data = tmp_path / "data"
+    data.mkdir()
+    for base in _srv.server_processes(data, stub_calendars=True, RATE_LIMIT_PER_DAY="50"):
+        run = run_dataset_cli(base, "anchor", "--bundle", str(bundle),
+                              "--name", "Name-Shown-Publicly", "--out", str(out))
+        assert run.returncode == 0, (run.stdout, run.stderr)
+        rid = json.loads((out / "certificate.json").read_text())["anchor"]["receipt_id"]
+        status, body, _ = _srv.request(base, f"/api/verify/{rid}")
+        assert status == 200 and json.loads(body).get("client_label") == "Name-Shown-Publicly"
+    # The claim that rests on it.
+    page = plain(served(server, "/dataset-provenance")).lower()
+    assert "a public receipt shows it" in page and "not confidential" in page
 
 
 def test_the_wider_scan_catches_the_sentences_master_carried():
@@ -139,6 +183,9 @@ def test_the_wider_scan_catches_the_sentences_master_carried():
         ("may anchor under hash-labeled paths, as noted above", "hash-labeled paths"),
         ("anchored exhibit folder as of the filing date six months earlier", "as of the filing date"),
         ("The office sees only the combined fingerprint.", "office sees only"),
+        ('<meta name="description" content="... only the fingerprint crosses the wire.">',
+         "only the fingerprint crosses the wire"),
+        ("Hashed locally. Only the fingerprints are submitted.", "only the fingerprints are submitted"),
     ):
         assert phrase in unsupported_in(f"<p>{old}</p>"), old
 

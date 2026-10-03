@@ -5,7 +5,7 @@
 <title>Orphograph — Dataset provenance, anchored to Bitcoin</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#f6f1e3">
-<meta name="description" content="Commit a dataset bundle, supporting documents, and acquisition log to a Merkle receipt. Dataset bytes stay local; manifest paths, digests, sizes, the root and the bundle name are submitted when anchoring online.">
+<meta name="description" content="Commit a dataset bundle, supporting documents, and acquisition log to a Merkle receipt. Dataset bytes stay local; manifest paths, digests, sizes, the root and the bundle name (or its --label) are submitted when anchoring online.">
 <meta property="og:title" content="Orphograph — Dataset provenance, anchored to Bitcoin">
 <meta property="og:description" content="Commit a dataset bundle to a path-bound Merkle root and verify disclosed files against a confirmed timestamp receipt.">
 <meta property="og:url" content="https://orphograph.com/dataset-provenance">
@@ -83,7 +83,7 @@
     <div class="arch-rule"></div>
     <p><strong>1. Assemble a bundle.</strong> A folder with your dataset under <code>data/</code>, your license and consent documents under <code>licenses/</code>, and an <code>acquisition_log</code> describing where each source came from, when, and under what terms.</p>
     <p><strong>2. Hash it locally.</strong> Every file is SHA-256'd on your machine and combined into an RFC&nbsp;6962-style Merkle tree. Online mode sends the manifest (literal relative paths, digests, sizes, and the root) but not dataset file bytes. Path names may be confidential and should be sanitized before submission. The bundle's <code>--name</code> (or <code>--label</code>, when given) is sent too, as the receipt's label, and a public receipt shows it to anyone with the link: use a name that is not confidential. <code>--offline</code> writes an unanchored certificate and manifest and makes no anchoring request.</p>
-    <p><strong>3. Retain the outputs.</strong> The CLI writes <code>certificate.json</code>, <code>certificate.txt</code>, and <code>manifest.json</code>. When the request succeeds, the certificate records the returned receipt identifiers. Supporting documents are represented by paths and digests; the CLI does not upload or publish their contents. <a href="/certificate/DatasetProvenanceSample">See a sample certificate →</a></p>
+    <p><strong>3. Retain the outputs.</strong> The CLI writes <code>certificate.json</code>, <code>certificate.txt</code>, and <code>manifest.json</code>. When a calendar accepts the root, the certificate records the returned receipt identifiers. Supporting documents are represented by paths and digests; the CLI does not upload or publish their contents. <a href="/certificate/DatasetProvenanceSample">See a sample certificate →</a></p>
   </section>
 
   <section>

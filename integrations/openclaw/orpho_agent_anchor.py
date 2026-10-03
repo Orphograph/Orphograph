@@ -199,9 +199,13 @@ def main() -> int:
                          api_key=args.api_key, pack_token=args.pack_token)
     record = {"ts": utc_now_iso(), "subject": subject, "sha256": sha256,
               "response": result}
+    # calendars_ok 0: a receipt with no Bitcoin commitment, and it never gets
+    # one; the GitHub Action and the dataset CLI count it as not anchored too.
+    if "error" not in result and result.get("calendars_ok") == 0:
+        record["not_anchored"] = "no calendar accepted the hash"
     append_receipt(state_dir, record)
     print(json.dumps(record, indent=2, sort_keys=True))
-    return 0 if "error" not in result else 1
+    return 0 if "error" not in result and "not_anchored" not in record else 1
 
 
 if __name__ == "__main__":

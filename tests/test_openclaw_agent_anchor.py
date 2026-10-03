@@ -214,3 +214,24 @@ def test_verify_with_a_file_it_cannot_read_fails(given, monkeypatch, capsys):
     out = json.loads(capsys.readouterr().out)
     assert out["local_match"] is False
     assert "cannot read --file" in out["local_error"]
+
+
+def test_an_anchor_no_calendar_accepted_exits_nonzero(monkeypatch, capsys):
+    # Review round 2 of the rescue branch: the action and the dataset CLI
+    # treat calendars_ok 0 as not anchored (no Bitcoin commitment, ever);
+    # this CLI exited 0 for it.
+    monkeypatch.setattr(anchor, "post_anchor", lambda *a, **k: {
+        "receipt_id": "r-nocal", "calendars_ok": 0, "calendars_total": 5})
+
+    assert run_main(monkeypatch, ["anchor-text"], stdin="payload") == 1
+    out = json.loads(capsys.readouterr().out)
+    assert "no calendar" in out["not_anchored"]
+
+
+def test_an_anchor_one_calendar_accepted_still_succeeds(monkeypatch, capsys):
+    # The honest caller on the same path: one calendar is enough to commit.
+    monkeypatch.setattr(anchor, "post_anchor", lambda *a, **k: {
+        "receipt_id": "r-one", "calendars_ok": 1, "calendars_total": 5})
+
+    assert run_main(monkeypatch, ["anchor-text"], stdin="payload") == 0
+    assert "not_anchored" not in json.loads(capsys.readouterr().out)

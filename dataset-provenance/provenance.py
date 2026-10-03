@@ -392,7 +392,10 @@ def _render_certificate_text(cert: dict) -> str:
         L.append(f"Hosted view:    {a['certificate_url']}")
         L.append(f"Receipt JSON:   {a['receipt_url']}")
     else:
-        L.append(f"Anchored:       NOT YET — {a.get('note', 'unanchored')}")
+        # A root no calendar accepted is never anchored; "NOT YET" promised a
+        # later commitment it cannot get (review round 2 of the rescue branch).
+        state = "NO" if str(a.get("note", "")).startswith("no calendar accepted") else "NOT YET"
+        L.append(f"Anchored:       {state} — {a.get('note', 'unanchored')}")
     L.append("")
     if cert["license_documents"]:
         L.append("LICENSE / CONSENT DOCUMENTS (sha256)")

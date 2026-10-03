@@ -10,7 +10,7 @@
 <link rel="stylesheet" href="/style.css?v=8">
 <meta name="copyright" content="© 2026 Orphograph. MIT — see /LICENSE">
 <link rel="canonical" href="https://orphograph.com/privacy">
-<meta name="description" content="Orphograph's privacy policy: your files never leave your device — only cryptographic fingerprints (SHA-256, optional SHA-512 sibling) cross the wire, and only the SHA-256 is anchored to Bitcoin. What we collect, what we never see, and your rights.">
+<meta name="description" content="Orphograph's privacy policy: your files never leave your device. A single file sends only its cryptographic fingerprints (SHA-256, optional SHA-512 sibling); a folder anchor also sends its manifest of relative paths and sizes. Only a SHA-256 (a file's, or a folder's Merkle root) is anchored to Bitcoin. What we collect, what we never see, and your rights.">
 </head>
 <body class="orpho">
 
@@ -50,6 +50,12 @@
       <strong>The fingerprints you submit</strong> — the SHA-256 digest, the
       optional SHA-512 sibling — plus the optional client label (filename,
       max 200 chars) you choose to attach.
+    </li>
+    <li>
+      <strong>Folder manifests, when you anchor a folder</strong> — each file's
+      relative path, SHA-256 digest and byte size, and the folder's Merkle
+      root. File contents are never sent. The paths are shown only to the
+      receipt's owner unless you choose to make them public.
     </li>
     <li>
       <strong>Truncated IP prefixes</strong> for rate limiting (we keep the
