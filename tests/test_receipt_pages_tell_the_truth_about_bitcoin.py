@@ -426,3 +426,100 @@ def test_the_helper_check_sees_the_forms_earlier_versions_used():
                  'serversOk: num(rec.calendars_ok, okFiles.length),',
                  '`${c.serversOk} of ${c.serversTotal} calendar servers · `'):
         assert not _calendar_comparisons_outside_helpers(fine), fine
+
+
+
+# Round 4 of PR #284: the comparison scan above misses truthiness and alias
+# reads, so it cannot by itself keep the #btc row and the Bitcoin card in step
+# with the status line. This drives the real pages: each script runs whole in
+# a node vm with a fake DOM and a fetch stub that answers the record (no
+# network module is reachable from the vm), and every Bitcoin line is read.
+_PAGE_DOM_DRIVER = r"""
+import vm from "node:vm";
+import fs from "node:fs";
+const [file, kind, recJson] = process.argv.slice(2);
+const rec = JSON.parse(recJson);
+function mkEl(tag) {
+  const e = { tag, _text: "", children: [], attrs: {}, hidden: false, style: {}, dataset: {}, className: "",
+    classList: { _s: new Set(), add(...c) { c.forEach((x) => this._s.add(x)); }, remove(...c) { c.forEach((x) => this._s.delete(x)); },
+      toggle(c, f) { (f ?? !this._s.has(c)) ? this._s.add(c) : this._s.delete(c); }, contains(c) { return this._s.has(c); } },
+    get textContent() { return this._text + this.children.map((c) => c.textContent).join(""); },
+    set textContent(v) { this._text = String(v); this.children = []; },
+    set innerHTML(v) { this._text = String(v); this.children = []; }, get innerHTML() { return this._text; },
+    appendChild(c) { this.children.push(c); return c; },
+    append(...c) { c.forEach((x) => this.children.push(typeof x === "string" ? { textContent: x } : x)); },
+    prepend(...c) { c.forEach((x) => this.children.unshift(typeof x === "string" ? { textContent: x } : x)); },
+    replaceChildren(...c) { this._text = ""; this.children = []; this.append(...c); },
+    removeChild(c) { this.children = this.children.filter((x) => x !== c); }, remove() {},
+    setAttribute(k, v) { this.attrs[k] = String(v); }, getAttribute(k) { return this.attrs[k] ?? null; }, removeAttribute(k) { delete this.attrs[k]; },
+    addEventListener() {}, querySelector() { return mkEl("q"); }, querySelectorAll() { return []; }, closest() { return null; },
+    focus() {}, click() {}, insertBefore(c) { this.children.push(c); return c; }, cloneNode() { return mkEl(tag); } };
+  return e;
+}
+const reg = new Map();
+const get = (k) => { if (!reg.has(k)) reg.set(k, mkEl(k)); return reg.get(k); };
+const document = { querySelector: (s) => get(s), getElementById: (id) => get("#" + id), querySelectorAll: () => [],
+  createElement: (t) => mkEl(t), createTextNode: (t) => ({ textContent: String(t) }), addEventListener() {},
+  body: mkEl("body"), documentElement: mkEl("html") };
+const path = kind === "receipt" ? "/r/abc123" : "/certificate/abc123";
+const body = kind === "receipt" ? rec : { receipt: rec, manifest: { root_hex: "ab".repeat(32), leaves: [] } };
+const fetch = async (u) => String(u).startsWith("/api/me")
+  ? { ok: false, status: 401, json: async () => ({}) } : { ok: true, status: 200, json: async () => body };
+const window = { location: { pathname: path, search: "", hash: "", href: "http://127.0.0.1" + path, origin: "http://127.0.0.1", replace() {} },
+  print() {}, addEventListener() {} };
+const ctx = { document, fetch, window, location: window.location, navigator: {}, console, setTimeout: () => 0, clearTimeout() {},
+  URLSearchParams, Intl, Date, encodeURIComponent, JSON, Math, Number, String, isNaN, Promise, Array, Object, Set, Map,
+  TextEncoder, crypto: {}, history: { replaceState() {} } };
+ctx.globalThis = ctx; ctx.self = ctx;
+vm.createContext(ctx);
+vm.runInContext(fs.readFileSync(file, "utf8"), ctx, { filename: file });
+await new Promise((r) => setImmediate(r));
+await new Promise((r) => setTimeout(r, 30));
+const out = {};
+for (const k of ["#status", "#btc", "#verdict-headline", "#fact-btc", "#explorer-grid"]) {
+  if (reg.has(k)) out[k] = reg.get(k).textContent;
+}
+const m = /Bitcoin chain(.*?)(How verification works|$)/.exec(out["#explorer-grid"] || "");
+out["card"] = m ? m[1] : null;
+delete out["#explorer-grid"];
+process.stdout.write(JSON.stringify(out));
+"""
+
+_SAYS_NONE = re.compile(r"no bitcoin commitment|never be pinned|^none", re.I)
+_SAYS_PENDING = re.compile(r"pending|awaiting|in progress", re.I)
+
+
+def _page_lines(tmp_path, page: str, rec: dict) -> dict:
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("node not on PATH: this check runs the real page scripts")
+    driver = tmp_path / "page_dom_driver.mjs"
+    driver.write_text(_PAGE_DOM_DRIVER)
+    kind = "receipt" if page == "receipt.js" else "certificate"
+    proc = subprocess.run([node, str(driver), str(WEB / page), kind, json.dumps(rec)],
+                          capture_output=True, text=True, timeout=60)
+    assert proc.returncode == 0, proc.stderr
+    return json.loads(proc.stdout)
+
+
+_MISSING = object()
+
+
+@pytest.mark.parametrize("page", ["receipt.js", "certificate.js"])
+@pytest.mark.parametrize("calendars_ok", [0, 1, 3, _MISSING, None, "0"],
+                         ids=["zero", "one", "three", "absent", "null", "string-zero"])
+def test_every_bitcoin_line_of_the_page_agrees(tmp_path, page, calendars_ok):
+    rec = {"receipt_id": "abc123", "status": "pending", "created_at": "2026-10-03T05:00:00Z",
+           "calendars_total": 5, "calendars_submitted_total": 5}
+    if calendars_ok is not _MISSING:
+        rec["calendars_ok"] = calendars_ok
+    lines = _page_lines(tmp_path, page, rec)
+    expected = {"#status", "#btc", "card"} | ({"#verdict-headline", "#fact-btc"} if page == "receipt.js" else set())
+    assert expected <= {k for k, v in lines.items() if v}, lines
+    none = calendars_ok == 0        # only an explicit integer 0 ("0" != 0 in Python too)
+    for key in expected:
+        text = lines[key]
+        if none:
+            assert _SAYS_NONE.search(text) and not _SAYS_PENDING.search(text), (key, text)
+        else:
+            assert _SAYS_PENDING.search(text) and not _SAYS_NONE.search(text), (key, text)

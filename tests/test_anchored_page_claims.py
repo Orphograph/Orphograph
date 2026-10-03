@@ -197,6 +197,17 @@ class TestNoPagePromisesItsOwnReceipt(unittest.TestCase):
                 copy = Path(d) / "auto_anchor_repo.py"
                 copy.write_text(planted)
                 self.assertTrue(_pages_the_daily_anchor_drops(_exclude_the_job_passes(copy)), name)
+        # Round 4: with no exclude passed, the job uses merkle.DEFAULT_EXCLUDE;
+        # the recorder must check that list, not an empty one.
+        import sys
+        from unittest import mock
+        sys.path.insert(0, str(ROOT / "server"))
+        import merkle
+        with tempfile.TemporaryDirectory() as d:
+            copy = Path(d) / "auto_anchor_repo.py"
+            copy.write_text(src.replace(call, "exclude=None"))
+            with mock.patch.object(merkle, "DEFAULT_EXCLUDE", tuple(merkle.DEFAULT_EXCLUDE) + ("web/*",)):
+                self.assertTrue(_pages_the_daily_anchor_drops(_exclude_the_job_passes(copy)), "default list")
 
 
 JOB = ROOT / "scripts" / "auto_anchor_repo.py"
@@ -219,7 +230,8 @@ def _exclude_the_job_passes(job: Path) -> list:
     seen = {}
 
     def record(root, exclude=None, **kwargs):
-        seen["exclude"] = list(exclude or [])
+        # from_folder applies DEFAULT_EXCLUDE when no list is passed.
+        seen["exclude"] = list(mod.merkle.DEFAULT_EXCLUDE if exclude is None else exclude)
         raise _Recorded
 
     with mock.patch.object(mod.merkle.MerkleTree, "from_folder", side_effect=record):

@@ -88,8 +88,8 @@ function calendarCounts(rec) {
 // The only two readings of calendars_ok on this page. Every line (status,
 // verdict, facts strip, #btc, Bitcoin card) goes through these, so the lines
 // cannot disagree: only an explicit 0 means "no Bitcoin commitment"; a record
-// with no calendars_ok field (an older server) is not a refusal. A test fails
-// on any other comparison of calendars_ok in this file.
+// with no calendars_ok field (an older server) is not a refusal. The tests run
+// this whole file under node and check that every one of those lines agrees.
 function noCommitment(rec) { return rec.calendars_ok === 0; }
 function someCalendarAccepted(rec) { return (rec.calendars_ok || 0) > 0; }
 

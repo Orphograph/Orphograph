@@ -81,5 +81,34 @@ class EmptyServerUrlTest(unittest.TestCase):
             self.assertEqual(_cli._env_server(), "http://127.0.0.1:9")
 
 
+class UrlInAnArgumentSlotTest(unittest.TestCase):
+    """Round 4 of PR #284: a server URL typed where the receipt id or path
+    goes was sent to the default server. Both CLIs refuse it now."""
+
+    def test_a_url_in_an_argument_slot_exits_two_before_any_request(self):
+        stop = AssertionError("request made")
+        with tempfile.TemporaryDirectory() as d:
+            for argv in (["inclusion-proof", "AbcDEFghi_JK-mno", "http://127.0.0.1:9"],
+                         ["verify", d, "http://127.0.0.1:9"],
+                         ["anchor", "http://127.0.0.1:9"]):
+                err = io.StringIO()
+                with mock.patch.object(_cli, "inclusion_proof", side_effect=stop) as ip, \
+                        mock.patch.object(_cli, "verify_folder", side_effect=stop) as vf, \
+                        mock.patch.object(_cli, "anchor_folder", side_effect=stop) as af, \
+                        redirect_stdout(io.StringIO()), redirect_stderr(err):
+                    rc = _cli.main(argv)
+                self.assertEqual(rc, 2, (argv, err.getvalue()))
+                self.assertFalse(ip.called or vf.called or af.called, argv)
+                self.assertIn("looks like a server URL", err.getvalue())
+
+    def test_an_ordinary_path_still_reaches_the_client(self):
+        proof = {"receipt_id": "AbcDEFghi_JK-mno", "path": "sub/a:b.txt", "proof": [], "root_hex": "0" * 64}
+        with mock.patch.object(_cli, "inclusion_proof", return_value=proof) as ip, \
+                redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+            rc = _cli.main(["--server-url", "http://127.0.0.1:9", "inclusion-proof", "AbcDEFghi_JK-mno", "sub/a:b.txt"])
+        self.assertEqual(rc, 0)
+        self.assertTrue(ip.called)
+
+
 if __name__ == "__main__":
     unittest.main()

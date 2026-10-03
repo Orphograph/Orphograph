@@ -452,8 +452,8 @@ function renderLineage(rec) {
 // ─── status copy (shared with receipt.js) ────────────────────────────────
 // The only reading of "no Bitcoin commitment" on this page: an explicit
 // calendars_ok of 0 (a missing field is an older server, not a refusal). The
-// status line, #btc and the Bitcoin card all use it; a test fails on any other
-// comparison of calendars_ok in this file.
+// status line, #btc and the Bitcoin card all use it; the tests run this whole
+// file under node and check that those lines agree.
 function noCommitment(rec) { return rec.calendars_ok === 0; }
 
 function friendlyStatus(rec) {

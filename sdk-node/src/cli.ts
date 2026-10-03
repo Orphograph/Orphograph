@@ -83,9 +83,11 @@ const SHORT_OPTION = /^-[A-Za-z]{1,2}$/;
 // <URL>`, with the server forgotten) is refused here instead of being sent as
 // an id to the default server.
 const RECEIPT_ID = /^[A-Za-z0-9_-]{1,64}$/;
-// A manifest rel_path never holds "://"; one that does is a server URL in the
-// wrong slot (`proof <id> <URL>`).
-const LOOKS_LIKE_URL = /^[A-Za-z][A-Za-z0-9+.-]*:\/\//;
+// A server URL anywhere but after --server / --server-url is a server the
+// caller meant to name: `proof <id> <URL>`, `proof <id> -sURL`, `proof <id> --
+// --server=URL`. Normalised rel paths and receipt ids never hold "://", so any
+// argument that does is refused on the subcommands that make a request.
+const HOLDS_URL = /:\/\//;
 
 // A server flag given with no value (`--server` at the end, `--server=`, or an
 // unset variable in `--server "$URL"`) is refused too: an empty server fell
@@ -297,15 +299,16 @@ async function main(): Promise<number> {
     printUsage();
     return 2;
   }
+  const urlArg = subcommand === "verify-inclusion" ? undefined : args.positional.find((p) => HOLDS_URL.test(p));
+  if (urlArg !== undefined) {
+    process.stderr.write(`argument looks like a server URL: ${urlArg} (give it as --server URL)\n`);
+    printUsage();
+    return 2;
+  }
   const idSlot = subcommand === "verify" ? 1 : subcommand === "proof" ? 0 : -1;
   const id = idSlot >= 0 ? args.positional[idSlot] : undefined;
   if (id !== undefined && !RECEIPT_ID.test(id)) {
     process.stderr.write(`not a receipt id: ${id}\n`);
-    printUsage();
-    return 2;
-  }
-  if (subcommand === "proof" && args.positional[1] !== undefined && LOOKS_LIKE_URL.test(args.positional[1])) {
-    process.stderr.write(`rel_path looks like a server URL: ${args.positional[1]} (use --server)\n`);
     printUsage();
     return 2;
   }

@@ -247,6 +247,13 @@ test("verify-inclusion (offline) takes a rel_path -x as a path", async () => {
 for (const [name, argvFor] of [
   ["a URL in the receipt id slot of verify", (s: string) => ["verify", folderWithOneFile(), s]],
   ["a URL in the rel_path slot of proof", (s: string) => ["proof", "AbcDEFghi_JK-mno", s]],
+  // Round 4: a URL stuck to a short option, or after a bare "--".
+  ["proof <id> -sURL", (s: string) => ["proof", "AbcDEFghi_JK-mno", "-s" + s]],
+  ["proof <id> -s=URL", (s: string) => ["proof", "AbcDEFghi_JK-mno", "-s=" + s]],
+  ["proof <id> -- --server=URL", (s: string) => ["proof", "AbcDEFghi_JK-mno", "--", "--server=" + s]],
+  ["proof -- <id> --server-url=URL", (s: string) => ["proof", "--", "AbcDEFghi_JK-mno", "--server-url=" + s]],
+  ["anchor -- --server=URL", (s: string) => ["anchor", "--", "--server=" + s]],
+  ["a receipt id outside the server's format", (s: string) => ["verify", folderWithOneFile(), "not an id", "--server", s]],
   ["--__proto__ URL", (s: string) => ["anchor", folderWithOneFile(), "--__proto__", s]],
   ["a valueless --api-key", (s: string) => ["anchor", folderWithOneFile(), "--server", s, "--api-key"]],
   ["a valueless --label", (s: string) => ["anchor", folderWithOneFile(), "--server", s, "--label"]],
@@ -279,10 +286,9 @@ test("--server and --server-url naming one server (trailing slash aside) are acc
 test("ORPHO_SERVER_URL is used when no --server is given", async () => {
   // The Python CLI's environment form; both packages install `orphograph`.
   const run = await runWithStub(() => ["anchor", folderWithOneFile()], (s) => ({ ORPHO_SERVER_URL: s }));
+  // The stub's port is only in the variable, so one request here proves it
+  // was read. (Round 4: a "without it" control here headed for the live
+  // default on every run, held back only by the guard; removed.)
   assert.equal(run.code, 0, run.stderr);
   assert.equal(run.urls.length, 1);
-  // Control: without it, the run heads for the default server (the guard stops it).
-  const bare = await runWithStub(() => ["anchor", folderWithOneFile()]);
-  assert.equal(bare.urls.length, 0);
-  assert.match(bare.stderr, /egress blocked/);
 });

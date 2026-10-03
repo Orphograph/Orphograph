@@ -171,6 +171,15 @@ def main(argv: Optional[List[str]] = None) -> int:
     if args.command != "verify-inclusion" and args.server_url is not None and not args.server_url.strip():
         print("orphograph: --server-url is empty; give a URL or leave the option out.", file=sys.stderr)
         return 2
+    # A server URL in an argument slot (`inclusion-proof <id> <URL>`, the
+    # option forgotten) was sent as an id or path to the default server.
+    # Receipt ids and normalised rel paths never hold "://".
+    if args.command != "verify-inclusion":
+        for name in ("folder", "receipt_id", "path"):
+            value = getattr(args, name, None)
+            if isinstance(value, str) and "://" in value:
+                print(f"orphograph: {name} looks like a server URL; give it as --server-url URL.", file=sys.stderr)
+                return 2
     server_url = args.server_url or _env_server()
     api_key = args.api_key if args.api_key is not None else _env_api_key()
 

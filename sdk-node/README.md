@@ -116,9 +116,11 @@ Flags:
 - `--label TEXT` records a free-form client label on the receipt
   (truncated to 200 characters by the server).
 - Any other option or an extra argument stops the CLI with exit code 2
-  before any request; so does a short option such as `-s` on `anchor`,
-  `verify` and `proof`. A bare `--` ends the options, so a path or receipt id
-  that starts with `-` can follow it: `npx orphograph proof <receipt_id> -- -x`.
+  before any request. On `anchor`, `verify` and `proof`, so do a separate
+  short option such as `-s` and any argument that holds `://` (a server URL
+  belongs after `--server`). A bare `--` ends the options, so a path or
+  receipt id that starts with `-` can follow it:
+  `npx orphograph proof <receipt_id> -- -x`.
 
 ## What crosses the network
 
