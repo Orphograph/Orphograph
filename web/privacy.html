@@ -10,7 +10,7 @@
 <link rel="stylesheet" href="/style.css?v=8">
 <meta name="copyright" content="© 2026 Orphograph. MIT — see /LICENSE">
 <link rel="canonical" href="https://orphograph.com/privacy">
-<meta name="description" content="Orphograph's privacy policy: your files never leave your device. A single file sends only its cryptographic fingerprints (SHA-256, optional SHA-512 sibling); a folder anchor also sends its manifest of relative paths and sizes. Only a SHA-256 (a file's, or a folder's Merkle root) is anchored to Bitcoin. What we collect, what we never see, and your rights.">
+<meta name="description" content="Orphograph's privacy policy: your files never leave your device. A single file sends only its cryptographic fingerprints (SHA-256, optional SHA-512 sibling) and a label if you attach one; a folder anchor also sends its manifest of relative paths and sizes. Only a SHA-256 (a file's, or a folder's Merkle root) is anchored to Bitcoin. What we collect, what we never see, and your rights.">
 </head>
 <body class="orpho">
 
@@ -31,15 +31,12 @@
 
 <section>
   <h1>Privacy Policy</h1>
-  <p class="muted">Last updated: 2026-09-30.</p>
+  <p class="muted">Last updated: 2026-10-02.</p>
 
   <h2>What we never see</h2>
   <p>
     <strong>Your files do not reach our server.</strong> Hashing happens in your
-    browser via <code>crypto.subtle</code>. What crosses the network is the
-    32-byte SHA-256 digest and — when the anchoring page computes it — an
-    optional SHA-512 sibling digest, recorded on the receipt but never
-    anchored. A digest cannot be reversed into your file; nobody can do that.
+    browser via <code>crypto.subtle</code>. For a single file, what crosses the network is the 32-byte SHA-256 digest, an optional SHA-512 sibling digest (recorded on the receipt but never anchored) and a label only if you attach one. A folder anchor also sends its manifest; see What we collect. A digest cannot be reversed into your file; nobody can do that.
     The privacy claim is enforced by the structure of the protocol, not by our
     promise to behave.
   </p>

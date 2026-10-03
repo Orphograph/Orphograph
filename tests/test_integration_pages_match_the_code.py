@@ -70,6 +70,15 @@ UNSUPPORTED = (
     "only the manifest of relative paths, digests, and the root is submitted",
     "only the bundle's manifest (paths, digests and sizes) and its root are sent",
     "why filenames are excluded from the receipt",
+    # Review round 3: what round 2 left in the same pages, and single-file
+    # sentences that dropped the optional label (the MCP tools and the API
+    # send it; a public receipt shows it).
+    "the 32-byte sha-256 digest and — when the anchoring page computes it",
+    "only the 64-hex digest crosses the wire",
+    "digest-only",
+    "only those fingerprints are committed",
+    "only those fingerprints are transmitted to the office",
+    "the bundle's --name are sent",
 )
 
 # True of a single file's bytes and said on single-file pages, so it is not in

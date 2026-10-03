@@ -46,7 +46,7 @@
   <h1>An agent's work, anchored before it is handed over.</h1>
   <p class="arch-lede">
     An agent that produces work someone relies on can anchor that work before delivering it.
-    The deliverable is hashed on the agent's machine; only the 64-hex digest crosses the wire;
+    The deliverable is hashed on the agent's machine; only the 64-hex digest, and a label if the agent gives one, crosses the wire;
     the receipt that comes back is committed to Bitcoin and outlives the platform, the agent,
     and this service. This page maps the six MCP tools and the batch API onto the workflows
     an agent actually runs.
@@ -69,8 +69,7 @@
         <tr>
           <td><code>anchor_output</code></td>
           <td>The agent just produced a result — a response, a report, a transcript.</td>
-          <td>The text is hashed in-process and never leaves the machine; only the SHA-256 and
-              SHA-512 digests are submitted. An optional <code>zk_proof</code> is forwarded and
+          <td>The text is hashed in-process and never leaves the machine; only the SHA-256 and SHA-512 digests, and a label if one is given, are submitted. An optional <code>zk_proof</code> is forwarded and
               echoed back as <code>zk_provenance</code> — it proves a fixed hash-chain procedure ran — not that a specific AI model ran.
               Its proving key ceremony is development-grade; we do not yet make this claim in any certified sense.</td>
         </tr>
@@ -138,11 +137,11 @@
   <section>
     <h2>Agent-to-agent: hiring the notary</h2>
     <div class="arch-rule"></div>
-    <p>The same digest-only handoff contract can be used with an agent-commerce protocol. Its
+    <p>The same handoff contract (no file bytes leave the agent) can be used with an agent-commerce protocol. Its
     job spec can carry the deliverable's SHA-256, and nothing else about the work; a completed response
     carries the receipt and a proof bundle
     (<code>/api/receipt/&lt;id&gt;.zip</code>) whose <code>.ots</code> files verify without us.
-    The paying agent never uploads its deliverable — the same digest-only contract as every
+    The paying agent never uploads its deliverable: the same no-file-bytes contract as every
     row above.</p>
     <p>On the Virtuals Agent Commerce Protocol the office is listed as provider
     <code>0x73113714cae2e351e2e0146b2f9b55c316b93f14</code> on Base, with two offerings:</p>

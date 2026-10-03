@@ -5,7 +5,7 @@
 <title>Orphograph — Model Context Protocol server</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#f6f1e3">
-<meta name="description" content="A local-only Model Context Protocol server that grants a coding assistant the ability to anchor, verify, and list Orphograph receipts. Files do not leave the device: a single file sends only its fingerprint, and a folder anchor also sends its manifest of relative paths and sizes.">
+<meta name="description" content="A local-only Model Context Protocol server that grants a coding assistant the ability to anchor, verify, and list Orphograph receipts. Files do not leave the device: a single file sends only its fingerprint (and a label, if given), and a folder anchor also sends its manifest of relative paths and sizes.">
 <link rel="icon" type="image/png" href="/favicon.png?v=8">
 <meta property="og:title" content="Orphograph — Model Context Protocol server">
 <meta property="og:description" content="A local-only MCP server that lets a coding assistant anchor files to Bitcoin without transmitting their contents.">
@@ -45,7 +45,7 @@
   <p class="mcp-eyebrow">Model Context Protocol</p>
   <h1 class="mcp-h1">An office at the coding assistant's elbow.</h1>
   <p class="mcp-lede">
-    The Orphograph MCP server is a single-file Python program, MIT-licensed and approximately four hundred lines, with no third-party dependencies. It is hosted within the user's own Claude Desktop, Claude Code, or Cursor environment; it is never hosted on Orphograph's servers. The server exposes six tools to the assistant. When the assistant invokes <code class="inline">anchor_file</code>, the file is read locally, its SHA-256 and SHA-512 fingerprints are computed in the local process, and only those fingerprints are transmitted to the office. The file itself does not cross the wire.
+    The Orphograph MCP server is a single-file Python program, MIT-licensed and approximately four hundred lines, with no third-party dependencies. It is hosted within the user's own Claude Desktop, Claude Code, or Cursor environment; it is never hosted on Orphograph's servers. The server exposes six tools to the assistant. When the assistant invokes <code class="inline">anchor_file</code>, the file is read locally, its SHA-256 and SHA-512 fingerprints are computed in the local process, and only those fingerprints, with a label if one is given, are transmitted to the office. The file itself does not cross the wire.
   </p>
 
   <section class="mcp-section">
@@ -119,7 +119,7 @@ claude mcp add orphograph -- orphograph-mcp</code></pre>
       <tbody>
         <tr>
           <td>orphograph.anchor_file(path)</td>
-          <td>Reads the file at the given absolute path locally. Computes its SHA-256 and SHA-512 fingerprints in the local Python process. Submits only those fingerprints to <code class="inline">https://orphograph.com/api/anchor</code>. Returns the receipt identifier and the receipt URL. The file body is not transmitted.</td>
+          <td>Reads the file at the given absolute path locally. Computes its SHA-256 and SHA-512 fingerprints in the local Python process. Submits only those fingerprints, and the label if one is given, to <code class="inline">https://orphograph.com/api/anchor</code>. Returns the receipt identifier and the receipt URL. The file body is not transmitted.</td>
         </tr>
         <tr>
           <td>orphograph.anchor_folder(path)</td>
@@ -149,10 +149,10 @@ claude mcp add orphograph -- orphograph-mcp</code></pre>
     <h2>Privacy contract</h2>
     <div class="mcp-rule"></div>
     <p>
-      The file remains on the device. For a single file only the SHA-256 and SHA-512 fingerprints are transmitted (a folder anchor also sends its manifest of relative paths, sizes and digests), and only those fingerprints are committed to Bitcoin via the OpenTimestamps calendars. This is the same structural privacy contract observed by the web interface: the office does not see the bytes, the network does not see the bytes, the chain does not see the bytes. The MIT verifier that checks a receipt produced from the website also checks a receipt produced through the MCP server; the receipt is the instrument, regardless of the path that produced it.
+      The file remains on the device. For a single file only the SHA-256 and SHA-512 fingerprints are transmitted, with a label if one is given (a folder anchor also sends its manifest of relative paths, sizes and digests), and only the SHA-256 (for a folder, its Merkle root) is committed to Bitcoin via the OpenTimestamps calendars. This is the same structural privacy contract observed by the web interface: the office does not see the bytes, the network does not see the bytes, the chain does not see the bytes. The MIT verifier that checks a receipt produced from the website also checks a receipt produced through the MCP server; the receipt is the instrument, regardless of the path that produced it.
     </p>
     <div class="mcp-callout">
-      <p>Nothing in the assistant's transcript causes the file to be exfiltrated by the office. For a single file nothing but the fingerprint leaves the local process; for a folder, its manifest leaves with it.</p>
+      <p>Nothing in the assistant's transcript causes the file to be exfiltrated by the office. For a single file nothing but the fingerprint, and a label if one is given, leaves the local process; for a folder, its manifest leaves with it.</p>
     </div>
   </section>
 
@@ -168,10 +168,10 @@ claude mcp add orphograph -- orphograph-mcp</code></pre>
     <h2>For autonomous agents</h2>
     <div class="mcp-rule"></div>
     <p>
-      An agent producing work at volume has three further surfaces, all built on the same contract: file bytes stay on the agent's machine. A single file sends only its fingerprint; a folder also sends its manifest of relative paths, digests and sizes.
+      An agent producing work at volume has three further surfaces, all built on the same contract: file bytes stay on the agent's machine. A single file sends only its fingerprint (and a label, if given); a folder also sends its manifest of relative paths, digests and sizes.
       Up to fifty hashes anchor in one call through <a href="/docs/api#post-api-anchor-batch" class="mcp-link-confirm">POST /api/anchor/batch</a>.
       A whole output tree anchors as one Merkle root through <code class="inline">orphograph.anchor_folder</code>, and any single file inside it is later provable with the SDK's offline <code class="inline">verify-inclusion</code> — no server, no account.
-      For an agent-to-agent delivery, anchor the deliverable's digest before handoff and send the receipt URL with its downloadable proof bundle; only the digest goes to Orphograph.
+      For an agent-to-agent delivery, anchor the deliverable's digest before handoff and send the receipt URL with its downloadable proof bundle; only the digest, and any label you give it, goes to Orphograph.
     </p>
   </section>
 

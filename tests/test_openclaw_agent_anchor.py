@@ -235,3 +235,12 @@ def test_an_anchor_one_calendar_accepted_still_succeeds(monkeypatch, capsys):
 
     assert run_main(monkeypatch, ["anchor-text"], stdin="payload") == 0
     assert "not_anchored" not in json.loads(capsys.readouterr().out)
+
+
+def test_an_answer_with_no_receipt_is_not_an_anchor(monkeypatch, capsys):
+    # Review round 3: an empty or receipt-less 200 exited 0 and was saved as
+    # a success; the GitHub Action counts that shape as an unexpected answer.
+    monkeypatch.setattr(anchor, "post_anchor", lambda *a, **k: {})
+
+    assert run_main(monkeypatch, ["anchor-text"], stdin="payload") == 1
+    assert "no receipt" in json.loads(capsys.readouterr().out)["not_anchored"]
