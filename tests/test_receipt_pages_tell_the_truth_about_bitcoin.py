@@ -21,6 +21,7 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 WEB = ROOT / "web"
 CERT_JS = WEB / "certificate.js"
+RECEIPT_JS = WEB / "receipt.js"
 
 # Promises that a receipt is pinned in about an hour. Review round 5: the
 # first pattern missed "within roughly an hour" and "~1 hour" forms. Not
@@ -96,3 +97,32 @@ def test_the_hour_scan_leaves_true_hour_statements_alone():
                  "Calendars batch-broadcast roughly hourly.",
                  "The claim code is emailed the moment your payment confirms (~1 hour on-chain)."):
         assert not HOUR_PROMISE.search(true.lower()), true
+
+
+
+def _receipt_status(rec: dict) -> str:
+    """Run the real receiptStatusLine from receipt.js under node, with the
+    constants and helpers above it (the top of the file is declarations only)."""
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("node not on PATH: this check runs the real receipt.js")
+    src = RECEIPT_JS.read_text(encoding="utf-8")
+    head = src[: src.index("function el(tag, attrs")]
+    assert "function receiptStatusLine(rec)" in head, "receiptStatusLine moved below function el"
+    driver = head + "\nprocess.stdout.write(receiptStatusLine(JSON.parse(process.argv[1])));\n"
+    proc = subprocess.run([node, "-e", driver, json.dumps(rec)],
+                          capture_output=True, text=True, timeout=60)
+    assert proc.returncode == 0, proc.stderr
+    return proc.stdout
+
+
+def test_a_receipt_with_no_calendar_proof_is_not_called_pending():
+    # Cycle 9: the certificate page was fixed in #283; the single-file receipt
+    # page still read "Pending Bitcoin confirmation" for it.
+    text = _receipt_status({"status": "pending", "calendars_ok": 0, "calendars_submitted_total": 5})
+    assert "pending" not in text.lower() and "no bitcoin commitment" in text.lower(), text
+
+
+def test_a_receipt_with_one_calendar_proof_is_still_pending():
+    text = _receipt_status({"status": "pending", "calendars_ok": 1, "calendars_submitted_total": 5})
+    assert text.startswith("Pending Bitcoin confirmation"), text

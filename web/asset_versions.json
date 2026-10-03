@@ -412,8 +412,8 @@
     "sha256": "b4ec3bb15e88b287a225d760a08f594c81fcb58bdacee4317bfd1419000f2094"
   },
   "/receipt.js": {
-    "version": "10",
-    "sha256": "d66bd02a777c12b885fc7786750205df6b246d47ded229e0da0d3535430a9f3e"
+    "version": "11",
+    "sha256": "2ff5d34c32fff0996fcc636f370d8b1f59ea0b3f76507cdae5fad4a7401ebb07"
   },
   "/recover.css": {
     "version": "2",
