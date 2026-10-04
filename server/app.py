@@ -4181,9 +4181,12 @@ class Handler(BaseHTTPRequestHandler):
             _json_response(self, 400, {"error": "body must be JSON"})
             return
         email = payload.get("email", "")
-        if not isinstance(email, str) or not EMAIL_RE.match(email.strip()):
+        if (not isinstance(email, str) or not EMAIL_RE.match(email.strip())
+                or not _utf8_encodable(email)):
             # Enumeration defense: still return 200 with neutral body. Don't leak
             # whether the address shape was valid via different status codes.
+            # A lone surrogate ("\ud800") matches EMAIL_RE but is not text: it
+            # was stored in the token ledger and then raised in email_id.
             _json_response(self, 200, {"ok": True, "message": "If that address is valid, a link is on the way."})
             return
         if needs_lowercase(email):

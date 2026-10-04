@@ -334,6 +334,11 @@ def session_email(session_id: str) -> str | None:
         return None
     if _now() > float(state.get("expires_unix", 0)):
         return None
+    # A session made before sign-in refused such a spelling (2026-10-03) would
+    # still be, for everything keyed by email_id, the account of the address
+    # it lowercases to. It ends now rather than at its 30-day expiry.
+    if needs_lowercase(state.get("email")):
+        return None
     return state.get("email")
 
 

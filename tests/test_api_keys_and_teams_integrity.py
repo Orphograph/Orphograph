@@ -647,8 +647,9 @@ def test_two_spellings_of_one_mailbox_hold_one_live_key(srv):
 
 def test_kelvin_sign_spelling_does_not_own_the_team(srv):
     """Defect 9, teams. A Kelvin-sign spelling of karl's address is another
-    mailbox. It must not see karl's team, remove karl's member or issue
-    karl's invites, and a team it creates must not be stored as karl's."""
+    mailbox. Since 2026-10-03 such a spelling holds no session at all
+    (auth.session_email), so it reaches none of karl's team; a team row it
+    created before then is still not stored as karl's."""
     base, data = srv
     tag = secrets.token_hex(3)
     karl_email = f"karl.{tag}@example.test"
@@ -663,69 +664,67 @@ def test_kelvin_sign_spelling_does_not_own_the_team(srv):
     assert code == 200 and body.get("team_id") == tid, body
 
     code, body = get(base, "/api/me/team", kelvin)
-    assert code == 200 and body.get("team") is None, body
-    code, body, _ = post(base, "/api/me/team/remove", kelvin, {"member_email": member_email})
-    assert code == 403, (code, body)
-    code, body, _ = post(base, "/api/me/team/invite", kelvin)
-    assert code == 403, (code, body)
+    assert code == 401, (code, body)
+    for path, payload in (("/api/me/team/remove", {"member_email": member_email}),
+                          ("/api/me/team/invite", None), ("/api/me/team/create", {"team_name": "K"})):
+        code, body, _ = post(base, path, kelvin, payload)
+        assert code == 401, (path, code, body)
     code, body = get(base, "/api/me/team", member)
     assert body.get("team", {}).get("team_id") == tid, body
 
-    ktid = _create(base, kelvin, "Kelvin Co")
-    assert ktid != tid
-    creates = [r for r in _read_rows(data / "teams.jsonl")
-               if r.get("event") == "create" and r.get("team_id") == ktid]
-    assert [r.get("owner_email") for r in creates] == [kelvin_email], creates
-    code, body = get(base, "/api/me/team", kelvin)
-    assert body.get("role") == "owner" and body["team"]["team_id"] == ktid, body
+    # A team the Kelvin spelling created before the fix: karl does not own it.
+    ktid = "team_" + secrets.token_urlsafe(10)
+    _append_rows(data / "teams.jsonl", [dict(
+        ts="2026-09-25T00:00:00+00:00", event="create", team_id=ktid,
+        owner_email=kelvin_email, team_name="Kelvin Co")])
     code, body = get(base, "/api/me/team", karl)
     assert body.get("role") == "owner" and body["team"]["team_id"] == tid, body
 
 
 def test_kelvin_sign_spelling_has_its_own_key_and_budget(srv):
-    """Defect 9, keys. The Kelvin-sign spelling spends its own issuance
-    budget, and its keys never replace karl's."""
+    """Defect 9, keys. The Kelvin-sign spelling can no longer issue keys (it
+    holds no session), a key issued to it before 2026-10-03 is dead, and none
+    of that touches karl's key or budget."""
     base, data = srv
     tag = secrets.token_hex(3)
     karl = account(data, f"karl.{tag}@example.test")
-    kelvin = account(data, f"{KELVIN}arl.{tag}@example.test")
+    kelvin_email = f"{KELVIN}arl.{tag}@example.test"
+    kelvin = account(data, kelvin_email)
     karl_key = _issue_key(base, karl)
 
-    codes, kelvin_key = [], None
-    for _ in range(10):
-        code, body, _ = post(base, "/api/me/api-key", kelvin)
-        codes.append(code)
-        if code != 200:
-            break
-        kelvin_key = body["api_key"]
-    assert codes[-1] == 429 and codes.count(200) == 5, codes
-    assert (key_status(base, karl_key), key_status(base, kelvin_key)) == (200, 200), (
-        "one account's key issuance revoked another account's key")
+    code, body, _ = post(base, "/api/me/api-key", kelvin)
+    assert code == 401, (code, body)
+    old_kelvin_key = "orpho_" + secrets.token_urlsafe(24)
+    _append_rows(data / "api_keys.jsonl", [issued_row(kelvin_email, old_kelvin_key)])
+    assert (key_status(base, karl_key), key_status(base, old_kelvin_key)) == (200, 401)
 
     code, body, _ = post(base, "/api/me/api-key", karl)
-    assert code == 200, ("karl was limited by another account's issuances", code, body)
+    assert code == 200, ("karl was limited by another spelling's issuances", code, body)
 
 
 def test_owner_removes_the_kelvin_spelling_not_the_plain_member(srv):
     """Defect 9, remove. The two spellings are two members. The route used to
     lowercase the address before remove, which turned the Kelvin-sign one
-    into the plain one, so the wrong person was removed."""
+    into the plain one, so the wrong person was removed. The Kelvin member
+    here joined before 2026-10-03 (its join row is written directly: such a
+    spelling can no longer sign in to redeem an invite)."""
     base, data = srv
     tag = secrets.token_hex(3)
     owner = account(data, f"olga.{tag}@example.test")
     plain_email = f"karl.{tag}@example.test"
     kelvin_email = f"{KELVIN}arl.{tag}@example.test"
     plain = account(data, plain_email, subscribed=False)
-    kelvin = account(data, kelvin_email, subscribed=False)
     tid = _create(base, owner, "Two Karls")
-    for who in (plain, kelvin):
-        code, body, _ = post(base, "/api/me/team/redeem", who, {"invite_code": _invite(base, owner)})
-        assert code == 200 and body.get("team_id") == tid, body
+    code, body, _ = post(base, "/api/me/team/redeem", plain, {"invite_code": _invite(base, owner)})
+    assert code == 200 and body.get("team_id") == tid, body
+    _append_rows(data / "teams.jsonl", [dict(
+        ts="2026-09-25T00:00:00+00:00", event="join", team_id=tid, member_email=kelvin_email)])
 
     code, body, _ = post(base, "/api/me/team/remove", owner, {"member_email": kelvin_email})
     assert code == 200 and body.get("ok") is True, body
-    code, body = get(base, "/api/me/team", kelvin)
-    assert body.get("team") is None, body
+    members = [r for r in _read_rows(data / "teams.jsonl")
+               if r.get("team_id") == tid and r.get("event") == "remove"]
+    assert [r.get("member_email") for r in members] == [kelvin_email], members
     code, body = get(base, "/api/me/team", plain)
     assert body.get("team", {}).get("team_id") == tid, ("the plain-k member was removed", body)
 

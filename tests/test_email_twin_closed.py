@@ -614,3 +614,77 @@ def test_a_twin_gift_recipient_is_not_mailed_and_the_buyer_gets_the_pack(server)
     status, result = _webhook(base, _gift_event(buyer, plain))
     assert (status, result.get("gift")) == (200, True), result
     assert _to(_mails(d)[n1:]) == [[plain]]
+
+
+# ── rows written before the fix (attack pass on PR #286) ─────────────────
+
+def _append_row(path: Path, row: dict) -> None:
+    with path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(row) + "\n")
+
+
+def _legacy_session(d: Path, addr: str) -> str:
+    """A session row exactly as sign-in wrote one before the fix."""
+    sid = "sess-" + secrets.token_hex(12)
+    _append_row(d / "auth_sessions.jsonl", {
+        "event": "created", "session_hash": hashlib.sha256(sid.encode()).hexdigest(),
+        "email": addr, "expires_unix": time.time() + 3600})
+    return "orpho_sid=" + sid
+
+
+def test_a_twin_session_made_before_the_fix_ends_now(server):
+    # It used to keep working until its 30-day expiry, and for everything keyed
+    # by email_id it was karl's account: his receipts, private ones included.
+    base, d = server
+    plain, twin = _pair("sess")
+    karls = _receipts_for(d, plain)
+    twin_cookie, plain_cookie = _legacy_session(d, twin), _legacy_session(d, plain)
+    assert _me(base, twin_cookie) == 401
+    assert _vault(base, twin_cookie) == 401
+    assert _me(base, plain_cookie) == 200                       # control
+    assert _vault(base, plain_cookie) == karls
+
+
+def test_an_api_key_issued_to_a_twin_before_the_fix_is_dead(server):
+    base, d = server
+    plain, twin = _pair("key")
+    _receipts_for(d, plain)
+    keys = {}
+    for addr in (plain, twin):
+        key = "orpho_" + secrets.token_urlsafe(24)
+        _append_row(d / "api_keys.jsonl", {
+            "ts": "2026-09-25T00:00:00+00:00", "event": "issued",
+            "key_hash": hashlib.sha256(key.encode()).hexdigest(), "key_prefix": key[:14], "email": addr})
+        keys[addr] = key
+    # The vault answers a key only for an active subscriber.
+    _append_row(d / "subscriptions.jsonl", {"email": plain, "status": "active", "stripe_sub": "sub_" + secrets.token_hex(6)})
+    status = lambda k: _srv.request(base, "/api/me/anchors", headers={"X-Orpho-Api-Key": k})[0]
+    assert status(keys[twin]) == 401
+    assert status(keys[plain]) == 200                           # control
+
+
+def test_a_webhook_registered_by_a_twin_before_the_fix_gets_nothing(tmp_path, monkeypatch):
+    # Webhook rows are keyed by email.lower(), so the twin's registration
+    # matched karl's anchor events, and registrations never expire.
+    import webhooks
+    ledger = tmp_path / "webhooks.jsonl"
+    monkeypatch.setattr(webhooks, "WEBHOOKS_LEDGER", ledger)
+    plain, twin = _pair("hook")
+    for addr, url in ((twin, "https://twin.example.test/hook"), (plain, "https://karl.example.test/hook")):
+        _append_row(ledger, {"ts": "2026-09-25T00:00:00+00:00", "event": "registered",
+                             "email": addr, "url": url, "secret": "orpho_whsec_" + secrets.token_hex(8)})
+    assert [h["url"] for h in webhooks.list_for_email(plain)] == ["https://karl.example.test/hook"]
+    assert [h["url"] for h in webhooks.list_for_email_with_secrets(plain)] == ["https://karl.example.test/hook"]
+    assert webhooks.list_for_email(twin) == [] and webhooks.list_for_email_with_secrets(twin) == []
+    assert webhooks.delete(twin, "https://karl.example.test/hook") is False   # cannot delete karl's
+
+
+def test_a_sign_in_with_a_lone_surrogate_writes_nothing(server):
+    # It matched EMAIL_RE, was stored in the token ledger, and then raised in
+    # email_id (found by the review of PR #285).
+    base, d = server
+    before = _snap(d, "auth_tokens.jsonl")
+    n0 = len(_mails(d))
+    status, body = _post(base, "/api/auth/email-link", {"email": "a\ud800@example.test"})
+    assert status == 200 and body.get("ok") is True, (status, body)   # the neutral answer
+    assert _snap(d, "auth_tokens.jsonl") == before and len(_mails(d)) == n0

@@ -25,7 +25,7 @@ import threading
 from datetime import datetime, timezone
 from pathlib import Path
 
-from email_fold import fold_email
+from email_fold import fold_email, needs_lowercase
 from file_lock import locked
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -219,6 +219,10 @@ def email_for_key(key: str) -> str | None:
         elif row.get("event") == "revoked":
             revoked = True
     if issued_row is None or revoked:
+        return None
+    # Issued before sign-in refused such a spelling (2026-10-03): its holder
+    # would act, by email_id, as the address it lowercases to.
+    if needs_lowercase(issued_row.get("email")):
         return None
     return issued_row.get("email")
 
