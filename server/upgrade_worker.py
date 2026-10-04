@@ -23,6 +23,7 @@ Public API:
 """
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import socket
@@ -511,6 +512,7 @@ def upgrade_all(min_age_sec: int = 3600) -> dict:
     scanned = 0
     upgraded = 0
     skipped = 0
+    lock_open_failed = 0
     results = []
     # Counts only: the log never names an address.
     notify = {"removed": 0, "failed": 0}
@@ -541,7 +543,18 @@ def upgrade_all(min_age_sec: int = 3600) -> dict:
         # the same volume — the module already expects concurrent cron runs).
         # A lost update here can erase pin_email_sent_at and re-email the
         # customer. Busy lock → skip; the next pass retries.
-        with try_locked(receipt_dir / ".upgrade.lock") as _lk:
+        with contextlib.ExitStack() as stack:
+            # A lock file this process cannot open (left owned by another user,
+            # e.g. by an operator tool run as root) used to raise out of the
+            # pass and stop every receipt after it from upgrading. It is now
+            # that one receipt's problem: skipped, counted, the pass goes on.
+            try:
+                _lk = stack.enter_context(try_locked(receipt_dir / ".upgrade.lock"))
+            except OSError as exc:
+                lock_open_failed += 1
+                sys.stderr.write(f"[upgrade] a receipt's lock file could not be opened "
+                                 f"({type(exc).__name__}); skipped\n")
+                continue
             if _lk is None:
                 skipped += 1
                 continue
@@ -592,6 +605,7 @@ def upgrade_all(min_age_sec: int = 3600) -> dict:
         "skipped": skipped,
         "notify_email_removed": notify["removed"],
         "notify_email_remove_failed": notify["failed"],
+        "lock_open_failed": lock_open_failed,
         "results": results,
     }
     _log(summary)

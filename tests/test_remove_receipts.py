@@ -124,8 +124,9 @@ def test_the_printed_undo_puts_everything_back(data, capsys):
     undo = [ln.split(": ", 1)[1] for ln in capsys.readouterr().out.splitlines() if ln.strip().startswith("undo ")]
     assert len(undo) == 3
     for cmd in undo:
-        _, src, dst = cmd.split(" ")
-        os.rename(src, dst)
+        mv, flag, src, dst = cmd.split(" ")
+        assert (mv, flag) == ("mv", "-T")      # never into an existing dir at dst
+        os.rename(src, dst)                    # rename(2) is what mv -T does
     assert _tree_hash(data / "receipts") == before
 
 
@@ -154,6 +155,62 @@ def test_a_lock_file_it_had_to_create_is_not_left_behind(data, monkeypatch):
         _apply(data, ids=BAD[:1])
     assert not (data / "receipts" / BAD[0] / ".upgrade.lock").exists()
     assert (data / "receipts" / BAD[0] / "receipt.json").exists()
+
+
+def test_a_lock_file_it_created_does_not_travel_into_quarantine(data, capsys):
+    # Review of PR #285: the lock this run creates is root-owned under fly ssh.
+    # Carried into quarantine, the printed undo put it back, and the upgrade
+    # worker (uid orpho) could no longer open it.
+    (data / "receipts" / BAD[2] / ".upgrade.lock").unlink()
+    assert _apply(data) == 0
+    [run_dir] = list((data / "quarantine").iterdir())
+    assert not (run_dir / "receipts" / BAD[2] / ".upgrade.lock").exists()
+    assert (run_dir / "receipts" / BAD[0] / ".upgrade.lock").exists()   # one that was already there stays
+    meta = json.loads((run_dir / "removal.json").read_text())
+    assert ".upgrade.lock" not in meta["files"][BAD[2]]
+
+
+def test_a_busy_id_is_reported_busy_not_moved(data, capsys):
+    held = os.open(str(data / "receipts" / BAD[0] / ".upgrade.lock"), os.O_WRONLY)
+    fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    try:
+        assert _apply(data) == 4
+    finally:
+        os.close(held)
+    out = capsys.readouterr().out
+    assert f"BUSY {BAD[0]}" in out and f"moved {BAD[0]}" not in out and f"moved {BAD[1]}" in out
+
+
+def test_a_failure_mid_run_still_records_what_moved(data, monkeypatch):
+    real = os.rename
+    calls = []
+
+    def second_fails(src, dst):
+        calls.append(src)
+        if len(calls) == 2:
+            raise OSError("planted failure on the second move")
+        real(src, dst)
+    monkeypatch.setattr(rr.os, "rename", second_fails)
+    with pytest.raises(OSError):
+        _apply(data)
+    [run_dir] = list((data / "quarantine").iterdir())
+    meta = json.loads((run_dir / "removal.json").read_text())
+    assert meta["moved"] == [BAD[0]] and len(meta["undo"]) == 1
+
+
+def test_a_stub_the_worker_recreates_mid_run_is_not_a_failed_post_check(data, monkeypatch, capsys):
+    real = os.rename
+
+    def rename_then_worker_recreates(src, dst):
+        real(src, dst)
+        Path(src).mkdir()
+        (Path(src) / ".upgrade.lock").write_bytes(b"")
+    monkeypatch.setattr(rr.os, "rename", rename_then_worker_recreates)
+    assert _apply(data, ids=BAD[:1]) == 0
+    assert "lock stub" in capsys.readouterr().err
+    monkeypatch.setattr(rr.os, "rename", real)
+    assert _apply(data, ids=BAD[:1]) == 0                  # the rerun clears the stub
+    assert not (data / "receipts" / BAD[0]).exists()
 
 
 def test_second_apply_is_zero_changes(data, capsys):
@@ -261,6 +318,7 @@ def test_list_free_on_prints_counts_first_and_no_label_or_hash(data, capsys):
     out = capsys.readouterr().out
     assert "free receipts created on 2026-10-03 (UTC): 5" in out   # 3 + child + stranger
     assert "not in --except: 2" in out and "hour 14Z: 1" in out
+    assert "other sources that day (not removable by this tool): 0" in out
     assert other not in out                                       # ids only on request
     assert rr.run(["--data-dir", str(data), "--list-free-on", DAY, "--except", *BAD, "--show-ids"]) == 0
     out = capsys.readouterr().out
@@ -285,3 +343,40 @@ def test_the_upgrade_worker_never_sees_quarantine(data, monkeypatch):
     out = uw.upgrade_all(min_age_sec=10**9)               # nothing old enough: no calendar call
     assert out["scanned"] == 2                            # control + child only
     assert not any(rid in json.dumps(out["results"]) for rid in BAD)
+
+
+def test_list_free_on_counts_other_sources_by_prefix_only(data, capsys):
+    # Review of PR #285: a same-day accidental anchor through another rail
+    # (x402, pack, key) is not free, so the free count alone could not rule
+    # out a fourth.
+    _mk(data, "X402X402X402X401", _rec("X402X402X402X401", source="x402:0xabc", client_label="secret-label"))
+    assert rr.run(["--data-dir", str(data), "--list-free-on", DAY, "--except", *BAD]) == 0
+    out = capsys.readouterr().out
+    assert "other sources that day (not removable by this tool): 1 {'x402': 1}" in out
+    assert "0xabc" not in out and "secret-label" not in out and "X402X402X402X401" not in out
+
+
+def test_one_unopenable_lock_does_not_stop_the_upgrade_pass(data, monkeypatch):
+    # Review of PR #285: try_locked opens the lock file before locking it, and
+    # a file the worker cannot open (left root-owned) raised out of
+    # upgrade_all, so every receipt after it stopped upgrading.
+    def blocked(*a, **k):
+        raise AssertionError("network blocked")
+    monkeypatch.setattr(socket, "create_connection", blocked)
+    monkeypatch.setattr(urllib.request, "urlopen", blocked)
+    monkeypatch.setenv("ORPHO_DATA_DIR", str(data))
+    sys.path.insert(0, str(SERVER))
+    uw = importlib.import_module("upgrade_worker")
+    monkeypatch.setattr(uw, "RECEIPTS_DIR", data / "receipts")
+    monkeypatch.setattr(uw, "UPGRADE_LOG", data / "upgrade_log.jsonl")
+    real = uw.try_locked
+    first = sorted(p.name for p in (data / "receipts").iterdir())[0]
+
+    def unopenable(path, *a, **k):
+        if path.parent.name == first:
+            raise PermissionError(13, "Permission denied")
+        return real(path, *a, **k)
+    monkeypatch.setattr(uw, "try_locked", unopenable)
+    out = uw.upgrade_all(min_age_sec=10**9)
+    assert out["lock_open_failed"] == 1
+    assert out["scanned"] == 5                     # every receipt was reached

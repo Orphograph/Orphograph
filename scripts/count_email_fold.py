@@ -27,6 +27,15 @@ def nkcf(s): return ud.normalize("NFKC", ud.normalize("NFKC", s).casefold())
 TWIN = {c for c in map(chr, range(0x80, 0x110000))
         if not 0xD800 <= ord(c) <= 0xDFFF and c.lower() != c and c.lower().upper() != c}
 KEYS = ("email", "owner", "member", "invitee")
+# Ledger names that may appear in an output key. Any other *.jsonl file on the
+# volume is counted under "other", so no name read from disk is printed.
+LEDGERS = frozenset({
+    "auth_sessions.jsonl", "auth_tokens.jsonl", "api_keys.jsonl", "credit_ledger.jsonl",
+    "subscriptions.jsonl", "stripe_customer_emails.jsonl", "webhooks.jsonl", "teams.jsonl",
+    "waitlist.jsonl", "referrals.jsonl", "newsletter.jsonl", "unsubscribes.jsonl",
+    "resend_suppressed_emails.jsonl", "suppressions.jsonl", "x402_ledger.jsonl",
+    "manual_fulfillment_queue.jsonl", "refund_requests.jsonl", "recovery_gaps.jsonl",
+    "onboarding.jsonl", "gdpr.jsonl", "events.jsonl", "demand_events.jsonl"})
 
 def secret():
     env = os.environ.get("ORPHO_HMAC_SECRET", "")
@@ -88,10 +97,22 @@ for rp in glob.glob(os.path.join(DATA, "receipts", "*", "receipt.json")):
     if isinstance(ne, str) and "@" in ne and not ne.startswith("enc:"):
         spell[ne.strip()].add("receipt.notify_email")
 
+# A stored address with a lone surrogate (accepted by the sign-in link before
+# PR #286) cannot be encoded, so no HMAC id can belong to it; hashing it used
+# to crash the whole census with no output.
+def _encodable(x):
+    try:
+        x.encode("utf-8")
+        return True
+    except UnicodeEncodeError:
+        return False
+out["spellings_not_utf8_encodable"] = sum(not _encodable(x) for x in spell)
+for x in [x for x in spell if not _encodable(x)]:
+    del spell[x]
 S = list(spell)
 na = [s for s in S if not s.isascii()]
 out["spellings_total"] = len(S)
-out["spellings_encrypted_values_skipped"] = enc
+out["encrypted_values_skipped"] = enc     # occurrences, not distinct spellings
 out["spellings_any_nonascii"] = len(na)
 out["spellings_fold_ne_lower"] = sum(fold(s) != low(s) for s in S)
 out["spellings_nfkc_casefold_ne_lower"] = sum(nkcf(s) != low(s) for s in S)
@@ -103,22 +124,9 @@ for s in S:
         for b in spell[s]:
             per[b] += 1
 for b in sorted(per):
-    out["fold_ne_lower_in:" + b] = per[b]
+    out["fold_ne_lower_in:" + (b if b in LEDGERS or b == "receipt.notify_email" else "other")] += per[b]
 
 now = time.time()
-def live(path, idkey, okevent):
-    state = {}
-    for r in rows(os.path.join(DATA, path)):
-        h = r.get(idkey)
-        if h:
-            state[h] = r
-    n = 0
-    for r in state.values():
-        e = r.get("email")
-        if (r.get("event") == okevent and isinstance(e, str) and fold(e) != low(e.strip())
-                and float(r.get("expires_unix", now + 1) or 0) > now):
-            n += 1
-    return n
 def tw(e): return isinstance(e, str) and any(c in TWIN for c in e)
 def fl(e): return isinstance(e, str) and fold(e) != low(e.strip())
 def live2(path, idkey, okevent):
@@ -126,7 +134,7 @@ def live2(path, idkey, okevent):
     for r in rows(os.path.join(DATA, path)):
         h = r.get(idkey)
         if h:
-            state[h] = r
+            state[h] = {k: r.get(k) for k in ("event", "email", "expires_unix")}
     return [r.get("email") for r in state.values() if r.get("event") == okevent
             and float(r.get("expires_unix", now + 1) or 0) > now]
 for name, path, idk, ev in (("live_sessions", "auth_sessions.jsonl", "session_hash", "created"),

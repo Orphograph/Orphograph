@@ -128,11 +128,21 @@ def list_free_on(receipts: Path, day: str, known: set, show_ids: bool) -> int:
         if isinstance(rec, dict) and rec.get("source") == "free" and _created_on(rec) == day:
             rows.append(rec)
     others = [r for r in rows if r.get("receipt_id") not in known]
+    other_sources = Counter()
+    for d in sorted(receipts.iterdir()):
+        try:
+            rec = json.loads((d / "receipt.json").read_text())
+        except (OSError, ValueError):
+            continue
+        if isinstance(rec, dict) and rec.get("source") != "free" and _created_on(rec) == day:
+            other_sources[str(rec.get("source") or "none").split(":", 1)[0]] += 1
     hours = Counter(str(r.get("created_at", ""))[11:13] for r in others)
     print(f"free receipts created on {day} (UTC): {len(rows)}")
     print(f"  of those, not in --except: {len(others)}")
     for h in sorted(hours):
         print(f"    hour {h}Z: {hours[h]}")
+    print(f"receipts from other sources that day (not removable by this tool): "
+          f"{sum(other_sources.values())} {dict(sorted(other_sources.items()))}")
     if show_ids:
         for r in others:
             print(f"  {r.get('receipt_id')}  {r.get('created_at')}  kind={r.get('kind', 'file')}"
@@ -240,7 +250,7 @@ def run(argv: list[str]) -> int:
     if not_found:
         return 6  # a mistyped id stops the run before anything moves
     for rid in plan:
-        print(f"{'MOVE' if a.apply else 'would move'} {rid}")
+        print(f"{'will move' if a.apply else 'would move'} {rid}")
     for rid in done:
         print(f"already removed {rid}")
     for rid in stubs:
@@ -261,38 +271,60 @@ def run(argv: list[str]) -> int:
         print("refused: quarantine is on another device", file=sys.stderr)
         return 5
     moved, busy = [], []
-    for rid in plan:
-        d = receipts / rid
-        lock = d / LOCK_NAME
-        fd, created = _lock(lock)
-        if fd is None:
-            busy.append(rid)
-            continue
-        try:
-            os.rename(d, qrec / rid)
-            moved.append(rid)
-        finally:
-            os.close(fd)
-            if rid not in moved and created:
-                lock.unlink(missing_ok=True)  # leave no lock file we made behind
-    for rid in stubs:
-        (receipts / rid / LOCK_NAME).unlink()
-        (receipts / rid).rmdir()
+    try:
+        for rid in plan:
+            d = receipts / rid
+            lock = d / LOCK_NAME
+            fd, created = _lock(lock)
+            if fd is None:
+                busy.append(rid)
+                print(f"BUSY {rid}: the upgrade worker holds it; run again")
+                continue
+            try:
+                os.rename(d, qrec / rid)
+                moved.append(rid)
+                print(f"moved {rid}")
+            finally:
+                os.close(fd)
+                # A lock file this run created is root-owned under fly ssh. Left
+                # in the receipt, or carried into quarantine and restored by
+                # the undo, it would stop the upgrade worker (uid orpho) from
+                # opening it. Remove it wherever it now is.
+                if created:
+                    (qrec / rid / LOCK_NAME if rid in moved else lock).unlink(missing_ok=True)
+        for rid in stubs:
+            (receipts / rid / LOCK_NAME).unlink()
+            (receipts / rid).rmdir()
+    finally:
+        _write_removal(run_dir, qrec, receipts, a, moved, busy, stubs)
+    leftover = [rid for rid in moved if (receipts / rid / "receipt.json").exists()
+                or not (qrec / rid / "receipt.json").exists()]
+    print(f"moved {len(moved)}  busy {len(busy)}  lock stubs removed {len(stubs)}  quarantine {run_dir}")
+    for rid in moved:
+        print(f"  undo {rid}: {_undo(qrec / rid, receipts / rid)}")
+    if any((receipts / rid).exists() for rid in moved):
+        print("  note: the upgrade worker recreated an empty lock stub for a moved id; "
+              "run this again to clear it before any undo", file=sys.stderr)
+    if leftover:
+        print(f"POST-CHECK FAILED for {len(leftover)} id(s)", file=sys.stderr)
+        return 5
+    return 4 if busy else 0
+
+
+def _undo(src: Path, dst: Path) -> str:
+    # -T: never move the receipt INTO an existing directory at dst (a lock stub
+    # the worker recreated); mv then fails instead of nesting it.
+    return f"mv -T {src} {dst}"
+
+
+def _write_removal(run_dir: Path, qrec: Path, receipts: Path, a, moved, busy, stubs) -> None:
     (run_dir / "removal.json").write_text(json.dumps({
         "ts": _now(), "host": socket.gethostname(), "reason": a.reason,
         "created_on": a.created_on, "moved": moved, "busy": busy,
         "lock_stubs_removed": stubs,
         "files": {rid: sorted(p.name for p in (qrec / rid).iterdir()) for rid in moved},
-        "undo": [f"mv {qrec / rid} {receipts / rid}" for rid in moved],
+        "undo": [_undo(qrec / rid, receipts / rid) for rid in moved],
     }, indent=2))
-    leftover = [rid for rid in moved if (receipts / rid).exists() or not (qrec / rid / "receipt.json").exists()]
-    print(f"moved {len(moved)}  busy {len(busy)}  lock stubs removed {len(stubs)}  quarantine {run_dir}")
-    for rid in moved:
-        print(f"  undo {rid}: mv {qrec / rid} {receipts / rid}")
-    if leftover:
-        print(f"POST-CHECK FAILED for {len(leftover)} id(s)", file=sys.stderr)
-        return 5
-    return 4 if busy else 0
 
 
 if __name__ == "__main__":

@@ -87,3 +87,24 @@ def test_writes_nothing_and_never_creates_the_hmac_secret(tmp_path):
     assert c["hmac_secret_missing_id_counts_skipped"] == 1
     assert not (data / ".hmac_secret").exists()
     assert _tree_hash(data) == before
+
+
+def test_a_stored_address_with_a_lone_surrogate_does_not_crash_it(tmp_path):
+    # Review of PR #285: the sign-in link stored such an address, and hashing
+    # it raised UnicodeEncodeError before anything was printed.
+    data = _data(tmp_path, secret=True)
+    with open(data / "auth_tokens.jsonl", "a", encoding="utf-8") as f:
+        f.write(json.dumps({"token_hash": "t2", "event": "issued", "email": "a\ud800@example.test",
+                            "expires_unix": 4e9}) + "\n")
+    out = _run(data)
+    c = _counts(out)
+    assert c["spellings_not_utf8_encodable"] == 1 and c["spellings_with_U+212A"] == 1
+    assert "example" not in out
+
+
+def test_an_unknown_ledger_file_name_is_not_printed(tmp_path):
+    data = _data(tmp_path, secret=True)
+    (data / "operator-notes-Kate.jsonl").write_text(json.dumps({"email": "\u00c9ve@example.test"}) + "\n")
+    out = _run(data)
+    assert "operator" not in out and "Kate" not in out
+    assert "fold_ne_lower_in:other=1" in out
