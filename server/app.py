@@ -7431,7 +7431,7 @@ def _start_upgrade_scheduler() -> None:
                 summary = upgrade_worker.upgrade_all()
                 sys.stderr.write(
                     f"[upgrade] scanned={summary['scanned']} upgraded={summary['upgraded']} "
-                    f"skipped={summary['skipped']}\n"
+                    f"skipped={summary['skipped']} lock_open_failed={summary.get('lock_open_failed', 0)}\n"
                 )
             except Exception as exc:  # noqa: BLE001 — worker errors must not kill the thread
                 sys.stderr.write(f"[upgrade] error: {type(exc).__name__}: {exc}\n")

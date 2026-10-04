@@ -23,6 +23,7 @@ Public API:
 """
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import socket
@@ -506,11 +507,12 @@ def upgrade_all(min_age_sec: int = 3600) -> dict:
     """
     if not RECEIPTS_DIR.exists():
         return {"scanned": 0, "upgraded": 0, "skipped": 0, "notify_email_removed": 0,
-                "notify_email_remove_failed": 0, "results": []}
+                "notify_email_remove_failed": 0, "lock_open_failed": 0, "results": []}
     now = time.time()
     scanned = 0
     upgraded = 0
     skipped = 0
+    lock_open_failed = 0
     results = []
     # Counts only: the log never names an address.
     notify = {"removed": 0, "failed": 0}
@@ -541,13 +543,30 @@ def upgrade_all(min_age_sec: int = 3600) -> dict:
         # the same volume — the module already expects concurrent cron runs).
         # A lost update here can erase pin_email_sent_at and re-email the
         # customer. Busy lock → skip; the next pass retries.
-        with try_locked(receipt_dir / ".upgrade.lock") as _lk:
+        with contextlib.ExitStack() as stack:
+            # A lock file this process cannot open (left owned by another user,
+            # e.g. by an operator tool run as root) used to raise out of the
+            # pass and stop every receipt after it from upgrading. It is now
+            # that one receipt's problem: skipped, counted, the pass goes on.
+            try:
+                _lk = stack.enter_context(try_locked(receipt_dir / ".upgrade.lock"))
+            except OSError as exc:
+                lock_open_failed += 1
+                # The id, as results[] already logs it: a receipt skipped on
+                # every pass must be findable, or it never gets repaired.
+                sys.stderr.write(f"[upgrade] lock file of {receipt_dir.name} could not be opened "
+                                 f"({type(exc).__name__}); skipped\n")
+                continue
             if _lk is None:
                 skipped += 1
                 continue
             try:
                 record = json.loads(receipt_file.read_text())
             except json.JSONDecodeError:
+                continue
+            except FileNotFoundError:
+                # Moved away (scripts/remove_receipts.py) between the exists()
+                # check and the lock: that receipt is gone, the pass goes on.
                 continue
             if (record.get("status") == "pinned"
                     and int(record.get("upgrade_schema", 1) or 1) >= UPGRADE_SCHEMA):
@@ -592,6 +611,7 @@ def upgrade_all(min_age_sec: int = 3600) -> dict:
         "skipped": skipped,
         "notify_email_removed": notify["removed"],
         "notify_email_remove_failed": notify["failed"],
+        "lock_open_failed": lock_open_failed,
         "results": results,
     }
     _log(summary)
