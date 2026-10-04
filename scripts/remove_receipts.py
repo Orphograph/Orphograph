@@ -28,7 +28,8 @@ office signature, is labelled like the weekly office receipt, is on the
 Standing Record's historical list, or (with --created-on) was not created on
 that UTC date. Exit codes: 0 done or nothing to do, 2 bad arguments,
 3 refused, 4 an id was busy (the upgrade worker held it; run again),
-5 post-check failed, 6 an id was not found. Prints ids and counts only,
+5 post-check failed or a move raised mid-run (the moves already made are
+listed with their undo lines), 6 an id was not found. Prints ids and counts only,
 never labels, hashes or addresses.
 
 Stdlib only.
@@ -270,19 +271,23 @@ def run(argv: list[str]) -> int:
     if os.stat(qrec).st_dev != os.stat(receipts).st_dev:
         print("refused: quarantine is on another device", file=sys.stderr)
         return 5
-    moved, busy = [], []
+    moved, busy, stubs_removed = [], [], []
+    failed = None
     try:
         for rid in plan:
             d = receipts / rid
             lock = d / LOCK_NAME
             fd, created = _lock(lock)
+            failed = rid
             if fd is None:
                 busy.append(rid)
+                failed = None
                 print(f"BUSY {rid}: the upgrade worker holds it; run again")
                 continue
             try:
                 os.rename(d, qrec / rid)
                 moved.append(rid)
+                failed = None
                 print(f"moved {rid}")
             finally:
                 os.close(fd)
@@ -295,8 +300,15 @@ def run(argv: list[str]) -> int:
         for rid in stubs:
             (receipts / rid / LOCK_NAME).unlink()
             (receipts / rid).rmdir()
-    finally:
-        _write_removal(run_dir, qrec, receipts, a, moved, busy, stubs)
+            stubs_removed.append(rid)
+    except OSError as exc:
+        _write_removal(run_dir, qrec, receipts, a, moved, busy, stubs_removed, failed)
+        print(f"STOPPED: moving {failed or 'a lock stub'} raised {type(exc).__name__}; quarantine {run_dir}",
+              file=sys.stderr)
+        for rid in moved:
+            print(f"  undo {rid}: {_undo(qrec / rid, receipts / rid)}")
+        return 5
+    _write_removal(run_dir, qrec, receipts, a, moved, busy, stubs_removed, None)
     leftover = [rid for rid in moved if (receipts / rid / "receipt.json").exists()
                 or not (qrec / rid / "receipt.json").exists()]
     print(f"moved {len(moved)}  busy {len(busy)}  lock stubs removed {len(stubs)}  quarantine {run_dir}")
@@ -317,11 +329,11 @@ def _undo(src: Path, dst: Path) -> str:
     return f"mv -T {src} {dst}"
 
 
-def _write_removal(run_dir: Path, qrec: Path, receipts: Path, a, moved, busy, stubs) -> None:
+def _write_removal(run_dir: Path, qrec: Path, receipts: Path, a, moved, busy, stubs, failed) -> None:
     (run_dir / "removal.json").write_text(json.dumps({
         "ts": _now(), "host": socket.gethostname(), "reason": a.reason,
         "created_on": a.created_on, "moved": moved, "busy": busy,
-        "lock_stubs_removed": stubs,
+        "lock_stubs_removed": stubs, "failed": failed,
         "files": {rid: sorted(p.name for p in (qrec / rid).iterdir()) for rid in moved},
         "undo": [_undo(qrec / rid, receipts / rid) for rid in moved],
     }, indent=2))

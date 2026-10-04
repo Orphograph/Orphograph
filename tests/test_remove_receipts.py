@@ -151,8 +151,7 @@ def test_a_lock_file_it_had_to_create_is_not_left_behind(data, monkeypatch):
     def refuse(src, dst):
         raise OSError("planted rename failure")
     monkeypatch.setattr(rr.os, "rename", refuse)
-    with pytest.raises(OSError):
-        _apply(data, ids=BAD[:1])
+    assert _apply(data, ids=BAD[:1]) == 5
     assert not (data / "receipts" / BAD[0] / ".upgrade.lock").exists()
     assert (data / "receipts" / BAD[0] / "receipt.json").exists()
 
@@ -191,11 +190,10 @@ def test_a_failure_mid_run_still_records_what_moved(data, monkeypatch):
             raise OSError("planted failure on the second move")
         real(src, dst)
     monkeypatch.setattr(rr.os, "rename", second_fails)
-    with pytest.raises(OSError):
-        _apply(data)
+    assert _apply(data) == 5
     [run_dir] = list((data / "quarantine").iterdir())
     meta = json.loads((run_dir / "removal.json").read_text())
-    assert meta["moved"] == [BAD[0]] and len(meta["undo"]) == 1
+    assert meta["moved"] == [BAD[0]] and len(meta["undo"]) == 1 and meta["failed"] == BAD[1]
 
 
 def test_a_stub_the_worker_recreates_mid_run_is_not_a_failed_post_check(data, monkeypatch, capsys):
@@ -369,14 +367,44 @@ def test_one_unopenable_lock_does_not_stop_the_upgrade_pass(data, monkeypatch):
     uw = importlib.import_module("upgrade_worker")
     monkeypatch.setattr(uw, "RECEIPTS_DIR", data / "receipts")
     monkeypatch.setattr(uw, "UPGRADE_LOG", data / "upgrade_log.jsonl")
+    import contextlib
     real = uw.try_locked
     first = sorted(p.name for p in (data / "receipts").iterdir())[0]
 
+    @contextlib.contextmanager
     def unopenable(path, *a, **k):
+        # Raises on ENTRY, where the real open() inside try_locked raises.
         if path.parent.name == first:
             raise PermissionError(13, "Permission denied")
-        return real(path, *a, **k)
+        with real(path, *a, **k) as f:
+            yield f
     monkeypatch.setattr(uw, "try_locked", unopenable)
     out = uw.upgrade_all(min_age_sec=10**9)
     assert out["lock_open_failed"] == 1
     assert out["scanned"] == 5                     # every receipt was reached
+
+
+def test_a_receipt_moved_away_mid_pass_does_not_stop_the_upgrade_pass(data, monkeypatch):
+    # Review round 2 of PR #285: a receipt renamed away between the worker's
+    # exists() check and its lock left a stub, and read_text raised out of
+    # upgrade_all.
+    def blocked(*a, **k):
+        raise AssertionError("network blocked")
+    monkeypatch.setattr(socket, "create_connection", blocked)
+    monkeypatch.setattr(urllib.request, "urlopen", blocked)
+    monkeypatch.setenv("ORPHO_DATA_DIR", str(data))
+    sys.path.insert(0, str(SERVER))
+    uw = importlib.import_module("upgrade_worker")
+    monkeypatch.setattr(uw, "RECEIPTS_DIR", data / "receipts")
+    monkeypatch.setattr(uw, "UPGRADE_LOG", data / "upgrade_log.jsonl")
+    real = uw.try_locked
+    first = sorted(p.name for p in (data / "receipts").iterdir())[0]
+    (data / "elsewhere").mkdir()
+
+    def moved_just_before(path, *a, **k):
+        if path.parent.name == first and path.parent.exists():
+            os.rename(path.parent, data / "elsewhere" / first)
+        return real(path, *a, **k)
+    monkeypatch.setattr(uw, "try_locked", moved_just_before)
+    out = uw.upgrade_all(min_age_sec=10**9)
+    assert out["scanned"] == 5 and out["lock_open_failed"] == 0

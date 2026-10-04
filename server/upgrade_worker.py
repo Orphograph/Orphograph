@@ -507,7 +507,7 @@ def upgrade_all(min_age_sec: int = 3600) -> dict:
     """
     if not RECEIPTS_DIR.exists():
         return {"scanned": 0, "upgraded": 0, "skipped": 0, "notify_email_removed": 0,
-                "notify_email_remove_failed": 0, "results": []}
+                "notify_email_remove_failed": 0, "lock_open_failed": 0, "results": []}
     now = time.time()
     scanned = 0
     upgraded = 0
@@ -552,7 +552,9 @@ def upgrade_all(min_age_sec: int = 3600) -> dict:
                 _lk = stack.enter_context(try_locked(receipt_dir / ".upgrade.lock"))
             except OSError as exc:
                 lock_open_failed += 1
-                sys.stderr.write(f"[upgrade] a receipt's lock file could not be opened "
+                # The id, as results[] already logs it: a receipt skipped on
+                # every pass must be findable, or it never gets repaired.
+                sys.stderr.write(f"[upgrade] lock file of {receipt_dir.name} could not be opened "
                                  f"({type(exc).__name__}); skipped\n")
                 continue
             if _lk is None:
@@ -561,6 +563,10 @@ def upgrade_all(min_age_sec: int = 3600) -> dict:
             try:
                 record = json.loads(receipt_file.read_text())
             except json.JSONDecodeError:
+                continue
+            except FileNotFoundError:
+                # Moved away (scripts/remove_receipts.py) between the exists()
+                # check and the lock: that receipt is gone, the pass goes on.
                 continue
             if (record.get("status") == "pinned"
                     and int(record.get("upgrade_schema", 1) or 1) >= UPGRADE_SCHEMA):
