@@ -753,7 +753,8 @@ function revealPackWaitlist(btn) {
       });
       const data = await r.json().catch(() => ({}));
       msg.hidden = false;
-      msg.textContent = r.ok ? (data.message || "On the list — we'll email you the second checkout opens.") : "Try again in a moment.";
+      msg.textContent = r.ok ? (data.message || "On the list — we'll email you the second checkout opens.")
+        : (data.error === "email_needs_lowercase" ? data.message : "Try again in a moment.");
       if (r.ok) {
         input.disabled = true;
         send.textContent = "✓ Saved";

@@ -133,7 +133,7 @@ class TestStaticMarkup(unittest.TestCase):
         css_ref = f"/index.css?v={css_version}"
         self.assertIn(css_ref, index)
         pricing = (ROOT / "web" / "pricing.html").read_text()
-        self.assertIn("/checkout-cta.js?v=4", pricing)
+        self.assertIn("/checkout-cta.js?v=5", pricing)
         self.assertIn(css_ref, pricing)
         # No page may still reference a stale index.css version.
         for page in (ROOT / "web").rglob("*.html"):
@@ -142,7 +142,7 @@ class TestStaticMarkup(unittest.TestCase):
                 self.assertIn(css_ref, body,
                               f"{page.name} loads a stale index.css version")
         v2 = (ROOT / "web" / "v2" / "index.html").read_text()
-        self.assertIn("/checkout-cta.js?v=4", v2)
+        self.assertIn("/checkout-cta.js?v=5", v2)
         self.assertIn("/v2/style.css?v=8", v2)
         # The 404/error template lives INSIDE server/app.py, so the rglob over
         # web/*.html above cannot see it. It sat on /index.css?v=16 for three

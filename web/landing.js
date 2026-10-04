@@ -136,11 +136,25 @@
       btn.disabled    = true;
       btn.textContent = "Saving…";
       try {
-        await fetch("/api/waitlist", {
+        const r = await fetch("/api/waitlist", {
           method:  "POST",
           headers: { "Content-Type": "application/json" },
           body:    JSON.stringify({ email, interest }),
         });
+        const data = await r.json().catch(() => ({}));
+        if (data.error === "email_needs_lowercase") {
+          // The server's own line, under the form: retype in lowercase.
+          let note = f.nextElementSibling;
+          if (!note || !note.classList.contains("wl-msg")) {
+            note = document.createElement("p");
+            note.className = "wl-msg hint small";
+            f.insertAdjacentElement("afterend", note);
+          }
+          note.textContent = data.message;
+          btn.textContent = "Try again";
+          btn.disabled    = false;
+          return;
+        }
         btn.textContent = "On the list ✓";
       } catch (_) {
         btn.textContent = "Try again";

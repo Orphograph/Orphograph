@@ -35,6 +35,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from email_fold import needs_lowercase  # noqa: E402
 from file_lock import can_append, locked  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -168,13 +169,21 @@ def _read_all(path: Path) -> list[dict]:
     return rows
 
 
+def _same_account(row_email, account: str) -> bool:
+    """Does a ledger row's address belong to the account `account` names?
+    Compared by email_id, the id everything signed in is keyed by: the exact
+    string missed "Alice@x" against "alice@x", which is one account."""
+    return isinstance(row_email, str) and bool(row_email) and email_id(row_email) == account
+
+
 def _supersede_prior_tokens_for_email(email: str) -> int:
     """Mark all previously-issued, still-valid tokens for this email as
     superseded so they can no longer be redeemed. Defense against the
     "user requested two links, the older one persists in browser history
-    on a now-shared device" scenario."""
+    on a now-shared device" scenario. Every spelling of the account counts."""
     if not email:
         return 0
+    account = email_id(email)
     rows = _read_all(TOKEN_LEDGER)
     # Latest event per token_hash wins; collect those still in "issued" state for this email.
     state: dict[str, dict] = {}
@@ -187,7 +196,7 @@ def _supersede_prior_tokens_for_email(email: str) -> int:
     for h, row in state.items():
         if row.get("event") != "issued":
             continue
-        if row.get("email") != email:
+        if not _same_account(row.get("email"), account):
             continue
         _append(TOKEN_LEDGER, {
             "ts": _iso(_now()),
@@ -235,6 +244,10 @@ def _redeemable_state(h: str) -> dict | None:
         # redeemed / superseded / any non-issued state — refuse
         return None
     if _now() > float(state.get("expires_unix", 0)):
+        return None
+    # Issued before sign-in refused such a spelling (2026-10-03): its session
+    # would be the account of the address it lowercases to.
+    if needs_lowercase(state.get("email")):
         return None
     return state
 
@@ -340,10 +353,12 @@ def revoke_all_sessions(email: str) -> int:
     Appends a `revoked` event for each currently-live (created, unexpired,
     not-already-revoked) session belonging to this email. Returns the count
     revoked. Other users' sessions are untouched. Idempotent: re-running once
-    no live sessions remain returns 0.
+    no live sessions remain returns 0. A session is this email's when its
+    address has the same email_id, whatever its case.
     """
     if not email:
         return 0
+    account = email_id(email)
     # Hold one ledger lock across the scan-and-append so two concurrent
     # logout-all calls under ThreadingHTTPServer can't double-write revoked
     # rows (mirrors redeem_link_token; security review 2026-06-22). The lock is
@@ -364,7 +379,7 @@ def revoke_all_sessions(email: str) -> int:
         for h, row in state.items():
             if row.get("event") != "created":
                 continue
-            if row.get("email") != email:
+            if not _same_account(row.get("email"), account):
                 continue
             if now > float(row.get("expires_unix", 0)):
                 continue  # already expired — no need to revoke

@@ -41,6 +41,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import unsubscribe as _unsub
+from email_fold import fold_email
 
 # Shared so callers can catch one exception type across both
 # consent ledgers.
@@ -134,8 +135,12 @@ def _mark_processed(event_id: str, result: dict) -> None:
 
 
 def record_suppression(email: str, reason: str) -> None:
-    """Append an address to the suppression ledger (so the mailer skips it)."""
-    email = (email or "").strip().lower()
+    """Append an address to the suppression ledger (so the mailer skips it).
+
+    Stored with only A-Z lowercased (fold_email). str.lower() turned a
+    bounce of a U+212A KELVIN SIGN spelling into the plain-"k" address, so
+    one bounce from a lookalike stopped mail to someone else (2026-10-03)."""
+    email = fold_email(email)
     if not email:
         return
     try:
@@ -149,9 +154,16 @@ def record_suppression(email: str, reason: str) -> None:
 
 
 def is_suppressed(email: str) -> bool:
-    """True if the address has a recorded hard-bounce / complaint. Crash-safe."""
-    email = (email or "").strip().lower()
-    if not email or not SUPPRESSION_LIST_PATH.exists():
+    """True if the address has a recorded hard-bounce / complaint. Crash-safe.
+
+    A row matches the address folded (how rows are written now) or lowered
+    (how rows were written before 2026-10-03; those must keep suppressing).
+    The row is folded, never lowered, when read: lowering a folded row would
+    bring back the lookalike match record_suppression stopped writing."""
+    if not isinstance(email, str):
+        return False
+    wanted = {fold_email(email), email.strip().lower()} - {""}
+    if not wanted or not SUPPRESSION_LIST_PATH.exists():
         return False
     try:
         with SUPPRESSION_LIST_PATH.open() as f:
@@ -160,9 +172,9 @@ def is_suppressed(email: str) -> bool:
                 if not line:
                     continue
                 try:
-                    if (json.loads(line).get("email") or "").strip().lower() == email:
+                    if fold_email(json.loads(line).get("email")) in wanted:
                         return True
-                except json.JSONDecodeError:
+                except (json.JSONDecodeError, AttributeError):
                     continue
     except OSError as e:
         # NOT "return False". An unreadable suppression ledger means consent

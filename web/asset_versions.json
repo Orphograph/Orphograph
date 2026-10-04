@@ -28,8 +28,8 @@
     "sha256": "20b741a9c98ea14402ad72e5543c920ab73d598caa7eac71e39a247067babdda"
   },
   "/app.js": {
-    "version": "4",
-    "sha256": "98d02efb0908df1251923d1ab7e1c34d94f8e8afb9049f548e8458c023702bb2"
+    "version": "5",
+    "sha256": "79ff13f81fb6707160d6ba105b551d93f3c507da2131b900ac26dd6ab0a17b8e"
   },
   "/assets/drop-observer.js": {
     "version": "1",
@@ -44,8 +44,8 @@
     "sha256": "51ea5eed0bddc55c03623ae21d8141406f48c9add4eedfd92a62f2a2240fa428"
   },
   "/assets/pack.js": {
-    "version": "1",
-    "sha256": "fe223558192111b35275e21fdd20e8e4b0ce7cbead313a2f8707fb0e2d376aed"
+    "version": "2",
+    "sha256": "d797ae69143284967d1d8596890f64a865a1b92e97594013974cb4f0178ba55b"
   },
   "/assets/scroll-depth.js": {
     "version": "1",
@@ -152,8 +152,8 @@
     "sha256": "afa891972814f3f9f6e44f8a0da22dacac4f11546013b25276f524559dc63605"
   },
   "/checkout-cta.js": {
-    "version": "4",
-    "sha256": "b263745d59177915b4c511080dcf888fa7b4606bee175064daa1924e3ec3dbb4"
+    "version": "5",
+    "sha256": "58c402b5d43e5ce63be8af6659d291c16f1e2646fd891d94cb6404608e3c49eb"
   },
   "/continuity.css": {
     "version": "1",
@@ -272,8 +272,8 @@
     "sha256": "3c878bc5386074ae3938459c86d0fd666c69d9081fd546f3aa1f45523eca501d"
   },
   "/landing.js": {
-    "version": "1",
-    "sha256": "45ba32afdd6ad4fce9f86fa79f1b0881099fa132fd13eea8216c5c3c370be899"
+    "version": "2",
+    "sha256": "53f76b80118a969f0f40b987b1101ee119fe38202da33d66861a305f2388b1a9"
   },
   "/learn.css": {
     "version": "1",
@@ -308,8 +308,8 @@
     "sha256": "b44e89c64aeb6b4648b1c2d7166d8da2a3c2c4272735dece4fec506cb46a0364"
   },
   "/lp/agent-receipts.js": {
-    "version": "2",
-    "sha256": "6a62c3340d7ae62202a9449b2c3c92776138310ead62415adc6a848e8984a6ce"
+    "version": "3",
+    "sha256": "cbd74d9d1d2dbee72a3bc6d22c46baf5c5470740f2784f0eb82589196fefb191"
   },
   "/lp/eu-ai-act-training-data.css": {
     "version": "1",
@@ -384,8 +384,8 @@
     "sha256": "5c0ea20f7a3c4c686bcb4a67428f8ea4e42403f7a7c572e63f4c3fc52c03e2b5"
   },
   "/pay/crypto.js": {
-    "version": "2",
-    "sha256": "3674a6ca1fe44da7f9c33b35c5393c676bf34b7d127a5280e105000f06172639"
+    "version": "3",
+    "sha256": "f99405170c9be9362b19df5f11fa1561ed6e425f9370412c92206e8785977726"
   },
   "/pay/success.css": {
     "version": "1",
@@ -420,8 +420,8 @@
     "sha256": "3e0ac5f2abd7a3937554d73ebc06936ac4eb2e314b9f45aaa7d6dffa4e23834e"
   },
   "/recover.js": {
-    "version": "1",
-    "sha256": "c8b659e9c02af87f26acd1f102d443746ee3216b6b4490f6214fc9fb16f8acde"
+    "version": "2",
+    "sha256": "0961155a459b2e8909cd964f7804b6d7508bedbea54315f487f265f1c1357a10"
   },
   "/roadmap.css": {
     "version": "1",
@@ -432,8 +432,8 @@
     "sha256": "a4890a9f4fffec77736a25c2f35b457c440b82db9c7733a66365fca11e1224e9"
   },
   "/signin.js": {
-    "version": "1",
-    "sha256": "e43a7d1a8284d4227ae3e424efaf05f5fcfc44cd4c822b6d9b8bcce333ad001c"
+    "version": "2",
+    "sha256": "dc4be96463dd9cf93f1646655c6803671099981d1844fe07c26a5ff69a39094a"
   },
   "/standing-record.css": {
     "version": "1",
@@ -488,8 +488,8 @@
     "sha256": "42591a6aeb2c7a86c5f01380b4f7fc935fae67b461ce39edb6faf1579df03321"
   },
   "/v2.js": {
-    "version": "12",
-    "sha256": "e73014094430979899ba808d69770c951ba1324fd2729ecfb3b24a1cc707301d"
+    "version": "13",
+    "sha256": "73efe72be989a5d6a431be285773ae5f9aefb92a7172ad3a155981720940619a"
   },
   "/v2/app.js": {
     "version": "4",

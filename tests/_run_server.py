@@ -179,6 +179,67 @@ def _capture_mail(data_dir: Path) -> None:
         request=types.SimpleNamespace(Request=urllib.request.Request, urlopen=urlopen))
 
 
+EGRESS_BLOCKED = "stub_egress_blocked.jsonl"
+_LOOPBACK = {"127.0.0.1", "localhost", "::1"}
+
+
+def _guard_egress(data_dir: Path) -> None:
+    """Refuse every connection and name lookup for a host that is not this
+    machine, from any code in this process, and record each one (host and
+    port only) in <data dir>/stub_egress_blocked.jsonl.
+
+    The other stubs replace the one function each third party is reached
+    through. This is the floor under them: a call that goes around them is
+    refused here, and the test can read that it was tried. The refusal is an
+    OSError, as a real unreachable host would raise, so the product's own
+    failure handling runs instead of a crash in a stub."""
+    import socket
+    import urllib.request
+
+    # A proxy on this machine would pass the loopback test and forward the
+    # request on, so urllib is given none, from the environment or the OS.
+    for name in [k for k in os.environ if k.lower().endswith("_proxy")]:
+        del os.environ[name]
+    urllib.request.getproxies = lambda: {}
+
+    blocked = data_dir / EGRESS_BLOCKED
+    lock = threading.Lock()
+
+    def refuse(host, port, kind):
+        with lock, blocked.open("a") as f:
+            f.write(json.dumps({"host": str(host), "port": port, "via": kind}) + "\n")
+
+    real_connect = socket.socket.connect
+    real_connect_ex = socket.socket.connect_ex
+    real_getaddrinfo = socket.getaddrinfo
+
+    def _host(address):
+        return address[0] if isinstance(address, tuple) else address
+
+    def connect(self, address):
+        if self.family in (socket.AF_INET, socket.AF_INET6) and _host(address) not in _LOOPBACK:
+            refuse(_host(address), address[1] if isinstance(address, tuple) else None, "connect")
+            raise ConnectionRefusedError("egress guard: only loopback may be reached")
+        return real_connect(self, address)
+
+    def connect_ex(self, address):
+        if self.family in (socket.AF_INET, socket.AF_INET6) and _host(address) not in _LOOPBACK:
+            refuse(_host(address), address[1] if isinstance(address, tuple) else None, "connect_ex")
+            return 111
+        return real_connect_ex(self, address)
+
+    def getaddrinfo(host, port, *args, **kwargs):
+        name = host.decode() if isinstance(host, bytes) else host
+        if name is not None and name not in _LOOPBACK:
+            refuse(name, port, "getaddrinfo")
+            raise socket.gaierror(socket.EAI_NONAME, "egress guard: only loopback may be reached")
+        return real_getaddrinfo(host, port, *args, **kwargs)
+
+    socket.socket.connect = connect
+    socket.socket.connect_ex = connect_ex
+    socket.getaddrinfo = getaddrinfo
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--stub-calendars", action="store_true")
@@ -199,9 +260,13 @@ def main() -> int:
     # setting can reach it.
     parser.add_argument("--arm-lightning", action="store_true")
     parser.add_argument("--capture-mail", action="store_true")
+    parser.add_argument("--egress-guard", action="store_true")
     args = parser.parse_args()
     if not args.stub_calendars:
         parser.error("this launcher requires --stub-calendars")
+    if args.egress_guard:
+        # First, so nothing imported below can open a connection before it.
+        _guard_egress(Path(os.environ["ORPHO_DATA_DIR"]))
     if args.stub_stripe:
         _stub_stripe(Path(os.environ["ORPHO_DATA_DIR"]))
     if args.arm_lightning:

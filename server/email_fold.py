@@ -15,6 +15,14 @@ key-issuance budget (2026-09-26). Folding only A-Z keeps every non-ASCII
 character exact. That can keep two spellings of one mailbox apart, but it can
 never merge two different mailboxes, and merging is the failure that hands
 one person another person's team.
+
+The account id is still the HMAC of email.lower() (auth.email_id), so for
+everything keyed by it, a Kelvin-sign spelling and the plain-"k" address were
+one account: a session for one listed the other's receipts, and pack recovery
+mailed the other's codes (2026-10-03). The id stays as it is. Instead every
+intake where a caller types an address to sign in with, be mailed at or buy
+with refuses one that needs_lowercase() and shows LOWERCASE_HINT. An address
+made only of ASCII never needs it.
 """
 from __future__ import annotations
 
@@ -29,3 +37,19 @@ def fold_email(email) -> str:
     if not isinstance(email, str):
         return ""
     return email.strip().translate(_ASCII_UPPER_TO_LOWER)
+
+
+# Shown to the person whose address was refused; the server sends it as the
+# "message" of {"error": "email_needs_lowercase"} and the pages show it.
+LOWERCASE_HINT = ("Please type your email address in lowercase and try again. "
+                  "Some capital letters outside A to Z can't be matched safely.")
+
+
+def needs_lowercase(email) -> bool:
+    """Would str.lower() change a character that fold_email() keeps? True for
+    an address carrying an uppercase letter outside A-Z (1,407 code points
+    change under lower(), U+212A among them). Never for ASCII, whatever its
+    case, and never for anything that is not a string."""
+    if not isinstance(email, str):
+        return False
+    return fold_email(email) != email.strip().lower()

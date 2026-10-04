@@ -172,8 +172,9 @@ def test_a_send_that_raises_does_not_stop_the_next_code(fresh_app, monkeypatch, 
         sent.append((addr, code, remaining))
         return True
 
-    monkeypatch.setattr(app.credits, "find_claim_codes_by_email",
-                        lambda _addr: ["pk_FIRSTcode000001", "pk_SECONDcode00001"])
+    monkeypatch.setattr(app.credits, "find_claim_code_holders_by_email",
+                        lambda _addr: [("pk_FIRSTcode000001", "owner@recover.test"),
+                                       ("pk_SECONDcode00001", "owner@recover.test")])
     monkeypatch.setattr(app.credits, "balance", lambda _code: 5)
     monkeypatch.setattr(app.mailer, "send_pack_claim_email", send)
     app._pack_recover_resend("owner@recover.test")
@@ -196,8 +197,9 @@ def test_a_balance_that_will_not_read_does_not_stop_the_next_code(fresh_app, mon
             raise ValueError("credits_delta is not a whole number")
         return 3
 
-    monkeypatch.setattr(app.credits, "find_claim_codes_by_email",
-                        lambda _addr: ["pk_CORRUPTcode0001", "pk_HEALTHYcode0001"])
+    monkeypatch.setattr(app.credits, "find_claim_code_holders_by_email",
+                        lambda _addr: [("pk_CORRUPTcode0001", "owner@recover.test"),
+                                       ("pk_HEALTHYcode0001", "owner@recover.test")])
     monkeypatch.setattr(app.credits, "balance", balance)
     monkeypatch.setattr(app.mailer, "send_pack_claim_email",
                         lambda addr, code, n: sent.append(code) or True)
@@ -213,7 +215,7 @@ def test_a_lookup_that_fails_is_logged_once_without_the_address(fresh_app, monke
     def lookup(_addr):
         raise PermissionError("ledger unreadable")
 
-    monkeypatch.setattr(app.credits, "find_claim_codes_by_email", lookup)
+    monkeypatch.setattr(app.credits, "find_claim_code_holders_by_email", lookup)
     app._pack_recover_resend("owner@recover.test")
     err = capsys.readouterr().err
     assert err.count("[pack-recover]") == 1, err

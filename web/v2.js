@@ -263,7 +263,16 @@
           headers: {"Content-Type": "application/json"},
           body: JSON.stringify({email: input.value, interest: "demand_pack_v1"}),
         });
-        if (!response.ok) throw new Error("request failed");
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({}));
+          if (data.error === "email_needs_lowercase") {
+            msg.textContent = data.message;
+            msg.hidden = false;
+            button.disabled = false;
+            return;
+          }
+          throw new Error("request failed");
+        }
         input.value = "";
         msg.textContent = "Recorded. You were not charged.";
         msg.hidden = false;

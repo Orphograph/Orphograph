@@ -15,6 +15,7 @@ Public API:
     balance(claim_code) -> int
     new_claim_code() -> str
     find_claim_codes_by_email(email) -> list[str]  # read-only recovery lookup
+    find_claim_code_holders_by_email(email) -> list[tuple[str, str]]
     revoke_credits_by_source(source_token, revoke_source) -> list[dict]
 """
 from __future__ import annotations
@@ -323,12 +324,24 @@ def find_claim_codes_by_email(email: str) -> list[str]:
     ever lands on a code that has its own mint row naming its holder. It is
     a denylist on purpose, so a mint kind added later is never dropped here.
     """
+    return [code for code, _holder in find_claim_code_holders_by_email(email)]
+
+
+def find_claim_code_holders_by_email(email: str) -> list[tuple[str, str]]:
+    """(claim_code, address on its mint row) for each code
+    find_claim_codes_by_email returns, in the same order.
+
+    The match lowercases both sides, and str.lower() turns some characters
+    outside ASCII into ASCII letters (U+212A KELVIN SIGN into "k"), so the
+    address typed can be a different mailbox from the one a code was bought
+    with. A code is only ever sent to the address on its own row, stripped
+    and otherwise as written there (2026-10-03)."""
     if not email:
         return []
     needle = email.strip().lower()
     if not needle or not LEDGER_PATH.exists():
         return []
-    seen: dict[str, None] = {}
+    seen: dict[str, str] = {}
     with _lock:
         with LEDGER_PATH.open() as f:
             for row in _ledger_rows(f):
@@ -339,8 +352,8 @@ def find_claim_codes_by_email(email: str) -> list[str]:
                 if row_email and row_email == needle:
                     code = row.get("claim_code")
                     if code and code not in seen:
-                        seen[code] = None
-    return list(seen.keys())
+                        seen[code] = email_value.strip()
+    return list(seen.items())
 
 
 def _source_has_token(source: str, token: str) -> bool:

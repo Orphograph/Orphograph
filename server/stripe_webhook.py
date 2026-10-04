@@ -46,6 +46,7 @@ import credits
 import mailer
 import referrals
 import subscriptions
+from email_fold import needs_lowercase
 from file_lock import locked
 
 ENABLE_AUTO_SIGNIN_TOKEN = os.environ.get("ORPHO_AUTO_SIGNIN_ON_CHECKOUT", "1") == "1"
@@ -217,8 +218,12 @@ def _settlement_failed(session_id: str) -> bool:
 def _is_gift_address(raw: str) -> bool:
     """Is `metadata.gift_to_email` an address a pack can be gifted to? Minimal
     shape check. One rule for the hold's notice and for the delivery, so the
-    notice never names a recipient the delivery will refuse."""
-    return bool(raw) and "@" in raw and len(raw) <= 254
+    notice never names a recipient the delivery will refuse.
+
+    Not one that needs_lowercase: the recovery lookup lowercases, so that
+    spelling can stand for another mailbox. No page of ours sends one, so it
+    is metadata someone wrote by hand."""
+    return bool(raw) and "@" in raw and len(raw) <= 254 and not needs_lowercase(raw)
 
 
 def _mark_processed(event_id: str, result: dict) -> None:
@@ -616,6 +621,13 @@ def handle_event(payload: bytes) -> dict:
         if _is_gift_address(gift_to_raw):
             recipient_email = gift_to_raw
             is_gift = True
+        elif needs_lowercase(gift_to_raw):
+            # Delivered to the buyer like a malformed address. The log names
+            # neither the address nor any part of it.
+            _stderr(
+                f"[stripe_webhook] session {session_id} had a gift_to_email that "
+                f"needs lowercase; delivering pack to buyer instead\n"
+            )
         elif gift_to_raw:
             # Buyer intended to gift but the address failed shape check.
             # Falling back to buyer-as-recipient is the right behavior (don't
