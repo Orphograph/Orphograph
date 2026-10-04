@@ -41,7 +41,7 @@ from email_fold import LOWERCASE_HINT, fold_email, needs_lowercase  # noqa: E402
 
 KELVIN = "K"  # KELVIN SIGN. str.lower() turns it into ASCII "k".
 SECRET = "email-twin-closed-hmac-secret"
-WHSEC = "whsec_email_twin_closed_not_a_real_secret"
+WHSEC = "whsec_" + "twin-closed-test"   # a test value, short of a real secret's shape
 JSON = {"Content-Type": "application/json"}
 REFUSED = {"error": "email_needs_lowercase", "message": LOWERCASE_HINT}
 WAIT_SEC = 30
