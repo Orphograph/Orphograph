@@ -61,6 +61,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from email_fold import needs_lowercase  # noqa: E402
 from file_lock import locked  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -106,6 +107,12 @@ def _latest_state() -> dict[tuple[str, str], dict]:
     """
     state: dict[tuple[str, str], dict] = {}
     for row in _read_all(WEBHOOKS_LEDGER):
+        # Rows are keyed by email.lower(). A row registered (before sign-in
+        # refused such spellings, 2026-10-03) under a spelling that lowercases
+        # onto another address would receive that address's events forever,
+        # so it is inert: never listed, never dispatched to.
+        if needs_lowercase(row.get("email")):
+            continue
         email = (row.get("email") or "").lower()
         url = row.get("url") or ""
         if not email or not url:
@@ -126,7 +133,7 @@ def list_for_email(email: str) -> list[dict]:
     short prefix (``orpho_xxxxx…``) sufficient for the account-page UI to
     confirm the registration without revealing the secret.
     """
-    if not email:
+    if not email or needs_lowercase(email):
         return []
     email_lower = email.lower()
     out: list[dict] = []
@@ -336,7 +343,7 @@ def register(email: str, url: str) -> dict:
 
 def delete(email: str, url: str) -> bool:
     """Mark a webhook registration as deleted. No further events dispatched."""
-    if not email or not url:
+    if not email or not url or needs_lowercase(email):
         return False
     if (email.lower(), url) not in _latest_state():
         return False
@@ -467,7 +474,7 @@ def list_for_email_with_secrets(email: str) -> list[dict]:
     Never expose via API; only the dispatch path uses this. The public
     ``list_for_email`` is the redacted version.
     """
-    if not email:
+    if not email or needs_lowercase(email):
         return []
     email_lower = email.lower()
     out: list[dict] = []

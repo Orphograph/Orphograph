@@ -80,8 +80,13 @@
         say("Too many attempts from this address. Try again shortly.");
         if (btn) btn.disabled = false;
       } else {
-        say("That did not go through. Try again in a moment.");
         if (btn) btn.disabled = false;
+        return r.json().then(function (j) {
+          say(j && j.error === "email_needs_lowercase" ? j.message
+            : "That did not go through. Try again in a moment.");
+        }, function () {
+          say("That did not go through. Try again in a moment.");
+        });
       }
     }).catch(function () {
       track("lp_notify_error");

@@ -17,7 +17,14 @@ form.addEventListener("submit", async (e) => {
     });
     const data = await r.json();
     msg.hidden = false;
-    msg.textContent = data.message || "Check your inbox.";
+    if (data.error === "email_needs_lowercase") {
+      // The server's own line: retype the address in lowercase.
+      msg.textContent = data.message;
+    } else if (!r.ok) {
+      msg.textContent = "Could not send a link just now. Try again in a moment.";
+    } else {
+      msg.textContent = data.message || "Check your inbox.";
+    }
   } catch {
     msg.hidden = false;
     msg.textContent = "Network error. Try again in a moment.";

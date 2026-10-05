@@ -111,7 +111,9 @@
         window.location.assign(data.url);
         return;
       }
-      if (res.status === 503) {
+      if (data.error === "email_needs_lowercase") {
+        setMsg(data.message, true);
+      } else if (res.status === 503) {
         setMsg(
           data.error ||
           "Crypto checkout isn't enabled right now. Use card checkout on /pricing, or email hello@orphograph.com.",

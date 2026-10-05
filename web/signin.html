@@ -40,7 +40,7 @@
     <input id="email" type="email" autocomplete="email" placeholder="you@example.com" required>
     <button type="submit" id="submit-btn">Email me a sign-in link</button>
   </form>
-  <p id="signin-msg" class="hint" hidden></p>
+  <p id="signin-msg" class="hint" role="status" aria-live="polite" hidden></p>
   <p class="hint">
     This isn't an account that tracks you. Your files never left your device —
     only their fingerprints were anchored — so there's nothing here to expose.
@@ -63,7 +63,7 @@
   </div>
 </footer>
 
-<script src="/signin.js?v=1"></script>
+<script src="/signin.js?v=2"></script>
 <script src="/statusbar.js?v=2" defer></script>
 <script src="/assets/event.js?v=1" defer></script>
 </body>

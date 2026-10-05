@@ -34,6 +34,20 @@
     }
   }
 
+  // A line under the notify row for what the server said, made here so the
+  // markup stays as it is (no inline style, nothing to keep in step).
+  function sayInForm(form, text) {
+    var el = form.querySelector(".card-notify-msg");
+    if (!el) {
+      el = document.createElement("p");
+      el.className = "card-notify-note card-notify-msg";
+      el.setAttribute("role", "status");
+      form.appendChild(el);
+    }
+    el.textContent = text;
+    el.hidden = !text;
+  }
+
   function wireNotify(id, tier, show) {
     var form = document.getElementById(id);
     if (!form) return;
@@ -53,15 +67,19 @@
         credentials: "same-origin",
         body: JSON.stringify({ email: email, interest: tier })
       }).then(function (r) {
+        sayInForm(form, "");   // a hint from an earlier answer never outlives this one
         if (r.ok) {
           var row = form.querySelector(".card-notify-row");
-          var note = form.querySelector(".card-notify-note");
+          var note = form.querySelector(".card-notify-note:not(.card-notify-msg)");
           var done = form.querySelector(".card-notify-done");
           if (row) row.hidden = true;
           if (note) note.hidden = true;
           if (done) done.hidden = false;
-        } else if (btn) {
-          btn.disabled = false;
+        } else {
+          if (btn) btn.disabled = false;
+          return r.json().then(function (j) {
+            if (j && j.error === "email_needs_lowercase") sayInForm(form, j.message);
+          }, function () {});
         }
       }).catch(function () {
         if (btn) btn.disabled = false;

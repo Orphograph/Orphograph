@@ -38,6 +38,8 @@
         if (res.status === 200 && res.body && res.body.ok) {
           showResult("ok", res.body.message || "The replacement instrument has been issued.");
           sessionEl.value = "";
+        } else if (res.body && res.body.error === "email_needs_lowercase") {
+          showResult("err", res.body.message);
         } else if (res.status === 202 && res.body && res.body.retryable) {
           showResult("wait", res.body.message || "Payment is on file but fulfillment has not yet completed. Try again in five minutes.");
         } else {

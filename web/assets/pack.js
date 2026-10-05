@@ -227,6 +227,12 @@
             show(recResult, "wait", "Too many requests — wait a minute and try once more.");
             return;
           }
+          // Refused before any lookup: the address has a capital letter
+          // outside A to Z, and the server says how to retype it.
+          if (res.body && res.body.error === "email_needs_lowercase") {
+            show(recResult, "err", res.body.message);
+            return;
+          }
           // Neutral by design: the same confirmation regardless of whether a
           // pack exists for this address.
           show(recResult, "ok", (res.body && res.body.message) ||

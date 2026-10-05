@@ -73,7 +73,7 @@ import nowpayments_api  # noqa: E402
 import nowpayments_webhook  # noqa: E402
 import subscriptions  # noqa: E402
 import teams  # noqa: E402
-from email_fold import fold_email  # noqa: E402
+from email_fold import LOWERCASE_HINT, fold_email, needs_lowercase  # noqa: E402
 import unsubscribe  # noqa: E402
 import newsletter  # noqa: E402
 import waitlist  # noqa: E402
@@ -822,15 +822,19 @@ def _reject_private(handler: BaseHTTPRequestHandler, pack_consumed: bool,
 def _pack_recover_resend(addr: str) -> None:
     """Re-send `addr`'s claim codes that still hold anchors. Runs on its own
     thread after /api/pack/recover has answered, so nothing the caller can
-    time depends on whether the address owns a pack."""
+    time depends on whether the address owns a pack.
+
+    Each code goes to the address on its own ledger row, never to `addr`: the
+    lookup lowercases, and a spelling that lowercases onto a buyer's address
+    is not necessarily the buyer's mailbox."""
     try:
-        codes = credits.find_claim_codes_by_email(addr)
+        holders = credits.find_claim_code_holders_by_email(addr)
     except Exception as e:  # noqa: BLE001
         # The caller already has its answer; a failure here reaches only the
         # log, and the address stays out of it.
         sys.stderr.write(f"[pack-recover] resend failed: {type(e).__name__}\n")
         return
-    for code in codes:
+    for code, holder in holders:
         # One try per code, as before the resend moved onto this thread: a
         # balance that will not parse or a send that raises for one code must
         # not stop the customer's other codes from going out. Neither the
@@ -841,7 +845,7 @@ def _pack_recover_resend(addr: str) -> None:
             # pack has nothing to reuse, and a "Pack of 0" notice would be
             # misleading.
             if remaining > 0:
-                mailer.send_pack_claim_email(addr, code, remaining)
+                mailer.send_pack_claim_email(holder, code, remaining)
         except Exception as e:  # noqa: BLE001
             sys.stderr.write(f"[pack-recover] resend of one code failed: {type(e).__name__}\n")
 
@@ -877,6 +881,18 @@ def _json_response(handler: BaseHTTPRequestHandler, status: int, payload: dict,
     _security_headers(handler)
     handler.end_headers()
     handler.wfile.write(body)
+
+
+# What an intake answers when the address its caller typed, to sign in with,
+# to be mailed at or to buy with, needs_lowercase(): auth.email_id lowers the
+# address, so a spelling with an uppercase letter outside A-Z can share
+# another mailbox's account id. Unsubscribe and team removal take such an
+# address as before: refusing them would strand mail or a member already there.
+_EMAIL_NEEDS_LOWERCASE = {"error": "email_needs_lowercase", "message": LOWERCASE_HINT}
+
+
+def _refuse_email_needs_lowercase(handler: BaseHTTPRequestHandler) -> None:
+    _json_response(handler, 400, _EMAIL_NEEDS_LOWERCASE)
 
 
 def _send_rate_limited(handler: BaseHTTPRequestHandler, retry_seconds: int,
@@ -4024,7 +4040,12 @@ class Handler(BaseHTTPRequestHandler):
             candidate = subscriber_email
         is_paid_anchor = (pack_consumed or subscription_active or api_key_active
                          or x402_delivered)
-        if candidate and is_paid_anchor and EMAIL_RE.match(candidate):
+        # An address that needs_lowercase is ignored like a malformed one: not
+        # mailed, not stored. The anchor itself still goes through, and the
+        # answer says why no receipt email will come.
+        notify_ignored = bool(candidate and is_paid_anchor and EMAIL_RE.match(candidate)
+                              and needs_lowercase(candidate))
+        if candidate and is_paid_anchor and EMAIL_RE.match(candidate) and not notify_ignored:
             mailer.send_receipt_email(candidate, record)
         # Webhook dispatch — fire-and-forget on background threads.
         # Subscribers and API-key holders receive anchor.created; Pack-only
@@ -4062,7 +4083,7 @@ class Handler(BaseHTTPRequestHandler):
         #
         # Saved only AFTER format validation, so the on-disk value is always a
         # syntactically valid address.
-        if candidate and is_paid_anchor and EMAIL_RE.match(candidate):
+        if candidate and is_paid_anchor and EMAIL_RE.match(candidate) and not notify_ignored:
             try:
                 receipt_path = engine.RECEIPTS_DIR / record["receipt_id"] / "receipt.json"
                 on_disk = json.loads(receipt_path.read_text())
@@ -4109,6 +4130,7 @@ class Handler(BaseHTTPRequestHandler):
             "pack_consumed": pack_consumed,
             "pack_remaining": pack_remaining,
             "credit_refunded": credit_refunded,
+            **({"notify_email_ignored": "email_needs_lowercase"} if notify_ignored else {}),
             "subscription_active": subscription_active,
             "successes": [{"calendar": s["calendar"], "ots_path": s["ots_path"]} for s in record["successes"]],
             "failures": record["failures"],
@@ -4159,10 +4181,19 @@ class Handler(BaseHTTPRequestHandler):
             _json_response(self, 400, {"error": "body must be JSON"})
             return
         email = payload.get("email", "")
-        if not isinstance(email, str) or not EMAIL_RE.match(email.strip()):
+        if (not isinstance(email, str) or not EMAIL_RE.match(email.strip())
+                or not _utf8_encodable(email)):
             # Enumeration defense: still return 200 with neutral body. Don't leak
             # whether the address shape was valid via different status codes.
+            # A lone surrogate ("\ud800") matches EMAIL_RE but is not text: it
+            # was stored in the token ledger and then raised in email_id.
             _json_response(self, 200, {"ok": True, "message": "If that address is valid, a link is on the way."})
+            return
+        if needs_lowercase(email):
+            # Before any token: a session for this spelling would be another
+            # mailbox's account. The answer depends on the spelling alone, so
+            # it says nothing about whether the address has an account.
+            _refuse_email_needs_lowercase(self)
             return
         email = email.strip()
         token, _exp = auth.issue_link_token(email)
@@ -4548,6 +4579,9 @@ class Handler(BaseHTTPRequestHandler):
             # Don't leak whether the address was valid.
             _json_response(self, 200, {"ok": True})
             return
+        if needs_lowercase(email):
+            _refuse_email_needs_lowercase(self)
+            return
         if not isinstance(interest, str) or not _utf8_encodable(interest):
             interest = "personal"
         waitlist.add(email.strip(), interest)
@@ -4601,6 +4635,11 @@ class Handler(BaseHTTPRequestHandler):
             _json_response(self, 400, {"error": "body must be JSON"})
             return
         email = payload.get("email", "")
+        if isinstance(email, str) and EMAIL_RE.match(email.strip()) and needs_lowercase(email):
+            # Decided by the spelling alone, before any lookup, so this 400
+            # says nothing about which addresses own a pack.
+            _refuse_email_needs_lowercase(self)
+            return
         # A malformed address returns the SAME neutral response as a valid one
         # with no pack — never a distinguishing 400 (mirrors _handle_waitlist).
         _json_response(self, 200, {"ok": True, "message": self._PACK_RECOVER_NEUTRAL})
@@ -5970,7 +6009,10 @@ class Handler(BaseHTTPRequestHandler):
         if not candidate and subscription_active and subscriber_email:
             candidate = subscriber_email
         is_paid_anchor = pack_consumed or subscription_active or api_key_active
-        if candidate and is_paid_anchor and EMAIL_RE.match(candidate):
+        if candidate and is_paid_anchor and EMAIL_RE.match(candidate) and needs_lowercase(candidate):
+            # Ignored like a malformed address, as on the single-file path.
+            response_body["notify_email_ignored"] = "email_needs_lowercase"
+        elif candidate and is_paid_anchor and EMAIL_RE.match(candidate):
             mailer.send_receipt_email(candidate, record)
             try:
                 rfile2 = engine.RECEIPTS_DIR / rid / "receipt.json"
@@ -6168,11 +6210,17 @@ class Handler(BaseHTTPRequestHandler):
         # The same field carries either a Stripe checkout session id
         # (cs_test_/cs_live_) or a crypto (NOWPayments) order id (np_...).
         sid = _json_str(payload, "stripe_session_id").strip()
-        provided_email = _json_str(payload, "email").strip().lower()
+        typed_email = _json_str(payload, "email")
+        provided_email = typed_email.strip().lower()
         # Email shape is required for BOTH paths; check it once up front so the
         # generic 400 below is identical regardless of which path is taken.
         if not provided_email or "@" not in provided_email or len(provided_email) > 254:
             _json_response(self, 400, {"error": "invalid request"})
+            return
+        # Asked of the address as typed: lowered, it can already match another
+        # buyer's. Before either path's lookup or the Stripe call.
+        if needs_lowercase(typed_email):
+            _refuse_email_needs_lowercase(self)
             return
 
         # ---- Crypto (NOWPayments) recovery branch -------------------------
@@ -6205,7 +6253,8 @@ class Handler(BaseHTTPRequestHandler):
         if payment_status != "paid":
             _json_response(self, 400, {"error": "session is not in a paid state"})
             return
-        stripe_email = ((data.get("customer_details") or {}).get("email") or data.get("customer_email") or "").strip().lower()
+        stripe_email_as_stored = ((data.get("customer_details") or {}).get("email") or data.get("customer_email") or "").strip()
+        stripe_email = stripe_email_as_stored.lower()
         if not stripe_email or stripe_email != provided_email:
             # Generic message — never confirm/deny which side mismatched.
             _json_response(self, 400, {"error": "session and email do not match"})
@@ -6277,7 +6326,10 @@ class Handler(BaseHTTPRequestHandler):
 
         claim_code = ledger_row["claim_code"]
         credit_count = ledger_row.get("credits_delta", 0)
-        sent = mailer.send_pack_claim_email(provided_email, claim_code, credit_count)
+        # To the buyer's address exactly as Stripe holds it, as pack recover
+        # mails the stored address: the match above is case-insensitive, and a
+        # bearer code must not follow a typed spelling to another mailbox.
+        sent = mailer.send_pack_claim_email(stripe_email_as_stored, claim_code, credit_count)
         sys.stderr.write(
             f"[recover] resent claim_code for session={stripe_api.mask_session_ids(sid)} "
             f"email={auth.mask_email(provided_email)} email_sent={sent}\n"
@@ -6338,7 +6390,7 @@ class Handler(BaseHTTPRequestHandler):
         #    path and the webhook use. Mirror the one-time-Pack success body.
         claim_code = ledger_row["claim_code"]
         credit_count = int(ledger_row.get("credits_delta", 0))
-        sent = mailer.send_pack_claim_email(provided_email, claim_code, credit_count)
+        sent = mailer.send_pack_claim_email(ledger_row["email"].strip(), claim_code, credit_count)
         sys.stderr.write(
             f"[recover] resent crypto claim_code for order={order_id} "
             f"email={auth.mask_email(provided_email)} email_sent={sent}\n"
@@ -6804,6 +6856,11 @@ class Handler(BaseHTTPRequestHandler):
 
         plan = _json_str(payload, "plan").strip().lower()
         email = _json_str(payload, "email").strip()
+        if "@" in email and needs_lowercase(email):
+            # The buyer's address is where the claim code is mailed: refused
+            # before any Stripe call.
+            _refuse_email_needs_lowercase(self)
+            return
         session_metadata: dict[str, str] = {}
         if plan == "pack":
             price_env, mode = "STRIPE_PRICE_PACK", "payment"
@@ -7012,6 +7069,9 @@ class Handler(BaseHTTPRequestHandler):
             _json_response(self, 400, {
                 "error": "A valid email is required — it is where we send your claim code.",
             })
+            return
+        if needs_lowercase(email):
+            _refuse_email_needs_lowercase(self)
             return
         plan_meta = nowpayments_api.PLANS[plan]
         # Order id is opaque + unguessable so retries/lookups are safe to leak

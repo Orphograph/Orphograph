@@ -46,6 +46,7 @@ import credits
 import mailer
 import referrals
 import subscriptions
+from email_fold import needs_lowercase
 from file_lock import locked
 
 ENABLE_AUTO_SIGNIN_TOKEN = os.environ.get("ORPHO_AUTO_SIGNIN_ON_CHECKOUT", "1") == "1"
@@ -217,8 +218,12 @@ def _settlement_failed(session_id: str) -> bool:
 def _is_gift_address(raw: str) -> bool:
     """Is `metadata.gift_to_email` an address a pack can be gifted to? Minimal
     shape check. One rule for the hold's notice and for the delivery, so the
-    notice never names a recipient the delivery will refuse."""
-    return bool(raw) and "@" in raw and len(raw) <= 254
+    notice never names a recipient the delivery will refuse.
+
+    Not one that needs_lowercase: the recovery lookup lowercases, so that
+    spelling can stand for another mailbox. No page of ours sends one, so it
+    is metadata someone wrote by hand."""
+    return bool(raw) and "@" in raw and len(raw) <= 254 and not needs_lowercase(raw)
 
 
 def _mark_processed(event_id: str, result: dict) -> None:
@@ -616,6 +621,13 @@ def handle_event(payload: bytes) -> dict:
         if _is_gift_address(gift_to_raw):
             recipient_email = gift_to_raw
             is_gift = True
+        elif needs_lowercase(gift_to_raw):
+            # Delivered to the buyer like a malformed address. The log names
+            # neither the address nor any part of it.
+            _stderr(
+                f"[stripe_webhook] session {session_id} had a gift_to_email that "
+                f"needs lowercase; delivering pack to buyer instead\n"
+            )
         elif gift_to_raw:
             # Buyer intended to gift but the address failed shape check.
             # Falling back to buyer-as-recipient is the right behavior (don't
@@ -683,9 +695,12 @@ def handle_event(payload: bytes) -> dict:
         # field that smells like a ref code.
         ref_credit_result = None
         ref_code = (meta.get("ref_code") or meta.get("ref") or "").strip()
-        if ref_code:
+        if ref_code and not needs_lowercase(customer_email):
             # Referral attribution stays with the BUYER (who clicked the
-            # affiliate link), not the gift recipient.
+            # affiliate link), not the gift recipient. Not for a buyer address
+            # that needs lowercase (typed on Stripe's page, outside our
+            # intake): referrals key on email_id, so it would use up the
+            # plain address's one referral credit.
             ref_credit_result = referrals.apply(ref_code, customer_email, claim_code)
 
         if is_gift:
