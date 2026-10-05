@@ -672,13 +672,18 @@ def test_kelvin_sign_spelling_does_not_own_the_team(srv):
     code, body = get(base, "/api/me/team", member)
     assert body.get("team", {}).get("team_id") == tid, body
 
-    # A team the Kelvin spelling created before the fix: karl does not own it.
+    # A team the Kelvin spelling of another address created before the fix:
+    # that address (with no team of its own, so the answer can tell) does not
+    # own it. Review round 1 of PR #286: with karl's own team created first,
+    # this held even when the Kelvin team was treated as karl's.
+    other_email = f"kurt.{tag}@example.test"
+    other = account(data, other_email)
     ktid = "team_" + secrets.token_urlsafe(10)
     _append_rows(data / "teams.jsonl", [dict(
         ts="2026-09-25T00:00:00+00:00", event="create", team_id=ktid,
-        owner_email=kelvin_email, team_name="Kelvin Co")])
-    code, body = get(base, "/api/me/team", karl)
-    assert body.get("role") == "owner" and body["team"]["team_id"] == tid, body
+        owner_email=KELVIN + other_email[1:], team_name="Kelvin Co")])
+    code, body = get(base, "/api/me/team", other)
+    assert code == 200 and body.get("team") is None, body
 
 
 def test_kelvin_sign_spelling_has_its_own_key_and_budget(srv):

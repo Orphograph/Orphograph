@@ -68,7 +68,7 @@ import auth as _auth  # noqa: E402  — mask_email + HMAC secret reuse
 import mailer as _mailer  # noqa: E402  — _send + footer compliance
 import unsubscribe as _unsubscribe  # noqa: E402  — suppression list
 import waitlist as _waitlist  # noqa: E402  — ledger path + interests
-from email_fold import fold_email  # noqa: E402
+from email_fold import needs_lowercase, fold_email  # noqa: E402
 from file_lock import ends_mid_line, locked  # noqa: E402
 
 RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
@@ -473,6 +473,10 @@ def confirm(token) -> tuple[str, str, str] | None:
                      if row.get("event") == "confirm_sent" and row.get("n") == claims["nonce"]),
                     None)
     if sent is None or not isinstance(sent.get("email"), str):
+        return None
+    if needs_lowercase(sent["email"]):
+        # Sent before the waitlist refused such a spelling: confirming it
+        # would put the address it lowercases to on the broadcast audience.
         return None
     email = sent["email"]
     interest = sent.get("interest") if sent.get("interest") in _waitlist.ALLOWED_INTERESTS else "other"

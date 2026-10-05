@@ -74,10 +74,12 @@ const store = {};
 const localStorage = { getItem: (k) => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); },
   removeItem: (k) => { delete store[k]; } };
 const posted = [];
+const served = {};
 const fetch = async (url, opts) => {
   const path = String(url).split("?")[0];
   if (opts && opts.body && typeof opts.body === "string") posted.push({ path, body: JSON.parse(opts.body) });
-  const a = spec.answers[path] || { status: 404, body: {} };
+  let a = spec.answers[path] || { status: 404, body: {} };
+  if (Array.isArray(a)) { const i = (served[path] = (served[path] || 0) + 1) - 1; a = a[Math.min(i, a.length - 1)]; }
   return { ok: a.status >= 200 && a.status < 300, status: a.status, json: async () => a.body,
     text: async () => JSON.stringify(a.body) };
 };
@@ -92,8 +94,10 @@ const settle = () => new Promise((r) => setTimeout(r, 150));
 (async () => {
   vm.runInContext(fs.readFileSync(spec.script, "utf8"), ctx);
   await settle();
-  (known[spec.submit]._l.submit || []).forEach((f) => f({ preventDefault() {} }));
-  await settle();
+  for (let n = 0; n < (spec.times || 1); n++) {
+    (known[spec.submit]._l.submit || []).forEach((f) => f({ preventDefault() {} }));
+    await settle();
+  }
   const out = { posted };
   spec.read.forEach((id) => { const e = known[id];
     out[id] = { text: e.textContent + (e.after || []).map((c) => c.textContent).join(""),
@@ -167,6 +171,7 @@ PAGES = {
                   queries={"notify-pack": {'input[type="email"]': "notify-pack-email", "button": "notify-pack-btn",
                                            ".card-notify-row": "notify-pack-row",
                                            ".card-notify-note": "notify-pack-note",
+                                           ".card-notify-note:not(.card-notify-msg)": "notify-pack-note",
                                            ".card-notify-done": "notify-pack-done"}},
                   submit="notify-pack", read=["notify-pack", "notify-pack-done"]),
         path="/api/waitlist", shows="notify-pack",
@@ -219,3 +224,17 @@ def test_signin_no_longer_says_check_your_inbox_when_it_was_refused(tmp_path):
     run = _run({**p["spec"], "answers": _answers("signin", {
         "status": 429, "body": {"error": "too many requests"}})}, tmp_path)
     assert run["signin-msg"]["text"] == "Could not send a link just now. Try again in a moment."
+
+
+def test_the_checkout_notify_hint_does_not_outlive_the_next_answer(tmp_path):
+    # Review round 1 of PR #286: refused, then accepted after retyping, the
+    # form showed "Noted" and the hint together; a later 429 kept the hint.
+    p = PAGES["checkout-cta"]
+    ok = {"status": 200, "body": {"ok": True, "message": "On the list."}}
+    for later in (ok, {"status": 429, "body": {"error": "too many requests"}}):
+        run = _run({**p["spec"], "answers": {p["path"]: [REFUSED, later], "/api/config": CONFIG}, "times": 2},
+                   tmp_path)
+        assert _posted_email(run, p["path"]) == [TWIN, TWIN]
+        assert LOWERCASE_HINT not in run["notify-pack"]["text"], (later, run["notify-pack"])
+        if later is ok:
+            assert run["notify-pack-done"]["hidden"] is False

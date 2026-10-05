@@ -688,3 +688,107 @@ def test_a_sign_in_with_a_lone_surrogate_writes_nothing(server):
     status, body = _post(base, "/api/auth/email-link", {"email": "a\ud800@example.test"})
     assert status == 200 and body.get("ok") is True, (status, body)   # the neutral answer
     assert _snap(d, "auth_tokens.jsonl") == before and len(_mails(d)) == n0
+
+
+# ── review round 1 of PR #286 ────────────────────────────────────────────
+
+def test_a_stored_lone_surrogate_row_does_not_take_sign_in_down(server):
+    # The sign-in link stored such an address before this PR. Comparing every
+    # issued row by email_id raised on it, so every later sign-in, for anyone,
+    # got a dropped connection.
+    base, d = server
+    _append_row(d / "auth_tokens.jsonl", {"event": "issued", "token_hash": secrets.token_hex(32),
+                                          "email": "\ud800@example.test", "expires_unix": time.time() + 3600})
+    _append_row(d / "auth_sessions.jsonl", {"event": "created", "session_hash": secrets.token_hex(32),
+                                            "email": "\ud801@example.test", "expires_unix": time.time() + 3600})
+    who = _fresh("after-surrogate")
+    cookie = _sign_in(base, d, who)                            # supersede runs over the planted row
+    assert _me(base, cookie) == 200
+    status, body = _post(base, "/api/me/logout-all", {}, {"Cookie": cookie})
+    assert status == 200 and body.get("sessions_revoked") == 1, (status, body)
+
+
+def _ref_code(claim_code: str) -> str:
+    return "ref_" + hmac.new(SECRET.encode(), b"orphograph-referral-code-v1:" + claim_code.encode(),
+                             hashlib.sha256).hexdigest()[:10]
+
+
+def _buy_event(buyer: str, ref: str) -> dict:
+    return {"id": "evt_test_" + secrets.token_hex(8), "type": "checkout.session.completed",
+            "data": {"object": {"id": "cs_test_" + secrets.token_hex(10), "mode": "payment",
+                                "payment_status": "paid", "customer_details": {"email": buyer},
+                                "customer": "cus_test_" + secrets.token_hex(4),
+                                "metadata": {"ref_code": ref}}}}
+
+
+def test_a_twin_buyer_on_stripes_page_does_not_use_up_the_plain_addresss_referral(server):
+    # Card buyers type their address on Stripe's page, outside our intakes.
+    # Referrals key on email_id, so a twin's purchase with R's code used to
+    # spend the plain address's one referral credit.
+    base, d = server
+    plain, twin = _pair("imref")
+    referrer = "pk_referrer" + secrets.token_hex(6)
+    _append_row(d / CREDITS, {"ts": "2026-10-01T00:00:00+00:00", "claim_code": referrer,
+                              "email": _fresh("carol"), "credits_delta": 10, "source": "stripe:cs_ref_" + secrets.token_hex(6)})
+    ref = _ref_code(referrer)
+    status, twin_result = _webhook(base, _buy_event(twin, ref))
+    assert status == 200 and twin_result.get("claim_code_minted") is True, twin_result
+    assert "referral" not in twin_result, twin_result            # no referral credit for the twin
+    status, plain_result = _webhook(base, _buy_event(plain, ref))
+    assert status == 200 and (plain_result.get("referral") or {}).get("ok") is True, plain_result
+
+
+def test_payment_recover_mails_the_code_to_the_address_stored_with_it(server):
+    # The match is case-insensitive; the code used to go to the typed spelling.
+    # A twin who bought on Stripe's page (or with crypto, before the fix) kept
+    # its code in its own mailbox only if recovery mails the stored address.
+    base, d = server
+    plain, twin = _pair("imrecover")
+    sid = "cs_test_twinbuyer" + secrets.token_hex(6)
+    card_code = "pk_cardtwin" + secrets.token_hex(4)
+    _append_row(d / CREDITS, {"ts": "2026-10-01T00:00:00+00:00", "claim_code": card_code, "email": twin,
+                              "credits_delta": 10, "source": "stripe:" + sid})
+    answers = _rows_json(d / STRIPE_ANSWERS)
+    answers["/checkout/sessions/" + sid] = {"data": {"id": sid, "payment_status": "paid", "mode": "payment",
+                                                     "customer_details": {"email": twin}}}
+    (d / STRIPE_ANSWERS).write_text(json.dumps(answers))
+    n0 = len(_mails(d))
+    status, body = _post(base, "/api/recover", {"stripe_session_id": sid, "email": plain})
+    assert (status, body.get("mode")) == (200, "payment"), (status, body)
+    assert _code_mails(d, card_code, n0) == [[twin]], _code_mails(d, card_code, n0)
+
+    order = "np_writer_pack_" + secrets.token_hex(5)
+    coin_code = "pk_cointwin" + secrets.token_hex(4)
+    _append_row(d / CREDITS, {"ts": "2026-10-01T00:00:00+00:00", "claim_code": coin_code, "email": twin,
+                              "credits_delta": 10, "source": f"nowpayments:inv_{secrets.token_hex(4)}:{order}"})
+    n1 = len(_mails(d))
+    status, body = _post(base, "/api/recover", {"stripe_session_id": order, "email": plain})
+    assert status == 200, (status, body)
+    assert _code_mails(d, coin_code, n1) == [[twin]], _code_mails(d, coin_code, n1)
+
+
+def test_a_newsletter_confirm_sent_to_a_twin_before_the_fix_confirms_nothing(tmp_path):
+    # Confirming it would put the address it lowercases to on the broadcast
+    # audience. Runs in its own process: newsletter binds its data dir at import.
+    import subprocess
+    script = r'''
+import os, socket, sys
+socket.socket.connect = lambda self, addr: (_ for _ in ()).throw(OSError("egress refused"))
+sys.path.insert(0, sys.argv[1])
+import newsletter
+tokens, calls = [], []
+newsletter.send_confirmation_email = lambda email, interest, token: tokens.append(token) or True
+newsletter._resend_request = lambda method, path, payload=None: calls.append(payload) or (200, {})
+for addr in ("Kim@example.test", "kim@example.test"):
+    newsletter.request_confirmation(addr, "personal")
+twin_outcome = newsletter.confirm(tokens[0])
+plain_outcome = newsletter.confirm(tokens[1])
+print(twin_outcome is None, (plain_outcome or ("",))[0])
+'''
+    env = {k: v for k, v in __import__("os").environ.items() if not k.startswith(("ORPHO_", "RESEND_"))}
+    env.update({"ORPHO_DATA_DIR": str(tmp_path), "ORPHO_HMAC_SECRET": SECRET, "RESEND_API_KEY": "dummy",
+                "ORPHO_AUDIENCE_ID": "aud", "PYTHONDONTWRITEBYTECODE": "1"})
+    proc = subprocess.run([sys.executable, "-c", script, str(Path(__file__).resolve().parent.parent / "server")],
+                          capture_output=True, text=True, env=env, timeout=60)
+    assert proc.returncode == 0, proc.stderr
+    assert proc.stdout.split() == ["True", "confirmed"], proc.stdout

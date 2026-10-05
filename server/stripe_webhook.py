@@ -695,9 +695,12 @@ def handle_event(payload: bytes) -> dict:
         # field that smells like a ref code.
         ref_credit_result = None
         ref_code = (meta.get("ref_code") or meta.get("ref") or "").strip()
-        if ref_code:
+        if ref_code and not needs_lowercase(customer_email):
             # Referral attribution stays with the BUYER (who clicked the
-            # affiliate link), not the gift recipient.
+            # affiliate link), not the gift recipient. Not for a buyer address
+            # that needs lowercase (typed on Stripe's page, outside our
+            # intake): referrals key on email_id, so it would use up the
+            # plain address's one referral credit.
             ref_credit_result = referrals.apply(ref_code, customer_email, claim_code)
 
         if is_gift:

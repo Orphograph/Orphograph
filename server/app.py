@@ -6253,7 +6253,8 @@ class Handler(BaseHTTPRequestHandler):
         if payment_status != "paid":
             _json_response(self, 400, {"error": "session is not in a paid state"})
             return
-        stripe_email = ((data.get("customer_details") or {}).get("email") or data.get("customer_email") or "").strip().lower()
+        stripe_email_as_stored = ((data.get("customer_details") or {}).get("email") or data.get("customer_email") or "").strip()
+        stripe_email = stripe_email_as_stored.lower()
         if not stripe_email or stripe_email != provided_email:
             # Generic message — never confirm/deny which side mismatched.
             _json_response(self, 400, {"error": "session and email do not match"})
@@ -6325,7 +6326,10 @@ class Handler(BaseHTTPRequestHandler):
 
         claim_code = ledger_row["claim_code"]
         credit_count = ledger_row.get("credits_delta", 0)
-        sent = mailer.send_pack_claim_email(provided_email, claim_code, credit_count)
+        # To the buyer's address exactly as Stripe holds it, as pack recover
+        # mails the stored address: the match above is case-insensitive, and a
+        # bearer code must not follow a typed spelling to another mailbox.
+        sent = mailer.send_pack_claim_email(stripe_email_as_stored, claim_code, credit_count)
         sys.stderr.write(
             f"[recover] resent claim_code for session={stripe_api.mask_session_ids(sid)} "
             f"email={auth.mask_email(provided_email)} email_sent={sent}\n"
@@ -6386,7 +6390,7 @@ class Handler(BaseHTTPRequestHandler):
         #    path and the webhook use. Mirror the one-time-Pack success body.
         claim_code = ledger_row["claim_code"]
         credit_count = int(ledger_row.get("credits_delta", 0))
-        sent = mailer.send_pack_claim_email(provided_email, claim_code, credit_count)
+        sent = mailer.send_pack_claim_email(ledger_row["email"].strip(), claim_code, credit_count)
         sys.stderr.write(
             f"[recover] resent crypto claim_code for order={order_id} "
             f"email={auth.mask_email(provided_email)} email_sent={sent}\n"

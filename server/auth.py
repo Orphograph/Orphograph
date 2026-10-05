@@ -173,7 +173,15 @@ def _same_account(row_email, account: str) -> bool:
     """Does a ledger row's address belong to the account `account` names?
     Compared by email_id, the id everything signed in is keyed by: the exact
     string missed "Alice@x" against "alice@x", which is one account."""
-    return isinstance(row_email, str) and bool(row_email) and email_id(row_email) == account
+    if not isinstance(row_email, str) or not row_email:
+        return False
+    try:
+        return email_id(row_email) == account
+    except UnicodeEncodeError:
+        # A lone surrogate the sign-in link stored before #286 has no id. It
+        # must not raise here: this runs over every issued row on every
+        # sign-in, so one such row took sign-in down for everyone.
+        return False
 
 
 def _supersede_prior_tokens_for_email(email: str) -> int:
