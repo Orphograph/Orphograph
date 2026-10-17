@@ -75,6 +75,7 @@ import json
 import os
 import secrets
 import socket
+import sys
 import time
 import urllib.error
 import urllib.request
@@ -432,6 +433,42 @@ def _claim_path() -> Path:
     return _data_dir() / _CLAIM_FILE
 
 
+# Claim ownership across processes (@x402-two-process-boot-release). A
+# process that takes a claim holds a SHARED flock on this file for the rest
+# of its life; the boot-time release runs only when it can take the lock
+# EXCLUSIVELY, i.e. when no other live process on this data dir can hold a
+# claim. The kernel drops a dead process's lock, so the crash-then-restart
+# case still releases. One descriptor per process and path: flock converts
+# the lock this process already holds instead of conflicting with it.
+_OWNER_FILE = "x402_claims.owner.lock"
+_OWNER_FDS: dict[str, int] = {}
+
+try:
+    import fcntl as _fcntl
+except ImportError:  # pragma: no cover - non-POSIX: the old single-process rule
+    _fcntl = None
+
+
+def _owner_fd() -> int | None:
+    if _fcntl is None:
+        return None
+    path = str(_data_dir() / _OWNER_FILE)
+    fd = _OWNER_FDS.get(path)
+    if fd is None:
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
+        _OWNER_FDS[path] = fd
+    return fd
+
+
+def _hold_claim_ownership() -> None:
+    """Mark this process as one that may hold claims (shared, blocking: it
+    waits out a boot-time release that is running in another process)."""
+    fd = _owner_fd()
+    if fd is not None:
+        _fcntl.flock(fd, _fcntl.LOCK_SH)
+
+
 def payment_identifier(payment_payload: dict) -> str:
     """A stable single-use identifier for a signed payment payload.
 
@@ -589,6 +626,10 @@ def claim(payment_payload: dict, receipt_id: str = "") -> tuple[bool, str]:
     """
     ident = payment_identifier(payment_payload)
     path = _claim_path()
+    try:
+        _hold_claim_ownership()
+    except OSError as e:
+        raise ClaimSetUnavailable(str(e)) from e
     # Every OSError, including the OPEN: a claim file that cannot be opened
     # escaped as an unhandled exception after settle() had moved the money
     # (self-review of 672be2f). The caller answers ClaimSetUnavailable with
@@ -892,14 +933,35 @@ def release_stranded_claims() -> int:
     exactly that case. Returns the number released; counts only, no ids,
     go to the log.
 
-    ASSUMES ONE SERVER PROCESS PER DATA DIRECTORY, which is the production
-    shape (one Fly machine, one volume; a deploy stops the old process
-    before the new one starts). A second process booting on a shared data
-    dir would release a claim the first holds mid-anchor, and the identical
-    request could then buy a second anchor on one payment. Do not run two
-    servers on one data dir without replacing this with a liveness check.
-    Not age-gated on purpose: a crash followed by a restart seconds later
-    is the common case, and its fresh claim must be released too."""
+    Production runs one process per data directory (one Fly machine, one
+    volume). A second process booting on a shared data dir used to release
+    a claim the first held mid-anchor, so the identical request bought a
+    second anchor on one payment (reproduced with two processes,
+    2026-10-17). Now the release runs only while this process holds the
+    claim-ownership lock exclusively: with another live claimer on the data
+    dir it releases nothing and returns 0. Not age-gated on purpose: a crash
+    followed by a restart seconds later is the common case, and its fresh
+    claim must be released too (the dead process's lock is gone)."""
+    fd = None
+    try:
+        fd = _owner_fd()
+        if fd is not None:
+            _fcntl.flock(fd, _fcntl.LOCK_EX | _fcntl.LOCK_NB)
+    except BlockingIOError:
+        sys.stderr.write("[x402] boot release skipped: another live process holds "
+                         "claims on this data directory\n")
+        return 0
+    except OSError as e:
+        raise ClaimSetUnavailable(str(e)) from e
+    try:
+        return _release_stranded_locked()
+    finally:
+        if fd is not None:
+            # Keep holding it shared: this process may take claims next.
+            _fcntl.flock(fd, _fcntl.LOCK_SH)
+
+
+def _release_stranded_locked() -> int:
     cpath = _claim_path()
     if not cpath.exists():
         return 0
