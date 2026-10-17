@@ -243,6 +243,47 @@ def find_nowpayments_mint(order_id: str) -> dict | None:
     return _latest_mint(nowpayments_mint_matcher(order_id))
 
 
+# The order-status poll is unauthenticated and web/pay/success.js repeats it;
+# each poll used to read the whole ledger. Answers are kept per order id while
+# the ledger file is unchanged (same device, inode, size and mtime): an append
+# or a rewrite changes the signature and drops every kept answer
+# (@order-status-index). Only the status poll reads through this; the
+# webhook's exactly-once check and recover always scan.
+_ORDER_STATUS_CACHE: dict = {"sig": None, "answers": {}}
+_ORDER_STATUS_CACHE_MAX = 1024
+
+
+def _ledger_signature():
+    try:
+        st = LEDGER_PATH.stat()
+    except FileNotFoundError:
+        return ("absent", str(LEDGER_PATH))
+    return (str(LEDGER_PATH), st.st_dev, st.st_ino, st.st_size, st.st_mtime_ns)
+
+
+def nowpayments_order_credits(order_id: str) -> int | None:
+    """The credits_delta of this crypto order's own latest mint, or None when
+    it has not been credited. Same answer as find_nowpayments_mint."""
+    if not order_id:
+        return None
+    with _lock:
+        sig = _ledger_signature()
+        cache = _ORDER_STATUS_CACHE
+        if cache["sig"] != sig:
+            cache["sig"], cache["answers"] = sig, {}
+        if order_id in cache["answers"]:
+            return cache["answers"][order_id]
+        row = find_nowpayments_mint(order_id)
+        answer = int(row.get("credits_delta", 0)) if row else None
+        # The ledger may have changed while it was read: keep the answer only
+        # when the signature still matches the one it was read under.
+        if _ledger_signature() == sig:
+            if len(cache["answers"]) >= _ORDER_STATUS_CACHE_MAX:
+                cache["answers"].clear()
+            cache["answers"][order_id] = answer
+        return answer
+
+
 def nowpayments_mint_matcher(order_id: str):
     """Predicate: is a mint source THIS crypto order's own mint? Shared by the
     lookups and by refund revocation, so a refund reaches exactly the rows the

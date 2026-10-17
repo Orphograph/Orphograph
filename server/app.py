@@ -2673,11 +2673,11 @@ class Handler(BaseHTTPRequestHandler):
                 return
             # Only a crypto order answers, and only by its own order id: see
             # credits.find_nowpayments_mint for what the looser lookup allowed.
-            ledger_row = credits.find_nowpayments_mint(order_id)
-            credited = ledger_row is not None
-            # NOTE: ledger_row contains claim_code + email + source — do NOT
-            # spread it into the response. Only the int delta is safe to echo.
-            credit_count = int(ledger_row.get("credits_delta", 0)) if ledger_row else None
+            # Only the int delta comes back (never the row: it holds the
+            # claim code and email), kept per order while the ledger is
+            # unchanged so a repeated poll does not re-read it.
+            credit_count = credits.nowpayments_order_credits(order_id)
+            credited = credit_count is not None
             _json_response(self, 200, {
                 "ok": True,
                 "order_id": order_id,
