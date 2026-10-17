@@ -57,31 +57,86 @@ def make_workspace(tmp_path, names):
 
 
 def test_receipt_links_point_at_the_server_that_issued_them(tmp_path):
+    # The server names its public address (SITE_URL); the action reaches it
+    # under another name (here 127.0.0.1, in a workflow a proxy or a CI
+    # network name). The link is the server's, not one built from base_url,
+    # which an outside reader cannot open (@action-receipt-url).
+    public = "https://receipts.example"
     workspace, data = make_workspace(tmp_path, ["app.tar.gz"])
-    for base in _srv.server_processes(data, stub_calendars=True, RATE_LIMIT_PER_DAY="50"):
+    for base in _srv.server_processes(data, stub_calendars=True, RATE_LIMIT_PER_DAY="50",
+                                      SITE_URL=public):
         out = run_action(base, workspace)
         assert out.returncode == 0, (out.stdout, out.stderr)
 
         rows = json.loads((workspace / "orphograph-receipts.json").read_text())
         assert [r["file"] for r in rows] == ["dist/app.tar.gz"]
         row = rows[0]
-        assert row["receipt_url"] == base + "/r/" + row["receipt_id"]
+        assert row["receipt_url"] == public + "/r/" + row["receipt_id"]
         assert json.loads(outputs(workspace)["receipts"]) == rows
         assert row["receipt_url"] in (workspace / "step_summary.md").read_text()
 
-        # The link has to resolve where the receipt lives.
-        path = row["receipt_url"][len(base):]
+        # The link's path resolves on the server that issued the receipt.
+        path = row["receipt_url"][len(public):]
         status, _, _ = _srv.request(base, path)
         assert status == 200
 
 
+class _Stub:
+    """A one-route anchor server answering every POST with `answer`."""
+
+    def __init__(self, answer):
+        import http.server
+        import threading
+
+        class OneAnswer(http.server.BaseHTTPRequestHandler):
+            def do_POST(self):
+                self.rfile.read(int(self.headers.get("Content-Length", 0)))
+                body = json.dumps(answer).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, *a):
+                pass
+
+        self.server = http.server.HTTPServer(("127.0.0.1", 0), OneAnswer)
+        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+        self.base = f"http://127.0.0.1:{self.server.server_port}"
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.server.shutdown()
+
+
 def test_a_trailing_slash_on_the_base_url_does_not_double_up(tmp_path):
-    workspace, data = make_workspace(tmp_path, ["app.tar.gz"])
-    for base in _srv.server_processes(data, stub_calendars=True, RATE_LIMIT_PER_DAY="50"):
-        out = run_action(base, workspace, ORPHO_BASE_URL=base + "/")
+    # No receipt_url in the answer: the link is built from base_url.
+    workspace, _data = make_workspace(tmp_path, ["app.tar.gz"])
+    with _Stub({"receipt_id": "AbC_12-x", "calendars_ok": 2}) as stub:
+        out = run_action(stub.base, workspace, ORPHO_BASE_URL=stub.base + "/")
         assert out.returncode == 0, (out.stdout, out.stderr)
         row = json.loads((workspace / "orphograph-receipts.json").read_text())[0]
-        assert row["receipt_url"] == base + "/r/" + row["receipt_id"]
+        assert row["receipt_url"] == stub.base + "/r/AbC_12-x"
+
+
+@pytest.mark.parametrize("served", [
+    "javascript:alert(1)//r/AbC_12-x",
+    "https://elsewhere.example/r/SomeOtherId",
+    "https://x.example/r/AbC_12-x) [click](https://evil.example",
+    "https://x.example/r/AbC_12-x\n## injected",
+    42,
+], ids=["scheme", "other-id", "markdown", "newline", "not-a-string"])
+def test_a_served_link_that_is_not_this_receipt_falls_back_to_base(tmp_path, served):
+    workspace, _data = make_workspace(tmp_path, ["app.tar.gz"])
+    with _Stub({"receipt_id": "AbC_12-x", "calendars_ok": 2,
+                "receipt_url": served}) as stub:
+        out = run_action(stub.base, workspace)
+        assert out.returncode == 0, (out.stdout, out.stderr)
+        row = json.loads((workspace / "orphograph-receipts.json").read_text())[0]
+        assert row["receipt_url"] == stub.base + "/r/AbC_12-x"
 
 
 def test_incomplete_anchoring_does_not_fail_the_job_unless_asked(tmp_path):

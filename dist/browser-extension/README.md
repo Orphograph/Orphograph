@@ -34,6 +34,10 @@ For permanent install, submit to AMO (addons.mozilla.org).
 
 - The file is fetched by your browser, hashed locally via WebCrypto, and only
   the SHA-256 + SHA-512 digests are sent to Orphograph.
+- No file name is sent by default. "Anchor with Orphograph" sends the hash
+  only. The second entry, "... and a file-name label (asks first)", shows the
+  name it would store (the last URL path segment, without query or fragment)
+  and asks; its default answer is no label.
 - Credentials (Pack token / API key) live in `chrome.storage.local` and are
   only sent to `orphograph.com` when you trigger an anchor.
 - No analytics, no telemetry, no third-party scripts.

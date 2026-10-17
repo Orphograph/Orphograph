@@ -62,6 +62,9 @@
       if (!email || email.indexOf("@") < 1) return;
       var btn = form.querySelector("button");
       if (btn) btn.disabled = true;
+      // An earlier answer's hint goes now, so no outcome of this submit
+      // (the network failing included) leaves it showing.
+      sayInForm(form, "");
       fetch("/api/waitlist", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

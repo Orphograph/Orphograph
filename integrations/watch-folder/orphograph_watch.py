@@ -20,6 +20,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import signal
 import sys
 import time
@@ -156,6 +157,22 @@ def post_anchor(base, sha256_hex, sha512_hex, api_key=None, pack_token=None):
         raise
 
 
+# scheme://host[:port][/path]/r/<id>, nothing a log or a markdown viewer
+# would read as more than one link.
+_SERVED_URL = re.compile(r"\Ahttps?://[A-Za-z0-9.-]+(?::[0-9]{1,5})?(?:/[A-Za-z0-9._~%-]+)*/r/[A-Za-z0-9_-]+\Z")
+
+
+def receipt_link(base, receipt_id, served=None):
+    """The receipt's public link. The server's own receipt_url wins (behind a
+    proxy or an internal name only the server knows its public address) when
+    it is a plain http(s) link to /r/<this id>; otherwise it is built from
+    --base. It used to name orphograph.com whatever --base was."""
+    if isinstance(served, str) and _SERVED_URL.match(served) \
+            and served.endswith("/r/" + receipt_id):
+        return served
+    return base.rstrip("/") + "/r/" + receipt_id
+
+
 def run_scan(root, args, state, pause):
     """One scan pass. Mutates state; returns (anchored_count, new_pause).
 
@@ -245,7 +262,7 @@ def run_scan(root, args, state, pause):
 
         pause["backoff"] = 0  # success resets exponential backoff
         receipt_id = result.get("receipt_id", "")
-        receipt_url = "https://orphograph.com/r/%s" % receipt_id
+        receipt_url = receipt_link(args.base, receipt_id, result.get("receipt_url"))
         append_receipt(receipts_path, {
             "ts": now_iso(),
             "path": rel,

@@ -17,7 +17,7 @@ import { readFile } from "node:fs/promises";
 
 import {
   anchorFolder,
-  verifyFolder,
+  verifyFolderDetail,
   inclusionProof,
   verifyInclusion,
   DEFAULT_SERVER_URL,
@@ -200,12 +200,20 @@ async function cmdVerify(args: ParsedArgs): Promise<number> {
     printUsage();
     return 2;
   }
-  const ok = await verifyFolder(folder, receiptId, {
+  const { match, calendarsOk } = await verifyFolderDetail(folder, receiptId, {
     serverUrl: getServer(args.flags),
     apiKey: getApiKey(args.flags),
   });
-  process.stdout.write(JSON.stringify({ ok }) + "\n");
-  return ok ? 0 : 1;
+  // calendars_ok 0: the bytes may match the root, but no calendar accepted
+  // it, so the receipt has no Bitcoin commitment and nothing bounds the
+  // bytes in time. It does not verify (the dataset CLI's rule).
+  if (match && calendarsOk === 0) {
+    process.stdout.write(JSON.stringify({ ok: false, match: true, calendars_ok: 0 }) + "\n");
+    process.stderr.write("orphograph: no calendar accepted this receipt's root; it has no Bitcoin commitment.\n");
+    return 1;
+  }
+  process.stdout.write(JSON.stringify({ ok: match }) + "\n");
+  return match ? 0 : 1;
 }
 
 async function cmdProof(args: ParsedArgs): Promise<number> {

@@ -288,3 +288,29 @@ def test_verify_on_a_200_that_is_not_a_json_object_fails_cleanly(monkeypatch, ca
 
     assert run_main(monkeypatch, ["--base", "http://127.0.0.1:9", "verify", "r1"]) == 1
     assert json.loads(capsys.readouterr().out)["error"] == "bad_response"
+
+
+@pytest.mark.parametrize("with_file", [True, False], ids=["with-file", "no-file"])
+def test_verify_a_receipt_no_calendar_accepted_fails(with_file, tmp_path, monkeypatch, capsys):
+    """@agent-sdk-verify-zero-cal: a receipt with calendars_ok 0 has no
+    Bitcoin commitment and never gets one; verify exited 0 on it, even with
+    a matching --file."""
+    source = tmp_path / "input.txt"
+    source.write_text("same")
+    digest = hashlib.sha256(source.read_bytes()).hexdigest()
+    monkeypatch.setattr(anchor, "get_verify", lambda base, receipt: {
+        "hash_hex": digest, "calendars_ok": 0, "calendars_total": 5})
+    argv = ["verify", "r-zero"] + (["--file", str(source)] if with_file else [])
+
+    assert run_main(monkeypatch, argv) == 1
+    out = json.loads(capsys.readouterr().out)
+    assert out["not_anchored"] == "no calendar accepted the hash"
+    if with_file:
+        assert out["local_match"] is True
+
+
+def test_verify_a_receipt_with_a_calendar_still_passes(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(anchor, "get_verify", lambda base, receipt: {
+        "hash_hex": "0" * 64, "calendars_ok": 1, "calendars_total": 5})
+    assert run_main(monkeypatch, ["verify", "r-one"]) == 0
+    assert "not_anchored" not in json.loads(capsys.readouterr().out)

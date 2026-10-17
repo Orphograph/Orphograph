@@ -123,6 +123,29 @@ export async function verifyFolder(
   receiptId: string,
   options: VerifyFolderOptions = {},
 ): Promise<boolean> {
+  return (await verifyFolderDetail(folderPath, receiptId, options)).match;
+}
+
+export interface VerifyFolderDetail {
+  /** The locally recomputed root equals the receipt's manifest root. */
+  match: boolean;
+  /**
+   * How many calendars hold a proof for the receipt, as the service reports
+   * it; null when the answer does not say. 0 means the receipt has no
+   * Bitcoin commitment and never gets one: matching bytes, no time bound.
+   */
+  calendarsOk: number | null;
+}
+
+/**
+ * verifyFolder plus the receipt's calendars_ok, so a caller can refuse a
+ * receipt no calendar accepted (the CLI's verify does).
+ */
+export async function verifyFolderDetail(
+  folderPath: string,
+  receiptId: string,
+  options: VerifyFolderOptions = {},
+): Promise<VerifyFolderDetail> {
   const tree = await MerkleTree.fromFolder(folderPath, {
     exclude: options.exclude,
   });
@@ -132,12 +155,15 @@ export async function verifyFolder(
     apiKey: options.apiKey,
     timeoutMs: options.timeoutMs,
   });
+  const receipt = remote && typeof remote === "object" ? remote.receipt : undefined;
+  const cal = receipt && typeof receipt === "object" ? receipt.calendars_ok : undefined;
+  const calendarsOk = typeof cal === "number" ? cal : null;
   // The manifest's root_hex is the ONLY acceptable remote side. A degraded
   // or partial response (missing manifest / missing root_hex) MUST NOT
   // verify — no fallback to receipt.hash_hex (VERIFIER_SPEC §4.2, audit D3).
-  const remoteRoot = remote.manifest && remote.manifest.root_hex;
-  if (!remoteRoot) return false;
-  return localRoot === remoteRoot;
+  const remoteRoot = remote && remote.manifest && remote.manifest.root_hex;
+  if (!remoteRoot) return { match: false, calendarsOk };
+  return { match: localRoot === remoteRoot, calendarsOk };
 }
 
 /**

@@ -131,6 +131,12 @@ The folder is walked locally, the Merkle root is recomputed, and the SDK
 returns `True` only if the recomputed root equals the root recorded in
 the receipt's manifest.
 
+`verify_folder` compares roots only. `verify_folder_detail` returns
+`{"match": bool, "calendars_ok": int | None}`; `calendars_ok` 0 means no
+calendar accepted the root, so the receipt has no Bitcoin commitment.
+`python -m orphograph verify <folder> <receipt_id>` refuses such a receipt:
+it prints `{"match": true, "verified": false, "calendars_ok": 0}` and exits 1.
+
 ## Inclusion proofs
 
 A folder receipt can be queried for a proof that a single file belonged

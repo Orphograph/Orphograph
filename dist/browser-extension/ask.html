@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Orphograph: label this receipt?</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+         background: #faf6ef; color: #1f1d1a; padding: 16px; margin: 0; font-size: 13px; }
+  h1 { font-size: 14px; margin: 0 0 10px; font-weight: 500; }
+  code { display: block; padding: 8px; background: #fff; border: 1px solid #ddd6cc;
+         border-radius: 6px; word-break: break-all; margin: 8px 0; }
+  p { color: #6b6660; line-height: 1.5; margin: 8px 0; }
+  button { margin-top: 8px; width: 100%; padding: 9px; border-radius: 6px; font-size: 13px;
+           cursor: pointer; border: 1px solid #1f1d1a; }
+  #nolabel { background: #1f1d1a; color: #faf6ef; }
+  #label { background: #fff; color: #1f1d1a; }
+  #cancel { background: transparent; border-color: #ddd6cc; color: #6b6660; }
+</style>
+</head>
+<body>
+  <h1>Label this receipt with the file name?</h1>
+  <code id="name"></code>
+  <p>The label is stored with the receipt and shown on its page to anyone who can open it.
+     Without a label, only the hash is sent.</p>
+  <button id="nolabel" autofocus>Anchor without a label</button>
+  <button id="label">Anchor and label it with this name</button>
+  <button id="cancel">Cancel</button>
+  <script src="ask.js"></script>
+</body>
+</html>

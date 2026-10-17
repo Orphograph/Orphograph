@@ -93,7 +93,9 @@ npx orphograph anchor /path/to/folder
 
 npx orphograph verify /path/to/folder abcd1234
 # {"ok":true}
-# exit code 0 on match, 1 on mismatch
+# exit code 0 on match, 1 on mismatch. A receipt no calendar accepted
+# (calendars_ok 0) has no Bitcoin commitment: it prints
+# {"ok":false,"match":true,"calendars_ok":0} and exits 1.
 
 npx orphograph proof abcd1234 sub/photo.jpg
 # {"receipt_id":"abcd1234","root_hex":"...","path":"sub/photo.jpg",...}

@@ -33,7 +33,7 @@ import re
 import sys
 from typing import List, Optional
 
-from . import anchor_folder, inclusion_proof, verify_folder, verify_inclusion
+from . import anchor_folder, inclusion_proof, verify_folder_detail, verify_inclusion
 from ._client import DEFAULT_SERVER_URL, OrphographError
 
 
@@ -239,14 +239,24 @@ def main(argv: Optional[List[str]] = None) -> int:
                 return 2
             return 0
         if args.command == "verify":
-            ok = verify_folder(
+            detail = verify_folder_detail(
                 args.folder,
                 args.receipt_id,
                 server_url=server_url,
                 api_key=api_key,
                 exclude=args.exclude,
             )
-            sys.stdout.write(json.dumps({"match": bool(ok)}) + "\n")
+            ok = bool(detail["match"])
+            # calendars_ok 0: the bytes may match, but no calendar accepted
+            # the root, so the receipt has no Bitcoin commitment and nothing
+            # bounds the bytes in time. It does not verify (the dataset CLI's
+            # rule); exit 1, the not-verified verdict.
+            if ok and detail.get("calendars_ok") == 0:
+                sys.stdout.write(json.dumps({"match": True, "verified": False, "calendars_ok": 0}) + "\n")
+                sys.stderr.write("orphograph: no calendar accepted this receipt's root; "
+                                 "it has no Bitcoin commitment.\n")
+                return 1
+            sys.stdout.write(json.dumps({"match": ok}) + "\n")
             return 0 if ok else 1
         if args.command == "inclusion-proof":
             proof = inclusion_proof(

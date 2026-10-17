@@ -340,7 +340,7 @@ class TestCli(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             folder = Path(td)
             (folder / "x.txt").write_bytes(b"x")
-            with mock.patch("orphograph._cli.verify_folder", return_value=False), \
+            with mock.patch("orphograph._cli.verify_folder_detail", return_value={"match": False, "calendars_ok": 3}), \
                  mock.patch("sys.stdout", new_callable=io.StringIO):
                 rc = _cli.main(["verify", str(folder), "rid-bad"])
             self.assertEqual(rc, 1)

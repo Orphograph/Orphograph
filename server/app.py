@@ -1718,32 +1718,60 @@ class Handler(BaseHTTPRequestHandler):
     _LOG_PLAIN_VALUE = re.compile(r"[A-Za-z0-9_.,:-]{0,128}")
     _LOG_PLAIN_MESSAGE = re.compile(r"[A-Za-z0-9 ,.'_-]{0,200}")
     _LOG_BEARER_ROUTES = ("/a/", "/api/pack/balance/")
+    # Routes whose next segment is an identifier: a receipt id (which opens a
+    # private receipt), an order id (which reads its payment state). The log
+    # names the route template, not the identifier (@log-route-template).
+    # /blog/ slugs are public and stay readable.
+    _LOG_ID_ROUTES = ("/r/", "/api/receipt/", "/api/verify/", "/api/verify_folder/",
+                      "/api/badge/", "/certificate/", "/api/nowpayments/order/",
+                      "/api/me/receipt/")
     _LOG_CONTROL_TABLE = {
         **{c: f"\\x{c:02x}" for c in (*range(0x20), *range(0x7f, 0xa0))},
         ord("\\"): "\\\\",
     }
 
+    @staticmethod
+    def _log_fold(path: str) -> str:
+        """`path` resolved the way a client or proxy might: slashes
+        collapsed, dot segments applied, case folded; with a trailing /."""
+        return posixpath.normpath("/" + path.lower().lstrip("/")) + "/"
+
     @classmethod
     def _log_bearer_route(cls, path: str) -> str | None:
-        """The bearer route `path` resolves to, or None. Resolved the way a
-        client or proxy might: slashes collapsed, dot segments applied,
-        case folded."""
-        folded = posixpath.normpath("/" + path.lower().lstrip("/")) + "/"
+        """The bearer route `path` resolves to (the folded path STARTS with
+        it), or None. `/blog/a/x` is not `/a/` (@log-bearer-startswith)."""
+        folded = cls._log_fold(path)
         for route in cls._LOG_BEARER_ROUTES:
-            if route in folded:
+            if folded.startswith(route):
                 return route
         return None
+
+    @classmethod
+    def _log_mentions_bearer(cls, path: str) -> bool:
+        """A bearer route appears anywhere in the folded path. Not a route,
+        but a token pasted after it is still a live credential."""
+        folded = cls._log_fold(path)
+        return any(route in folded for route in cls._LOG_BEARER_ROUTES)
 
     @classmethod
     def _log_path(cls, path: str) -> str:
         if not cls._LOG_PLAIN_PATH.fullmatch(path):
             return "[redacted-path]"
         route = cls._log_bearer_route(path)
-        if route is None:
-            return path
-        if posixpath.normpath("/" + path.lower().lstrip("/")).startswith(route):
+        if route is not None:
             return route + "[redacted]"
-        return "[redacted-path]"
+        folded = cls._log_fold(path)
+        # Folded like the bearer rule, so /R/<id> and //r/<id> are templated
+        # too; checked before the mention rule, so /r/<id>/a/ keeps no id.
+        for route in cls._LOG_ID_ROUTES:
+            if folded.startswith(route) and len(folded) > len(route):
+                return route + "{id}"
+        if cls._log_mentions_bearer(path):
+            # `/blog/a/x` is an ordinary path; `/x/a/<token>` still holds one.
+            tails = [folded.split(r, 1)[1] for r in cls._LOG_BEARER_ROUTES if r in folded]
+            if any(cls._LOG_TOKEN_LIKE.search(t) for t in tails):
+                return "[redacted-path]"
+        return path
 
     @classmethod
     def _log_query(cls, query: str) -> str:
@@ -1757,7 +1785,7 @@ class Handler(BaseHTTPRequestHandler):
             value = unquote_plus(raw_value)
             if key == "next":
                 keep = (bool(cls._LOG_PLAIN_PATH.fullmatch(value))
-                        and cls._log_bearer_route(value) is None)
+                        and not cls._log_mentions_bearer(value))
             else:
                 keep = key in cls._LOG_KEEP_PARAMS and bool(cls._LOG_PLAIN_VALUE.fullmatch(value))
                 if keep and key == "ref":
@@ -1766,6 +1794,10 @@ class Handler(BaseHTTPRequestHandler):
             # The KEY is request data too (`/?pk_<code>=1`): it is shown only
             # when it names a parameter this server knows.
             shown_key = raw_key if key in cls._LOG_KNOWN_KEYS else "[redacted]"
+            if keep and key == "next":
+                # The same template rule as the path: no receipt or order id.
+                parts.append(f"{raw_key}={cls._log_path(value)}")
+                continue
             parts.append(part if keep else f"{shown_key}=[redacted]")
         return "&".join(parts)
 
@@ -2642,11 +2674,11 @@ class Handler(BaseHTTPRequestHandler):
                 return
             # Only a crypto order answers, and only by its own order id: see
             # credits.find_nowpayments_mint for what the looser lookup allowed.
-            ledger_row = credits.find_nowpayments_mint(order_id)
-            credited = ledger_row is not None
-            # NOTE: ledger_row contains claim_code + email + source — do NOT
-            # spread it into the response. Only the int delta is safe to echo.
-            credit_count = int(ledger_row.get("credits_delta", 0)) if ledger_row else None
+            # Only the int delta comes back (never the row: it holds the
+            # claim code and email), kept per order while the ledger is
+            # unchanged so a repeated poll does not re-read it.
+            credit_count = credits.nowpayments_order_credits(order_id)
+            credited = credit_count is not None
             _json_response(self, 200, {
                 "ok": True,
                 "order_id": order_id,

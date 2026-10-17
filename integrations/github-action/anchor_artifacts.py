@@ -31,6 +31,7 @@ import glob
 import hashlib
 import json
 import os
+import re
 import sys
 import time
 import urllib.error
@@ -73,11 +74,22 @@ def hash_file(path: str) -> tuple:
     return h256.hexdigest(), h512.hexdigest()
 
 
-def receipt_url(base_url: str, receipt_id: str) -> str:
+def receipt_url(base_url: str, receipt_id: str, served=None) -> str:
     # The link names the server that issued the receipt. It used to name
     # orphograph.com whatever base_url was, so a run against any other host
-    # wrote links that led nowhere.
+    # wrote links that led nowhere. The server's own receipt_url wins: behind
+    # an internal base_url (a proxy or a CI-network name) only the server
+    # knows its public address. It is taken only when it is a plain http(s)
+    # link to /r/<this receipt id>; anything else falls back to base_url.
+    if isinstance(served, str) and _SERVED_URL.match(served):
+        if served.endswith("/r/" + receipt_id):
+            return served
     return base_url.rstrip("/") + "/r/" + receipt_id
+
+
+# scheme://host[:port][/path]/r/<id>, with no space, quote, bracket or
+# markdown character: the link is written into the step summary as text.
+_SERVED_URL = re.compile(r"\Ahttps?://[A-Za-z0-9.-]+(?::[0-9]{1,5})?(?:/[A-Za-z0-9._~%-]+)*/r/[A-Za-z0-9_-]+\Z")
 
 
 def build_headers() -> dict:
@@ -245,7 +257,7 @@ def main() -> int:
             "file": path,
             "sha256": sha256_hex,
             "receipt_id": receipt_id,
-            "receipt_url": receipt_url(base_url, receipt_id),
+            "receipt_url": receipt_url(base_url, receipt_id, body.get("receipt_url")),
         }
         rows.append(row)
         log("anchored %s -> %s (calendars %s/%s)" % (

@@ -152,8 +152,8 @@
     "sha256": "afa891972814f3f9f6e44f8a0da22dacac4f11546013b25276f524559dc63605"
   },
   "/checkout-cta.js": {
-    "version": "6",
-    "sha256": "381a4321b24b1a0c97fc548b62a638ead1ef4dacb05aa125ef747b075b4b8542"
+    "version": "7",
+    "sha256": "e94c30a7676f1e4cc1e26452233aedf2ff02c17795e006d11662e8740b4d6e4d"
   },
   "/continuity.css": {
     "version": "1",
@@ -524,7 +524,7 @@
     "sha256": "12cf4c84d5f01b8f3c053ef879f53064e6bc6dbabbc47a66df73a5c1cf333a74"
   },
   "/writers.js": {
-    "version": "4",
-    "sha256": "dba4cc1facf36fa67e47a597f12c7efe2a620978e922be3bd29eadfb39a00f14"
+    "version": "5",
+    "sha256": "890b8799b53660b2893f24ecbffc322ced061508f027d199093341e31c863a2e"
   }
 }

@@ -293,7 +293,8 @@ async function anchorChain() {
     if (btn) btn.disabled = false;
     return;
   }
-  state.merkle_root = root;
+  // The root is kept only once the chain is anchored (below): a failed
+  // attempt used to leave it in the state and in a downloaded manifest.
 
   setStatus("writers-status", "Submitting Merkle root to the calendars…");
   let resp;
@@ -355,6 +356,7 @@ async function anchorChain() {
   }
 
   state.anchored = true;
+  state.merkle_root = root;
   state.receipt = record;
   persistDraftSession();
   saveAnchoredSessionToIndex();

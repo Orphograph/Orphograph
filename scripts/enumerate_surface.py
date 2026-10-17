@@ -39,6 +39,9 @@ Domains:
            Not in this domain: the final `_serve_static(self, path)`
            fallthrough, which serves web/ files — that is `assets`. HEAD runs
            the GET routing, so GET routes are not repeated under HEAD.
+           `path in NAME` resolves when NAME is a module-level frozenset/set
+           of string literals assigned once; any other upper-case NAME is a
+           shape the walk cannot read and fails the shape oracle.
            Known blind spot of BOTH the AST walk and the shape oracle: reversed
            containment (`"/x" in path`) and `endswith`-only dispatch. Neither
            routes a request in app.py as of 2026-09-12 (`"?" in self.path` and
@@ -91,7 +94,7 @@ def enumerate_diff(repo: Path, base: str = "origin/master") -> tuple[list[str], 
 # ----------------------------------------------------------------------------- routes
 HANDLER = re.compile(r"do_[A-Z]+$")
 # Text form of a path comparison. `\bpath` does not match `rpath` / `rel_path`.
-TEXT_COMPARE = re.compile(r"\b(?:self\.)?path\s*(?:==|!=|in\s*\(|\.startswith\()")
+TEXT_COMPARE = re.compile(r"\b(?:self\.)?path\s*(?:==|!=|in\s*\(|in\s+[A-Z_][A-Z0-9_]*\b|\.startswith\()")
 
 
 def _is_subject(node: ast.AST) -> bool:
@@ -102,9 +105,11 @@ def _is_subject(node: ast.AST) -> bool:
             and isinstance(node.value, ast.Name) and node.value.id == "self")
 
 
-def _literals(node: ast.AST) -> list[str] | None:
+def _literals(node: ast.AST, names: dict | None = None) -> list[str] | None:
     if isinstance(node, ast.Constant) and isinstance(node.value, str):
         return [node.value]
+    if isinstance(node, ast.Name) and names and node.id in names:
+        return list(names[node.id])
     if isinstance(node, (ast.Tuple, ast.List, ast.Set)):
         vals = [e.value for e in node.elts
                 if isinstance(e, ast.Constant) and isinstance(e.value, str)]
@@ -112,12 +117,41 @@ def _literals(node: ast.AST) -> list[str] | None:
     return None
 
 
+def _named_literal_sets(tree: ast.Module) -> dict[str, list[str]]:
+    """Module-level `NAME = frozenset({...})` / `set(...)` / `{...}` whose
+    members are all string literals, assigned once. `path in NAME` resolves
+    through these; any other NAME stays unread and fails the shape oracle."""
+    found: dict[str, list[str]] = {}
+    seen: dict[str, int] = {}
+    for node in tree.body:
+        targets, value = [], None
+        if isinstance(node, ast.Assign):
+            targets, value = node.targets, node.value
+        elif isinstance(node, ast.AnnAssign) and node.value is not None:
+            targets, value = [node.target], node.value
+        for t in targets:
+            if not isinstance(t, ast.Name):
+                continue
+            seen[t.id] = seen.get(t.id, 0) + 1
+            inner = value
+            if (isinstance(inner, ast.Call) and isinstance(inner.func, ast.Name)
+                    and inner.func.id in ("frozenset", "set") and len(inner.args) == 1
+                    and not inner.keywords):
+                inner = inner.args[0]
+            elif not isinstance(inner, ast.Set):
+                continue
+            lits = _literals(inner)
+            if lits:
+                found[t.id] = lits
+    return {k: v for k, v in found.items() if seen.get(k) == 1}
+
+
 def _path_call(node: ast.AST, name: str) -> bool:
     return (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
             and node.func.attr == name and _is_subject(node.func.value))
 
 
-def _walk_handler(fn: ast.FunctionDef, method: str):
+def _walk_handler(fn: ast.FunctionDef, method: str, names: dict | None = None):
     routes: set[tuple] = set()
     guards: set[tuple] = set()
     lines: set[int] = set()
@@ -137,7 +171,7 @@ def _walk_handler(fn: ast.FunctionDef, method: str):
         found: list[tuple] = []
         if (isinstance(node, ast.Compare) and len(node.ops) == 1 and _is_subject(node.left)
                 and isinstance(node.ops[0], (ast.Eq, ast.NotEq, ast.In))):
-            lits = _literals(node.comparators[0])
+            lits = _literals(node.comparators[0], names)
             if lits is not None:
                 found = [(method, "eq", lit, None) for lit in lits]
         elif _path_call(node, "startswith") and node.args:
@@ -170,6 +204,7 @@ def _probe_entries(probes_src: str) -> list[tuple[str, str]]:
 def routes_report(app_src: str, probes_src: str, tracked: set[str]) -> dict:
     """Pure: one AST enumeration plus the probes and shape oracles."""
     tree = ast.parse(app_src)
+    names = _named_literal_sets(tree)
     source_lines = app_src.splitlines()
     routes: set[tuple] = set()
     guards: set[tuple] = set()
@@ -182,7 +217,7 @@ def routes_report(app_src: str, probes_src: str, tracked: set[str]) -> dict:
                 continue
             method = fn.name[3:]
             handlers.append(f"{cls.name}.{fn.name}")
-            r, g, lines = _walk_handler(fn, method)
+            r, g, lines = _walk_handler(fn, method, names)
             routes |= r
             guards |= g
             for no in range(fn.lineno, (fn.end_lineno or fn.lineno) + 1):
@@ -295,6 +330,23 @@ def selftest() -> int:
     r = routes_report(eq_only, _FIXTURE_PROBES, _FIXTURE_TRACKED)
     check("losing the != route is caught by the probes oracle",
           not r["ok"] and r["probe_missing"] == ["POST /api/anchor"])
+
+    # /pay/crypto control: a route dispatched through a module-level named
+    # set of literals is read (it was invisible: surfaces 91 -> 90 in #269),
+    # and a NAME the walk cannot resolve fails the shape oracle loudly.
+    named = ('CHECKOUT_PATHS = frozenset({"/pay/crypto", "/pay/crypto/"})\n' + _FIXTURE_APP).replace(
+        '        _serve_static(self, path)',
+        '        if path in CHECKOUT_PATHS and ab_on():\n            log()\n'
+        '        _serve_static(self, path)')
+    r = routes_report(named, _FIXTURE_PROBES, _FIXTURE_TRACKED)
+    lits = {e["literal"] for e in r["elements"]}
+    check("named literal set resolves (/pay/crypto control)",
+          r["ok"] and len(r["elements"]) == 8 and {"/pay/crypto", "/pay/crypto/"} <= lits)
+    unresolved = named.replace('CHECKOUT_PATHS = frozenset({"/pay/crypto", "/pay/crypto/"})\n',
+                               'CHECKOUT_PATHS = load_paths()\n')
+    r = routes_report(unresolved, _FIXTURE_PROBES, _FIXTURE_TRACKED)
+    check("unresolvable named set fails the shape oracle",
+          not r["ok"] and len(r["shape_unaccounted"]) == 1)
 
     for f in fails:
         print(f"SELFTEST FAIL: {f}", file=sys.stderr)

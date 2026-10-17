@@ -11,6 +11,10 @@
 
 const API_BASE = "https://orphograph.com";
 const CONTEXT_MENU_ID = "orphograph-anchor";
+// The file name is a label stored with the receipt. It is never sent
+// unless the user is asked and says yes: the plain entry sends no label,
+// and the labelled entry opens ask.html, whose default answer is no label.
+const CONTEXT_MENU_LABEL_ID = "orphograph-anchor-label";
 
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.create({
@@ -18,7 +22,29 @@ chrome.runtime.onInstalled.addListener(() => {
     title: "Anchor with Orphograph (hash only, file stays local)",
     contexts: ["image", "link", "video", "audio"],
   });
+  chrome.contextMenus.create({
+    id: CONTEXT_MENU_LABEL_ID,
+    title: "Anchor with Orphograph and a file-name label (asks first)",
+    contexts: ["image", "link", "video", "audio"],
+  });
 });
+
+// The last path segment of the URL, without query or fragment (those carry
+// tokens and session ids), decoded, at most 200 characters; "" when none.
+function proposedLabel(target) {
+  let name = "";
+  try {
+    name = new URL(target).pathname.split("/").pop() || "";
+  } catch {
+    return "";
+  }
+  try {
+    name = decodeURIComponent(name);
+  } catch {
+    // keep the raw segment
+  }
+  return name.trim().slice(0, 200);
+}
 
 async function sha256Hex(buf) {
   const digest = await crypto.subtle.digest("SHA-256", buf);
@@ -89,13 +115,7 @@ function notify(title, message, receiptId) {
   );
 }
 
-chrome.contextMenus.onClicked.addListener(async (info, tab) => {
-  if (info.menuItemId !== CONTEXT_MENU_ID) return;
-  const target = info.srcUrl || info.linkUrl || info.pageUrl;
-  if (!target) {
-    notify("Orphograph", "No file to anchor on this element.");
-    return;
-  }
+async function anchorTarget(target, clientLabel) {
   notify("Orphograph", "Hashing file locally…");
   try {
     const { sha256, sha512, size } = await fetchAndHash(target);
@@ -103,7 +123,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     const result = await anchorHash({
       sha256,
       sha512,
-      clientLabel: target.split("/").pop().slice(0, 200),
+      clientLabel: clientLabel || null,
       packToken: settings.packToken,
       apiKey: settings.apiKey,
     });
@@ -118,4 +138,43 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   } catch (e) {
     notify("Orphograph error", String(e.message || e));
   }
+}
+
+chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+  if (info.menuItemId !== CONTEXT_MENU_ID && info.menuItemId !== CONTEXT_MENU_LABEL_ID) return;
+  const target = info.srcUrl || info.linkUrl || info.pageUrl;
+  if (!target) {
+    notify("Orphograph", "No file to anchor on this element.");
+    return;
+  }
+  const label = proposedLabel(target);
+  if (info.menuItemId === CONTEXT_MENU_ID || !label) {
+    await anchorTarget(target, null);
+    return;
+  }
+  // Ask before the name goes anywhere. The question waits in session
+  // storage (the worker may sleep while the window is open).
+  const askId = crypto.randomUUID();
+  await chrome.storage.session.set({ [`ask:${askId}`]: { target, label } });
+  await chrome.windows.create({
+    url: `ask.html#${askId}`,
+    type: "popup",
+    width: 420,
+    height: 260,
+  });
+});
+
+chrome.runtime.onMessage.addListener((msg, sender) => {
+  if (!msg || msg.type !== "orpho-ask-answer" || typeof msg.askId !== "string") return;
+  // Only the extension's own ask page answers.
+  if (sender.id !== chrome.runtime.id) return;
+  const key = `ask:${msg.askId}`;
+  (async () => {
+    const stored = await chrome.storage.session.get(key);
+    const pending = stored[key];
+    if (!pending) return;
+    await chrome.storage.session.remove(key);
+    if (msg.answer === "cancel") return;
+    await anchorTarget(pending.target, msg.answer === "label" ? pending.label : null);
+  })();
 });

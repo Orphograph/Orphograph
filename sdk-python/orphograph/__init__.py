@@ -34,6 +34,7 @@ __all__ = [
     "OrphographError",
     "anchor_folder",
     "verify_folder",
+    "verify_folder_detail",
     "inclusion_proof",
     "verify_inclusion",
 ]
@@ -97,11 +98,39 @@ def verify_folder(
     root = Path(folder_path)
     if not root.is_dir():
         raise ValueError(f"not a directory: {folder_path}")
+    return verify_folder_detail(folder_path, receipt_id, server_url=server_url,
+                                api_key=api_key, exclude=exclude)["match"]
+
+
+def verify_folder_detail(
+    folder_path: str,
+    receipt_id: str,
+    *,
+    server_url: str = _client.DEFAULT_SERVER_URL,
+    api_key: Optional[str] = None,
+    exclude: Optional[list] = None,
+) -> dict:
+    """verify_folder plus the receipt's calendars_ok:
+    ``{"match": bool, "calendars_ok": int | None}``.
+
+    ``calendars_ok`` 0 means no calendar accepted the root: the receipt has
+    no Bitcoin commitment and never gets one, so matching bytes are not
+    bounded in time (the CLI's verify refuses it). None when the service's
+    answer does not say.
+    """
+    root = Path(folder_path)
+    if not root.is_dir():
+        raise ValueError(f"not a directory: {folder_path}")
     response = _client.get_verify_folder(receipt_id, server_url=server_url, api_key=api_key)
+    receipt = response.get("receipt")
+    cal = receipt.get("calendars_ok") if isinstance(receipt, dict) else None
+    calendars_ok = cal if isinstance(cal, int) and not isinstance(cal, bool) else None
     manifest = response.get("manifest") or {}
+    if not isinstance(manifest, dict):
+        manifest = {}
     server_root = manifest.get("root_hex")
     if not server_root:
-        return False
+        return {"match": False, "calendars_ok": calendars_ok}
     # The manifest is authoritative for its own scope.
     #
     # Previously this mirrored whatever the CALLER passed, which only moved the
@@ -118,7 +147,7 @@ def verify_folder(
     if isinstance(scope, dict) and isinstance(scope.get("exclude"), list):
         effective_exclude = list(scope["exclude"])
     tree = MerkleTree.from_folder(root, exclude=effective_exclude)
-    return tree.root_hex() == server_root
+    return {"match": tree.root_hex() == server_root, "calendars_ok": calendars_ok}
 
 
 def inclusion_proof(
