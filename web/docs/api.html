@@ -99,8 +99,8 @@
     <tr>
       <td><strong>API key</strong></td>
       <td><code>X-Orpho-Api-Key</code></td>
-      <td>Personal / Creator subscribers calling from a script, plugin, or server.</td>
-      <td>No IP rate limit while the underlying subscription is active. Soft fair-use ceiling of 1,000 anchors/day.</td>
+      <td>Standing Order subscribers calling from a script, plugin, or server.</td>
+      <td>No IP rate limit while the underlying subscription is active.</td>
     </tr>
     <tr>
       <td><strong>None (free tier)</strong></td>
@@ -143,17 +143,17 @@
       <td>One credit consumed per receipt. Pack credits never expire.</td>
     </tr>
     <tr>
-      <td>Standing Order ($9/mo) / Creator ($19/mo)</td>
-      <td>No IP limit, priority queue</td>
+      <td>Standing Order ($9/mo)</td>
+      <td>No IP limit</td>
       <td>Up to 50 hashes per <code>/api/anchor/batch</code> call</td>
-      <td>Soft fair-use ceiling: 1,000 anchors / API key / day.</td>
+      <td>Every anchor goes through the same calendar submission; there is no separate queue.</td>
     </tr>
   </tbody>
 </table>
 
 <p>
   When the free-tier limit triggers, the response body includes
-  <code>retry_after_seconds</code> and <code>limit_per_hour</code> so a polite
+  <code>retry_after_seconds</code> and <code>limit_per_day</code> so a polite
   client can back off without parsing headers.
 </p>
 
@@ -196,7 +196,7 @@
     <tr>
       <td><code>503</code></td>
       <td>Dependency unavailable</td>
-      <td>BTC oracle down (checkout endpoints only) or all five OTS calendars unreachable. Transient — retry in ~60 s.</td>
+      <td>Something the request needs is briefly unavailable: anchoring or checkout switched off for maintenance, a payment provider unreachable, or a ledger the request must write. Transient — retry in ~60 s. A calendar outage is <em>not</em> a 503: <code>/api/anchor</code> answers <code>200</code> with a receipt and <code>calendars_ok: 0</code>, meaning no calendar accepted the hash and the receipt has no Bitcoin commitment (a Pack credit spent on it is refunded). Check <code>calendars_ok</code> before treating an anchor as done.</td>
     </tr>
   </tbody>
 </table>
@@ -570,6 +570,11 @@ print(receipt["status"], receipt.get("btc_pinned_at"))</pre>
 }</pre>
 
   <p>
+    Each calendar also carries <code>checked</code>. When the server does not
+    probe the calendars (the production default), every calendar reads
+    <code>"reachable": null, "checked": false</code>: unknown, not down.
+  </p>
+  <p>
     The data here is intentionally non-sensitive: counts and timestamps,
     not contents. The <code>payout</code> block reports only that the direct
     Bitcoin rail is retired — actual balances are not exposed on this
@@ -627,6 +632,7 @@ print(f"{health['counts']['receipts_on_disk']} receipts, uptime {health['uptime_
   "calendars": {
     "reachable": 5,
     "total":     5,
+    "checked":   true,
     "items": [
       {"name": "a",      "reachable": true},
       {"name": "b",      "reachable": true},
@@ -637,6 +643,12 @@ print(f"{health['counts']['receipts_on_disk']} receipts, uptime {health['uptime_
   },
   "checked_at": "2026-05-14T14:00:30+00:00"
 }</pre>
+
+<p>
+  When the server does not probe the calendars (the production default),
+  <code>checked</code> is <code>false</code> and <code>reachable</code> is
+  <code>null</code>, at the top and on every item: unknown, not down.
+</p>
 
   <h3>Privacy invariants</h3>
   <p>The endpoint's contract guarantees these fields are <em>never</em> emitted:</p>
@@ -767,7 +779,7 @@ print(f"{health['counts']['receipts_on_disk']} receipts, uptime {health['uptime_
   <code>low_redundancy</code> flag fires below that threshold).
 </p>
 <p>
-  Paid Personal and Creator tiers are not yet under a written SLA. If
+  Paid tiers are not yet under a written SLA. If
   you need one for procurement, write to
   <a href="mailto:hello@orphograph.com">hello@orphograph.com</a> and
   describe your use case.
@@ -798,7 +810,7 @@ print(f"{health['counts']['receipts_on_disk']} receipts, uptime {health['uptime_
     <a href="https://github.com/Orphograph/Orphograph/tree/master/capture">github.com/Orphograph/Orphograph (<code>capture/</code>)</a>.
     Headless watcher that anchors files as they appear in a folder —
     DSLR tethering target, screenshot folder, recording dump. Targets
-    the Creator tier's capture-time provenance use case.
+    capture-time provenance use cases.
   </li>
 </ul>
 <p>

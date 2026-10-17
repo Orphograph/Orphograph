@@ -591,8 +591,8 @@ def _gift_event(buyer: str, gift_to: str) -> dict:
 
 
 def test_a_twin_gift_recipient_is_not_mailed_and_the_buyer_gets_the_pack(server):
-    """No page of ours sets gift_to_email (web/gift.js, which built it, is
-    loaded by no page), so such an address is metadata written by hand. The
+    """No page of ours sets gift_to_email (web/gift.js, which built it, was
+    loaded by no page and was deleted on 2026-10-17), so such an address is metadata written by hand. The
     pack goes to the buyer, as for a malformed recipient, and the log names
     no part of it."""
     base, d = server

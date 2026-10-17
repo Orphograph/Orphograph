@@ -30,7 +30,6 @@ import urllib.request
 # into stderr when the mailer is in inert (dev) mode.
 sys.path.insert(0, os.path.dirname(__file__))
 import auth as _auth
-import referrals as _referrals
 try:
     import receipt_pdf as _receipt_pdf
 except Exception:
@@ -330,17 +329,12 @@ def send_pack_claim_email(to: str, claim_code: str, credit_count: int) -> bool:
     # URL fragment, not query string: fragments never reach the server,
     # so the bearer claim code does not appear in access logs / referer headers.
     activate_url = f"{SITE_URL}/#pack={claim_code}"
-    # A keyed digest of the claim code, never a slice of it: this link is
-    # meant to be shared, and the claim code is the bearer credential. The link
-    # is optional and the claim code is not, so a failure making it drops the
-    # referral section instead of the email.
-    try:
-        ref_code = _referrals.code_for(claim_code)
-    except Exception as e:  # noqa: BLE001
-        sys.stderr.write(f"[mailer] referral link unavailable ({type(e).__name__}); "
-                         f"claim email sent without it\n")
-        ref_code = ""
-    referral_url = f"{SITE_URL}/?ref={ref_code}" if ref_code else ""
+    # No referral section (drift audit 2026-10-01, fixed 2026-10-17). It
+    # promised ten anchors to whoever bought through an /?ref= link and ten
+    # more to this code, but no page we serve carries a ref into a purchase:
+    # "/" never reads it, the Payment Links get none, and the crypto checkout
+    # has no ref at all. Nothing could ever be credited, so the email no
+    # longer offers it. tests/test_drift_audit_2026_10_17.py.
     subject = f"Orphograph — Pack of {credit_count} registered to your name"
     text = (
         f"Receipt of payment is acknowledged. A Pack of {credit_count} "
@@ -353,14 +347,6 @@ def send_pack_claim_email(to: str, claim_code: str, credit_count: int) -> bool:
         f"Please retain this notice. The claim code is the sole instrument "
         f"of recovery for the Pack.\n"
     )
-    if ref_code:
-        text += (
-            f"\nReferral instrument\n"
-            f"The bearer of the following address receives ten complimentary "
-            f"anchors upon purchasing a Pack; an equivalent ten will be added "
-            f"to the code above on the same occasion:\n"
-            f"{referral_url}\n"
-        )
     html = (
         f"<p>Receipt of payment is acknowledged. A Pack of "
         f"<strong>{credit_count} anchors</strong> has been registered against "
@@ -379,15 +365,6 @@ def send_pack_claim_email(to: str, claim_code: str, credit_count: int) -> bool:
         f"Please retain this notice. The claim code is the sole instrument "
         f"of recovery for the Pack.</p>"
     )
-    if ref_code:
-        html += (
-            f"<hr style=\"border:0;border-top:1px solid #e5dfd0;margin:20px 0;\">"
-            f"<p style=\"font-size:13px;color:#444;\"><strong>Referral instrument.</strong> "
-            f"The bearer of the address below receives ten complimentary anchors "
-            f"upon purchasing a Pack; an equivalent ten will be added to the "
-            f"code above on the same occasion.<br>"
-            f"<a href=\"{referral_url}\">{referral_url}</a></p>"
-        )
     return _send(to, subject, text, html)
 
 
@@ -583,6 +560,17 @@ def send_pin_email(to: str, receipt: dict) -> bool:
     pinned_count = int(receipt.get("pinned_count", receipt.get("calendars_ok", 0)))
     total = int(receipt.get("pinned_total", receipt.get("calendars_total", 0)))
     receipt_url = f"{SITE_URL}/r/{rid}"
+    # A folder receipt commits to a Merkle root over a manifest: "the
+    # original file" does not exist, and the manifest is what re-derives the
+    # root (drift audit 2026-10-01; the receipt email's text part already
+    # said so, its HTML part and this email did not).
+    if receipt.get("kind") == "folder":
+        evidentiary = ("This receipt, the folder's manifest, and the files "
+                       "themselves together constitute the complete evidentiary "
+                       "set; the manifest is required to re-derive the root.")
+    else:
+        evidentiary = ("The original file and this notice together constitute "
+                       "the complete evidentiary set.")
     subject = f"Orphograph — Receipt {rid} committed to Bitcoin"
     text = (
         f"The instrument is now committed to the Bitcoin chain.\n\n"
@@ -591,8 +579,7 @@ def send_pin_email(to: str, receipt: dict) -> bool:
         f"  Proofs            {pinned_count} of {total} anchored\n\n"
         f"  Full receipt      {receipt_url}\n\n"
         f"From this point forward the receipt verifies against the chain "
-        f"without further reference to this office. The original file "
-        f"and this notice together constitute the complete evidentiary set.\n"
+        f"without further reference to this office. {evidentiary}\n"
     )
     html = (
         f"<h2 style=\"font-family:Georgia,'Times New Roman',serif;margin:0 0 14px;"
@@ -616,8 +603,7 @@ def send_pin_email(to: str, receipt: dict) -> bool:
         f"View the full receipt →</a></p>"
         f"<p style=\"color:#444;font-size:14px;\">From this point forward "
         f"the receipt verifies against the chain without further reference "
-        f"to this office. The original file and this notice together "
-        f"constitute the complete evidentiary set.</p>"
+        f"to this office. {evidentiary}</p>"
     )
     attachments = None
     if _receipt_pdf is not None:
@@ -698,11 +684,13 @@ def send_receipt_email(to: str, receipt: dict) -> bool:
         f"style=\"margin:18px 0;border-collapse:collapse;font-size:14px;\">"
         f"<tr><td style=\"padding:4px 14px 4px 0;color:#666;vertical-align:top;\">Receipt</td>"
         f"<td style=\"font-family:Menlo,Consolas,monospace;color:#1a1a1a;\"><code>{rid}</code></td></tr>"
-        f"<tr><td style=\"padding:4px 14px 4px 0;color:#666;vertical-align:top;\">SHA-256</td>"
+        f"<tr><td style=\"padding:4px 14px 4px 0;color:#666;vertical-align:top;\">{digest_label.strip()}</td>"
         f"<td style=\"font-family:Menlo,Consolas,monospace;color:#1a1a1a;word-break:break-all;font-size:12px;\"><code>{hash_hex}</code></td></tr>"
         f"<tr><td style=\"padding:4px 14px 4px 0;color:#666;\">Registered (UTC)</td>"
         f"<td>{created_at}</td></tr>"
-        f"<tr><td style=\"padding:4px 14px 4px 0;color:#666;\">Calendars</td>"
+        + (f"<tr><td style=\"padding:4px 14px 4px 0;color:#666;\">Files anchored</td>"
+           f"<td>{leaf_count}</td></tr>" if is_folder and leaf_count else "")
+        + f"<tr><td style=\"padding:4px 14px 4px 0;color:#666;\">Calendars</td>"
         f"<td>{cal_ok} of {cal_total} attesting</td></tr>"
         f"</table>"
         f"<p style=\"margin:22px 0;\">"
@@ -712,11 +700,9 @@ def send_receipt_email(to: str, receipt: dict) -> bool:
         f"font-family:Georgia,'Times New Roman',serif;font-size:14px;"
         f"letter-spacing:0.03em;\">"
         f"View the full receipt →</a></p>"
-        + (f"<p style=\"color:#444;font-size:14px;\">{retain.strip()}</p>" if no_commitment else
-           f"<p style=\"color:#444;font-size:14px;\">A second notice will be "
-           f"issued upon Bitcoin commitment. Until then, this receipt and "
-           f"the original file together comprise the evidentiary set; please "
-           f"retain both.</p>")
+        # The same retain line as the text part, so a folder receipt names the
+        # manifest here too (drift audit 2026-10-01).
+        + f"<p style=\"color:#444;font-size:14px;\">{retain.strip()}</p>"
     )
     attachments = None
     if _receipt_pdf is not None:

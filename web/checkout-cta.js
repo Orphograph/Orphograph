@@ -7,7 +7,8 @@
 // Wires:
 //   #buy-pack     -> cfg.stripe.pack_url             (Writer Pack, one-time $19)
 //   #buy-pack50   -> cfg.stripe.pack50_url           (Pack of Fifty, one-time $29)
-//   #buy-personal -> cfg.stripe.personal_monthly_url (Standing Order, $9/mo)
+//   #buy-personal -> cfg.stripe.personal_monthly_url (Standing Order, $9/mo);
+//                    for a signed-in subscriber, /account instead (no second one)
 //
 // Card-notify fallback (funnel-hygiene): while card_charges_enabled is FALSE
 // the card buttons stay hidden and the per-tier notify forms (#notify-pack,
@@ -103,8 +104,33 @@
     wireNotify("notify-personal", "card_personal", !ok);
   }
 
+  // A signed-in account that already holds a Standing Order of its own
+  // (active, or past due) must not be sold a second one. A team member
+  // covered by the owner's subscription holds none and may still buy. The
+  // server's 409 guard sits on /api/stripe/checkout, which these Payment
+  // Links never reach (drift audit 2026-10-01), so the page applies the same
+  // rule: the card button becomes a link to the account page instead.
+  function guardSubscriber(me) {
+    if (!me || me.signed_in !== true) return;
+    if (me.subscription_own_active !== true && me.subscription_past_due !== true) return;
+    var a = document.getElementById("buy-personal");
+    if (!a) return;
+    a.href = "/account";
+    a.removeAttribute("target");
+    a.textContent = "You have a Standing Order: manage it";
+    a.hidden = false;
+    var n = document.getElementById("notify-personal");
+    if (n) n.hidden = true;
+  }
+
   fetch("/api/config", { credentials: "same-origin" })
     .then(function (r) { return r.ok ? r.json() : {}; })
     .then(apply)
-    .catch(function () { apply({}); });
+    .catch(function () { apply({}); })
+    .then(function () {
+      return fetch("/api/me", { credentials: "same-origin" })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(guardSubscriber);
+    })
+    .catch(function () { /* signed out or offline: the button stays as configured */ });
 })();

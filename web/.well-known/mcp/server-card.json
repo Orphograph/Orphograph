@@ -26,7 +26,7 @@
     },
     {
       "name": "orphograph_verify_receipt",
-      "description": "Verify an existing Orphograph receipt against the calendars and Bitcoin chain; returns the anchored hashes, attestation counts, and Bitcoin block commitment time when available. No API key required."
+      "description": "Look up an existing Orphograph receipt and return what the office recorded for it: the anchored hashes, the calendar attestation counts, and (when available) the time the pin to Bitcoin was observed. It reads the office's record and does not independently verify the Bitcoin chain; for that, run an OpenTimestamps client over the receipt's .ots files. No API key required."
     },
     {
       "name": "orphograph_verify_lineage",

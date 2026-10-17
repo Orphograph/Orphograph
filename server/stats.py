@@ -143,17 +143,26 @@ def _calendars_public(h: dict) -> dict:
     which are public OTS infrastructure. No private state.
     """
     rows = h.get("calendars") or []
-    reachable = sum(1 for r in rows if r.get("reachable"))
     total = len(rows)
+    # Unprobed is not unreachable. Production does not probe the calendars
+    # (ORPHO_HEALTH_ACTIVE_PROBES unset), so health reports reachable None;
+    # coercing that to False told every visitor all five were down while
+    # anchoring worked (drift audit 2026-10-01). None passes through, and
+    # "reachable" is None unless every calendar was actually checked.
+    checked = total > 0 and all(r.get("checked") is not False and r.get("reachable") is not None
+                                for r in rows)
+    reachable = sum(1 for r in rows if r.get("reachable") is True) if checked else None
     items = []
     for r in rows:
         url = r.get("url", "")
         # Short name: same convention engine._calendar_short uses.
         short = url.split("//", 1)[-1].split(".", 1)[0] if "//" in url else url
-        items.append({"name": short, "reachable": bool(r.get("reachable"))})
+        val = r.get("reachable")
+        items.append({"name": short, "reachable": val if isinstance(val, bool) else None})
     return {
         "reachable": reachable,
         "total": total,
+        "checked": checked,
         "items": items,
     }
 

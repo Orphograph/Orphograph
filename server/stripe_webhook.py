@@ -689,10 +689,12 @@ def handle_event(payload: bytes) -> dict:
         if isinstance(payment_intent_id, str) and payment_intent_id:
             _record_pi_session(payment_intent_id, session_id)
 
-        # Referral: Stripe Payment Links accept arbitrary key=value pairs
-        # in metadata (set client-side by adding ?prefilled_metadata or via
-        # the Stripe API). We look for `ref_code` first, fall back to any
-        # field that smells like a ref code.
+        # Referral: credited only when the session's metadata carries a
+        # `ref_code` (or `ref`). No page we serve puts one there (drift
+        # audit 2026-10-01: "/" never reads ?ref=, and the Payment Links get
+        # none), and claim emails stopped offering referral links on
+        # 2026-10-17, so in practice this only honours metadata set by hand
+        # through the Stripe API.
         ref_credit_result = None
         ref_code = (meta.get("ref_code") or meta.get("ref") or "").strip()
         if ref_code and not needs_lowercase(customer_email):

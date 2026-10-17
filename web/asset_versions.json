@@ -152,8 +152,8 @@
     "sha256": "afa891972814f3f9f6e44f8a0da22dacac4f11546013b25276f524559dc63605"
   },
   "/checkout-cta.js": {
-    "version": "5",
-    "sha256": "fa6239d8e4398a49b15b6a391de4d6f1d0beb8247ac2862388a5b7700b691ef2"
+    "version": "6",
+    "sha256": "381a4321b24b1a0c97fc548b62a638ead1ef4dacb05aa125ef747b075b4b8542"
   },
   "/continuity.css": {
     "version": "1",
@@ -216,8 +216,8 @@
     "sha256": "977d0bedb62a2a91c19c1ce8acb5b6076ad0c119bccb4317efe74c09497e445d"
   },
   "/founder/admin.js": {
-    "version": "2",
-    "sha256": "c96695006d28f20ba8ccc3087b2e0bf538612fec0b30169168b0feb8fd20c125"
+    "version": "3",
+    "sha256": "216a12c7a7741c16b021a9fb68c2ce46dfa63ecd212d742c1c4a63788196a4b9"
   },
   "/founder/funnel.css": {
     "version": "3",
@@ -392,8 +392,8 @@
     "sha256": "7863cb0392c48f025d63340a4935c419578161cede2e47db6ade3d1c8334c7b3"
   },
   "/pay/success.js": {
-    "version": "1",
-    "sha256": "9be7897bcf58354de68a70b12e8adc84b505cc333126ba63a63cfc6d63db5bdc"
+    "version": "2",
+    "sha256": "41f6f88c4b1de8a87139f5a28ec5d10106eec45629f25081aac50982eed0cb49"
   },
   "/press-kit.css": {
     "version": "1",
@@ -448,8 +448,8 @@
     "sha256": "9401d20d9d7e78b479a64fe695d03fc771c49b015f5194538fc8dea10aae1ca7"
   },
   "/stats.js": {
-    "version": "2",
-    "sha256": "68600c586efc0b8a6ca3d090d15a8efc96971ac344c3e4228ae95112ea24b01b"
+    "version": "3",
+    "sha256": "62f9855a13d40ef48ad901a8950303d99607a7de31d21779431c2bff9cbb1988"
   },
   "/status-badge.js": {
     "version": "2",

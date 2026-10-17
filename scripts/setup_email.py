@@ -269,7 +269,7 @@ ALIAS_ADDRESSES = (
     "privacy",
     "press",
     "abuse",      # RFC 2142; providers and reporters check it
-    "support",
+    "support",    # not currently published (gift page moved to hello@ + /recover, 2026-10-17); kept for replies
     "billing",    # not currently published; kept for checkout correspondence
 )
 

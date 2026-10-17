@@ -50,8 +50,8 @@ git clone https://github.com/Orphograph/Orphograph ~/src/orphograph
 |---|---|---|
 | Free | $0 | 3 / 24h |
 | Writer Pack | $19 one-shot | 10 (no expiry) |
+| Pack of Fifty | $29 one-shot | 50 (no expiry) |
 | Standing Order | $9/mo | Unlimited |
-| Creator | $19/mo | Unlimited + capture-time app + API + verifier badge |
 
 Set `$ORPHO_API_KEY` in your shell to use a paid tier (legacy `$ORPHOGRAPH_API_KEY` is still accepted), or pass `--api-key`.
 

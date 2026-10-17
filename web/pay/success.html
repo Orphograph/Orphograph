@@ -35,11 +35,12 @@
   <div class="ok-wrap">
     <div class="ok-card">
       <div class="ok-seal" aria-hidden="true">✓</div>
-      <h1>Payment received</h1>
+      <h1 id="ok-title">Payment sent</h1>
       <p id="ok-lede">
-        Thank you — your crypto payment is confirmed on-chain. We've emailed your
-        <strong>claim code</strong> to the address you entered at checkout; it
-        usually arrives within a few minutes (check spam if you don't see it).
+        Thank you. Your crypto payment now has to confirm on its network, which
+        usually takes up to about an hour. When it confirms, we email your
+        <strong>claim code</strong> to the address you entered at checkout
+        (check spam if you don't see it). You can close this page.
       </p>
 
       <div class="ok-order" id="ok-order" hidden>
@@ -74,7 +75,7 @@
   </div>
 </footer>
 
-<script src="/pay/success.js?v=1"></script>
+<script src="/pay/success.js?v=2"></script>
 <script src="/assets/event.js?v=1" defer></script>
 </body>
 </html>
