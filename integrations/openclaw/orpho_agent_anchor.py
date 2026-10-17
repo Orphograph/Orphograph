@@ -187,8 +187,14 @@ def main() -> int:
                 result["local_sha256"] = local256
                 result["local_match"] = (local256 == result.get("hash_hex")
                                          or local256 == result.get("sha256"))
+        # calendars_ok 0: the receipt has no Bitcoin commitment and never
+        # gets one, so a matching hash is not bounded in time. Not verified
+        # (the dataset CLI's and the SDK CLIs' rule).
+        if "error" not in result and result.get("calendars_ok") == 0:
+            result["not_anchored"] = "no calendar accepted the hash"
         print(json.dumps(result, indent=2, sort_keys=True))
-        return 0 if "error" not in result and result.get("local_match") is not False else 1
+        return 0 if ("error" not in result and "not_anchored" not in result
+                     and result.get("local_match") is not False) else 1
 
     if args.cmd == "anchor-file":
         sha256, sha512 = hash_file(args.path)

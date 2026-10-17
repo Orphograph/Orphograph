@@ -93,7 +93,7 @@ class UrlInAnArgumentSlotTest(unittest.TestCase):
                          ["anchor", "http://127.0.0.1:9"]):
                 err = io.StringIO()
                 with mock.patch.object(_cli, "inclusion_proof", side_effect=stop) as ip, \
-                        mock.patch.object(_cli, "verify_folder", side_effect=stop) as vf, \
+                        mock.patch.object(_cli, "verify_folder_detail", side_effect=stop) as vf, \
                         mock.patch.object(_cli, "anchor_folder", side_effect=stop) as af, \
                         redirect_stdout(io.StringIO()), redirect_stderr(err):
                     rc = _cli.main(argv)
@@ -115,7 +115,7 @@ class UrlInAnArgumentSlotTest(unittest.TestCase):
                 err = io.StringIO()
                 with mock.patch.dict("os.environ", env), \
                         mock.patch.object(_cli, "inclusion_proof", side_effect=stop) as ip, \
-                        mock.patch.object(_cli, "verify_folder", side_effect=stop) as vf, \
+                        mock.patch.object(_cli, "verify_folder_detail", side_effect=stop) as vf, \
                         mock.patch.object(_cli, "anchor_folder", side_effect=stop) as af, \
                         redirect_stdout(io.StringIO()), redirect_stderr(err):
                     rc = _cli.main(argv)

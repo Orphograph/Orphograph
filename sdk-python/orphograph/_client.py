@@ -50,6 +50,22 @@ class OrphographError(RuntimeError):
         self.payload = payload or {}
 
 
+class _RefuseRedirects(urllib.request.HTTPRedirectHandler):
+    """A 3xx is an answer, not an instruction to go elsewhere.
+
+    urllib's default handler followed a redirect to any host and copied every
+    header but the body's, X-Orpho-Api-Key included; a POST turned into a
+    GET and the CLI printed the other host's answer as a receipt. The 3xx now
+    surfaces as an HTTPError, so as an OrphographError (pre-release review
+    of the SDK CLIs)."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+_OPENER = urllib.request.build_opener(_RefuseRedirects)
+
+
 def _normalise_base(server_url: str) -> str:
     if not server_url:
         raise ValueError("server_url is required")
@@ -75,7 +91,7 @@ def _request(
 ) -> dict:
     req = urllib.request.Request(url=url, data=body, method=method, headers=headers or {})
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with _OPENER.open(req, timeout=timeout) as resp:
             raw = resp.read()
             status = resp.getcode()
     except urllib.error.HTTPError as e:
@@ -86,15 +102,23 @@ def _request(
             payload = json.loads(raw.decode("utf-8")) if raw else {}
         except (UnicodeDecodeError, json.JSONDecodeError):
             payload = {"error": raw[:200].decode("utf-8", "replace")}
-        raise OrphographError(status, payload.get("error") or e.reason or "request failed", payload)
+        if not isinstance(payload, dict):
+            payload = {}
+        message = payload.get("error")
+        if not isinstance(message, str) or not message:
+            message = str(e.reason or "request failed")
+        raise OrphographError(status, message, payload)
     if not (200 <= status < 300):
         raise OrphographError(status, "unexpected status")
     if not raw:
         return {}
     try:
-        return json.loads(raw.decode("utf-8"))
+        data = json.loads(raw.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as e:
         raise OrphographError(status, f"invalid JSON response: {e}")
+    if not isinstance(data, dict):
+        raise OrphographError(status, "response is not a JSON object")
+    return data
 
 
 def post_anchor_folder(
