@@ -2610,6 +2610,10 @@ class Handler(BaseHTTPRequestHandler):
                 # The account's own subscription, which Cancel acts on. It
                 # gives no access; the page says so and offers Cancel.
                 "subscription_past_due": subscriptions.row_is_past_due(sub_status),
+                # The account's OWN active subscription, not a team's cover:
+                # the same test the checkout 409 guard applies, so the
+                # pricing page can refuse a second one too (checkout-cta.js).
+                "subscription_own_active": subscriptions.is_active(email),
                 "subscription_status": sub_status or None,
                 "days_remaining": days_remaining,
                 "anchor_count": anchor_count,

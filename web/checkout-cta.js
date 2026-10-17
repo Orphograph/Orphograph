@@ -104,14 +104,15 @@
     wireNotify("notify-personal", "card_personal", !ok);
   }
 
-  // A signed-in account that already holds a Standing Order (active, or past
-  // due and still the account's own) must not be sold a second one. The
+  // A signed-in account that already holds a Standing Order of its own
+  // (active, or past due) must not be sold a second one. A team member
+  // covered by the owner's subscription holds none and may still buy. The
   // server's 409 guard sits on /api/stripe/checkout, which these Payment
   // Links never reach (drift audit 2026-10-01), so the page applies the same
   // rule: the card button becomes a link to the account page instead.
   function guardSubscriber(me) {
     if (!me || me.signed_in !== true) return;
-    if (me.subscription_active !== true && me.subscription_past_due !== true) return;
+    if (me.subscription_own_active !== true && me.subscription_past_due !== true) return;
     var a = document.getElementById("buy-personal");
     if (!a) return;
     a.href = "/account";

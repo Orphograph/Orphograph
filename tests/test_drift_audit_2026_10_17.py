@@ -394,15 +394,32 @@ _CFG = {"status": 200, "body": {"stripe": {"card_charges_enabled": True,
                                            "pack_url": "https://buy.stripe.test/pack"}}}
 
 
-@pytest.mark.parametrize("flag", ["subscription_active", "subscription_past_due"])
+@pytest.mark.parametrize("flag", ["subscription_own_active", "subscription_past_due"])
 def test_f18_a_signed_in_subscriber_is_not_offered_a_second_subscription(tmp_path, flag):
-    me = {"status": 200, "body": {"signed_in": True, "subscription_active": False,
+    me = {"status": 200, "body": {"signed_in": True, "subscription_active": flag == "subscription_own_active",
+                                  "subscription_own_active": False,
                                   "subscription_past_due": False, flag: True}}
     shown = _run_page(tmp_path, WEB / "checkout-cta.js", _CTA_IDS,
                       {"/api/config": _CFG, "/api/me": me}, hidden=_CTA_IDS)
     assert shown["buy-personal"]["href"] == "/account", shown["buy-personal"]
     assert "stripe" not in shown["buy-personal"]["href"]
     assert shown["buy-pack"]["href"] == "https://buy.stripe.test/pack"  # packs stay on sale
+
+
+def test_f18_a_team_member_covered_by_the_owner_can_still_subscribe(tmp_path):
+    """subscription_active counts the team owner's cover; the server's 409
+    guard does not, and neither does the page."""
+    me = {"status": 200, "body": {"signed_in": True, "subscription_active": True,
+                                  "subscription_own_active": False, "subscription_past_due": False}}
+    shown = _run_page(tmp_path, WEB / "checkout-cta.js", _CTA_IDS,
+                      {"/api/config": _CFG, "/api/me": me}, hidden=_CTA_IDS)
+    assert shown["buy-personal"]["href"] == "https://buy.stripe.test/sub"
+
+
+def test_f18_api_me_reports_the_accounts_own_subscription():
+    import app
+    src = Path(app.__file__).read_text()
+    assert '"subscription_own_active": subscriptions.is_active(email)' in src
 
 
 def test_f18_control_signed_out_visitors_still_get_the_payment_link(tmp_path):
