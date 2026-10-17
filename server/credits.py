@@ -245,7 +245,7 @@ def find_nowpayments_mint(order_id: str) -> dict | None:
 
 # The order-status poll is unauthenticated and web/pay/success.js repeats it;
 # each poll used to read the whole ledger. Answers are kept per order id while
-# the ledger file is unchanged (same device, inode, size and mtime): an append
+# the ledger file is unchanged (same device, inode, size, mtime and ctime): an append
 # or a rewrite changes the signature and drops every kept answer
 # (@order-status-index). Only the status poll reads through this; the
 # webhook's exactly-once check and recover always scan.
@@ -258,7 +258,7 @@ def _ledger_signature():
         st = LEDGER_PATH.stat()
     except FileNotFoundError:
         return ("absent", str(LEDGER_PATH))
-    return (str(LEDGER_PATH), st.st_dev, st.st_ino, st.st_size, st.st_mtime_ns)
+    return (str(LEDGER_PATH), st.st_dev, st.st_ino, st.st_size, st.st_mtime_ns, st.st_ctime_ns)
 
 
 def nowpayments_order_credits(order_id: str) -> int | None:

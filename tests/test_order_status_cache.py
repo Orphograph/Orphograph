@@ -72,3 +72,15 @@ def test_the_answer_matches_the_strict_lookup():
     assert credits.nowpayments_order_credits("np_pack_50_x") == 50
     assert credits.nowpayments_order_credits("np_pack_50") is None
     assert credits.nowpayments_order_credits("") is None
+
+
+def test_an_in_place_rewrite_with_the_mtime_put_back_is_still_seen():
+    """Review LOW: same size, same inode, mtime restored: only ctime moves."""
+    _mint("np_pack_50_d")
+    assert credits.nowpayments_order_credits("np_pack_50_d") == 50
+    st = credits.LEDGER_PATH.stat()
+    text = credits.LEDGER_PATH.read_text().replace("np_pack_50_d", "np_pack_50_y")
+    with open(credits.LEDGER_PATH, "r+") as f:
+        f.write(text)
+    os.utime(credits.LEDGER_PATH, ns=(st.st_atime_ns, st.st_mtime_ns))
+    assert credits.nowpayments_order_credits("np_pack_50_d") is None

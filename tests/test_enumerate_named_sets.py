@@ -12,10 +12,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
 import enumerate_surface as es  # noqa: E402
+from _srv import APP  # noqa: E402  (the path only; no server is started here)
 
 
 def _report():
-    app = (ROOT / "server" / "app.py").read_text()
+    app = APP.read_text()
     probes = (ROOT / "scripts" / "all_endpoints_probe.py").read_text()
     return es.routes_report(app, probes, set())
 
@@ -28,7 +29,7 @@ def test_the_pay_crypto_control_is_enumerated_from_the_real_app():
 
 
 def test_an_unresolvable_named_set_fails_the_shape_oracle():
-    app = (ROOT / "server" / "app.py").read_text()
+    app = APP.read_text()
     broken = app.replace('AB_CHECKOUT_PATHS = frozenset({"/pay/crypto", "/pay/crypto/"})',
                          'AB_CHECKOUT_PATHS = frozenset(_load())', 1)
     assert broken != app

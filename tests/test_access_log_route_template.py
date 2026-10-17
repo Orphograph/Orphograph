@@ -55,6 +55,8 @@ def test_a_token_after_a_bearer_route_mid_path_is_still_redacted(server):
     ("/api/nowpayments/order/OrderIdCanary05", "/api/nowpayments/order/{id}"),
     ("/certificate/ReceiptIdCanary06", "/certificate/{id}"),
     ("/login?next=/r/ReceiptIdCanary07", "/login?next=/r/{id}"),
+    ("/R/ReceiptIdCanary08", "/r/{id}"),
+    ("/r/x/a/ReceiptIdCanary09", "/r/{id}"),
 ])
 def test_an_id_route_is_logged_as_its_template(server, target, template):
     base, data_dir = server

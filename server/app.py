@@ -1760,16 +1760,17 @@ class Handler(BaseHTTPRequestHandler):
         route = cls._log_bearer_route(path)
         if route is not None:
             return route + "[redacted]"
+        folded = cls._log_fold(path)
+        # Folded like the bearer rule, so /R/<id> and //r/<id> are templated
+        # too; checked before the mention rule, so /r/<id>/a/ keeps no id.
+        for route in cls._LOG_ID_ROUTES:
+            if folded.startswith(route) and len(folded) > len(route):
+                return route + "{id}"
         if cls._log_mentions_bearer(path):
             # `/blog/a/x` is an ordinary path; `/x/a/<token>` still holds one.
-            folded = cls._log_fold(path)
             tails = [folded.split(r, 1)[1] for r in cls._LOG_BEARER_ROUTES if r in folded]
             if any(cls._LOG_TOKEN_LIKE.search(t) for t in tails):
                 return "[redacted-path]"
-            return path
-        for route in cls._LOG_ID_ROUTES:
-            if path.startswith(route) and len(path) > len(route):
-                return route + "{id}"
         return path
 
     @classmethod
