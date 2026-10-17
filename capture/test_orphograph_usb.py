@@ -38,7 +38,7 @@ def _no_network(monkeypatch):
     def _boom(*args, **kwargs):  # pragma: no cover — tripping it is the failure
         raise AssertionError("test attempted a real network call via urlopen")
 
-    monkeypatch.setattr(usb.urllib.request, "urlopen", _boom)
+    monkeypatch.setattr(usb, "_urlopen", _boom)
     yield
 
 
@@ -469,7 +469,7 @@ def test_fetch_proof_bundle_extracts_zip_and_blocks_zip_slip(tmp_path, monkeypat
         assert "/api/receipt/RID9.zip" in req.full_url
         return _FakeHTTPResponse(blob)
 
-    monkeypatch.setattr(usb.urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr(usb, "_urlopen", fake_urlopen)
     dest = tmp_path / "receipts"
     dest.mkdir()
     assert usb.fetch_proof_bundle(ENDPOINT, "RID9", dest) is True
@@ -482,7 +482,7 @@ def test_fetch_proof_bundle_extracts_zip_and_blocks_zip_slip(tmp_path, monkeypat
 
 
 def test_fetch_proof_bundle_bad_zip_returns_false(tmp_path, monkeypatch):
-    monkeypatch.setattr(usb.urllib.request, "urlopen",
+    monkeypatch.setattr(usb, "_urlopen",
                         lambda req, timeout=None: _FakeHTTPResponse(b"not a zip"))
     assert usb.fetch_proof_bundle(ENDPOINT, "RIDX", tmp_path) is False
 
@@ -500,7 +500,7 @@ def test_anchor_hash_success_posts_expected_body(monkeypatch):
         seen["api_key"] = req.headers.get("X-orpho-api-key")
         return _FakeHTTPResponse(json.dumps({"receipt_id": "R1"}).encode())
 
-    monkeypatch.setattr(usb.urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr(usb, "_urlopen", fake_urlopen)
     ok, resp = usb.anchor_hash(ENDPOINT + "/", "aa" * 32, "bb" * 64, "lbl", "KEY123")
     assert ok is True
     assert resp == {"receipt_id": "R1"}
@@ -516,7 +516,7 @@ def test_anchor_hash_http_error_carries_status_code(monkeypatch):
         raise urllib.error.HTTPError(req.full_url, 429, "Too Many Requests", {},
                                      io.BytesIO(b'{"error":"rate limit"}'))
 
-    monkeypatch.setattr(usb.urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr(usb, "_urlopen", fake_urlopen)
     ok, resp = usb.anchor_hash(ENDPOINT, "aa" * 32, "bb" * 64, "", "")
     assert ok is False
     assert resp["status_code"] == 429
@@ -527,7 +527,7 @@ def test_anchor_hash_network_error_returns_error_dict(monkeypatch):
     def fake_urlopen(req, timeout=None):
         raise urllib.error.URLError("no route to host")
 
-    monkeypatch.setattr(usb.urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr(usb, "_urlopen", fake_urlopen)
     ok, resp = usb.anchor_hash(ENDPOINT, "aa" * 32, "bb" * 64, "", "")
     assert ok is False
     assert "URLError" in resp["error"]
@@ -538,7 +538,7 @@ def test_anchor_hash_html_200_is_a_failure_not_a_crash(monkeypatch):
     """A captive portal answers 200 with HTML — the recorder's exact travel
     scenario. An unparseable success body must come back as (False, error),
     never as an unhandled JSONDecodeError that kills the whole pass."""
-    monkeypatch.setattr(usb.urllib.request, "urlopen",
+    monkeypatch.setattr(usb, "_urlopen",
                         lambda req, timeout=None: _FakeHTTPResponse(b"<html>hotel wifi</html>"))
     ok, resp = usb.anchor_hash(ENDPOINT, "aa" * 32, "bb" * 64, "", "")
     assert ok is False
@@ -552,6 +552,6 @@ def test_fetch_proof_bundle_empty_zip_is_a_failure(tmp_path, monkeypatch):
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w"):
         pass
-    monkeypatch.setattr(usb.urllib.request, "urlopen",
+    monkeypatch.setattr(usb, "_urlopen",
                         lambda req, timeout=None: _FakeHTTPResponse(buf.getvalue()))
     assert usb.fetch_proof_bundle(ENDPOINT, "RIDE", tmp_path) is False

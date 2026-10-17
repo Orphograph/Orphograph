@@ -22,6 +22,7 @@ log:enable("logfile")
 local API_BASE = "https://orphograph.com"
 
 local OrphographAPI = {}
+OrphographAPI.BASE = API_BASE
 
 function OrphographAPI.sha256OfFile(path)
   -- Runs `shasum -a 256 <path>` via LrTasks.execute, captures stdout via
@@ -79,7 +80,10 @@ function OrphographAPI.anchor(sha256_hex, clientLabel)
     local err = response:match('"error"%s*:%s*"([^"]+)"') or "unknown error"
     return nil, err
   end
-  return receiptId, nil
+  -- The server's own public link for the receipt (ReceiptLink.lua checks it
+  -- before use; nil when the answer has none).
+  local servedUrl = response:match('"receipt_url"%s*:%s*"([^"]+)"')
+  return receiptId, nil, servedUrl
 end
 
 return OrphographAPI

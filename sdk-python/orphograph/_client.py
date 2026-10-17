@@ -37,7 +37,9 @@ DEFAULT_TIMEOUT = 60.0
 # this SDK ships to third parties, so the lie propagated to every user of it.
 # All that is required is that a UA is SET, so urllib never falls back to its
 # default.
-USER_AGENT = "orphograph-python-sdk/0.1 (+https://orphograph.com)"
+# The version is the package's (pyproject.toml, orphograph.__version__);
+# tests/test_class_fixes_2026_10_17.py pins them equal.
+USER_AGENT = "orphograph-python-sdk/0.1.1 (+https://orphograph.com)"
 
 
 class OrphographError(RuntimeError):
@@ -66,6 +68,11 @@ class _RefuseRedirects(urllib.request.HTTPRedirectHandler):
 _OPENER = urllib.request.build_opener(_RefuseRedirects)
 
 
+def _urlopen(req, timeout):
+    """Every request this client makes goes through here."""
+    return _OPENER.open(req, timeout=timeout)
+
+
 def _normalise_base(server_url: str) -> str:
     if not server_url:
         raise ValueError("server_url is required")
@@ -91,7 +98,7 @@ def _request(
 ) -> dict:
     req = urllib.request.Request(url=url, data=body, method=method, headers=headers or {})
     try:
-        with _OPENER.open(req, timeout=timeout) as resp:
+        with _urlopen(req, timeout=timeout) as resp:
             raw = resp.read()
             status = resp.getcode()
     except urllib.error.HTTPError as e:

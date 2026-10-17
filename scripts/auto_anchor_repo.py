@@ -91,6 +91,27 @@ EXCLUDE_PATTERNS: tuple[str, ...] = (
 )
 
 
+class _RefuseRedirects(urllib.request.HTTPRedirectHandler):
+    """A 3xx is an answer, not an instruction to go elsewhere.
+
+    urllib's default handler followed a redirect to any host and copied every
+    header but the body's, the API key or pack token included, and a POST
+    came back as a GET whose answer (the other host's) was read as ours. The
+    3xx now surfaces as an HTTPError (@redirect-key-class; the Python SDK
+    client has refused redirects since #290)."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+_OPENER = urllib.request.build_opener(_RefuseRedirects)
+
+
+def _urlopen(req, timeout):
+    """Every request this client makes goes through here."""
+    return _OPENER.open(req, timeout=timeout)
+
+
 def git_short_sha(root: Path) -> str:
     """Return the short git SHA at HEAD, or an empty string on failure."""
     try:
@@ -137,7 +158,7 @@ def post_anchor(manifest: dict, client_label: str, base_url: str, api_key: str,
         headers=headers,
     )
     try:
-        with urllib.request.urlopen(req, timeout=60) as resp:
+        with _urlopen(req, timeout=60) as resp:
             status = resp.getcode()
             raw = resp.read().decode("utf-8", errors="replace")
     except urllib.error.HTTPError as e:

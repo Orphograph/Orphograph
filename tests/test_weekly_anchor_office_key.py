@@ -116,7 +116,7 @@ def job(monkeypatch, tmp_path):
         state["sent"].append(json.loads(req.data.decode()))
         return _Reply(state["reply"])
 
-    monkeypatch.setattr(weekly_anchor.urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr(weekly_anchor, "_urlopen", fake_urlopen)
     state["log"] = lambda: [json.loads(x) for x in
                             (tmp_path / "weekly_anchor_log.jsonl").read_text().splitlines()]
     return state

@@ -45,6 +45,27 @@ MEMORY_EXTS = (".md", ".markdown")
 STATE_DIR_NAME = ".orphograph"
 
 
+class _RefuseRedirects(urllib.request.HTTPRedirectHandler):
+    """A 3xx is an answer, not an instruction to go elsewhere.
+
+    urllib's default handler followed a redirect to any host and copied every
+    header but the body's, the API key or pack token included, and a POST
+    came back as a GET whose answer (the other host's) was read as ours. The
+    3xx now surfaces as an HTTPError (@redirect-key-class; the Python SDK
+    client has refused redirects since #290)."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+_OPENER = urllib.request.build_opener(_RefuseRedirects)
+
+
+def _urlopen(req, timeout):
+    """Every request this client makes goes through here."""
+    return _OPENER.open(req, timeout=timeout)
+
+
 def utc_now_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -117,7 +138,7 @@ def post_anchor(base, sha256_hex, sha512_hex, label=None,
                                  data=json.dumps(payload).encode("utf-8"),
                                  headers=headers, method="POST")
     try:
-        with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT_SEC) as resp:
+        with _urlopen(req, timeout=HTTP_TIMEOUT_SEC) as resp:
             return _json_object(resp.read())
     except urllib.error.HTTPError as e:
         return {"error": "http_error", "status": e.code,
@@ -132,7 +153,7 @@ def get_verify(base, receipt_id: str) -> dict:
                "Accept-Encoding": "identity"}
     req = urllib.request.Request(url, headers=headers)
     try:
-        with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT_SEC) as resp:
+        with _urlopen(req, timeout=HTTP_TIMEOUT_SEC) as resp:
             return _json_object(resp.read())
     except urllib.error.HTTPError as e:
         return {"error": "http_error", "status": e.code}

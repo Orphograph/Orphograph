@@ -217,7 +217,7 @@ def test_submit_posts_correct_shape():
         usb, sub, root_hex = _prepare_manifest_on_usb(work)
         fake, captured = _mock_urlopen_returning(_synthetic_receipt(root_hex))
 
-        with mock.patch("usb_offline_anchor_submit.urllib.request.urlopen", fake):
+        with mock.patch("usb_offline_anchor_submit._urlopen", fake):
             rc = usb_offline_anchor_submit.main([
                 "--usb", str(usb),
                 "--manifest-subdir", sub.name,
@@ -270,7 +270,7 @@ def test_submit_writes_receipt_to_new_subdir():
         }
 
         fake, _ = _mock_urlopen_returning(_synthetic_receipt(root_hex))
-        with mock.patch("usb_offline_anchor_submit.urllib.request.urlopen", fake):
+        with mock.patch("usb_offline_anchor_submit._urlopen", fake):
             rc = usb_offline_anchor_submit.main([
                 "--usb", str(usb),
                 "--manifest-subdir", sub.name,
@@ -308,7 +308,7 @@ def test_submit_4xx_exits_4():
                 fp=io.BytesIO(b'{"error":"no api key"}'),
             )
 
-        with mock.patch("usb_offline_anchor_submit.urllib.request.urlopen", _raise_http):
+        with mock.patch("usb_offline_anchor_submit._urlopen", _raise_http):
             rc = usb_offline_anchor_submit.main([
                 "--usb", str(usb),
                 "--manifest-subdir", sub.name,
@@ -326,7 +326,7 @@ def test_submit_network_failure_exits_5():
         def _raise_url(req, timeout=None):
             raise _uerr.URLError("name resolution failed")
 
-        with mock.patch("usb_offline_anchor_submit.urllib.request.urlopen", _raise_url):
+        with mock.patch("usb_offline_anchor_submit._urlopen", _raise_url):
             rc = usb_offline_anchor_submit.main([
                 "--usb", str(usb),
                 "--manifest-subdir", sub.name,
@@ -370,7 +370,7 @@ def test_dry_run_makes_no_writes_for_both_scripts():
         def _boom(*a, **kw):
             raise AssertionError("dry-run must not call urlopen")
 
-        with mock.patch("usb_offline_anchor_submit.urllib.request.urlopen", _boom):
+        with mock.patch("usb_offline_anchor_submit._urlopen", _boom):
             rc = usb_offline_anchor_submit.main([
                 "--usb", str(usb),
                 "--manifest-subdir", sub.name,
@@ -405,7 +405,7 @@ def test_submit_includes_api_key_header_when_passed():
         usb, sub, root_hex = _prepare_manifest_on_usb(work)
 
         fake, captured = _mock_urlopen_returning(_synthetic_receipt(root_hex))
-        with mock.patch("usb_offline_anchor_submit.urllib.request.urlopen", fake):
+        with mock.patch("usb_offline_anchor_submit._urlopen", fake):
             rc = usb_offline_anchor_submit.main([
                 "--usb", str(usb),
                 "--manifest-subdir", sub.name,

@@ -105,7 +105,7 @@ def no_real_network(monkeypatch):
     """Any un-stubbed urlopen is a test failure — the suite must run offline."""
     def _blocked(*a, **k):  # pragma: no cover — only fires on a bug
         raise AssertionError("test attempted a real network call via urlopen")
-    monkeypatch.setattr(oc.urllib.request, "urlopen", _blocked)
+    monkeypatch.setattr(oc, "_urlopen", _blocked)
 
 
 @pytest.fixture(autouse=True)
@@ -276,7 +276,7 @@ def _capture_wire(monkeypatch) -> list:
         body["sha512_hex"] = sent.get("sha512_hex", "")
         return _FakeResponse(json.dumps(body).encode("utf-8"))
 
-    monkeypatch.setattr(oc.urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr(oc, "_urlopen", fake_urlopen)
     return requests
 
 
@@ -514,7 +514,7 @@ def test_anchor_hash_html_200_is_a_failure_not_a_crash(monkeypatch):
             self.close()
             return False
 
-    monkeypatch.setattr(oc.urllib.request, "urlopen",
+    monkeypatch.setattr(oc, "_urlopen",
                         lambda req, timeout=None: _Resp(b"<html>hotel wifi</html>"))
     ok, resp = oc.anchor_hash("https://example.invalid", "aa" * 32, "bb" * 64,
                               "lbl", "")

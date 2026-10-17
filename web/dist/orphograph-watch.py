@@ -20,6 +20,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import signal
 import sys
 import time
@@ -35,6 +36,27 @@ USER_AGENT = "orphograph-watch-folder/1.0"
 MAX_BACKOFF = 15 * 60  # cap network-error backoff at 15 minutes
 
 _stop = False
+
+
+class _RefuseRedirects(urllib.request.HTTPRedirectHandler):
+    """A 3xx is an answer, not an instruction to go elsewhere.
+
+    urllib's default handler followed a redirect to any host and copied every
+    header but the body's, the API key or pack token included, and a POST
+    came back as a GET whose answer (the other host's) was read as ours. The
+    3xx now surfaces as an HTTPError (@redirect-key-class; the Python SDK
+    client has refused redirects since #290)."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+_OPENER = urllib.request.build_opener(_RefuseRedirects)
+
+
+def _urlopen(req, timeout):
+    """Every request this client makes goes through here."""
+    return _OPENER.open(req, timeout=timeout)
 
 
 def _sigint(_signum, _frame):
@@ -140,7 +162,7 @@ def post_anchor(base, sha256_hex, sha512_hex, api_key=None, pack_token=None):
     req = urllib.request.Request(base.rstrip("/") + "/api/anchor",
                                  data=body, headers=headers, method="POST")
     try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
+        with _urlopen(req, timeout=30) as resp:
             return json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
         if e.code == 429:
@@ -154,6 +176,22 @@ def post_anchor(base, sha256_hex, sha512_hex, api_key=None, pack_token=None):
         if e.code == 503:
             raise AnchorPaused()
         raise
+
+
+# scheme://host[:port][/path]/r/<id>, nothing a log or a markdown viewer
+# would read as more than one link.
+_SERVED_URL = re.compile(r"\Ahttps?://[A-Za-z0-9.-]+(?::[0-9]{1,5})?(?:/[A-Za-z0-9._~%-]+)*/r/[A-Za-z0-9_-]+\Z")
+
+
+def receipt_link(base, receipt_id, served=None):
+    """The receipt's public link. The server's own receipt_url wins (behind a
+    proxy or an internal name only the server knows its public address) when
+    it is a plain http(s) link to /r/<this id>; otherwise it is built from
+    --base. It used to name orphograph.com whatever --base was."""
+    if isinstance(served, str) and _SERVED_URL.match(served) \
+            and served.endswith("/r/" + receipt_id):
+        return served
+    return base.rstrip("/") + "/r/" + receipt_id
 
 
 def run_scan(root, args, state, pause):
@@ -234,9 +272,18 @@ def run_scan(root, args, state, pause):
             log("network error (%s); backing off %.0fs" % (e, pause["backoff"]))
             continue
 
+        if result.get("calendars_ok") == 0:
+            # No calendar accepted the hash: the receipt has no Bitcoin
+            # commitment and never gets one. Recording the file would mark it
+            # done; keep it queued and back off as for a paused server.
+            pause["until"] = time.time() + 300
+            log("no calendar accepted %s (receipt %s has no Bitcoin commitment); "
+                "it stays queued, retrying in 5min" % (rel, result.get("receipt_id", "")))
+            continue
+
         pause["backoff"] = 0  # success resets exponential backoff
         receipt_id = result.get("receipt_id", "")
-        receipt_url = "https://orphograph.com/r/%s" % receipt_id
+        receipt_url = receipt_link(args.base, receipt_id, result.get("receipt_url"))
         append_receipt(receipts_path, {
             "ts": now_iso(),
             "path": rel,

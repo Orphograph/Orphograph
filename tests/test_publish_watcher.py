@@ -101,7 +101,7 @@ def test_both_registries_404_writes_nothing():
         _isolate(td_path)
         try:
             with mock.patch(
-                "publish_watcher.urllib.request.urlopen",
+                "publish_watcher._urlopen",
                 side_effect=_http_error(404),
             ):
                 rc = publish_watcher.main([])
@@ -149,7 +149,7 @@ def test_pypi_first_sighting_records_and_posts_anchor():
                 raise AssertionError(f"unexpected url: {url}")
 
             with mock.patch(
-                "publish_watcher.urllib.request.urlopen",
+                "publish_watcher._urlopen",
                 side_effect=fake_urlopen,
             ):
                 rc = publish_watcher.main([])
@@ -214,7 +214,7 @@ def test_pypi_idempotent_second_run_no_duplicate():
                 raise AssertionError(f"unexpected url: {url}")
 
             with mock.patch(
-                "publish_watcher.urllib.request.urlopen",
+                "publish_watcher._urlopen",
                 side_effect=fake_urlopen,
             ):
                 publish_watcher.main([])
@@ -260,7 +260,7 @@ def test_npm_first_sighting_records_and_posts():
                 raise AssertionError(f"unexpected url: {url}")
 
             with mock.patch(
-                "publish_watcher.urllib.request.urlopen",
+                "publish_watcher._urlopen",
                 side_effect=fake_urlopen,
             ):
                 rc = publish_watcher.main([])
@@ -292,7 +292,7 @@ def test_network_error_exits_0_and_leaves_state_untouched(capsys):
         _isolate(td_path)
         try:
             with mock.patch(
-                "publish_watcher.urllib.request.urlopen",
+                "publish_watcher._urlopen",
                 side_effect=urllib.error.URLError("connection refused"),
             ):
                 rc = publish_watcher.main([])
@@ -334,7 +334,7 @@ def test_homepage_badges_is_well_formed_json_after_both_runs():
                 raise AssertionError(f"unexpected url: {url}")
 
             with mock.patch(
-                "publish_watcher.urllib.request.urlopen",
+                "publish_watcher._urlopen",
                 side_effect=fake_urlopen,
             ):
                 publish_watcher.main([])
@@ -380,7 +380,7 @@ def test_pypi_200_npm_404_only_pypi_state_written():
                 raise AssertionError(f"unexpected url: {url}")
 
             with mock.patch(
-                "publish_watcher.urllib.request.urlopen",
+                "publish_watcher._urlopen",
                 side_effect=fake_urlopen,
             ):
                 rc = publish_watcher.main([])

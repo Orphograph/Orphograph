@@ -42,7 +42,7 @@ def _no_network_no_stray_files(tmp_path, monkeypatch):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setattr(anchor, "post_anchor", blocked)
     monkeypatch.setattr(anchor, "get_verify", blocked)
-    monkeypatch.setattr(anchor.urllib.request, "urlopen", blocked)
+    monkeypatch.setattr(anchor, "_urlopen", blocked)
     monkeypatch.chdir(tmp_path)
 
 
@@ -273,7 +273,7 @@ def test_a_200_that_is_not_a_json_object_is_an_error_record(body, monkeypatch, c
     # traceback (JSONDecodeError / AttributeError), with no JSON record and no
     # ledger row. It is an error record now, saved, and the exit is 1.
     monkeypatch.setattr(anchor, "post_anchor", REAL_POST_ANCHOR)
-    monkeypatch.setattr(anchor.urllib.request, "urlopen", lambda req, timeout=None: _Resp(body))
+    monkeypatch.setattr(anchor, "_urlopen", lambda req, timeout=None: _Resp(body))
 
     assert run_main(monkeypatch, ["--base", "http://127.0.0.1:9", "anchor-text"], stdin="payload") == 1
     out = json.loads(capsys.readouterr().out)
@@ -284,7 +284,7 @@ def test_a_200_that_is_not_a_json_object_is_an_error_record(body, monkeypatch, c
 
 def test_verify_on_a_200_that_is_not_a_json_object_fails_cleanly(monkeypatch, capsys):
     monkeypatch.setattr(anchor, "get_verify", REAL_GET_VERIFY)
-    monkeypatch.setattr(anchor.urllib.request, "urlopen", lambda req, timeout=None: _Resp(b"<html>"))
+    monkeypatch.setattr(anchor, "_urlopen", lambda req, timeout=None: _Resp(b"<html>"))
 
     assert run_main(monkeypatch, ["--base", "http://127.0.0.1:9", "verify", "r1"]) == 1
     assert json.loads(capsys.readouterr().out)["error"] == "bad_response"
