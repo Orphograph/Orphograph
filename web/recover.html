@@ -42,7 +42,7 @@
   <p class="rec-eyebrow">Recovery</p>
   <h1>Recover an issued instrument.</h1>
   <p class="rec-lede">
-    If payment has been received but the corresponding claim instrument or sign-in instrument has not arrived in your inbox, this form re-issues it to the address on file. No duplicate instrument is minted; the original claim code is preserved. For a card payment, the identifier is the session segment beginning <code>cs_…</code> (in your checkout-success URL or your payment-confirmation email). For a crypto payment, it is the order identifier beginning <code>np_…</code> shown on the payment page and in your confirmation.
+    If payment has been received but the corresponding claim instrument or sign-in instrument has not arrived in your inbox, this form re-issues it to the address on file (for a gifted Pack, the recipient's). No duplicate instrument is minted; the original claim code is preserved. For a card payment, the identifier is the session segment beginning <code>cs_…</code> (in your checkout-success URL or your payment-confirmation email). For a crypto payment, it is the order identifier beginning <code>np_…</code> shown on the payment page and in your confirmation.
   </p>
 
   <form class="rec-form" id="rec-form" novalidate>
@@ -61,6 +61,9 @@
   <section class="rec-faq">
     <h3>Is a new instrument minted?</h3>
     <p>No. If a claim code was already issued for the session, the same code is re-sent. If the payment is recorded but a code has not yet been minted (the webhook may not have completed processing), the office is notified and you are asked to retry in a few minutes — never is a duplicate code minted.</p>
+
+    <h3>What about a Pack bought as a gift?</h3>
+    <p>A gifted Pack's claim code belongs to the recipient. Recovery re-sends it only to the recipient's address on file, never to the buyer; the buyer receives a notice naming the recipient's address in masked form, without the code. If no usable recipient address is on file, the code is sent to no one and the notice asks the buyer to write to <a href="mailto:hello@orphograph.com">hello@orphograph.com</a>.</p>
 
     <h3>What about subscriptions?</h3>
     <p>For an active subscription, the recovery instrument is a fresh one-click sign-in link valid for twenty-four hours. The link supersedes any earlier sign-in instrument; following it lands directly on the account ledger.</p>
