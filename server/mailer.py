@@ -19,6 +19,7 @@ and no gating beyond the transport's own suppression checks.
 from __future__ import annotations
 
 import base64
+import html as _html
 import json
 import os
 import sys
@@ -464,6 +465,41 @@ def send_pack_gift_email(
         f"<p><small><a href=\"{SITE_URL}\">{SITE_URL}</a></small></p>"
     )
     return _send(to, subject, text, html)
+
+
+def send_gift_recovery_notice(to: str, recipient_masked: str = "") -> bool:
+    """Tell the BUYER of a gifted Pack what a recovery request did. Never
+    carries the claim code: on a gift the code is the recipient's bearer
+    credential (founder decision 2026-10-17). `recipient_masked` is the
+    recipient's address already masked (auth.mask_email); empty when no
+    recipient address is on file, in which case the code went to nobody."""
+    if recipient_masked:
+        outcome = (
+            f"This Pack was bought as a gift, so its claim code belongs to the "
+            f"recipient. It has been re-sent to the recipient's address on file "
+            f"({recipient_masked}) and is not included in this message."
+        )
+    else:
+        outcome = (
+            "This Pack was bought as a gift, so its claim code belongs to the "
+            "recipient. No usable recipient address is on file for it, so the code "
+            "has not been sent to anyone. Write to hello@orphograph.com from "
+            "this address with the payment identifier and the office will help."
+        )
+    subject = "Orphograph — recovery of a gifted Pack"
+    text = (
+        "A recovery was requested for a Pack paid with this address.\n\n"
+        f"{outcome}\n\n"
+        "No duplicate code has been minted.\n"
+    )
+    html = (
+        "<p>A recovery was requested for a Pack paid with this address.</p>"
+        f"<p>{_html.escape(outcome)}</p>"
+        "<p style=\"color:#666;font-size:13px;\">No duplicate code has been "
+        "minted.</p>"
+    )
+    return _send(to, subject, text, html, transactional=True,
+                 category="gift_recovery_notice")
 
 
 def send_subscription_welcome_email(to: str, plan_label: str = "Standing Order",

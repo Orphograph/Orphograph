@@ -856,6 +856,56 @@ def _pack_recover_resend(addr: str) -> None:
             sys.stderr.write(f"[pack-recover] resend of one code failed: {type(e).__name__}\n")
 
 
+GIFT_SOURCE_PREFIX = "stripe-gift:"
+
+
+def _payment_recover_resend(ledger_row: dict, buyer: str, sid: str,
+                            gift_message: str = "") -> None:
+    """Send what /api/recover found for a paid card session. Runs on its own
+    thread after the answer, as _pack_recover_resend does, so how long the
+    answer takes does not depend on how many mails go out.
+
+    The buyer's own pack: the code goes to the buyer's address exactly as
+    Stripe holds it (the match is case-insensitive, and a bearer code must not
+    follow a typed spelling to another mailbox).
+
+    A gift (founder decision 2026-10-17): the code is the RECIPIENT's bearer
+    credential, so it goes only to the address on its own ledger row, the
+    recipient's. The buyer gets a notice naming the recipient masked and no
+    code. A gift row with no usable address sends the code to nobody. The log
+    never carries a code or a full address."""
+    masked_sid = stripe_api.mask_session_ids(sid)
+    try:
+        claim_code = ledger_row["claim_code"]
+        credit_count = ledger_row.get("credits_delta", 0)
+        source = ledger_row.get("source") or ""
+        if not (isinstance(source, str) and source.startswith(GIFT_SOURCE_PREFIX)):
+            sent = mailer.send_pack_claim_email(buyer, claim_code, credit_count)
+            sys.stderr.write(
+                f"[recover] resent claim_code for session={masked_sid} "
+                f"email={auth.mask_email(buyer)} email_sent={sent}\n")
+            return
+        holder = ledger_row.get("email")
+        recipient = holder.strip() if isinstance(holder, str) else ""
+        if not EMAIL_RE.match(recipient):
+            recipient = ""
+        code_sent = False
+        if recipient:
+            code_sent = mailer.send_pack_gift_email(
+                to=recipient, from_email=buyer, claim_code=claim_code,
+                credit_count=credit_count, message=gift_message.strip()[:500])
+        notice_sent = mailer.send_gift_recovery_notice(
+            buyer, auth.mask_email(recipient) if recipient else "")
+        sys.stderr.write(
+            f"[recover] gift session={masked_sid} buyer={auth.mask_email(buyer)} "
+            f"recipient={auth.mask_email(recipient) if recipient else 'none'} "
+            f"code_sent={code_sent} buyer_notice_sent={notice_sent}\n")
+    except Exception as e:  # noqa: BLE001
+        # The caller already has its answer; only the log hears of this.
+        sys.stderr.write(
+            f"[recover] resend failed for session={masked_sid}: {type(e).__name__}\n")
+
+
 # Founder decision 2026-09-27 (10A): the account-level referral/affiliate
 # program never worked end to end (the Stripe webhook cannot resolve its codes,
 # nothing ever recorded a signup, no page offered it) and every GET wrote the
@@ -6225,8 +6275,11 @@ class Handler(BaseHTTPRequestHandler):
           - Verifies Stripe says the session is paid AND the email
             matches the customer_email Stripe holds (cross-customer-leak guard)
           - For one-time-Pack mode: looks up the EXISTING claim_code from
-            the credits ledger by source containing session_id; re-sends
-            via mailer.send_pack_claim_email; NEVER mints a new code
+            the credits ledger by source containing session_id; NEVER mints
+            a new code. After the answer, re-sends it via
+            _payment_recover_resend: the buyer's own pack to the buyer; a
+            gift's code ONLY to the recipient on its ledger row, the buyer
+            getting a no-code notice (founder decision 2026-10-17)
           - For subscription mode: issues a fresh magic-link via
             auth.issue_link_token (auto-supersedes prior tokens) and
             sends the welcome email with that link
@@ -6370,24 +6423,27 @@ class Handler(BaseHTTPRequestHandler):
             })
             return
 
-        claim_code = ledger_row["claim_code"]
-        credit_count = ledger_row.get("credits_delta", 0)
-        # To the buyer's address exactly as Stripe holds it, as pack recover
-        # mails the stored address: the match above is case-insensitive, and a
-        # bearer code must not follow a typed spelling to another mailbox.
-        sent = mailer.send_pack_claim_email(stripe_email_as_stored, claim_code, credit_count)
-        sys.stderr.write(
-            f"[recover] resent claim_code for session={stripe_api.mask_session_ids(sid)} "
-            f"email={auth.mask_email(provided_email)} email_sent={sent}\n"
-        )
+        metadata = data.get("metadata")
+        gift_message = (metadata.get("gift_message") if isinstance(metadata, dict) else "") or ""
+        if not isinstance(gift_message, str):
+            gift_message = ""
+        # One answer, sent before any mail, for a gift and for the buyer's own
+        # pack: the body says the same thing and the mail (one send, or two
+        # for a gift) happens after it, so neither tells a gift apart.
         _json_response(self, 200, {
             "ok": True,
             "mode": "payment",
             "message": (
-                "The claim instrument has been re-sent to the address on file. "
-                "It is the same instrument originally issued — no duplicate has been minted."
+                "The claim instrument has been re-sent to the address it was "
+                "issued to. For a gift that is the recipient's address, and "
+                "the buyer is sent a notice without the code. It is the same "
+                "instrument originally issued — no duplicate has been minted."
             ),
         })
+        threading.Thread(
+            target=_payment_recover_resend,
+            args=(ledger_row, stripe_email_as_stored, sid, gift_message),
+            name="payment-recover", daemon=True).start()
 
     def _recover_crypto_claim(self, order_id: str, provided_email: str) -> None:
         """Crypto (NOWPayments) self-serve claim-code recovery.

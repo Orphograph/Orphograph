@@ -352,6 +352,18 @@ def _code_mails(d: Path, code: str, since: int) -> list[list[str]]:
     return [m["to"] for m in _mails(d)[since:] if code in m["text"]]
 
 
+def _wait_code_mails(d: Path, code: str, since: int) -> list[list[str]]:
+    """_code_mails once one has gone out: /api/recover answers first and
+    mails after (2026-10-17), so the mail can trail the answer."""
+    deadline = time.time() + WAIT_SEC
+    while time.time() < deadline:
+        got = _code_mails(d, code, since)
+        if got:
+            return got
+        time.sleep(0.05)
+    return _code_mails(d, code, since)
+
+
 def test_pack_recover_refuses_a_twin_and_sends_nothing(server):
     base, d = server
     plain, twin = _pair("arlpack")
@@ -418,7 +430,8 @@ def test_payment_recover_refuses_a_twin_before_asking_stripe(server):
         status, body = _post(base, "/api/recover", {"stripe_session_id": sid, "email": typed})
         assert (status, body.get("mode")) == (200, "payment"), (typed, status, body)
         assert len(_rows(d / STRIPE_CALLS)) == calls + 1
-        assert _code_mails(d, code, n1) == [[plain]], (typed, _code_mails(d, code, n1))
+        got = _wait_code_mails(d, code, n1)
+        assert got == [[plain]], (typed, got)
 
 
 def _rows_json(path: Path) -> dict:
@@ -755,7 +768,8 @@ def test_payment_recover_mails_the_code_to_the_address_stored_with_it(server):
     n0 = len(_mails(d))
     status, body = _post(base, "/api/recover", {"stripe_session_id": sid, "email": plain})
     assert (status, body.get("mode")) == (200, "payment"), (status, body)
-    assert _code_mails(d, card_code, n0) == [[twin]], _code_mails(d, card_code, n0)
+    got = _wait_code_mails(d, card_code, n0)
+    assert got == [[twin]], got
 
     order = "np_writer_pack_" + secrets.token_hex(5)
     coin_code = "pk_cointwin" + secrets.token_hex(4)
