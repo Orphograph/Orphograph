@@ -197,6 +197,7 @@ vm.runInContext(fs.readFileSync(src, "utf8") +
     const stored = JSON.parse(localStorage.getItem("orpho_writer_sessions") || "{}");
     out.push({ status: els["writers-status"].textContent, anchored: ctx.__state().anchored,
       button_disabled: els["anchor-chain-btn"].disabled, manifest_anchored: ctx.__manifest().anchored,
+      manifest_root: ctx.__manifest().merkle_root_sha256,
       stored_anchored: Object.values(stored).map((m) => m.anchored) });
   }
   process.stdout.write(JSON.stringify({ posts: call, out }));
@@ -227,6 +228,18 @@ def test_writers_leaves_a_chain_no_calendar_accepted_retryable(tmp_path):
     assert first["manifest_anchored"] is False and True not in first["stored_anchored"], first
     assert run["posts"] == 2 and second["anchored"] is True, run
     assert second["status"].startswith("Anchored."), second
+
+
+def test_writers_keeps_no_merkle_root_for_a_chain_that_was_not_anchored(tmp_path):
+    """@writers-stale-root (logged LOW in #284): the root was stored before the
+    anchor request, so a failed anchor left it in the state, and a downloaded
+    manifest carried a merkle_root_sha256 for a chain that was never anchored
+    (and, after another version was added, a root that no longer matched it)."""
+    run = _writers("0,1", tmp_path)
+    first, second = run["out"]
+    assert first["anchored"] is False and first["manifest_root"] is None, first
+    assert second["anchored"] is True, second
+    assert isinstance(second["manifest_root"], str) and len(second["manifest_root"]) == 64, second
 
 
 V2_JS = WEB / "v2.js"

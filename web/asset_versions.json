@@ -524,7 +524,7 @@
     "sha256": "12cf4c84d5f01b8f3c053ef879f53064e6bc6dbabbc47a66df73a5c1cf333a74"
   },
   "/writers.js": {
-    "version": "4",
-    "sha256": "dba4cc1facf36fa67e47a597f12c7efe2a620978e922be3bd29eadfb39a00f14"
+    "version": "5",
+    "sha256": "890b8799b53660b2893f24ecbffc322ced061508f027d199093341e31c863a2e"
   }
 }
