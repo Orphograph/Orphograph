@@ -80,6 +80,7 @@ const fetch = async (url, opts) => {
   if (opts && opts.body && typeof opts.body === "string") posted.push({ path, body: JSON.parse(opts.body) });
   let a = spec.answers[path] || { status: 404, body: {} };
   if (Array.isArray(a)) { const i = (served[path] = (served[path] || 0) + 1) - 1; a = a[Math.min(i, a.length - 1)]; }
+  if (a && a.network_error) throw new TypeError("Failed to fetch");
   return { ok: a.status >= 200 && a.status < 300, status: a.status, json: async () => a.body,
     text: async () => JSON.stringify(a.body) };
 };
@@ -238,3 +239,14 @@ def test_the_checkout_notify_hint_does_not_outlive_the_next_answer(tmp_path):
         assert LOWERCASE_HINT not in run["notify-pack"]["text"], (later, run["notify-pack"])
         if later is ok:
             assert run["notify-pack-done"]["hidden"] is False
+
+
+def test_the_checkout_notify_hint_does_not_outlive_a_network_failure(tmp_path):
+    """@checkout-hint-network-stale (#286 r2 main-loop LOW): refused, then the
+    next submit failed in the network (the catch path), and the stale
+    lowercase hint stayed on screen."""
+    p = PAGES["checkout-cta"]
+    run = _run({**p["spec"], "answers": {p["path"]: [REFUSED, {"network_error": True}],
+                                         "/api/config": CONFIG}, "times": 2}, tmp_path)
+    assert _posted_email(run, p["path"]) == [TWIN, TWIN]
+    assert LOWERCASE_HINT not in run["notify-pack"]["text"], run["notify-pack"]
