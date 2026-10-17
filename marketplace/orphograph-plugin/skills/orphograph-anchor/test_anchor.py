@@ -35,9 +35,9 @@ def _capture(monkeypatched_body=None):
                                          "calendars_total": 5}
         return _Resp(json.dumps(payload).encode())
 
-    orig = urllib.request.urlopen
-    urllib.request.urlopen = fake_urlopen
-    return captured, (lambda: setattr(urllib.request, "urlopen", orig))
+    orig = anchor._urlopen
+    anchor._urlopen = fake_urlopen
+    return captured, (lambda: setattr(anchor, "_urlopen", orig))
 
 
 def run():

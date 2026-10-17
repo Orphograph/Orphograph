@@ -79,7 +79,7 @@ def isolated_state(tmp_path, monkeypatch):
 def no_real_network(monkeypatch):
     def _blocked(*a, **k):  # pragma: no cover — only fires on a bug
         raise AssertionError("test attempted a real network call via urlopen")
-    monkeypatch.setattr(oc.urllib.request, "urlopen", _blocked)
+    monkeypatch.setattr(oc, "_urlopen", _blocked)
 
 
 # ─── 1. Attestation construction (stubbed signer) ───────────────────────────
@@ -314,7 +314,7 @@ def _capture_post_body(monkeypatch) -> list[dict]:
         bodies.append(json.loads(req.data.decode()))
         return _FakeHTTPResponse(json.dumps(
             {"receipt_id": "RCPT_WIRE", "hash_hex": "x"}).encode())
-    monkeypatch.setattr(oc.urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr(oc, "_urlopen", fake_urlopen)
     return bodies
 
 

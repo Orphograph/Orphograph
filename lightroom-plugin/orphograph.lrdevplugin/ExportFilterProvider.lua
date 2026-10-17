@@ -29,6 +29,7 @@ local prefs = LrPrefs.prefsForPlugin()
 -- Source: https://github.com/Egor-Skriptunoff/pure_lua_SHA — MIT, condensed.
 -- ~150 lines of constants + transforms; we embed inline for plugin portability.
 local sha256 = require "sha256"  -- shipped in same folder
+local ReceiptLink = require "ReceiptLink"  -- shipped in same folder
 
 -- ── HTTP POST to /api/anchor ────────────────────────────────────────────────
 local function postAnchor(hashHex, sha512Hex, label)
@@ -71,6 +72,7 @@ local function postProcessRenderedPhotos(functionContext, filterContext)
             local resp = postAnchor(sha256_hex, "", prefs.includeFilename and LrPathUtils.leafName(pathOrMessage) or "")
             if resp then
                 local rid = parseReceiptId(resp)
+                local servedUrl = resp:match('"receipt_url"%s*:%s*"([^"]+)"')
                 if rid then
                     -- Write receipt URL into IPTC "instructions" field so it
                     -- travels with the file. Lightroom doesn't allow direct
@@ -78,7 +80,7 @@ local function postProcessRenderedPhotos(functionContext, filterContext)
                     -- without re-export, so we instead update the catalog
                     -- entry's instruction metadata for the source photo.
                     local photo = rendition.photo
-                    local receiptUrl = (prefs.endpoint or "https://orphograph.com") .. "/r/" .. rid
+                    local receiptUrl = ReceiptLink.link(prefs.endpoint or "https://orphograph.com", rid, servedUrl)
                     photo.catalog:withWriteAccessDo("Add Orphograph receipt URL", function()
                         local existing = photo:getFormattedMetadata("instructions") or ""
                         photo:setRawMetadata("instructions",

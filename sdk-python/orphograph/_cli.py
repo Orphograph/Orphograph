@@ -246,6 +246,12 @@ def main(argv: Optional[List[str]] = None) -> int:
                 api_key=api_key,
                 exclude=args.exclude,
             )
+            if detail.get("root_served", True) is False:
+                # A broken answer is an error, not a verdict on the folder:
+                # exit 1 reads as "these bytes were changed".
+                sys.stderr.write("orphograph: the server's answer has no manifest root_hex; "
+                                 "nothing was compared.\n")
+                return 2
             ok = bool(detail["match"])
             # calendars_ok 0: the bytes may match, but no calendar accepted
             # the root, so the receipt has no Bitcoin commitment and nothing

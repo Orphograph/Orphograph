@@ -143,7 +143,7 @@ def test_a_200_that_is_not_json_is_a_failure_not_a_crash(monkeypatch):
         def __exit__(self, *a):
             return False
 
-    monkeypatch.setattr(ci.urllib.request, "urlopen", lambda req, timeout=None: _Resp())
+    monkeypatch.setattr(ci, "_urlopen", lambda req, timeout=None: _Resp())
     ok, resp = ci.anchor("http://127.0.0.1:9", "0" * 64, "0" * 128, "", "")
     assert ok is False and "error" in resp, resp
 
@@ -155,6 +155,6 @@ def test_an_error_body_that_is_not_an_object_is_a_failure_not_a_crash(monkeypatc
 
     def raise_http(req, timeout=None):
         raise urllib.error.HTTPError("http://127.0.0.1:9/api/anchor", 503, "busy", {}, io.BytesIO(b'["busy"]'))
-    monkeypatch.setattr(ci.urllib.request, "urlopen", raise_http)
+    monkeypatch.setattr(ci, "_urlopen", raise_http)
     ok, resp = ci.anchor("http://127.0.0.1:9", "0" * 64, "0" * 128, "", "")
     assert ok is False and resp["status_code"] == 503, resp

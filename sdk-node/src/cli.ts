@@ -200,10 +200,19 @@ async function cmdVerify(args: ParsedArgs): Promise<number> {
     printUsage();
     return 2;
   }
-  const { match, calendarsOk } = await verifyFolderDetail(folder, receiptId, {
+  const { match, calendarsOk, rootServed } = await verifyFolderDetail(folder, receiptId, {
     serverUrl: getServer(args.flags),
     apiKey: getApiKey(args.flags),
   });
+  // An answer with no manifest root is a broken answer, not a verdict on the
+  // folder: exit 2 (error), never 1 (the MISMATCH verdict, which reads as
+  // "these bytes were changed"). Same rule as the Python CLI.
+  if (!rootServed) {
+    process.stderr.write(
+      "orphograph: the server's answer has no manifest root_hex; nothing was compared.\n",
+    );
+    return 2;
+  }
   // calendars_ok 0: the bytes may match the root, but no calendar accepted
   // it, so the receipt has no Bitcoin commitment and nothing bounds the
   // bytes in time. It does not verify (the dataset CLI's rule).
@@ -248,18 +257,31 @@ async function cmdVerifyInclusion(args: ParsedArgs): Promise<number> {
   }
   try {
     const raw = await readFile(proofFile, "utf-8");
-    const parsed = JSON.parse(raw) as
-      | { proof?: ProofStep[]; root_hex?: string; path?: string }
-      | ProofStep[];
+    const parsed: unknown = JSON.parse(raw);
     const isBare = Array.isArray(parsed);
-    const proof: ProofStep[] = isBare
-      ? (parsed as ProofStep[])
-      : ((parsed as { proof?: ProofStep[] }).proof ?? []);
-    const embeddedRoot = isBare ? undefined : (parsed as { root_hex?: string }).root_hex;
-    const embeddedPath = isBare ? undefined : (parsed as { path?: string }).path;
+    // The Python CLI's input checks (_load_proof), each a usage error (exit
+    // 2). Without them a wrong file, e.g. the receipt instead of the proof,
+    // defaulted to an empty proof, compared the bare leaf to the root and
+    // printed the mismatch verdict (exit 1): a usage slip read as tampering.
+    if (!isBare && (parsed === null || typeof parsed !== "object")) {
+      throw new Error("proof_json must be an object or an array");
+    }
+    const obj = parsed as { proof?: unknown; root_hex?: unknown; path?: unknown };
+    if (!isBare && !("proof" in obj)) {
+      throw new Error(
+        "proof_json object has no 'proof' key — is this the receipt instead of the inclusion-proof JSON written by the proof subcommand?",
+      );
+    }
+    const proofValue: unknown = isBare ? parsed : obj.proof;
+    if (!Array.isArray(proofValue)) {
+      throw new Error("proof must be a list of [direction, hex] steps");
+    }
+    const proof = proofValue as ProofStep[];
+    const embeddedRoot = isBare ? undefined : obj.root_hex;
+    const embeddedPath = isBare ? undefined : obj.path;
     const root = rootOverride ?? embeddedRoot;
     const source = rootOverride ? "argument" : "proof_json";
-    if (!root) {
+    if (typeof root !== "string" || !root) {
       process.stderr.write(
         JSON.stringify({
           error:

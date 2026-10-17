@@ -31,6 +31,7 @@ Stdlib only. Usage:
 """
 from __future__ import annotations
 
+import re
 import argparse
 import hashlib
 import json
@@ -47,6 +48,44 @@ DEFAULT_ENDPOINT = "https://orphograph.com"
 HTTP_TIMEOUT_SEC = 30
 USER_AGENT = "orphograph-anchor-commit/0.1 (stdlib)"
 GIT_NOTES_REF = "orphograph"
+
+
+# scheme://host[:port][/path]/r/<id>, with no space, quote, bracket, "@" or
+# query: nothing a log, a sidecar or a markdown viewer reads as more.
+_SERVED_URL = re.compile(r"\Ahttps?://[A-Za-z0-9.-]+(?::[0-9]{1,5})?(?:/[A-Za-z0-9._~%-]+)*/r/[A-Za-z0-9_-]+\Z")
+
+
+def receipt_link(base, receipt_id, served=None):
+    """The receipt's public link. The server's own receipt_url wins (behind a
+    proxy or an internal name only the server knows its public address) when
+    it is a plain http(s) link to /r/<this id>; otherwise it is built from the
+    base this client used (@receipt-link-base-class, as in the GitHub release
+    action and the watch-folder integration since #290)."""
+    if isinstance(served, str) and _SERVED_URL.match(served) \
+            and served.endswith("/r/" + str(receipt_id)):
+        return served
+    return base.rstrip("/") + "/r/" + str(receipt_id)
+
+
+class _RefuseRedirects(urllib.request.HTTPRedirectHandler):
+    """A 3xx is an answer, not an instruction to go elsewhere.
+
+    urllib's default handler followed a redirect to any host and copied every
+    header but the body's, the API key or pack token included, and a POST
+    came back as a GET whose answer (the other host's) was read as ours. The
+    3xx now surfaces as an HTTPError (@redirect-key-class; the Python SDK
+    client has refused redirects since #290)."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+_OPENER = urllib.request.build_opener(_RefuseRedirects)
+
+
+def _urlopen(req, timeout):
+    """Every request this client makes goes through here."""
+    return _OPENER.open(req, timeout=timeout)
 
 
 def _git(*args: str) -> str:
@@ -83,7 +122,7 @@ def anchor_hash(endpoint: str, hash_hex: str, sha512_hex: str,
     req = urllib.request.Request(
         endpoint.rstrip("/") + "/api/anchor", data=data, method="POST", headers=headers)
     try:
-        with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT_SEC) as resp:
+        with _urlopen(req, timeout=HTTP_TIMEOUT_SEC) as resp:
             return True, json.loads(resp.read().decode())
     except urllib.error.HTTPError as e:
         try:
@@ -137,7 +176,7 @@ def anchor_commit(ref: str = "HEAD", *, endpoint: str = DEFAULT_ENDPOINT,
         "subject": subject,
         "descriptor_sha256": sha256_hex,
         "receipt_id": rid,
-        "receipt_url": f"{endpoint.rstrip('/')}/r/{rid}" if rid else "",
+        "receipt_url": receipt_link(endpoint, rid, resp.get("receipt_url")) if rid else "",
         "anchored_at": resp.get("created_at"),
         "calendars_ok": resp.get("calendars_ok"),
         "anchored_by": "orphograph-anchor-commit/0.1",

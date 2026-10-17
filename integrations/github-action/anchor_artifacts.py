@@ -52,6 +52,27 @@ FREE_TIER_HINT = (
 )
 
 
+class _RefuseRedirects(urllib.request.HTTPRedirectHandler):
+    """A 3xx is an answer, not an instruction to go elsewhere.
+
+    urllib's default handler followed a redirect to any host and copied every
+    header but the body's, the API key or pack token included, and a POST
+    came back as a GET whose answer (the other host's) was read as ours. The
+    3xx now surfaces as an HTTPError (@redirect-key-class; the Python SDK
+    client has refused redirects since #290)."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+_OPENER = urllib.request.build_opener(_RefuseRedirects)
+
+
+def _urlopen(req, timeout):
+    """Every request this client makes goes through here."""
+    return _OPENER.open(req, timeout=timeout)
+
+
 def log(msg: str) -> None:
     print(msg, flush=True)
 
@@ -122,7 +143,7 @@ def anchor_one(base_url: str, headers: dict, sha256_hex: str, sha512_hex: str):
     for attempt in range(1, MAX_ATTEMPTS + 1):
         req = urllib.request.Request(url, data=payload, headers=headers, method="POST")
         try:
-            with urllib.request.urlopen(req, timeout=REQUEST_TIMEOUT_SEC) as resp:
+            with _urlopen(req, timeout=REQUEST_TIMEOUT_SEC) as resp:
                 body = json.loads(resp.read().decode("utf-8"))
             return body, None
         except urllib.error.HTTPError as exc:

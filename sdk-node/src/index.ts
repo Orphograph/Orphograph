@@ -20,6 +20,7 @@
 // MIT — see LICENSE.
 
 import { createReadStream } from "node:fs";
+import { stat } from "node:fs/promises";
 import { createHash } from "node:crypto";
 
 import {
@@ -135,6 +136,13 @@ export interface VerifyFolderDetail {
    * Bitcoin commitment and never gets one: matching bytes, no time bound.
    */
   calendarsOk: number | null;
+  /**
+   * The service's answer carried a manifest root_hex. false means the answer
+   * was broken or partial: `match` is then false (VERIFIER_SPEC §4.2, no
+   * fallback), but nothing was compared, so a caller must not report it as
+   * a mismatch. The CLI's verify exits 2 on it.
+   */
+  rootServed: boolean;
 }
 
 /**
@@ -146,10 +154,12 @@ export async function verifyFolderDetail(
   receiptId: string,
   options: VerifyFolderOptions = {},
 ): Promise<VerifyFolderDetail> {
-  const tree = await MerkleTree.fromFolder(folderPath, {
-    exclude: options.exclude,
-  });
-  const localRoot = tree.rootHex();
+  // The folder is checked before the request (the walk now follows it, to
+  // read the manifest's scope): a typo in the path fails without touching
+  // the network, as it did when the walk came first.
+  if (!(await stat(folderPath)).isDirectory()) {
+    throw new Error(`not a directory: ${folderPath}`);
+  }
   const remote = await fetchVerifyFolder(receiptId, {
     serverUrl: options.serverUrl,
     apiKey: options.apiKey,
@@ -161,9 +171,26 @@ export async function verifyFolderDetail(
   // The manifest's root_hex is the ONLY acceptable remote side. A degraded
   // or partial response (missing manifest / missing root_hex) MUST NOT
   // verify — no fallback to receipt.hash_hex (VERIFIER_SPEC §4.2, audit D3).
-  const remoteRoot = remote && remote.manifest && remote.manifest.root_hex;
-  if (!remoteRoot) return { match: false, calendarsOk };
-  return { match: localRoot === remoteRoot, calendarsOk };
+  const manifest: unknown = remote && typeof remote === "object" ? remote.manifest : undefined;
+  const m = manifest && typeof manifest === "object" ? (manifest as Record<string, unknown>) : {};
+  const remoteRoot = m.root_hex;
+  if (typeof remoteRoot !== "string" || !remoteRoot) {
+    return { match: false, calendarsOk, rootServed: false };
+  }
+  // The manifest is authoritative for its own scope, as in the Python SDK:
+  // a folder anchored with custom excludes re-derives its root only with the
+  // same patterns, which the manifest records under scope.exclude. The
+  // caller's `exclude` is the fallback for manifests issued before scope.
+  let exclude = options.exclude;
+  const scope = m.scope;
+  if (scope && typeof scope === "object" && !Array.isArray(scope)) {
+    const recorded = (scope as Record<string, unknown>).exclude;
+    if (Array.isArray(recorded) && recorded.every((p) => typeof p === "string")) {
+      exclude = recorded as string[];
+    }
+  }
+  const tree = await MerkleTree.fromFolder(folderPath, { exclude });
+  return { match: tree.rootHex() === remoteRoot, calendarsOk, rootServed: true };
 }
 
 /**

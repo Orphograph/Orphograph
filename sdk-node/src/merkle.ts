@@ -114,49 +114,105 @@ function sha256(bytes: Uint8Array): Uint8Array {
 }
 
 /**
- * fnmatch-equivalent: translates a glob pattern to a RegExp.
- * Supports `*`, `?`, and character classes — matches Python fnmatch.
+ * fnmatch-equivalent glob matching: `*`, `?` and character classes, as in
+ * Python's fnmatch.fnmatchcase (`*` and `?` match any character, `/` and
+ * newline included; `[!...]` negates; a reversed range like `z-a` matches
+ * nothing; an unclosed `[` is a literal).
+ *
+ * Patterns are not compiled to a RegExp. Since verify reads them from the
+ * manifest the server returns (scope.exclude), a pattern is untrusted input:
+ * `*a*a*a*a*a*a*a*a*b` as a RegExp backtracked for seconds per file name and
+ * `[z-a]` threw. This matcher is a token walk that backtracks only to the
+ * last `*`, so it takes at most pattern-length x name-length steps, and it
+ * never throws.
  */
-function fnmatchToRegex(pat: string): RegExp {
-  let re = "";
+type GlobToken =
+  | { kind: "star" }
+  | { kind: "one" }
+  | { kind: "lit"; ch: string }
+  | { kind: "cls"; negate: boolean; items: Array<[string, string]> };
+
+function parseGlob(pat: string): GlobToken[] {
+  const out: GlobToken[] = [];
+  const chars = Array.from(pat);
   let i = 0;
-  while (i < pat.length) {
-    const c = pat[i];
+  while (i < chars.length) {
+    const c = chars[i];
     if (c === "*") {
-      re += ".*";
+      if (out.length === 0 || out[out.length - 1].kind !== "star") out.push({ kind: "star" });
     } else if (c === "?") {
-      re += ".";
+      out.push({ kind: "one" });
     } else if (c === "[") {
       let j = i + 1;
-      if (j < pat.length && pat[j] === "!") j++;
-      if (j < pat.length && pat[j] === "]") j++;
-      while (j < pat.length && pat[j] !== "]") j++;
-      if (j >= pat.length) {
-        re += "\\[";
+      if (j < chars.length && chars[j] === "!") j++;
+      if (j < chars.length && chars[j] === "]") j++;
+      while (j < chars.length && chars[j] !== "]") j++;
+      if (j >= chars.length) {
+        out.push({ kind: "lit", ch: "[" });
       } else {
-        let cls = pat.slice(i + 1, j);
-        if (cls.startsWith("!")) cls = "^" + cls.slice(1);
-        re += `[${cls}]`;
+        let body = chars.slice(i + 1, j);
+        const negate = body[0] === "!";
+        if (negate) body = body.slice(1);
+        const items: Array<[string, string]> = [];
+        let k = 0;
+        while (k < body.length) {
+          if (k + 2 < body.length && body[k + 1] === "-") {
+            if (body[k] <= body[k + 2]) items.push([body[k], body[k + 2]]);
+            k += 3;
+          } else {
+            items.push([body[k], body[k]]);
+            k += 1;
+          }
+        }
+        out.push({ kind: "cls", negate, items });
         i = j;
       }
-    } else if (/[.\\+(){}^$|]/.test(c)) {
-      re += "\\" + c;
     } else {
-      re += c;
+      out.push({ kind: "lit", ch: c });
     }
     i++;
   }
-  return new RegExp(`^${re}$`);
+  return out;
 }
 
-const _fnmatchCache = new Map<string, RegExp>();
-function fnmatch(name: string, pat: string): boolean {
-  let re = _fnmatchCache.get(pat);
-  if (!re) {
-    re = fnmatchToRegex(pat);
-    _fnmatchCache.set(pat, re);
+function tokenMatches(t: GlobToken, ch: string): boolean {
+  if (t.kind === "one") return true;
+  if (t.kind === "lit") return t.ch === ch;
+  if (t.kind === "cls") {
+    const hit = t.items.some(([lo, hi]) => lo <= ch && ch <= hi);
+    return t.negate ? !hit : hit;
   }
-  return re.test(name);
+  return false;
+}
+
+const _globCache = new Map<string, GlobToken[]>();
+function fnmatch(name: string, pat: string): boolean {
+  let toks = _globCache.get(pat);
+  if (!toks) {
+    toks = parseGlob(pat);
+    _globCache.set(pat, toks);
+  }
+  const s = Array.from(name);
+  let ti = 0;
+  let si = 0;
+  let starTi = -1;
+  let starSi = 0;
+  while (si < s.length) {
+    if (ti < toks.length && toks[ti].kind === "star") {
+      starTi = ti++;
+      starSi = si;
+    } else if (ti < toks.length && tokenMatches(toks[ti], s[si])) {
+      ti++;
+      si++;
+    } else if (starTi !== -1) {
+      ti = starTi + 1;
+      si = ++starSi;
+    } else {
+      return false;
+    }
+  }
+  while (ti < toks.length && toks[ti].kind === "star") ti++;
+  return ti === toks.length;
 }
 
 function matchesAny(relPath: string, patterns: readonly string[]): boolean {

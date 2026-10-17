@@ -111,7 +111,10 @@ def verify_folder_detail(
     exclude: Optional[list] = None,
 ) -> dict:
     """verify_folder plus the receipt's calendars_ok:
-    ``{"match": bool, "calendars_ok": int | None}``.
+    ``{"match": bool, "calendars_ok": int | None, "root_served": bool}``.
+
+    ``root_served`` False means the service's answer had no manifest
+    root_hex: ``match`` is False, but nothing was compared.
 
     ``calendars_ok`` 0 means no calendar accepted the root: the receipt has
     no Bitcoin commitment and never gets one, so matching bytes are not
@@ -129,8 +132,11 @@ def verify_folder_detail(
     if not isinstance(manifest, dict):
         manifest = {}
     server_root = manifest.get("root_hex")
-    if not server_root:
-        return {"match": False, "calendars_ok": calendars_ok}
+    if not isinstance(server_root, str) or not server_root:
+        # A broken or partial answer: no match (VERIFIER_SPEC 4.2), but
+        # nothing was compared either; root_served False lets the CLI report
+        # an error (exit 2) instead of the mismatch verdict (exit 1).
+        return {"match": False, "calendars_ok": calendars_ok, "root_served": False}
     # The manifest is authoritative for its own scope.
     #
     # Previously this mirrored whatever the CALLER passed, which only moved the
@@ -147,7 +153,8 @@ def verify_folder_detail(
     if isinstance(scope, dict) and isinstance(scope.get("exclude"), list):
         effective_exclude = list(scope["exclude"])
     tree = MerkleTree.from_folder(root, exclude=effective_exclude)
-    return {"match": tree.root_hex() == server_root, "calendars_ok": calendars_ok}
+    return {"match": tree.root_hex() == server_root, "calendars_ok": calendars_ok,
+            "root_served": True}
 
 
 def inclusion_proof(

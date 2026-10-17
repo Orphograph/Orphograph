@@ -78,6 +78,27 @@ HTTP_TIMEOUT_S = 30
 # --------------------------------------------------------------------------- #
 
 
+class _RefuseRedirects(urllib.request.HTTPRedirectHandler):
+    """A 3xx is an answer, not an instruction to go elsewhere.
+
+    urllib's default handler followed a redirect to any host and copied every
+    header but the body's, the API key or pack token included, and a POST
+    came back as a GET whose answer (the other host's) was read as ours. The
+    3xx now surfaces as an HTTPError (@redirect-key-class; the Python SDK
+    client has refused redirects since #290)."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+_OPENER = urllib.request.build_opener(_RefuseRedirects)
+
+
+def _urlopen(req, timeout):
+    """Every request this client makes goes through here."""
+    return _OPENER.open(req, timeout=timeout)
+
+
 def _utc_now_iso() -> str:
     return _dt.datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
 
@@ -95,7 +116,7 @@ def _http_get(url: str, *, timeout: int = HTTP_TIMEOUT_S) -> tuple[int, bytes]:
     """
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with _urlopen(req, timeout=timeout) as resp:
             return int(getattr(resp, "status", 200) or 200), resp.read()
     except urllib.error.HTTPError as e:
         return int(getattr(e, "code", 0) or 0), b""
@@ -198,7 +219,7 @@ def _post_anchor(manifest: dict, client_label: str) -> dict:
         headers=headers,
     )
     try:
-        with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT_S) as resp:
+        with _urlopen(req, timeout=HTTP_TIMEOUT_S) as resp:
             status = int(getattr(resp, "status", 200) or 200)
             raw = resp.read()
     except urllib.error.HTTPError as e:

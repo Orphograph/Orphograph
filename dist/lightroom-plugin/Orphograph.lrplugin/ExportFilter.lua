@@ -8,6 +8,7 @@ local LrFileUtils = import "LrFileUtils"
 local LrPathUtils = import "LrPathUtils"
 
 local API = require "OrphographAPI"
+local ReceiptLink = require "ReceiptLink"
 
 return {
   shouldRenderPhoto = function(_, _) return true end,
@@ -20,7 +21,7 @@ return {
         local path = pathOrMsg
         local hex, hashErr = API.sha256OfFile(path)
         if hex then
-          local rid, postErr = API.anchor(hex, LrPathUtils.leafName(path))
+          local rid, postErr, servedUrl = API.anchor(hex, LrPathUtils.leafName(path))
           if rid then
             local sidecar = path .. ".orpho.txt"
             local fh = io.open(sidecar, "w")
@@ -28,7 +29,7 @@ return {
               fh:write("receipt_id: " .. rid .. "\n")
               fh:write("hash_sha256: " .. hex .. "\n")
               fh:write("source_file: " .. LrPathUtils.leafName(path) .. "\n")
-              fh:write("verify_url: https://orphograph.com/r/" .. rid .. "\n")
+              fh:write("verify_url: " .. ReceiptLink.link(API.BASE, rid, servedUrl) .. "\n")
               fh:close()
             end
           end

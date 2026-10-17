@@ -77,7 +77,7 @@ def test_post_shape_matches_anchor_folder_contract():
                 "calendars_ok": 5,
             })
 
-        with mock.patch("auto_anchor_repo.urllib.request.urlopen", side_effect=fake_urlopen):
+        with mock.patch("auto_anchor_repo._urlopen", side_effect=fake_urlopen):
             status, payload = auto_anchor_repo.post_anchor(
                 manifest, "deadbee auto-anchor", "https://example.invalid", ""
             )
@@ -112,7 +112,7 @@ def test_post_shape_includes_api_key_header_when_provided():
                 "calendars_ok": 5,
             })
 
-        with mock.patch("auto_anchor_repo.urllib.request.urlopen", side_effect=fake_urlopen):
+        with mock.patch("auto_anchor_repo._urlopen", side_effect=fake_urlopen):
             auto_anchor_repo.post_anchor(
                 manifest, "label", "https://example.invalid", "sk_test_xyz"
             )
@@ -131,7 +131,7 @@ def test_network_failure_exit_code_1():
         root = Path(td)
         _seed_repo(root)
         with mock.patch(
-            "auto_anchor_repo.urllib.request.urlopen",
+            "auto_anchor_repo._urlopen",
             side_effect=urllib.error.URLError("connection refused"),
         ):
             with mock.patch.object(auto_anchor_repo, "API_KEY", "sk_test_xyz"):
@@ -151,7 +151,7 @@ def test_api_rejection_exit_code_2():
             io.BytesIO(b'{"error":"rate limit"}'),
         )
         with mock.patch(
-            "auto_anchor_repo.urllib.request.urlopen", side_effect=err
+            "auto_anchor_repo._urlopen", side_effect=err
         ):
             with mock.patch.object(auto_anchor_repo, "API_KEY", "sk_test_xyz"):
                 rc = auto_anchor_repo.main(["--root", str(root), "--quiet"])
@@ -170,7 +170,7 @@ def test_5xx_exit_code_2():
             io.BytesIO(b'{"error":"upstream"}'),
         )
         with mock.patch(
-            "auto_anchor_repo.urllib.request.urlopen", side_effect=err
+            "auto_anchor_repo._urlopen", side_effect=err
         ):
             with mock.patch.object(auto_anchor_repo, "API_KEY", "sk_test_xyz"):
                 rc = auto_anchor_repo.main(["--root", str(root), "--quiet"])
@@ -182,7 +182,7 @@ def test_timeout_exit_code_1():
         root = Path(td)
         _seed_repo(root)
         with mock.patch(
-            "auto_anchor_repo.urllib.request.urlopen",
+            "auto_anchor_repo._urlopen",
             side_effect=TimeoutError("timed out"),
         ):
             with mock.patch.object(auto_anchor_repo, "API_KEY", "sk_test_xyz"):

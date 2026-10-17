@@ -76,7 +76,10 @@ const DEFAULT_TIMEOUT_MS = 60_000;
 // literal token, not scripted clients as a class. test/client.test.ts has
 // asserted `ua.startsWith("orphograph-node/")` this whole time and has been
 // FAILING, unnoticed, because no workflow ran this suite.
-const USER_AGENT = "orphograph-node/0.1.0 (+https://orphograph.com)";
+// The version is the package's (package.json); test/node_sdk_lows.test.ts pins
+// them equal so a release cannot ship one number in the header and another
+// on the registry.
+export const USER_AGENT = "orphograph-node/0.1.0 (+https://orphograph.com)";
 
 interface HttpResult {
   status: number;
@@ -167,6 +170,20 @@ function parseJsonOrThrow(text: string, status: number): unknown {
   }
 }
 
+/**
+ * The endpoint under the server URL, keeping the URL's own path:
+ * `new URL("/api/x", "https://host/orpho")` resolves to https://host/api/x
+ * and drops /orpho, so a service mounted under a path was unreachable. The
+ * Python client appends to the trimmed base; this does the same.
+ */
+export function apiUrl(base: string, endpoint: string): URL {
+  const url = new URL(base);
+  url.pathname = url.pathname.replace(/\/+$/, "") + endpoint;
+  url.search = "";
+  url.hash = "";
+  return url;
+}
+
 function authHeaders(apiKey: string | undefined): Record<string, string> {
   return apiKey ? { "X-Orpho-Api-Key": apiKey } : {};
 }
@@ -188,7 +205,7 @@ export async function submitManifest(
   transport: Transport = defaultTransport,
 ): Promise<AnchorResponse> {
   const base = options.serverUrl || DEFAULT_SERVER_URL;
-  const url = new URL("/api/anchor_folder", base);
+  const url = apiUrl(base, "/api/anchor_folder");
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const payload: Record<string, unknown> = { manifest };
   if (options.clientLabel) {
@@ -222,7 +239,7 @@ export async function fetchVerifyFolder(
   transport: Transport = defaultTransport,
 ): Promise<VerifyFolderResponse> {
   const base = options.serverUrl || DEFAULT_SERVER_URL;
-  const url = new URL(`/api/verify_folder/${encodeURIComponent(receiptId)}`, base);
+  const url = apiUrl(base, `/api/verify_folder/${encodeURIComponent(receiptId)}`);
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const { status, body } = await transport.getJson(
     url,
@@ -245,7 +262,7 @@ export async function fetchInclusionProof(
   transport: Transport = defaultTransport,
 ): Promise<InclusionProofResponse> {
   const base = options.serverUrl || DEFAULT_SERVER_URL;
-  const url = new URL("/api/inclusion_proof", base);
+  const url = apiUrl(base, "/api/inclusion_proof");
   url.searchParams.set("receipt_id", receiptId);
   url.searchParams.set("path", relPath);
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
