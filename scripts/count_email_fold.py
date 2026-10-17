@@ -26,7 +26,7 @@ def low(s): return s.lower()                                   # auth.py:121 (ca
 def nkcf(s): return ud.normalize("NFKC", ud.normalize("NFKC", s).casefold())
 TWIN = {c for c in map(chr, range(0x80, 0x110000))
         if not 0xD800 <= ord(c) <= 0xDFFF and c.lower() != c and c.lower().upper() != c}
-KEYS = ("email", "owner", "member", "invitee")
+KEYS = ("email", "owner", "member", "invitee", "issued_by")   # teams.py: invites name the owner in issued_by
 # Ledger names that may appear in an output key. Any other *.jsonl file on the
 # volume is counted under "other", so no name read from disk is printed.
 LEDGERS = frozenset({
@@ -35,7 +35,12 @@ LEDGERS = frozenset({
     "waitlist.jsonl", "referrals.jsonl", "newsletter.jsonl", "unsubscribes.jsonl",
     "resend_suppressed_emails.jsonl", "suppressions.jsonl", "x402_ledger.jsonl",
     "manual_fulfillment_queue.jsonl", "refund_requests.jsonl", "recovery_gaps.jsonl",
-    "onboarding.jsonl", "gdpr.jsonl", "events.jsonl", "demand_events.jsonl"})
+    "onboarding.jsonl", "gdpr.jsonl", "events.jsonl", "demand_events.jsonl",
+    # Real ledger names the list missed (#285 round 2): the server's
+    # gdpr.py, onboarding.py and teams.py, the reply router, and the
+    # legacy files interim_pii_scrub.py names.
+    "gdpr_deletions.jsonl", "onboarding_state.jsonl", "team_invites.jsonl",
+    "interested.jsonl", "btc_orders.jsonl", "stripe_cancellations.jsonl"})
 
 def secret():
     env = os.environ.get("ORPHO_HMAC_SECRET", "")
@@ -129,22 +134,46 @@ for b in sorted(per):
 now = time.time()
 def tw(e): return isinstance(e, str) and any(c in TWIN for c in e)
 def fl(e): return isinstance(e, str) and fold(e) != low(e.strip())
-def live2(path, idkey, okevent):
+def _expires(v):
+    """expires_unix as a float, or None when it is not a number. Never
+    raises: float() on a stored string echoed the value in its error."""
+    if v is None:
+        return now + 1
+    if isinstance(v, bool) or not isinstance(v, (int, float, str)):
+        return None
+    try:
+        return float(v or 0)
+    except (TypeError, ValueError, OverflowError):
+        return None
+def live2(name, path, idkey, okevent):
     state = {}
     for r in rows(os.path.join(DATA, path)):
         h = r.get(idkey)
-        if h:
+        if isinstance(h, str) and h:
             state[h] = {k: r.get(k) for k in ("event", "email", "expires_unix")}
-    return [r.get("email") for r in state.values() if r.get("event") == okevent
-            and float(r.get("expires_unix", now + 1) or 0) > now]
+        elif h:
+            out[name + "_rows_unusable_id"] += 1      # a non-string id (contrived)
+    live = []
+    for r in state.values():
+        if r.get("event") != okevent:
+            continue
+        exp = _expires(r.get("expires_unix"))
+        if exp is None:
+            # Counted as live: the census asks whether a twin COULD be live.
+            out[name + "_rows_unparseable_expiry"] += 1
+            live.append(r.get("email"))
+        elif exp > now:
+            live.append(r.get("email"))
+    return live
 for name, path, idk, ev in (("live_sessions", "auth_sessions.jsonl", "session_hash", "created"),
                             ("live_link_tokens", "auth_tokens.jsonl", "token_hash", "issued")):
-    es = live2(path, idk, ev)
+    es = live2(name, path, idk, ev)
     out[name + "_fold_ne_lower"] = sum(map(fl, es))
     out[name + "_twin_codepoint"] = sum(map(tw, es))
 kr = list(rows(os.path.join(DATA, "api_keys.jsonl")))
-revoked = {r.get("key_hash") for r in kr if r.get("event") == "revoked"}
-ke = [r.get("email") for r in kr if r.get("event") == "issued" and r.get("key_hash") not in revoked]
+revoked = {r.get("key_hash") for r in kr if r.get("event") == "revoked" and isinstance(r.get("key_hash"), str)}
+ke = [r.get("email") for r in kr if r.get("event") == "issued"
+      and not (isinstance(r.get("key_hash"), str) and r.get("key_hash") in revoked)]
 out["live_api_keys_fold_ne_lower"] = sum(map(fl, ke))
 out["live_api_keys_twin_codepoint"] = sum(map(tw, ke))
 wst = {}
@@ -203,10 +232,10 @@ else:
         if not ids & known:
             out["receipts_with_no_plaintext_preimage_on_file"] += 1
     for r in rows(os.path.join(DATA, "x402_ledger.jsonl")):
-        if r.get("owner_id") in rekeyed:
+        if isinstance(r.get("owner_id"), str) and r.get("owner_id") in rekeyed:
             out["x402_rows_owner_on_rekeyed_ids"] += 1
-    sup = {(r.get("email") or "").strip() for f in ("resend_suppressed_emails.jsonl", "suppressions.jsonl")
-           for r in rows(os.path.join(DATA, f))}
+    sup = {r.get("email").strip() for f in ("resend_suppressed_emails.jsonl", "suppressions.jsonl")
+           for r in rows(os.path.join(DATA, f)) if isinstance(r.get("email"), str)}
     out["suppressed_addrs_equal_to_lower_of_a_twin_spelling"] = sum(
         1 for s in S if any(c in TWIN for c in s) and low(s) in sup)
 

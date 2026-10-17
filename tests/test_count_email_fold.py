@@ -108,3 +108,47 @@ def test_an_unknown_ledger_file_name_is_not_printed(tmp_path):
     out = _run(data)
     assert "operator" not in out and "Kate" not in out
     assert "fold_ne_lower_in:other=1" in out
+
+
+def test_real_ledgers_are_named_and_invite_owners_are_read(tmp_path):
+    """@census-ledger-names (#285 round 2): gdpr_deletions, onboarding_state,
+    interested, btc_orders, stripe_cancellations and team_invites were
+    counted under "other", and team_invites keeps the owner's address under
+    issued_by, which KEYS skipped."""
+    d = _data(tmp_path, secret=True)
+    capital = "Éva@example.test"
+    names = ("gdpr_deletions", "onboarding_state", "interested", "btc_orders",
+             "stripe_cancellations")
+    for name in names:
+        _write(d / f"{name}.jsonl", [{"email": capital}])
+    _write(d / "team_invites.jsonl", [{"issued_by": "Áda@example.test", "code": "x"}])
+    c = _counts(_run(d))
+    for name in names + ("team_invites",):
+        assert c.get(f"fold_ne_lower_in:{name}.jsonl") == 1, (name, c)
+    assert "fold_ne_lower_in:other" not in c, c
+
+
+def test_contrived_field_types_are_counted_not_fatal(tmp_path):
+    """@census-contrived-shapes (#285 round 2): an unhashable id or key hash,
+    or a non-numeric expires_unix, stopped the census; the float error echoed
+    the stored value to stderr. The server never writes these shapes."""
+    d = _data(tmp_path, secret=True)
+    canary = "ExpiryValueCanary"
+    _write(d / "auth_sessions.jsonl", [
+        {"session_hash": ["s9"], "event": "created", "email": "a@example.test", "expires_unix": 4e9},
+        {"session_hash": "s8", "event": "created", "email": "b@example.test", "expires_unix": canary},
+        {"session_hash": "s7", "event": "created", "email": "c@example.test", "expires_unix": [1]}])
+    _write(d / "api_keys.jsonl", [{"key_hash": ["k"], "event": "revoked"},
+                                  {"key_hash": {"k": 1}, "event": "issued", "email": "d@example.test"}])
+    _write(d / "x402_ledger.jsonl", [{"owner_id": ["x"]}])
+    _write(d / "suppressions.jsonl", [{"email": ["e@example.test"]}])
+    env = {k: v for k, v in os.environ.items() if not k.startswith("ORPHO_")}
+    env["ORPHO_DATA_DIR"] = str(d)
+    proc = subprocess.run([sys.executable, str(SCRIPT)], env=env, capture_output=True,
+                          text=True, timeout=120)
+    assert proc.returncode == 0, proc.stderr
+    assert canary not in proc.stdout + proc.stderr
+    assert all(LINE.fullmatch(ln) for ln in proc.stdout.splitlines())
+    c = _counts(proc.stdout)
+    assert c["live_sessions_rows_unusable_id"] == 1
+    assert c["live_sessions_rows_unparseable_expiry"] == 2
