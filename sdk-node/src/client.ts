@@ -178,7 +178,11 @@ function parseJsonOrThrow(text: string, status: number): unknown {
  */
 export function apiUrl(base: string, endpoint: string): URL {
   const url = new URL(base);
-  url.pathname = url.pathname.replace(/\/+$/, "") + endpoint;
+  // A loop, not /\/+$/: that RegExp is quadratic on a long run of slashes
+  // (CodeQL js/polynomial-redos), and the URL is caller input.
+  let path = url.pathname;
+  while (path.endsWith("/")) path = path.slice(0, -1);
+  url.pathname = path + endpoint;
   url.search = "";
   url.hash = "";
   return url;

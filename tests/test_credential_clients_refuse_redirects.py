@@ -129,7 +129,9 @@ def _redirector(target: str, code_box: list):
             if n:
                 self.rfile.read(n)
             self.send_response(code_box[0])
-            self.send_header("Location", target + self.path)
+            # A fixed path, not the request's: nothing from the request is
+            # echoed into a header (CodeQL py/http-response-splitting).
+            self.send_header("Location", target + "/api/anchor")
             self.send_header("Content-Length", "0")
             self.end_headers()
 
