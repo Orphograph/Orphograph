@@ -1,8 +1,8 @@
-# Orphograph Capture — capture-time provenance ($19 Creator tier)
+# Orphograph Capture — capture-time provenance
 
 **What it does:** watches your photo + document folders, computes SHA-256 of every new file locally (the file never uploads), anchors that hash to Bitcoin via Orphograph, and writes a receipt sidecar next to each file. Your portfolio becomes cryptographically timestamped as you make it.
 
-**Tier:** $19/mo Creator (after free + Pack + Personal tiers ship). Get an API key from `https://orphograph.com/account.html`.
+**Tier:** works on any tier; past the free tier, use a Standing Order API key from `https://orphograph.com/account.html`. (A separate Creator tier was planned and is not on sale.)
 
 ## What gets anchored, what doesn't
 

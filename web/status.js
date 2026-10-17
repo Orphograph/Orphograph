@@ -41,8 +41,14 @@ async function refresh() {
     const url = document.createElement("td");
     url.textContent = cal.url;
     const reach = document.createElement("td");
-    reach.textContent = cal.reachable ? "✓ reachable" : "✗ unreachable";
-    reach.className = cal.reachable ? "cal-ok" : "cal-bad";
+    // reachable null = the server did not probe: unknown, not down.
+    if (cal.reachable === true) {
+      reach.textContent = "✓ reachable"; reach.className = "cal-ok";
+    } else if (cal.reachable === false) {
+      reach.textContent = "✗ unreachable"; reach.className = "cal-bad";
+    } else {
+      reach.textContent = "not probed"; reach.className = "cal-unknown";
+    }
     tr.appendChild(url);
     tr.appendChild(reach);
     tbody.appendChild(tr);

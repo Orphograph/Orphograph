@@ -24,6 +24,8 @@ import time
 from collections import OrderedDict
 from pathlib import Path
 
+import request_mode
+
 
 class TokenBucket:
     def __init__(
@@ -33,6 +35,7 @@ class TokenBucket:
         max_keys: int = 50_000,
         snapshot_path: Path | None = None,
         snapshot_interval_sec: float = 5.0,
+        method_neutral: bool = False,
     ) -> None:
         if capacity <= 0 or refill_per_sec <= 0:
             raise ValueError("capacity and refill_per_sec must be positive")
@@ -41,6 +44,11 @@ class TokenBucket:
         self.max_keys = max_keys
         self.snapshot_path = Path(snapshot_path) if snapshot_path else None
         self.snapshot_interval_sec = snapshot_interval_sec
+        # A HEAD spends from a key of its own (request_mode): a probe must not
+        # use up the budget of the GET it mirrors. A FAILURE limiter (wrong
+        # founder token) passes method_neutral=True: a guess is a guess,
+        # whatever the method, and its peek() must see the same bucket.
+        self.method_neutral = method_neutral
         self._buckets: OrderedDict[str, tuple[float, float]] = OrderedDict()
         self._lock = threading.Lock()
         self._last_snapshot = 0.0
@@ -97,8 +105,14 @@ class TokenBucket:
             # Release the lock before disk I/O via save() — save reacquires.
             pass  # caller invokes after returning
 
+    def _key(self, key: str) -> str:
+        if not self.method_neutral and request_mode.is_safe_method():
+            return f"head:{key}"
+        return key
+
     def check(self, key: str) -> tuple[bool, float]:
         """Consume 1 token for key. Returns (allowed, retry_after_seconds)."""
+        key = self._key(key)
         now = time.time()
         should_snapshot = False
         with self._lock:
@@ -122,7 +136,8 @@ class TokenBucket:
                 should_snapshot = True
         if should_snapshot:
             try:
-                self.save()
+                with request_mode.accounting():
+                    self.save()
             except OSError:
                 pass  # don't kill a request because the disk is grumpy
         return allowed, retry_after
@@ -140,6 +155,7 @@ class TokenBucket:
         """
         if amount <= 0:
             return
+        key = self._key(key)
         now = time.time()
         with self._lock:
             entry = self._buckets.get(key)
@@ -160,6 +176,7 @@ class TokenBucket:
         successful auth never consumes, so `peek` + consume-on-failure bounds
         brute force without ever throttling the legitimate holder.
         """
+        key = self._key(key)
         now = time.time()
         with self._lock:
             tokens, last = self._buckets.get(key, (self.capacity, now))

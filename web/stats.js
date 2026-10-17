@@ -61,13 +61,20 @@ async function refresh() {
   setNumber($("#anchors-24h"), a.last_24h);
   setNumber($("#anchors-7d"), a.last_7d);
 
-  const cals = s.calendars || { reachable: 0, total: 0, items: [] };
+  const cals = s.calendars || { reachable: null, total: 0, items: [] };
   const calSum = $("#cal-summary");
   if (calSum) {
-    calSum.textContent = `${cals.reachable}/${cals.total}`;
-    calSum.className = "stat-value " + (
-      cals.reachable === cals.total && cals.total > 0 ? "ok" : "bad"
-    );
+    // reachable is null when the server did not probe the calendars:
+    // unknown, not down (drift audit 2026-10-01).
+    if (cals.reachable === null || cals.reachable === undefined) {
+      calSum.textContent = "not probed";
+      calSum.className = "stat-value";
+    } else {
+      calSum.textContent = `${cals.reachable}/${cals.total}`;
+      calSum.className = "stat-value " + (
+        cals.reachable === cals.total && cals.total > 0 ? "ok" : "bad"
+      );
+    }
   }
   const calList = $("#cal-list");
   if (calList) {
@@ -78,8 +85,13 @@ async function refresh() {
       name.className = "cal-name";
       name.textContent = item.name;
       const status = document.createElement("span");
-      status.className = item.reachable ? "cal-ok" : "cal-bad";
-      status.textContent = item.reachable ? "reachable" : "unreachable";
+      if (item.reachable === true) {
+        status.className = "cal-ok"; status.textContent = "reachable";
+      } else if (item.reachable === false) {
+        status.className = "cal-bad"; status.textContent = "unreachable";
+      } else {
+        status.className = "cal-unknown"; status.textContent = "not probed";
+      }
       li.appendChild(name);
       li.appendChild(status);
       calList.appendChild(li);

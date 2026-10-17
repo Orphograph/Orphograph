@@ -84,6 +84,7 @@ except ImportError:  # pragma: no cover
     payout_monitor = None  # type: ignore
 from http.cookies import SimpleCookie  # noqa: E402
 from rate_limit import TokenBucket, truncate_ip  # noqa: E402
+import request_mode  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 WEB_DIR = ROOT / "web"
@@ -283,6 +284,8 @@ MIN_CALENDARS_OK = int(os.environ.get("MIN_CALENDARS_OK", "3"))
 STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
 NOWPAYMENTS_IPN_SECRET = os.environ.get("NOWPAYMENTS_IPN_SECRET", "")
 DATA_DIR = Path(os.environ.get("ORPHO_DATA_DIR", str(ROOT / "data") if (ROOT / "data").is_dir() else str(ROOT)))
+# HEAD never writes under the data dir, whichever route it reaches.
+request_mode.guard_writes_under(DATA_DIR)
 RATE_LIMIT_SNAPSHOT = Path(os.environ.get(
     "ORPHO_RATE_LIMIT_SNAPSHOT", str(DATA_DIR / "rate_limit_state.json")
 ))
@@ -346,7 +349,7 @@ _status_limiter = TokenBucket(STATUS_RATE_CAPACITY, STATUS_RATE_REFILL)
 # A buyer loads the page a handful of times, so the burst stays small: at 5,
 # twenty prefixes are needed to reach Stripe's per-second limit even briefly
 # (the old 3/day bucket needed 34). A HEAD has a bucket of its own, the same
-# size (see _lookup_allowed), so a prefix sending both can make 10 reads and
+# size (request_mode, rate_limit.TokenBucket), so a prefix sending both can make 10 reads and
 # ten prefixes are needed. No ceiling shared across callers: one would let a
 # few prefixes lock every buyer out.
 SESSION_LOOKUP_CAPACITY = 5
@@ -492,7 +495,9 @@ def _queue_waitlist_confirmation(email: str, interest: str) -> None:
 # quota is acceptable for a defense-in-depth control.
 FOUNDER_FAIL_CAPACITY = 20
 FOUNDER_FAIL_REFILL = 20 / 3600.0  # full recovery in 1 hour
-_founder_fail_limiter = TokenBucket(FOUNDER_FAIL_CAPACITY, FOUNDER_FAIL_REFILL)
+# method_neutral: a failed guess counts the same on HEAD (request_mode).
+_founder_fail_limiter = TokenBucket(FOUNDER_FAIL_CAPACITY, FOUNDER_FAIL_REFILL,
+                                    method_neutral=True)
 
 # Global (all-IPs) founder-failure counter (funnel-hygiene pass). The per-IP
 # bucket above is keyed on truncated client IP, so an attacker rotating source
@@ -503,7 +508,8 @@ _founder_fail_limiter = TokenBucket(FOUNDER_FAIL_CAPACITY, FOUNDER_FAIL_REFILL)
 # so the founder is only impacted while an active spray is underway.
 FOUNDER_GLOBAL_FAIL_CAPACITY = 100
 FOUNDER_GLOBAL_FAIL_REFILL = 100 / 3600.0  # full recovery in 1 hour
-_founder_fail_global_limiter = TokenBucket(FOUNDER_GLOBAL_FAIL_CAPACITY, FOUNDER_GLOBAL_FAIL_REFILL)
+_founder_fail_global_limiter = TokenBucket(FOUNDER_GLOBAL_FAIL_CAPACITY, FOUNDER_GLOBAL_FAIL_REFILL,
+                                           method_neutral=True)
 _FOUNDER_GLOBAL_FAIL_KEY = "founder-fail:GLOBAL"
 
 # Allowlist for the funnel events the client actually emits. Any value outside
@@ -853,11 +859,13 @@ def _pack_recover_resend(addr: str) -> None:
 # Founder decision 2026-09-27 (10A): the account-level referral/affiliate
 # program never worked end to end (the Stripe webhook cannot resolve its codes,
 # nothing ever recorded a signup, no page offered it) and every GET wrote the
-# code registry. Its endpoints answer 410. Pack referral links in claim emails
-# are a different program and work.
+# code registry. Its endpoints answer 410. The Pack referral links that claim
+# emails used to carry never reached a purchase either (drift audit
+# 2026-10-01: no page we serve reads ?ref=), so the emails stopped offering
+# them on 2026-10-17 and this answer no longer says they work.
 _AFFILIATE_RETIRED = {
     "error": "The account referral program is retired.",
-    "detail": "Referral links in Pack claim emails still work.",
+    "detail": "Pack referral links are retired too: following one adds no anchors.",
 }
 
 
@@ -1866,16 +1874,12 @@ class Handler(BaseHTTPRequestHandler):
         do_HEAD runs the GET routing, so a HEAD used to spend from the bucket
         of the GET it mirrors. Link scanners and uptime probes send HEAD, and
         one on the buyer's network used up the budget the buyer's
-        confirmation page polls with. A HEAD spends from a key of its own on
-        the same limiter, so it cannot touch the GET budget and is bounded
-        the same way: the lookup behind it (a Stripe read, for the session
-        route) runs whatever the method.
-
-        Not for the founder-token failure limiters: a guess is a guess
-        whatever the method.
+        confirmation page polls with. That is now enforced once, for every
+        limiter, by the mechanism: do_HEAD runs inside
+        request_mode.safe_method() and TokenBucket spends a HEAD from a key
+        of its own. This wrapper adds nothing on top; it stays so the two
+        lookup routes read the same as before.
         """
-        if self._is_head():
-            key = f"head:{key}"
         return limiter.check(key)
 
     def _record_demand(self, event: str, *, auth_path: str, surface: str,
@@ -4407,7 +4411,9 @@ class Handler(BaseHTTPRequestHandler):
 
         # Running the GET routing also runs its side effects. HEAD is a safe
         # method (RFC 9110 §9.2.1), so a GET handler that writes must ask
-        # `_is_head()` and answer from a read-only lookup instead.
+        # `_is_head()` and answer from a read-only lookup instead. One that
+        # does not is refused by request_mode below (PermissionError on the
+        # write), so a missed guard fails loudly instead of changing state.
         real_wfile = self.wfile
         shim = _HeadBodySuppressor(real_wfile)
         inherited_end_headers = self.end_headers
@@ -4419,7 +4425,11 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile = shim
         self.end_headers = _end_headers_then_suppress  # type: ignore[method-assign]
         try:
-            self.do_GET()
+            # The one place HEAD-safety is enforced for every GET route
+            # (server/request_mode.py): writes under the data dir are refused
+            # and rate-limit budgets are kept apart from GET's.
+            with request_mode.safe_method():
+                self.do_GET()
         finally:
             self.wfile = real_wfile
             # Drop the instance attribute so the class method is visible again.
@@ -4730,8 +4740,8 @@ class Handler(BaseHTTPRequestHandler):
         from html import escape as _h
         self._unsubscribe_page(
             200, "Unsubscribed", "Done — you're unsubscribed.",
-            "If this was a mistake, just sign in again or buy a pack and "
-            "you'll be re-enrolled per your action.",
+            "Unsubscribing cannot be undone from this page. If it was a "
+            "mistake, write to hello@orphograph.com.",
             f"<p>We've removed <strong>{_h(email)}</strong> from all marketing "
             "email. You will still receive <em>transactional</em> mail "
             "tied to actions you take on the site (receipts, sign-in "

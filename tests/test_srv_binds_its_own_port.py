@@ -59,14 +59,15 @@ def test_a_server_that_dies_before_binding_fails_at_once_with_its_output(tmp_pat
 
 
 def test_the_hmac_secret_is_not_written_into_the_checkout(monkeypatch):
-    """An in-process claim email derives a referral code from the installation
-    secret; loading it must not create or touch a secret in the checkout.
+    """An in-process account id is derived from the installation secret;
+    loading it must not create or touch a secret in the checkout.
 
-    The cache is emptied first so the email itself must load the secret, and
+    The cache is emptied first so the call itself must load the secret, and
     the test fails if it did not (a no-op mailer made the first version of
-    this test pass while checking nothing; found by review of #276)."""
+    this test pass while checking nothing; found by review of #276). Until
+    2026-10-17 the claim email loaded it for its referral link; that link is
+    gone (drift audit finding 1), so the test asks for an account id."""
     import auth
-    import mailer
     repo = Path(__file__).resolve().parent.parent
     in_checkout = [repo / ".hmac_secret", repo / "data" / ".hmac_secret"]
 
@@ -74,8 +75,8 @@ def test_the_hmac_secret_is_not_written_into_the_checkout(monkeypatch):
         return {p: (p.stat().st_mtime_ns if p.exists() else None) for p in in_checkout}
     before = state()
     monkeypatch.setattr(auth, "_HMAC_SECRET_CACHE", None)
-    mailer.send_pack_claim_email("secret-path@example.test", "pk_secretPathTest01", 10)
-    assert auth._HMAC_SECRET_CACHE is not None, "the email never loaded the secret"
+    auth.email_id("secret-path@example.test")
+    assert auth._HMAC_SECRET_CACHE is not None, "the call never loaded the secret"
     assert repo not in auth.HMAC_SECRET_PATH.parents, auth.HMAC_SECRET_PATH
     assert auth.HMAC_SECRET_PATH.read_bytes() == auth._HMAC_SECRET_CACHE
     assert state() == before, "a secret file in the checkout was created or rewritten"

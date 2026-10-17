@@ -58,14 +58,18 @@ def test_a_ref_code_carries_no_piece_of_the_claim_code():
     assert referrals.code_for(BOB_PACK) != code
 
 
-def test_the_claim_email_shares_the_new_code_not_a_slice(monkeypatch):
+def test_the_claim_email_mails_no_referral_code_new_or_sliced(monkeypatch):
+    """Since 2026-10-17 the claim email carries no referral link at all (no
+    page we serve carries a ref into a purchase: drift audit, finding 1), so
+    neither the new code nor the old slice of the credential is mailed."""
     sent: list[str] = []
     monkeypatch.setattr(mailer, "_send", lambda to, subject, text, html, *a, **k:
                         sent.append(text + html) or True)
     mailer.send_pack_claim_email("alice@example.test", ALICE_PACK, 10)
     assert len(sent) == 1
     body = sent[0]
-    assert "?ref=" + referrals.code_for(ALICE_PACK) in body, "the share link must carry the new code"
+    assert ALICE_PACK in body, "control: the claim code itself is mailed"
+    assert referrals.code_for(ALICE_PACK) not in body
     assert "ref_" + ALICE_PACK[3:15] not in body, "the old slice-of-the-credential code is still mailed"
 
 

@@ -168,10 +168,10 @@ Example:
 **Q: How much does Orphograph cost?**
 
 A: 
-- **Free:** 1 anchor per calendar month (rate-limited)
+- **Free:** 3 anchors per 24 hours per IP, no account
 - **Writer Pack:** $19 one-time for 10 anchor credits (never expire)
-- **Standing Order:** $9/month for unlimited anchors (planned, not yet live)
-- **Creator:** $19/month for capture-time provenance app + API (planned, not yet live)
+- **Pack of Fifty:** $29 one-time for 50 anchor credits (never expire)
+- **Standing Order:** $9/month for unlimited anchors, private receipts, vault and an API key (live)
 
 **Q: What's a Pack credit?**
 
@@ -297,7 +297,7 @@ This is normal.
 
 **Q: I got an error message "Rate limit exceeded." What?**
 
-A: You've created more than 10 anchors per hour from your IP address. Try again in 1 hour, or buy a Pack (no rate limit for Pack users).
+A: You've used the free tier's 3 anchors per 24 hours from your IP address. The response says how long to wait (retry_after_seconds); or buy a Pack or a Standing Order (no IP limit for either).
 
 This prevents bot attacks while letting humans anchor freely.
 

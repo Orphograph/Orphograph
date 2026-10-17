@@ -77,7 +77,8 @@ def test_the_retired_reads_answer_gone_and_write_nothing(server, path):
     for headers in (member, {}):
         status, body, _h = _srv.request(base, path, headers=headers, timeout=15)
         assert status == 410, (path, headers, status, body)
-        assert "still work" in json.loads(body)["detail"]
+        detail = json.loads(body)["detail"]
+        assert "still work" not in detail and "retired" in detail, detail
         head = _srv.request(base, path, method="HEAD", headers=headers, timeout=15)
         assert head[0] == 410
     after = _ledgers(data_dir)

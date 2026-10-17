@@ -398,7 +398,11 @@ def _main() -> int:
     import argparse
     parser = argparse.ArgumentParser(
         description="Batch-renew Orphograph receipts (one anchor per cycle)")
-    parser.add_argument("--data-dir", default=os.environ.get("ORPHO_DATA_DIR", "."),
+    # Without ORPHO_DATA_DIR, the same default as engine.DATA_DIR, never the
+    # working directory (drift audit 2026-10-01).
+    _root = Path(__file__).resolve().parent.parent
+    _default = str(_root / "data") if (_root / "data").is_dir() else str(_root)
+    parser.add_argument("--data-dir", default=os.environ.get("ORPHO_DATA_DIR") or _default,
                         help="data root containing receipts/")
     parser.add_argument("--commit", action="store_true",
                         help="actually anchor and write (default is dry-run)")

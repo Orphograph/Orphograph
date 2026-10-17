@@ -19,6 +19,10 @@ sys.path.insert(0, str(ROOT / "server"))
 # Explicit, not the implicit script-dir entry: PYTHONSAFEPATH / -P remove that.
 sys.path.insert(0, str(ROOT / "tests"))
 
+# The stubs below record calls in the data dir, and a HEAD reaches some of
+# them; that record is the harness's instrumentation, not the server's state.
+import request_mode  # noqa: E402
+
 
 STRIPE_CALLS = "stub_stripe_calls.jsonl"
 STRIPE_DOWN = "stub_stripe_down"
@@ -111,7 +115,7 @@ def _stub_stripe(data_dir: Path) -> None:
     lock = threading.Lock()
 
     def recorded(method: str, path: str, form: dict | None = None) -> dict:
-        with lock, calls.open("a") as f:
+        with lock, request_mode.accounting(), calls.open("a") as f:
             f.write(json.dumps({"method": method, "path": path, "form": form or {}}) + "\n")
         if down.exists():
             return real_request(method, path, form)
@@ -166,7 +170,7 @@ def _capture_mail(data_dir: Path) -> None:
         if getattr(req, "full_url", None) != _RESEND_EMAILS:
             raise urllib.error.URLError("capture-mail stub refuses this URL")
         outage = down.exists()
-        with lock, sent.open("a") as f:
+        with lock, request_mode.accounting(), sent.open("a") as f:
             f.write(json.dumps({"payload": json.loads(req.data),
                                 "delivered": not outage}) + "\n")
         if outage:
@@ -206,7 +210,7 @@ def _guard_egress(data_dir: Path) -> None:
     lock = threading.Lock()
 
     def refuse(host, port, kind):
-        with lock, blocked.open("a") as f:
+        with lock, request_mode.accounting(), blocked.open("a") as f:
             f.write(json.dumps({"host": str(host), "port": port, "via": kind}) + "\n")
 
     real_connect = socket.socket.connect

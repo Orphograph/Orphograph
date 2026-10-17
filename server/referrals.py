@@ -48,8 +48,10 @@ def _iso() -> str:
 # to share. It is now a keyed digest of the claim code (the installation's HMAC
 # secret, which account ids already depend on, with its own label), so the
 # link says nothing about the credential. Codes already mailed in the old shape
-# keep working, matched exactly but without case: web/app.js lowercases every
-# ?ref= before checkout, and a legacy code is mixed-case base64. Lengths tell
+# are matched exactly but without case: web/app.js (served by no page today;
+# drift audit 2026-10-01) lowercased every ?ref= before checkout, and a legacy
+# code is mixed-case base64. Claim emails stopped carrying a link on
+# 2026-10-17, because no served page carries a ref into a purchase. Lengths tell
 # the two apart. The account-level affiliate codes (8 hex, affiliate.py) are
 # NOT resolved here: they resolve to nothing, as they always have, and that
 # program's endpoints are retired (2026-09-27).

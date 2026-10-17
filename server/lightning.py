@@ -42,7 +42,15 @@ from pathlib import Path
 
 import file_lock
 
-DATA_DIR = Path(os.environ.get("ORPHO_DATA_DIR", "."))
+def _default_data_dir() -> Path:
+    """Without ORPHO_DATA_DIR, the same rule as engine.DATA_DIR (ROOT/data
+    when it exists, else ROOT), never the process's working directory (drift
+    audit 2026-10-01; production sets the variable)."""
+    root = Path(__file__).resolve().parent.parent
+    return root / "data" if (root / "data").is_dir() else root
+
+
+DATA_DIR = Path(os.environ.get("ORPHO_DATA_DIR") or _default_data_dir())
 USER_AGENT = "orphograph/0.1 (stdlib)"
 HTTP_TIMEOUT_SEC = 15
 
@@ -95,7 +103,7 @@ def _secret() -> bytes:
 
 def _data_dir() -> Path:
     # Re-read the env each call: tests point ORPHO_DATA_DIR at temp dirs.
-    return Path(os.environ.get("ORPHO_DATA_DIR", "."))
+    return Path(os.environ.get("ORPHO_DATA_DIR") or _default_data_dir())
 
 
 def mint_macaroon(payment_hash: str, price_sats: int) -> str:

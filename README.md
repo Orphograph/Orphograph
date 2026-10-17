@@ -192,7 +192,7 @@ orphograph/
 │
 ├── lightroom-plugin/             Adobe Lightroom Classic plugin (Lua)
 │
-├── capture/                      desktop capture daemon (Creator tier)
+├── capture/                      desktop capture daemon
 │
 ├── dist/orphograph-verify/       MIT standalone verifier (vendorable)
 │
@@ -206,10 +206,8 @@ orphograph/
 │
 └── deploy/                       deploy + ops docs
     ├── FLY_PREFLIGHT.md
-    ├── EMAIL_AND_LEGAL_COMPLIANCE.md
-    ├── PAYOUT.md
-    ├── RUNBOOK.md
-    └── launch_drafts/
+    ├── SLO.md
+    └── SUPPORT_FAQ.md
 ```
 
 ---
@@ -252,8 +250,10 @@ email, CSP `default-src 'self'`. Step-by-step in
 |---|---|---|
 | Free | $0 | 3 anchors per 24 hours per IP-prefix |
 | Writer Pack | $19 one-time | 10 anchors, claim code by email, never expires, skips rate limit |
-| Standing Order | $9/mo or $60/yr | Unlimited anchors, email delivery, account dashboard, anchor history |
-| Creator | $19/mo | Personal + Orphograph Capture (capture-time desktop app) + API access + verifier badge |
+| Pack of Fifty | $29 one-time | 50 anchors, claim code by email, never expires, skips rate limit |
+| Standing Order | $9/mo | Unlimited anchors, email delivery, account dashboard, anchor history, API key |
+
+There is no annual plan and no Creator tier on sale; [pricing](https://orphograph.com/pricing) is the live list.
 
 The `$19 / $9` price points are set deliberately low.
 The wedge is browser-based UX plus the open-source verifier — not the

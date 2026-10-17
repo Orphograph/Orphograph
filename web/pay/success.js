@@ -22,8 +22,14 @@
     var MAX_TRIES = 6;        // ~30s total
     var INTERVAL_MS = 5000;   // every 5s
 
+    // The static page says the payment is SENT and still confirming: it is
+    // shown before anything is checked, and the claim code is minted only on
+    // the processor's "confirmed"/"finished" callback. Only a credited order
+    // turns it into "received" (drift audit 2026-10-01).
     function markCredited() {
       try {
+        var title = document.getElementById("ok-title");
+        if (title) title.textContent = "Payment received";
         var lede = document.getElementById("ok-lede");
         if (lede) {
           lede.textContent =

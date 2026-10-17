@@ -10,8 +10,10 @@
 Orphograph never receives file contents. Hashing happens on the client; only the
 SHA-256/SHA-512 fingerprints (or, for folders, a manifest of relative paths, per-file
 digests, and the RFC 6962 Merkle root) are transmitted. A free tier requires no
-account: three anchors per twenty-four hours per IP, no sign-up. Paid subscriptions
-and credit packs raise the limit via an API key issued from the account page.
+account: three anchors per twenty-four hours per IP, no sign-up. A Standing Order
+subscription raises the limit via an API key issued from the account page (keys go
+to active subscribers only); a credit pack raises it via its claim code, sent as the
+X-Pack-Token header.
 
 ## Key pages
 
@@ -39,8 +41,11 @@ and credit packs raise the limit via an API key issued from the account page.
   USDC has no value; mainnet later.
 - POST https://orphograph.com/api/anchor_folder — anchor a folder manifest: an
   RFC 6962 Merkle root plus a {leaves} list of relative paths and per-file digests
-- GET https://orphograph.com/api/verify/<receipt_id> — receipt status: calendar
-  attestation counts and, once confirmed, the Bitcoin block commitment time
+- GET https://orphograph.com/api/verify/<receipt_id> — receipt status from the
+  office's record: calendar attestation counts and, once pinned, the time the
+  office OBSERVED the Bitcoin pin (btc_pinned_at; not the block's own
+  timestamp). It does not check the chain; for that, run an OpenTimestamps
+  client over the receipt's .ots files
 
 ## MCP server
 

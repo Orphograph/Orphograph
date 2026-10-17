@@ -96,14 +96,18 @@
     $('boot-at').textContent = 'boot ' + (health.boot_at || '—');
     $('version-val').textContent = health.version || '—';
     var cal = health.calendars || [];
-    var reachable = 0;
-    for (var i = 0; i < cal.length; i++) { if (cal[i] && cal[i].reachable) reachable++; }
-    $('calendars-val').textContent = reachable + ' / ' + cal.length;
+    var reachable = 0, unprobed = 0;
+    for (var i = 0; i < cal.length; i++) {
+      if (cal[i] && cal[i].reachable === true) reachable++;
+      else if (!cal[i] || cal[i].reachable !== false) unprobed++;
+    }
+    // reachable null = not probed (ORPHO_HEALTH_ACTIVE_PROBES unset): unknown, not down.
+    $('calendars-val').textContent = unprobed ? 'not probed' : reachable + ' / ' + cal.length;
     var names = [];
     for (var j = 0; j < cal.length; j++) {
       var c = cal[j] || {};
       var short = (c.url || '').replace(/^https?:\/\//, '').split('.')[0];
-      names.push(short + (c.reachable ? ' ok' : ' DOWN'));
+      names.push(short + (c.reachable === true ? ' ok' : c.reachable === false ? ' DOWN' : ' not probed'));
     }
     $('calendars-sub').textContent = names.join(' · ') || 'OpenTimestamps pool';
   }
