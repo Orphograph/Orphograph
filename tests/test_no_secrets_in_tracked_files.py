@@ -13,6 +13,7 @@ never by file.
 """
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import io
 import re
@@ -229,6 +230,150 @@ def test_keys_inside_urls_and_escaped_text_are_caught():
     assert "telegram_bot_token" in {n for n, _l in scan_text(tg)}
     assert "stripe_live_key" in {n for n, _l in scan_text("k=\\n" + PLANTED["stripe_live_key"])}
     assert "openai_key" in {n for n, _l in scan_text("Bearer%20" + PLANTED["openai_key"])}
+
+
+# Values already in public history that are not credentials. By the sha256 of
+# the value, so the value itself never re-enters the tree, and a real key in
+# the same blob is still caught.
+HISTORY_ACCEPTED = frozenset({
+    # Public BTC receive address in old deploy/FLY_PREFLIGHT.md; the direct
+    # BTC rail is gone (test_direct_btc_rail_is_gone.py). An address, not a key.
+    "ec1f8fdd9b88",
+    # Low-entropy WHSEC fixture in old tests/test_email_twin_closed.py
+    # (14 distinct characters, no digits); not a Stripe-issued secret.
+    "4bc8c54e1bbd",
+})
+
+
+def _history_blobs(repo: Path):
+    """(path, bytes) of every blob reachable from HEAD, once each."""
+    objs = subprocess.run(["git", "rev-list", "--objects", "HEAD"], cwd=repo,
+                          capture_output=True, check=True).stdout.decode("utf-8", "surrogateescape")
+    blobs = {}
+    for line in objs.splitlines():
+        sha, _, path = line.partition(" ")
+        if path:
+            blobs.setdefault(sha, path)
+    cat = subprocess.Popen(["git", "cat-file", "--batch"], cwd=repo,
+                           stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    try:
+        for sha, path in blobs.items():
+            cat.stdin.write(sha.encode() + b"\n")
+            cat.stdin.flush()
+            header = cat.stdout.readline().split()
+            size = int(header[2]) if len(header) == 3 else -1
+            data = cat.stdout.read(size + 1)[:-1] if size >= 0 else b""
+            if header[1:2] == [b"blob"] and size < 5_000_000:
+                yield path, data
+    finally:
+        cat.stdin.close()
+        cat.wait()
+
+
+# A pattern that opens with the `_PRE` lookbehind gets no literal-prefix
+# speedup from `re`, and history holds ~100 copies of server/app.py. Each of
+# those patterns needs one of these substrings, so a blob without them is
+# skipped for that pattern only.
+_ANCHORS = {
+    "stripe_live_key": ("k_live_",),
+    "github_token": ("ghp_", "gho_", "ghu_", "ghs_", "ghr_", "github_pat_"),
+    "anthropic_key": ("sk-ant-",),
+    "openai_key": ("sk-",),
+}
+
+
+def _history_value_hits(text: str) -> list[tuple[str, int, str]]:
+    """scan_text, plus the sha256 prefix of each value for HISTORY_ACCEPTED."""
+    out = []
+    for name, rx in COMPILED.items():
+        if name in _ANCHORS and not any(a in text for a in _ANCHORS[name]):
+            continue
+        for m in rx.finditer(text):
+            value = m.group(1) if m.groups() and m.group(1) else m.group(0)
+            if value in KNOWN_FAKES or m.group(0) in KNOWN_FAKES:
+                continue
+            out.append((name, text.count("\n", 0, m.start()) + 1,
+                        hashlib.sha256(value.encode()).hexdigest()[:12]))
+    for name, rx in NAMED.items():
+        for m in rx.finditer(text):
+            if m.group(1) not in KNOWN_FAKES and _looks_random(m.group(1)):
+                out.append((name, text.count("\n", 0, m.start()) + 1,
+                            hashlib.sha256(m.group(1).encode()).hexdigest()[:12]))
+    return out
+
+
+def scan_history(repo: Path) -> tuple[list[str], int]:
+    """Credential hits in any blob ever reachable from HEAD, and the blob count.
+
+    The tracked-file scan sees only the current tree. In a public repo a key
+    committed in one commit and deleted in the next passes that scan and stays
+    readable in history forever.
+    """
+    leaks, count = [], 0
+    for path, data in _history_blobs(repo):
+        count += 1
+        texts = [(path, _decode(data))]
+        texts += [(f"{path}!{member}", _decode(content))
+                  for member, content in _archive_members(Path(path), data)]
+        for where, text in texts:
+            if text is None:
+                continue
+            leaks += [f"{where}:{line} {name}" for name, line, digest in _history_value_hits(text)
+                      if digest not in HISTORY_ACCEPTED]
+    return leaks, count
+
+
+def _git_repo(tmp_path: Path) -> Path:
+    repo = tmp_path / "r"
+    repo.mkdir()
+    for args in (["init", "-q"], ["config", "user.email", "t@example.invalid"], ["config", "user.name", "t"]):
+        subprocess.run(["git", *args], cwd=repo, check=True)
+    return repo
+
+
+def _commit(repo: Path, message: str) -> None:
+    subprocess.run(["git", "add", "-A"], cwd=repo, check=True)
+    subprocess.run(["git", "commit", "-qm", message], cwd=repo, check=True)
+
+
+def test_a_key_added_then_deleted_is_caught_in_history(tmp_path):
+    repo = _git_repo(tmp_path)
+    (repo / "deploy.sh").write_text("KEY='" + PLANTED["stripe_live_key"] + "'\n")
+    _commit(repo, "leak")
+    (repo / "deploy.sh").write_text("KEY=\"$STRIPE_KEY\"\n")
+    _commit(repo, "remove")
+    assert scan_text((repo / "deploy.sh").read_text()) == [], "the tree is clean"
+    leaks, count = scan_history(repo)
+    assert count == 2
+    assert leaks == ["deploy.sh:1 stripe_live_key"], leaks
+
+
+@pytest.mark.parametrize("name", sorted(SHAPES))
+def test_the_history_scan_finds_every_planted_shape(name):
+    for text in (f"x = '{PLANTED[name]}'\n", "k=\\n" + PLANTED[name], "Bearer%20" + PLANTED[name]):
+        expected = {n for n, _l in scan_text(text)}
+        assert {n for n, _l, _d in _history_value_hits(text)} == expected, text[:12]
+    assert name in {n for n, _l, _d in _history_value_hits(f"x = '{PLANTED[name]}'\n")}
+
+
+def test_history_accepts_only_the_listed_value(tmp_path, monkeypatch):
+    repo = _git_repo(tmp_path)
+    accepted = PLANTED["slack_token"]
+    (repo / "a.md").write_text(f"t = '{accepted}'\nKEY='{PLANTED['github_token']}'\n")
+    _commit(repo, "both")
+    assert sorted(scan_history(repo)[0]) == ["a.md:1 slack_token", "a.md:2 github_token"]
+    digest = hashlib.sha256(accepted.encode()).hexdigest()[:12]
+    monkeypatch.setattr(sys.modules[__name__], "HISTORY_ACCEPTED", frozenset({digest}))
+    assert scan_history(repo)[0] == ["a.md:2 github_token"]
+
+
+def test_no_commit_reachable_from_head_ever_carried_a_credential():
+    shallow = subprocess.run(["git", "rev-parse", "--is-shallow-repository"], cwd=REPO_ROOT,
+                             capture_output=True, text=True, check=True).stdout.strip()
+    assert shallow == "false", "shallow clone: history cannot be scanned (checkout needs fetch-depth: 0)"
+    leaks, count = scan_history(REPO_ROOT)
+    assert count > 3000, f"only {count} blobs in history: the walk did not run"
+    assert not leaks, "credential-shaped values in git history (values not shown):\n" + "\n".join(leaks)
 
 
 def test_no_tracked_file_carries_a_credential():
