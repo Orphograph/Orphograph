@@ -125,19 +125,41 @@ PLANTED = {
 }
 
 
-def scan_text(text: str) -> list[tuple[str, int]]:
-    """(pattern name, line number) for every credential in `text`."""
+# A pattern that opens with the `_PRE` lookbehind gets no literal-prefix
+# speedup from `re`, and git history holds ~100 copies of server/app.py. Each
+# of those patterns needs one of these substrings, so the history scan skips a
+# blob without them for that pattern only.
+_ANCHORS = {
+    "stripe_live_key": ("k_live_",),
+    "github_token": ("ghp_", "gho_", "ghu_", "ghs_", "ghr_", "github_pat_"),
+    "anthropic_key": ("sk-ant-",),
+    "openai_key": ("sk-",),
+}
+
+
+def _value_hits(text: str, anchored: bool = False) -> list[tuple[str, int, str]]:
+    """(pattern name, line number, sha256 prefix of the value) per credential."""
     hits = []
     for name, rx in COMPILED.items():
+        if anchored and name in _ANCHORS and not any(a in text for a in _ANCHORS[name]):
+            continue
         for m in rx.finditer(text):
-            if m.group(0) in KNOWN_FAKES or (m.groups() and m.group(1) in KNOWN_FAKES):
+            value = m.group(1) if m.groups() and m.group(1) else m.group(0)
+            if m.group(0) in KNOWN_FAKES or value in KNOWN_FAKES:
                 continue
-            hits.append((name, text.count("\n", 0, m.start()) + 1))
+            hits.append((name, text.count("\n", 0, m.start()) + 1,
+                         hashlib.sha256(value.encode()).hexdigest()[:12]))
     for name, rx in NAMED.items():
         for m in rx.finditer(text):
             if m.group(1) not in KNOWN_FAKES and _looks_random(m.group(1)):
-                hits.append((name, text.count("\n", 0, m.start()) + 1))
+                hits.append((name, text.count("\n", 0, m.start()) + 1,
+                             hashlib.sha256(m.group(1).encode()).hexdigest()[:12]))
     return hits
+
+
+def scan_text(text: str) -> list[tuple[str, int]]:
+    """(pattern name, line number) for every credential in `text`."""
+    return [(name, line) for name, line, _digest in _value_hits(text)]
 
 
 def _decode(data: bytes) -> str | None:
@@ -263,43 +285,11 @@ def _history_blobs(repo: Path):
             header = cat.stdout.readline().split()
             size = int(header[2]) if len(header) == 3 else -1
             data = cat.stdout.read(size + 1)[:-1] if size >= 0 else b""
-            if header[1:2] == [b"blob"] and size < 5_000_000:
+            if header[1:2] == [b"blob"]:
                 yield path, data
     finally:
         cat.stdin.close()
         cat.wait()
-
-
-# A pattern that opens with the `_PRE` lookbehind gets no literal-prefix
-# speedup from `re`, and history holds ~100 copies of server/app.py. Each of
-# those patterns needs one of these substrings, so a blob without them is
-# skipped for that pattern only.
-_ANCHORS = {
-    "stripe_live_key": ("k_live_",),
-    "github_token": ("ghp_", "gho_", "ghu_", "ghs_", "ghr_", "github_pat_"),
-    "anthropic_key": ("sk-ant-",),
-    "openai_key": ("sk-",),
-}
-
-
-def _history_value_hits(text: str) -> list[tuple[str, int, str]]:
-    """scan_text, plus the sha256 prefix of each value for HISTORY_ACCEPTED."""
-    out = []
-    for name, rx in COMPILED.items():
-        if name in _ANCHORS and not any(a in text for a in _ANCHORS[name]):
-            continue
-        for m in rx.finditer(text):
-            value = m.group(1) if m.groups() and m.group(1) else m.group(0)
-            if value in KNOWN_FAKES or m.group(0) in KNOWN_FAKES:
-                continue
-            out.append((name, text.count("\n", 0, m.start()) + 1,
-                        hashlib.sha256(value.encode()).hexdigest()[:12]))
-    for name, rx in NAMED.items():
-        for m in rx.finditer(text):
-            if m.group(1) not in KNOWN_FAKES and _looks_random(m.group(1)):
-                out.append((name, text.count("\n", 0, m.start()) + 1,
-                            hashlib.sha256(m.group(1).encode()).hexdigest()[:12]))
-    return out
 
 
 def scan_history(repo: Path) -> tuple[list[str], int]:
@@ -318,7 +308,7 @@ def scan_history(repo: Path) -> tuple[list[str], int]:
         for where, text in texts:
             if text is None:
                 continue
-            leaks += [f"{where}:{line} {name}" for name, line, digest in _history_value_hits(text)
+            leaks += [f"{where}:{line} {name}" for name, line, digest in _value_hits(text, anchored=True)
                       if digest not in HISTORY_ACCEPTED]
     return leaks, count
 
@@ -352,8 +342,8 @@ def test_a_key_added_then_deleted_is_caught_in_history(tmp_path):
 def test_the_history_scan_finds_every_planted_shape(name):
     for text in (f"x = '{PLANTED[name]}'\n", "k=\\n" + PLANTED[name], "Bearer%20" + PLANTED[name]):
         expected = {n for n, _l in scan_text(text)}
-        assert {n for n, _l, _d in _history_value_hits(text)} == expected, text[:12]
-    assert name in {n for n, _l, _d in _history_value_hits(f"x = '{PLANTED[name]}'\n")}
+        assert {n for n, _l, _d in _value_hits(text, anchored=True)} == expected, text[:12]
+    assert name in {n for n, _l, _d in _value_hits(f"x = '{PLANTED[name]}'\n", anchored=True)}
 
 
 def test_history_accepts_only_the_listed_value(tmp_path, monkeypatch):
