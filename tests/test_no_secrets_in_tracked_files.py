@@ -267,9 +267,9 @@ HISTORY_ACCEPTED = frozenset({
 })
 
 
-def _history_blobs(repo: Path):
-    """(path, bytes) of every blob reachable from HEAD, once each."""
-    objs = subprocess.run(["git", "rev-list", "--objects", "HEAD"], cwd=repo,
+def _history_blobs(repo: Path, revs: tuple[str, ...] = ("HEAD",)):
+    """(path, bytes) of every blob reachable from `revs`, once each."""
+    objs = subprocess.run(["git", "rev-list", "--objects", *revs], cwd=repo,
                           capture_output=True, check=True).stdout.decode("utf-8", "surrogateescape")
     blobs = {}
     for line in objs.splitlines():
@@ -292,15 +292,20 @@ def _history_blobs(repo: Path):
         cat.wait()
 
 
-def scan_history(repo: Path) -> tuple[list[str], int]:
-    """Credential hits in any blob ever reachable from HEAD, and the blob count.
+# Every ref a stranger can fetch from the public repo: all branches and tags.
+# HEAD alone misses a key that lives only on a side branch.
+PUBLIC_REFS = ("--remotes", "--tags")
+
+
+def scan_history(repo: Path, revs: tuple[str, ...] = ("HEAD",)) -> tuple[list[str], int]:
+    """Credential hits in any blob ever reachable from `revs`, and the blob count.
 
     The tracked-file scan sees only the current tree. In a public repo a key
     committed in one commit and deleted in the next passes that scan and stays
     readable in history forever.
     """
     leaks, count = [], 0
-    for path, data in _history_blobs(repo):
+    for path, data in _history_blobs(repo, revs):
         count += 1
         texts = [(path, _decode(data))]
         texts += [(f"{path}!{member}", _decode(content))
@@ -357,11 +362,35 @@ def test_history_accepts_only_the_listed_value(tmp_path, monkeypatch):
     assert scan_history(repo)[0] == ["a.md:2 github_token"]
 
 
-def test_no_commit_reachable_from_head_ever_carried_a_credential():
+def test_a_key_only_on_a_side_branch_or_tag_is_caught_by_the_public_ref_scan(tmp_path):
+    repo = _git_repo(tmp_path)
+    (repo / "README.md").write_text("hello\n")
+    _commit(repo, "base")
+    base = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
+    # A different shape on each ref, so dropping either flag from PUBLIC_REFS loses a hit.
+    for ref, shape in (("refs/remotes/origin/leaky", "stripe_live_key"), ("refs/tags/v0", "github_token")):
+        subprocess.run(["git", "checkout", "-q", "--detach", base], cwd=repo, check=True)
+        (repo / "deploy.sh").write_text("KEY='" + PLANTED[shape] + "'\n")
+        _commit(repo, "leak")
+        (repo / "deploy.sh").write_text("KEY=\"$SECRET\"\n")
+        _commit(repo, "remove")
+        subprocess.run(["git", "update-ref", ref, "HEAD"], cwd=repo, check=True)
+    subprocess.run(["git", "checkout", "-q", "--detach", base], cwd=repo, check=True)
+    assert scan_history(repo)[0] == [], "HEAD's own history sees nothing: that is the gap"
+    assert scan_history(repo, ("HEAD", "--remotes"))[0] == ["deploy.sh:1 stripe_live_key"]
+    assert scan_history(repo, ("HEAD", "--tags"))[0] == ["deploy.sh:1 github_token"]
+    assert sorted(scan_history(repo, ("HEAD", *PUBLIC_REFS))[0]) == [
+        "deploy.sh:1 github_token", "deploy.sh:1 stripe_live_key"]
+
+
+def test_no_commit_reachable_from_head_or_any_public_ref_ever_carried_a_credential():
     shallow = subprocess.run(["git", "rev-parse", "--is-shallow-repository"], cwd=REPO_ROOT,
                              capture_output=True, text=True, check=True).stdout.strip()
     assert shallow == "false", "shallow clone: history cannot be scanned (checkout needs fetch-depth: 0)"
-    leaks, count = scan_history(REPO_ROOT)
+    remotes = subprocess.run(["git", "for-each-ref", "refs/remotes/origin/"], cwd=REPO_ROOT,
+                             capture_output=True, text=True, check=True).stdout.splitlines()
+    assert len(remotes) > 20, f"only {len(remotes)} remote refs: other branches were not fetched, so they were not scanned"
+    leaks, count = scan_history(REPO_ROOT, ("HEAD", *PUBLIC_REFS))
     assert count > 3000, f"only {count} blobs in history: the walk did not run"
     assert not leaks, "credential-shaped values in git history (values not shown):\n" + "\n".join(leaks)
 

@@ -26,7 +26,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # Full history: tests/test_no_secrets_in_tracked_files.py scans every
-          # blob reachable from HEAD and fails on a shallow clone.
+          # blob reachable from HEAD or any branch or tag, and fails on a shallow clone.
           fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
