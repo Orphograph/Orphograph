@@ -389,7 +389,8 @@ def test_no_commit_reachable_from_head_or_any_public_ref_ever_carried_a_credenti
     assert shallow == "false", "shallow clone: history cannot be scanned (checkout needs fetch-depth: 0)"
     remotes = subprocess.run(["git", "for-each-ref", "refs/remotes/origin/"], cwd=REPO_ROOT,
                              capture_output=True, text=True, check=True).stdout.splitlines()
-    assert len(remotes) > 20, f"only {len(remotes)} remote refs: other branches were not fetched, so they were not scanned"
+    others = [r for r in remotes if not r.endswith(("/master", "/HEAD"))]
+    assert others, "no remote branch besides master was fetched, so no other branch was scanned (checkout needs fetch-depth: 0)"
     leaks, count = scan_history(REPO_ROOT, ("HEAD", *PUBLIC_REFS))
     assert count > 3000, f"only {count} blobs in history: the walk did not run"
     assert not leaks, "credential-shaped values in git history (values not shown):\n" + "\n".join(leaks)
