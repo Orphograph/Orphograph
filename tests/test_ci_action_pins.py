@@ -50,8 +50,8 @@ NODE24_FLOOR = {
 # here until a human adds the new row — that is the review step, on purpose.
 KNOWN_SHAS = {
     "3d3c42e5aac5ba805825da76410c181273ba90b1": ("actions/checkout", "v7.0.1"),
-    "5fda3b95a4ea91299a34e894583c3862153e4b97": ("actions/setup-python", "v7.0.0"),
-    "820762786026740c76f36085b0efc47a31fe5020": ("actions/setup-node", "v7.0.0"),
+    "6d4fd22b20465ccc0f7354476588e8df7c9ca0e0": ("actions/setup-python", "v7.1.0"),
+    "949feb2413d6458794dcd2491c4babbbce0c15c1": ("actions/setup-node", "v7.1.0"),
 }
 
 USES = re.compile(r"^(?P<action>[^@\s'\"]+)@(?P<ref>[^\s'\"]+)$")
