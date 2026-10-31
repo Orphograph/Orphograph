@@ -5,6 +5,7 @@ The real-response test replays a captured testnet transaction, so the parser
 is held to what a node actually returns, not to a shape written from docs.
 """
 import json
+import re
 import sys
 import unittest
 from pathlib import Path
@@ -243,12 +244,6 @@ class ReviewFindings(unittest.TestCase):
         b = resp(); b["result"].pop("ledger_hash", None); b["result"]["ledger_index"] = "1"
         self.assertEqual(self.quorum({self.A: a, self.B: b})[:2], ("OK", 0))
 
-    def test_confirm_retries_a_lagging_node_then_succeeds(self):
-        calls = iter([("UNAVAILABLE", 3, {}), ("OK", 0, {"hash": self.H})])
-        v, code, _ = xv.confirm(self.H, ROOT, ACCT, [self.A, self.B], tries=3, wait=0,
-                                verify_fn=lambda *a, **k: next(calls), sleep=lambda s: None)
-        self.assertEqual((v, code), ("OK", 0))
-
     def test_version_false_is_not_version_zero(self):
         # Python's False == 0; the memo version must be the integer 0.
         data = json.dumps({"alg": "a", "receipt_id": "X", "root_hex": ROOT, "v": False},
@@ -256,10 +251,84 @@ class ReviewFindings(unittest.TestCase):
         bad = memo(); bad["Memo"]["MemoData"] = data.encode().hex()
         self.assertEqual(xv.check(resp(memos=[bad]), ROOT, ACCT)[1], 1)
 
-    def test_confirm_gives_up_with_the_last_verdict(self):
-        v, code, _ = xv.confirm(self.H, ROOT, ACCT, [self.A, self.B], tries=2, wait=0,
-                                verify_fn=lambda *a, **k: ("UNAVAILABLE", 3, {}), sleep=lambda s: None)
-        self.assertEqual(code, 3)
+
+class NodeUsePolicy(unittest.TestCase):
+    """Public nodes are someone else's: one honest identity, blocked means stop,
+    light traffic. Driven through a fake transport (urlopen patched): no network."""
+    A, B = "https://a.invalid/", "https://b.invalid/"
+    H = "AB" * 32
+    BROWSER = ("Mozilla", "Chrome", "Safari", "AppleWebKit")
+
+    def setUp(self):
+        xv.BLOCKED.clear()
+        self.calls = []          # (host, user_agent, timeout)
+
+    def transport(self, answers):
+        """answers: host -> dict body | int HTTP status | Exception."""
+        def fake_urlopen(req, timeout=None):
+            host = xv.urllib.parse.urlsplit(req.full_url).hostname
+            self.calls.append((host, req.get_header("User-agent"), timeout))
+            a = answers[host]
+            if isinstance(a, int):
+                raise xv.urllib.error.HTTPError(req.full_url, a, "refused", {}, None)
+            if isinstance(a, BaseException):
+                raise a
+            body = mock.MagicMock()
+            body.__enter__.return_value.read.return_value = json.dumps(a).encode()
+            return body
+        return mock.patch("urllib.request.urlopen", fake_urlopen)
+
+    def count(self, host):
+        return sum(1 for c in self.calls if c[0] == host)
+
+    def test_every_request_carries_the_one_honest_user_agent(self):
+        with self.transport({"a.invalid": resp(), "b.invalid": resp()}):
+            xv.verify(self.H, ROOT, ACCT, [self.A, self.B], 2)
+        self.assertEqual(len(self.calls), 2)
+        for _, ua, _ in self.calls:
+            self.assertEqual(ua, xv.USER_AGENT)
+            for token in self.BROWSER:
+                self.assertNotIn(token, ua)
+
+    def test_the_user_agent_cannot_be_overridden(self):
+        src = (HERE.parent / "tools" / "xrpl_anchor" / "xrpl_verify.py").read_text()
+        self.assertNotRegex(src, r"environ|getenv", "no env var may change the identity")
+        flags = re.findall(r'add_argument\(\s*"(--[a-z-]+)"', src)
+        self.assertFalse([f for f in flags if "agent" in f or f in ("--ua", "--proxy")], flags)
+        for token in self.BROWSER:
+            self.assertNotIn(token, xv.USER_AGENT)
+
+    def test_a_refusing_node_gets_exactly_one_request_and_is_operator_refused(self):
+        for status in (401, 403, 429):
+            with self.subTest(status=status):
+                xv.BLOCKED.clear(); self.calls.clear()
+                with self.transport({"a.invalid": status, "b.invalid": resp()}):
+                    v1 = xv.verify(self.H, ROOT, ACCT, [self.A, self.B], 2)
+                    v2 = xv.verify(self.H, ROOT, ACCT, [self.A, self.B], 2)  # same run
+                self.assertEqual(self.count("a.invalid"), 1)
+                self.assertEqual((v1[0], v1[1]), ("UNAVAILABLE", 3))      # never FAIL
+                a = [n for n in v1[2]["nodes"] if n["node"] == self.A][0]
+                self.assertEqual(a["reason"], "operator refused")
+                self.assertEqual(v2[1], 3)
+
+    def test_a_reply_naming_a_rate_limit_is_a_block(self):
+        slow = {"result": {"error": "slowDown", "status": "error"}}
+        with self.transport({"a.invalid": slow, "b.invalid": resp()}):
+            xv.verify(self.H, ROOT, ACCT, [self.A, self.B], 2)
+            xv.verify(self.H, ROOT, ACCT, [self.A, self.B], 2)
+        self.assertEqual(self.count("a.invalid"), 1)
+        self.assertIn(self.A, xv.BLOCKED)
+
+    def test_at_most_one_request_per_node_per_verify_and_no_retry(self):
+        with self.transport({"a.invalid": resp(), "b.invalid": TimeoutError("slow")}):
+            xv.verify(self.H, ROOT, ACCT, [self.A, self.B, self.A], 2)
+        self.assertEqual((self.count("a.invalid"), self.count("b.invalid")), (1, 1))
+        self.assertFalse(hasattr(xv, "confirm"), "no retry helper may exist")
+
+    def test_timeout_is_at_most_ten_seconds(self):
+        with self.transport({"a.invalid": resp()}):
+            xv.verify(self.H, ROOT, ACCT, [self.A], 1)
+        self.assertTrue(all(t is not None and t <= 10 for _, _, t in self.calls), self.calls)
 
 
 if __name__ == "__main__":
