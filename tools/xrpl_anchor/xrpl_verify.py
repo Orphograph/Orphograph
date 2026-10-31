@@ -33,7 +33,6 @@ import http.client
 import json
 import re
 import sys
-import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -45,8 +44,14 @@ TESTNET = "https://s.altnet.rippletest.net:51234/"   # run by Ripple
 # 2026-10-30); older anchors need full-history nodes passed with --node.
 TESTNET_NODES = [TESTNET, "https://testnet.xrpl-labs.com/"]
 MAX_BODY = 2 * 1024 * 1024
+TIMEOUT = 10                 # seconds per request; not configurable
 # Honest and named. A CDN in front of one node 403s urllib's default agent.
+# One identity, a constant: no flag, env var or rotation can change it.
 USER_AGENT = "orphograph-xrpl-verify/0 (+https://github.com/Orphograph/Orphograph)"
+# A node that refused us (401/403/429 or a rate-limit reply) is not asked
+# again in this process. There is no proxy, IP or UA rotation to route around it.
+BLOCKED = set()
+REFUSED_STATUS = (401, 403, 429)
 MEMO_TYPE = "orphograph.com/xrpl-anchor/v0"
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
 TX_HASH = re.compile(r"^[0-9A-Fa-f]{64}$")
@@ -59,18 +64,41 @@ class Unavailable(Exception):
     pass
 
 
-def fetch_tx(tx_hash, node=TESTNET, timeout=20):
+class Blocked(Unavailable):
+    """The node's operator refused the request. Stop; never retry this run."""
+
+
+def _refusal(node, why):
+    BLOCKED.add(node)
+    return Blocked(f"{node}: operator refused ({why})")
+
+
+def fetch_tx(tx_hash, node=TESTNET):
+    """One request to one node. Refusals mark the node BLOCKED for the run."""
+    if node in BLOCKED:
+        raise Blocked(f"{node}: operator refused earlier this run; not asked again")
     body = json.dumps({"method": "tx", "params": [
         {"transaction": tx_hash, "binary": False, "api_version": 2}]}).encode()
     req = urllib.request.Request(node, data=body,
                                  headers={"Content-Type": "application/json",
                                           "User-Agent": USER_AGENT})
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as r:
+        with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
             raw = r.read(MAX_BODY + 1)
         if len(raw) > MAX_BODY:
             raise Unavailable(f"{node}: response over {MAX_BODY} bytes")
-        return json.loads(raw.decode())
+        if b"rate limit" in raw.lower():
+            raise _refusal(node, "rate limit")
+        body = json.loads(raw.decode())
+        res = body.get("result") if isinstance(body, dict) else None
+        if isinstance(res, dict) and res.get("error") in ("slowDown", "tooBusy"):
+            raise _refusal(node, res["error"])
+        return body
+    except urllib.error.HTTPError as e:
+        # Checked before the generic branch: a refusal is not an outage.
+        if e.code in REFUSED_STATUS:
+            raise _refusal(node, f"HTTP {e.code}") from e
+        raise Unavailable(f"{node}: HTTP {e.code}") from e
     except (OSError, http.client.HTTPException, ValueError, RecursionError) as e:
         # OSError covers URLError, timeouts and resets mid-read.
         raise Unavailable(f"{node}: {type(e).__name__}: {e}") from e
@@ -170,8 +198,11 @@ def verify(tx_hash, expected_root, account, nodes, min_agree=2, fetch=None):
     nodes = distinct_nodes(nodes)
 
     def one(node):
+        # Exactly one fetch per distinct node per call, and no retry.
         try:
             v, code, d = check(fetch(tx_hash, node), expected_root, account, tx_hash)
+        except Blocked:
+            v, code, d = "UNAVAILABLE", 3, {"reason": "operator refused"}
         except Unavailable as e:
             v, code, d = "UNAVAILABLE", 3, {"reason": str(e)}
         return {"node": node, "verdict": v, **d}
@@ -201,21 +232,6 @@ def verify(tx_hash, expected_root, account, nodes, min_agree=2, fetch=None):
     return "UNAVAILABLE", 3, summary
 
 
-def confirm(tx_hash, expected_root, account, nodes, min_agree=2, tries=6, wait=5,
-            verify_fn=None, sleep=time.sleep):
-    """verify(), retried while the answer could still change (a node a ledger
-    behind the one we submitted to). Returns the last verdict; never upgrades it."""
-    verify_fn = verify_fn or verify
-    result = None
-    for i in range(max(1, tries)):
-        result = verify_fn(tx_hash, expected_root, account, nodes, min_agree)
-        if result[1] in (0, 1):
-            return result
-        if i + 1 < tries:
-            sleep(wait)
-    return result
-
-
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("tx_hash")
@@ -224,8 +240,9 @@ def main(argv=None):
     g.add_argument("--manifest", help="folder manifest.json; uses its root_hex")
     ap.add_argument("--account", help="require this sender address (r...)")
     ap.add_argument("--node", action="append",
-                    help="node URL; repeat for each (replaces the defaults: "
-                         "one Ripple + one XRPL Labs testnet node)")
+                    help="node URL; repeat for each (replaces the defaults: one Ripple + one "
+                         "XRPL Labs testnet node). Documented alternative if XRPL Labs declines: "
+                         "https://testnet.honeycluster.io/ (check its terms first; see NODES.md)")
     ap.add_argument("--min-agree", type=int, default=2,
                     help="distinct nodes that must agree (default 2; 1 is labelled SINGLE-NODE)")
     a = ap.parse_args(argv)
