@@ -69,10 +69,15 @@ fly secrets set \
 Optional but recommended:
 ```bash
 fly secrets set \
-  HMAC_SECRET="$(openssl rand -hex 32)" \
-  ORPHO_RATE_LIMIT_PER_HOUR="10" \
+  ORPHO_HMAC_SECRET="$(openssl rand -hex 32)" \
   MIN_CALENDARS_OK="3"
 ```
+
+The free-tier limit is not a secret: `fly.toml` sets `RATE_LIMIT_PER_DAY = '3'`
+(3 anchors per 24 hours, the number the homepage and API docs state). Leave it
+there. (Corrected 2026-10-31: this block used to say `HMAC_SECRET` and
+`ORPHO_RATE_LIMIT_PER_HOUR="10"`, and the server reads neither name.
+`tests/test_deploy_docs_name_real_env_vars.py` now fails on any name like that.)
 
 `MIN_CALENDARS_OK` counts DISTINCT upstream calendars, not calendar
 servers: `a.pool` and `b.pool` are aggregators for alice and bob, so the
