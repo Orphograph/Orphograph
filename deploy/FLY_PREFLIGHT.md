@@ -68,10 +68,18 @@ fly secrets set \
 
 Optional but recommended:
 ```bash
-fly secrets set \
-  ORPHO_HMAC_SECRET="$(openssl rand -hex 32)" \
-  MIN_CALENDARS_OK="3"
+fly secrets set MIN_CALENDARS_OK="3"
 ```
+
+**First deploy only** (a new app with an empty volume):
+```bash
+fly secrets set ORPHO_HMAC_SECRET="$(openssl rand -hex 32)"
+```
+Never set `ORPHO_HMAC_SECRET` on an app that is already running. Without it, the
+server keeps its signing key in `$ORPHO_DATA_DIR/.hmac_secret` on the volume
+(created on first start, 0600). The environment variable takes precedence over
+that file (`server/auth.py`), so setting it later replaces the key, and every
+email lookup id and token signed with the old key stops matching.
 
 The free-tier limit is not a secret: `fly.toml` sets `RATE_LIMIT_PER_DAY = '3'`
 (3 anchors per 24 hours, the number the homepage and API docs state). Leave it
