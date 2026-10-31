@@ -51,8 +51,8 @@ def _tracked_markdown() -> list[str]:
 
 
 def test_the_check_fires_on_a_name_nothing_reads():
-    doc = 'fly secrets set \\\n  REAL_ONE="x" \\\n  ORPHO_NOT_A_REAL_SETTING="1"\n'
-    assert unread_names(doc, names_read("os.environ.get('REAL_ONE')", {})) == ["ORPHO_NOT_A_REAL_SETTING"]
+    doc = 'fly secrets set \\\n  REAL_ONE="x" \\\n  ZZ_NOT_A_REAL_SETTING="1"\n'
+    assert unread_names(doc, names_read("os.environ.get('REAL_ONE')", {})) == ["ZZ_NOT_A_REAL_SETTING"]
 
 
 def test_a_mention_that_is_not_a_read_does_not_count():
