@@ -101,3 +101,75 @@ class Main(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class HostileResponses(unittest.TestCase):
+    """A node is untrusted input: odd shapes must become verdicts, never tracebacks."""
+
+    def test_non_object_memo_payload_is_a_fail_not_a_crash(self):
+        bad = memo(); bad["Memo"]["MemoData"] = b"[1,2]".hex()
+        self.assertEqual(xv.check(resp(memos=[bad]), ROOT, ACCT)[1], 1)
+
+    def test_non_object_memo_entries_are_ignored(self):
+        self.assertEqual(xv.check(resp(memos=["junk", None, memo()]), ROOT, ACCT)[:2], ("OK", 0))
+
+    def test_oversized_body_is_unavailable(self):
+        big = mock.MagicMock()
+        big.__enter__.return_value.read.return_value = b"x" * (xv.MAX_BODY + 1)
+        with mock.patch("urllib.request.urlopen", return_value=big):
+            with self.assertRaises(xv.Unavailable):
+                xv.fetch_tx("AB" * 32, "https://node.invalid/")
+
+
+class Quorum(unittest.TestCase):
+    """OK needs >= min_agree nodes that agree; one dissenting node is a FAIL."""
+    A, B = "https://a.invalid/", "https://b.invalid/"
+
+    def run_with(self, answers, min_agree=2):
+        def fake(tx_hash, node, timeout=20):
+            a = answers[node]
+            if isinstance(a, Exception):
+                raise a
+            return a
+        return xv.verify("AB" * 32, ROOT, ACCT, [self.A, self.B], min_agree, fetch=fake)
+
+    def test_two_agreeing_nodes_ok(self):
+        self.assertEqual(self.run_with({self.A: resp(), self.B: resp()})[:2], ("OK", 0))
+
+    def test_one_dissenting_node_fails(self):
+        self.assertEqual(self.run_with({self.A: resp(), self.B: resp(result="tecFAILED")})[:2][1], 1)
+
+    def test_nodes_reporting_different_ledgers_fail(self):
+        other = resp(); other["result"]["ledger_hash"] = "CD" * 32
+        base = resp(); base["result"]["ledger_hash"] = "EF" * 32
+        self.assertEqual(self.run_with({self.A: base, self.B: other})[1], 1)
+
+    def test_history_gap_on_one_node_is_unavailable_not_ok(self):
+        gap = {"result": {"error": "txnNotFound", "status": "error"}}
+        self.assertEqual(self.run_with({self.A: resp(), self.B: gap})[:2], ("UNAVAILABLE", 3))
+
+    def test_unreachable_node_is_unavailable_not_ok(self):
+        self.assertEqual(self.run_with({self.A: resp(), self.B: xv.Unavailable("down")})[1], 3)
+
+    def test_explicit_single_node_is_labelled(self):
+        gap = {"result": {"error": "txnNotFound", "status": "error"}}
+        v, code, _ = self.run_with({self.A: resp(), self.B: gap}, min_agree=1)
+        self.assertEqual((v, code), ("OK-SINGLE-NODE", 0))
+
+    def test_all_nodes_missing_is_pending(self):
+        gap = {"result": {"error": "txnNotFound", "status": "error"}}
+        self.assertEqual(self.run_with({self.A: gap, self.B: gap})[:2], ("PENDING", 2))
+
+
+class Transport(unittest.TestCase):
+    def test_sends_an_honest_named_user_agent(self):
+        # 2026-10-30: a CDN in front of a public testnet node answered 403 to
+        # urllib's default "Python-urllib/x" agent, so the node was never asked.
+        seen = {}
+        def fake_urlopen(req, timeout=None):
+            seen["ua"] = req.get_header("User-agent")
+            raise xv.urllib.error.URLError("stop")
+        with mock.patch("urllib.request.urlopen", fake_urlopen), self.assertRaises(xv.Unavailable):
+            xv.fetch_tx("AB" * 32, "https://node.invalid/")
+        self.assertTrue(seen["ua"] and seen["ua"].startswith("orphograph-xrpl-verify/"))
+        self.assertNotIn("Mozilla", seen["ua"])
