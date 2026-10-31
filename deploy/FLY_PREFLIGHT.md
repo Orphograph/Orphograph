@@ -59,17 +59,16 @@ fly secrets set \
   ORPHO_BUSINESS_ENTITY="Orphograph" \
   ORPHO_BUSINESS_ADDRESS="PO Box 12345, San Juan, PR 00901" \
   STRIPE_WEBHOOK_SECRET="whsec_..." \
-  STRIPE_API_KEY="sk_live_..." \
+  STRIPE_SECRET_KEY="sk_live_..." \
   RESEND_API_KEY="re_..." \
   ORPHO_COOKIE_SECURE="1"
 ```
 
 **Replace placeholders** with the real values. The Stripe + Resend keys come from those respective dashboards; the business address is whatever PO box / virtual mailbox you set up per the compliance audit. `BTC_RECEIVE_ADDRESS` is NOT in this list any more — the direct on-chain rail was retired on 2026-09-19 and nothing reads that secret.
 
-Optional but recommended:
-```bash
-fly secrets set MIN_CALENDARS_OK="3"
-```
+`MIN_CALENDARS_OK` is not a secret: `fly.toml` already sets it (`[env]`). Do not
+also set it with `fly secrets set`. A secret overrides `[env]`, so a later,
+reviewed edit to `fly.toml` would silently stop taking effect.
 
 **First deploy only** (a new app with an empty volume):
 ```bash
@@ -83,9 +82,13 @@ email lookup id and token signed with the old key stops matching.
 
 The free-tier limit is not a secret: `fly.toml` sets `RATE_LIMIT_PER_DAY = '3'`
 (3 anchors per 24 hours, the number the homepage and API docs state). Leave it
-there. (Corrected 2026-10-31: this block used to say `HMAC_SECRET` and
-`ORPHO_RATE_LIMIT_PER_HOUR="10"`, and the server reads neither name.
-`tests/test_deploy_docs_name_real_env_vars.py` now fails on any name like that.)
+there. (Corrected 2026-10-31: this page used to say `STRIPE_API_KEY` (the server reads
+`STRIPE_SECRET_KEY`), `HMAC_SECRET` and `ORPHO_RATE_LIMIT_PER_HOUR="10"`. The
+server reads none of those names. `tests/test_deploy_docs_name_real_env_vars.py`
+now fails on any name like that. If an app was set up from the old text, remove
+the dead names so `fly secrets list` stops suggesting they do something:
+`fly secrets unset HMAC_SECRET ORPHO_RATE_LIMIT_PER_HOUR STRIPE_API_KEY`. Check
+first that `STRIPE_SECRET_KEY` is listed.)
 
 `MIN_CALENDARS_OK` counts DISTINCT upstream calendars, not calendar
 servers: `a.pool` and `b.pool` are aggregators for alice and bob, so the

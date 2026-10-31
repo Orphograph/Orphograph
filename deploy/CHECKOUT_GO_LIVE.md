@@ -55,7 +55,7 @@ In the Stripe Dashboard (test mode first):
 ## Step 3 — Fly: set the secrets
 ```bash
 fly secrets set \
-  STRIPE_API_KEY="sk_live_..." \
+  STRIPE_SECRET_KEY="sk_live_..." \
   STRIPE_PACK_URL="https://buy.stripe.com/..." \
   STRIPE_WEBHOOK_SECRET="whsec_..." \
   PACK_PRICE_USD="19" \
