@@ -141,7 +141,7 @@ def check(response, expected_root, account=None, tx_hash=None):
     if not isinstance(payload, dict):
         return "FAIL", 1, {**detail, "reason": "memo data is not a JSON object"}
     detail["memo"] = payload
-    if payload.get("v") != 0 or payload.get("root_hex") != expected_root:
+    if type(payload.get("v")) is not int or payload["v"] != 0 or payload.get("root_hex") != expected_root:
         return "FAIL", 1, {**detail, "reason": "memo root does not match the expected root"}
     return ("OK" if account else "OK-UNBOUND"), 0, detail
 

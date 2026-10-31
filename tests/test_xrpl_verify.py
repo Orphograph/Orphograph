@@ -249,6 +249,13 @@ class ReviewFindings(unittest.TestCase):
                                 verify_fn=lambda *a, **k: next(calls), sleep=lambda s: None)
         self.assertEqual((v, code), ("OK", 0))
 
+    def test_version_false_is_not_version_zero(self):
+        # Python's False == 0; the memo version must be the integer 0.
+        data = json.dumps({"alg": "a", "receipt_id": "X", "root_hex": ROOT, "v": False},
+                          sort_keys=True, separators=(",", ":"))
+        bad = memo(); bad["Memo"]["MemoData"] = data.encode().hex()
+        self.assertEqual(xv.check(resp(memos=[bad]), ROOT, ACCT)[1], 1)
+
     def test_confirm_gives_up_with_the_last_verdict(self):
         v, code, _ = xv.confirm(self.H, ROOT, ACCT, [self.A, self.B], tries=2, wait=0,
                                 verify_fn=lambda *a, **k: ("UNAVAILABLE", 3, {}), sleep=lambda s: None)
