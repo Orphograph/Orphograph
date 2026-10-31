@@ -55,6 +55,11 @@ SHAPES = {
     "resend_key": r"\bre_[A-Za-z0-9]{8}_[A-Za-z0-9_-]{20,}",
     "anthropic_key": _PRE + r"sk-ant-[A-Za-z0-9_-]{20,}",
     "openai_key": _PRE + r"sk-(?:proj-|svcacct-|admin-)?(?!ant-)[A-Za-z0-9_-]{32,}",
+    # XRPL wallet seed (base58, Ripple alphabet): "s" + 28 chars, or "sEd" + 28
+    # for ed25519. Added with tools/xrpl_anchor, which keeps a testnet seed on
+    # disk. Mixed case plus a digit, so a long lowercase word is not a seed.
+    "xrpl_seed": (r"(?<![A-Za-z0-9])(?=[A-Za-z0-9]*[0-9])(?=[A-Za-z0-9]*[A-Z])(?=[A-Za-z0-9]*[a-z])"
+                  r"s(?:Ed)?[1-9A-HJ-NP-Za-km-z]{28}(?![A-Za-z0-9])"),
 }
 
 # The server's own secrets have no recognisable shape, so they are matched by
@@ -122,6 +127,7 @@ PLANTED = {
     "anthropic_key": "sk-ant-" + "api03-Ab3_dEf-Gh1jKl2mNo3p",
     "openai_key": "sk-proj-" + "Ab3_dEf-Gh1jKl2mNo3pQr4sTu5vWx6_yZ",
     "nowpayments_api_key": "A1B2C3D" + "-E4F5G6H-J7K8L9M-N0P1Q2R",
+    "xrpl_seed": "sEd" + "TM1uX8pu2do5XvTnutH6HsouMaM2",  # XRPL docs example seed
 }
 
 
@@ -137,6 +143,32 @@ _ANCHORS = {
 }
 
 
+_RIPPLE_B58 = "rpshnaf39wBUDNEGHJKLM4PQRST7VWXYZ2bcdeCg65jkm8oFqi1tuvAxyz"
+
+
+def _xrpl_seed_checksum_ok(value: str) -> bool:
+    """A shape match is a seed only if it base58check-decodes to a seed-sized
+    payload: 21 bytes (secp256k1) or 23 (ed25519), double-SHA-256 checksum.
+    camelCase identifiers fit the shape (three.min.js has one); they never
+    carry a valid checksum."""
+    n = 0
+    for ch in value:
+        i = _RIPPLE_B58.find(ch)
+        if i < 0:
+            return False
+        n = n * 58 + i
+    raw = n.to_bytes((n.bit_length() + 7) // 8, "big")
+    raw = b"\0" * (len(value) - len(value.lstrip(_RIPPLE_B58[0]))) + raw
+    if len(raw) not in (21, 23):
+        return False
+    body, check = raw[:-4], raw[-4:]
+    return hashlib.sha256(hashlib.sha256(body).digest()).digest()[:4] == check
+
+
+# Shapes whose matches must also pass a structural check before they count.
+VALIDATORS = {"xrpl_seed": _xrpl_seed_checksum_ok}
+
+
 def _value_hits(text: str, anchored: bool = False) -> list[tuple[str, int, str]]:
     """(pattern name, line number, sha256 prefix of the value) per credential."""
     hits = []
@@ -146,6 +178,8 @@ def _value_hits(text: str, anchored: bool = False) -> list[tuple[str, int, str]]
         for m in rx.finditer(text):
             value = m.group(1) if m.groups() and m.group(1) else m.group(0)
             if m.group(0) in KNOWN_FAKES or value in KNOWN_FAKES:
+                continue
+            if name in VALIDATORS and not VALIDATORS[name](value):
                 continue
             hits.append((name, text.count("\n", 0, m.start()) + 1,
                          hashlib.sha256(value.encode()).hexdigest()[:12]))
@@ -211,6 +245,14 @@ def test_each_shape_fires_on_a_realistic_example(name):
 def test_the_audit_patterns_are_scanned_too():
     names = {n for n, _l in scan_text("NOWPAYMENTS_API_KEY=" + "ABCDEFGHJK" * 3 + "\n")}
     assert "audit:NOWPAYMENTS_API_KEY" in names
+
+
+def test_an_xrpl_seed_needs_a_valid_checksum_not_just_the_shape():
+    # Both fit the shape; only the real seed carries a base58check checksum.
+    assert scan_text("x = 'supportsCompressedTextureS3TC'") == []
+    assert scan_text("seed: " + PLANTED["xrpl_seed"]) == [("xrpl_seed", 1)]
+    broken = PLANTED["xrpl_seed"][:-1] + ("3" if PLANTED["xrpl_seed"][-1] != "3" else "4")
+    assert scan_text("seed: " + broken) == []
 
 
 def test_a_customer_key_inside_a_webhook_secret_is_caught():

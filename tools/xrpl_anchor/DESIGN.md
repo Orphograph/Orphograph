@@ -40,13 +40,19 @@ The transaction is an `AccountSet` carrying no flags. XRPL rejects an XRP paymen
 
 ```mermaid
 stateDiagram-v2
-  [*] --> Fetch
-  Fetch --> UNAVAILABLE: network error / bad JSON (exit 3, never a pass or a fail)
-  Fetch --> PENDING: txnNotFound or validated=false (exit 2)
-  Fetch --> Check
-  Check --> FAIL: result != tesSUCCESS / account mismatch / no Orphograph memo / root differs (exit 1)
-  Check --> OK: validated, tesSUCCESS, memo root == expected (exit 0)
+  [*] --> AskEachNode
+  AskEachNode --> PerNode: check() on each node's answer
+  PerNode --> FAIL: any node FAIL (with an OK elsewhere = "nodes disagree") (exit 1)
+  PerNode --> FAIL: OK nodes differ on hash / ledger / sender / memo, or on a reported ledger_hash (exit 1)
+  PerNode --> OK: >= min-agree OK nodes, all identical (exit 0)
+  PerNode --> UNAVAILABLE: some OK but fewer than min-agree (exit 3, never a pass)
+  PerNode --> PENDING: no OK, at least one found-but-not-validated (exit 2)
+  PerNode --> UNAVAILABLE: no node readable, malformed, or not in its history (exit 3)
 ```
+
+**Trust boundary.** Everything a node returns is untrusted. A single lying node could fabricate the whole transaction, so OK needs `--min-agree` distinct hosts (default 2; a repeated host is one vote) from different operators: Ripple's `s.altnet` and XRPL Labs' `testnet.xrpl-labs.com`. Ripple's `clio.altnet` would not add independence. Node answers are type-checked and capped at 2 MB, so a hostile shape becomes a verdict, never a traceback. The verifier sends an honest, named User-Agent, because one node's CDN returns 403 to urllib's default agent.
+
+**History and durability.** XRPL Labs keeps about 2 h of ledger history. To verify an older anchor, pass full-history nodes with `--node` (it replaces the defaults; `--min-agree` cannot exceed the node count), or accept a labelled SINGLE-NODE result with `--min-agree 1`. Otherwise the result is honestly UNAVAILABLE. Each node must return the exact transaction hash that was requested. A malformed answer counts as unavailable, not as dissent. The anchor tool retries the quorum while the second node catches up, and logs every submitted anchor whatever the verdict. Testnet is reset from time to time, so a testnet anchor is a demo, not a durable record.
 
 What OK proves: the root existed no later than the ledger's close time. It doesn't prove who made the folder. Anyone can write any memo from any account, so `--account` only binds the anchor to Orphograph's address. Without `--account` the result says the anchor is unbound.
 

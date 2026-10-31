@@ -53,8 +53,8 @@ class Check(unittest.TestCase):
     def test_unvalidated_is_pending_not_ok(self):
         self.assertEqual(xv.check(resp(validated=False), ROOT, ACCT)[:2], ("PENDING", 2))
 
-    def test_not_found_is_pending(self):
-        self.assertEqual(xv.check({"result": {"error": "txnNotFound", "status": "error"}}, ROOT)[1], 2)
+    def test_not_found_is_a_history_gap_not_pending(self):
+        self.assertEqual(xv.check({"result": {"error": "txnNotFound", "status": "error"}}, ROOT)[1], 3)
 
     def test_foreign_memo_alone_fails(self):
         self.assertEqual(xv.check(resp(memos=[memo(mtype="someone/else")]), ROOT, ACCT)[1], 1)
@@ -97,6 +97,169 @@ class Main(unittest.TestCase):
              mock.patch("sys.stderr"):
             xv.main(["nothex", "--root", ROOT])
         f.assert_not_called()
+
+
+
+class HostileResponses(unittest.TestCase):
+    """A node is untrusted input: odd shapes must become verdicts, never tracebacks."""
+
+    def test_non_object_memo_payload_is_a_fail_not_a_crash(self):
+        bad = memo(); bad["Memo"]["MemoData"] = b"[1,2]".hex()
+        self.assertEqual(xv.check(resp(memos=[bad]), ROOT, ACCT)[1], 1)
+
+    def test_non_object_memo_entries_are_ignored(self):
+        self.assertEqual(xv.check(resp(memos=["junk", None, memo()]), ROOT, ACCT)[:2], ("OK", 0))
+
+    def test_oversized_body_is_unavailable(self):
+        big = mock.MagicMock()
+        big.__enter__.return_value.read.return_value = b"x" * (xv.MAX_BODY + 1)
+        with mock.patch("urllib.request.urlopen", return_value=big):
+            with self.assertRaises(xv.Unavailable):
+                xv.fetch_tx("AB" * 32, "https://node.invalid/")
+
+
+class Quorum(unittest.TestCase):
+    """OK needs >= min_agree nodes that agree; one dissenting node is a FAIL."""
+    A, B = "https://a.invalid/", "https://b.invalid/"
+
+    def run_with(self, answers, min_agree=2):
+        def fake(tx_hash, node, timeout=20):
+            a = answers[node]
+            if isinstance(a, Exception):
+                raise a
+            return a
+        return xv.verify("AB" * 32, ROOT, ACCT, [self.A, self.B], min_agree, fetch=fake)
+
+    def test_two_agreeing_nodes_ok(self):
+        self.assertEqual(self.run_with({self.A: resp(), self.B: resp()})[:2], ("OK", 0))
+
+    def test_one_dissenting_node_fails(self):
+        self.assertEqual(self.run_with({self.A: resp(), self.B: resp(result="tecFAILED")})[:2][1], 1)
+
+    def test_nodes_reporting_different_ledgers_fail(self):
+        other = resp(); other["result"]["ledger_hash"] = "CD" * 32
+        base = resp(); base["result"]["ledger_hash"] = "EF" * 32
+        self.assertEqual(self.run_with({self.A: base, self.B: other})[1], 1)
+
+    def test_history_gap_on_one_node_is_unavailable_not_ok(self):
+        gap = {"result": {"error": "txnNotFound", "status": "error"}}
+        self.assertEqual(self.run_with({self.A: resp(), self.B: gap})[:2], ("UNAVAILABLE", 3))
+
+    def test_unreachable_node_is_unavailable_not_ok(self):
+        self.assertEqual(self.run_with({self.A: resp(), self.B: xv.Unavailable("down")})[1], 3)
+
+    def test_explicit_single_node_is_labelled(self):
+        gap = {"result": {"error": "txnNotFound", "status": "error"}}
+        v, code, _ = self.run_with({self.A: resp(), self.B: gap}, min_agree=1)
+        self.assertEqual((v, code), ("OK-SINGLE-NODE", 0))
+
+    def test_found_but_unvalidated_everywhere_is_pending(self):
+        self.assertEqual(self.run_with({self.A: resp(validated=False),
+                                        self.B: resp(validated=False)})[:2], ("PENDING", 2))
+
+
+class Transport(unittest.TestCase):
+    def test_sends_an_honest_named_user_agent(self):
+        # 2026-10-30: a CDN in front of a public testnet node answered 403 to
+        # urllib's default "Python-urllib/x" agent, so the node was never asked.
+        seen = {}
+        def fake_urlopen(req, timeout=None):
+            seen["ua"] = req.get_header("User-agent")
+            raise xv.urllib.error.URLError("stop")
+        with mock.patch("urllib.request.urlopen", fake_urlopen), self.assertRaises(xv.Unavailable):
+            xv.fetch_tx("AB" * 32, "https://node.invalid/")
+        self.assertTrue(seen["ua"] and seen["ua"].startswith("orphograph-xrpl-verify/"))
+        self.assertNotIn("Mozilla", seen["ua"])
+
+
+class ReviewFindings(unittest.TestCase):
+    """Code review 2026-10-31: each test failed on the code before its fix."""
+    A, B = "https://a.invalid/", "https://b.invalid/"
+    H = "AB" * 32
+    GAP = {"result": {"error": "txnNotFound", "status": "error"}}
+
+    def quorum(self, answers, nodes=None, min_agree=2):
+        def fake(tx_hash, node, timeout=20):
+            a = answers[node]
+            if isinstance(a, BaseException):
+                raise a
+            return a
+        return xv.verify(self.H, ROOT, ACCT, nodes or [self.A, self.B], min_agree, fetch=fake)
+
+    def test_the_same_node_twice_is_one_vote(self):
+        v, code, _ = self.quorum({self.A: resp()}, nodes=[self.A, self.A.rstrip("/")])
+        self.assertEqual(code, 3)
+
+    def test_deeply_nested_body_is_unavailable_not_a_crash(self):
+        deep = mock.MagicMock()
+        deep.__enter__.return_value.read.return_value = b"[" * 100000 + b"]" * 100000
+        with mock.patch("urllib.request.urlopen", return_value=deep):
+            with self.assertRaises(xv.Unavailable):
+                xv.fetch_tx(self.H, self.A)
+
+    def test_deeply_nested_memo_is_a_fail_not_a_crash(self):
+        bad = memo(); bad["Memo"]["MemoData"] = (b"[" * 100000 + b"]" * 100000).hex()
+        self.assertEqual(xv.check(resp(memos=[bad]), ROOT, ACCT)[1], 1)
+
+    def test_connection_reset_mid_read_is_unavailable(self):
+        r = mock.MagicMock()
+        r.__enter__.return_value.read.side_effect = ConnectionResetError("reset")
+        with mock.patch("urllib.request.urlopen", return_value=r):
+            with self.assertRaises(xv.Unavailable):
+                xv.fetch_tx(self.H, self.A)
+
+    def test_incomplete_read_is_unavailable(self):
+        import http.client
+        r = mock.MagicMock()
+        r.__enter__.return_value.read.side_effect = http.client.IncompleteRead(b"x")
+        with mock.patch("urllib.request.urlopen", return_value=r):
+            with self.assertRaises(xv.Unavailable):
+                xv.fetch_tx(self.H, self.A)
+
+    def test_min_agree_above_node_count_is_a_usage_error(self):
+        with self.assertRaises(SystemExit), mock.patch("sys.stderr"):
+            xv.main([self.H, "--root", ROOT, "--node", self.A, "--min-agree", "2"])
+
+    def test_not_found_everywhere_is_unavailable_not_pending(self):
+        # A history gap is not "wait for validation"; a caller retrying on 2 would loop.
+        self.assertEqual(self.quorum({self.A: self.GAP, self.B: self.GAP})[1], 3)
+
+    def test_a_different_hash_than_requested_fails(self):
+        other = resp(); other["result"]["hash"] = "CD" * 32
+        self.assertEqual(xv.check(other, ROOT, ACCT, tx_hash=self.H)[1], 1)
+
+    def test_nodes_naming_different_senders_disagree_when_unbound(self):
+        a, b = resp(account="rAAA"), resp(account="rBBB")
+        def fake(tx_hash, node, timeout=20):
+            return {self.A: a, self.B: b}[node]
+        self.assertEqual(xv.verify(self.H, ROOT, None, [self.A, self.B], 2, fetch=fake)[1], 1)
+
+    def test_one_malformed_node_is_unavailable_not_a_fail(self):
+        broken = resp(); broken["result"]["meta"] = "not-an-object"
+        self.assertEqual(self.quorum({self.A: resp(), self.B: broken})[1], 3)
+
+    def test_a_node_omitting_ledger_hash_still_agrees(self):
+        a = resp(); a["result"]["ledger_hash"] = "EF" * 32
+        b = resp(); b["result"].pop("ledger_hash", None); b["result"]["ledger_index"] = "1"
+        self.assertEqual(self.quorum({self.A: a, self.B: b})[:2], ("OK", 0))
+
+    def test_confirm_retries_a_lagging_node_then_succeeds(self):
+        calls = iter([("UNAVAILABLE", 3, {}), ("OK", 0, {"hash": self.H})])
+        v, code, _ = xv.confirm(self.H, ROOT, ACCT, [self.A, self.B], tries=3, wait=0,
+                                verify_fn=lambda *a, **k: next(calls), sleep=lambda s: None)
+        self.assertEqual((v, code), ("OK", 0))
+
+    def test_version_false_is_not_version_zero(self):
+        # Python's False == 0; the memo version must be the integer 0.
+        data = json.dumps({"alg": "a", "receipt_id": "X", "root_hex": ROOT, "v": False},
+                          sort_keys=True, separators=(",", ":"))
+        bad = memo(); bad["Memo"]["MemoData"] = data.encode().hex()
+        self.assertEqual(xv.check(resp(memos=[bad]), ROOT, ACCT)[1], 1)
+
+    def test_confirm_gives_up_with_the_last_verdict(self):
+        v, code, _ = xv.confirm(self.H, ROOT, ACCT, [self.A, self.B], tries=2, wait=0,
+                                verify_fn=lambda *a, **k: ("UNAVAILABLE", 3, {}), sleep=lambda s: None)
+        self.assertEqual(code, 3)
 
 
 if __name__ == "__main__":
