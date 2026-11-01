@@ -24,7 +24,7 @@ from xrpl.transaction import submit_and_wait
 from xrpl.wallet import Wallet, generate_faucet_wallet
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from xrpl_verify import HEX64, MEMO_TYPE, TESTNET, TESTNET_NODES, confirm  # noqa: E402
+from xrpl_verify import HEX64, MEMO_TYPE, TESTNET, TESTNET_NODES, verify  # noqa: E402
 
 WALLET = Path.home() / ".config" / "orphograph-xrpl" / "testnet-wallet.json"
 LOG = Path(__file__).resolve().parent / "anchors" / "testnet.jsonl"
@@ -80,10 +80,10 @@ def main(argv=None):
     sent = submit_and_wait(tx, client, wallet).result
     tx_hash = sent.get("hash") or (sent.get("tx_json") or {}).get("hash")
 
-    # Re-read through the stdlib verifier and its two-operator quorum, so the log
-    # records what a third party sees. confirm() retries while the second node
-    # catches up to the ledger we submitted to.
-    verdict, code, detail = confirm(tx_hash, root, wallet.address, TESTNET_NODES)
+    # Submitted through the one node above (TESTNET), never fanned out. Then ONE
+    # read-back through the verifier's quorum, with no retry loop: if the second
+    # node lags, the anchor is logged UNAVAILABLE and can be re-verified later.
+    verdict, code, detail = verify(tx_hash, root, wallet.address, TESTNET_NODES)
     rec = {"network": "xrpl-testnet", "tx_hash": tx_hash, "verdict": verdict,
            "root_hex": root, "receipt_id": m.get("receipt_id"),
            "account": detail.get("account"), "ledger_index": detail.get("ledger_index"),
