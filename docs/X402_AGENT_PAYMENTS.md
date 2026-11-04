@@ -32,9 +32,10 @@ present wins, so a request is never charged twice.
 
 Server checks, in order: parse the header → look up what this
 authorization's nonce has already bought (hex case ignored: `0xAABB..` and
-`0xaabb..` are one nonce) → if it already bought an anchor, 401 and nothing
-else runs → otherwise VERIFY with the facilitator (cheap, no chain write) →
-SETTLE for real, still before any anchor work, and record the charge →
+`0xaabb..` are one nonce) → if it already bought an anchor, nothing else
+runs: the identical request is answered with the receipt it bought (a safe
+retry, below) and any other request gets 401 → otherwise VERIFY with the
+facilitator (cheap, no chain write) → SETTLE for real, still before any anchor work, and record the charge →
 claim the nonce atomically (our own single-use lock, the same one
 `lightning.claim()` gives L402 — verify() alone is not single-use) → do the
 actual anchor. A payment that has not settled buys nothing: a refused
@@ -62,7 +63,7 @@ value, validAfter, validBefore, nonce, signature)`, and every one of those
 fields is in the transaction's calldata. So the charge row carries a
 digest of the request body the payer sent (canonical JSON, key order
 ignored; only the digest is stored), and a held payment is redeemed — and
-the replay 401 names the receipt a payment bought — only for the identical
+a delivered payment's receipt is served back — only for the identical
 request. Anything else presenting that payment's payload is answered like
 a replay (401, no receipt named). The most anyone who rebuilds the payload
 from the chain can do with a held payment is make the exact anchor its
@@ -81,20 +82,34 @@ that identity, never under whoever presents the request. The redeemed
 receipt's email and `anchor.created` webhook go only to that identity when
 it presents the request itself (signed in, subscribed), or to a
 `notify_email` carried in the paid body; otherwise nobody is mailed, and
-the payer's replay of the identical request names the receipt. A held
+the payer's retry of the identical request is answered with the receipt. A held
 private payment also stays redeemable after the payer's subscription
 lapses: it was authorised as private when it was charged. If the office
 cannot read its payment records during that redemption, the answer is the
 same 503 as everywhere else ("resubmit the identical request shortly"),
 never the private-receipt refusal.
 
+Safe retries. A client whose first 200 never arrived (a timeout, a dropped
+connection) resends the identical request: same signed payload, same body.
+Once the payment has bought its anchor, that resend is answered 200 with the
+same receipt, in the shape a first paid anchor returns, with
+`x402_settled: true`, `x402_payment_held: false`, `x402_replay: true` and
+the same PAYMENT-RESPONSE header, rebuilt from the recorded settlement.
+Nothing runs again: no verify(), no settle(), no claim, no anchor, and no
+pack credit or free-tier budget is touched. A private receipt is served
+that way only to its owner (the same rule as `/api/receipt/<id>`); anyone
+else presenting the identical private request gets the 401, which names only
+the receipt id. A request that differs in any field stays a 401 with no
+receipt named. A resend that arrives while the first is still anchoring
+loses the claim and gets the 401; resend it once that one has answered.
+
 Accepted residual, stated rather than hidden: anyone who can rebuild both
 the payload (from the chain) and the body (from a shared receipt) can
-confirm which receipt a payment bought, because the replay 401 names it to
-the identical request. No public route finds a receipt by its hash (every
+confirm which receipt a payment bought, because the identical request is
+answered with it. No public route finds a receipt by its hash (every
 receipt route takes a receipt id), so this needs a receipt that was
 already shared, and it links a payment to a receipt the viewer can already
-see.
+see (for a private receipt, only its id, as before).
 
 (An earlier version of this rail, never deployed, bound redemption to a
 digest of the signature and authorization on the premise that only the

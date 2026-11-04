@@ -77,13 +77,25 @@ def check_required(spec: dict, schema_name: str, body: dict) -> list[str]:
             for f in _schema(spec, schema_name)["required"] if f not in body]
 
 
+def _required_query(op: dict) -> str:
+    """The query string an operation documents as required, built from each
+    required query parameter's own documented example. A required parameter
+    with no example cannot be called from the contract: reported as missing
+    (the request goes out without it and must then fail)."""
+    pairs = [f"{p['name']}={p['example']}" for p in op.get("parameters", [])
+             if p.get("in") == "query" and p.get("required") and "example" in p]
+    return ("?" + "&".join(pairs)) if pairs else ""
+
+
 def check_paths(spec: dict, base: str, rid: str) -> list[str]:
-    """Every documented GET path answers 200 on the real server."""
+    """Every documented GET path answers 200 on the real server, called the
+    way the contract documents it (required query parameters included)."""
     out = []
     for path, ops in spec["paths"].items():
         if "get" not in ops:
             continue
-        code, _, _ = _srv.request(base, path.replace("{receipt_id}", rid), timeout=15)
+        target = path.replace("{receipt_id}", rid) + _required_query(ops["get"])
+        code, _, _ = _srv.request(base, target, timeout=15)
         if code != 200:
             out.append(f"GET {path} -> {code}")
     return out
@@ -140,6 +152,19 @@ class TestOpenapiContract(unittest.TestCase):
             body = _srv.ok_json(*_srv.get_json(self.base, path, timeout=15))
             self.assertEqual(check_required(self.spec, "VerifyResponse", body), [], path)
 
+    def test_verify_output_carries_required_fields(self):
+        op = self.spec["paths"]["/api/verify_output/{receipt_id}"]["get"]
+        anchored = self.anchor.get("hash_hex", "")
+        for sha, match in ((anchored, True), ("0" * 64, False)):
+            body = _srv.ok_json(*_srv.get_json(
+                self.base, f"/api/verify_output/{self.rid}?sha256={sha}", timeout=15))
+            self.assertEqual(check_required(self.spec, "VerifyOutputResponse", body), [], sha)
+            self.assertIs(body["match"], match)
+        # The documented example is a real call, and the 400 is documented.
+        self.assertIn("400", op["responses"])
+        code, _, _ = _srv.request(self.base, f"/api/verify_output/{self.rid}", timeout=15)
+        self.assertEqual(code, 400, "sha256 is documented as required")
+
     def test_every_documented_get_path_answers(self):
         self.assertEqual(check_paths(self.spec, self.base, self.rid), [])
 
@@ -187,6 +212,18 @@ class TestOpenapiContract(unittest.TestCase):
         bad = copy.deepcopy(self.spec)
         bad["paths"]["/api/not-a-route"] = {"get": {}}
         self.assertTrue(check_paths(bad, self.base, self.rid))
+        # A required query parameter the contract cannot fill is called
+        # without it, and the route must then answer non-200.
+        bad = copy.deepcopy(self.spec)
+        for prm in bad["paths"]["/api/verify_output/{receipt_id}"]["get"]["parameters"]:
+            prm.pop("example", None)
+        self.assertTrue(check_paths(bad, self.base, self.rid))
+
+        bad = copy.deepcopy(self.spec)
+        _schema(bad, "VerifyOutputResponse")["required"].append("not_sent_by_server")
+        body = _srv.ok_json(*_srv.get_json(
+            self.base, f"/api/verify_output/{self.rid}?sha256={'0' * 64}", timeout=15))
+        self.assertTrue(check_required(bad, "VerifyOutputResponse", body))
 
 
 if __name__ == "__main__":

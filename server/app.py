@@ -7,6 +7,7 @@ Endpoints:
     POST /api/anchor             — body: {"hash_hex": "<64 hex>", "client_label": "optional"}
     GET  /api/receipt/<id>       — return receipt JSON
     GET  /api/verify/<id>        — re-check the receipt locally
+    GET  /api/verify_output/<id>?sha256=<hex> — does a received output match the receipt
     GET  /api/health             — liveness
     GET  /api/stats              — public marketing metrics (counts only, no PII)
 
@@ -649,6 +650,7 @@ def _security_headers(handler: BaseHTTPRequestHandler) -> None:
         if (
             rpath.startswith("/api/verify/")
             or rpath.startswith("/api/verify_folder/")
+            or rpath.startswith("/api/verify_output/")
             or rpath.startswith("/api/badge/")
             or rpath == "/api/inclusion_proof"
         ):
@@ -1672,6 +1674,87 @@ def _billing_summary(outcomes: list[dict]) -> dict:
             "detail": words + ". No refund was issued for the current period."}
 
 
+_SHA256_HEX_RE = re.compile(r"[0-9a-fA-F]{64}")
+_VERIFY_OUTPUT_SCOPE = ("Shows this exact output existed by the anchor time. It "
+                        "does not show who produced it or that it is correct.")
+
+
+def _folder_inclusion_proof(manifest: dict, rel_path: str) -> dict:
+    """The inclusion proof for one path of a folder manifest: the ONE
+    implementation /api/inclusion_proof and /api/verify_output share.
+
+    Rebuilds the tree from the stored manifest (merkle.MerkleTree.from_manifest
+    recomputes every leaf and the root, and refuses a manifest that does not
+    derive its own root) and returns { root_hex, path, file_sha256_hex,
+    merkle_algorithm, proof }. Raises ValueError when the manifest does not
+    rebuild or the path is not in it.
+    """
+    tree = merkle.MerkleTree.from_manifest(manifest)
+    proof = tree.inclusion_proof(rel_path)
+    # Pull the file's SHA-256 from the manifest entry so the verifier
+    # can reconstruct the leaf locally without contacting the server again.
+    file_hex = None
+    for leaf in manifest.get("leaves", []):
+        if leaf.get("path") == rel_path:
+            file_hex = leaf.get("file_sha256_hex")
+            break
+    return {
+        "root_hex": manifest.get("root_hex"),
+        "path": rel_path,
+        "file_sha256_hex": file_hex,
+        "merkle_algorithm": manifest.get("algorithm"),
+        "proof": proof,
+    }
+
+
+def _anchor_response_body(record: dict, *, distinct: dict, low_redundancy: bool,
+                          pack_consumed: bool, pack_remaining: int,
+                          credit_refunded: bool, notify_ignored: bool,
+                          subscription_active: bool,
+                          x402_fields: dict | None) -> dict:
+    """The 200 body of POST /api/anchor: one builder for a first anchor and
+    for an x402 replay that answers with the receipt a payment already
+    bought, so the two shapes cannot drift."""
+    site = os.environ.get("SITE_URL", "https://orphograph.com").rstrip("/")
+    rid = record["receipt_id"]
+    return {
+        "receipt_id": rid,
+        "created_at": record["created_at"],
+        "hash_hex": record["hash_hex"],
+        "sha512_hex": record.get("sha512_hex"),
+        "client_label": record.get("client_label"),
+        "calendars_ok": record["calendars_ok"],
+        "calendars_total": record["calendars_total"],
+        # Five servers reach four calendars: both counts are reported so
+        # neither number has to carry a meaning it does not have.
+        **distinct,
+        "low_redundancy": low_redundancy,
+        "pack_consumed": pack_consumed,
+        "pack_remaining": pack_remaining,
+        "credit_refunded": credit_refunded,
+        **({"notify_email_ignored": "email_needs_lowercase"} if notify_ignored else {}),
+        "subscription_active": subscription_active,
+        "successes": [{"calendar": s["calendar"], "ots_path": s["ots_path"]}
+                      for s in record.get("successes") or []],
+        "failures": record.get("failures") or [],
+        # Provenance fields echo only when the sanitizer accepted them —
+        # a client that sent a proof needs to SEE whether it survived
+        # (the capture daemon's sidecar writer relies on this echo).
+        **({"zk_provenance": record["zk_provenance"]}
+           if record.get("zk_provenance") else {}),
+        **({"hardware_attestation": record["hardware_attestation"]}
+           if record.get("hardware_attestation") else {}),
+        # Distribution-friendly URLs. Every API caller (a workflow tool,
+        # an SDK user, a curl script) gets the receipt's public URL and
+        # an embeddable badge URL without having to read docs and
+        # hand-construct them. Receipt UI uses these too.
+        "receipt_url": f"{site}/r/{rid}",
+        "badge_url": f"{site}/api/badge/{rid}.svg",
+        "verify_url": f"{site}/api/receipt/{rid}",
+        **(x402_fields or {}),
+    }
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "orphograph/0.1"
     timeout = REQUEST_TIMEOUT_SEC  # close slow / dead connections so a thread isn't pinned
@@ -1773,8 +1856,8 @@ class Handler(BaseHTTPRequestHandler):
     # names the route template, not the identifier (@log-route-template).
     # /blog/ slugs are public and stay readable.
     _LOG_ID_ROUTES = ("/r/", "/api/receipt/", "/api/verify/", "/api/verify_folder/",
-                      "/api/badge/", "/certificate/", "/api/nowpayments/order/",
-                      "/api/me/receipt/")
+                      "/api/verify_output/", "/api/badge/", "/certificate/",
+                      "/api/nowpayments/order/", "/api/me/receipt/")
     _LOG_CONTROL_TABLE = {
         **{c: f"\\x{c:02x}" for c in (*range(0x20), *range(0x7f, 0xa0))},
         ord("\\"): "\\\\",
@@ -2329,6 +2412,18 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/api/inclusion_proof":
             self._handle_inclusion_proof()
+            return
+        if path.startswith("/api/verify_output/"):
+            # An agent that RECEIVED an output checks it against a receipt
+            # with one GET, no MCP: free, no account, the same privacy gate
+            # as /api/verify and /api/verify_folder.
+            rid = path[len("/api/verify_output/"):]
+            if not RECEIPT_ID_RE.match(rid):
+                _json_response(self, 400, {"error": "invalid receipt_id: use the "
+                                                    "receipt id alphabet A-Z a-z 0-9 _ -, "
+                                                    "1 to 64 characters"})
+                return
+            self._handle_verify_output(rid)
             return
         if path.startswith("/api/badge/") and path.endswith(".svg"):
             # Embeddable verification badge. Single GET, public, cacheable.
@@ -3616,14 +3711,30 @@ class Handler(BaseHTTPRequestHandler):
                                 "no money and made no anchor; resubmit the "
                                 "identical request shortly."})
                     return
+                if x402_state == "delivered":
+                    # Safe retry: the identical request (same signed payload,
+                    # same body) whose payment already bought its anchor.
+                    # Its first response may never have arrived, so it is
+                    # answered with that same receipt, 200, in the shape a
+                    # first paid anchor gets. Nothing runs: no verify(), no
+                    # settle(), no claim, no anchor, no credit or free-tier
+                    # budget is touched (this block is reached only with no
+                    # pack consumed, and before the free-tier limiter).
+                    replay = self._x402_replay_answer(
+                        (x402_paid or {}).get("receipt_id") or "", x402_paid or {},
+                        subscription_active=subscription_active,
+                        subscriber_email=subscriber_email,
+                        pack_consumed=pack_consumed, pack_remaining=pack_remaining)
+                    if replay:
+                        return
                 if x402_state in ("delivered", "foreign"):
-                    # Already bought its anchor, or presented with a request
-                    # that is not the one that paid ("foreign": anyone can
-                    # rebuild the signed payload from the chain). One status
-                    # and one error for both. Only the identical request
-                    # ("delivered": both digests matched) is told the
-                    # receipt its payment bought, in case the first response
-                    # never reached it.
+                    # Already bought its anchor and the receipt cannot be
+                    # served to this caller (see _x402_replay_answer), or
+                    # presented with a request that is not the one that paid
+                    # ("foreign": anyone can rebuild the signed payload from
+                    # the chain). One status and one error for both. Only the
+                    # identical request ("delivered": both digests matched)
+                    # is told the receipt id its payment bought.
                     bought = ((x402_paid or {}).get("receipt_id")
                               if x402_state == "delivered" else None)
                     _json_response(self, 401, {
@@ -4183,8 +4294,6 @@ class Handler(BaseHTTPRequestHandler):
                 record["notify_email"] = candidate
             except (OSError, json.JSONDecodeError):
                 pass
-        site = os.environ.get("SITE_URL", "https://orphograph.com").rstrip("/")
-        rid = record["receipt_id"]
         if pack_consumed:
             demand_auth_path = "pack"
         elif ln_payment_hash is not None:
@@ -4206,52 +4315,76 @@ class Handler(BaseHTTPRequestHandler):
             authenticated=api_key_active or subscription_active,
             paid=demand_auth_path != "free",
         )
-        _json_response(self, 200, {
-            "receipt_id": rid,
-            "created_at": record["created_at"],
-            "hash_hex": record["hash_hex"],
-            "sha512_hex": record.get("sha512_hex"),
-            "client_label": record["client_label"],
-            "calendars_ok": record["calendars_ok"],
-            "calendars_total": record["calendars_total"],
-            # Five servers reach four calendars: both counts are reported so
-            # neither number has to carry a meaning it does not have.
-            **distinct,
-            "low_redundancy": low_redundancy,
-            "pack_consumed": pack_consumed,
-            "pack_remaining": pack_remaining,
-            "credit_refunded": credit_refunded,
-            **({"notify_email_ignored": "email_needs_lowercase"} if notify_ignored else {}),
-            "subscription_active": subscription_active,
-            "successes": [{"calendar": s["calendar"], "ots_path": s["ots_path"]} for s in record["successes"]],
-            "failures": record["failures"],
-            # Provenance fields echo only when the sanitizer accepted them —
-            # a client that sent a proof needs to SEE whether it survived
-            # (the capture daemon's sidecar writer relies on this echo).
-            **({"zk_provenance": record["zk_provenance"]}
-               if record.get("zk_provenance") else {}),
-            **({"hardware_attestation": record["hardware_attestation"]}
-               if record.get("hardware_attestation") else {}),
-            # Distribution-friendly URLs. Every API caller (a workflow tool,
-            # an SDK user, a curl script) gets the receipt's public URL and
-            # an embeddable badge URL without having to read docs and
-            # hand-construct them. Receipt UI uses these too.
-            "receipt_url": f"{site}/r/{rid}",
-            "badge_url": f"{site}/api/badge/{rid}.svg",
-            "verify_url": f"{site}/api/receipt/{rid}",
+        _json_response(self, 200, _anchor_response_body(
+            record, distinct=distinct, low_redundancy=low_redundancy,
+            pack_consumed=pack_consumed, pack_remaining=pack_remaining,
+            credit_refunded=credit_refunded, notify_ignored=notify_ignored,
+            subscription_active=subscription_active,
             # Echoed only when x402 was the payment path, so every other
             # caller's response body is byte-for-byte unchanged. `settled`
             # is always true by here (an unsettled payment never reaches
             # the anchor); `held` says whether this receipt is the one it
             # paid for, or a 0-calendar one the identical request may retry.
-            **({"x402_settled": True, "x402_payment_held": not x402_delivered,
-                **({} if x402_delivered else {"x402_hint": _X402_HELD_HINT})}
-               if x402_claim_ident is not None else {}),
-        }, headers=(
+            x402_fields=({"x402_settled": True, "x402_payment_held": not x402_delivered,
+                          **({} if x402_delivered else {"x402_hint": _X402_HELD_HINT})}
+                         if x402_claim_ident is not None else None),
+        ), headers=(
             # The settlement header marks delivery, not the charge: a held
             # payment's caller must not read its worthless receipt as paid for.
             (x402.PAYMENT_RESPONSE_HEADER, x402.encode_payment_response_header(x402_paid)),
         ) if x402_delivered else ())
+
+    def _x402_replay_answer(self, rid: str, settlement: dict, *,
+                            subscription_active: bool, subscriber_email: str | None,
+                            pack_consumed: bool, pack_remaining: int) -> bool:
+        """Answer an identical x402 replay with the receipt its payment
+        bought: 200, the first paid anchor's body (_anchor_response_body)
+        plus x402_replay: true, and the PAYMENT-RESPONSE header rebuilt from
+        the recorded settlement. Returns False, having sent nothing, when the
+        receipt cannot be served to this caller; the caller then answers the
+        401 it always gave (which names only the receipt id):
+
+          * no receipt id on the delivery row, or the receipt is gone or
+            unreadable: there is nothing to serve;
+          * the receipt is private and this caller is not its owner: the
+            payload is public on-chain and the body may be known, so a
+            private receipt's content goes only to its owner, exactly as
+            /api/receipt/<id> decides.
+
+        Read-only: it reads receipt.json and the .ots proofs, nothing else.
+        """
+        if not rid or not RECEIPT_ID_RE.match(rid):
+            return False
+        try:
+            stored = json.loads((engine.RECEIPTS_DIR / rid / "receipt.json").read_text())
+        except (OSError, json.JSONDecodeError):
+            return False
+        if not isinstance(stored, dict) or stored.get("receipt_id") != rid:
+            return False
+        if stored.get("private"):
+            viewer = subscriber_email or self._session_email()
+            viewer_id = auth.email_id(viewer) if viewer else None
+            if not viewer_id or viewer_id != stored.get("owner_id"):
+                return False
+        try:
+            distinct = engine.receipt_distinct_counts(stored)
+            body = _anchor_response_body(
+                stored, distinct=distinct,
+                low_redundancy=distinct["calendars_distinct_ok"] < MIN_CALENDARS_OK,
+                pack_consumed=pack_consumed, pack_remaining=pack_remaining,
+                credit_refunded=False, notify_ignored=False,
+                subscription_active=subscription_active,
+                x402_fields={"x402_settled": True, "x402_payment_held": False,
+                             "x402_replay": True})
+        except (KeyError, TypeError) as e:
+            sys.stderr.write(f"[x402] replay receipt unreadable: {type(e).__name__}\n")
+            return False
+        # The header a first delivery carried: the SettleResponse, rebuilt
+        # from the charge row. The receipt id is the body's, not the header's.
+        header = {k: v for k, v in settlement.items() if k != "receipt_id"}
+        _json_response(self, 200, body, headers=(
+            (x402.PAYMENT_RESPONSE_HEADER, x402.encode_payment_response_header(header)),))
+        return True
 
     def _handle_request_email_link(self) -> None:
         # Rate-limited by IP to prevent email bombing.
@@ -6243,26 +6376,102 @@ class Handler(BaseHTTPRequestHandler):
             _json_response(self, 500, {"error": "manifest missing"})
             return
         try:
-            tree = merkle.MerkleTree.from_manifest(manifest)
-            proof = tree.inclusion_proof(rel_path)
+            proof = _folder_inclusion_proof(manifest, rel_path)
         except ValueError as e:
             _json_response(self, 404, {"error": str(e)})
             return
-        # Pull the file's SHA-256 from the manifest entry so the verifier
-        # can reconstruct the leaf locally without contacting the server again.
-        file_hex = None
-        for leaf in manifest.get("leaves", []):
-            if leaf.get("path") == rel_path:
-                file_hex = leaf.get("file_sha256_hex")
-                break
-        _json_response(self, 200, {
+        _json_response(self, 200, {"receipt_id": rid, **proof})
+
+    def _handle_verify_output(self, rid: str) -> None:
+        """GET /api/verify_output/<rid>?sha256=<64 hex>: is this output the
+        one the receipt anchored (single), or one of its leaves (folder/run)?
+
+        The server-side twin of the MCP tool `orphograph_verify_output`,
+        answered from the office's own records. Privacy is the gate of
+        /api/verify and /api/verify_folder: a private receipt answers 404,
+        in the same shape as a missing one, to everyone but its owner, and
+        that gate runs BEFORE anything about the receipt's kind or content
+        is said. Read-only (HEAD runs this same code under safe_method).
+        """
+        from urllib.parse import urlparse, parse_qs
+        qs = parse_qs(urlparse(self.path).query, keep_blank_values=True)
+        given = qs.get("sha256", [])
+        if len(given) != 1 or not _SHA256_HEX_RE.fullmatch(given[0]):
+            _json_response(self, 400, {
+                "error": "invalid sha256: pass exactly one sha256 query parameter, "
+                         "64 hex characters (the SHA-256 of the output you received)"})
+            return
+        target = given[0].lower()
+        record = engine.verify_receipt(rid)
+        not_found = {"receipt_id": rid, "found": False, "error": "receipt not found"}
+        if not record.get("found"):
+            _json_response(self, 404, not_found)
+            return
+        session_email = self._session_email()
+        viewer_id = auth.email_id(session_email) if session_email else None
+        is_owner = bool(viewer_id and viewer_id == record.get("owner_id"))
+        if record.get("private") and not is_owner:
+            _json_response(self, 404, not_found)
+            return
+        anchored = record.get("hash_hex")
+        anchored = anchored.lower() if isinstance(anchored, str) else ""
+        site = os.environ.get("SITE_URL", "https://orphograph.com").rstrip("/")
+        base = {
             "receipt_id": rid,
-            "root_hex": manifest.get("root_hex"),
-            "path": rel_path,
-            "file_sha256_hex": file_hex,
-            "merkle_algorithm": manifest.get("algorithm"),
-            "proof": proof,
-        })
+            "output_sha256_hex": target,
+            "anchored_hash_sha256": anchored or None,
+            "anchored_at_utc": record.get("created_at"),
+            "btc_pinned_at_utc": record.get("btc_pinned_at"),
+            "calendars_ok": record.get("calendars_ok"),
+            "receipt_url": f"{site}/r/{rid}",
+            "scope": _VERIFY_OUTPUT_SCOPE,
+        }
+        if record.get("kind") != "folder":
+            _json_response(self, 200, {**base, "kind": "single",
+                                       "match": bool(anchored) and anchored == target})
+            return
+        try:
+            stored = json.loads((engine.RECEIPTS_DIR / rid / "manifest.json").read_text())
+        except (OSError, json.JSONDecodeError):
+            _json_response(self, 500, {"error": "manifest missing"})
+            return
+        leaves = stored.get("leaves") if isinstance(stored, dict) else None
+        if not isinstance(leaves, list) or stored.get("root_hex") != anchored:
+            # The office will not answer from a manifest that is not the one
+            # its receipt anchored.
+            _json_response(self, 500, {"error": "manifest does not match the anchored root"})
+            return
+        hits = [i for i, leaf in enumerate(leaves)
+                if isinstance(leaf, dict) and isinstance(leaf.get("file_sha256_hex"), str)
+                and leaf["file_sha256_hex"].lower() == target]
+        folder = {**base, "kind": "folder", "leaf_count": len(leaves)}
+        if not hits:
+            _json_response(self, 200, {**folder, "match": False})
+            return
+        # Path visibility follows the folder view this viewer is served
+        # (receipt_export.manifest_view): owner, or a paths_public receipt.
+        import receipt_export
+        view = receipt_export.manifest_view(
+            stored, redact_paths=not is_owner and not record.get("paths_public"))
+        first = hits[0]
+        path_visible = "path" in view["leaves"][first]
+        try:
+            proof = _folder_inclusion_proof(stored, leaves[first]["path"])
+        except (ValueError, KeyError, TypeError):
+            _json_response(self, 500, {"error": "manifest does not match the anchored root"})
+            return
+        proof["leaf_index"] = first
+        proof["leaf_hex"] = leaves[first].get("leaf_hex")
+        if not path_visible:
+            # The sibling hashes are already public (every leaf_hex is in the
+            # redacted view); the path is not, so it is withheld here too.
+            proof.pop("path", None)
+        out = {**folder, "match": True, "matched_leaf_count": len(hits),
+               "path_visible": path_visible}
+        if path_visible:
+            out["path"] = leaves[first]["path"]
+        out["inclusion_proof"] = proof
+        _json_response(self, 200, out)
 
     def _handle_recover_payment(self) -> None:
         """Customer self-serve recovery: a customer who paid (Stripe) but
