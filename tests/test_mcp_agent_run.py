@@ -224,7 +224,7 @@ def test_the_stdio_server_itself_anchors_and_verifies_a_run(office):
                        input="\n".join(json.dumps(m) for m in msgs) + "\n",
                        capture_output=True, text=True, env=env, timeout=60)
     replies = [json.loads(l) for l in p.stdout.splitlines() if l.strip()]
-    assert replies[0]["result"]["serverInfo"]["version"] == "0.1.2"
+    assert replies[0]["result"]["serverInfo"]["version"] == mcp.SERVER_VERSION
     run = json.loads(replies[1]["result"]["content"][0]["text"])
     assert run["ok"] is True, (run, p.stderr[-400:])
     check = {"jsonrpc": "2.0", "id": 3, "method": "tools/call",
