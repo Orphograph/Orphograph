@@ -35,6 +35,14 @@
     {
       "name": "orphograph_list_vault",
       "description": "List the signed-in subscriber's anchored receipts; requires ORPHO_API_KEY in the environment."
+    },
+    {
+      "name": "orphograph_anchor_run",
+      "description": "Anchor every step of an agent run under one receipt; only one SHA-256 per step and the Merkle root are sent, and each step stays provable on its own."
+    },
+    {
+      "name": "orphograph_verify_output",
+      "description": "For the agent receiving an output: check whether a receipt covers it, trusting only the anchored hash (a run's manifest is recomputed locally)."
     }
   ]
 }

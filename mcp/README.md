@@ -75,6 +75,8 @@ Or edit `~/.claude/settings.json` and add the same `mcpServers` block.
 | `orphograph_verify_receipt(receipt_id)` | Look up what the office recorded for a receipt. A lookup — it does NOT consult the chain; run `ots verify` for that. | None |
 | `orphograph_verify_lineage(receipt_id)` | Walk an edit-lineage chain back through its committed parents. | None |
 | `orphograph_list_vault(limit?)` | List the subscriber's receipts. | API key required |
+| `orphograph_anchor_run(steps, label?)` | Anchor every step of an agent run under one receipt; each step provable alone. | None |
+| `orphograph_verify_output(receipt_id, text \| sha256_hex)` | Check whether a receipt covers an exact output, trusting only the anchored hash. | None |
 
 ## Privacy contract
 

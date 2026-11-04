@@ -45,7 +45,7 @@
   <p class="mcp-eyebrow">Model Context Protocol</p>
   <h1 class="mcp-h1">An office at the coding assistant's elbow.</h1>
   <p class="mcp-lede">
-    The Orphograph MCP server is a single-file Python program, MIT-licensed and approximately four hundred lines, with no third-party dependencies. It is hosted within the user's own Claude Desktop, Claude Code, or Cursor environment; it is never hosted on Orphograph's servers. The server exposes six tools to the assistant. When the assistant invokes <code class="inline">anchor_file</code>, the file is read locally, its SHA-256 and SHA-512 fingerprints are computed in the local process, and only those fingerprints, with a label if one is given, are transmitted to the office. The file itself does not cross the wire.
+    The Orphograph MCP server is a single-file Python program, MIT-licensed, with no third-party dependencies. It is hosted within the user's own Claude Desktop, Claude Code, or Cursor environment; it is never hosted on Orphograph's servers. The server exposes eight tools to the assistant. When the assistant invokes <code class="inline">anchor_file</code>, the file is read locally, its SHA-256 and SHA-512 fingerprints are computed in the local process, and only those fingerprints, with a label if one is given, are transmitted to the office. The file itself does not cross the wire.
   </p>
 
   <section class="mcp-section">
@@ -107,7 +107,7 @@ claude mcp add orphograph -- orphograph-mcp</code></pre>
   </section>
 
   <section class="mcp-section">
-    <h2>The six tools</h2>
+    <h2>The eight tools</h2>
     <div class="mcp-rule"></div>
     <p>
       Each tool is registered with the host on startup and made available to the assistant. The file is read locally for the anchor operation; the script never transmits the file body to any external endpoint.
@@ -136,6 +136,14 @@ claude mcp add orphograph -- orphograph-mcp</code></pre>
         <tr>
           <td>orphograph_verify_receipt(receipt_id)</td>
           <td>Retrieves the receipt by identifier and returns what this office recorded for it: the anchored hashes, the calendar attestation counts, and the time the Bitcoin pin was observed. This reads the office's record; it does not itself consult the chain. For an independent chain check, run an OpenTimestamps client over the receipt's <code>.ots</code> files.</td>
+        </tr>
+        <tr>
+          <td>orphograph_anchor_run(steps)</td>
+          <td>Hashes each step of an agent run in the local process and anchors them under one receipt as a Merkle tree. Only one fingerprint per step and the root are transmitted. Any single step can later be checked on its own.</td>
+        </tr>
+        <tr>
+          <td>orphograph_verify_output(receipt_id, text)</td>
+          <td>For the agent receiving an output: checks whether the receipt covers that exact output. It trusts only the anchored fingerprint; for a run, it recomputes the tree locally before any step counts. It shows the output existed by the anchor time, not who produced it or that it is correct.</td>
         </tr>
         <tr>
           <td>orphograph_list_vault()</td>
