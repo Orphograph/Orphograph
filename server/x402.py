@@ -70,9 +70,11 @@ anything, so it needs no crypto dependency at all.
 from __future__ import annotations
 
 import base64
+import functools
 import hashlib
 import json
 import os
+import re
 import secrets
 import socket
 import sys
@@ -136,6 +138,103 @@ def _data_dir() -> Path:
 _KNOWN_NETWORKS = {NETWORK_BASE_SEPOLIA: USDC_BASE_SEPOLIA, NETWORK_BASE_MAINNET: USDC_BASE_MAINNET}
 
 
+# ── Pay-to address check (2026-11-04) ───────────────────────────────────────
+# Before this, a non-empty ORPHO_X402_PAY_TO_ADDRESS armed the rail whatever
+# it said. A typo would publish a payTo nobody controls, and on mainnet every
+# payment to it is real USDC lost. EIP-55 mixed-case checksums catch a mistyped
+# character (a wrong letter or digit fails with probability ~0.9998). The
+# checksum needs Keccak-256, which hashlib does not have: hashlib.sha3_256 is
+# FIPS 202 SHA3, same permutation but a different padding byte (0x06, not
+# Keccak's 0x01). The sponge below is the Keccak team's CompactFIPS202
+# reference, parametrised by that byte, so tests check it against hashlib's
+# SHA3 (suffix 0x06) as well as published Keccak-256 vectors (suffix 0x01).
+
+def _rol64(a: int, n: int) -> int:
+    n %= 64
+    return ((a >> (64 - n)) | (a << n)) & 0xFFFFFFFFFFFFFFFF
+
+
+def _keccak_f1600(state: bytearray) -> bytearray:
+    lanes = [[int.from_bytes(state[8 * (x + 5 * y):8 * (x + 5 * y) + 8], "little")
+              for y in range(5)] for x in range(5)]
+    r = 1
+    for _ in range(24):
+        c = [lanes[x][0] ^ lanes[x][1] ^ lanes[x][2] ^ lanes[x][3] ^ lanes[x][4] for x in range(5)]
+        d = [c[(x + 4) % 5] ^ _rol64(c[(x + 1) % 5], 1) for x in range(5)]
+        lanes = [[lanes[x][y] ^ d[x] for y in range(5)] for x in range(5)]
+        x, y = 1, 0
+        current = lanes[x][y]
+        for t in range(24):
+            x, y = y, (2 * x + 3 * y) % 5
+            current, lanes[x][y] = lanes[x][y], _rol64(current, (t + 1) * (t + 2) // 2)
+        for y in range(5):
+            row = [lanes[x][y] for x in range(5)]
+            for x in range(5):
+                lanes[x][y] = row[x] ^ ((~row[(x + 1) % 5]) & row[(x + 2) % 5])
+        for j in range(7):
+            r = ((r << 1) ^ ((r >> 7) * 0x71)) % 256
+            if r & 2:
+                lanes[0][0] ^= 1 << ((1 << j) - 1)
+    out = bytearray(200)
+    for x in range(5):
+        for y in range(5):
+            out[8 * (x + 5 * y):8 * (x + 5 * y) + 8] = lanes[x][y].to_bytes(8, "little")
+    return out
+
+
+def _keccak256(data: bytes, suffix: int = 0x01) -> bytes:
+    """Keccak-256 (suffix 0x01, Ethereum's hash) or SHA3-256 (suffix 0x06)."""
+    rate = 136
+    state = bytearray(200)
+    off = 0
+    block = 0
+    while off < len(data):
+        block = min(len(data) - off, rate)
+        for i in range(block):
+            state[i] ^= data[off + i]
+        off += block
+        if block == rate:
+            state = _keccak_f1600(state)
+            block = 0
+    state[block] ^= suffix
+    if (suffix & 0x80) and block == rate - 1:
+        state = _keccak_f1600(state)
+    state[rate - 1] ^= 0x80
+    return bytes(_keccak_f1600(state)[:32])
+
+
+def eip55_checksum(address: str) -> str:
+    """The EIP-55 mixed-case form of a 0x + 40-hex address."""
+    body = address[2:].lower()
+    h = _keccak256(body.encode("ascii")).hex()
+    return "0x" + "".join(ch.upper() if ch.isalpha() and int(h[i], 16) >= 8 else ch
+                          for i, ch in enumerate(body))
+
+
+_HEX_ADDRESS = re.compile(r"0x[0-9a-fA-F]{40}")
+
+
+@functools.lru_cache(maxsize=8)
+def pay_to_problem(address: str) -> str | None:
+    """Why `address` must not be published as payTo, or None.
+
+    Cached per address string: configured() runs up to three times per
+    anchor request, and the checksum is pure-Python Keccak. Messages name
+    the env var, never the value."""
+    name = "ORPHO_X402_PAY_TO_ADDRESS"
+    if not _HEX_ADDRESS.fullmatch(address):
+        return f"{name} is not a 0x-prefixed, 40-hex-digit address"
+    body = address[2:]
+    if body.lower() == "0" * 40:
+        return f"{name} is the zero address"
+    if address.lower() in {a.lower() for a in _KNOWN_NETWORKS.values()}:
+        return f"{name} is a USDC token contract, not a wallet"
+    mixed = body != body.lower() and body != body.upper()
+    if mixed and eip55_checksum(address) != address:
+        return f"{name} fails its EIP-55 checksum (a mistyped character)"
+    return None
+
+
 def is_testnet() -> bool:
     return network() == NETWORK_BASE_SEPOLIA
 
@@ -160,6 +259,10 @@ def config_problems() -> list[str]:
         want = _KNOWN_NETWORKS[net]
         if asset().lower() in {a.lower() for a in _KNOWN_NETWORKS.values()} and asset().lower() != want.lower():
             out.append("ORPHO_X402_ASSET is the USDC of the other network")
+    if pay_to():
+        why = pay_to_problem(pay_to())
+        if why:
+            out.append(why)
     fac = facilitator_url()
     if net == NETWORK_BASE_MAINNET and fac == DEFAULT_FACILITATOR_URL.rstrip("/"):
         out.append("mainnet selected but the facilitator is x402.org, which is testnet-only")

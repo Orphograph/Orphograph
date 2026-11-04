@@ -53,7 +53,7 @@ def env(monkeypatch):
     for k in list(os.environ):
         if k.startswith("ORPHO_X402_"):
             monkeypatch.delenv(k)
-    monkeypatch.setenv("ORPHO_X402_PAY_TO_ADDRESS", "0x00000000000000000000000000000000000BEEF")
+    monkeypatch.setenv("ORPHO_X402_PAY_TO_ADDRESS", "0x000000000000000000000000000000000000BEEF")
     return monkeypatch
 
 
@@ -245,7 +245,7 @@ def test_broken_cdp_key_is_unavailable_not_a_leak(env):
 # ── discovery metadata, off the wire ────────────────────────────────────────
 
 X402_ENV = {"ORPHO_X402_BACKEND": "mock", "ORPHO_X402_ALLOW_MOCK": "1",
-            "ORPHO_X402_PAY_TO_ADDRESS": "0x00000000000000000000000000000000000BEEF",
+            "ORPHO_X402_PAY_TO_ADDRESS": "0x000000000000000000000000000000000000BEEF",
             "RATE_LIMIT_PER_DAY": "1"}
 
 

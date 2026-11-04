@@ -32,7 +32,11 @@ shows `x402.armed: false` and a `config_problems` count). It is not empty when:
 - the asset is the USDC of the other network;
 - the facilitator is CDP but `ORPHO_X402_CDP_KEY_ID` / `ORPHO_X402_CDP_KEY_SECRET`
   are missing or the secret is not a 64-byte Ed25519 key;
-- the network is unknown or the facilitator URL is not https.
+- the network is unknown or the facilitator URL is not https;
+- `ORPHO_X402_PAY_TO_ADDRESS` is not `0x` plus 40 hex digits, is mixed-case
+  but fails its EIP-55 checksum (a mistyped character), or is the zero address
+  or a USDC token contract. Paste the address exactly as the wallet shows it;
+  an all-lowercase address is accepted but carries no typo protection.
 
 To see the reasons on the machine: `python3 -c "import x402; print(x402.config_problems())"`
 from `server/`.
