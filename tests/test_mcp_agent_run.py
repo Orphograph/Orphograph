@@ -206,3 +206,32 @@ def test_a_hostile_office_answer_never_crashes_and_never_matches(verify, folder,
     monkeypatch.setattr(mcp, "_http", fake)
     out = mcp.tool_verify_output({"receipt_id": "R1", "text": "anything"})
     assert out.get("match") is not True
+
+
+def test_the_stdio_server_itself_anchors_and_verifies_a_run(office):
+    """Wire path: the MCP host talks JSON-RPC over stdio to the shipped file,
+    not to these functions. Drive that process end to end."""
+    import subprocess
+    env = {**__import__("os").environ, "ORPHO_BASE_URL": office}
+    env.pop("ORPHO_API_KEY", None)
+    msgs = [
+        {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}},
+        {"jsonrpc": "2.0", "method": "notifications/initialized"},
+        {"jsonrpc": "2.0", "id": 2, "method": "tools/call",
+         "params": {"name": "orphograph_anchor_run", "arguments": {"steps": STEPS}}},
+    ]
+    p = subprocess.run([sys.executable, str(ROOT / "web" / "mcp" / "orphograph_mcp.py")],
+                       input="\n".join(json.dumps(m) for m in msgs) + "\n",
+                       capture_output=True, text=True, env=env, timeout=60)
+    replies = [json.loads(l) for l in p.stdout.splitlines() if l.strip()]
+    assert replies[0]["result"]["serverInfo"]["version"] == "0.1.2"
+    run = json.loads(replies[1]["result"]["content"][0]["text"])
+    assert run["ok"] is True, (run, p.stderr[-400:])
+    check = {"jsonrpc": "2.0", "id": 3, "method": "tools/call",
+             "params": {"name": "orphograph_verify_output",
+                        "arguments": {"receipt_id": run["receipt_id"], "text": STEPS[2]}}}
+    p2 = subprocess.run([sys.executable, str(ROOT / "web" / "mcp" / "orphograph_mcp.py")],
+                        input=json.dumps(check) + "\n", capture_output=True, text=True,
+                        env=env, timeout=60)
+    v = json.loads(json.loads(p2.stdout.splitlines()[0])["result"]["content"][0]["text"])
+    assert v["match"] is True and v["matched_paths"] == ["step-000003"], v
