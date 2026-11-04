@@ -1679,6 +1679,24 @@ _VERIFY_OUTPUT_SCOPE = ("Shows this exact output existed by the anchor time. It 
                         "does not show who produced it or that it is correct.")
 
 
+def _read_receipt_manifest(rid: str) -> dict:
+    """The stored folder manifest of receipt `rid`, read only from inside the
+    receipts directory. Every route that reaches here has already matched
+    RECEIPT_ID_RE, so no id can name another path; this re-checks it where
+    the path is built (defense in depth, and the form code scanning can see):
+    the id must match fully, and the resolved file must sit under the
+    receipts directory. Raises ValueError otherwise, OSError/JSONDecodeError
+    on a missing or unreadable file."""
+    if not RECEIPT_ID_RE.fullmatch(rid):
+        raise ValueError("invalid receipt id")
+    base = os.path.realpath(engine.RECEIPTS_DIR)
+    target = os.path.realpath(os.path.join(base, rid, "manifest.json"))
+    if not target.startswith(base + os.sep):
+        raise ValueError("manifest path escapes the receipts directory")
+    with open(target, encoding="utf-8") as fh:
+        return json.load(fh)
+
+
 def _folder_inclusion_proof(manifest: dict, rel_path: str) -> dict:
     """The inclusion proof for one path of a folder manifest: the ONE
     implementation /api/inclusion_proof and /api/verify_output share.
@@ -6325,8 +6343,8 @@ class Handler(BaseHTTPRequestHandler):
             _json_response(self, 400, {"error": "receipt is not a folder anchor"})
             return
         try:
-            manifest = json.loads((engine.RECEIPTS_DIR / rid / "manifest.json").read_text())
-        except (OSError, json.JSONDecodeError):
+            manifest = _read_receipt_manifest(rid)
+        except (OSError, ValueError):
             _json_response(self, 500, {"error": "manifest missing"})
             return
         # Privacy guard: for a public folder receipt viewed by a non-owner,
@@ -6371,8 +6389,8 @@ class Handler(BaseHTTPRequestHandler):
                 _json_response(self, 404, {"error": "folder receipt not found"})
                 return
         try:
-            manifest = json.loads((engine.RECEIPTS_DIR / rid / "manifest.json").read_text())
-        except (OSError, json.JSONDecodeError):
+            manifest = _read_receipt_manifest(rid)
+        except (OSError, ValueError):
             _json_response(self, 500, {"error": "manifest missing"})
             return
         try:
@@ -6431,8 +6449,8 @@ class Handler(BaseHTTPRequestHandler):
                                        "match": bool(anchored) and anchored == target})
             return
         try:
-            stored = json.loads((engine.RECEIPTS_DIR / rid / "manifest.json").read_text())
-        except (OSError, json.JSONDecodeError):
+            stored = _read_receipt_manifest(rid)
+        except (OSError, ValueError):
             _json_response(self, 500, {"error": "manifest missing"})
             return
         leaves = stored.get("leaves") if isinstance(stored, dict) else None
