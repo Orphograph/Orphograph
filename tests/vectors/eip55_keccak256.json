@@ -1,0 +1,43 @@
+{
+  "fetched": "2026-11-04",
+  "eip55": {
+    "source": "https://eips.ethereum.org/EIPS/eip-55 (plain curl)",
+    "source_sha256": "c204b03e6e2b392c88a5271d5ff20d3a42d2105abd52459e95bd3a4736e49768",
+    "note": "The EIP's test cases. Each is its own checksum: all-caps and all-lower are cases whose hash puts every letter on one side.",
+    "all_caps": [
+      "0x52908400098527886E0F7030069857D2E4169EE7",
+      "0x8617E340B3D01FA5F11F306F4090FD50E238070D"
+    ],
+    "all_lower": [
+      "0xde709f2102306220921060314715629080e2fb77",
+      "0x27b1fdb04752bbc536007a920d24acb045561c26"
+    ],
+    "normal": [
+      "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed",
+      "0xfB6916095ca1df60bB79Ce92cE3Ea74c37c5d359",
+      "0xdbF03B407c01E7cD3CBea99509d93f8DDDC8C6FB",
+      "0xD1220A0cf47c7B9Be7A2E6BA89F429762e7b9aDb"
+    ]
+  },
+  "keccak256": {
+    "source": "https://raw.githubusercontent.com/ethereum/go-ethereum/master/core/types/hashes.go (plain curl)",
+    "source_sha256": "ed6b927ef8d5eb0c01bfb6033d3e2cb18357880eeb145cd58e6c9e9b9f8ea7da",
+    "vectors": [
+      {
+        "name": "EmptyCodeHash = Keccak256(nil)",
+        "input_hex": "",
+        "digest": "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"
+      },
+      {
+        "name": "EmptyRootHash = Keccak256(RLP empty string 0x80)",
+        "input_hex": "80",
+        "digest": "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"
+      },
+      {
+        "name": "EmptyUncleHash = Keccak256(RLP empty list 0xc0)",
+        "input_hex": "c0",
+        "digest": "1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"
+      }
+    ]
+  }
+}

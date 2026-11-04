@@ -31,7 +31,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "server"))
 import x402 as x402_const  # noqa: E402 — constants + pure helpers only; no
                             # shared mutable state with the server subprocess.
 
-PAY_TO = "0x00000000000000000000000000000000000BEEF"
+PAY_TO = "0x000000000000000000000000000000000000BEEF"
 HASH_A = "aa" * 32
 HASH_B = "bb" * 32
 HASH_C = "cc" * 32

@@ -325,7 +325,7 @@ def test_a_free_anchor_past_its_allowance_gets_the_unconfigured_answer(tmp_path)
 
 # ── 3b · L402 beside an x402 payment ───────────────────────────────────────
 
-PAY_TO = "0x00000000000000000000000000000000000BEEF"
+PAY_TO = "0x000000000000000000000000000000000000BEEF"
 X402_ENV = {
     "ORPHO_X402_BACKEND": "mock",
     "ORPHO_X402_ALLOW_MOCK": "1",
