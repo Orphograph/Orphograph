@@ -53,6 +53,7 @@ X-Pack-Token header.
   (mcp/orphograph_mcp.py)
 - Registry entry: io.github.Orphograph/orphograph on registry.modelcontextprotocol.io
 - Server card: https://orphograph.com/.well-known/mcp/server-card.json
+- OpenAPI contract (single-fingerprint anchor + free verify): https://orphograph.com/openapi.json
 - Tools: orphograph_anchor_file, orphograph_anchor_folder, orphograph_anchor_output,
   orphograph_verify_receipt, orphograph_verify_lineage, orphograph_list_vault
 

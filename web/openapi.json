@@ -1,0 +1,161 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Orphograph API",
+    "version": "1.0.0",
+    "summary": "Anchor a SHA-256 fingerprint to Bitcoin through OpenTimestamps and get a verifiable receipt.",
+    "description": "A receipt proves WHEN a fingerprint existed: that a file or hash existed at a point in time. It does not establish who made it, who owns it, or that it is original, and it is not a notarisation or legal advice. File contents never reach the server: the client computes the SHA-256 and sends only the fingerprint. Verification is free and needs no account. This document covers the single-fingerprint lane an agent uses most; folders and lineage are described in https://orphograph.com/llms.txt.",
+    "license": {
+      "name": "MIT (open-source verifier and MCP server)",
+      "url": "https://github.com/Orphograph/Orphograph/blob/master/LICENSE"
+    }
+  },
+  "servers": [
+    {"url": "https://orphograph.com"}
+  ],
+  "paths": {
+    "/api/anchor": {
+      "post": {
+        "operationId": "anchorFingerprint",
+        "summary": "Anchor one SHA-256 fingerprint.",
+        "description": "Free tier: three anchors per 24 hours per client, no account. Past it, send a Pack claim code (X-Pack-Token), a Standing Order API key (X-Orpho-Api-Key), or pay for this one anchor with x402. x402 runs on Base Sepolia (eip155:84532), the TEST network: test USDC has no value. One x402 authorization buys one anchor; resending an authorization that already bought an anchor is refused with 401. When the resent request is identical to the one that paid, the body names the receipt_id it bought, so a client whose first reply was lost recovers its receipt without paying twice.",
+        "parameters": [
+          {"name": "X-Pack-Token", "in": "header", "required": false, "schema": {"type": "string"}, "description": "Claim code of a credit Pack; consumes one credit."},
+          {"name": "X-Orpho-Api-Key", "in": "header", "required": false, "schema": {"type": "string"}, "description": "API key of an active Standing Order subscription."},
+          {"name": "PAYMENT-SIGNATURE", "in": "header", "required": false, "schema": {"type": "string"}, "description": "x402 v2 PaymentPayload, base64 JSON, carrying a signed EIP-3009 authorization for the exact amount named in the 402 challenge. X-PAYMENT is accepted as the legacy header name."}
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/AnchorRequest"},
+              "example": {"hash_hex": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08", "client_label": "agent-run-42"}
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Anchored. calendars_ok counts the OpenTimestamps calendar servers that accepted the fingerprint; the Bitcoin attestation follows within hours and is visible on /api/verify.",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/AnchorResponse"}}}
+          },
+          "400": {"description": "Invalid body; the error names the field and the fix.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}},
+          "401": {"description": "A credential or x402 authorization was refused. For an authorization that already bought an anchor, the body carries that receipt_id.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}},
+          "402": {"description": "Free-tier limit reached and x402 is armed: the PAYMENT-REQUIRED header carries the x402 requirements as base64 JSON; the body repeats them with limit_per_day, retry_after_seconds and a hint.", "headers": {"PAYMENT-REQUIRED": {"schema": {"type": "string"}}, "Retry-After": {"schema": {"type": "integer"}}}},
+          "415": {"description": "POST bodies must be sent as Content-Type: application/json.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}},
+          "429": {"description": "Free-tier limit reached; retry after Retry-After seconds, or use a Pack, a subscription, or x402.", "headers": {"Retry-After": {"schema": {"type": "integer"}}}},
+          "503": {"description": "Anchoring is temporarily unavailable; nothing was charged unless the body says otherwise."}
+        }
+      }
+    },
+    "/api/verify/{receipt_id}": {
+      "get": {
+        "operationId": "verifyReceipt",
+        "summary": "Receipt status from the office's record (free, no account).",
+        "description": "Returns calendar attestation counts and, once pinned, btc_pinned_at: the time the office OBSERVED the Bitcoin pin, not the block's own timestamp. This endpoint does not check the chain itself; to do that without Orphograph, run an OpenTimestamps client over the receipt's .ots files (offline verifier: https://orphograph.com/verify/).",
+        "parameters": [{"$ref": "#/components/parameters/ReceiptId"}],
+        "responses": {
+          "200": {"description": "Receipt found.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/VerifyResponse"}}}},
+          "404": {"description": "No receipt with that id (private receipts answer the same way to everyone but their owner)."}
+        }
+      }
+    },
+    "/api/receipt/{receipt_id}": {
+      "get": {
+        "operationId": "getReceipt",
+        "summary": "The receipt record (same body as /api/verify/{receipt_id}).",
+        "parameters": [{"$ref": "#/components/parameters/ReceiptId"}],
+        "responses": {
+          "200": {"description": "Receipt found.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/VerifyResponse"}}}},
+          "404": {"description": "No receipt with that id."}
+        }
+      }
+    },
+    "/r/{receipt_id}": {
+      "get": {
+        "operationId": "receiptPage",
+        "summary": "Human-readable receipt page (HTML).",
+        "parameters": [{"$ref": "#/components/parameters/ReceiptId"}],
+        "responses": {"200": {"description": "HTML page.", "content": {"text/html": {}}}, "404": {"description": "No receipt with that id."}}
+      }
+    },
+    "/api/stats": {
+      "get": {
+        "operationId": "getStats",
+        "summary": "Public anchor counts and calendar status.",
+        "responses": {"200": {"description": "Counts.", "content": {"application/json": {"schema": {"type": "object", "required": ["anchors", "calendars", "version"], "properties": {"anchors": {"type": "object"}, "calendars": {"type": "object"}, "version": {"type": "string"}}}}}}}
+      }
+    },
+    "/llms.txt": {
+      "get": {
+        "operationId": "getLlmsTxt",
+        "summary": "Plain-text summary of the service for AI readers.",
+        "responses": {"200": {"description": "text/plain", "content": {"text/plain": {}}}}
+      }
+    }
+  },
+  "components": {
+    "parameters": {
+      "ReceiptId": {"name": "receipt_id", "in": "path", "required": true, "schema": {"type": "string"}}
+    },
+    "schemas": {
+      "AnchorRequest": {
+        "type": "object",
+        "required": ["hash_hex"],
+        "properties": {
+          "hash_hex": {"type": "string", "pattern": "^[0-9a-f]{64}$", "description": "SHA-256 of the content, 64 lowercase hex characters, computed by the client."},
+          "sha512_hex": {"type": "string", "pattern": "^[0-9a-f]{128}$", "description": "Optional SHA-512 of the same content, a second digest stored with the receipt."},
+          "client_label": {"type": "string", "description": "Optional label of your own choosing. It is shown on the receipt; do not put secrets or personal data in it."},
+          "private": {"type": "boolean", "description": "Subscribers only: keep the receipt out of public lookup."},
+          "notify_email": {"type": "string", "description": "Paid anchors only: email the receipt to this address."},
+          "c2pa_manifest_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$", "description": "Optional SHA-256 of a C2PA manifest to bind to this receipt; echoed on verify."},
+          "metadata": {"type": "object", "description": "Optional small JSON object stored with the receipt."},
+          "attestation": {"type": "object"},
+          "hardware_attestation": {"type": "object"},
+          "paths_public": {"type": "boolean", "description": "Folder anchors only (/api/anchor_folder): publish the manifest's relative paths. Type-checked here and otherwise ignored."},
+          "zk_proof": {"type": "object", "description": "Optional zero-knowledge proof that a fixed, published hash-chain procedure produced the output. It does not prove which model ran."}
+        }
+      },
+      "AnchorResponse": {
+        "type": "object",
+        "required": ["receipt_id", "hash_hex", "created_at", "calendars_ok", "calendars_total", "receipt_url", "verify_url"],
+        "properties": {
+          "receipt_id": {"type": "string"},
+          "hash_hex": {"type": "string"},
+          "sha512_hex": {"type": ["string", "null"]},
+          "created_at": {"type": "string", "description": "UTC time the office received the fingerprint (ISO 8601)."},
+          "calendars_ok": {"type": "integer"},
+          "calendars_total": {"type": "integer"},
+          "calendars_distinct_ok": {"type": "integer"},
+          "calendars_distinct_total": {"type": "integer"},
+          "low_redundancy": {"type": "boolean"},
+          "receipt_url": {"type": "string"},
+          "verify_url": {"type": "string"},
+          "badge_url": {"type": "string"},
+          "credit_refunded": {"type": "boolean"}
+        }
+      },
+      "VerifyResponse": {
+        "type": "object",
+        "required": ["receipt_id", "found", "hash_hex", "created_at", "status", "bitcoin_attested"],
+        "properties": {
+          "receipt_id": {"type": "string"},
+          "found": {"type": "boolean"},
+          "hash_hex": {"type": "string"},
+          "sha512_hex": {"type": ["string", "null"]},
+          "created_at": {"type": "string"},
+          "status": {"type": "string"},
+          "bitcoin_attested": {"type": "boolean"},
+          "btc_pinned_at": {"type": ["string", "null"], "description": "When the office observed the Bitcoin pin; not the block timestamp."},
+          "calendars_ok": {"type": "integer"},
+          "calendars_total": {"type": "integer"},
+          "c2pa_manifest_hash": {"type": "string"}
+        }
+      },
+      "Error": {
+        "type": "object",
+        "required": ["error"],
+        "properties": {"error": {"type": "string"}, "detail": {"type": "string"}, "hint": {"type": "string"}, "receipt_id": {"type": "string"}}
+      }
+    }
+  }
+}
