@@ -86,6 +86,8 @@ Listed in the official MCP registry as `io.github.Orphograph/orphograph`.
 | `orphograph_verify_receipt` | Look up what this office recorded for a receipt: anchored hashes, calendar attestation counts, and when the Bitcoin pin was observed. A lookup, not an independent chain check — run `ots verify` for that. No API key required. |
 | `orphograph_verify_lineage` | Walk an edit-lineage chain back through its committed parents and report the ordering the anchors establish. |
 | `orphograph_list_vault` | List the authenticated subscriber's anchored receipts. |
+| `orphograph_anchor_run` | Anchor every step of an agent run under one receipt; each step stays provable on its own. Only digests are sent. |
+| `orphograph_verify_output` | For the agent receiving an output: does this receipt cover it? Trusts only the anchored hash. |
 
 Quickstart (stdio transport):
 

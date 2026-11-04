@@ -59,7 +59,7 @@
   </div>
 
   <section>
-    <h2>The six tools, by workflow</h2>
+    <h2>The eight tools, by workflow</h2>
     <div class="arch-rule"></div>
     <table class="tool-map">
       <thead>
@@ -106,6 +106,16 @@
           <td>Lists the signed-in subscriber's receipts. Requires an API key
               (<code>ORPHO_API_KEY</code>), issued from <a href="/account.html">the account
               page</a>; without one the server returns a clean error saying so.</td>
+        </tr>
+        <tr>
+          <td><code>anchor_run</code></td>
+          <td>The agent finished a run of several steps and wants one receipt for all of them.</td>
+          <td>Each step is hashed in-process; only one SHA-256 per step and the Merkle root are submitted. Any single step can later be checked on its own, without revealing the others.</td>
+        </tr>
+        <tr>
+          <td><code>verify_output</code></td>
+          <td>An agent received an output with a receipt id and wants to check it before relying on it.</td>
+          <td>Hashes the output locally and checks it against the anchored fingerprint. For a run, the tree is recomputed locally first, so a tampered manifest fails. It shows the output existed by the anchor time, not who produced it or that it is correct.</td>
         </tr>
       </tbody>
     </table>

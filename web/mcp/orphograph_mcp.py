@@ -55,6 +55,16 @@ Tools exposed
     to be set in the environment, otherwise the server returns a
     clean error directing the user to /account.html for a key.
 
+- orphograph_anchor_run(steps, label?)
+    Anchor every step of an agent run under one receipt, as a folder
+    manifest with paths "step-NNNNNN" (POST /api/anchor_folder,
+    paths_public). Only one SHA-256 per step and the root are sent.
+
+- orphograph_verify_output(receipt_id, text | sha256_hex)
+    For the agent receiving an output: does this receipt cover it?
+    Trusts only the anchored hash; a run's manifest is recomputed
+    locally and must equal it before any step counts as a match.
+
 Privacy contract
 ----------------
 - File path stays on the user's machine.
@@ -104,7 +114,7 @@ COMMON_HEADERS = {
 }
 PROTOCOL_VERSION = "2024-11-05"
 SERVER_NAME = "orphograph"
-SERVER_VERSION = "0.1.1"
+SERVER_VERSION = "0.1.2"
 
 
 # ── stderr logger ──────────────────────────────────────────────────
@@ -718,6 +728,183 @@ def tool_list_vault(args: dict) -> dict:
     }
 
 
+# ── agent runs: one anchor for many steps, each step provable alone ──
+# A run is anchored as a folder manifest whose paths are "step-NNNNNN" (the
+# zero-padding keeps UTF-8 byte order equal to step order, which is the
+# canonical leaf order). paths_public is set because the paths carry no
+# content and the receiving side needs them to bind a step's digest to its
+# leaf. Only digests leave the device.
+
+_RUN_STEP_WIDTH = 6
+_RUN_MAX_STEPS = 50_000  # the office's MAX_FOLDER_LEAVES
+_HEX64 = frozenset("0123456789abcdef")
+
+
+def _step_digest(step: Any) -> bytes:
+    """A step is its output text, or {"sha256_hex": ...} for output already
+    hashed by the caller (binary output, or text too large for a tool call)."""
+    if isinstance(step, str):
+        return hashlib.sha256(step.encode("utf-8")).digest()
+    if isinstance(step, dict) and isinstance(step.get("sha256_hex"), str):
+        h = step["sha256_hex"].strip().lower()
+        if len(h) == 64 and set(h) <= _HEX64:
+            return bytes.fromhex(h)
+    raise ValueError("each step must be a string or {\"sha256_hex\": <64 hex chars>}")
+
+
+def _build_run_manifest(steps: list) -> dict:
+    if not isinstance(steps, list) or not steps:
+        raise ValueError("steps must be a non-empty list")
+    if len(steps) > _RUN_MAX_STEPS:
+        raise ValueError(f"at most {_RUN_MAX_STEPS} steps per run")
+    leaves_meta, leaf_hashes = [], []
+    for i, step in enumerate(steps, start=1):
+        digest = _step_digest(step)
+        path = f"step-{i:0{_RUN_STEP_WIDTH}d}"
+        leaf = hashlib.sha256(b"\x00" + path.encode("utf-8") + b"\x00" + digest).digest()
+        leaves_meta.append({"path": path, "file_sha256_hex": digest.hex(),
+                            "leaf_hex": leaf.hex(),
+                            "size_bytes": len(step.encode("utf-8")) if isinstance(step, str) else 0})
+        leaf_hashes.append(leaf)
+    return {"algorithm": _MERKLE_ALGORITHM, "version": _MERKLE_VERSION,
+            "root_hex": _merkle_root(leaf_hashes).hex(), "leaves": leaves_meta}
+
+
+def tool_anchor_run(args: dict) -> dict:
+    """Anchor every step of an agent run under ONE receipt. Each step stays
+    provable on its own: orphograph_verify_output(receipt_id, text) checks
+    a single step without the others."""
+    try:
+        manifest = _build_run_manifest(args.get("steps"))
+    except ValueError as e:
+        return {"ok": False, "error": str(e)}
+    body: dict = {"manifest": manifest, "paths_public": True}
+    label = args.get("label")
+    if isinstance(label, str) and label.strip():
+        body["client_label"] = label.strip()[:200]
+    log(f"anchor_run: {len(manifest['leaves'])} steps, "
+        f"root {manifest['root_hex'][:12]}…, submitting digests …")
+    result = _http("POST", "/api/anchor_folder", body)
+    if result.get("error"):
+        return {"ok": False, "error": result.get("error"),
+                "detail": result.get("body") or result.get("reason")}
+    refused = _no_calendar_accepted(result)
+    if refused:
+        return refused
+    rid = result.get("receipt_id", "")
+    return {
+        "ok": True,
+        "receipt_id": rid,
+        "receipt_url": f"{BASE_URL}/r/{rid}" if rid else None,
+        "root_hex": manifest["root_hex"],
+        "step_count": len(manifest["leaves"]),
+        "step_sha256_hex": [l["file_sha256_hex"] for l in manifest["leaves"]],
+        "calendars_ok": result.get("calendars_ok"),
+        "calendars_distinct_ok": result.get("calendars_distinct_ok"),
+        "low_redundancy": result.get("low_redundancy", False),
+        "note": ("No step text left this device: only one SHA-256 digest per "
+                 "step and the Merkle root were transmitted. Any single step "
+                 "can later be checked with orphograph_verify_output."),
+    }
+
+
+def _rebuild_root(leaves: list) -> tuple[bytes | None, list[str]]:
+    """Recompute the root from the served leaves without trusting their
+    leaf_hex: where a path is visible the leaf is recomputed from path and
+    digest; where it is redacted only the served leaf_hex exists, and that
+    leaf is reported as unbound. Returns (root, problems)."""
+    problems: list[str] = []
+    hashes: list[bytes] = []
+    for i, leaf in enumerate(leaves):
+        if not isinstance(leaf, dict):
+            return None, [f"leaf {i} is not an object"]
+        digest_hex, leaf_hex, path = leaf.get("file_sha256_hex"), leaf.get("leaf_hex"), leaf.get("path")
+        try:
+            if isinstance(path, str) and isinstance(digest_hex, str):
+                h = hashlib.sha256(b"\x00" + path.encode("utf-8") + b"\x00"
+                                   + bytes.fromhex(digest_hex)).digest()
+                if isinstance(leaf_hex, str) and leaf_hex.lower() != h.hex():
+                    problems.append(f"leaf {i}: served leaf_hex does not match its path and digest")
+            elif isinstance(leaf_hex, str):
+                h = bytes.fromhex(leaf_hex)
+            else:
+                return None, [f"leaf {i} carries neither a path+digest nor a leaf hash"]
+        except ValueError:
+            return None, [f"leaf {i} is not hex"]
+        hashes.append(h)
+    if not hashes:
+        return None, ["manifest has no leaves"]
+    return _merkle_root(hashes), problems
+
+
+def tool_verify_output(args: dict) -> dict:
+    """Check that an output is covered by a receipt, trusting only the
+    anchored hash. For a single anchor: sha256(text) must equal it. For a run
+    or folder anchor: the manifest is fetched, its root recomputed locally and
+    required to equal the anchored hash, and the output's digest must sit in
+    a leaf whose path binds it."""
+    rid = args.get("receipt_id")
+    if not isinstance(rid, str) or not rid:
+        return {"error": "missing required argument: receipt_id"}
+    safe = "".join(c for c in rid if c.isalnum() or c in ("_", "-"))[:64]
+    if safe != rid:
+        return {"error": "receipt_id contains characters not in the receipt-id alphabet"}
+    text, given = args.get("text"), args.get("sha256_hex")
+    if isinstance(text, str) and text:
+        target = hashlib.sha256(text.encode("utf-8")).hexdigest()
+    elif isinstance(given, str) and len(given.strip()) == 64 and set(given.strip().lower()) <= _HEX64:
+        target = given.strip().lower()
+    else:
+        return {"error": "pass the output as text, or its sha256_hex (64 hex chars)"}
+    rec = _http("GET", f"/api/verify/{urllib.parse.quote(safe)}")
+    if rec.get("error"):
+        return {"ok": False, "error": rec.get("error"),
+                "detail": rec.get("body") or rec.get("reason")}
+    anchored = (rec.get("hash_hex") or "").lower()
+    base = {"ok": True, "receipt_id": safe, "output_sha256_hex": target,
+            "anchored_hash_sha256": anchored or None,
+            "anchored_at_utc": rec.get("created_at"),
+            "btc_pinned_at_utc": rec.get("btc_pinned_at"),
+            "calendars_ok": rec.get("calendars_ok"),
+            "receipt_url": f"{BASE_URL}/r/{safe}",
+            "scope": ("Shows this exact output existed by the anchor time. It "
+                      "does not show who produced it or that it is correct.")}
+    if not anchored:
+        return {**base, "match": False, "reason": "the receipt carries no anchored hash"}
+    if anchored == target:
+        return {**base, "match": True, "kind": "single"}
+    folder = _http("GET", f"/api/verify_folder/{urllib.parse.quote(safe)}")
+    if folder.get("error"):
+        if folder.get("status") == 400:
+            # The office answers 400 when the receipt is not a folder anchor:
+            # a single anchor whose hash differs from the output's.
+            return {**base, "match": False, "kind": "single",
+                    "reason": "the output's hash is not the anchored hash"}
+        # Anything else (network, 5xx, private 404) decided nothing.
+        return {"ok": False, "receipt_id": safe,
+                "error": "could not fetch the run's manifest; nothing was decided",
+                "detail": folder.get("body") or folder.get("reason") or folder.get("error")}
+    leaves = (folder.get("manifest") or {}).get("leaves") or []
+    root, problems = _rebuild_root(leaves)
+    if root is None or root.hex() != anchored or problems:
+        return {**base, "match": False, "kind": "run",
+                "reason": "the served manifest does not recompute to the anchored "
+                          "root; do not trust it",
+                "problems": problems or ["recomputed root differs from the anchored hash"]}
+    hits = [l for l in leaves if isinstance(l, dict)
+            and (l.get("file_sha256_hex") or "").lower() == target]
+    bound = [l.get("path") for l in hits if isinstance(l.get("path"), str)]
+    if bound:
+        return {**base, "match": True, "kind": "run", "matched_paths": bound,
+                "leaf_count": len(leaves)}
+    if hits:
+        return {**base, "match": False, "kind": "run", "digest_listed": True,
+                "reason": "the digest is listed, but the owner kept paths private, "
+                          "so its leaf cannot be bound to it from here"}
+    return {**base, "match": False, "kind": "run", "leaf_count": len(leaves),
+            "reason": "no step in this run has the output's hash"}
+
+
 # ── MCP protocol handling ──────────────────────────────────────────
 
 
@@ -880,6 +1067,57 @@ TOOL_DEFINITIONS = [
             },
         },
     },
+    {
+        "name": "orphograph_anchor_run",
+        "description": (
+            "Anchor every step of an AI agent run under ONE Bitcoin-anchored "
+            "receipt. Each step is hashed locally; only one SHA-256 digest per "
+            "step and the Merkle root are transmitted, never the step text. "
+            "Any single step stays provable on its own with "
+            "orphograph_verify_output. Proves the steps existed by the anchor "
+            "time, not who produced them or that they are correct."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "steps": {
+                    "type": "array",
+                    "description": "The run's steps in order (max 50,000). Each is the step's output text, or {\"sha256_hex\": ...} for output you already hashed.",
+                    "items": {"anyOf": [
+                        {"type": "string"},
+                        {"type": "object",
+                         "properties": {"sha256_hex": {"type": "string"}},
+                         "required": ["sha256_hex"]},
+                    ]},
+                    "minItems": 1,
+                },
+                "label": {
+                    "type": "string",
+                    "description": "Optional human-readable label (max 200 chars). Stored on the receipt; do not include sensitive content.",
+                },
+            },
+            "required": ["steps"],
+        },
+    },
+    {
+        "name": "orphograph_verify_output",
+        "description": (
+            "Check whether an exact output is covered by a receipt, for the "
+            "agent RECEIVING the output. Works for single anchors and for "
+            "agent runs. Trusts only the anchored hash: for a run, the "
+            "manifest is recomputed locally and must match it. Returns "
+            "match true/false, the anchor time, and the reason when false."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "receipt_id": {"type": "string", "description": "The receipt id to check against."},
+                "text": {"type": "string", "description": "The output text. Hashed locally; not transmitted."},
+                "sha256_hex": {"type": "string", "description": "Alternatively, the output's SHA-256 (64 hex chars)."},
+            },
+            "required": ["receipt_id"],
+        },
+    },
 ]
 
 
@@ -940,6 +1178,10 @@ def handle(msg: dict) -> dict | None:
             return _reply(req_id, _wrap_tool_result(tool_verify_receipt(args)))
         if name == "orphograph_verify_lineage":
             return _reply(req_id, _wrap_tool_result(tool_verify_lineage(args)))
+        if name == "orphograph_anchor_run":
+            return _reply(req_id, _wrap_tool_result(tool_anchor_run(args)))
+        if name == "orphograph_verify_output":
+            return _reply(req_id, _wrap_tool_result(tool_verify_output(args)))
         if name == "orphograph_list_vault":
             return _reply(req_id, _wrap_tool_result(tool_list_vault(args)))
         return _reply(req_id, error={"code": -32601, "message": f"unknown tool: {name}"})

@@ -55,7 +55,8 @@ X-Pack-Token header.
 - Server card: https://orphograph.com/.well-known/mcp/server-card.json
 - OpenAPI contract (single-fingerprint anchor + free verify): https://orphograph.com/openapi.json
 - Tools: orphograph_anchor_file, orphograph_anchor_folder, orphograph_anchor_output,
-  orphograph_verify_receipt, orphograph_verify_lineage, orphograph_list_vault
+  orphograph_anchor_run, orphograph_verify_receipt, orphograph_verify_output,
+  orphograph_verify_lineage, orphograph_list_vault
 
 ## Edit lineage (version history)
 
