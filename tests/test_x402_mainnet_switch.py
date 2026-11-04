@@ -270,3 +270,27 @@ def test_challenge_carries_discovery_metadata_the_server_accepts(server):
     # a 400 here even past the free tier.
     code, rec = _srv.anchor(server, dict(baz["info"]["input"]["body"]))
     assert code in (200, 402, 429), (code, rec)
+
+
+def test_arming_check_does_no_curve_math_per_request(env):
+    """configured() runs on every anchor request. Re-deriving the CDP public
+    key each time cost 3.5 ms of CPU any caller could trigger (2026-11-04);
+    the decoded key is cached per secret value. A rotated secret is still
+    checked: a bad replacement disarms on the very next call."""
+    env.setenv("ORPHO_X402_NETWORK", x402.NETWORK_BASE_MAINNET)
+    env.setenv("ORPHO_X402_FACILITATOR_URL", cdp_auth.CDP_X402_BASE)
+    env.setenv("ORPHO_X402_CDP_KEY_ID", "k")
+    env.setenv("ORPHO_X402_CDP_KEY_SECRET", _secret(hashlib.sha256(b"cache probe").digest()))
+    calls = {"n": 0}
+    real_mul = cdp_auth._mul
+
+    def counting_mul(s, p):
+        calls["n"] += 1
+        return real_mul(s, p)
+
+    env.setattr(cdp_auth, "_mul", counting_mul)
+    for _ in range(50):
+        assert x402.configured()
+    assert calls["n"] <= 1, calls
+    env.setenv("ORPHO_X402_CDP_KEY_SECRET", base64.b64encode(b"z" * 64).decode())
+    assert not x402.configured()

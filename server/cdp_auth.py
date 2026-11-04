@@ -28,6 +28,7 @@ through the facilitator round-trip, which dwarfs it.
 from __future__ import annotations
 
 import base64
+import functools
 import hashlib
 import json
 import os
@@ -128,7 +129,14 @@ def key_id() -> str:
     return os.environ.get("ORPHO_X402_CDP_KEY_ID", "").strip()
 
 
+@functools.lru_cache(maxsize=4)
 def _seed_from_secret(secret: str) -> bytes:
+    """Decoded and self-checked once per distinct secret value. Without the
+    cache every configured() call re-derived the public key (3.5 ms of pure-
+    Python curve math, measured 2026-11-04), up to three times per anchor
+    request, which any caller could trigger for free. A rotated secret is a
+    new cache key, so it is checked again. Failures are not cached (they
+    raise), so a fixed secret is accepted on the next call."""
     try:
         raw = base64.b64decode(secret.strip(), validate=True)
     except (ValueError, TypeError):
