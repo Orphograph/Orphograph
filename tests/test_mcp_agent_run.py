@@ -235,3 +235,18 @@ def test_the_stdio_server_itself_anchors_and_verifies_a_run(office):
                         env=env, timeout=60)
     v = json.loads(json.loads(p2.stdout.splitlines()[0])["result"]["content"][0]["text"])
     assert v["match"] is True and v["matched_paths"] == ["step-000003"], v
+
+
+def test_the_mcp_pages_state_the_true_tool_count_and_no_line_count():
+    """web/mcp.html said "approximately four hundred lines" of a 1,200-line
+    file and "six tools" once there were more. A count in prose drifts; this
+    pins the words to the implementation."""
+    import re
+    words = {6: "six", 7: "seven", 8: "eight", 9: "nine", 10: "ten"}
+    n = len(set(re.findall(r'"name":\s*"(orphograph_[a-z_]+)"',
+                           (ROOT / "mcp" / "orphograph_mcp.py").read_text())))
+    for rel in ("web/mcp.html", "web/docs/agents.html"):
+        text = (ROOT / rel).read_text()
+        stated = set(re.findall(r"\b(six|seven|eight|nine|ten) tools\b", text, re.I))
+        assert stated == {words[n]} or not stated, f"{rel} says {stated} tools; there are {n}"
+        assert not re.search(r"hundred lines", text), f"{rel} states a line count"
