@@ -13,6 +13,7 @@ Public API:
     cancel_at_period_end(subscription_id) -> dict
     reactivate(subscription_id) -> dict
     create_checkout_session(price_id, mode, success_url, cancel_url, ...) -> dict
+    record_x402_payment(tx_hash, amount_atomic, network_id, payer, idempotency_key) -> dict
     is_configured() -> bool
 """
 from __future__ import annotations
@@ -121,7 +122,8 @@ def mask_session_ids(text: str) -> str:
     return _SESSION_ID_RE.sub(r"\1…\2", str(text))
 
 
-def _request(method: str, path: str, form: dict | None = None) -> dict:
+def _request(method: str, path: str, form: dict | None = None,
+             headers: dict | None = None) -> dict:
     if not STRIPE_SECRET_KEY:
         return {
             "ok": False,
@@ -133,7 +135,10 @@ def _request(method: str, path: str, form: dict | None = None) -> dict:
         STRIPE_BASE + path,
         data=data,
         method=method,
+        # Extra headers (a preview Stripe-Version, an Idempotency-Key) go in
+        # first, so none of them can replace the two this module owns.
         headers={
+            **(headers or {}),
             "Authorization": f"Bearer {STRIPE_SECRET_KEY}",
             "Content-Type": "application/x-www-form-urlencoded",
         },
@@ -334,3 +339,85 @@ def create_checkout_session(
         form["customer_creation"] = "if_required"
 
     return _request("POST", "/checkout/sessions", form=form)
+
+
+# ── x402 settlements recorded as PaymentIntents (2026-11-04) ───────────────
+# When x402's payTo is a Stripe crypto deposit address, the USDC lands in
+# Stripe, and Stripe books it once the server tells it which on-chain
+# transaction it was: a PaymentIntent with the `crypto` payment method in
+# `transaction_verification` mode. Off by default (server/x402.py,
+# ORPHO_X402_STRIPE_RECORD).
+#
+# Field names are copied, not guessed, from Stripe's official sample
+# stripe-samples/machine-payments (MIT License, Copyright (c) 2026 Stripe, LLC),
+# commit f3b74fe587427b156c4a67069f82f64c11dadf1b,
+# x402/server/python/main.py lines 133-156 (stripe.PaymentIntent.create:
+# amount, currency, confirm, payment_method_data.type,
+# allowed_payment_method_types, payment_method_options.crypto.mode,
+# ...transaction_verification_options.network / .transaction_hash), and the
+# same call in x402/server/node-typescript/main.ts lines 68-88. The API
+# version is the one https://docs.stripe.com/payments/machine/x402 names for
+# this call ("This feature requires the 2026-05-27.preview API version", read
+# 2026-11-04); the sample's HEAD pins a later preview, 2026-10-28.preview.
+STRIPE_X402_API_VERSION = "2026-05-27.preview"
+# Stripe's `network` value per x402 network id. Base Sepolia is "base" too:
+# the docs' sandbox section records Base Sepolia payments against a sandbox
+# deposit address created with network=base.
+STRIPE_X402_NETWORKS = {"eip155:8453": "base", "eip155:84532": "base"}
+_USDC_ATOMIC_PER_CENT = 10_000   # USDC has 6 decimals: $0.01 = 10_000 atomic
+_TX_HASH_RE = re.compile(r"[\x21-\x7e]{1,200}")
+
+
+def _refused(why: str) -> dict:
+    """A request this module will not send. Nothing reached Stripe."""
+    return {"ok": False, "category": "invalid_input", "error": why, "retryable": False}
+
+
+def record_x402_payment(*, tx_hash: str, amount_atomic, network_id: str,
+                        payer: str | None, idempotency_key: str) -> dict:
+    """Record one settled x402 payment in Stripe as a confirmed PaymentIntent.
+
+    `idempotency_key` is the x402 payment identifier, sent as Stripe's
+    Idempotency-Key header: a retry of the same payment returns the
+    PaymentIntent the first call made instead of creating a second one.
+    (Stripe keeps a key for at least 24 hours; the sample keys on the tx
+    hash, which is equally unique per payment.)
+
+    Amounts that are not a whole number of cents are refused here, as is an
+    unknown network: nothing is sent. Returns _request's dict shape."""
+    if not isinstance(tx_hash, str) or not _TX_HASH_RE.fullmatch(tx_hash):
+        return _refused("transaction hash missing or malformed")
+    try:
+        atomic = int(str(amount_atomic), 10)
+    except (TypeError, ValueError):
+        return _refused("amount_atomic is not an integer")
+    if atomic <= 0 or atomic % _USDC_ATOMIC_PER_CENT:
+        return _refused("amount is not a positive whole number of cents")
+    stripe_network = STRIPE_X402_NETWORKS.get(network_id)
+    if stripe_network is None:
+        return _refused("network has no Stripe transaction_verification equivalent")
+    if (not isinstance(idempotency_key, str) or not idempotency_key
+            or len(idempotency_key) > 255):
+        return _refused("idempotency key missing or longer than 255 characters")
+    form = {
+        "amount": str(atomic // _USDC_ATOMIC_PER_CENT),
+        "currency": "usd",
+        "confirm": "true",
+        "payment_method_data[type]": "crypto",
+        "allowed_payment_method_types[0]": "crypto",
+        "payment_method_options[crypto][mode]": "transaction_verification",
+        "payment_method_options[crypto][transaction_verification_options][network]":
+            stripe_network,
+        "payment_method_options[crypto][transaction_verification_options][transaction_hash]":
+            tx_hash,
+        # Ours, not the sample's: lets the dashboard row be traced back to
+        # the ledger. Public on-chain data only (the chain, the payer).
+        "metadata[source]": "x402",
+        "metadata[x402_network]": network_id,
+    }
+    if isinstance(payer, str) and payer:
+        form["metadata[x402_payer]"] = payer[:100]
+    return _request("POST", "/payment_intents", form=form, headers={
+        "Stripe-Version": STRIPE_X402_API_VERSION,
+        "Idempotency-Key": idempotency_key,
+    })

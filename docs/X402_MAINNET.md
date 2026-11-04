@@ -65,6 +65,52 @@ from `server/`.
 7. **Roll back** at any point: `fly secrets unset -a orphograph ORPHO_X402_NETWORK ORPHO_X402_FACILITATOR_URL ORPHO_X402_CDP_KEY_ID ORPHO_X402_CDP_KEY_SECRET`
    returns the rail to the test network.
 
+## Paying into Stripe (optional, off by default)
+
+The pay-to address can be a Stripe crypto deposit address, so x402 payments
+land in the Stripe balance. Stripe books each one once the server reports its
+on-chain transaction: after every successful settle, and only after its charge
+row is in `x402_ledger.jsonl`, the server creates a PaymentIntent with the
+`crypto` payment method in `transaction_verification` mode
+(`stripe_api.record_x402_payment`, Stripe-Version `2026-05-27.preview`, the
+x402 payment identifier as Idempotency-Key). Source:
+https://docs.stripe.com/payments/machine/x402 (read 2026-11-04). The request
+fields follow Stripe's sample, stripe-samples/machine-payments (MIT).
+
+1. **Enable the payment method.** Dashboard → Settings → Payment methods →
+   request **Stablecoins and Crypto**. It shows Pending until Stripe approves it.
+   (US businesses outside New York; others email machine-payments@stripe.com.)
+2. **Create the Base deposit address** (the docs' "Create a Stripe deposit
+   address" step): `POST /v1/crypto/deposit_addresses` with `network=base` and
+   header `Stripe-Version: 2026-05-27.preview`, using the live secret key, in
+   the operator's own terminal. Keep the returned address. For a test run, do
+   the same in a Stripe sandbox with Base Sepolia (`network=base` there too).
+3. **Restricted key.** The server's `STRIPE_SECRET_KEY` needs **PaymentIntents:
+   Write** for this call, on top of what checkout already uses.
+4. **Secrets**, staged so they apply together on the next deploy (values typed
+   by the operator, never pasted into chat):
+   `fly secrets set --stage -a orphograph ORPHO_X402_STRIPE_DEPOSIT_ADDRESS=<address> ORPHO_X402_PAY_TO_ADDRESS=<same address> ORPHO_X402_STRIPE_RECORD=1`
+   Staged secrets take effect with the next deploy.
+5. **Check:** `/api/health` shows `"stripe_record": true` and
+   `"stripe_pending": 0` in the `x402` block, `config_problems: 0`. After the
+   canary payment, the PaymentIntent appears under Payments in the Dashboard.
+
+What refuses to arm (added to `config_problems()`, rail stays off): recording
+on with no deposit address; a pay-to address that is not the deposit address
+(compared case-insensitively); a network other than Base mainnet or Base
+Sepolia; no `STRIPE_SECRET_KEY`; `ORPHO_X402_STRIPE_RECORD` set to anything but
+`1` or `0`.
+
+Recording never blocks or fails the paid anchor: the money has already moved.
+It runs on a background thread. Each payment is written to
+`x402_stripe_pending.jsonl` (next to the ledger) before the Stripe call and
+removed when Stripe answers success; a failure logs its error category only and
+stays pending. Pending rows are re-sent at boot with the same Idempotency-Key,
+so a retry cannot create a second PaymentIntent. `stripe_pending` in
+`/api/health` counts them. Turn it off with
+`fly secrets unset -a orphograph ORPHO_X402_STRIPE_RECORD` (the pay-to address
+stays the deposit address until changed).
+
 ## Key handling
 
 The CDP key authenticates this server to CDP. It cannot move funds: payments

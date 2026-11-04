@@ -64,8 +64,17 @@ def _x402_state() -> dict:
     # config_problems: a COUNT only. This endpoint is public; the reasons
     # (env-var names) are for the founder: `python3 -c "import x402;
     # print(x402.config_problems())"` on the machine (2026-11-04).
+    # stripe_record / stripe_pending (2026-11-04): whether settled payments
+    # are booked in Stripe, and how many still wait for a retry. A count
+    # only; None when the pending file cannot be read.
+    try:
+        pending = x402.stripe_pending_count()
+    except OSError:
+        pending = None
     return {"armed": armed, "network": x402.network() if armed else None,
-            "config_problems": len(x402.config_problems())}
+            "config_problems": len(x402.config_problems()),
+            "stripe_record": x402.stripe_record_enabled(),
+            "stripe_pending": pending}
 
 def _last_line_ts(path: Path) -> str | None:
     if not path.exists() or path.stat().st_size == 0:

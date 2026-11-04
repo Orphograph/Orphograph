@@ -114,13 +114,20 @@ def _stub_stripe(data_dir: Path) -> None:
         real_request.__name__, real_request.__defaults__, real_request.__closure__)
     lock = threading.Lock()
 
-    def recorded(method: str, path: str, form: dict | None = None) -> dict:
+    def recorded(method: str, path: str, form: dict | None = None,
+                 headers: dict | None = None) -> dict:
+        # Extra request headers (x402 -> Stripe sends a preview Stripe-Version
+        # and an Idempotency-Key) are recorded only when a caller passes
+        # them, so every older call's record keeps its exact shape.
+        row = {"method": method, "path": path, "form": form or {}}
+        if headers is not None:
+            row["headers"] = headers
         with lock, request_mode.accounting(), calls.open("a") as f:
-            f.write(json.dumps({"method": method, "path": path, "form": form or {}}) + "\n")
+            f.write(json.dumps(row) + "\n")
         if down.exists():
-            return real_request(method, path, form)
+            return real_request(method, path, form, headers)
         if path in _answers(answers):
-            return scripted_request(method, path, form)
+            return scripted_request(method, path, form, headers)
         return {"ok": True, "data": {}}
 
     stripe_api._request = recorded

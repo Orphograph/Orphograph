@@ -4,7 +4,7 @@
     "title": "Orphograph API",
     "version": "1.0.0",
     "summary": "Anchor a SHA-256 fingerprint to Bitcoin through OpenTimestamps and get a verifiable receipt.",
-    "description": "A receipt proves WHEN a fingerprint existed: that a file or hash existed at a point in time. It does not establish who made it, who owns it, or that it is original, and it is not a notarisation or legal advice. File contents never reach the server: the client computes the SHA-256 and sends only the fingerprint. Verification is free and needs no account. This document covers the single-fingerprint lane an agent uses most; folders and lineage are described in https://orphograph.com/llms.txt.",
+    "description": "A receipt proves WHEN a fingerprint existed: that a file or hash existed at a point in time. It does not establish who made it, who owns it, or that it is original, and it is not a notarisation or legal advice. File contents never reach the server: the client computes the SHA-256 and sends only the fingerprint. Verification is free and needs no account. This document covers the single-fingerprint lane an agent uses most and folder (agent-run) anchors; lineage is described in https://orphograph.com/llms.txt.",
     "license": {
       "name": "MIT (open-source verifier and MCP server)",
       "url": "https://github.com/Orphograph/Orphograph/blob/master/LICENSE"
@@ -75,6 +75,47 @@
         }
       }
     },
+    "/api/anchor_folder": {
+      "post": {
+        "operationId": "anchorFolder",
+        "summary": "Anchor a folder or an agent run: one Merkle root over many file digests.",
+        "description": "The client builds an orphograph-merkle-v1-rfc6962 manifest (one leaf per file: its relative path and SHA-256, computed by the client) and sends only the manifest; file contents never reach the server. The server re-derives every leaf and the root from the manifest and refuses one whose root does not follow from its leaves, then anchors the root exactly like /api/anchor. An agent run is the same call with leaf paths step-000001, step-000002, ... (one leaf per step output). Free tier, Pack and Standing Order apply as on /api/anchor; x402 is not accepted on this path. The body is either {manifest, ...options} or the raw manifest as the top-level object. Paths are shown only to the receipt's owner unless paths_public is true.",
+        "parameters": [
+          {"name": "X-Pack-Token", "in": "header", "required": false, "schema": {"type": "string"}, "description": "Claim code of a credit Pack; consumes one credit."},
+          {"name": "X-Orpho-Api-Key", "in": "header", "required": false, "schema": {"type": "string"}, "description": "API key of an active Standing Order subscription."}
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/FolderAnchorRequest"},
+              "example": {"manifest": {"algorithm": "orphograph-merkle-v1-rfc6962", "version": 1, "root_hex": "32493c7857addadd6ebf5eb72ae8fb49e25c8e538c2ddaf7619a261efdf5ad16", "leaves": [{"path": "step-000001", "file_sha256_hex": "56cf9d5a811c81d29ae04efc7d4920a33edea49b3db5b827ff018098db836639", "leaf_hex": "5381ae12e0eed29e5cbf057724af4ef3b7e278b537231051cc1d21c169e25c64", "size_bytes": 13}, {"path": "step-000002", "file_sha256_hex": "431b423bc90718f9f1841240f6b047b777d8cc3cf3752e3659c24bac141e786c", "leaf_hex": "2193e0192f21fb015d9d53fcf8133cdbb97ed1544bee47438b8f764a2037c979", "size_bytes": 13}]}, "client_label": "agent-run-43", "paths_public": true}
+            }
+          }
+        },
+        "responses": {
+          "200": {"description": "Anchored. The response names the root and leaf count; fetch the receipt and manifest from /api/verify_folder/{receipt_id}.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/FolderAnchorResponse"}}}},
+          "400": {"description": "Invalid body or manifest (a leaf or root that does not derive, a wrong-typed option, a body over 8 MB); the error names the problem. Nothing was charged.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}},
+          "402": {"description": "private: true was asked without an active subscription; no anchor was made.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}},
+          "415": {"description": "POST bodies must be sent as Content-Type: application/json.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}},
+          "429": {"description": "Free-tier limit reached, too many rejected manifests from this address, or another folder anchor from this address is still in flight; retry after Retry-After seconds.", "headers": {"Retry-After": {"schema": {"type": "integer"}}}},
+          "503": {"description": "Anchoring is temporarily unavailable; nothing was charged."}
+        }
+      }
+    },
+    "/api/verify_folder/{receipt_id}": {
+      "get": {
+        "operationId": "verifyFolder",
+        "summary": "A folder or agent-run receipt with its stored manifest (free, no account).",
+        "description": "Returns the receipt record and the manifest it anchored. With the manifest, anyone can recompute each leaf and the root offline and check the root against the receipt's .ots files. Leaf paths are withheld (paths_redacted: true) from everyone but the owner unless the receipt was anchored with paths_public; leaf digests, sizes and order are always shown.",
+        "parameters": [{"$ref": "#/components/parameters/ReceiptId"}],
+        "responses": {
+          "200": {"description": "Folder receipt found.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/VerifyFolderResponse"}}}},
+          "400": {"description": "The receipt exists but is a single-fingerprint anchor; use /api/verify/{receipt_id}.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}},
+          "404": {"description": "No receipt with that id (private receipts answer the same way to everyone but their owner)."}
+        }
+      }
+    },
     "/api/receipt/{receipt_id}": {
       "get": {
         "operationId": "getReceipt",
@@ -98,7 +139,8 @@
       "get": {
         "operationId": "getStats",
         "summary": "Public anchor counts and calendar status.",
-        "responses": {"200": {"description": "Counts.", "content": {"application/json": {"schema": {"type": "object", "required": ["anchors", "calendars", "version"], "properties": {"anchors": {"type": "object"}, "calendars": {"type": "object"}, "version": {"type": "string"}}}}}}}
+        "description": "Aggregate counts only: no receipt ids, labels, paths or accounts.",
+        "responses": {"200": {"description": "Counts.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/StatsResponse"}}}}}
       }
     },
     "/llms.txt": {
@@ -193,6 +235,121 @@
             "description": "Folder anchors, on a match: proof for the first matching leaf. proof is a list of [direction, sibling_hex] from the leaf upward; L puts the sibling on the left.",
             "properties": {"root_hex": {"type": "string"}, "path": {"type": "string"}, "file_sha256_hex": {"type": "string"}, "merkle_algorithm": {"type": "string"}, "leaf_index": {"type": "integer"}, "leaf_hex": {"type": "string"}, "proof": {"type": "array", "items": {"type": "array"}}}
           }
+        }
+      },
+      "FolderManifest": {
+        "type": "object",
+        "required": ["algorithm", "version", "root_hex", "leaves"],
+        "properties": {
+          "algorithm": {"type": "string", "enum": ["orphograph-merkle-v1-rfc6962"]},
+          "version": {"type": "integer", "enum": [1]},
+          "root_hex": {"type": "string", "pattern": "^[0-9a-f]{64}$", "description": "The Merkle root; it must follow from the leaves (RFC 6962 hashing)."},
+          "leaves": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 50000,
+            "items": {
+              "type": "object",
+              "required": ["path", "file_sha256_hex", "leaf_hex", "size_bytes"],
+              "properties": {
+                "path": {"type": "string", "description": "Relative POSIX path; step-NNNNNN for an agent run's steps."},
+                "file_sha256_hex": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+                "leaf_hex": {"type": "string", "pattern": "^[0-9a-f]{64}$", "description": "SHA-256(0x00 || path || 0x00 || file digest)."},
+                "size_bytes": {"type": "integer", "minimum": 0}
+              }
+            }
+          },
+          "scope": {"type": "object", "description": "Optional: what the folder walk included and excluded, checked against its recorded hash."},
+          "parent": {"type": "object", "description": "Optional edit-lineage block (see llms.txt)."},
+          "signature": {"type": "object", "description": "Optional Ed25519 signature over the manifest; if present it must verify."}
+        }
+      },
+      "FolderAnchorRequest": {
+        "type": "object",
+        "required": ["manifest"],
+        "properties": {
+          "manifest": {"$ref": "#/components/schemas/FolderManifest"},
+          "client_label": {"type": "string", "description": "Optional label of your own choosing, cut at 200 characters. It is shown on the receipt; do not put secrets or personal data in it."},
+          "private": {"type": "boolean", "description": "Subscribers only: keep the receipt out of public lookup."},
+          "paths_public": {"type": "boolean", "description": "Show the manifest's paths to anyone who views the receipt (default: owner only)."},
+          "notify_email": {"type": "string", "description": "Paid anchors only: email the receipt to this address."},
+          "office_signature": {"type": "string", "pattern": "^[0-9a-f]{128}$", "description": "Office use only (the weekly Standing Record anchor). Other callers omit it; one that does not verify is refused with 400."}
+        }
+      },
+      "FolderAnchorResponse": {
+        "type": "object",
+        "required": ["receipt_id", "root_hex", "leaf_count", "kind", "merkle_algorithm", "calendars_ok", "calendars_total", "low_redundancy", "created_at", "private", "credit_refunded"],
+        "properties": {
+          "receipt_id": {"type": "string"},
+          "root_hex": {"type": "string"},
+          "leaf_count": {"type": "integer"},
+          "kind": {"type": "string", "enum": ["folder"]},
+          "merkle_algorithm": {"type": "string"},
+          "calendars_ok": {"type": "integer"},
+          "calendars_total": {"type": "integer"},
+          "calendars_distinct_ok": {"type": "integer"},
+          "calendars_distinct_total": {"type": "integer"},
+          "low_redundancy": {"type": "boolean"},
+          "created_at": {"type": "string", "description": "UTC time the office received the root (ISO 8601)."},
+          "private": {"type": "boolean"},
+          "paths_public": {"type": "boolean", "description": "Present (true) when paths_public was asked."},
+          "credit_refunded": {"type": "boolean"},
+          "lineage": {"type": "object", "description": "Present when the manifest carries a lineage block."},
+          "signature_verified": {"type": "boolean"},
+          "signer_kid": {"type": "string"}
+        }
+      },
+      "VerifyFolderResponse": {
+        "type": "object",
+        "required": ["receipt", "manifest"],
+        "properties": {
+          "receipt": {
+            "type": "object",
+            "required": ["receipt_id", "found", "hash_hex", "created_at", "kind", "leaf_count", "merkle_algorithm"],
+            "description": "The receipt record (as /api/verify/{receipt_id}); hash_hex is the folder's Merkle root.",
+            "properties": {
+              "receipt_id": {"type": "string"},
+              "found": {"type": "boolean"},
+              "hash_hex": {"type": "string"},
+              "created_at": {"type": "string"},
+              "kind": {"type": "string", "enum": ["folder"]},
+              "leaf_count": {"type": "integer"},
+              "merkle_algorithm": {"type": "string"},
+              "paths_public": {"type": "boolean"}
+            }
+          },
+          "manifest": {
+            "type": "object",
+            "required": ["algorithm", "version", "root_hex", "leaves"],
+            "description": "The stored manifest. When paths are withheld, each leaf carries index instead of path, and paths_redacted is true.",
+            "properties": {
+              "algorithm": {"type": "string"},
+              "version": {"type": "integer"},
+              "root_hex": {"type": "string"},
+              "leaves": {"type": "array", "items": {"type": "object"}},
+              "paths_redacted": {"type": "boolean"}
+            }
+          }
+        }
+      },
+      "StatsResponse": {
+        "type": "object",
+        "required": ["anchors", "calendars", "version"],
+        "properties": {
+          "anchors": {
+            "type": "object",
+            "required": ["total", "last_24h", "last_7d", "x402_anchors", "agent_label_anchors", "run_anchors"],
+            "properties": {
+              "total": {"type": "integer"},
+              "last_24h": {"type": "integer"},
+              "last_7d": {"type": "integer"},
+              "x402_anchors": {"type": "integer", "description": "Anchors paid with x402."},
+              "agent_label_anchors": {"type": "integer", "description": "Anchors whose client_label starts with agent- (any case)."},
+              "run_anchors": {"type": "integer", "description": "Folder anchors whose every path is step-NNNNNN (agent runs)."}
+            }
+          },
+          "calendars": {"type": "object"},
+          "version": {"type": "string"}
         }
       },
       "Error": {

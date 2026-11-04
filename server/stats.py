@@ -6,7 +6,9 @@ so polling can't degrade performance.
 
 Privacy invariants (enforced by what is NOT included here):
     - never customer emails
-    - never filenames / client_labels
+    - never filenames / client_labels (a label's "agent-" prefix and a folder
+      manifest's path SHAPE are read to classify a row into a count, and
+      neither the label nor any path ever leaves this module)
     - never IP addresses
     - never per-customer counts
     - never BTC balances (hot/cold)
@@ -20,6 +22,9 @@ Public-safe fields (counts + names of public infrastructure only):
     - btc oracle source name + price (public market data)
     - server uptime / boot timestamp
     - last anchor timestamp (no id, no email)
+    - demand counters (2026-11-04): anchors paid via x402, anchors whose
+      client_label starts with "agent-", and agent-run folder anchors
+      (every manifest path is step-NNNNNN) — aggregate counts only
 
 Public API:
     snapshot() -> dict
@@ -28,6 +33,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import threading
 import time
 from datetime import datetime, timezone
@@ -61,12 +67,59 @@ def _parse_iso(ts: str | None) -> float | None:
     return dt.timestamp()
 
 
+# An agent run is anchored as a folder manifest whose leaf paths are
+# "step-NNNNNN" (mcp/orphograph_mcp.py, _build_run_manifest). The ledger row
+# does not say a receipt is a folder (the kind is set on the receipt after the
+# row is written), so the stored manifest is read: once per receipt, then
+# remembered. A manifest never changes once written. A receipt with no
+# manifest is remembered as "not a run" only once it is older than
+# _RUN_SETTLE_SEC: the folder handler writes the manifest just after the
+# ledger row, and a scan in between must not fix a run as "not a run".
+_STEP_PATH = re.compile(r"step-[0-9]{6}")
+_RUN_SETTLE_SEC = 300
+_run_memo: dict[str, bool] = {}
+_run_memo_lock = threading.Lock()
+
+
+def _manifest_is_run(manifest_file: Path) -> bool:
+    try:
+        manifest = json.loads(manifest_file.read_text())
+    except (OSError, ValueError):
+        return False
+    leaves = manifest.get("leaves") if isinstance(manifest, dict) else None
+    if not isinstance(leaves, list) or not leaves:
+        return False
+    return all(isinstance(leaf, dict) and isinstance(leaf.get("path"), str)
+               and _STEP_PATH.fullmatch(leaf["path"]) for leaf in leaves)
+
+
+def _is_run_receipt(rid, created_epoch: float, now: float) -> bool:
+    if not isinstance(rid, str) or not rid or "/" in rid or rid.startswith("."):
+        return False
+    with _run_memo_lock:
+        known = _run_memo.get(rid)
+    if known is not None:
+        return known
+    manifest_file = engine.RECEIPTS_DIR / rid / "manifest.json"
+    if manifest_file.exists():
+        verdict = _manifest_is_run(manifest_file)
+    elif now - created_epoch >= _RUN_SETTLE_SEC:
+        verdict = False
+    else:
+        return False
+    with _run_memo_lock:
+        _run_memo[rid] = verdict
+    return verdict
+
+
 def _scan_ledger() -> dict:
     """Single pass over the ledger producing the counts the page needs.
 
     Reads line-by-line so a multi-MB ledger doesn't balloon memory.
-    Per-customer fields (emails, claim codes, client labels) are deliberately
-    NOT read — we only extract created_at and source.
+    Per-customer fields (emails, claim codes) are deliberately NOT read — we
+    extract created_at and source, plus two classifications that are kept as
+    counts only: whether client_label starts with "agent-", and whether the
+    receipt is an agent-run folder anchor (_is_run_receipt).
     """
     ledger: Path = engine.LEDGER
     total = 0
@@ -75,6 +128,9 @@ def _scan_ledger() -> dict:
     free_anchors = 0  # source == "free"
     pack_anchors = 0  # source starts with "pack:"
     sub_anchors = 0   # source starts with "sub:" or "api:"
+    x402_anchors = 0         # source starts with "x402:" (paid via x402)
+    agent_label_anchors = 0  # client_label starts with "agent-", any case
+    run_anchors = 0          # folder anchor whose paths are all step-NNNNNN
     last_anchor_at: str | None = None
     last_anchor_epoch: float = 0.0
     now = time.time()
@@ -89,6 +145,9 @@ def _scan_ledger() -> dict:
             "free_anchors": 0,
             "pack_anchors": 0,
             "sub_anchors": 0,
+            "x402_anchors": 0,
+            "agent_label_anchors": 0,
+            "run_anchors": 0,
             "last_anchor_at": None,
         }
 
@@ -115,6 +174,13 @@ def _scan_ledger() -> dict:
                     pack_anchors += 1
                 elif source.startswith(("sub:", "api:")):
                     sub_anchors += 1
+                elif source.startswith("x402:"):
+                    x402_anchors += 1
+                label = row.get("client_label")
+                if isinstance(label, str) and label[:6].lower() == "agent-":
+                    agent_label_anchors += 1
+                if _is_run_receipt(row.get("receipt_id"), ts, now):
+                    run_anchors += 1
                 if ts >= cutoff_24h:
                     last_24h += 1
                 if ts >= cutoff_7d:
@@ -132,6 +198,9 @@ def _scan_ledger() -> dict:
         "free_anchors": free_anchors,
         "pack_anchors": pack_anchors,
         "sub_anchors": sub_anchors,
+        "x402_anchors": x402_anchors,
+        "agent_label_anchors": agent_label_anchors,
+        "run_anchors": run_anchors,
         "last_anchor_at": last_anchor_at,
     }
 
@@ -204,3 +273,5 @@ def _reset_cache_for_tests() -> None:
     with _lock:
         _cached = None
         _cached_at = 0.0
+    with _run_memo_lock:
+        _run_memo.clear()

@@ -198,5 +198,6 @@ def test_server_with_bad_pay_to_is_disarmed_and_offers_no_402(tmp_path):
 def test_control_same_server_with_good_pay_to_offers_402(tmp_path):
     for base in _srv.server_processes(tmp_path, stub_calendars=True, **_real_backend_env(GOOD)):
         health, status, headers = _health_and_second_anchor(base)
-        assert health == {"armed": True, "network": x402.NETWORK_BASE_SEPOLIA, "config_problems": 0}, health
+        assert health == {"armed": True, "network": x402.NETWORK_BASE_SEPOLIA, "config_problems": 0,
+                          "stripe_record": False, "stripe_pending": 0}, health
         assert status == 402 and headers.get(x402.PAYMENT_REQUIRED_HEADER), status
