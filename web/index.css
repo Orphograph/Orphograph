@@ -232,7 +232,7 @@
 
   /* ── Fees / tiers ───────────────────────────────────────────────── */
   .tiers{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;}
-  /* 4-tier variant — Free / Writer Pack / Pack of Two Hundred / Standing Order.
+  /* 4-tier variant — Free / Writer Pack / Pack of Fifty / Standing Order.
      Tightens padding so 4 cards fit on a 12-col container without crowding. */
   .tiers.tiers-4{grid-template-columns:repeat(4,1fr);gap:16px;}
   .tiers.tiers-4 .tier{padding:26px 22px;}

@@ -130,7 +130,7 @@ class TestPublicConfig(unittest.TestCase):
             "enabled": False,
             "offer_version": "demand-pack-v1",
             "price_usd": 5,
-            "credits": 10,
+            "credits": 25,
             "transactional": False,
         })
 

@@ -100,7 +100,7 @@ Or edit `~/.claude/settings.json` and add the same `mcpServers` block.
 |---|---|---|
 | Free | 3 anchors / 24h | $0 |
 | Writer Pack | 10 anchors, never expires | $19 one-time |
-| Pack of Fifty | 50 anchors, never expires | $29 one-time |
+| Pack of Two Hundred | 200 anchors, never expires | $20 one-time |
 | Standing Order | Unrestricted anchoring | $9 / month |
 
 ## Verification

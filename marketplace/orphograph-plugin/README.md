@@ -49,8 +49,8 @@ git clone https://github.com/Orphograph/Orphograph ~/src/orphograph
 | Tier | Price | Anchors |
 |---|---|---|
 | Free | $0 | 3 / 24h |
-| Writer Pack | $19 one-shot | 10 (no expiry) |
-| Pack of Fifty | $29 one-shot | 50 (no expiry) |
+| Writer Pack | $5 one-shot | 25 (no expiry) |
+| Pack of Two Hundred | $20 one-shot | 200 (no expiry) |
 | Standing Order | $9/mo | Unlimited |
 
 Set `$ORPHO_API_KEY` in your shell to use a paid tier (legacy `$ORPHOGRAPH_API_KEY` is still accepted), or pass `--api-key`.

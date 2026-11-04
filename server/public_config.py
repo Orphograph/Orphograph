@@ -97,7 +97,7 @@ def snapshot() -> dict:
                 "enabled": os.environ.get("ORPHO_DEMAND_PACK_V1", "0") == "1",
                 "offer_version": "demand-pack-v1",
                 "price_usd": 5,
-                "credits": 10,
+                "credits": 25,
                 "transactional": False,
             },
         },
