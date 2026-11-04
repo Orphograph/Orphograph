@@ -169,8 +169,8 @@ Example:
 
 A: 
 - **Free:** 3 anchors per 24 hours per IP, no account
-- **Writer Pack:** $19 one-time for 10 anchor credits (never expire)
-- **Pack of Fifty:** $29 one-time for 50 anchor credits (never expire)
+- **Writer Pack:** $5 one-time for 25 anchor credits (never expire)
+- **Pack of Two Hundred:** $20 one-time for 200 anchor credits (never expire)
 - **Standing Order:** $9/month for unlimited anchors, private receipts, vault and an API key (live)
 
 **Q: What's a Pack credit?**

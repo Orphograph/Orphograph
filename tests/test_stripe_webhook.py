@@ -110,7 +110,7 @@ def test_handle_event_is_idempotent_on_replay(tmp_path, monkeypatch):
     }).encode()
     first = stripe_webhook.handle_event(payload)
     assert first.get("claim_code_minted") is True
-    # ledger should have exactly 10 credits for ONE code
+    # ledger should have exactly 25 credits for ONE code
     bal_codes_before = sum(int(line.split('"credits_delta":')[1].split(',')[0])
                             for line in (tmp_path / "credit_ledger.jsonl").read_text().splitlines())
     second = stripe_webhook.handle_event(payload)
@@ -136,8 +136,8 @@ def _ledger_total(ledger_path):
 
 
 def test_entry_pack_without_metadata_grants_default_credits(tmp_path, monkeypatch):
-    """Backward-compat: a checkout with no credit_count metadata mints the
-    default PACK_CREDITS (=10) — the existing Writer Pack path is unchanged."""
+    """A checkout with no credit_count metadata (e.g. a Payment Link) mints the
+    default PACK_CREDITS, which is the Writer Pack's 25 since 2026-11-04."""
     ledger = tmp_path / "credit_ledger.jsonl"
     monkeypatch.setattr(credits, "LEDGER_PATH", ledger)
     payload = json.dumps({
@@ -146,11 +146,13 @@ def test_entry_pack_without_metadata_grants_default_credits(tmp_path, monkeypatc
     }).encode()
     result = stripe_webhook.handle_event(payload)
     assert result["ok"] is True
-    assert _ledger_total(ledger) == stripe_webhook.PACK_CREDITS
+    assert stripe_webhook.PACK_CREDITS == 25
+    assert _ledger_total(ledger) == 25
 
 
-def test_pack50_metadata_grants_fifty_credits(tmp_path, monkeypatch):
-    """pack50 carries credit_count=50 in session metadata → mints 50, not 10."""
+def test_pack50_metadata_grants_two_hundred_credits(tmp_path, monkeypatch):
+    """pack50 (Pack of 200) carries credit_count=200 in session metadata →
+    mints 200, not the 25 default."""
     ledger = tmp_path / "credit_ledger.jsonl"
     monkeypatch.setattr(credits, "LEDGER_PATH", ledger)
     payload = json.dumps({
@@ -158,12 +160,12 @@ def test_pack50_metadata_grants_fifty_credits(tmp_path, monkeypatch):
         "data": {"object": {
             "id": "cs_pack50_x",
             "customer_email": "buyer@example.com",
-            "metadata": {"credit_count": "50", "plan": "pack50"},
+            "metadata": {"credit_count": "200", "plan": "pack50"},
         }},
     }).encode()
     result = stripe_webhook.handle_event(payload)
     assert result["ok"] is True
-    assert _ledger_total(ledger) == 50
+    assert _ledger_total(ledger) == 200
 
 
 def test_bad_credit_count_metadata_falls_back_to_default(tmp_path, monkeypatch):
@@ -186,8 +188,8 @@ def test_bad_credit_count_metadata_falls_back_to_default(tmp_path, monkeypatch):
 # --------------------------------------- email credit-count (pack50 mislabel)
 
 def test_pack50_claim_email_reports_actual_credit_count(tmp_path, monkeypatch):
-    """The ledger grants 50 for pack50, but the confirmation email previously
-    hardcoded PACK_CREDITS(=10). The email must state the ACTUAL granted amount."""
+    """The ledger grants 200 for pack50, but the confirmation email previously
+    hardcoded PACK_CREDITS. The email must state the ACTUAL granted amount."""
     monkeypatch.setattr(credits, "LEDGER_PATH", tmp_path / "credit_ledger.jsonl")
     import mailer
     captured = {}
@@ -202,12 +204,12 @@ def test_pack50_claim_email_reports_actual_credit_count(tmp_path, monkeypatch):
         "data": {"object": {
             "id": "cs_pack50_email",
             "customer_email": "buyer@example.com",
-            "metadata": {"credit_count": "50", "plan": "pack50"},
+            "metadata": {"credit_count": "200", "plan": "pack50"},
         }},
     }).encode()
     result = stripe_webhook.handle_event(payload)
     assert result["ok"] is True
-    assert captured.get("credit_count") == 50, "pack50 email must say 50, not 10"
+    assert captured.get("credit_count") == 200, "pack50 email must say 200, not 25"
 
 
 def test_pack50_gift_email_reports_actual_credit_count(tmp_path, monkeypatch):
@@ -225,12 +227,12 @@ def test_pack50_gift_email_reports_actual_credit_count(tmp_path, monkeypatch):
         "data": {"object": {
             "id": "cs_pack50_gift",
             "customer_email": "buyer@example.com",
-            "metadata": {"credit_count": "50", "gift_to_email": "friend@example.com"},
+            "metadata": {"credit_count": "200", "gift_to_email": "friend@example.com"},
         }},
     }).encode()
     result = stripe_webhook.handle_event(payload)
     assert result.get("gift") is True
-    assert captured.get("credit_count") == 50
+    assert captured.get("credit_count") == 200
 
 
 # --------------------------------------- refund clawback via payment_intent map

@@ -100,13 +100,13 @@ def test_the_revoke_still_finds_every_source_shape_it_is_called_with():
 
 def test_a_failed_settlement_for_a_lookalike_id_leaves_the_other_buyer_alone():
     stripe_webhook.handle_event(_event("evt_a", "cs_nest_12", payment_status="paid"))
-    assert _held("cs_nest_12") == 10, "control: the long id was delivered"
+    assert _held("cs_nest_12") == 25, "control: the long id was delivered"
 
     result = stripe_webhook.handle_event(_event(
         "evt_b", "cs_nest_1", type_="checkout.session.async_payment_failed",
         payment_status="unpaid"))
     assert result["revoked"] == []
-    assert _held("cs_nest_12") == 10
+    assert _held("cs_nest_12") == 25
 
 
 # --- 2. a failure that arrives first is remembered ----------------------------
@@ -137,14 +137,14 @@ def test_an_unpaid_completed_waits_for_settlement_then_delivers_once(_isolate):
         "evt_ok_settled", "cs_ok", type_="checkout.session.async_payment_succeeded",
         payment_status="paid"))
     assert settled.get("claim_code_minted") is True, settled
-    assert _held("cs_ok") == 10 and len(sent) == 1
+    assert _held("cs_ok") == 25 and len(sent) == 1
 
     # A redelivered `completed` (new event id, same session) does not deliver
     # twice, and says the session was delivered rather than "waiting".
     again = stripe_webhook.handle_event(_event("evt_ok_again", "cs_ok", payment_status="unpaid"))
     assert not again.get("claim_code_minted"), again
     assert again.get("already_delivered") is True and not again.get("awaiting_settlement"), again
-    assert _held("cs_ok") == 10 and len(sent) == 1
+    assert _held("cs_ok") == 25 and len(sent) == 1
 
 
 def test_a_completed_that_arrives_after_the_settlement_is_not_held(_isolate, capsys):
@@ -162,14 +162,14 @@ def test_a_completed_that_arrives_after_the_settlement_is_not_held(_isolate, cap
     assert late.get("already_delivered") is True, late
     assert not late.get("awaiting_settlement"), late
     assert "delivers when the payment settles" not in capsys.readouterr().err
-    assert _held("cs_late_completed") == 10 and len(sent) == 1
+    assert _held("cs_late_completed") == 25 and len(sent) == 1
 
 
 def test_a_card_payment_is_still_delivered_at_completed(_isolate):
     """Control: only the unpaid (delayed) case waits."""
     result = stripe_webhook.handle_event(_event("evt_card", "cs_card", payment_status="paid"))
     assert result.get("claim_code_minted") is True, result
-    assert _held("cs_card") == 10
+    assert _held("cs_card") == 25
 
 
 def test_a_settlement_that_fails_after_the_wait_delivers_nothing(_isolate):
@@ -205,4 +205,4 @@ def test_a_failure_for_one_session_does_not_block_another(_isolate):
         payment_status="unpaid"))
     other = stripe_webhook.handle_event(_event("evt_g2", "cs_ooo_12", payment_status="paid"))
     assert other.get("claim_code_minted") is True, "an id that merely contains a failed id was blocked"
-    assert _held("cs_ooo_12") == 10
+    assert _held("cs_ooo_12") == 25

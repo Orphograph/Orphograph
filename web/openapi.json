@@ -18,7 +18,7 @@
       "post": {
         "operationId": "anchorFingerprint",
         "summary": "Anchor one SHA-256 fingerprint.",
-        "description": "Free tier: three anchors per 24 hours per client, no account. Past it, send a Pack claim code (X-Pack-Token), a Standing Order API key (X-Orpho-Api-Key), or pay for this one anchor with x402. x402 runs on Base Sepolia (eip155:84532), the TEST network: test USDC has no value. One x402 authorization buys one anchor; resending an authorization that already bought an anchor is refused with 401. When the resent request is identical to the one that paid, the body names the receipt_id it bought, so a client whose first reply was lost recovers its receipt without paying twice.",
+        "description": "Free tier: three anchors per 24 hours per client, no account. Past it, send a Pack claim code (X-Pack-Token), a Standing Order API key (X-Orpho-Api-Key), or pay for this one anchor with x402. x402 runs on Base Sepolia (eip155:84532), the TEST network: test USDC has no value. One x402 authorization buys one anchor. Retrying is safe: resending the identical request (same signed authorization, same body) after it bought its anchor answers 200 with that same receipt, x402_replay: true and the original PAYMENT-RESPONSE header; nothing is anchored or charged again. The same authorization with any other body is refused with 401 and names no receipt.",
         "parameters": [
           {"name": "X-Pack-Token", "in": "header", "required": false, "schema": {"type": "string"}, "description": "Claim code of a credit Pack; consumes one credit."},
           {"name": "X-Orpho-Api-Key", "in": "header", "required": false, "schema": {"type": "string"}, "description": "API key of an active Standing Order subscription."},
@@ -39,7 +39,7 @@
             "content": {"application/json": {"schema": {"$ref": "#/components/schemas/AnchorResponse"}}}
           },
           "400": {"description": "Invalid body; the error names the field and the fix.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}},
-          "401": {"description": "A credential or x402 authorization was refused. For an authorization that already bought an anchor, the body carries that receipt_id.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}},
+          "401": {"description": "A credential or x402 authorization was refused: for example an authorization that already bought an anchor, presented with a different body. An identical retry is a 200, not a 401 (a private receipt is served that way only to its owner; anyone else gets this 401 with the receipt_id alone).", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}},
           "402": {"description": "Free-tier limit reached and x402 is armed: the PAYMENT-REQUIRED header carries the x402 requirements as base64 JSON; the body repeats them with limit_per_day, retry_after_seconds and a hint.", "headers": {"PAYMENT-REQUIRED": {"schema": {"type": "string"}}, "Retry-After": {"schema": {"type": "integer"}}}},
           "415": {"description": "POST bodies must be sent as Content-Type: application/json.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}},
           "429": {"description": "Free-tier limit reached; retry after Retry-After seconds, or use a Pack, a subscription, or x402.", "headers": {"Retry-After": {"schema": {"type": "integer"}}}},
@@ -55,6 +55,22 @@
         "parameters": [{"$ref": "#/components/parameters/ReceiptId"}],
         "responses": {
           "200": {"description": "Receipt found.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/VerifyResponse"}}}},
+          "404": {"description": "No receipt with that id (private receipts answer the same way to everyone but their owner)."}
+        }
+      }
+    },
+    "/api/verify_output/{receipt_id}": {
+      "get": {
+        "operationId": "verifyOutput",
+        "summary": "Check an output you received against a receipt (free, no account).",
+        "description": "Send the SHA-256 of the output, computed by you. For a single anchor, match is true when it equals the anchored hash. For a folder or agent-run anchor, match is true when it equals one leaf's file digest; the answer then carries an inclusion proof for that leaf (RFC 6962 node hashing, the same proof /api/inclusion_proof serves) that you can recompute to anchored_hash_sha256 offline. When the receipt's paths are not visible to you, path_visible is false and the path is withheld; the proof starts from leaf_hex. A mismatch is still a 200 with match false. Shows this exact output existed by the anchor time. It does not show who produced it or that it is correct.",
+        "parameters": [
+          {"$ref": "#/components/parameters/ReceiptId"},
+          {"name": "sha256", "in": "query", "required": true, "schema": {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"}, "example": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08", "description": "SHA-256 of the output, 64 hex characters (any case)."}
+        ],
+        "responses": {
+          "200": {"description": "Checked; match says whether the output is covered.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/VerifyOutputResponse"}}}},
+          "400": {"description": "Invalid receipt_id or sha256; the error names the field.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}},
           "404": {"description": "No receipt with that id (private receipts answer the same way to everyone but their owner)."}
         }
       }
@@ -131,7 +147,10 @@
           "receipt_url": {"type": "string"},
           "verify_url": {"type": "string"},
           "badge_url": {"type": "string"},
-          "credit_refunded": {"type": "boolean"}
+          "credit_refunded": {"type": "boolean"},
+          "x402_settled": {"type": "boolean", "description": "x402-paid anchors only: the payment settled before the anchor ran."},
+          "x402_payment_held": {"type": "boolean", "description": "x402-paid anchors only: true when the anchor reached no calendar and the identical request may retry on the money already paid."},
+          "x402_replay": {"type": "boolean", "description": "Present (true) only when this answer is an identical retry served the receipt its payment already bought."}
         }
       },
       "VerifyResponse": {
@@ -149,6 +168,31 @@
           "calendars_ok": {"type": "integer"},
           "calendars_total": {"type": "integer"},
           "c2pa_manifest_hash": {"type": "string"}
+        }
+      },
+      "VerifyOutputResponse": {
+        "type": "object",
+        "required": ["receipt_id", "match", "kind", "output_sha256_hex", "anchored_hash_sha256", "anchored_at_utc", "btc_pinned_at_utc", "calendars_ok", "receipt_url", "scope"],
+        "properties": {
+          "receipt_id": {"type": "string"},
+          "match": {"type": "boolean"},
+          "kind": {"type": "string", "enum": ["single", "folder"]},
+          "output_sha256_hex": {"type": "string", "description": "The sha256 you sent, lowercased."},
+          "anchored_hash_sha256": {"type": ["string", "null"], "description": "The anchored hash: the fingerprint itself, or the folder's Merkle root."},
+          "anchored_at_utc": {"type": "string"},
+          "btc_pinned_at_utc": {"type": ["string", "null"], "description": "When the office observed the Bitcoin pin; not the block timestamp."},
+          "calendars_ok": {"type": "integer"},
+          "receipt_url": {"type": "string"},
+          "scope": {"type": "string"},
+          "leaf_count": {"type": "integer", "description": "Folder anchors only."},
+          "matched_leaf_count": {"type": "integer", "description": "Folder anchors, on a match: how many leaves carry this digest."},
+          "path_visible": {"type": "boolean", "description": "Folder anchors, on a match: whether the leaf path is shown to you."},
+          "path": {"type": "string", "description": "The first matching leaf's path, only when path_visible."},
+          "inclusion_proof": {
+            "type": "object",
+            "description": "Folder anchors, on a match: proof for the first matching leaf. proof is a list of [direction, sibling_hex] from the leaf upward; L puts the sibling on the left.",
+            "properties": {"root_hex": {"type": "string"}, "path": {"type": "string"}, "file_sha256_hex": {"type": "string"}, "merkle_algorithm": {"type": "string"}, "leaf_index": {"type": "integer"}, "leaf_hex": {"type": "string"}, "proof": {"type": "array", "items": {"type": "array"}}}
+          }
         }
       },
       "Error": {

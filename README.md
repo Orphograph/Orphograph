@@ -9,8 +9,8 @@ photographers, journalists, indie creators, and developers who need to prove a
 file existed before a given moment, especially before an AI model saw it, and
 anchoring a file takes about ten seconds. Files never leave the browser: only
 their fingerprints are sent, and only the 32-byte SHA-256 is committed to
-Bitcoin. Free tier (3 anchors every 24 hours), $19 Writer Pack (10 anchors),
-$29 Pack of Fifty (50 anchors), $9/mo Standing Order (unrestricted anchoring,
+Bitcoin. Free tier (3 anchors every 24 hours), $5 Writer Pack (25 anchors),
+$20 Pack of Two Hundred (200 anchors), $9/mo Standing Order (unrestricted anchoring,
 private receipts, vault, API).
 
 ---
@@ -251,13 +251,13 @@ email, CSP `default-src 'self'`. Step-by-step in
 | Tier | Price | What's included |
 |---|---|---|
 | Free | $0 | 3 anchors per 24 hours per IP-prefix |
-| Writer Pack | $19 one-time | 10 anchors, claim code by email, never expires, skips rate limit |
-| Pack of Fifty | $29 one-time | 50 anchors, claim code by email, never expires, skips rate limit |
+| Writer Pack | $5 one-time | 25 anchors, claim code by email, never expires, skips rate limit |
+| Pack of Two Hundred | $20 one-time | 200 anchors, claim code by email, never expires, skips rate limit |
 | Standing Order | $9/mo | Unlimited anchors, email delivery, account dashboard, anchor history, API key |
 
 There is no annual plan and no Creator tier on sale; [pricing](https://orphograph.com/pricing) is the live list.
 
-The `$19 / $9` price points are set deliberately low.
+The `$5 / $9` price points are set deliberately low.
 The wedge is browser-based UX plus the open-source verifier — not the
 cryptography, which is the public OpenTimestamps protocol.
 

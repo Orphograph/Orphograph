@@ -80,7 +80,7 @@ def test_product_price_tags_do_not_trip_exit():
     with tempfile.TemporaryDirectory() as td:
         root = Path(td)
         _write(root / "web" / "pricing.html",
-               "Writer Pack $19. Standing Order $9/mo. Pack of Fifty $29. Annual $60/yr.\n")
+               "Writer Pack $5. Standing Order $9/mo. Pack of Two Hundred $20. Annual $60/yr.\n")
         out = root / "outbox" / "report.json"
         rc, report = _run(root, out)
         assert rc == 0, "product price tags must not fail the build"

@@ -874,7 +874,7 @@
   <p>That track record is what you are relying on when you anchor a file to Bitcoin. The cryptography matters, but the empirical record is the part that converts a theoretical guarantee into a useful one. In 2026 there is no other anchor with comparable properties.</p>
   <p>If the receipt format outlives the service that issued it — which Orphograph&#x27;s does, by design — then the only question that matters for the next decade is whether the Bitcoin chain continues. So far it has, every ten minutes, for sixteen years.</p>
   <hr>
-  <p><em>Orphograph is a Bitcoin file-timestamping service. Three free anchors every 24 hours. Pack of Fifty: $29 one-time, credits never expire. Standing Order: $9/month for unlimited. Open-source verifier. Receipts verify against any Bitcoin node, independent of Orphograph.</em> Related reading: <a href="/blog/why-5-opentimestamps-calendars-not-1.html" style="color:var(--confirm);">why five OpenTimestamps calendars, not one</a>. Method overview: <a href="/learn.html" style="color:var(--confirm);">how the protocol works</a>.</p>
+  <p><em>Orphograph is a Bitcoin file-timestamping service. Three free anchors every 24 hours. Pack of Two Hundred: $20 one-time, credits never expire. Standing Order: $9/month for unlimited. Open-source verifier. Receipts verify against any Bitcoin node, independent of Orphograph.</em> Related reading: <a href="/blog/why-5-opentimestamps-calendars-not-1.html" style="color:var(--confirm);">why five OpenTimestamps calendars, not one</a>. Method overview: <a href="/learn.html" style="color:var(--confirm);">how the protocol works</a>.</p>
 
   <p class="post-foot">
     Published 2026-05-17. <a href="/blog/" style="color:var(--muted);">More from the blog</a>.
@@ -1008,7 +1008,7 @@
   <p>It is not perfect. But it is structurally honest in a way that self-attested timestamps, traditional digital signatures, and proprietary &quot;verified&quot; badges are not. The proof outlives the issuer. The verifier doesn&#x27;t need permission. The math is the trust.</p>
   <p>Anyone whose work might one day be disputed should anchor it.</p>
   <hr>
-  <p><em>Orphograph is a Bitcoin file-timestamping service. Three free anchors every 24 hours. Pack of Fifty: $29 one-time, credits never expire. Standing Order: $9/month for unlimited. Open-source verifier. The file&#x27;s bytes never leave the browser; only the hash is submitted. <a href="https://orphograph.com/#sample">Try the sample receipt without signing up.</a></em> Related: <a href="/blog/bitcoin-block-height-as-source-of-truth.html" style="color:var(--confirm);">why a Bitcoin block height is the strongest anchor</a>. Method overview: <a href="/learn.html" style="color:var(--confirm);">how the protocol works end-to-end</a>.</p>
+  <p><em>Orphograph is a Bitcoin file-timestamping service. Three free anchors every 24 hours. Pack of Two Hundred: $20 one-time, credits never expire. Standing Order: $9/month for unlimited. Open-source verifier. The file&#x27;s bytes never leave the browser; only the hash is submitted. <a href="https://orphograph.com/#sample">Try the sample receipt without signing up.</a></em> Related: <a href="/blog/bitcoin-block-height-as-source-of-truth.html" style="color:var(--confirm);">why a Bitcoin block height is the strongest anchor</a>. Method overview: <a href="/learn.html" style="color:var(--confirm);">how the protocol works end-to-end</a>.</p>
 
   <p class="post-foot">
     Published 2026-05-17. <a href="/blog/" style="color:var(--muted);">More from the blog</a>.
@@ -1106,7 +1106,7 @@
   <p>Orphograph is not a notary public, not a qualified trust service provider under eIDAS, and not a court-authorized digital signature authority. It does not verify the identity of users. It does not witness signatures. It does not retain a notarial journal. It is a proof-of-existence service for files, and that is the entire scope.</p>
   <p>If a matter needs a notarial act, hire a notary. If it needs a qualified electronic timestamp under eIDAS, contact a qualified TSA in the relevant jurisdiction. If it needs a strong, free or low-cost, permissionless anchor of &quot;this file existed by this date&quot; — that is the thing Orphograph does well.</p>
   <hr>
-  <p><em>Orphograph is a Bitcoin file-timestamping service. Three free anchors every 24 hours. Pack of Fifty: $29 one-time, credits never expire. Standing Order: $9/month for unlimited. Receipts verify against any Bitcoin node, independent of Orphograph. Orphograph is not a notary public.</em> Method overview: <a href="/method/evidence-law.html" style="color:var(--confirm);">how evidence law treats these receipts</a>. Related: <a href="/blog/why-domain-dying-doesnt-kill-your-timestamp.html" style="color:var(--confirm);">why the receipt survives if the issuer disappears</a>.</p>
+  <p><em>Orphograph is a Bitcoin file-timestamping service. Three free anchors every 24 hours. Pack of Two Hundred: $20 one-time, credits never expire. Standing Order: $9/month for unlimited. Receipts verify against any Bitcoin node, independent of Orphograph. Orphograph is not a notary public.</em> Method overview: <a href="/method/evidence-law.html" style="color:var(--confirm);">how evidence law treats these receipts</a>. Related: <a href="/blog/why-domain-dying-doesnt-kill-your-timestamp.html" style="color:var(--confirm);">why the receipt survives if the issuer disappears</a>.</p>
 
   <p class="post-foot">
     Published 2026-05-17. <a href="/blog/" style="color:var(--muted);">More from the blog</a>.
@@ -1186,7 +1186,7 @@
   <p>The whole thing takes about ten minutes. The receipt is good for the working life of Bitcoin, which is the longest-running proof-of-existence anchor available in 2026.</p>
   <p>Start with the free tier at <a href="https://orphograph.com">https://orphograph.com</a>.</p>
   <hr>
-  <p><em>Orphograph is a Bitcoin file-timestamping service. Three free anchors every 24 hours. Pack of Fifty: $29 one-time, credits never expire. Standing Order: $9/month for unlimited. Open-source verifier. Receipts verify against any Bitcoin node, independent of Orphograph.</em> Related: <a href="/blog/bitcoin-merkle-roots-unforgeable-timestamps.html" style="color:var(--confirm);">the cryptography that makes the receipt un-falsifiable</a>. Method overview: <a href="/learn.html" style="color:var(--confirm);">how the protocol works</a>.</p>
+  <p><em>Orphograph is a Bitcoin file-timestamping service. Three free anchors every 24 hours. Pack of Two Hundred: $20 one-time, credits never expire. Standing Order: $9/month for unlimited. Open-source verifier. Receipts verify against any Bitcoin node, independent of Orphograph.</em> Related: <a href="/blog/bitcoin-merkle-roots-unforgeable-timestamps.html" style="color:var(--confirm);">the cryptography that makes the receipt un-falsifiable</a>. Method overview: <a href="/learn.html" style="color:var(--confirm);">how the protocol works</a>.</p>
 
   <p class="post-foot">
     Published 2026-05-17. <a href="/blog/" style="color:var(--muted);">More from the blog</a>.
@@ -1288,9 +1288,9 @@
   <p>The <code>.ots</code> file is tiny (~200–500 bytes), and once upgraded, can be verified offline against any Bitcoin node.</p>
   <h2>What if you don&#x27;t want to install Python?</h2>
   <p>The protocol is great. The CLI is a wall.</p>
-  <p>A handful of services wrap OpenTimestamps with a browser-based UI. <a href="https://orphograph.com">Orphograph</a> is one: drop a file in the browser, receive a receipt. The file never uploads — hashing happens locally via WebCrypto. The free tier covers three anchors per 24 hours; a Pack of Fifty is $29 one-time, credits never expire (Standing Order $9/month for unlimited). The open-source verifier means receipts continue to verify against any Bitcoin node even if the wrapper service is gone.</p>
+  <p>A handful of services wrap OpenTimestamps with a browser-based UI. <a href="https://orphograph.com">Orphograph</a> is one: drop a file in the browser, receive a receipt. The file never uploads — hashing happens locally via WebCrypto. The free tier covers three anchors per 24 hours; a Pack of Two Hundred is $20 one-time, credits never expire (Standing Order $9/month for unlimited). The open-source verifier means receipts continue to verify against any Bitcoin node even if the wrapper service is gone.</p>
   <p>Other timestamping services exist with different focuses — some target specific publishing platforms, others target enterprise. The office does not maintain a comparison directory; readers evaluating alternatives should compare them on protocol openness (does the receipt verify without the issuer&#x27;s tools), and pricing model.</p>
-  <p>For a photographer worried about AI training scraping the work, who wants a way to prove &quot;this photo existed on October 4&quot; without installing anything, the Orphograph free tier or Pack of Fifty is the shortest path. For zero dependency on any single company, the OpenTimestamps CLI is the direct route.</p>
+  <p>For a photographer worried about AI training scraping the work, who wants a way to prove &quot;this photo existed on October 4&quot; without installing anything, the Orphograph free tier or Pack of Two Hundred is the shortest path. For zero dependency on any single company, the OpenTimestamps CLI is the direct route.</p>
   <h2>Common questions</h2>
   <h3>Does the timestamp prove I authored the file?</h3>
   <p>No. It proves the file existed by a certain time. If you publicly post a photo and someone immediately anchors it before you do, both of you can prove &quot;this file existed by Day 1.&quot; The trick is to anchor at capture time, before anyone else has access — that&#x27;s the temporal moat.</p>
@@ -1307,7 +1307,7 @@
   <p>The protocol is free. It is permissionless. It does not require trust in any single party. And unlike much of the broader crypto landscape, it has been quietly working in production since 2017.</p>
   <p>Anchor the work.</p>
   <hr>
-  <p><em>Orphograph is a Bitcoin file-timestamping service. Three free anchors every 24 hours. Pack of Fifty: $29 one-time, credits never expire. Standing Order: $9/month for unlimited. Open-source verifier. The file&#x27;s bytes never leave the browser; only the hash is submitted. <a href="https://orphograph.com/#sample">Try the sample receipt without signing up.</a></em> Related: <a href="/blog/why-5-opentimestamps-calendars-not-1.html" style="color:var(--confirm);">why five calendars and not one</a>. Method overview: <a href="/learn.html" style="color:var(--confirm);">how the protocol works end-to-end</a>.</p>
+  <p><em>Orphograph is a Bitcoin file-timestamping service. Three free anchors every 24 hours. Pack of Two Hundred: $20 one-time, credits never expire. Standing Order: $9/month for unlimited. Open-source verifier. The file&#x27;s bytes never leave the browser; only the hash is submitted. <a href="https://orphograph.com/#sample">Try the sample receipt without signing up.</a></em> Related: <a href="/blog/why-5-opentimestamps-calendars-not-1.html" style="color:var(--confirm);">why five calendars and not one</a>. Method overview: <a href="/learn.html" style="color:var(--confirm);">how the protocol works end-to-end</a>.</p>
 
   <p class="post-foot">
     Published 2026-05-17. <a href="/blog/" style="color:var(--muted);">More from the blog</a>.
@@ -1358,7 +1358,7 @@
   <p><strong>3.</strong> The receipt — a JSON file plus five OpenTimestamps proofs — downloads as a single bundle.</p>
   <p><strong>4.</strong> The block-pinning upgrade happens automatically over the following hour; the receipt updates from &quot;pending&quot; to &quot;block-pinned at block N.&quot;</p>
   <p>The receipt verifies later against any Bitcoin node using the open-source verifier published at <a href="/verify/">orphograph.com/verify/</a> — no Orphograph dependency. The receipt is designed to outlive the issuing service.</p>
-  <p>Pricing: the free tier covers three anchors per 24 hours. A Pack of Fifty is $29 (one-time, credits never expire); a Standing Order is $9/month for unlimited. Packs are one-time purchases, credits never expire.</p>
+  <p>Pricing: the free tier covers three anchors per 24 hours. A Pack of Two Hundred is $20 (one-time, credits never expire); a Standing Order is $9/month for unlimited. Packs are one-time purchases, credits never expire.</p>
   <h2>Three working paths for a portfolio</h2>
   <p>Pick the path that matches the reader&#x27;s comfort level. The defensibility is identical across all three — the same OpenTimestamps proofs land in the same Bitcoin blocks.</p>
   <h3>Path A — free, technical (use OpenTimestamps directly)</h3>
@@ -1375,7 +1375,7 @@
   <p>Visit <a href="https://orphograph.com">orphograph.com</a>, drop a photo onto the box, save the receipt bundle. The free tier covers three anchors per 24 hours, permanent.</p>
   <p>Cost: $0. Time: about ten seconds. Save the bundle to whichever cloud-sync service or external drive holds the rest of the photo backup.</p>
   <h3>Path C — Pack purchase (when batch volume exceeds the free tier)</h3>
-  <p>A Pack of Fifty ($29 one-time, credits never expire) clears the rate limit for batch sessions — for a wedding shoot, a fashion-week catalog, or a back-catalog upgrade. Packs are one-time purchases, credits never expire, and the claim code is delivered by email so receipts continue to flow even if the original payment device is replaced. The card-checkout receipt is the invoice; the email carries the claim code.</p>
+  <p>A Pack of Two Hundred ($20 one-time, credits never expire) clears the rate limit for batch sessions — for a wedding shoot, a fashion-week catalog, or a back-catalog upgrade. Packs are one-time purchases, credits never expire, and the claim code is delivered by email so receipts continue to flow even if the original payment device is replaced. The card-checkout receipt is the invoice; the email carries the claim code.</p>
   <h2>What this does not do</h2>
   <p>The limits matter — disputes around AI training are being litigated, and a holder of a receipt should know exactly what it will and will not prove.</p>
   <p>A timestamped hash proves:</p>
@@ -1403,7 +1403,7 @@
   </ul>
   <p>Real-world use cases settled with a Bitcoin-anchored receipt are the most useful input the office can receive. The office keeps a public record of cases where the customer consents to publication; <a href="mailto:hello@orphograph.com" style="color:var(--confirm);">write to the office</a> to share one.</p>
   <hr>
-  <p><em>Orphograph is a Bitcoin file-timestamping service. Three free anchors every 24 hours. Pack of Fifty: $29 one-time, credits never expire. Standing Order: $9/month for unlimited. Open-source verifier. The file&#x27;s bytes never leave the browser; only the hash is submitted. <a href="https://orphograph.com/#sample">Try the sample receipt without signing up.</a></em> Related: <a href="/blog/how-to-prove-photo-existed-before-ai-model-released.html" style="color:var(--confirm);">the step-by-step model-cutoff walkthrough</a>. Method overview: <a href="/learn.html" style="color:var(--confirm);">how the protocol works end-to-end</a>.</p>
+  <p><em>Orphograph is a Bitcoin file-timestamping service. Three free anchors every 24 hours. Pack of Two Hundred: $20 one-time, credits never expire. Standing Order: $9/month for unlimited. Open-source verifier. The file&#x27;s bytes never leave the browser; only the hash is submitted. <a href="https://orphograph.com/#sample">Try the sample receipt without signing up.</a></em> Related: <a href="/blog/how-to-prove-photo-existed-before-ai-model-released.html" style="color:var(--confirm);">the step-by-step model-cutoff walkthrough</a>. Method overview: <a href="/learn.html" style="color:var(--confirm);">how the protocol works end-to-end</a>.</p>
 
   <p class="post-foot">
     Published 2026-05-17. <a href="/blog/" style="color:var(--muted);">More from the blog</a>.
@@ -1530,7 +1530,7 @@
   <p>If anything on the verification path ever stops adding up — the file&#x27;s hash, the merkle path, the Bitcoin chain — the cryptographic contract is broken and the office wants to know. The security disclosure address is in the README; PGP keys are available on request.</p>
   <p>For nearly all users, &quot;click verify&quot; is enough. For the minority who need to confirm the math is real, this post is a starting point.</p>
   <hr>
-  <p><em>Orphograph is a Bitcoin file-timestamping service. Three free anchors every 24 hours. Pack of Fifty: $29 one-time, credits never expire. Standing Order: $9/month for unlimited. Open-source verifier at <a href="/verify/">/verify/</a>. Receipts verify against any Bitcoin node, independent of Orphograph.</em> Related: <a href="/blog/why-5-opentimestamps-calendars-not-1.html" style="color:var(--confirm);">why five calendars and not one</a>. Method overview: <a href="/method/the-mit-verifier-annotated.html" style="color:var(--confirm);">the verifier source, annotated</a>.</p>
+  <p><em>Orphograph is a Bitcoin file-timestamping service. Three free anchors every 24 hours. Pack of Two Hundred: $20 one-time, credits never expire. Standing Order: $9/month for unlimited. Open-source verifier at <a href="/verify/">/verify/</a>. Receipts verify against any Bitcoin node, independent of Orphograph.</em> Related: <a href="/blog/why-5-opentimestamps-calendars-not-1.html" style="color:var(--confirm);">why five calendars and not one</a>. Method overview: <a href="/method/the-mit-verifier-annotated.html" style="color:var(--confirm);">the verifier source, annotated</a>.</p>
 
   <p class="post-foot">
     Published 2026-05-17. <a href="/blog/" style="color:var(--muted);">More from the blog</a>.
@@ -1599,7 +1599,7 @@
   <p>In exchange, the receipt has no single point of failure on the calendar side. The redundancy is the entire reason for the overhead. For a service whose receipts are supposed to verify indefinitely, that trade-off is the right one.</p>
   <p>There is no version of the product where the holder only gets one calendar&#x27;s proof. The five-proof receipt is the only receipt Orphograph issues.</p>
   <hr>
-  <p><em>Orphograph is a Bitcoin file-timestamping service. Three free anchors every 24 hours. Pack of Fifty: $29 one-time, credits never expire. Standing Order: $9/month for unlimited. Five calendar servers, four distinct calendars, no single point of failure. Receipts verify against any Bitcoin node, independent of Orphograph.</em> Related: <a href="/blog/why-domain-dying-doesnt-kill-your-timestamp.html" style="color:var(--confirm);">why the receipt survives if the issuer disappears</a>. Method overview: <a href="/method/evidence-law.html" style="color:var(--confirm);">how evidence law treats these receipts</a>.</p>
+  <p><em>Orphograph is a Bitcoin file-timestamping service. Three free anchors every 24 hours. Pack of Two Hundred: $20 one-time, credits never expire. Standing Order: $9/month for unlimited. Five calendar servers, four distinct calendars, no single point of failure. Receipts verify against any Bitcoin node, independent of Orphograph.</em> Related: <a href="/blog/why-domain-dying-doesnt-kill-your-timestamp.html" style="color:var(--confirm);">why the receipt survives if the issuer disappears</a>. Method overview: <a href="/method/evidence-law.html" style="color:var(--confirm);">how evidence law treats these receipts</a>.</p>
 
   <p class="post-foot">
     Published 2026-05-17. <a href="/blog/" style="color:var(--muted);">More from the blog</a>.
@@ -1694,7 +1694,7 @@
   <p>If Orphograph is around in 10 years: useful. If not: the receipts still work.</p>
   <p>That is the whole pitch.</p>
   <hr>
-  <p><em>Orphograph is a Bitcoin file-timestamping service. Three free anchors every 24 hours. Pack of Fifty: $29 one-time, credits never expire. Standing Order: $9/month for unlimited. Open-source verifier at <a href="/verify/">/verify/</a>. Receipts verify against any Bitcoin node, independent of Orphograph.</em> Related: <a href="/blog/why-5-opentimestamps-calendars-not-1.html" style="color:var(--confirm);">why five calendars and not one</a>. Method overview: <a href="/method/the-mit-verifier-annotated.html" style="color:var(--confirm);">the verifier source, annotated</a>.</p>
+  <p><em>Orphograph is a Bitcoin file-timestamping service. Three free anchors every 24 hours. Pack of Two Hundred: $20 one-time, credits never expire. Standing Order: $9/month for unlimited. Open-source verifier at <a href="/verify/">/verify/</a>. Receipts verify against any Bitcoin node, independent of Orphograph.</em> Related: <a href="/blog/why-5-opentimestamps-calendars-not-1.html" style="color:var(--confirm);">why five calendars and not one</a>. Method overview: <a href="/method/the-mit-verifier-annotated.html" style="color:var(--confirm);">the verifier source, annotated</a>.</p>
 
   <p class="post-foot">
     Published 2026-05-17. <a href="/blog/" style="color:var(--muted);">More from the blog</a>.

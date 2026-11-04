@@ -163,7 +163,7 @@ def main() -> int:
         # /pricing, not /buy: since 2026-09-19 /buy is the post-Checkout
         # CONFIRMATION page and tells an arriving visitor there is nothing to
         # confirm. The place to actually buy is the pricing page.
-        print(f"  buy a Writer Pack (10 anchors / $19): {args.endpoint.rstrip('/')}/pricing",
+        print(f"  buy a Writer Pack (25 anchors / $5): {args.endpoint.rstrip('/')}/pricing",
               file=sys.stderr)
         print("  then spend it:  export ORPHO_PACK_TOKEN=<token>   (or pass --pack-token)",
               file=sys.stderr)

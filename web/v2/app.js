@@ -79,7 +79,7 @@ async function handleFile(file){
     return;
   }
   if(resp.status === 429){
-    fail("Today's three free anchors are used — a Writer Pack (10 anchors, $19) removes the limit. Pricing is just below.");
+    fail("Today's three free anchors are used — a Writer Pack (25 anchors, $5) removes the limit. Pricing is just below.");
     return;
   }
   if(resp.status === 503){

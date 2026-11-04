@@ -57,19 +57,20 @@ def snapshot() -> dict:
             "creator_monthly_url": os.environ.get("STRIPE_CREATOR_MONTHLY_URL", "").strip(),
         },
         "pricing": {
-            # Canonical entry SKU: Writer Pack — 10 anchors — $19 (founder-confirmed
-            # 2026-05-25). Default was $7 (stale "Pack of Ten" pricing) and silently
-            # contradicted the live homepage CTA. See config_warnings().
-            "pack_usd": _int_env("PACK_PRICE_USD", 19),
-            "pack_credits": _int_env("PACK_CREDIT_COUNT", 10),
-            # Pack of Fifty — $29 — was sold via stripe.pack50_url but absent
-            # from this block, so the one machine-readable pricing surface
-            # omitted a live SKU and the docs example (which mirrors this
-            # block) looked self-contradictory next to the SKU table
-            # (found 2026-08-08). Additive fields; nothing consumes the block
-            # for charging — Stripe Payment Links carry the actual prices.
-            "pack50_usd": _int_env("PACK50_PRICE_USD", 29),
-            "pack50_credits": _int_env("PACK50_CREDIT_COUNT", 50),
+            # Canonical entry SKU: Writer Pack — 25 anchors — $5. The ladder
+            # changed 2026-11-04 (founder decision): it was 10 anchors for $19
+            # (confirmed 2026-05-25; before that a stale $7 "Pack of Ten").
+            # See config_warnings().
+            "pack_usd": _int_env("PACK_PRICE_USD", 5),
+            "pack_credits": _int_env("PACK_CREDIT_COUNT", 25),
+            # Pack of Two Hundred — $20 / 200 anchors since 2026-11-04 (founder
+            # decision; it was the $29 / 50-anchor Pack of Fifty). The keys keep
+            # their pack50 names so env vars and integrations do not move.
+            # Added 2026-08-08 because the SKU was sold via stripe.pack50_url but
+            # absent here. Nothing consumes this block for charging — Stripe
+            # prices and Payment Links carry the actual amounts.
+            "pack50_usd": _int_env("PACK50_PRICE_USD", 20),
+            "pack50_credits": _int_env("PACK50_CREDIT_COUNT", 200),
             # Standing Order (unlimited monthly) — $9/mo canonical (blogs + mcp
             # README + records). Default was $5 (stale). Annual left at 60 pending
             # a founder decision — see config_warnings()/CHECKOUT_GO_LIVE.md.
@@ -96,7 +97,7 @@ def snapshot() -> dict:
                 "enabled": os.environ.get("ORPHO_DEMAND_PACK_V1", "0") == "1",
                 "offer_version": "demand-pack-v1",
                 "price_usd": 5,
-                "credits": 10,
+                "credits": 25,
                 "transactional": False,
             },
         },

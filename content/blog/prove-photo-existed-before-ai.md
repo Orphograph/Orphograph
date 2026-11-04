@@ -95,7 +95,7 @@ You can verify the receipt later with [a ~100-line Python
 verifier](https://orphograph.com/verify/) — no Orphograph
 dependency. The receipt outlives our company by design.
 
-Three pricing tiers: free (3 anchors/24h), $19 Writer Pack (10 anchors,
+Three pricing tiers: free (3 anchors/24h), $5 Writer Pack (25 anchors,
 never expires, claim code by email), $9/mo Standing Order (unlimited).
 
 ## How to actually do this for your portfolio
@@ -129,10 +129,10 @@ receipt has to be re-downloaded if your browser clears
 localStorage. Save the receipt to your normal cloud storage or
 photo backup.
 
-### Path C — $19 for a batch (when you have 10 photos at once)
+### Path C — $5 for a batch (when you have up to 25 photos at once)
 
-Same as Path B but pay $19 and skip the rate limit. The claim code
-is delivered by email and lets you anchor 10 files in one
+Same as Path B but pay $5 and skip the rate limit. The claim code
+is delivered by email and lets you anchor 25 files in one
 sitting. The Stripe receipt is your invoice; the email gets the
 claim code.
 
@@ -200,7 +200,7 @@ get built for the next round.
 
 ---
 
-*Orphograph is a $19-and-up Bitcoin timestamping service for
+*Orphograph is a $5-and-up Bitcoin timestamping service for
 photographers. Open source verifier, no file uploads, your
 receipt verifies forever. [Try the sample receipt without
 signing up.](https://orphograph.com/#sample)*

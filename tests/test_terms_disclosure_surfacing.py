@@ -5,9 +5,9 @@ and the disclosure must be REACHABLE at the moments that matter.
 Found 2026-08-10 by the disclosure-map audit. Three gaps, one per test:
 
   * terms.html §4 was written when the catalog was one SKU ("Writer Pack
-    ($19)"). The live pricing page sells THREE: Writer Pack ($19, 10
-    credits), Pack of Fifty ($29, 50 credits), and the Standing Order
-    ($9/month subscription). Two of the three — including the only
+    ($19)"). The live pricing page sold THREE: Writer Pack, Pack of Fifty
+    (renamed Pack of Two Hundred on 2026-11-04, when the ladder became
+    $5/25 and $20/200), and the Standing Order ($9/month subscription). Two of the three — including the only
     RECURRING charge — appeared nowhere in the contract governing them.
   * No purchase-assent line existed at any buy CTA. Terms a buyer never
     sees at the moment of payment are terms nobody agreed to.
@@ -44,9 +44,9 @@ class TestTermsCoverTheCatalog(unittest.TestCase):
         monthly = _default("PERSONAL_MONTHLY_USD")
         for label, pattern in [
             (f"Writer Pack price ${pack}", r"(?<!\d)\$%d\b" % pack),
-            (f"Pack of Fifty price ${pack50}", r"(?<!\d)\$%d\b" % pack50),
+            (f"Pack of Two Hundred price ${pack50}", r"(?<!\d)\$%d\b" % pack50),
             (f"Standing Order price ${monthly}", r"(?<!\d)\$%d\b" % monthly),
-            ("Pack of Fifty by name", r"Pack of Fifty"),
+            ("Pack of Two Hundred by name", r"Pack of Two Hundred"),
             ("Standing Order by name", r"Standing Order"),
         ]:
             self.assertTrue(re.search(pattern, TERMS),
@@ -55,7 +55,7 @@ class TestTermsCoverTheCatalog(unittest.TestCase):
 
     def test_credit_counts_match_config(self):
         for env, name in [("PACK_CREDIT_COUNT", "Writer Pack"),
-                          ("PACK50_CREDIT_COUNT", "Pack of Fifty")]:
+                          ("PACK50_CREDIT_COUNT", "Pack of Two Hundred")]:
             n = _default(env)
             self.assertTrue(re.search(r"(?<!\d)%d\b" % n, TERMS),
                             f"terms.html never states the {name}'s "

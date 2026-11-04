@@ -302,11 +302,14 @@ def test_recased_nonce_resubmission_is_the_same_payment_and_is_rejected(server, 
     assert "already used" in b2["error"]
     assert "receipt_id" not in b2 and "receipt_url" not in b2
     assert _receipts_on_disk_for(tmp_path, HASH_D) == [], "the re-cased nonce bought an anchor"
-    # The identical request, re-cased nonce: the SAME payment, told its receipt.
+    # The identical request, re-cased nonce: the SAME payment, answered
+    # with the receipt it already bought (a safe retry), never a second one.
     s3, _h3, b3 = _post(server, "/api/anchor", {"hash_hex": HASH_B},
                         _payment_headers(nonce=upper.lower()))
-    assert s3 == 401, b3
+    assert s3 == 200, b3
+    assert b3.get("x402_replay") is True, b3
     assert b3.get("receipt_id") == b["receipt_id"], "the re-cased nonce is the SAME payment"
+    assert _receipts_on_disk_for(tmp_path, HASH_B) == [b["receipt_id"]]
     assert len(_ledger_rows(tmp_path)) == before, "a replay must not even attempt settlement"
 
 
@@ -481,7 +484,7 @@ def test_a_stranger_with_only_the_nonce_cannot_redeem_a_held_payment(server, tmp
     assert _payment_response(h3)["transaction"] == original_tx
     # Delivered now. The stranger's replay is still a bare 401: the nonce is
     # public on-chain, so the receipt it bought is named only to the payload
-    # that paid (test_a_delivered_replay_names_the_receipt_it_bought).
+    # that paid (test_a_delivered_identical_replay_is_a_safe_retry_answered_with_its_receipt).
     s4, _h4, b4 = _post(server, "/api/anchor", {"hash_hex": HASH_D}, _headers_for(stranger))
     assert s4 == 401, b4
     assert "receipt_id" not in b4 and "receipt_url" not in b4, "payment -> receipt link leaked to a stranger"
@@ -557,16 +560,76 @@ def test_a_lost_settle_answer_is_recorded_and_a_later_used_refusal_says_so(serve
     assert _receipts_on_disk_for(tmp_path, HASH_B) == []
 
 
-def test_a_delivered_replay_names_the_receipt_it_bought(server, tmp_path):
-    """A response lost after delivery must not leave the customer with only
-    a 401: the replay answer names the receipt the payment bought."""
+def test_a_delivered_identical_replay_is_a_safe_retry_answered_with_its_receipt(server, tmp_path):
+    """A response lost after delivery must not leave the customer with a
+    401: the identical request (same signed payload, same body) is answered
+    200 with the receipt the payment bought, in the first answer's shape and
+    with the same PAYMENT-RESPONSE header. Nothing runs again: no verify(),
+    no settle() (every facilitator call writes a ledger row, and a second
+    settle of this nonce would be refused by the mock as used -> 402), no
+    claim, no anchor."""
     _exhaust_free_tier(server)
     headers = _payment_headers(nonce="n14")
-    s, _h, b = _post(server, "/api/anchor", {"hash_hex": HASH_B}, headers)
+    s, h, b = _post(server, "/api/anchor", {"hash_hex": HASH_B}, headers)
     assert s == 200, b
-    s2, _h2, b2 = _post(server, "/api/anchor", {"hash_hex": HASH_B}, headers)
-    assert s2 == 401, b2
-    assert b2.get("receipt_id") == b["receipt_id"]
+    first_header = _payment_response(h)
+    rows_before = _ledger_rows(tmp_path)
+    claims_before = (tmp_path / "x402_claimed.jsonl").read_text()
+    s2, h2, b2 = _post(server, "/api/anchor", {"hash_hex": HASH_B}, headers)
+    assert s2 == 200, b2
+    assert b2["receipt_id"] == b["receipt_id"]
+    assert b2["x402_replay"] is True and b2["x402_settled"] is True
+    assert b2["x402_payment_held"] is False
+    assert "x402_replay" not in b, "a first anchor is not a replay"
+    # The first answer's shape: every field it carried, the same values
+    # wherever the value is the receipt's own.
+    assert set(b) | {"x402_replay"} == set(b2), set(b) ^ set(b2)
+    for k in ("hash_hex", "sha512_hex", "created_at", "client_label", "calendars_ok",
+              "calendars_total", "calendars_distinct_ok", "calendars_distinct_total",
+              "successes", "receipt_url", "badge_url", "verify_url"):
+        assert b2[k] == b[k], k
+    assert b2["pack_consumed"] is False and b2["credit_refunded"] is False
+    replay_header = _payment_response(h2)
+    assert replay_header == first_header, (replay_header, first_header)
+    assert replay_header["transaction"].startswith("0xmock")
+    # No second anchor, no second settle, no second claim.
+    assert _receipts_on_disk_for(tmp_path, HASH_B) == [b["receipt_id"]]
+    assert _ledger_rows(tmp_path) == rows_before, "a replay must not even attempt settlement"
+    assert len(_settled_rows(tmp_path)) == 1
+    assert (tmp_path / "x402_claimed.jsonl").read_text() == claims_before
+    # And again: a retry is idempotent.
+    s3, h3, b3 = _post(server, "/api/anchor", {"hash_hex": HASH_B}, headers)
+    assert s3 == 200 and b3["receipt_id"] == b["receipt_id"], b3
+    assert _payment_response(h3) == first_header
+    assert _ledger_rows(tmp_path) == rows_before
+    # A different request with the same payload is not the one that paid:
+    # the signed payload is public on-chain once settled, so it proves
+    # nothing about who is asking. Still 401, no receipt named, no header.
+    s4, h4, b4 = _post(server, "/api/anchor", {"hash_hex": HASH_D}, headers)
+    assert s4 == 401, b4
+    assert "already used" in b4["error"]
+    assert "receipt_id" not in b4 and "receipt_url" not in b4 and "hash_hex" not in b4
+    assert x402_const.PAYMENT_RESPONSE_HEADER not in h4
+    assert _receipts_on_disk_for(tmp_path, HASH_D) == []
+    assert _ledger_rows(tmp_path) == rows_before
+
+
+def test_a_paid_anchor_and_its_replay_leave_the_free_tier_untouched(server, tmp_path):
+    """The replay consumes nothing: on a fresh server (one free anchor a
+    day), a paid anchor and two identical replays leave the one free anchor
+    still available to a request with no payment."""
+    headers = _payment_headers(nonce="n15")
+    s, _h, b = _post(server, "/api/anchor", {"hash_hex": HASH_B}, headers)
+    assert s == 200 and b["x402_settled"] is True, b
+    for _ in range(2):
+        s2, _h2, b2 = _post(server, "/api/anchor", {"hash_hex": HASH_B}, headers)
+        assert s2 == 200 and b2["x402_replay"] is True, b2
+    s3, _h3, b3 = _post(server, "/api/anchor", {"hash_hex": HASH_C})
+    assert s3 == 200, b3
+    assert "x402_settled" not in b3, "the free anchor went through the payment path"
+    # Control: the free tier is now spent, so the limiter is live.
+    s4, _h4, _b4 = _post(server, "/api/anchor", {"hash_hex": HASH_D})
+    assert s4 in (402, 429), s4
     # A different request with the same payload is not the one that paid:
     # the signed payload is public on-chain once settled, so it proves
     # nothing about who is asking. No receipt is named to it.
@@ -583,11 +646,18 @@ def test_concurrent_identical_payloads_buy_exactly_one_anchor(server, tmp_path):
     _exhaust_free_tier(server)
     headers = _payment_headers(nonce="n13")
     def go(_):
-        return _post(server, "/api/anchor", {"hash_hex": HASH_E}, headers)[0]
+        st, _h, b = _post(server, "/api/anchor", {"hash_hex": HASH_E}, headers)
+        return st, b
     with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
-        statuses = list(pool.map(go, range(8)))
-    assert statuses.count(200) == 1, statuses
+        results = list(pool.map(go, range(8)))
+    statuses = [st for st, _b in results]
     assert set(statuses) <= {200, 401, 402}, statuses
+    # One anchor. A request that arrives after delivery is a safe retry
+    # (200, x402_replay) answered with that same receipt; one that arrives
+    # while the anchor is in flight loses the claim (401).
+    ok = [b for st, b in results if st == 200]
+    assert len([b for b in ok if not b.get("x402_replay")]) == 1, results
+    assert len({b["receipt_id"] for b in ok}) == 1, results
     assert len(_receipts_on_disk_for(tmp_path, HASH_E)) == 1
 
 
@@ -692,9 +762,13 @@ def test_a_chain_observer_cannot_redeem_a_held_payment_or_learn_its_receipt(serv
     s5, _h5, b5 = _post(server, "/api/anchor", {"hash_hex": HASH_D}, _headers_for(observer))
     assert s5 == 401, b5
     assert "receipt_id" not in b5 and "receipt_url" not in b5, "payment -> receipt link leaked"
-    # the identical request that paid is told its receipt
-    s6, _h6, b6 = _post(server, "/api/anchor", body, _headers_for(victim))
-    assert s6 == 401 and b6.get("receipt_id") == b4["receipt_id"], b6
+    # the identical request that paid is answered with its receipt (a safe
+    # retry: 200, the receipt it bought, the original settlement header)
+    s6, h6, b6 = _post(server, "/api/anchor", body, _headers_for(victim))
+    assert s6 == 200 and b6.get("receipt_id") == b4["receipt_id"], b6
+    assert b6["x402_replay"] is True
+    assert _payment_response(h6)["transaction"] == original_tx
+    assert len(_settled_rows(tmp_path)) == 1, "no second charge"
 
 
 def test_a_verify_answer_after_an_unanswered_settle_never_asks_for_a_second_payment(server, tmp_path):
@@ -884,8 +958,19 @@ def test_a_held_private_payment_stays_its_payers_whoever_redeems_it(subscriber_s
     so, _ = _srv.get_json(base, f"/api/receipt/{r1}", headers=_cookie("sess-other"))
     assert sv == 200, "the payer cannot see the private receipt they paid for"
     assert so == 404, "the redeemer owns the payer's private receipt"
+    # Delivered now. The payer's identical retry is answered with the
+    # private receipt: they own it.
     s2, _h2, b2 = _post(base, "/api/anchor", body, {**_headers_for(victim), **_cookie("sess-victim")})
-    assert s2 == 401 and b2.get("receipt_id") == r1, b2
+    assert s2 == 200 and b2.get("receipt_id") == r1 and b2["x402_replay"] is True, b2
+    # Anyone else presenting the identical request (payload rebuilt from
+    # calldata) learns nothing of the private receipt's content: the
+    # answer stays the 401 it always was, the receipt id only.
+    s3, h3, b3 = _post(base, "/api/anchor", body,
+                       {**_headers_for(_chain_observer_payload(victim)), **_cookie("sess-other")})
+    assert s3 == 401 and b3.get("receipt_id") == r1, b3
+    for leaked in ("hash_hex", "created_at", "calendars_ok", "receipt_url", "successes"):
+        assert leaked not in b3, (leaked, b3)
+    assert x402_const.PAYMENT_RESPONSE_HEADER not in h3
 
 
 def test_a_held_redemption_never_files_the_redeemers_address(subscriber_server, tmp_path):

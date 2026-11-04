@@ -52,7 +52,10 @@ from file_lock import locked
 ENABLE_AUTO_SIGNIN_TOKEN = os.environ.get("ORPHO_AUTO_SIGNIN_ON_CHECKOUT", "1") == "1"
 
 
-PACK_CREDITS = int(os.environ.get("PACK_CREDIT_COUNT", "10"))
+# Writer Pack grant when a session carries no credit_count. 25 since the
+# 2026-11-04 ladder change (founder decision; was 10). /api/checkout now sends
+# an explicit count on every pack session; this default covers Payment Links.
+PACK_CREDITS = int(os.environ.get("PACK_CREDIT_COUNT", "25"))
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = Path(os.environ.get("ORPHO_DATA_DIR", str(ROOT / "data") if (ROOT / "data").is_dir() else str(ROOT)))
 PROCESSED_EVENTS_PATH = Path(os.environ.get(
@@ -638,9 +641,9 @@ def handle_event(payload: bytes) -> dict:
                 f"({auth.mask_email(gift_to_raw)!r}); delivering pack to buyer instead\n"
             )
 
-        # Credit count: multi-size packs (e.g. pack50) carry `credit_count` in
-        # the checkout-session metadata; the entry Writer Pack sends none and
-        # falls back to PACK_CREDITS (=10) — so existing purchases are unchanged.
+        # Credit count: /api/checkout puts `credit_count` in the session
+        # metadata for both packs (25 Writer Pack, 200 Pack of 200). A session
+        # without it (e.g. a Payment Link) falls back to PACK_CREDITS (=25).
         try:
             credit_amount = int(meta.get("credit_count") or PACK_CREDITS)
         except (TypeError, ValueError):

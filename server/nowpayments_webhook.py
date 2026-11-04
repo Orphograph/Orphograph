@@ -41,9 +41,10 @@ from file_lock import locked
 
 # Plan -> credit-pack metadata. Kept in sync with nowpayments_api.PLANS,
 # but we import only what we need to avoid a hard dep on the outbound module.
+# Ladder of 2026-11-04 (founder decision): Writer Pack 25, Pack of 200 200.
 PLAN_CREDITS = {
-    "writer_pack": 10,
-    "pack_50": 50,
+    "writer_pack": 25,
+    "pack_50": 200,
 }
 DEFAULT_PLAN = "writer_pack"
 
@@ -162,7 +163,8 @@ def handle_event(payload: bytes) -> dict:
                 break
     if plan not in PLAN_CREDITS:
         desc = (event.get("order_description") or "").lower()
-        if "pack-of-50" in desc or "pack of 50" in desc:
+        if ("pack-of-200" in desc or "pack of 200" in desc
+                or "pack-of-50" in desc or "pack of 50" in desc):
             plan = "pack_50"
         elif "writer" in desc:
             plan = "writer_pack"
@@ -171,7 +173,7 @@ def handle_event(payload: bytes) -> dict:
         # Could not determine the pack from any echoed field. Default to the
         # SMALLER pack so we never OVER-grant, and alert loudly so the founder
         # can reconcile (top up to the larger pack) rather than silently
-        # shipping 10 credits for a possible $29 purchase.
+        # shipping 25 credits for a possible $20 purchase.
         sys.stderr.write(
             f"[nowpayments_webhook] order {order_id}: UNRESOLVED plan "
             f"(desc={event.get('order_description')!r}) — defaulting to "

@@ -4,7 +4,7 @@ drop a functional hook from the homepage.
 
 The 2026-08-08 archival redesign rewrites web/index.html wholesale. The page
 is the revenue surface: it carries the file drop zone, folder anchoring, the
-Pack-of-Fifty purchase form, the live status badge, the incident banner and
+pack form (Writer Pack / Pack of Two Hundred), the live status badge, the incident banner and
 the recent-receipts feed. Every one of those is wired by id from a separate
 JS file, so losing an id breaks the feature with NO error — the script simply
 finds nothing and returns.
@@ -31,7 +31,7 @@ REQUIRED_IDS = {
     "drop", "drop-input", "drop-btn", "try-sample",
     # folder anchoring (Merkle manifest path)
     "anchor-folder-btn", "folder-progress", "folder-receipt",
-    # Pack of Fifty purchase form — revenue
+    # pack form (Writer Pack / Pack of Two Hundred) — revenue
     "pack-form", "pack-form-input", "pack-form-msg", "pack-form-cancel",
     # tier / entitlement display
     "tier-badge", "tier-badge-clear", "tier-badge-detail", "tier-badge-link",

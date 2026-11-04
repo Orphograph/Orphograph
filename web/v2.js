@@ -637,7 +637,7 @@
           // path instead of a dead error. (Crypto checkout works today.)
           setStatusSimple(
             "You've used today's free anchors.",
-            "A Writer Pack is 10 anchors for $19 — credits never expire.",
+            "A Writer Pack is 25 anchors for $5 — credits never expire.",
             "info"
           );
           offerWriterPack();
