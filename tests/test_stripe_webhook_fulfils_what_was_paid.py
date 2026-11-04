@@ -125,7 +125,7 @@ def test_a_payment_taken_during_a_freeze_is_still_delivered(frozen):
     assert status == 200
     assert result.get("claim_code_minted") is True, (
         f"the buyer was charged and the webhook answered {result}")
-    assert _spendable(data_dir, "cs_freeze_paid") == 10
+    assert _spendable(data_dir, "cs_freeze_paid") == 25
 
 
 def test_the_forged_event_control_still_holds_during_a_freeze(frozen):
@@ -157,7 +157,7 @@ def test_a_delayed_payment_is_delivered_when_it_settles(normal):
         "evt_d1_ok", "cs_delayed_ok",
         type_="checkout.session.async_payment_succeeded", payment_status="paid"))
     assert settled.get("claim_code_minted") is True, settled
-    assert _spendable(data_dir, "cs_delayed_ok") == 10
+    assert _spendable(data_dir, "cs_delayed_ok") == 25
 
     # A second settlement event (another event id) delivers nothing more.
     _status, again = _deliver(base, _event(
@@ -199,7 +199,7 @@ def test_a_pack_delivered_before_the_change_is_still_taken_back_on_failure(norma
     assert status == 200 and result.get("revoked"), result
     assert _spendable(data_dir, "cs_legacy_delayed") == 0, "a failed payment kept its credits"
     # Another session's credits are untouched by that revoke.
-    assert _spendable(data_dir, "cs_delayed_ok") == 10
+    assert _spendable(data_dir, "cs_delayed_ok") == 25
 
 
 def test_a_failure_for_a_session_we_never_delivered_is_a_quiet_no_op(normal):
@@ -217,7 +217,7 @@ def test_a_missed_completed_is_still_delivered_by_the_success_event(normal):
         "evt_d4_ok", "cs_completed_was_missed",
         type_="checkout.session.async_payment_succeeded", payment_status="paid"))
     assert result.get("claim_code_minted") is True, result
-    assert _spendable(data_dir, "cs_completed_was_missed") == 10
+    assert _spendable(data_dir, "cs_completed_was_missed") == 25
 
 
 @pytest.mark.parametrize("status_value", ["paid", "no_payment_required", None])
@@ -229,7 +229,7 @@ def test_every_settled_shape_still_delivers(normal, status_value):
     extra = {} if status_value is None else {"payment_status": status_value}
     _status, result = _deliver(base, _event(f"evt_{sid}", sid, **extra))
     assert result.get("claim_code_minted") is True, result
-    assert _spendable(data_dir, sid) == 10
+    assert _spendable(data_dir, sid) == 25
 
 
 # --- 3. one session, one delivery --------------------------------------------

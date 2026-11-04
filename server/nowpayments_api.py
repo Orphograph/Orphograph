@@ -34,10 +34,13 @@ SUPPORTED_CURRENCIES = (
     "btc", "usdc", "sol", "xrp", "eth", "usdt", "ltc", "doge", "matic",
 )
 
-# Plan -> credit-pack metadata.
+# Plan -> credit-pack metadata. Ladder of 2026-11-04 (founder decision);
+# keys keep their old names. /pay/crypto offers only pack_50: a $5 invoice
+# can fall under NOWPayments' per-coin minimums. writer_pack stays accepted
+# by the API.
 PLANS = {
-    "writer_pack": {"price_usd": 19, "credit_count": 10, "label": "Writer Pack"},
-    "pack_50":     {"price_usd": 29, "credit_count": 50, "label": "Pack of 50"},
+    "writer_pack": {"price_usd": 5, "credit_count": 25, "label": "Writer Pack"},
+    "pack_50":     {"price_usd": 20, "credit_count": 200, "label": "Pack of 200"},
 }
 
 
@@ -149,8 +152,8 @@ def create_invoice(
     origin = _site_origin()
     # Round-trip the plan to the IPN. NOWPayments echoes order_description
     # verbatim; the webhook resolves the credit pack from it (and from the
-    # plan token embedded in order_id) so a $29 Pack-of-50 is not mistaken
-    # for a $19 Writer Pack and under-granted.
+    # plan token embedded in order_id) so a $20 Pack of 200 is not mistaken
+    # for a $5 Writer Pack and under-granted.
     plan_token = (plan or "").strip().lower()
     description = (
         f"Orphograph {plan_token} credit pack" if plan_token

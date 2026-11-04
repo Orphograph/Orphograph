@@ -77,16 +77,16 @@ def test_finished_status_grants_credits(tmp_path):
     assert result["ok"] is True
     assert result.get("claim_code_minted") is True
     assert result["plan"] == "writer_pack"
-    assert result["credits"] == 10
+    assert result["credits"] == 25
 
-    # Ledger should have exactly one positive row, 10 credits for one code.
+    # Ledger should have exactly one positive row, 25 credits for one code.
     rows = [
         json.loads(l)
         for l in credits.LEDGER_PATH.read_text().splitlines()
         if l.strip()
     ]
     assert len(rows) == 1
-    assert rows[0]["credits_delta"] == 10
+    assert rows[0]["credits_delta"] == 25
     assert rows[0]["source"].startswith("nowpayments:")
 
 
@@ -101,7 +101,7 @@ def test_finished_status_pack_50_grants_50_credits():
     payload, _sig = _sign(body)
     result = nowpayments_webhook.handle_event(payload)
     assert result.get("claim_code_minted") is True
-    assert result["credits"] == 50
+    assert result["credits"] == 200
 
 
 # ----------------------------------------------------------- idempotency
@@ -253,7 +253,7 @@ def test_confirmed_then_finished_same_order_credits_only_once():
     assert first.get("claim_code_minted") is True
     rows_after_first = _ledger_rows()
     assert len(rows_after_first) == 1
-    assert rows_after_first[0]["credits_delta"] == 10
+    assert rows_after_first[0]["credits_delta"] == 25
 
     second = nowpayments_webhook.handle_event(finished_payload)
     assert second.get("duplicate_mint") == order_id
@@ -266,8 +266,8 @@ def test_confirmed_then_finished_same_order_credits_only_once():
 
 def test_plan_resolved_from_order_id_token_when_no_plan_key():
     """Real IPNs do not echo a `plan` key. The pack must be recovered from the
-    plan token we embed in order_id (np_<plan>_<rand>), else a $29 Pack-of-50
-    silently grants 10 credits."""
+    plan token we embed in order_id (np_<plan>_<rand>), else a $20 Pack of 200
+    silently grants 25 credits."""
     body = {
         "order_id": "np_pack_50_Ab12Cd34",   # plan token embedded by the caller
         "payment_status": "finished",
@@ -279,7 +279,7 @@ def test_plan_resolved_from_order_id_token_when_no_plan_key():
     result = nowpayments_webhook.handle_event(payload)
     assert result.get("claim_code_minted") is True
     assert result["plan"] == "pack_50"
-    assert result["credits"] == 50
+    assert result["credits"] == 200
     assert result.get("plan_resolved") is True
 
 
@@ -294,7 +294,7 @@ def test_plan_resolved_from_order_description_when_no_plan_key():
     payload, _sig = _sign(body)
     result = nowpayments_webhook.handle_event(payload)
     assert result["plan"] == "pack_50"
-    assert result["credits"] == 50
+    assert result["credits"] == 200
 
 
 def test_unresolved_plan_defaults_to_smaller_pack_and_flags():
@@ -312,7 +312,7 @@ def test_unresolved_plan_defaults_to_smaller_pack_and_flags():
     result = nowpayments_webhook.handle_event(payload)
     assert result.get("claim_code_minted") is True
     assert result["plan"] == "writer_pack"
-    assert result["credits"] == 10
+    assert result["credits"] == 25
     assert result.get("plan_resolved") is False
 
 
@@ -333,7 +333,7 @@ def test_underpayment_warns_but_still_credits_by_default():
     payload, _sig = _sign(body)
     result = nowpayments_webhook.handle_event(payload)
     assert result.get("claim_code_minted") is True
-    assert result["credits"] == 10
+    assert result["credits"] == 25
 
 
 def test_underpayment_blocks_when_enforcement_enabled(monkeypatch):
@@ -368,7 +368,7 @@ def test_exact_payment_credits_under_enforcement(monkeypatch):
     payload, _sig = _sign(body)
     result = nowpayments_webhook.handle_event(payload)
     assert result.get("claim_code_minted") is True
-    assert result["credits"] == 10
+    assert result["credits"] == 25
 
 
 # ------------------------------------------- golden full-payload end-to-end
@@ -381,13 +381,13 @@ GOLDEN_IPN_FIELDS = {
     "invoice_id": 4944856743,
     "payment_status": "finished",
     "pay_address": "bc1qexampleexampleexampleexampleexampleex",
-    "price_amount": 19,
+    "price_amount": 5,
     "price_currency": "usd",
     "pay_amount": 0.000196,
     "actually_paid": 0.000196,
     "pay_currency": "btc",
     "order_id": "np_writer_pack_GoLdEn01",
-    "order_description": "Orphograph Writer Pack — 10 anchors",
+    "order_description": "Orphograph Writer Pack — 25 anchors",
     "purchase_id": "6097863291",
     "outcome_amount": 0.000194,
     "outcome_currency": "btc",
@@ -397,7 +397,7 @@ GOLDEN_IPN_FIELDS = {
 
 def test_golden_full_ipn_signature_and_exactly_once_mint():
     """End-to-end with a realistic full IPN payload: the signature verifies over
-    the canonical body, the `confirmed` IPN mints exactly one Writer Pack (10),
+    the canonical body, the `confirmed` IPN mints exactly one Writer Pack (25),
     and the `finished` IPN for the same order does NOT double-mint."""
     confirmed = {**GOLDEN_IPN_FIELDS, "payment_status": "confirmed"}
     finished = {**GOLDEN_IPN_FIELDS, "payment_status": "finished"}
@@ -411,10 +411,10 @@ def test_golden_full_ipn_signature_and_exactly_once_mint():
 
     first = nowpayments_webhook.handle_event(c_payload)
     assert first.get("claim_code_minted") is True
-    assert first["credits"] == 10
+    assert first["credits"] == 25
     rows = _ledger_rows()
     assert len(rows) == 1
-    assert rows[0]["credits_delta"] == 10
+    assert rows[0]["credits_delta"] == 25
     # order_id (not just invoice_id) is recorded in the source for refund linkage
     assert GOLDEN_IPN_FIELDS["order_id"] in rows[0]["source"]
 
@@ -519,7 +519,7 @@ def test_claim_email_sent_once_outside_lock(monkeypatch):
     r1 = nowpayments_webhook.handle_event(payload)
     assert r1.get("claim_code_minted") is True
     assert len(calls) == 1, f"exactly one email on fresh mint, got {len(calls)}"
-    assert calls[0][0] == "mail@example.com" and calls[0][2] == 10
+    assert calls[0][0] == "mail@example.com" and calls[0][2] == 25
     nowpayments_webhook.handle_event(payload)  # duplicate
     assert len(calls) == 1, "duplicate IPN must not re-send the claim-code email"
 
@@ -602,7 +602,7 @@ def test_a_colon_in_the_invoice_is_escaped_so_every_lookup_finds_the_mint():
     row = credits.find_nowpayments_mint("np_order_esc")
     assert row is not None and row["source"] == "nowpayments:inv%3Awith%3Acolons:np_order_esc"
     refund = nowpayments_webhook.handle_event(_sign({**body, "payment_status": "refunded"})[0])
-    assert refund["revoked"] == [{"claim_code": row["claim_code"], "revoked": 10}], refund
+    assert refund["revoked"] == [{"claim_code": row["claim_code"], "revoked": 25}], refund
 
 
 def test_a_retry_with_a_different_invoice_id_is_still_exactly_once(monkeypatch):
@@ -629,7 +629,7 @@ def test_a_non_string_source_elsewhere_does_not_break_a_refund():
             "plan": "writer_pack"}
     assert nowpayments_webhook.handle_event(_sign(body)[0]).get("claim_code_minted") is True
     refund = nowpayments_webhook.handle_event(_sign({**body, "payment_status": "refunded"})[0])
-    assert refund.get("refunded") is True and refund["revoked"][0]["revoked"] == 10
+    assert refund.get("refunded") is True and refund["revoked"][0]["revoked"] == 25
 
 
 def test_a_legacy_row_with_a_raw_colon_invoice_is_still_found_and_refunded(monkeypatch):
@@ -655,4 +655,4 @@ def test_a_list_claim_code_elsewhere_does_not_break_a_refund():
             "plan": "writer_pack"}
     assert nowpayments_webhook.handle_event(_sign(body)[0]).get("claim_code_minted") is True
     refund = nowpayments_webhook.handle_event(_sign({**body, "payment_status": "refunded"})[0])
-    assert refund["revoked"][0]["revoked"] == 10, refund
+    assert refund["revoked"][0]["revoked"] == 25, refund

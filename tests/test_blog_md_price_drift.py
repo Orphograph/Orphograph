@@ -13,21 +13,19 @@ string sitting in a "dead" .md source is one file deletion away from going
 live, so it is gated here rather than left to be caught only when it
 surfaces on a page.
 
-Current pricing truth (verified 2026-09-19):
-  - server/nowpayments_api.py PLANS: writer_pack = $19 / 10 credits,
-    pack_50 = $29 / 50 credits.
-  - web/pricing.html: Writer Pack $19 (10 anchors), Pack of Fifty $29
-    (50 anchors), Standing Order $9/month.
+Current pricing truth (ladder of 2026-11-04, founder decision):
+  - server/nowpayments_api.py PLANS: writer_pack = $5 / 25 credits,
+    pack_50 = $20 / 200 credits (label "Pack of 200").
+  - web/pricing.html: Writer Pack $5 (25 anchors), Pack of Two Hundred $20
+    (200 anchors), Standing Order $9/month.
 
-The known drift class is NOT "$29" or "$19" appearing at all — both are
-correct prices for their own tier ($19 for 10 credits, $29 for 50 credits).
-The defect is the two paired wrong: an old boilerplate line that priced a
-*10-anchor* pack at *$29* (Pack of Fifty's price, not Writer Pack's), found
-verbatim in four posts on 2026-09-19 and fixed in this same change. Each
-pattern below is a (price, count-word) conjunction, not a bare dollar
-amount, so the gate cannot fire on correct copy (e.g. "$19 for a 10-anchor
-pack" or "Pack of Fifty: $29") and cannot be satisfied by ever forbidding a
-correct price from appearing in a post.
+Before that the ladder was Writer Pack $19 / 10 and Pack of Fifty $29 / 50.
+On 2026-09-19 the drift class was a mismatched pairing (a *10-anchor* pack
+priced at *$29*). Each pattern below is either such a (price, count)
+mismatch for the current ladder, or a string that only the retired ladder
+used ("Pack of Fifty", "$19"/"$29" beside a pack). None has a legitimate
+use in a post today, so the gate cannot fire on correct copy (e.g. "$5 for
+a 25-anchor pack" or "Pack of Two Hundred: $20").
 """
 from __future__ import annotations
 
@@ -41,17 +39,27 @@ BLOG_DIR = ROOT / "content" / "blog"
 # price/count pairing, cite the correct source, and have zero legitimate use.
 STALE_PATTERNS: list[tuple[re.Pattern[str], str]] = [
     (
-        re.compile(r"\$29\s+for\s+a\s+10-(?:anchor\s+)?pack"),
-        "$29 is the Pack of Fifty price (50 credits) per "
-        "server/nowpayments_api.py PLANS['pack_50'] and web/pricing.html "
-        "line ~133/136. A 10-anchor/10-pack claim must price at $19 "
-        "(PLANS['writer_pack'], web/pricing.html line ~109/112).",
+        re.compile(r"\$20\s+for\s+a\s+25-(?:anchor\s+)?pack"),
+        "$20 is the Pack of Two Hundred price (200 credits) per "
+        "server/nowpayments_api.py PLANS['pack_50'] and web/pricing.html. "
+        "A 25-anchor pack is the Writer Pack at $5 (PLANS['writer_pack']).",
     ),
     (
-        re.compile(r"\$19\s+for\s+a\s+50-(?:anchor\s+)?pack"),
-        "$19 is the Writer Pack price (10 credits) per "
-        "server/nowpayments_api.py PLANS['writer_pack']. A 50-anchor/"
-        "50-pack claim must price at $29 (PLANS['pack_50']).",
+        re.compile(r"\$5\s+for\s+a\s+200-(?:anchor\s+)?pack"),
+        "$5 is the Writer Pack price (25 credits) per "
+        "server/nowpayments_api.py PLANS['writer_pack']. A 200-anchor pack "
+        "is the Pack of Two Hundred at $20 (PLANS['pack_50']).",
+    ),
+    (
+        re.compile(r"Pack\s+of\s+(?:Fifty|50)\b"),
+        "The Pack of Fifty was renamed the Pack of Two Hundred ($20, 200 "
+        "credits) on 2026-11-04.",
+    ),
+    (
+        re.compile(r"\$(?:19|29)\b[^.\n]{0,40}\b(?:[Pp]ack|anchors?)\b"
+                   r"|(?:Writer\s+Pack|[Pp]ack)\b[^.\n]{0,30}\$(?:19|29)\b"),
+        "$19 / $29 are the retired pack prices (before 2026-11-04). The "
+        "Writer Pack is $5 for 25, the Pack of Two Hundred $20 for 200.",
     ),
 ]
 

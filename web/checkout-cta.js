@@ -5,8 +5,8 @@
 // button. Self-contained, no dependencies (CSP: script-src 'self').
 //
 // Wires:
-//   #buy-pack     -> cfg.stripe.pack_url             (Writer Pack, one-time $19)
-//   #buy-pack50   -> cfg.stripe.pack50_url           (Pack of Fifty, one-time $29)
+//   #buy-pack     -> cfg.stripe.pack_url             (Writer Pack, one-time $5, 25 anchors)
+//   #buy-pack50   -> cfg.stripe.pack50_url           (Pack of Two Hundred, one-time $20, 200 anchors)
 //   #buy-personal -> cfg.stripe.personal_monthly_url (Standing Order, $9/mo);
 //                    for a signed-in subscriber, /account instead (no second one)
 //

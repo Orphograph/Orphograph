@@ -1696,7 +1696,7 @@ class Handler(BaseHTTPRequestHandler):
 <link rel="stylesheet" href="/blog.css?v=1">
 <link rel="stylesheet" href="/css/orpho-tokens.css?v=2">
 <link rel="stylesheet" href="/css/orpho-primitives.css?v=3">
-<link rel="stylesheet" href="/index.css?v=22">
+<link rel="stylesheet" href="/index.css?v=23">
 </head>
 <body class="orpho">
 <header>
@@ -6967,12 +6967,14 @@ class Handler(BaseHTTPRequestHandler):
         session_metadata: dict[str, str] = {}
         if plan == "pack":
             price_env, mode = "STRIPE_PRICE_PACK", "payment"
+            # Every pack session carries its explicit credit count, read back
+            # by the webhook, so a grant never depends on the PACK_CREDIT_COUNT
+            # default. Ladder of 2026-11-04 (founder decision): Writer Pack is
+            # 25 anchors, the Pack of 200 is 200.
+            session_metadata = {"credit_count": "25", "plan": "pack"}
         elif plan in ("pack50", "pack_50"):
             price_env, mode = "STRIPE_PRICE_PACK50", "payment"
-            # The 50-pack's credit count travels in session metadata and is
-            # read back by the webhook, so it stays independent of the default
-            # PACK_CREDIT_COUNT (=10) that the entry Writer Pack relies on.
-            session_metadata = {"credit_count": "50", "plan": "pack50"}
+            session_metadata = {"credit_count": "200", "plan": "pack50"}
         elif plan in ("pro", "sub", "subscription", "standing", "standing_order"):
             price_env, mode = "STRIPE_PRICE_SUB", "subscription"
         else:

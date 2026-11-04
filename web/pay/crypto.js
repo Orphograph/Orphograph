@@ -17,10 +17,13 @@
   var packPick = $("#pack-pick");
   if (!form || !coinSel || !submitBtn || !packPick) return;
 
-  var currentPlan = "writer_pack";
+  // Crypto checkout sells the Pack of 200 (plan key pack_50) only: a $5
+  // Writer Pack invoice can fall under NOWPayments' per-coin minimums
+  // (ladder of 2026-11-04). The server still accepts writer_pack by API.
+  var currentPlan = "pack_50";
 
-  // Pack toggle (writer_pack / pack_50). Buttons inside #pack-pick use
-  // data-plan attributes; clicking one becomes the active selection.
+  // Pack toggle. Buttons inside #pack-pick use data-plan attributes;
+  // clicking one becomes the active selection.
   var packButtons = packPick.querySelectorAll("button[data-plan]");
 
   function selectPlan(plan) {
@@ -42,14 +45,10 @@
     });
   });
 
-  // Honor the deep link from the pricing page: the Pack of Fifty tier links to
-  // /pay/crypto.html?plan=pack_50. Without this, that buyer silently lands on
-  // the default Writer Pack and gets invoiced for 10 credits instead of 50.
-  // Only pack_50 is accepted off the query string; anything else stays the
-  // 10-credit entry pack.
-  var params = new URLSearchParams(window.location.search);
-  var plan = params.get("plan");
-  selectPlan(plan === "pack_50" ? "pack_50" : "writer_pack");
+  // Any ?plan= in the link (an old ?plan=writer_pack bookmark included) is
+  // ignored: the page offers one pack, and the invoice is always the one
+  // shown on the button.
+  selectPlan("pack_50");
 
   function setMsg(text, isError) {
     msgEl.textContent = text || "";

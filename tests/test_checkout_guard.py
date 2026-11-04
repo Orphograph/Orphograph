@@ -2,7 +2,7 @@
 
 Two failures this locks down, both seen live on 2026-05-25:
   1. /api/config served the stale $7 "Pack of Ten" price while the homepage
-     showed the canonical $19 Writer Pack — displayed price could mismatch the
+     showed the canonical Writer Pack price — displayed price could mismatch the
      actual Stripe charge.
   2. checkout was enabled while every Stripe Payment Link URL was empty, so the
      buy buttons led nowhere and no one could pay — silently.
@@ -24,15 +24,16 @@ def _load():
 
 
 class TestCanonicalPrice(unittest.TestCase):
-    def test_pack_default_is_19_writer_pack(self):
-        """Entry SKU is the Writer Pack: 10 anchors, $19. Default must not
-        regress to the stale $7/$29 values without an explicit env override."""
+    def test_pack_default_is_5_writer_pack(self):
+        """Entry SKU is the Writer Pack: 25 anchors, $5 (ladder of 2026-11-04,
+        founder decision). Default must not regress to the stale $7 or $19/10
+        values without an explicit env override."""
         mod = _load()
         for var in ("PACK_PRICE_USD", "PACK_CREDIT_COUNT"):
             os.environ.pop(var, None)
         pricing = mod.snapshot()["pricing"]
-        self.assertEqual(pricing["pack_usd"], 19, "Writer Pack price drifted")
-        self.assertEqual(pricing["pack_credits"], 10, "Writer Pack credit count drifted")
+        self.assertEqual(pricing["pack_usd"], 5, "Writer Pack price drifted")
+        self.assertEqual(pricing["pack_credits"], 25, "Writer Pack credit count drifted")
 
 
 class TestCheckoutGuard(unittest.TestCase):

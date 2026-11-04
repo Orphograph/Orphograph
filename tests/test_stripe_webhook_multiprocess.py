@@ -86,7 +86,7 @@ print(json.dumps(result, sort_keys=True))
         if line.strip()
     ]
     assert len(credit_rows) == 1
-    assert credit_rows[0]["credits_delta"] == 10
+    assert credit_rows[0]["credits_delta"] == 25
 
     processed_rows = [
         json.loads(line)

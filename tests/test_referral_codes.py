@@ -139,10 +139,12 @@ def test_the_webhook_applies_the_new_code_and_refuses_the_empty_one(tmp_path, mo
     stripe_webhook.handle_event(_completed("evt_r1", "cs_bob1", "bob@example.test",
                                            referrals.code_for(ALICE_PACK)))
     assert credits.balance(ALICE_PACK) == 20, "the referrer was not credited"
-    assert credits.balance(codes[-1]) == 20, "the referred buyer did not get the bonus"
+    # A metadata-less session grants the Writer Pack default (25 since the
+    # 2026-11-04 ladder), plus the +10 referral bonus.
+    assert credits.balance(codes[-1]) == 35, "the referred buyer did not get the bonus"
 
     stripe_webhook.handle_event(_completed("evt_r2", "cs_carol1", "carol@example.test", "ref_"))
-    assert credits.balance(codes[-1]) == 10, "an empty code still earned the bonus"
+    assert credits.balance(codes[-1]) == 25, "an empty code still earned the bonus"
     assert credits.balance(ALICE_PACK) == 20, "an empty code credited a stranger's pack"
 
 

@@ -93,7 +93,7 @@
     <tr>
       <td><strong>Pack token</strong></td>
       <td><code>X-Pack-Token</code></td>
-      <td>One-shot buyers ($29 / 50 receipts). The token is the claim code emailed after purchase.</td>
+      <td>One-shot buyers ($5 / 25 or $20 / 200 receipts). The token is the claim code emailed after purchase.</td>
       <td>No IP rate limit. Each anchor consumes one credit until the balance is exhausted.</td>
     </tr>
     <tr>
@@ -137,7 +137,7 @@
       <td>Token bucket; refills continuously at ~3/86400 tokens/sec. Hit it and you get <code>429</code>.</td>
     </tr>
     <tr>
-      <td>Pack of Fifty ($29 one-shot)</td>
+      <td>Writer Pack ($5) or Pack of Two Hundred ($20), one-shot</td>
       <td>No IP limit</td>
       <td>—</td>
       <td>One credit consumed per receipt. Pack credits never expire.</td>
@@ -918,7 +918,7 @@ python3 verify_cli.py receipt.json</code></pre>
   </p>
   <pre><code>{
   "stripe": { "pack_url": "...", "personal_monthly_url": "...", "personal_annual_url": "...", "creator_monthly_url": "..." },
-  "pricing": { "pack_usd": 19, "pack_credits": 10, "pack50_usd": 29, "pack50_credits": 50, "personal_monthly_usd": 9, "personal_annual_usd": 60, "creator_monthly_usd": 19 },
+  "pricing": { "pack_usd": 5, "pack_credits": 25, "pack50_usd": 20, "pack50_credits": 200, "personal_monthly_usd": 9, "personal_annual_usd": 60, "creator_monthly_usd": 19 },
   "toggles": { "checkout_disabled": false, "anchoring_disabled": false, "maintenance_mode": false },
   "features": { "creator_tier_live": false, "private_receipts": true, "receipt_vault": true }
 }</code></pre>

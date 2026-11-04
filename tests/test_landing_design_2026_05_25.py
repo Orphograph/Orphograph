@@ -4,8 +4,9 @@ Locks in the visible changes so a future template edit can't silently undo:
 
   1. The header nav badge default label is "status", not the half-built-looking
      "checking" — JS still overwrites to "live"/"degraded" on /api/health.
-  2. The Writer Pack ($19 / 10 anchors) is a real tier card, not a footnote.
-  3. All four canonical SKUs (Free, Writer Pack, Pack of Fifty, Standing Order)
+  2. The Writer Pack ($5 / 25 anchors since 2026-11-04) is a real tier card,
+     not a footnote.
+  3. All four canonical SKUs (Free, Writer Pack, Pack of Two Hundred, Standing Order)
      are present and priced per the founder-confirmed canon.
   4. The hero price-anchor strip surfaces every SKU before the long scroll.
   5. Tier CTAs are crypto-only while the card rails are unconfigured: the free
@@ -81,7 +82,7 @@ class TestNavBadgeLabel(unittest.TestCase):
 class TestFourTierPricing(unittest.TestCase):
     def test_all_four_canonical_skus_present(self):
         html = _pricing()
-        for sku in ("Free", "Writer Pack", "Pack of Fifty", "Standing Order"):
+        for sku in ("Free", "Writer Pack", "Pack of Two Hundred", "Standing Order"):
             self.assertIn(
                 f">{sku}<",
                 html,
@@ -89,20 +90,20 @@ class TestFourTierPricing(unittest.TestCase):
             )
 
     def test_canonical_prices_displayed(self):
-        """Prices must match founder canon (2026-05-25):
-        Free $0, Writer Pack $19, Pack of Fifty $29, Standing Order $9/month."""
+        """Prices must match founder canon (ladder of 2026-11-04):
+        Free $0, Writer Pack $5, Pack of Two Hundred $20, Standing Order $9/month."""
         html = _pricing()
         # Free
         self.assertRegex(html, r'class="t-name">Free</div>\s*<div class="t-price">\$0')
         # Writer Pack
         self.assertRegex(
             html,
-            r'class="t-name">Writer Pack</div>\s*<div class="t-price">\$19',
+            r'class="t-name">Writer Pack</div>\s*<div class="t-price">\$5<',
         )
-        # Pack of Fifty
+        # Pack of Two Hundred
         self.assertRegex(
             html,
-            r'class="t-name">Pack of Fifty</div>\s*<div class="t-price">\$29',
+            r'class="t-name">Pack of Two Hundred</div>\s*<div class="t-price">\$20<',
         )
         # Standing Order
         self.assertRegex(
@@ -132,7 +133,7 @@ class TestPriceAnchorStrip(unittest.TestCase):
         m = re.search(r'<div class="price-anchor".*?</div>', html, re.DOTALL)
         self.assertIsNotNone(m, "Price-anchor strip missing.")
         strip = m.group(0)
-        for sku in ("Free", "Writer Pack", "Pack of Fifty", "Standing Order"):
+        for sku in ("Free", "Writer Pack", "Pack of Two Hundred", "Standing Order"):
             self.assertIn(sku, strip, f"{sku!r} not in price-anchor strip.")
 
 
@@ -191,12 +192,15 @@ class TestCTAVerbs(unittest.TestCase):
             tiers_block, r'>\s*Begin\s*<',
             "Free-tier CTA verb 'Begin' missing from tiers block.",
         )
-        # Each of the three paid tiers routes to the crypto checkout.
+        # The Pack of Two Hundred and the Standing Order route to the crypto
+        # checkout. The Writer Pack is card-only since 2026-11-04: crypto
+        # sells the Pack of Two Hundred alone (a $5 invoice can fall under a
+        # coin's minimum), so a crypto button there would invoice $20.
         pay_crypto = re.findall(r'>\s*Pay with crypto\s*<', tiers_block)
         self.assertEqual(
-            len(pay_crypto), 3,
-            "Expected exactly 3 'Pay with crypto' CTAs (one per paid tier), "
-            f"found {len(pay_crypto)}.",
+            len(pay_crypto), 2,
+            "Expected exactly 2 'Pay with crypto' CTAs (Pack of Two Hundred "
+            f"and Standing Order), found {len(pay_crypto)}.",
         )
 
     def test_no_dead_card_buttons(self):
@@ -206,7 +210,7 @@ class TestCTAVerbs(unittest.TestCase):
         html = _pricing()
         m = re.search(r'id="tiers".*?</section>', html, re.DOTALL)
         self.assertIsNotNone(m)
-        # Strip HTML comments first: the Pack-of-Fifty card-enable note mentions
+        # Strip HTML comments first: the Pack-of-Two-Hundred card-enable note mentions
         # data-checkout in prose — documentation, not an active button.
         tiers_block = re.sub(r"<!--.*?-->", "", m.group(0), flags=re.DOTALL)
         self.assertNotIn(
@@ -234,12 +238,12 @@ class TestCheckoutWiringMatchesSKU(unittest.TestCase):
     2026-05-31 (card rails unconfigured), so no tier carries a card button
     today. This guard preserves the rule for whenever a card button returns:
     the card `data-checkout="pack"` plan charges the single STRIPE_PRICE_PACK
-    and grants PACK_CREDIT_COUNT (=10) credits, so it may ONLY ever back a
-    10-credit tier (Writer Pack). Wiring it to the 50-credit "Pack of Fifty"
-    under-delivers (buyer pays for 50, receives 10) — the bug this prevents
-    from ever shipping. Pack of Fifty needs its own $29 / 50-credit Stripe
-    price (STRIPE_PRICE_PACK50) before it gets a card button. crypto.js
-    separately honors the ?plan=pack_50 query param; see TestCryptoPlanDeepLink.
+    and grants 25 credits (ladder of 2026-11-04), so it may ONLY ever back the
+    25-credit tier (Writer Pack). Wiring it to the 200-credit "Pack of Two
+    Hundred" under-delivers (buyer pays for 200, receives 25) — the bug this
+    prevents from ever shipping. The Pack of Two Hundred has its own $20 /
+    200-credit Stripe price (STRIPE_PRICE_PACK50). crypto.js sells pack_50
+    only; see TestCryptoPlanDeepLink.
     """
 
     def _tier_chunk(self, name: str) -> str:
@@ -253,48 +257,55 @@ class TestCheckoutWiringMatchesSKU(unittest.TestCase):
                 return c
         self.fail(f"tier card {name!r} not found")
 
-    def test_fifty_credit_tier_is_not_wired_to_the_ten_credit_pack(self):
-        fifty = self._tier_chunk("Pack of Fifty")
-        self.assertIn("50 anchor credits", fifty, "sanity: this is the 50-credit tier")
+    def test_two_hundred_credit_tier_is_not_wired_to_the_entry_pack(self):
+        big = self._tier_chunk("Pack of Two Hundred")
+        self.assertIn("200 anchor credits", big, "sanity: this is the 200-credit tier")
         self.assertNotIn(
             "plan=writer_pack",
-            fifty,
-            "Pack of Fifty must NOT deep-link to the writer_pack plan: that SKU "
-            "grants 10 credits and would under-deliver the 50-pack.",
+            big,
+            "Pack of Two Hundred must NOT deep-link to the writer_pack plan: "
+            "that SKU grants 25 credits and would under-deliver the 200-pack.",
         )
         self.assertRegex(
-            fifty,
+            big,
             r'/pay/crypto(?:\.html)?\?plan=pack_50',
-            "Pack of Fifty should deep-link to the dedicated pack_50 plan, "
-            "which grants 50 credits.",
+            "Pack of Two Hundred should deep-link to the dedicated pack_50 "
+            "plan, which grants 200 credits.",
         )
 
-    def test_writer_pack_routes_to_crypto(self):
-        """The 10-credit Writer Pack is crypto-only while the card rails are
-        unconfigured: it routes to the crypto checkout with plan=writer_pack
-        and carries NO card hook. (If a card button is ever re-added it must
-        map to the single `pack` SKU — 10 credits / $19 — never the 50-pack.)"""
+    def test_writer_pack_is_card_only(self):
+        """The 25-credit Writer Pack is sold by card only since 2026-11-04:
+        crypto checkout carries the Pack of Two Hundred alone, so a crypto
+        link on this tier would invoice $20 for a $5 card. It carries the
+        card hook #buy-pack (the single `pack` SKU, 25 credits / $5) and no
+        data-checkout or crypto deep link."""
         writer = self._tier_chunk("Writer Pack")
-        self.assertIn("10 anchor credits", writer)
+        self.assertIn("25 anchor credits", writer)
+        self.assertIn('id="buy-pack"', writer)
         self.assertNotIn(
             'data-checkout="pack"', writer,
-            "Writer Pack is crypto-only until Stripe is configured.",
+            "Writer Pack must not carry a live data-checkout hook.",
         )
-        self.assertRegex(
-            writer, r'href="/pay/crypto(?:\.html)?\?plan=writer_pack"',
-            "Writer Pack CTA should route to the crypto checkout "
-            "(plan=writer_pack).",
+        self.assertNotRegex(
+            writer, r'/pay/crypto',
+            "Writer Pack must not link the crypto checkout: it sells the "
+            "Pack of Two Hundred only.",
         )
 
 
 class TestCryptoPlanDeepLink(unittest.TestCase):
-    def test_crypto_page_honors_pack50_query_param(self):
-        """The landing links to /pay/crypto.html?plan=pack_50 for the 50-pack.
-        The crypto page must not silently default that buyer back to the
-        10-credit Writer Pack."""
+    def test_crypto_page_sells_only_the_pack_of_two_hundred(self):
+        """Since 2026-11-04 the crypto page offers one pack, pack_50 (the
+        Pack of 200). It defaults to it and never selects writer_pack, so an
+        old ?plan=writer_pack link cannot produce a $5 invoice that falls
+        under a coin's minimum."""
         js = CRYPTO_JS.read_text(encoding="utf-8")
-        self.assertIn('params.get("plan")', js)
-        self.assertIn('plan === "pack_50" ? "pack_50" : "writer_pack"', js)
+        self.assertIn('var currentPlan = "pack_50";', js)
+        self.assertIn('selectPlan("pack_50");', js)
+        code = "\n".join(l for l in js.splitlines() if not l.strip().startswith("//"))
+        self.assertNotIn('"writer_pack"', code)
+        html = (REPO / "web" / "pay" / "crypto.html").read_text(encoding="utf-8")
+        self.assertEqual(re.findall(r'data-plan="([^"]+)"', html), ["pack_50"])
 
 
 class TestCspInlineConsolidation(unittest.TestCase):
