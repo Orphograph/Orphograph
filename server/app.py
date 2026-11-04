@@ -3838,7 +3838,8 @@ class Handler(BaseHTTPRequestHandler):
                     "limit_per_day": ANCHOR_RATE_CAPACITY,
                     "retry_after_seconds": retry_seconds,
                     "hint": "Buy a Pack or subscribe to skip rate limits, or pay for this "
-                            "one anchor with x402 (USDC, test network for now).",
+                            "one anchor with x402 (USDC"
+                            + (", test network for now)." if x402.is_testnet() else " on Base)."),
                 }).encode("utf-8")
                 self.send_response(402)
                 self.send_header("Content-Type", "application/json; charset=utf-8")

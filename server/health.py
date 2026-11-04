@@ -61,7 +61,11 @@ def _x402_state() -> dict:
     except Exception:  # pragma: no cover - the module ships with the server
         return {"armed": False, "network": None}
     armed = x402.configured()
-    return {"armed": armed, "network": x402.network() if armed else None}
+    # config_problems: a COUNT only. This endpoint is public; the reasons
+    # (env-var names) are for the founder: `python3 -c "import x402;
+    # print(x402.config_problems())"` on the machine (2026-11-04).
+    return {"armed": armed, "network": x402.network() if armed else None,
+            "config_problems": len(x402.config_problems())}
 
 def _last_line_ts(path: Path) -> str | None:
     if not path.exists() or path.stat().st_size == 0:

@@ -133,6 +133,46 @@ def _data_dir() -> Path:
     return root / "data" if (root / "data").is_dir() else root
 
 
+_KNOWN_NETWORKS = {NETWORK_BASE_SEPOLIA: USDC_BASE_SEPOLIA, NETWORK_BASE_MAINNET: USDC_BASE_MAINNET}
+
+
+def is_testnet() -> bool:
+    return network() == NETWORK_BASE_SEPOLIA
+
+
+def config_problems() -> list[str]:
+    """Why the configured rail must NOT be armed, or [] when it may be.
+
+    Added 2026-11-04 for the mainnet switch. Network, asset and facilitator
+    are three separate env vars; setting one to mainnet and forgetting the
+    others would publish requirements no facilitator can settle (mainnet
+    network + testnet USDC), or send mainnet payments to the testnet-only
+    x402.org facilitator. Every such mix fails closed here. Messages name
+    env vars only, never their secret values.
+    """
+    if os.environ.get("ORPHO_X402_BACKEND", "").strip().lower() == "mock":
+        return []
+    out = []
+    net = network()
+    if net not in _KNOWN_NETWORKS:
+        out.append(f"ORPHO_X402_NETWORK={net!r} is not a known network")
+    else:
+        want = _KNOWN_NETWORKS[net]
+        if asset().lower() in {a.lower() for a in _KNOWN_NETWORKS.values()} and asset().lower() != want.lower():
+            out.append("ORPHO_X402_ASSET is the USDC of the other network")
+    fac = facilitator_url()
+    if net == NETWORK_BASE_MAINNET and fac == DEFAULT_FACILITATOR_URL.rstrip("/"):
+        out.append("mainnet selected but the facilitator is x402.org, which is testnet-only")
+    if not fac.startswith("https://"):
+        out.append("ORPHO_X402_FACILITATOR_URL must be https")
+    import cdp_auth  # local: keeps the module importable without it in odd test layouts
+    if cdp_auth.is_cdp_url(fac):
+        why = cdp_auth.credentials_problem()
+        if why:
+            out.append(why)
+    return out
+
+
 def configured() -> bool:
     """True iff a real payment can be accepted right now.
 
@@ -145,7 +185,8 @@ def configured() -> bool:
         return os.environ.get("ORPHO_X402_ALLOW_MOCK") == "1"
     # Fail closed: requirements without the asset's EIP-712 domain cannot be
     # verified by any facilitator, so such a rail is not armed at all.
-    return bool(os.environ.get("ORPHO_X402_PAY_TO_ADDRESS", "").strip()) and asset_domain() is not None
+    return (bool(os.environ.get("ORPHO_X402_PAY_TO_ADDRESS", "").strip())
+            and asset_domain() is not None and not config_problems())
 
 
 def network() -> str:
@@ -153,7 +194,10 @@ def network() -> str:
 
 
 def asset() -> str:
-    return os.environ.get("ORPHO_X402_ASSET", USDC_BASE_SEPOLIA).strip()
+    # Default follows the network, so switching ORPHO_X402_NETWORK alone
+    # cannot pair mainnet with testnet USDC (2026-11-04).
+    default = USDC_BASE_MAINNET if network() == NETWORK_BASE_MAINNET else USDC_BASE_SEPOLIA
+    return os.environ.get("ORPHO_X402_ASSET", default).strip() or default
 
 
 def asset_domain():
@@ -203,6 +247,49 @@ def build_payment_requirements(resource_url: str) -> dict:
     }
 
 
+def bazaar_extension(resource_url: str) -> dict:
+    """x402 v2 discovery metadata ("bazaar"), so a discovering facilitator
+    can list the anchor endpoint. Shape matched to the reference SDK
+    (coinbase/x402 python/x402/extensions/bazaar, resource_service.py
+    _create_body_discovery_extension + server.py enrich_declaration, read at
+    main 0e6e8c55d8, 2026-11-04): info.input {type, method, bodyType, body},
+    info.output {type, example}, and a JSON schema over both. Only the wire
+    format is matched; no code is copied. Example values are illustrative."""
+    site = resource_url.rsplit("/api/", 1)[0]
+    return {"bazaar": {
+        "info": {
+            "input": {"type": "http", "method": "POST", "bodyType": "json",
+                      "body": {"hash_hex": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+                               "client_label": "agent-run-42"}},
+            "output": {"type": "json", "example": {
+                "receipt_id": "AbCdEf123456", "hash_hex": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+                "created_at": "2026-11-04T18:00:00+00:00", "calendars_ok": 5, "calendars_total": 5,
+                "receipt_url": f"{site}/r/AbCdEf123456",
+                "verify_url": f"{site}/api/verify/AbCdEf123456"}},
+        },
+        "schema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+                "input": {"type": "object", "properties": {
+                    "type": {"type": "string", "const": "http"},
+                    "method": {"type": "string", "enum": ["POST", "PUT", "PATCH"]},
+                    "bodyType": {"type": "string", "enum": ["json", "form-data", "text"]},
+                    "body": {"type": "object", "required": ["hash_hex"], "properties": {
+                        "hash_hex": {"type": "string", "pattern": "^[0-9a-f]{64}$",
+                                     "description": "SHA-256 of the content, computed by the client; the content is never sent"},
+                        "client_label": {"type": "string"}}},
+                }, "required": ["type", "method", "bodyType", "body"], "additionalProperties": False},
+                "output": {"type": "object", "properties": {
+                    "type": {"type": "string"},
+                    "example": {"type": "object", "required": ["receipt_id", "hash_hex", "created_at"]}},
+                    "required": ["type"]},
+            },
+            "required": ["input"],
+        },
+    }}
+
+
 def build_payment_required_body(resource_url: str, *, error: str | None = None) -> dict:
     """The 402 response body: PaymentRequired, V2 shape."""
     return {
@@ -211,7 +298,7 @@ def build_payment_required_body(resource_url: str, *, error: str | None = None) 
         "resource": {"url": resource_url, "description": "Anchor a SHA-256 hash to Bitcoin",
                      "mimeType": "application/json"},
         "accepts": [build_payment_requirements(resource_url)],
-        "extensions": None,
+        "extensions": bazaar_extension(resource_url),
     }
 
 
@@ -298,9 +385,17 @@ def _facilitator_call(path: str, body: dict) -> dict:
             raise FacilitatorError("mock backend not allowed")
         return _mock_facilitator_call(path, body)
     url = facilitator_url() + path
+    headers = {"Content-Type": "application/json", "User-Agent": USER_AGENT}
+    import cdp_auth
+    if cdp_auth.is_cdp_url(url):
+        # The CDP facilitator (mainnet; OFAC/KYT screening on payer and
+        # payee) authenticates every call with a 120 s, URI-bound JWT.
+        try:
+            headers["Authorization"] = cdp_auth.bearer_for("POST", url)
+        except cdp_auth.CdpKeyError as e:
+            raise FacilitatorUnavailable(f"CDP credentials unusable: {e}") from None
     req = urllib.request.Request(
-        url, method="POST", data=json.dumps(body).encode(),
-        headers={"Content-Type": "application/json", "User-Agent": USER_AGENT})
+        url, method="POST", data=json.dumps(body).encode(), headers=headers)
     try:
         with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT_SEC) as resp:
             return json.loads(resp.read())
