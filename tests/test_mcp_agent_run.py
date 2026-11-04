@@ -191,3 +191,18 @@ def test_the_tools_are_listed_and_dispatched():
     r = mcp.handle({"jsonrpc": "2.0", "id": 2, "method": "tools/call",
                     "params": {"name": "orphograph_anchor_run", "arguments": {"steps": []}}})
     assert r["result"]["isError"] is True
+
+
+@pytest.mark.parametrize("verify, folder", [
+    (["not", "a", "dict"], None),
+    ({"hash_hex": 12345}, None),
+    ({"hash_hex": "ab" * 32}, {"manifest": ["leaf"]}),
+    ({"hash_hex": "ab" * 32}, {"manifest": {"leaves": "nope"}}),
+    ({"hash_hex": "ab" * 32}, {"manifest": {"leaves": [{"file_sha256_hex": 7, "leaf_hex": 9}]}}),
+])
+def test_a_hostile_office_answer_never_crashes_and_never_matches(verify, folder, monkeypatch):
+    def fake(method, path, body=None):
+        return verify if path.startswith("/api/verify/") else folder
+    monkeypatch.setattr(mcp, "_http", fake)
+    out = mcp.tool_verify_output({"receipt_id": "R1", "text": "anything"})
+    assert out.get("match") is not True

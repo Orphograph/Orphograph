@@ -804,7 +804,10 @@ def tool_anchor_run(args: dict) -> dict:
         "low_redundancy": result.get("low_redundancy", False),
         "note": ("No step text left this device: only one SHA-256 digest per "
                  "step and the Merkle root were transmitted. Any single step "
-                 "can later be checked with orphograph_verify_output."),
+                 "can later be checked with orphograph_verify_output. The "
+                 "digests and the step count are public on the receipt, so a "
+                 "short or guessable step (\"approved\") can be confirmed by "
+                 "anyone who guesses it; put a random nonce in such steps."),
     }
 
 
@@ -857,10 +860,13 @@ def tool_verify_output(args: dict) -> dict:
     else:
         return {"error": "pass the output as text, or its sha256_hex (64 hex chars)"}
     rec = _http("GET", f"/api/verify/{urllib.parse.quote(safe)}")
+    if not isinstance(rec, dict):
+        return {"ok": False, "error": "the office answered with an unexpected shape"}
     if rec.get("error"):
         return {"ok": False, "error": rec.get("error"),
                 "detail": rec.get("body") or rec.get("reason")}
-    anchored = (rec.get("hash_hex") or "").lower()
+    anchored = rec.get("hash_hex")
+    anchored = anchored.lower() if isinstance(anchored, str) else ""
     base = {"ok": True, "receipt_id": safe, "output_sha256_hex": target,
             "anchored_hash_sha256": anchored or None,
             "anchored_at_utc": rec.get("created_at"),
@@ -874,6 +880,8 @@ def tool_verify_output(args: dict) -> dict:
     if anchored == target:
         return {**base, "match": True, "kind": "single"}
     folder = _http("GET", f"/api/verify_folder/{urllib.parse.quote(safe)}")
+    if not isinstance(folder, dict):
+        folder = {"error": "bad_shape"}
     if folder.get("error"):
         if folder.get("status") == 400:
             # The office answers 400 when the receipt is not a folder anchor:
@@ -884,7 +892,10 @@ def tool_verify_output(args: dict) -> dict:
         return {"ok": False, "receipt_id": safe,
                 "error": "could not fetch the run's manifest; nothing was decided",
                 "detail": folder.get("body") or folder.get("reason") or folder.get("error")}
-    leaves = (folder.get("manifest") or {}).get("leaves") or []
+    served = folder.get("manifest")
+    leaves = served.get("leaves") if isinstance(served, dict) else None
+    if not isinstance(leaves, list):
+        leaves = []
     root, problems = _rebuild_root(leaves)
     if root is None or root.hex() != anchored or problems:
         return {**base, "match": False, "kind": "run",
@@ -892,7 +903,8 @@ def tool_verify_output(args: dict) -> dict:
                           "root; do not trust it",
                 "problems": problems or ["recomputed root differs from the anchored hash"]}
     hits = [l for l in leaves if isinstance(l, dict)
-            and (l.get("file_sha256_hex") or "").lower() == target]
+            and isinstance(l.get("file_sha256_hex"), str)
+            and l["file_sha256_hex"].lower() == target]
     bound = [l.get("path") for l in hits if isinstance(l.get("path"), str)]
     if bound:
         return {**base, "match": True, "kind": "run", "matched_paths": bound,
@@ -1075,7 +1087,9 @@ TOOL_DEFINITIONS = [
             "step and the Merkle root are transmitted, never the step text. "
             "Any single step stays provable on its own with "
             "orphograph_verify_output. Proves the steps existed by the anchor "
-            "time, not who produced them or that they are correct."
+            "time, not who produced them or that they are correct. Step "
+            "digests are public on the receipt: add a random nonce to short "
+            "or guessable steps."
         ),
         "inputSchema": {
             "type": "object",

@@ -14,7 +14,7 @@
       "registryType": "mcpb",
       "identifier": "https://github.com/Orphograph/Orphograph/releases/download/mcp-v0.1.2/orphograph-mcp-0.1.2.mcpb",
       "version": "0.1.2",
-      "fileSha256": "4366cdb7e33f374570d965cf1ef021915cf7123042c8c82d3f3eb43ca44a3570",
+      "fileSha256": "7a95bc07b5c86bc5d81c3f8d155f33e66b978fc77eac9501762ba0ca50175182",
       "transport": {
         "type": "stdio"
       },
@@ -66,7 +66,7 @@
         "name": "orphograph_verify_receipt"
       }
     ],
-    "sourceFileSha256": "50988257b9001a4f2d997fb99934b522fc91e7e9c6bf580b6ccda06b5fc7355e"
+    "sourceFileSha256": "49ee2b0ed54d38a01ba1882023b5f272aafbc7210edbf073e0a790af14b3cffa"
   },
   "title": "Orphograph"
 }
