@@ -48,6 +48,11 @@ from pathlib import Path
 
 OTS_HEADER_MAGIC = b"\x00OpenTimestamps\x00\x00Proof\x00\xbf\x89\xe2\xe8\x84\xe8\x92\x94"
 _EMBEDDED_HASH_OFFSET = len(OTS_HEADER_MAGIC) + 2
+OTS_VERSION = 0x01
+OTS_OP_SHA256 = 0x08
+# File-hash operations a detached .ots may start with (opentimestamps/core/op.py).
+_FILE_HASH_OPS = {0x02: "SHA-1", 0x03: "RIPEMD-160", 0x08: "SHA-256",
+                  0x67: "Keccak-256"}
 
 # Only this one counts as "the chain confirmed it".
 VERIFIED = "VERIFIED"
@@ -97,6 +102,25 @@ def local_binding(ots_path: Path, expected_hash_hex: str) -> tuple[bool, str]:
         return False, f"unreadable: {e}"
     if not data.startswith(OTS_HEADER_MAGIC):
         return False, "not an OpenTimestamps proof (bad header magic)"
+    # The two bytes after the magic are the format version and the operation
+    # that hashed the original file. Reading the next 32 bytes as "the SHA-256
+    # of the file" is only true when that op IS SHA-256 (0x08). A proof made
+    # by another tool with SHA-1 (0x02), RIPEMD-160 (0x03) or Keccak-256
+    # (0x67) commits to a different function of the file, and its 32 bytes
+    # (or 20 bytes plus the next opcode) must not be compared as if they
+    # were a SHA-256 digest. Say which, and fail closed.
+    if len(data) < _EMBEDDED_HASH_OFFSET + 32:
+        return False, "truncated OpenTimestamps proof (no file digest)"
+    version = data[len(OTS_HEADER_MAGIC)]
+    if version != OTS_VERSION:
+        return False, (f"OpenTimestamps format version {version} is not one "
+                       f"this checker reads (expects {OTS_VERSION})")
+    file_op = data[len(OTS_HEADER_MAGIC) + 1]
+    if file_op != OTS_OP_SHA256:
+        name = _FILE_HASH_OPS.get(file_op, f"unknown op 0x{file_op:02x}")
+        return False, (f"this proof commits to the file's {name}, not its "
+                       f"SHA-256 — it cannot be checked against a SHA-256 "
+                       f"fingerprint")
     try:
         expected = bytes.fromhex(expected_hash_hex)
     except ValueError:

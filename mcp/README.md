@@ -71,12 +71,12 @@ Or edit `~/.claude/settings.json` and add the same `mcpServers` block.
 |---|---|---|
 | `orphograph_anchor_file(path)` | Hash a local file and register the fingerprint on Bitcoin. | Optional API key |
 | `orphograph_anchor_folder(path)` | Hash a whole folder into an RFC-6962 Merkle tree and anchor one root covering every file. | Optional API key |
-| `orphograph_anchor_output(text, …)` | Hash generated output (an agent result, a transcript) in-process and anchor it. Accepts an optional `zk_proof`. | Optional API key |
+| `orphograph_anchor_output(text, …)` | Hash generated output (an agent result, a transcript) in-process and anchor it. Accepts an optional `zk_proof`. The fingerprint is public on the receipt, so for short or guessable output pass `salt: true`: it anchors SHA-256(salt + text), returns `salt_hex` (never transmitted) and needs it to verify. Every anchor reply says `bitcoin_status`: `pending` until the calendars commit to a Bitcoin block (usually hours), then `confirmed`. | Optional API key |
 | `orphograph_verify_receipt(receipt_id)` | Look up what the office recorded for a receipt. A lookup — it does NOT consult the chain; run `ots verify` for that. | None |
 | `orphograph_verify_lineage(receipt_id)` | Walk an edit-lineage chain back through its committed parents. | None |
 | `orphograph_list_vault(limit?)` | List the subscriber's receipts. | API key required |
 | `orphograph_anchor_run(steps, label?)` | Anchor every step of an agent run under one receipt; each step provable alone. | None |
-| `orphograph_verify_output(receipt_id, text \| sha256_hex)` | Check whether a receipt covers an exact output, trusting only the anchored hash. | None |
+| `orphograph_verify_output(receipt_id, text \| sha256_hex, salt_hex?)` | Check whether a receipt covers an exact output, trusting only the anchored hash. Pass `salt_hex` for an output anchored with a salt. | None |
 
 ## Privacy contract
 
