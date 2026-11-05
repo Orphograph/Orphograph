@@ -1290,9 +1290,23 @@ def test_health_says_whether_x402_is_armed_and_on_which_network(server, unconfig
     outside; health is the one observable proof that the rail is (or is not)
     live, and on which network. Testnet first: Base Sepolia."""
     assert _health(server)["x402"] == {"armed": True, "network": "eip155:84532", "config_problems": 0,
+                                       "price_atomic": "50000", "asset": x402_const.USDC_BASE_SEPOLIA,
                                        "stripe_record": False, "stripe_pending": 0}
     assert _health(unconfigured_server)["x402"] == {"armed": False, "network": None, "config_problems": 0,
+                                                    "price_atomic": None, "asset": None,
                                                     "stripe_record": False, "stripe_pending": 0}
+
+
+def test_health_price_is_the_price_the_challenge_asks(server):
+    """An agent reads the price from health before paying; it must be the
+    exact amount and asset the 402 then demands, or it decided on a lie."""
+    advertised = _health(server)["x402"]
+    _exhaust_free_tier(server)
+    s, _h, b = _post(server, "/api/anchor", {"hash_hex": HASH_B})
+    assert s == 402, b
+    asked = b["accepts"][0]
+    assert (advertised["price_atomic"], advertised["asset"], advertised["network"]) == (
+        asked["amount"], asked["asset"], asked["network"])
 
 
 def test_x402_ledgers_never_fall_back_to_the_working_directory(tmp_path, monkeypatch):

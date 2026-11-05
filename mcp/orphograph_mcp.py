@@ -114,7 +114,7 @@ COMMON_HEADERS = {
 }
 PROTOCOL_VERSION = "2024-11-05"
 SERVER_NAME = "orphograph"
-SERVER_VERSION = "0.1.4"
+SERVER_VERSION = "0.1.5"
 
 
 # ── stderr logger ──────────────────────────────────────────────────
@@ -152,6 +152,27 @@ def hash_file_local(path: str) -> tuple[str, str, int]:
 # ── HTTP ───────────────────────────────────────────────────────────
 
 
+class _RefuseRedirects(urllib.request.HTTPRedirectHandler):
+    """A 3xx is an answer, not an instruction to go elsewhere.
+
+    urllib's default opener follows a redirect to any host and copies every
+    header but the body's, so X-Orpho-Api-Key went to whatever host a 3xx
+    named (shown 2026-11-05 with two local servers). The same fix the other
+    clients carry (tests/test_credential_clients_refuse_redirects.py): the 3xx
+    surfaces as an HTTPError and the key never leaves BASE_URL."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+_OPENER = urllib.request.build_opener(_RefuseRedirects)
+
+
+def _urlopen(req, timeout):
+    """Every request this server makes goes through here."""
+    return _OPENER.open(req, timeout=timeout)
+
+
 def _http(method: str, path: str, body: dict | None = None) -> dict:
     """JSON request to BASE_URL. Returns the parsed response body or {error: ...}."""
     url = f"{BASE_URL}{path}"
@@ -161,7 +182,7 @@ def _http(method: str, path: str, body: dict | None = None) -> dict:
         headers["X-Orpho-Api-Key"] = API_KEY
     req = urllib.request.Request(url, data=data, method=method, headers=headers)
     try:
-        with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT_SEC) as resp:
+        with _urlopen(req, timeout=HTTP_TIMEOUT_SEC) as resp:
             raw = resp.read().decode("utf-8", errors="replace")
             try:
                 return json.loads(raw) if raw else {}
@@ -173,6 +194,15 @@ def _http(method: str, path: str, body: dict | None = None) -> dict:
             body_raw = e.read().decode("utf-8", errors="replace")[:400]
         except Exception:
             pass
+        if 300 <= e.code < 400:
+            # https://www.orphograph.com and http://orphograph.com answer 301
+            # (probed 2026-11-05); the default base URL answers directly.
+            location = (e.headers.get("Location") if e.headers else None) or ""
+            return {"error": "redirect_refused", "status": e.code, "location": location[:300],
+                    "detail": "the server answered with a redirect; it was not followed, "
+                              "so the API key stayed with " + BASE_URL
+                              + (". If that target is right, set ORPHO_BASE_URL to its "
+                                 "scheme and host." if location else "")}
         return {"error": "http_error", "status": e.code, "body": body_raw}
     except urllib.error.URLError as e:
         return {"error": "network_error", "reason": str(getattr(e, "reason", e))}

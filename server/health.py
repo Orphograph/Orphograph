@@ -71,7 +71,13 @@ def _x402_state() -> dict:
         pending = x402.stripe_pending_count()
     except OSError:
         pending = None
+    # price_atomic / asset (2026-11-05): what one anchor costs an agent, in
+    # USDC atomic units (6 decimals: "10000" = 1 cent), readable before
+    # paying. Until then only a real 402 challenge showed it, and getting one
+    # meant spending the caller's free anchors on public receipts.
     return {"armed": armed, "network": x402.network() if armed else None,
+            "price_atomic": x402.price_atomic() if armed else None,
+            "asset": x402.asset() if armed else None,
             "config_problems": len(x402.config_problems()),
             "stripe_record": x402.stripe_record_enabled(),
             "stripe_pending": pending}

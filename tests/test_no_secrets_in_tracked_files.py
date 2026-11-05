@@ -16,6 +16,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import io
+import os
 import re
 import subprocess
 import sys
@@ -425,6 +426,44 @@ def test_a_key_only_on_a_side_branch_or_tag_is_caught_by_the_public_ref_scan(tmp
         "deploy.sh:1 github_token", "deploy.sh:1 stripe_live_key"]
 
 
+def _report_history_walk(blobs: int, refs: dict[str, int]) -> str:
+    """One line saying what the history walk covered, for the CI log and job summary.
+
+    A walk that silently covered less (no PR heads fetched, a shallow clone)
+    reads the same as a clean one; the counts are the second signal.
+    """
+    line = ("history scan: " + str(blobs) + " blobs from "
+            + ", ".join(f"{n} {kind}" for kind, n in refs.items()))
+    summary = os.environ.get("GITHUB_STEP_SUMMARY")
+    if summary:
+        with open(summary, "a", encoding="utf-8") as fh:
+            fh.write(line + "\n")
+    print(line, file=sys.__stderr__)
+    return line
+
+
+def _ref_counts(repo: Path) -> dict[str, int]:
+    names = subprocess.run(["git", "for-each-ref", "--format=%(refname)"], cwd=repo,
+                           capture_output=True, text=True, check=True).stdout.split()
+    counts = {"branches": 0, "pull-request heads": 0, "tags": 0}
+    for name in names:
+        if name.startswith("refs/remotes/prheads/"):
+            counts["pull-request heads"] += 1
+        elif name.startswith("refs/remotes/") and not name.endswith("/HEAD"):
+            counts["branches"] += 1
+        elif name.startswith("refs/tags/"):
+            counts["tags"] += 1
+    return counts
+
+
+def test_the_walk_report_names_every_ref_kind(tmp_path, monkeypatch):
+    summary = tmp_path / "summary.md"
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary))
+    line = _report_history_walk(10, {"branches": 2, "pull-request heads": 3, "tags": 1})
+    assert line == "history scan: 10 blobs from 2 branches, 3 pull-request heads, 1 tags"
+    assert summary.read_text() == line + "\n"
+
+
 def test_no_commit_reachable_from_head_or_any_public_ref_ever_carried_a_credential():
     shallow = subprocess.run(["git", "rev-parse", "--is-shallow-repository"], cwd=REPO_ROOT,
                              capture_output=True, text=True, check=True).stdout.strip()
@@ -433,7 +472,12 @@ def test_no_commit_reachable_from_head_or_any_public_ref_ever_carried_a_credenti
                              capture_output=True, text=True, check=True).stdout.splitlines()
     others = [r for r in remotes if not r.endswith(("/master", "/HEAD"))]
     assert others, "no remote branch besides master was fetched, so no other branch was scanned (checkout needs fetch-depth: 0)"
+    # refs/pull/N/head stays fetchable by anyone after a PR closes and its
+    # branch is deleted. Fetched into refs/remotes/prheads/, --remotes walks
+    # them; the count below says whether that happened (0 = not covered).
+    refs = _ref_counts(REPO_ROOT)
     leaks, count = scan_history(REPO_ROOT, ("HEAD", *PUBLIC_REFS))
+    _report_history_walk(count, refs)
     assert count > 3000, f"only {count} blobs in history: the walk did not run"
     assert not leaks, "credential-shaped values in git history (values not shown):\n" + "\n".join(leaks)
 

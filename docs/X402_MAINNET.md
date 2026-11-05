@@ -53,7 +53,7 @@ from `server/`.
    `fly secrets set -a orphograph ORPHO_X402_NETWORK=eip155:8453 ORPHO_X402_FACILITATOR_URL=https://api.cdp.coinbase.com/platform/v2/x402 ORPHO_X402_PAY_TO_ADDRESS=<address> ORPHO_X402_CDP_KEY_ID=<id> ORPHO_X402_CDP_KEY_SECRET=<secret>`
    (`ORPHO_X402_ASSET` can stay unset: it follows the network.)
 4. **Check it armed:** `curl -s https://orphograph.com/api/health` shows
-   `"x402": {"armed": true, "network": "eip155:8453", "config_problems": 0}`.
+   `"x402": {"armed": true, "network": "eip155:8453", "price_atomic": "10000", "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", "config_problems": 0}`.
    If it shows `armed: false`, read the reasons on the machine (above).
 5. **Canary payment.** From a separate wallet holding a little USDC on Base,
    exhaust the free tier and pay one anchor with an x402 client. Expect a 200

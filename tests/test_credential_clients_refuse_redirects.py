@@ -46,6 +46,7 @@ CLIENTS = [
     "integrations/github-action/anchor_artifacts.py",
     "integrations/openclaw/orpho_agent_anchor.py",
     "integrations/watch-folder/orphograph_watch.py",
+    "mcp/orphograph_mcp.py",
     "marketplace/orphograph-plugin/skills/orphograph-anchor/anchor.py",
     "scripts/auto_anchor_repo.py",
     "scripts/folder_watch.py",
@@ -57,6 +58,7 @@ CLIENTS = [
     "tools/anchor_commit.py",
     "tools/anchor_prompt.py",
     "web/dist/orphograph-watch.py",
+    "web/mcp/orphograph_mcp.py",
 ]
 
 # Files that name a credential header next to a urllib request but are not
@@ -66,15 +68,9 @@ SAFE = {
     "scripts/morning_check.py": "fixed host https://orphograph.com (PROD_BASE constant)",
 }
 
-# The class, not fixed here: mcp/orphograph_mcp.py is pinned by sha256 in
-# mcp/server.json (tests/test_mcp_release_currency.py), so any change to it is
-# a new MCP release (version, .mcpb, registry entry), which is founder-held;
-# web/mcp/orphograph_mcp.py must stay byte-equal to it. The fix belongs in the
-# 0.1.2 release candidate.
-BLOCKED = {
-    "mcp/orphograph_mcp.py": "release-pinned; fix ships with MCP 0.1.2 (founder-held)",
-    "web/mcp/orphograph_mcp.py": "byte copy of mcp/orphograph_mcp.py",
-}
+# Known-open members of the class. Empty since MCP 0.1.5 (2026-11-05), which
+# moved mcp/orphograph_mcp.py and its web/ byte copy into CLIENTS.
+BLOCKED: dict[str, str] = {}
 
 _CRED = re.compile(r"X-Orpho-Api-Key|X-Pack-Token|X-Orpho-Founder")
 _REQ = re.compile(r"urlopen|build_opener")
@@ -241,13 +237,9 @@ def test_sweep_is_complete():
     assert set(CLIENTS) <= found, sorted(set(CLIENTS) - found)
 
 
-def test_blocked_mcp_finding_is_still_open():
-    """Tripwire: when the MCP release ships the fix, this fails and the two
-    files move from BLOCKED to CLIENTS."""
-    for rel in BLOCKED:
-        src = (ROOT / rel).read_text(encoding="utf-8")
-        assert "urllib.request.urlopen(" in src and "_RefuseRedirects" not in src, (
-            rel + " now refuses redirects: move it from BLOCKED to CLIENTS")
+def test_no_known_open_member_remains():
+    """A file goes back into BLOCKED only with its reason; today there is none."""
+    assert BLOCKED == {}, sorted(BLOCKED)
 
 
 # ── the three integrations named in the finding, through their entry points ──
@@ -287,3 +279,20 @@ def test_github_action_entry_point(servers, monkeypatch):
         receipt, _fatal = mod.anchor_one(base, mod.build_headers(), "a" * 64, "b" * 128)
         assert not receipt or receipt.get("receipt_id") != "TRAPPED", receipt
     assert _Trap.hits == []
+
+
+def test_mcp_tool_call_reports_the_refused_redirect_and_sends_no_key(servers, monkeypatch):
+    """Through the MCP server's own request path: the agent gets a named
+    error with the redirect target, and the other host sees nothing."""
+    base, code_box = servers
+    monkeypatch.setenv("ORPHO_BASE_URL", base)
+    monkeypatch.setenv("ORPHO_API_KEY", "k-secret")
+    mod = _load("mcp/orphograph_mcp.py")
+    for code in (301, 302, 307, 308):
+        code_box[0] = code
+        for method, body in (("GET", None), ("POST", {"hash_hex": "ab" * 32})):
+            out = mod._http(method, "/api/anchor", body)
+            assert out["error"] == "redirect_refused" and out["status"] == code, out
+            assert out["location"].startswith("http://localhost:"), out
+            assert "k-secret" not in str(out)
+    assert _Trap.hits == [], _Trap.hits[:1]

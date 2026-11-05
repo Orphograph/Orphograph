@@ -2,7 +2,7 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.Orphograph/orphograph",
   "description": "Anchor a file's SHA-256 fingerprint to Bitcoin. The file never leaves the device.",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "repository": {
     "url": "https://github.com/Orphograph/Orphograph",
     "source": "github",
@@ -12,9 +12,9 @@
   "packages": [
     {
       "registryType": "mcpb",
-      "identifier": "https://github.com/Orphograph/Orphograph/releases/download/mcp-v0.1.4/orphograph-mcp-0.1.4.mcpb",
-      "version": "0.1.4",
-      "fileSha256": "b4b8f7d10fc48826c39d69b0d074c9bb5afbfca2dd2dd9b03566baa6bd260d3f",
+      "identifier": "https://github.com/Orphograph/Orphograph/releases/download/mcp-v0.1.5/orphograph-mcp-0.1.5.mcpb",
+      "version": "0.1.5",
+      "fileSha256": "d6120b469580c10ae2754528f02d18c8fccd4cc882c83c3cbd3643cda82c24c0",
       "transport": {
         "type": "stdio"
       },
@@ -66,8 +66,8 @@
         "name": "orphograph_verify_receipt"
       }
     ],
-    "sourceFileSha256": "7d3b2deb9aa52e7e0217e8c5b474a2e5e00adef1f25532151a523e91f70130a3",
-    "mcpbBuildDate": "2026-11-04",
+    "sourceFileSha256": "39a4165ec2d7976515a4b32f3fcd9a06b0685cf3111f9d41fee7aa93ff5ad366",
+    "mcpbBuildDate": "2026-11-05",
     "mcpbZipMethod": "stored"
   },
   "title": "Orphograph"
