@@ -183,7 +183,9 @@ therefore leaves them unredeemable until it is armed again; check
    Sepolia address to receive payments (a fresh EOA is enough; no ETH is
    needed to RECEIVE — the facilitator pays gas to settle).
 2. `fly secrets set ORPHO_X402_PAY_TO_ADDRESS=0x…`
-3. Optional: `ORPHO_X402_PRICE_CENTS` (default 5), `ORPHO_X402_NETWORK`
+3. Optional: `ORPHO_X402_PRICE_CENTS` (default 1: one cent per receipt of any
+   kind; a whole agent run or folder is one receipt; a value below 1 or not a
+   whole number refuses to arm), `ORPHO_X402_NETWORK`
    (default `eip155:84532`, Base Sepolia), `ORPHO_X402_ASSET` (default the
    Base Sepolia USDC contract, confirmed against Circle's own docs:
    `0x036CbD53842c5426634e7929541eC2318f3dCF7e`), `ORPHO_X402_FACILITATOR_URL`

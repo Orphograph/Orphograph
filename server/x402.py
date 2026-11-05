@@ -264,6 +264,9 @@ def config_problems() -> list[str]:
         why = pay_to_problem(pay_to())
         if why:
             out.append(why)
+    why = price_problem()
+    if why:
+        out.append(why)
     fac = facilitator_url()
     if net == NETWORK_BASE_MAINNET and fac == DEFAULT_FACILITATOR_URL.rstrip("/"):
         out.append("mainnet selected but the facilitator is x402.org, which is testnet-only")
@@ -322,8 +325,37 @@ def pay_to() -> str:
     return os.environ.get("ORPHO_X402_PAY_TO_ADDRESS", "").strip()
 
 
+# Agent price per receipt, in US cents (2026-11-05, founder "competing and
+# accessible"). One payment buys one receipt of any kind: a single file or
+# output, or a whole folder or agent run (up to the manifest limits) under
+# ONE receipt, so the per-step price of a run falls far below a cent.
+# Verification is never charged. 1 cent is the floor this rail can express
+# (USDC atomic units are derived from cents) and stays above the CDP
+# facilitator's own $0.001 per on-chain settlement after its free tier.
+DEFAULT_PRICE_CENTS = 1
+
+
+def price_problem() -> str | None:
+    """Why ORPHO_X402_PRICE_CENTS is unusable, or None. A zero, negative or
+    non-integer price would publish a challenge no one should pay (or one
+    that charges nothing), so it refuses to arm instead."""
+    raw = os.environ.get("ORPHO_X402_PRICE_CENTS")
+    if raw is None or raw.strip() == "":
+        return None
+    try:
+        cents = int(raw.strip())
+    except ValueError:
+        return "ORPHO_X402_PRICE_CENTS is not a whole number of cents"
+    if cents < 1:
+        return "ORPHO_X402_PRICE_CENTS must be at least 1"
+    return None
+
+
 def price_cents() -> int:
-    return int(os.environ.get("ORPHO_X402_PRICE_CENTS", "5"))
+    if price_problem():
+        return DEFAULT_PRICE_CENTS
+    raw = os.environ.get("ORPHO_X402_PRICE_CENTS", "").strip()
+    return int(raw) if raw else DEFAULT_PRICE_CENTS
 
 
 def price_atomic() -> str:
