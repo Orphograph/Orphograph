@@ -778,7 +778,15 @@ _X402_FIRST_PARTY_UA = ("orphograph-usb/", "orphograph-watch-folder/", "orphogra
                         "orphographacp/", "orphograph-github-action/")
 
 
+X402_OPT_IN_HEADER = "X-Orpho-X402"
+
+
 def _x402_classic_caller(handler: BaseHTTPRequestHandler) -> bool:
+    # A first-party client that can pay says so (2026-11-05, MCP 0.1.6 with
+    # a payer key and a daily cap): it gets the payable 402, not the classic
+    # 429. Only "accept" counts; anything else keeps the classic answer.
+    if handler.headers.get(X402_OPT_IN_HEADER, "").strip().lower() == "accept":
+        return False
     fetch_site = handler.headers.get("Sec-Fetch-Site", "").strip().lower()
     if fetch_site == "same-origin":
         return True

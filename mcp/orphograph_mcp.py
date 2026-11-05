@@ -83,6 +83,17 @@ Environment variables:
   ORPHO_BASE_URL   Optional. Defaults to https://orphograph.com.
                    Override for self-hosted instances or testing.
 
+  Paying per anchor with x402 (0.1.6; off unless BOTH of the first two are set):
+  ORPHO_X402_PAYER_KEY_FILE    Path to a file holding the hex private key of a
+                   wallet with USDC on Base. chmod 600, or it is refused.
+                   Use a dedicated wallet holding only what the cap can spend.
+  ORPHO_X402_DAILY_CAP_CENTS   Most this server may sign for in one UTC day.
+  ORPHO_X402_MAX_CENTS_PER_CALL  Most for one anchor (default 5).
+  Past the free tier, an anchor answered with 402 is paid (1 cent today):
+  the USDC contract, its EIP-712 domain and the chain are pinned here,
+  and the key never leaves this process. Spend is kept in
+  ~/.orphograph/x402_spend.json (ORPHO_X402_SPEND_FILE to move it).
+
 License: MIT. See https://github.com/Orphograph/Orphograph
 """
 from __future__ import annotations
@@ -114,7 +125,7 @@ COMMON_HEADERS = {
 }
 PROTOCOL_VERSION = "2024-11-05"
 SERVER_NAME = "orphograph"
-SERVER_VERSION = "0.1.5"
+SERVER_VERSION = "0.1.6"
 
 
 # ── stderr logger ──────────────────────────────────────────────────
@@ -213,6 +224,468 @@ def _http(method: str, path: str, body: dict | None = None) -> dict:
 # ── tools ──────────────────────────────────────────────────────────
 
 
+# ── x402 payment (opt-in, 0.1.6) ───────────────────────────────────
+# Past the free tier, /api/anchor answers 402 with a 1-cent USDC price on
+# Base. With a payer key file AND a daily cap configured, this server pays
+# it: it signs an EIP-3009 TransferWithAuthorization locally and retries.
+# The key never leaves this process; only the signature is sent.
+#
+# Everything in the 402 is a request from the server, not an instruction:
+# the asset, its EIP-712 domain and the chain are pinned here, and the
+# amount must fit both caps. Checked 2026-11-05 against the live Base USDC
+# contract: TRANSFER_WITH_AUTHORIZATION_TYPEHASH = 0x7c7c6cdb…2267 and
+# DOMAIN_SEPARATOR = 0x02fa7265…834f match what this code computes.
+#
+# The secp256k1 arithmetic below is plain Python: correct (tested against
+# the EIP-712 specification's signature and an independent ECDSA library)
+# but not constant-time. It signs on the operator's own machine for cents;
+# use a dedicated wallet holding only what the daily cap can spend.
+
+X402_OPT_IN_HEADER = "X-Orpho-X402"
+_PAYMENT_REQUIRED_HEADER = "PAYMENT-REQUIRED"
+_PAYMENT_SIGNATURE_HEADER = "PAYMENT-SIGNATURE"
+_PAYMENT_RESPONSE_HEADER = "PAYMENT-RESPONSE"
+
+# network -> (USDC contract, EIP-712 name, version, chain id)
+_X402_ASSETS = {
+    "eip155:8453": ("0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", "USD Coin", "2", 8453),
+    "eip155:84532": ("0x036CbD53842c5426634e7929541eC2318f3dCF7e", "USDC", "2", 84532),
+}
+_X402_DEFAULT_MAX_CENTS_PER_CALL = 5
+_X402_MAX_DAILY_CAP_CENTS = 100_000
+
+# Keccak-256 (the pre-NIST padding Ethereum uses), same as server/x402.py.
+_KECCAK_RC = [
+    0x0000000000000001, 0x0000000000008082, 0x800000000000808A, 0x8000000080008000,
+    0x000000000000808B, 0x0000000080000001, 0x8000000080008081, 0x8000000000008009,
+    0x000000000000008A, 0x0000000000000088, 0x0000000080008009, 0x000000008000000A,
+    0x000000008000808B, 0x800000000000008B, 0x8000000000008089, 0x8000000000008003,
+    0x8000000000008002, 0x8000000000000080, 0x000000000000800A, 0x800000008000000A,
+    0x8000000080008081, 0x8000000000008080, 0x0000000080000001, 0x8000000080008008,
+]
+_KECCAK_ROT = [
+    [0, 36, 3, 41, 18], [1, 44, 10, 45, 2], [62, 6, 43, 15, 61],
+    [28, 55, 25, 21, 56], [27, 20, 39, 8, 14],
+]
+_M64 = (1 << 64) - 1
+
+
+def _keccak_f(a: list) -> None:
+    for rc in _KECCAK_RC:
+        c = [a[x][0] ^ a[x][1] ^ a[x][2] ^ a[x][3] ^ a[x][4] for x in range(5)]
+        d = [c[(x - 1) % 5] ^ (((c[(x + 1) % 5] << 1) | (c[(x + 1) % 5] >> 63)) & _M64)
+             for x in range(5)]
+        for x in range(5):
+            for y in range(5):
+                a[x][y] ^= d[x]
+        b = [[0] * 5 for _ in range(5)]
+        for x in range(5):
+            for y in range(5):
+                r = _KECCAK_ROT[x][y]
+                v = a[x][y]
+                b[y][(2 * x + 3 * y) % 5] = ((v << r) | (v >> (64 - r))) & _M64 if r else v
+        for x in range(5):
+            for y in range(5):
+                a[x][y] = b[x][y] ^ ((~b[(x + 1) % 5][y]) & b[(x + 2) % 5][y])
+        a[0][0] ^= rc
+
+
+def keccak256(data: bytes) -> bytes:
+    rate = 136
+    msg = bytearray(data) + b"\x01"
+    msg += b"\x00" * (-len(msg) % rate)
+    msg[-1] |= 0x80
+    a = [[0] * 5 for _ in range(5)]
+    for off in range(0, len(msg), rate):
+        block = msg[off:off + rate]
+        for i in range(rate // 8):
+            a[i % 5][i // 5] ^= int.from_bytes(block[8 * i:8 * i + 8], "little")
+        _keccak_f(a)
+    out = b"".join(a[i % 5][i // 5].to_bytes(8, "little") for i in range(4))
+    return out
+
+
+# secp256k1
+_P = 2 ** 256 - 2 ** 32 - 977
+_N = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141
+_G = (0x79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798,
+      0x483ADA7726A3C4655DA4FBFC0E1108A8FD17B448A68554199C47D08FFB10D4B8)
+
+
+def _pt_add(p1, p2):
+    if p1 is None:
+        return p2
+    if p2 is None:
+        return p1
+    if p1[0] == p2[0] and (p1[1] + p2[1]) % _P == 0:
+        return None
+    if p1 == p2:
+        lam = 3 * p1[0] * p1[0] * pow(2 * p1[1], -1, _P) % _P
+    else:
+        lam = (p2[1] - p1[1]) * pow(p2[0] - p1[0], -1, _P) % _P
+    x = (lam * lam - p1[0] - p2[0]) % _P
+    return x, (lam * (p1[0] - x) - p1[1]) % _P
+
+
+def _pt_mul(k: int, pt):
+    out = None
+    while k:
+        if k & 1:
+            out = _pt_add(out, pt)
+        pt = _pt_add(pt, pt)
+        k >>= 1
+    return out
+
+
+def _rfc6979_k(d: int, z: bytes):
+    """Deterministic nonces (RFC 6979, HMAC-SHA256), in order."""
+    import hmac
+    x = d.to_bytes(32, "big")
+    h = (int.from_bytes(z, "big") % _N).to_bytes(32, "big")
+    v, k = b"\x01" * 32, b"\x00" * 32
+    k = hmac.new(k, v + b"\x00" + x + h, hashlib.sha256).digest()
+    v = hmac.new(k, v, hashlib.sha256).digest()
+    k = hmac.new(k, v + b"\x01" + x + h, hashlib.sha256).digest()
+    v = hmac.new(k, v, hashlib.sha256).digest()
+    while True:
+        v = hmac.new(k, v, hashlib.sha256).digest()
+        cand = int.from_bytes(v, "big")
+        if 1 <= cand < _N:
+            yield cand
+        k = hmac.new(k, v + b"\x00", hashlib.sha256).digest()
+        v = hmac.new(k, v, hashlib.sha256).digest()
+
+
+def ecdsa_sign(z: bytes, d: int) -> tuple[int, int, int]:
+    """(r, s, v) over a 32-byte digest; low-s, v = 27 + recovery id."""
+    e = int.from_bytes(z, "big")
+    for k in _rfc6979_k(d, z):
+        R = _pt_mul(k, _G)
+        r = R[0] % _N
+        if r == 0:
+            continue
+        s = pow(k, -1, _N) * (e + r * d) % _N
+        if s == 0:
+            continue
+        recid = (R[1] & 1) | (2 if R[0] >= _N else 0)
+        if s > _N // 2:
+            s, recid = _N - s, recid ^ 1
+        return r, s, 27 + recid
+    raise RuntimeError("unreachable")
+
+
+def ecdsa_recover(z: bytes, r: int, s: int, v: int) -> str:
+    """The checksummed address that signed digest z, or raise ValueError."""
+    recid = v - 27
+    if not (0 <= recid <= 3 and 1 <= r < _N and 1 <= s < _N):
+        raise ValueError("bad signature values")
+    x = r + (recid >> 1) * _N
+    if x >= _P:
+        raise ValueError("bad r")
+    y = pow((x * x * x + 7) % _P, (_P + 1) // 4, _P)
+    if (y * y - (x * x * x + 7)) % _P:
+        raise ValueError("r is not on the curve")
+    if (y & 1) != (recid & 1):
+        y = _P - y
+    e = int.from_bytes(z, "big")
+    rinv = pow(r, -1, _N)
+    q = _pt_add(_pt_mul(s * rinv % _N, (x, y)), _pt_mul((-e * rinv) % _N, _G))
+    if q is None:
+        raise ValueError("recovered the point at infinity")
+    return _address_of_point(q)
+
+
+def _address_of_point(pt) -> str:
+    raw = keccak256(pt[0].to_bytes(32, "big") + pt[1].to_bytes(32, "big"))[-20:]
+    return checksum_address("0x" + raw.hex())
+
+
+def checksum_address(addr: str) -> str:
+    body = addr[2:].lower()
+    h = keccak256(body.encode("ascii")).hex()
+    return "0x" + "".join(c.upper() if c.isalpha() and int(h[i], 16) >= 8 else c
+                          for i, c in enumerate(body))
+
+
+def address_of_key(d: int) -> str:
+    return _address_of_point(_pt_mul(d, _G))
+
+
+_EIP712_DOMAIN_TYPEHASH = keccak256(
+    b"EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)")
+_TRANSFER_WITH_AUTHORIZATION_TYPEHASH = keccak256(
+    b"TransferWithAuthorization(address from,address to,uint256 value,"
+    b"uint256 validAfter,uint256 validBefore,bytes32 nonce)")
+
+
+def _addr32(addr: str) -> bytes:
+    return bytes(12) + bytes.fromhex(addr[2:])
+
+
+def _u256(n: int) -> bytes:
+    return int(n).to_bytes(32, "big")
+
+
+def usdc_domain_separator(network: str) -> bytes:
+    contract, name, version, chain_id = _X402_ASSETS[network]
+    return keccak256(_EIP712_DOMAIN_TYPEHASH + keccak256(name.encode()) + keccak256(version.encode())
+                     + _u256(chain_id) + _addr32(contract))
+
+
+def transfer_authorization_digest(network: str, auth: dict) -> bytes:
+    struct = keccak256(_TRANSFER_WITH_AUTHORIZATION_TYPEHASH + _addr32(auth["from"]) + _addr32(auth["to"])
+                       + _u256(int(auth["value"])) + _u256(int(auth["validAfter"]))
+                       + _u256(int(auth["validBefore"])) + bytes.fromhex(auth["nonce"][2:]))
+    return keccak256(b"\x19\x01" + usdc_domain_separator(network) + struct)
+
+
+class X402ConfigError(ValueError):
+    """Paying is configured wrongly; the message names the setting, never a value."""
+
+
+def _x402_payer():
+    """(private key int, address, daily cap cents, per-call cap cents), or None
+    when paying is off. Raises X402ConfigError when it is half-configured."""
+    key_file = os.environ.get("ORPHO_X402_PAYER_KEY_FILE", "").strip()
+    cap_raw = os.environ.get("ORPHO_X402_DAILY_CAP_CENTS", "").strip()
+    if not key_file and not cap_raw:
+        return None
+    if not key_file or not cap_raw:
+        raise X402ConfigError("x402 paying needs both ORPHO_X402_PAYER_KEY_FILE and "
+                              "ORPHO_X402_DAILY_CAP_CENTS; one is missing")
+    try:
+        daily = int(cap_raw)
+        per_call = int(os.environ.get("ORPHO_X402_MAX_CENTS_PER_CALL", "").strip()
+                       or _X402_DEFAULT_MAX_CENTS_PER_CALL)
+    except ValueError:
+        raise X402ConfigError("ORPHO_X402_DAILY_CAP_CENTS and ORPHO_X402_MAX_CENTS_PER_CALL "
+                              "must be whole numbers of cents") from None
+    if not (1 <= daily <= _X402_MAX_DAILY_CAP_CENTS) or not (1 <= per_call <= daily):
+        raise X402ConfigError("caps out of range: 1 <= ORPHO_X402_MAX_CENTS_PER_CALL <= "
+                              f"ORPHO_X402_DAILY_CAP_CENTS <= {_X402_MAX_DAILY_CAP_CENTS}")
+    path = os.path.expanduser(key_file)
+    try:
+        st = os.stat(path)
+        if os.name == "posix" and st.st_mode & 0o077:
+            raise X402ConfigError("ORPHO_X402_PAYER_KEY_FILE is readable by other users; "
+                                  "run chmod 600 on it")
+        with open(path, encoding="ascii") as fh:
+            raw = fh.read().strip()
+    except OSError:
+        raise X402ConfigError("ORPHO_X402_PAYER_KEY_FILE cannot be read") from None
+    except UnicodeDecodeError:
+        raise X402ConfigError("ORPHO_X402_PAYER_KEY_FILE is not a hex private key") from None
+    hexkey = raw[2:] if raw[:2].lower() == "0x" else raw
+    if len(hexkey) != 64 or any(c not in "0123456789abcdefABCDEF" for c in hexkey):
+        raise X402ConfigError("ORPHO_X402_PAYER_KEY_FILE is not a 32-byte hex private key")
+    d = int(hexkey, 16)
+    if not 1 <= d < _N:
+        raise X402ConfigError("ORPHO_X402_PAYER_KEY_FILE is not a valid secp256k1 key")
+    # Over plain http anyone on the path could rewrite payTo in the 402.
+    host = (urllib.parse.urlsplit(BASE_URL).hostname or "").lower()
+    if not BASE_URL.startswith("https://") and host not in ("127.0.0.1", "localhost", "::1"):
+        raise X402ConfigError("x402 paying needs an https ORPHO_BASE_URL")
+    return d, address_of_key(d), daily, per_call
+
+
+def _x402_allowed_networks() -> set:
+    nets = {"eip155:8453"}
+    if os.environ.get("ORPHO_X402_ALLOW_TESTNET", "").strip() == "1":
+        nets.add("eip155:84532")
+    return nets
+
+
+def _spend_path() -> str:
+    return os.path.expanduser(os.environ.get("ORPHO_X402_SPEND_FILE", "").strip()
+                              or "~/.orphograph/x402_spend.json")
+
+
+def _reserve_spend(amount: int, daily_cap_atomic: int, record: dict) -> tuple[bool, int]:
+    """Add `amount` to today's spend if it fits under the cap; (ok, spent today).
+
+    Reserved before signing and never released: a signed authorization can
+    still settle until it expires, so it counts as spent."""
+    import datetime
+    path = _spend_path()
+    os.makedirs(os.path.dirname(path), mode=0o700, exist_ok=True)
+    today = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
+    fd = os.open(path + ".lock", os.O_CREAT | os.O_RDWR, 0o600)
+    try:
+        try:
+            import fcntl
+            fcntl.flock(fd, fcntl.LOCK_EX)
+        except ImportError:  # pragma: no cover - not POSIX
+            pass
+        try:
+            with open(path, encoding="utf-8") as fh:
+                state = json.load(fh)
+        except (OSError, ValueError):
+            state = {}
+        if not isinstance(state, dict) or state.get("day") != today:
+            state = {"day": today, "atomic": 0, "payments": []}
+        spent = int(state.get("atomic", 0))
+        if spent + amount > daily_cap_atomic:
+            return False, spent
+        state["atomic"] = spent + amount
+        state["payments"] = (list(state.get("payments") or []) + [record])[-200:]
+        tmp = path + ".tmp"
+        with open(os.open(tmp, os.O_CREAT | os.O_WRONLY | os.O_TRUNC, 0o600), "w",
+                  encoding="utf-8") as fh:
+            json.dump(state, fh)
+        os.replace(tmp, path)
+        return True, state["atomic"]
+    finally:
+        os.close(fd)
+
+
+def _choose_requirement(required: dict, per_call_atomic: int) -> tuple[dict | None, str]:
+    nets = _x402_allowed_networks()
+    reasons = []
+    for req in required.get("accepts") or []:
+        if not isinstance(req, dict):
+            continue
+        net = req.get("network")
+        if req.get("scheme") != "exact" or net not in nets:
+            reasons.append(f"scheme/network {req.get('scheme')}/{net} not accepted")
+            continue
+        if str(req.get("asset", "")).lower() != _X402_ASSETS[net][0].lower():
+            reasons.append("asset is not the pinned USDC for " + net)
+            continue
+        pay_to = str(req.get("payTo", ""))
+        if len(pay_to) != 42 or not pay_to.startswith("0x") or any(
+                c not in "0123456789abcdefABCDEF" for c in pay_to[2:]) or int(pay_to, 16) == 0:
+            reasons.append("payTo is not an address")
+            continue
+        try:
+            amount = int(str(req.get("amount")))
+        except ValueError:
+            reasons.append("amount is not a whole number")
+            continue
+        if amount <= 0:
+            reasons.append("amount is not positive")
+            continue
+        if amount > per_call_atomic:
+            reasons.append(f"price {amount} is above ORPHO_X402_MAX_CENTS_PER_CALL")
+            continue
+        return req, ""
+    return None, "; ".join(reasons) or "the 402 offered no payment option"
+
+
+def _b64json(raw: str):
+    import base64
+    try:
+        return json.loads(base64.b64decode(raw + "=" * (-len(raw) % 4)))
+    except (ValueError, TypeError):
+        return None
+
+
+def _http_full(method: str, path: str, body: dict | None, extra: dict | None = None):
+    """(status, headers, parsed body) without following redirects, or raise URLError."""
+    headers = dict(COMMON_HEADERS)
+    if API_KEY:
+        headers["X-Orpho-Api-Key"] = API_KEY
+    headers.update(extra or {})
+    data = json.dumps(body).encode("utf-8") if body is not None else None
+    req = urllib.request.Request(f"{BASE_URL}{path}", data=data, method=method, headers=headers)
+    try:
+        with _urlopen(req, timeout=HTTP_TIMEOUT_SEC) as resp:
+            status, hdrs, raw = resp.status, resp.headers, resp.read()
+    except urllib.error.HTTPError as e:
+        status, hdrs = e.code, e.headers
+        try:
+            raw = e.read()
+        except Exception:
+            raw = b""
+    try:
+        parsed = json.loads(raw.decode("utf-8", errors="replace")) if raw else {}
+    except json.JSONDecodeError:
+        parsed = {"raw": raw[:400].decode("utf-8", errors="replace")}
+    return status, hdrs, parsed if isinstance(parsed, dict) else {"raw": str(parsed)[:400]}
+
+
+def _anchor_post(payload: dict) -> dict:
+    """POST /api/anchor; pays a 402 only when x402 paying is configured."""
+    try:
+        payer = _x402_payer()
+    except X402ConfigError as e:
+        return {"error": "x402_config", "reason": str(e)}
+    if payer is None:
+        return _http("POST", "/api/anchor", payload)
+    d, address, daily_cents, per_call_cents = payer
+    try:
+        status, hdrs, body = _http_full("POST", "/api/anchor", payload,
+                                        {X402_OPT_IN_HEADER: "accept"})
+    except urllib.error.URLError as e:
+        return {"error": "network_error", "reason": str(getattr(e, "reason", e))}
+    except TimeoutError:
+        return {"error": "timeout"}
+    if status != 402:
+        if 200 <= status < 300:
+            return body
+        if 300 <= status < 400:
+            return {"error": "redirect_refused", "status": status,
+                    "detail": "the server answered with a redirect; it was not followed"}
+        return {"error": "http_error", "status": status, "body": json.dumps(body)[:400]}
+    required = _b64json((hdrs.get(_PAYMENT_REQUIRED_HEADER) or "").strip()) if hdrs else None
+    if not isinstance(required, dict):
+        required = body
+    req, why = _choose_requirement(required, per_call_cents * 10_000)
+    if req is None:
+        return {"error": "payment_declined", "status": 402,
+                "reason": "x402: no acceptable payment option (" + why + "); nothing was signed"}
+    import time
+    now = int(time.time())
+    try:
+        timeout = max(30, min(300, int(str(req.get("maxTimeoutSeconds") or 60))))
+    except ValueError:
+        timeout = 60
+    auth = {"from": address, "to": checksum_address(req["payTo"]), "value": str(int(req["amount"])),
+            "validAfter": str(now - 600), "validBefore": str(now + timeout),
+            "nonce": "0x" + os.urandom(32).hex()}
+    ok, spent = _reserve_spend(int(auth["value"]), daily_cents * 10_000,
+                               {"t": now, "nonce": auth["nonce"], "amount": auth["value"],
+                                "payTo": auth["to"], "network": req["network"]})
+    if not ok:
+        return {"error": "payment_declined", "status": 402,
+                "reason": (f"x402: today's spend {spent} + {auth['value']} would pass "
+                           "ORPHO_X402_DAILY_CAP_CENTS; nothing was signed")}
+    digest = transfer_authorization_digest(req["network"], auth)
+    r, s, v = ecdsa_sign(digest, d)
+    if ecdsa_recover(digest, r, s, v) != address:  # a signer bug must never reach the wire
+        return {"error": "x402_signer_selfcheck_failed", "reason": "nothing was sent"}
+    signed = {"x402Version": 2, "accepted": req,
+              "payload": {"signature": "0x" + r.to_bytes(32, "big").hex() + s.to_bytes(32, "big").hex()
+                          + bytes([v]).hex(), "authorization": auth}}
+    if isinstance(required.get("resource"), dict):
+        signed["resource"] = required["resource"]
+    import base64
+    header = base64.b64encode(json.dumps(signed, separators=(",", ":")).encode()).decode()
+    extra = {X402_OPT_IN_HEADER: "accept", _PAYMENT_SIGNATURE_HEADER: header}
+    status = hdrs = None
+    last = ""
+    for _attempt in range(2):  # an identical replay is safe: the server answers it once
+        try:
+            status, hdrs, body = _http_full("POST", "/api/anchor", payload, extra)
+            break
+        except (urllib.error.URLError, TimeoutError) as e:
+            last = str(getattr(e, "reason", e))
+    if status is None:
+        return {"error": "network_error", "reason": last,
+                "detail": "a signed 1-payment authorization was sent or may have been; it is "
+                          "counted in today's spend and expires at validBefore"}
+    paid = {"amount_atomic": auth["value"], "network": req["network"], "pay_to": auth["to"],
+            "payer": address, "nonce": auth["nonce"], "spent_today_atomic": spent,
+            "daily_cap_cents": daily_cents}
+    if 200 <= status < 300:
+        settle = _b64json((hdrs.get(_PAYMENT_RESPONSE_HEADER) or "").strip()) if hdrs else None
+        if isinstance(settle, dict):
+            paid["transaction"] = settle.get("transaction")
+        body["_x402"] = paid
+        return body
+    return {"error": "payment_rejected", "status": status, "body": json.dumps(body)[:400],
+            "x402": paid}
+
+
 def _no_calendar_accepted(result: dict) -> dict | None:
     """The refusal for a 200 with calendars_ok 0: a receipt with no Bitcoin
     commitment that never gets one. Counted as not anchored, as the GitHub
@@ -246,7 +719,7 @@ def tool_anchor_file(args: dict) -> dict:
     if isinstance(c2pa_hash, str) and c2pa_hash.strip():
         payload["c2pa_manifest_hash"] = c2pa_hash.strip().lower()
     log(f"anchor_file: hashing {path} ({size} bytes), submitting hash …")
-    result = _http("POST", "/api/anchor", payload)
+    result = _anchor_post(payload)
     if result.get("error"):
         return {
             "ok": False,
@@ -276,6 +749,7 @@ def tool_anchor_file(args: dict) -> dict:
         "pack_remaining": result.get("pack_remaining", 0),
         "subscription_active": result.get("subscription_active", False),
         "size_bytes": size,
+        "x402_payment": result.get("_x402"),
         "note": (
             "The file body did not leave this device. Only the SHA-256 "
             "and SHA-512 fingerprints were transmitted."
@@ -528,7 +1002,7 @@ def tool_anchor_output(args: dict) -> dict:
             ),
         }
     log(f"anchor_output: hashing {size} bytes of output, submitting hash …")
-    result = _http("POST", "/api/anchor", payload)
+    result = _anchor_post(payload)
     if result.get("error"):
         return {
             "ok": False,
@@ -561,6 +1035,7 @@ def tool_anchor_output(args: dict) -> dict:
         # Echo the server's view so a caller can confirm the proof was stored
         # rather than silently dropped — the failure mode this fix addresses.
         "zk_provenance": result.get("zk_provenance"),
+        "x402_payment": result.get("_x402"),
         **privacy,
     }
 

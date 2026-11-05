@@ -2,7 +2,7 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.Orphograph/orphograph",
   "description": "Anchor a file's SHA-256 fingerprint to Bitcoin. The file never leaves the device.",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "repository": {
     "url": "https://github.com/Orphograph/Orphograph",
     "source": "github",
@@ -12,9 +12,9 @@
   "packages": [
     {
       "registryType": "mcpb",
-      "identifier": "https://github.com/Orphograph/Orphograph/releases/download/mcp-v0.1.5/orphograph-mcp-0.1.5.mcpb",
-      "version": "0.1.5",
-      "fileSha256": "d6120b469580c10ae2754528f02d18c8fccd4cc882c83c3cbd3643cda82c24c0",
+      "identifier": "https://github.com/Orphograph/Orphograph/releases/download/mcp-v0.1.6/orphograph-mcp-0.1.6.mcpb",
+      "version": "0.1.6",
+      "fileSha256": "f0897fec55ed78f3a7d31163f9780ebfd2b6aaa6db87d4e8b6fc764c6051e49c",
       "transport": {
         "type": "stdio"
       },
@@ -30,6 +30,22 @@
           "description": "Base URL for the Orphograph API. Defaults to https://orphograph.com. Override only for testing or self-hosted instances.",
           "isRequired": false,
           "default": "https://orphograph.com"
+        },
+        {
+          "name": "ORPHO_X402_PAYER_KEY_FILE",
+          "description": "Optional. Path to a chmod-600 file holding the hex private key of a dedicated Base wallet with USDC. With ORPHO_X402_DAILY_CAP_CENTS set too, anchors past the free tier are paid with x402 (1 cent today). The key never leaves the machine.",
+          "isRequired": false
+        },
+        {
+          "name": "ORPHO_X402_DAILY_CAP_CENTS",
+          "description": "Optional. The most this server may pay in one UTC day, in cents. Paying stays off unless this and ORPHO_X402_PAYER_KEY_FILE are both set.",
+          "isRequired": false
+        },
+        {
+          "name": "ORPHO_X402_MAX_CENTS_PER_CALL",
+          "description": "Optional. The most one anchor may cost, in cents. Default 5.",
+          "isRequired": false,
+          "default": "5"
         }
       ]
     }
@@ -66,7 +82,7 @@
         "name": "orphograph_verify_receipt"
       }
     ],
-    "sourceFileSha256": "39a4165ec2d7976515a4b32f3fcd9a06b0685cf3111f9d41fee7aa93ff5ad366",
+    "sourceFileSha256": "6cb1790d7670bf906a54d66b48b3a21867033b4000ed7303295d44117391681f",
     "mcpbBuildDate": "2026-11-05",
     "mcpbZipMethod": "stored"
   },

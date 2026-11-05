@@ -93,15 +93,21 @@ Or edit `~/.claude/settings.json` and add the same `mcpServers` block.
 |---|---|
 | `ORPHO_API_KEY` | Optional. Issued from [orphograph.com/account.html](https://orphograph.com/account.html). Without it, the install is rate-limited to the free tier (3 anchors per 24 hours). |
 | `ORPHO_BASE_URL` | Optional. Defaults to `https://orphograph.com`. Override for testing or self-hosted instances. |
+| `ORPHO_X402_PAYER_KEY_FILE` | Optional (0.1.6). Path to a `chmod 600` file holding the hex private key of a dedicated Base wallet with USDC. With the daily cap below, anchors past the free tier are paid with x402. The key never leaves the machine. |
+| `ORPHO_X402_DAILY_CAP_CENTS` | Optional (0.1.6). The most the server may pay in one UTC day, in cents. Paying stays off unless this and the key file are both set. |
+| `ORPHO_X402_MAX_CENTS_PER_CALL` | Optional (0.1.6). The most one anchor may cost, in cents. Default 5. |
+
+With paying on, the server pins the USDC contract, its signing domain and the chain (Base); a 402 asking for anything else, or for more than either cap, is declined and nothing is signed. Spending is recorded in `~/.orphograph/x402_spend.json`. A paid result carries `x402_payment` with the amount and the on-chain transaction.
 
 ## Tiers and limits
 
 | Tier | Cap | Price |
 |---|---|---|
 | Free | 3 anchors / 24h | $0 |
-| Writer Pack | 10 anchors, never expires | $19 one-time |
+| Writer Pack | 25 anchors, never expires | $5 one-time |
 | Pack of Two Hundred | 200 anchors, never expires | $20 one-time |
 | Standing Order | Unrestricted anchoring | $9 / month |
+| Agents (x402) | Past the free tier, per anchor | 1 cent in USDC on Base |
 
 ## Verification
 
