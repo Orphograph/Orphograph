@@ -1,0 +1,47 @@
+#!/bin/sh
+# pre-push secret guard. Tracked copy: install or refresh it with
+# `python3 tools/install_hooks.py`; tools/start_branch.py refuses to start
+# a branch while it is missing or out of date. Scans every blob in the commits
+# being pushed that no remote has yet, with the pattern list in
+# tests/test_no_secrets_in_tracked_files.py. Prints file + pattern, never values.
+# A public repo exposes a pushed branch at once, so CI is too late to prevent.
+exec python3 -I -c '
+import importlib.util, subprocess, sys
+from pathlib import Path
+root = Path(subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True).stdout.strip())
+src = root / "tests" / "test_no_secrets_in_tracked_files.py"
+if not src.exists():
+    sys.exit("pre-push secret guard: " + str(src) + " missing; cannot scan, push refused")
+spec = importlib.util.spec_from_file_location("secret_scan", src)
+m = importlib.util.module_from_spec(spec); sys.modules[spec.name] = m; spec.loader.exec_module(m)
+accepted = getattr(m, "HISTORY_ACCEPTED", frozenset())
+hits = getattr(m, "_value_hits", None)
+leaks, scanned = [], 0
+for line in sys.stdin:
+    parts = line.split()
+    if len(parts) != 4 or set(parts[1]) == {"0"}:
+        continue
+    objs = subprocess.run(["git", "rev-list", "--objects", parts[1], "--not", "--remotes"],
+                          capture_output=True, text=True, check=True).stdout.splitlines()
+    for obj in objs:
+        sha, _, path = obj.partition(" ")
+        if not path:
+            continue
+        kind = subprocess.run(["git", "cat-file", "-t", sha], capture_output=True, text=True).stdout.strip()
+        if kind != "blob":
+            continue
+        data = subprocess.run(["git", "cat-file", "blob", sha], capture_output=True).stdout
+        scanned += 1
+        texts = [(path, m._decode(data))] + [(path + "!" + n, m._decode(c)) for n, c in m._archive_members(Path(path), data)]
+        for where, text in texts:
+            if text is None:
+                continue
+            if hits:
+                leaks += [where + ":" + str(ln) + " " + n for n, ln, d in hits(text, anchored=True) if d not in accepted]
+            else:
+                leaks += [where + ":" + str(ln) + " " + n for n, ln in m.scan_text(text)]
+if leaks:
+    sys.exit("pre-push secret guard: credential-shaped values in commits being pushed (values not shown):\n  "
+             + "\n  ".join(sorted(set(leaks))) + "\nRemove them from EVERY commit (rewrite the branch), and rotate the key.")
+print("pre-push secret guard: " + str(scanned) + " new blobs clean", file=sys.stderr)
+'

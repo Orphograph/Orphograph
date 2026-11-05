@@ -8,6 +8,7 @@ caller's checkout and never pushes, merges, rebases, or deletes anything.
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import re
 import subprocess
 import sys
@@ -19,6 +20,26 @@ SLUG = re.compile(r"^[a-z0-9][a-z0-9-]{1,62}$")
 
 class StartError(RuntimeError):
     pass
+
+
+HOOK = "scripts/git-hooks/pre-push"
+
+
+def _hook_problem(repo: Path, base: str) -> str | None:
+    """Why this clone's pre-push secret guard is missing or stale, or None.
+
+    The reference is the guard as tracked at ``origin/master``, so a branch
+    never starts from a clone that would push without the current guard.
+    """
+    shown = subprocess.run(["git", "show", f"{base}:{HOOK}"], cwd=repo,
+                           capture_output=True, check=False)
+    if shown.returncode:
+        return f"{HOOK} is not tracked at origin/master; cannot check the pre-push guard"
+    spec = importlib.util.spec_from_file_location(
+        "install_hooks", Path(__file__).resolve().parent / "install_hooks.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod.hook_problem(repo, shown.stdout)
 
 
 def _git(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
@@ -36,6 +57,7 @@ def start_branch(
     worktree_root: Path,
     *,
     fetch: bool = True,
+    require_hook: bool = True,
 ) -> tuple[Path, str, str]:
     repo = repo.resolve()
     if not SLUG.fullmatch(slug):
@@ -43,6 +65,10 @@ def start_branch(
     if fetch:
         _git(repo, "fetch", "--prune", "origin")
     base = _git(repo, "rev-parse", "--verify", "origin/master").stdout.strip()
+    if require_hook:
+        problem = _hook_problem(repo, base)
+        if problem:
+            raise StartError(problem + "; run: python3 tools/install_hooks.py")
     branch = f"codex/{slug}"
     exists = _git(repo, "show-ref", "--verify", f"refs/heads/{branch}", check=False)
     if exists.returncode == 0:
