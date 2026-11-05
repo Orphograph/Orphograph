@@ -56,3 +56,24 @@ def test_mcpb_identifier_and_version_are_consistent():
     assert f"mcp-v{p['version']}/orphograph-mcp-{p['version']}.mcpb" in p["identifier"], (
         "packages[0].identifier release tag/filename does not match its version"
     )
+
+
+def test_package_rebuilds_from_source_to_the_pinned_sha():
+    """The .mcpb must be reproducible from the committed sources.
+
+    scripts/build_mcpb.py reproduced the published 0.1.3 package byte for
+    byte (sha256 9b0ec403…6c20) on 2026-11-04. Before that the build recipe
+    existed only in someone's shell history. Rebuilding here means a
+    fileSha256 that no longer matches the sources, or a package nobody can
+    rebuild, fails CI instead of shipping.
+    """
+    import sys as _sys
+    _sys.path.insert(0, str(MCP.parent / "scripts"))
+    import build_mcpb
+    version, _data, digest = build_mcpb.build_from_tree()
+    pkg = _server_json()["packages"][0]
+    assert version == pkg["version"]
+    assert digest == pkg["fileSha256"], (
+        "rebuilding the .mcpb from mcp/manifest.json + mcp/orphograph_mcp.py "
+        "on _meta.mcpbBuildDate does not give packages[0].fileSha256 — run "
+        "scripts/build_mcpb.py and roll the pin (and the release asset)")

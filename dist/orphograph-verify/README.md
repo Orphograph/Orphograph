@@ -113,6 +113,35 @@ pip install opentimestamps-client
 If the binary is not on `PATH`, the verifier reports the absence and
 returns exit code 4 — the core Merkle check is unaffected.
 
+### Check any OpenTimestamps proof, not only ours
+
+`ots` checks a `.ots` proof made by any tool or service against the original
+file or its SHA-256. Nothing in it is specific to Orphograph:
+
+```
+python3 verify.py ots --file contract.pdf --ots contract.pdf.ots
+python3 verify.py ots --sha256 <64 hex> --ots proof.ots
+```
+
+The binding is checked offline first: the header, the format version, and
+that the proof commits to the file's **SHA-256** (a proof that commits to a
+SHA-1, RIPEMD-160 or Keccak-256 of the file says so and is `UNBOUND`). Then
+the OpenTimestamps client is asked, exactly as in the sub-check above. The
+exit code is `0` only for `VERIFIED`, `4` for every other state.
+`tests/vectors/foreign_ots/` in the source repository holds a proof made by
+the OpenTimestamps project's own client, which the tests check.
+
+### Checking without the internet
+
+The OpenTimestamps client never asks a block explorer: it reads block
+headers from **your own Bitcoin node** over RPC (a pruned node works; it
+keeps every header). So a check can be fully offline, and no third party
+learns which proof you checked. A node can even stay current with no
+internet at all, from the free one-way broadcast of the Bitcoin chain by
+satellite (Blockstream Satellite, which needs a satellite dish and receiver).
+With no node, the result is `UNAVAILABLE`, which says nothing about the
+proof; `ots info <file.ots>` still prints the attestation offline.
+
 ## Exit codes
 
 - `0` — verification succeeded

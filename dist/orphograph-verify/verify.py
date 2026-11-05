@@ -212,6 +212,46 @@ def _verify_file(args: argparse.Namespace) -> int:
     return 0
 
 
+def _verify_any_ots(args: argparse.Namespace) -> int:
+    """Check ANY OpenTimestamps proof against a file or a SHA-256 — ours or
+    one made by another tool or service. Nothing here is specific to
+    Orphograph: the binding is the standard .ots header, and the verdict is
+    the OpenTimestamps client's, asked of YOUR Bitcoin node.
+
+    Exit codes match the rest of this tool (README "Exit codes"): 0 confirmed
+    on Bitcoin; 4 for every other chain-step state, with the `[OTS] <STATE>:`
+    line saying which (UNBOUND = the proof is about a different file, FAILED =
+    the client rejected it, PENDING, UNAVAILABLE, INDETERMINATE); 2 bad input.
+    3 stays reserved for a Merkle root that does not reproduce.
+    """
+    ots_path = Path(args.ots).expanduser().resolve()
+    if not ots_path.is_file():
+        print(f"ots file not found: {ots_path}", file=sys.stderr)
+        return 2
+    if args.file:
+        file_path = Path(args.file).expanduser().resolve()
+        if not file_path.is_file():
+            print(f"file not found: {file_path}", file=sys.stderr)
+            return 2
+        digest_hex = _sha256_file(file_path).hex()
+        print(f"  file:        {file_path.name}")
+    else:
+        digest_hex = args.sha256.strip()
+        if len(digest_hex) != 64 or any(c not in "0123456789abcdef" for c in digest_hex):
+            print("--sha256 must be 64 lowercase hex characters", file=sys.stderr)
+            return 2
+    print(f"  sha256:      {digest_hex}")
+    print(f"  proof:       {ots_path.name}")
+    status, height, msg = otscheck.chain_verdict(ots_path, digest_hex)
+    print(f"  [OTS] {status}: {msg}")
+    if status in otscheck.PASSING:
+        return 0
+    if status == otscheck.UNAVAILABLE:
+        print("        The chain check did NOT run. That says nothing about "
+              "whether the proof is good.")
+    return 4
+
+
 def _verify_folder(args: argparse.Namespace) -> int:
     folder = Path(args.dir).expanduser().resolve()
     manifest_path = Path(args.manifest).expanduser().resolve()
@@ -370,7 +410,19 @@ def main(argv: list[str] | None = None) -> int:
         help="walk with --exclude (or the default deny-list) even if the manifest records a scope block",
     )
 
+    po = sub.add_parser(
+        "ots",
+        help="check ANY OpenTimestamps proof (ours or another tool's) "
+             "against a file or its SHA-256, using your own Bitcoin node",
+    )
+    po.add_argument("--ots", required=True, help="path to the .ots proof")
+    target = po.add_mutually_exclusive_group(required=True)
+    target.add_argument("--file", help="the original file (hashed locally)")
+    target.add_argument("--sha256", help="the file's SHA-256, 64 lowercase hex")
+
     args = p.parse_args(argv)
+    if args.command == "ots":
+        return _verify_any_ots(args)
     if args.command == "file":
         return _verify_file(args)
     if args.command == "folder":

@@ -114,7 +114,7 @@ COMMON_HEADERS = {
 }
 PROTOCOL_VERSION = "2024-11-05"
 SERVER_NAME = "orphograph"
-SERVER_VERSION = "0.1.3"
+SERVER_VERSION = "0.1.4"
 
 
 # ── stderr logger ──────────────────────────────────────────────────
@@ -233,6 +233,7 @@ def tool_anchor_file(args: dict) -> dict:
         "receipt_url": f"{BASE_URL}/r/{rid}" if rid else None,
         "sha256_hex": sha256_hex,
         "sha512_hex": sha512_hex,
+        **_bitcoin_state(result.get("btc_pinned_at")),
         "calendars_ok": result.get("calendars_ok"),
         "calendars_total": result.get("calendars_total"),
         # Distinct upstream calendars, which is what low_redundancy measures:
@@ -379,6 +380,7 @@ def tool_anchor_folder(args: dict) -> dict:
         "root_hex": manifest["root_hex"],
         "file_count": len(manifest["leaves"]),
         "size_bytes": total,
+        **_bitcoin_state(result.get("btc_pinned_at")),
         "calendars_ok": result.get("calendars_ok"),
         "calendars_distinct_ok": result.get("calendars_distinct_ok"),
         "calendars_distinct_total": result.get("calendars_distinct_total"),
@@ -389,10 +391,57 @@ def tool_anchor_folder(args: dict) -> dict:
     }
 
 
-def hash_text(text: str) -> tuple[str, str, int]:
-    """SHA-256 + SHA-512 of a UTF-8 string. Returns (sha256_hex, sha512_hex, byte_len)."""
+def hash_text(text: str, salt: bytes = b"") -> tuple[str, str, int]:
+    """SHA-256 + SHA-512 of salt ‖ UTF-8 text. Returns (sha256_hex,
+    sha512_hex, byte_len of the text). With no salt this is the plain hash of
+    the text, exactly as before."""
     raw = text.encode("utf-8")
-    return hashlib.sha256(raw).hexdigest(), hashlib.sha512(raw).hexdigest(), len(raw)
+    msg = salt + raw
+    return hashlib.sha256(msg).hexdigest(), hashlib.sha512(msg).hexdigest(), len(raw)
+
+
+# A receipt's fingerprint is public. For short or guessable output
+# ("approve", "yes", an amount) anyone can hash the likely candidates and
+# confirm which one was anchored, so "the text never left the device" does
+# not make it private. A 32-byte random salt kept by the holder closes that:
+# the anchored value is SHA-256(salt ‖ text), which reveals nothing without
+# the salt, and the holder proves the output later by handing over both.
+_SALT_BYTES = 32
+
+
+def _parse_salt(args: dict) -> tuple[bytes | None, str | None]:
+    """Return (salt, error). salt_hex wins; salt=true makes a fresh one."""
+    given = args.get("salt_hex")
+    if given is not None:
+        if not (isinstance(given, str) and len(given) == 2 * _SALT_BYTES
+                and set(given) <= _HEX64):
+            return None, (f"salt_hex must be {2 * _SALT_BYTES} lowercase hex "
+                          f"characters ({_SALT_BYTES} bytes)")
+        return bytes.fromhex(given), None
+    flag = args.get("salt")
+    if flag is not None and not isinstance(flag, bool):
+        # "true" as a string would otherwise anchor UNSALTED without a word.
+        return None, "salt must be a boolean (true or false)"
+    if flag:
+        return os.urandom(_SALT_BYTES), None
+    return b"", None
+
+
+def _bitcoin_state(btc_pinned_at: Any) -> dict:
+    """Say plainly what a receipt is worth right now. Agents act in
+    milliseconds; a Bitcoin commitment takes hours. Until it lands, the proof
+    ends at the OpenTimestamps calendar servers, not at Bitcoin."""
+    if btc_pinned_at:
+        return {"bitcoin_status": "confirmed",
+                "bitcoin_note": ("The anchor is committed to a Bitcoin block "
+                                 "and can be checked against any Bitcoin "
+                                 "node.")}
+    return {"bitcoin_status": "pending",
+            "bitcoin_note": ("Not yet in a Bitcoin block. The calendars "
+                             "normally commit within a few hours; until then "
+                             "the proof ends at the calendar servers, not at "
+                             "Bitcoin. Check later with "
+                             "orphograph_verify_receipt.")}
 
 
 def tool_anchor_output(args: dict) -> dict:
@@ -404,7 +453,10 @@ def tool_anchor_output(args: dict) -> dict:
     text = args.get("text")
     if not isinstance(text, str) or not text:
         return {"error": "missing required argument: text"}
-    sha256_hex, sha512_hex, size = hash_text(text)
+    salt, salt_error = _parse_salt(args)
+    if salt_error:
+        return {"error": salt_error}
+    sha256_hex, sha512_hex, size = hash_text(text, salt)
     payload: dict = {"hash_hex": sha256_hex, "sha512_hex": sha512_hex}
     label = args.get("label")
     if isinstance(label, str) and label.strip():
@@ -420,6 +472,31 @@ def tool_anchor_output(args: dict) -> dict:
     zk_proof = args.get("zk_proof")
     if isinstance(zk_proof, dict) and zk_proof:
         payload["zk_proof"] = zk_proof
+    if salt:
+        privacy = {
+            "salted": True,
+            "salt_hex": salt.hex(),
+            "note": (
+                "The output text did not leave this device. The anchored "
+                "fingerprints are of salt + text, so they reveal nothing about "
+                "the text without the salt. KEEP salt_hex with the output: it "
+                "was not transmitted, the office cannot recover it, and "
+                "without it this output can never be re-verified. To verify, "
+                "pass the text and salt_hex to orphograph_verify_output."
+            ),
+        }
+    else:
+        privacy = {
+            "salted": False,
+            "note": (
+                "The output text did not leave this device — only the SHA-256 "
+                "and SHA-512 fingerprints were transmitted. The fingerprint is "
+                "public on the receipt, so short or guessable text (\"approve\", "
+                "an amount) can be confirmed by anyone who guesses it; anchor "
+                "with salt: true to prevent that. To re-verify, hash the exact "
+                "same text and compare to the receipt's anchored hash."
+            ),
+        }
     log(f"anchor_output: hashing {size} bytes of output, submitting hash …")
     result = _http("POST", "/api/anchor", payload)
     if result.get("error"):
@@ -438,6 +515,7 @@ def tool_anchor_output(args: dict) -> dict:
         "receipt_url": f"{BASE_URL}/r/{rid}" if rid else None,
         "sha256_hex": sha256_hex,
         "sha512_hex": sha512_hex,
+        **_bitcoin_state(result.get("btc_pinned_at")),
         "calendars_ok": result.get("calendars_ok"),
         "calendars_total": result.get("calendars_total"),
         # Distinct upstream calendars, which is what low_redundancy measures:
@@ -453,11 +531,7 @@ def tool_anchor_output(args: dict) -> dict:
         # Echo the server's view so a caller can confirm the proof was stored
         # rather than silently dropped — the failure mode this fix addresses.
         "zk_provenance": result.get("zk_provenance"),
-        "note": (
-            "The output text did not leave this device — only the SHA-256 and "
-            "SHA-512 fingerprints were transmitted. To re-verify, hash the exact "
-            "same text and compare to the receipt's anchored hash."
-        ),
+        **privacy,
     }
 
 
@@ -485,6 +559,7 @@ def tool_verify_receipt(args: dict) -> dict:
         "anchored_hash_sha512": result.get("sha512_hex"),
         "anchored_at_utc": result.get("created_at"),
         "btc_pinned_at_utc": result.get("btc_pinned_at"),
+        **_bitcoin_state(result.get("btc_pinned_at")),
         "calendars_ok": result.get("calendars_ok"),
         "calendars_total": result.get("calendars_total"),
         "all_ots_proofs_valid": all_ok,
@@ -799,6 +874,7 @@ def tool_anchor_run(args: dict) -> dict:
         "root_hex": manifest["root_hex"],
         "step_count": len(manifest["leaves"]),
         "step_sha256_hex": [l["file_sha256_hex"] for l in manifest["leaves"]],
+        **_bitcoin_state(result.get("btc_pinned_at")),
         "calendars_ok": result.get("calendars_ok"),
         "calendars_distinct_ok": result.get("calendars_distinct_ok"),
         "low_redundancy": result.get("low_redundancy", False),
@@ -853,8 +929,17 @@ def tool_verify_output(args: dict) -> dict:
     if safe != rid:
         return {"error": "receipt_id contains characters not in the receipt-id alphabet"}
     text, given = args.get("text"), args.get("sha256_hex")
+    if args.get("salt_hex") is not None and not (isinstance(text, str) and text):
+        # The salt is mixed into the TEXT. With only a digest there is nothing
+        # to mix it into; ignoring it would report a confident mismatch.
+        return {"error": "salt_hex goes with text; for a salted anchor pass "
+                         "the text and salt_hex, or the salted digest as sha256_hex"}
     if isinstance(text, str) and text:
-        target = hashlib.sha256(text.encode("utf-8")).hexdigest()
+        salt, salt_error = _parse_salt({"salt_hex": args.get("salt_hex")}
+                                       if args.get("salt_hex") is not None else {})
+        if salt_error:
+            return {"error": salt_error}
+        target = hashlib.sha256(salt + text.encode("utf-8")).hexdigest()
     elif isinstance(given, str) and len(given.strip()) == 64 and set(given.strip().lower()) <= _HEX64:
         target = given.strip().lower()
     else:
@@ -990,6 +1075,20 @@ TOOL_DEFINITIONS = [
                 "text": {
                     "type": "string",
                     "description": "The output text to anchor. Hashed locally; not transmitted.",
+                },
+                "salt": {
+                    "type": "boolean",
+                    "description": (
+                        "Anchor SHA-256(salt + text) with a fresh 32-byte random "
+                        "salt, returned as salt_hex and never transmitted. Use it "
+                        "for short or guessable output, whose plain fingerprint "
+                        "anyone could confirm by guessing. Keep salt_hex: without "
+                        "it the output cannot be re-verified."
+                    ),
+                },
+                "salt_hex": {
+                    "type": "string",
+                    "description": "Your own 32-byte salt as 64 lowercase hex characters, instead of salt: true.",
                 },
                 "label": {
                     "type": "string",
@@ -1127,6 +1226,7 @@ TOOL_DEFINITIONS = [
             "properties": {
                 "receipt_id": {"type": "string", "description": "The receipt id to check against."},
                 "text": {"type": "string", "description": "The output text. Hashed locally; not transmitted."},
+                "salt_hex": {"type": "string", "description": "The salt_hex returned when the output was anchored with salt; needed with text for a salted anchor."},
                 "sha256_hex": {"type": "string", "description": "Alternatively, the output's SHA-256 (64 hex chars)."},
             },
             "required": ["receipt_id"],

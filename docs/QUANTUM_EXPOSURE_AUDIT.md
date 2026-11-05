@@ -626,3 +626,75 @@ hours, requires no protocol change, and is the only item on this list where
 the gap between what the product says and what the code does is currently
 load-bearing. Every genuinely Shor-vulnerable primitive in this repo sits
 in an optional layer that no public claim depends on.
+
+---
+
+## 10. Addendum 2026-11-04 — the x402 rail, and a post-quantum authorship design
+
+The sweep in §0–§9 is dated 2026-08-04. The x402 payment rail went live on
+2026-10-02 (`server/x402.py`) and the CDP facilitator key on 2026-11-04
+(`server/cdp_auth.py`), so neither was in it. This section classifies them
+with the same key (§1). It adds nothing to the core claim, and changes none
+of §0: the anchor path still uses no signature.
+
+| # | Primitive | Location | What it protects | Class | Reaches the core claim? |
+|---|---|---|---|---|---|
+| B8 | secp256k1 ECDSA, EIP-712 / EIP-3009 `transferWithAuthorization` signed by the payer | built by the payer's client; checked by the facilitator (`x402.verify`, `x402.settle`) | That this payer authorised this USDC transfer | **BROKEN** | No |
+| B9 | Ed25519 JWT, 120 s, `server/cdp_auth.py` | server → CDP facilitator calls | That a /verify or /settle call comes from this server | **BROKEN** (low impact) | No |
+| B10 | Keccak-256 address of `ORPHO_X402_PAY_TO_ADDRESS` | `server/x402.py` `pay_to()` | Where payments settle | PQ-SAFE as a hash; the key behind it is B5-class once the wallet has spent | No |
+| — | Base (OP-stack L2) transaction history | outside this repo | That a payment settled | Named, not classified: rests on Ethereum's BLS/ECDSA, not proof-of-work | No |
+
+**Why none of it reaches the core claim.** A receipt records the anchored
+fingerprints and the OpenTimestamps proofs. The x402 path decides whether a
+request is *paid for*; it writes `x402_settled` / `x402_payment_held` into the
+anchor *reply* and a 10-character payer prefix into the internal usage
+source label (`server/app.py`), and nothing about the payment into the
+receipt's commitment bytes or its `.ots` proofs. A forged B8 signature moves
+the payer's real funds on Base, so to this server it is an ordinary paid
+request; that harm is the payer's. A forged B9 token could make /verify and
+/settle calls as this server but cannot redirect funds: payments are signed
+by payers and settle to the B10 address.
+
+**What this rules out for product copy.** "Which wallet paid for this
+anchor" is a binding that rests on B8. It is useful today and goes to zero
+for a cryptographically relevant quantum computer, exactly like B1. It must
+never be offered as durable evidence, and it is not on the receipt.
+
+**R-items.**
+- **R8 (B9).** When CDP accepts a post-quantum key type, rotate to it. Until
+  then the existing rotation path (`docs/X402_MAINNET.md`, "Key handling")
+  is the mitigation; the key cannot move funds.
+- **R9 (B10).** The pay-to wallet should receive only and sweep to fresh
+  addresses: an address whose public key has never appeared on chain is
+  protected by Keccak-256, not by secp256k1.
+- **R10 (copy).** Any public text about x402 says what the payment buys
+  (an anchor), never that the payment proves who requested it.
+
+### 10.1 Design — a hash-based post-quantum co-signature (SLH-DSA), not built
+
+B1 is the one signature a customer might rely on for longer than a
+decade. The design that keeps the product's rule (hash functions only, no
+new assumption) is an **optional SLH-DSA co-signature** beside the existing
+Ed25519 block:
+
+- **Algorithm:** SLH-DSA (FIPS 205, August 2024), parameter set
+  SLH-DSA-SHA2-128s: security rests on SHA-256 alone, the same function the
+  anchor path already trusts. Signature 7,856 bytes, public key 32 bytes.
+- **Wire:** a `pq_signature` block, sibling of `signature` in the manifest,
+  carrying `alg: "SLH-DSA-SHA2-128s"`, the public key and the signature over
+  the same canonical bytes (`server/manifest_signature.py`
+  `canonical_manifest_bytes`). Strictly
+  additive, the §B1 rule unchanged: a manifest without it anchors and
+  verifies exactly as before; one with it MUST verify.
+- **Ship gates, all required:** (1) the implementation passes NIST's ACVP
+  SLH-DSA known-answer vectors for that parameter set, committed with their
+  source and sha256; (2) an independent verifier in `dist/orphograph-verify/`
+  and `verifier-js/` passes the same vectors; (3) a planted one-bit flip in a
+  vector fails both; (4) a real request for it (Stage 1 demand gate).
+- **Existing receipts** are carried forward by renewal
+  (`docs/DESIGN_RENEWAL_PATH.md`, `server/renewal.py`), not re-signed: an
+  issued receipt's meaning never changes.
+- **Not claimed:** that this makes anything "quantum-proof". It replaces one
+  Shor-vulnerable optional layer with a hash-based one.
+
+Status: design only. No code was changed for 10.1.
