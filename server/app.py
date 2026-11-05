@@ -3914,6 +3914,25 @@ class Handler(BaseHTTPRequestHandler):
                                     "authorization, contact support with its "
                                     "transaction id first."})
                         return
+                    # Settled, and its charge row is on disk (a ledger write
+                    # failure returned the 503 above). Only now, and only on
+                    # this first-charge path (never a held redemption or a
+                    # replay, which charged nothing), is the payment booked
+                    # in Stripe when ORPHO_X402_STRIPE_RECORD=1. Background
+                    # thread: the money already moved, so Stripe being slow
+                    # or down must never delay or fail the anchor it paid
+                    # for; a failure stays pending and is retried at boot.
+                    if x402.stripe_record_enabled():
+                        try:
+                            x402.stripe_record_settlement(
+                                ident=x402_ident,
+                                tx_hash=x402_paid.get("transaction"),
+                                amount_atomic=x402_requirements["amount"],
+                                network_id=x402_requirements["network"],
+                                payer=x402_paid.get("payer") or x402_payer)
+                        except Exception as e:  # recording must not cost the anchor
+                            sys.stderr.write(f"[x402] stripe record not started "
+                                             f"({type(e).__name__})\n")
                 else:
                     # "held": charged earlier, anchor still owed. No second
                     # verify() or settle() — a spent nonce can only fail
@@ -7997,6 +8016,24 @@ def main() -> int:
             sys.stderr.write(f"[x402] released {stranded} stranded claim(s) at boot\n")
     except x402.ClaimSetUnavailable as e:
         sys.stderr.write(f"[x402] could not reconcile claims at boot: {e}\n")
+    # Settled payments whose Stripe booking failed (or was cut off by a crash)
+    # are re-sent with their original Idempotency-Key. Off the boot path: a
+    # slow Stripe must not hold the port closed.
+    try:
+        stripe_pending = x402.stripe_pending_count() if x402.stripe_record_enabled() else 0
+    except OSError as e:
+        stripe_pending = 0
+        sys.stderr.write(f"[x402] stripe pending file unreadable at boot ({type(e).__name__})\n")
+    if stripe_pending:
+        def _retry_stripe_pending() -> None:
+            try:
+                done, left = x402.retry_stripe_pending()
+                sys.stderr.write(f"[x402] stripe pending at boot: {done} recorded, "
+                                 f"{left} still pending\n")
+            except Exception as e:
+                sys.stderr.write(f"[x402] stripe pending retry failed ({type(e).__name__})\n")
+        threading.Thread(target=_retry_stripe_pending, name="x402-stripe-retry",
+                         daemon=True).start()
     server = ThreadingHTTPServer((HOST, PORT), Handler)
     # The port actually bound (PORT=0 lets the OS choose, as the test harness
     # does); for any fixed PORT this is the same number.

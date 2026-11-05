@@ -78,6 +78,7 @@ import re
 import secrets
 import socket
 import sys
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -273,6 +274,7 @@ def config_problems() -> list[str]:
         why = cdp_auth.credentials_problem()
         if why:
             out.append(why)
+    out.extend(stripe_record_problems())
     return out
 
 
@@ -1210,3 +1212,225 @@ def iter_ledger_rows():
                 yield json.loads(line)
             except json.JSONDecodeError:
                 continue
+
+
+
+# ── Paying into Stripe (2026-11-04) ─────────────────────────────────────────
+# With ORPHO_X402_STRIPE_RECORD=1 the pay-to address is a Stripe crypto
+# deposit address, and every SUCCESSFUL settlement, once its charge row is in
+# the ledger above, is also recorded in Stripe as a PaymentIntent
+# (stripe_api.record_x402_payment). Off by default.
+#
+# The money has already moved on-chain by then, so recording never blocks or
+# fails the paid anchor: it runs on a background thread. Its row is written
+# to x402_stripe_pending.jsonl BEFORE the Stripe call (a crash mid-call leaves
+# it there) and removed only once Stripe answered success. What is left is
+# retried at boot and by retry_stripe_pending(), always with the same
+# Idempotency-Key (the payment identifier), so a retry cannot create a second
+# PaymentIntent. /api/health shows the on/off switch and the pending COUNT.
+
+_STRIPE_PENDING_FILE = "x402_stripe_pending.jsonl"
+_STRIPE_RECORD_ENV = "ORPHO_X402_STRIPE_RECORD"
+_STRIPE_DEPOSIT_ENV = "ORPHO_X402_STRIPE_DEPOSIT_ADDRESS"
+
+
+# The names are spelled out at each read (not via the constants above) so a
+# search for the variable, and tests/test_deploy_docs_name_real_env_vars.py,
+# find where it is read.
+def stripe_record_enabled() -> bool:
+    return os.environ.get("ORPHO_X402_STRIPE_RECORD", "").strip() == "1"
+
+
+def stripe_deposit_address() -> str:
+    return os.environ.get("ORPHO_X402_STRIPE_DEPOSIT_ADDRESS", "").strip()
+
+
+def stripe_record_problems() -> list[str]:
+    """Why recording into Stripe is misconfigured, or []. Part of
+    config_problems(), so a misconfigured recorder keeps the rail unarmed
+    rather than taking payments Stripe will never book. Names env vars only,
+    never their values."""
+    raw = os.environ.get("ORPHO_X402_STRIPE_RECORD", "").strip()
+    if raw not in ("", "0", "1"):
+        return [f"{_STRIPE_RECORD_ENV} must be 1 (on) or 0 / unset (off)"]
+    if raw != "1":
+        return []
+    out = []
+    deposit = stripe_deposit_address()
+    if not deposit:
+        out.append(f"{_STRIPE_RECORD_ENV}=1 but {_STRIPE_DEPOSIT_ENV} is unset")
+    elif pay_to().lower() != deposit.lower():
+        out.append(f"{_STRIPE_RECORD_ENV}=1 but ORPHO_X402_PAY_TO_ADDRESS is not "
+                   f"{_STRIPE_DEPOSIT_ENV}: payments would not reach Stripe")
+    if network() not in (NETWORK_BASE_MAINNET, NETWORK_BASE_SEPOLIA):
+        out.append(f"{_STRIPE_RECORD_ENV}=1 but ORPHO_X402_NETWORK is not Base "
+                   "mainnet or Base Sepolia")
+    if not os.environ.get("STRIPE_SECRET_KEY", "").strip():
+        out.append(f"{_STRIPE_RECORD_ENV}=1 but STRIPE_SECRET_KEY is unset")
+    return out
+
+
+def _stripe_pending_path() -> Path:
+    return _data_dir() / _STRIPE_PENDING_FILE
+
+
+def _stripe_pending_lock() -> Path:
+    # A sidecar lock, not the file itself: removal os.replace()s the file,
+    # which changes its inode (same reason as analytics.append_event).
+    return _data_dir() / (_STRIPE_PENDING_FILE + ".lock")
+
+
+def stripe_pending_add(row: dict) -> None:
+    """Append one pending row, fsynced, under the sidecar lock."""
+    path = _stripe_pending_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    line = json.dumps(row, separators=(",", ":")) + "\n"
+    with file_lock.locked(_stripe_pending_lock(), mode="a"):
+        if file_lock.ends_mid_line(path):
+            line = "\n" + line
+        with open(path, "a") as f:
+            f.write(line)
+            f.flush()
+            os.fsync(f.fileno())
+    try:
+        os.chmod(path, 0o600)
+    except OSError:
+        pass
+
+
+def stripe_pending_rows() -> list[dict]:
+    """Pending rows, the last one per payment identifier. Torn or foreign
+    lines are skipped. Unlocked read: removal replaces the file whole."""
+    path = _stripe_pending_path()
+    rows: dict[str, dict] = {}
+    try:
+        with path.open() as f:
+            for line in f:
+                try:
+                    row = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(row, dict) and isinstance(row.get("id"), str):
+                    rows[row["id"]] = row
+    except FileNotFoundError:
+        return []
+    return list(rows.values())
+
+
+def stripe_pending_count() -> int:
+    return len(stripe_pending_rows())
+
+
+def stripe_pending_remove(ident: str) -> None:
+    """Drop every row for `ident`: the rest go to a temp file, fsynced, then
+    os.replace()d over the pending file, so a crash leaves the old file or
+    the new one, never a half-written one."""
+    path = _stripe_pending_path()
+    with file_lock.locked(_stripe_pending_lock(), mode="a"):
+        try:
+            lines = path.read_text().splitlines(keepends=True)
+        except FileNotFoundError:
+            return
+        kept = []
+        for line in lines:
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError:
+                if line.strip():
+                    kept.append(line if line.endswith("\n") else line + "\n")
+                continue
+            if not (isinstance(row, dict) and row.get("id") == ident):
+                kept.append(line if line.endswith("\n") else line + "\n")
+        tmp = path.with_name(f".{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+        try:
+            with open(tmp, "w") as out:
+                os.chmod(tmp, 0o600)
+                out.write("".join(kept))
+                out.flush()
+                os.fsync(out.fileno())
+            os.replace(tmp, path)
+        finally:
+            try:
+                tmp.unlink()
+            except FileNotFoundError:
+                pass
+        try:
+            fd = os.open(path.parent, os.O_RDONLY)
+            try:
+                os.fsync(fd)
+            finally:
+                os.close(fd)
+        except OSError:
+            pass
+
+
+def _stripe_attempt(row: dict, *, on_disk: bool) -> bool:
+    """One Stripe call for one pending row. True when Stripe booked it.
+    Logs the error CATEGORY only: no key, no tx hash, no payer."""
+    import stripe_api  # local: x402 stays importable without the Stripe module
+    try:
+        res = stripe_api.record_x402_payment(
+            tx_hash=row.get("tx_hash") or "", amount_atomic=row.get("amount_atomic"),
+            network_id=row.get("network") or "", payer=row.get("payer"),
+            idempotency_key=row["id"])
+    except Exception as e:  # never let a recorder bug escape a thread
+        res = {"ok": False, "category": f"exception:{type(e).__name__}"}
+    if res.get("ok"):
+        if on_disk:
+            try:
+                stripe_pending_remove(row["id"])
+            except OSError as e:
+                # Booked, but still listed: the next retry re-sends the same
+                # Idempotency-Key and Stripe answers with the same intent.
+                sys.stderr.write(f"[x402] stripe recorded; pending row not removed "
+                                 f"({type(e).__name__})\n")
+        return True
+    if not on_disk:
+        try:
+            stripe_pending_add(row)
+            on_disk = True
+        except OSError as e:
+            sys.stderr.write(f"[x402] stripe record failed (category={res.get('category')}) "
+                             f"and its pending row could not be written "
+                             f"({type(e).__name__}); not retried\n")
+            return False
+    sys.stderr.write(f"[x402] stripe record failed (category={res.get('category')}); "
+                     "kept pending for retry\n")
+    return False
+
+
+def stripe_record_settlement(*, ident: str, tx_hash: str | None, amount_atomic,
+                             network_id: str, payer: str | None,
+                             wait: bool = False) -> threading.Thread:
+    """Queue one settled payment for Stripe and record it on a background
+    thread. Call only after record_settlement() wrote the SUCCESSFUL charge
+    row. The pending row is written here, synchronously, before the thread
+    starts; `wait` joins the thread (tests)."""
+    row = {"ts": int(time.time()), "id": ident, "tx_hash": tx_hash or "",
+           "amount_atomic": str(amount_atomic), "network": network_id,
+           "payer": payer or ""}
+    try:
+        stripe_pending_add(row)
+        on_disk = True
+    except OSError as e:
+        sys.stderr.write(f"[x402] stripe pending row not written ({type(e).__name__}); "
+                         "recording anyway\n")
+        on_disk = False
+    t = threading.Thread(target=_stripe_attempt, args=(row,), kwargs={"on_disk": on_disk},
+                         name="x402-stripe-record", daemon=True)
+    t.start()
+    if wait:
+        t.join()
+    return t
+
+
+def retry_stripe_pending() -> tuple[int, int]:
+    """Re-send every pending row with its original Idempotency-Key. Returns
+    (recorded, still_pending). Runs at boot (server/app.py main) and is
+    callable directly."""
+    done = 0
+    rows = stripe_pending_rows()
+    for row in rows:
+        if _stripe_attempt(row, on_disk=True):
+            done += 1
+    return done, len(rows) - done

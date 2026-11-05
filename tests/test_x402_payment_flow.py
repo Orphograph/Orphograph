@@ -1289,8 +1289,10 @@ def test_health_says_whether_x402_is_armed_and_on_which_network(server, unconfig
     """Arming is a secret on the server, and secrets cannot be read from
     outside; health is the one observable proof that the rail is (or is not)
     live, and on which network. Testnet first: Base Sepolia."""
-    assert _health(server)["x402"] == {"armed": True, "network": "eip155:84532", "config_problems": 0}
-    assert _health(unconfigured_server)["x402"] == {"armed": False, "network": None, "config_problems": 0}
+    assert _health(server)["x402"] == {"armed": True, "network": "eip155:84532", "config_problems": 0,
+                                       "stripe_record": False, "stripe_pending": 0}
+    assert _health(unconfigured_server)["x402"] == {"armed": False, "network": None, "config_problems": 0,
+                                                    "stripe_record": False, "stripe_pending": 0}
 
 
 def test_x402_ledgers_never_fall_back_to_the_working_directory(tmp_path, monkeypatch):
