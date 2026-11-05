@@ -279,3 +279,20 @@ def test_github_action_entry_point(servers, monkeypatch):
         receipt, _fatal = mod.anchor_one(base, mod.build_headers(), "a" * 64, "b" * 128)
         assert not receipt or receipt.get("receipt_id") != "TRAPPED", receipt
     assert _Trap.hits == []
+
+
+def test_mcp_tool_call_reports_the_refused_redirect_and_sends_no_key(servers, monkeypatch):
+    """Through the MCP server's own request path: the agent gets a named
+    error with the redirect target, and the other host sees nothing."""
+    base, code_box = servers
+    monkeypatch.setenv("ORPHO_BASE_URL", base)
+    monkeypatch.setenv("ORPHO_API_KEY", "k-secret")
+    mod = _load("mcp/orphograph_mcp.py")
+    for code in (301, 302, 307, 308):
+        code_box[0] = code
+        for method, body in (("GET", None), ("POST", {"hash_hex": "ab" * 32})):
+            out = mod._http(method, "/api/anchor", body)
+            assert out["error"] == "redirect_refused" and out["status"] == code, out
+            assert out["location"].startswith("http://localhost:"), out
+            assert "k-secret" not in str(out)
+    assert _Trap.hits == [], _Trap.hits[:1]

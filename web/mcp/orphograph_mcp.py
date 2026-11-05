@@ -195,9 +195,14 @@ def _http(method: str, path: str, body: dict | None = None) -> dict:
         except Exception:
             pass
         if 300 <= e.code < 400:
-            return {"error": "redirect_refused", "status": e.code,
+            # https://www.orphograph.com and http://orphograph.com answer 301
+            # (probed 2026-11-05); the default base URL answers directly.
+            location = (e.headers.get("Location") if e.headers else None) or ""
+            return {"error": "redirect_refused", "status": e.code, "location": location[:300],
                     "detail": "the server answered with a redirect; it was not followed, "
-                              "so the API key stayed with " + BASE_URL}
+                              "so the API key stayed with " + BASE_URL
+                              + (". If that target is right, set ORPHO_BASE_URL to its "
+                                 "scheme and host." if location else "")}
         return {"error": "http_error", "status": e.code, "body": body_raw}
     except urllib.error.URLError as e:
         return {"error": "network_error", "reason": str(getattr(e, "reason", e))}
