@@ -20,15 +20,20 @@ def test_three_doctrine_points_are_present():
     assert "The proof stays on Bitcoin, not on whoever hosts the marketplace." in sec
 
 
-def test_agent_payment_is_described_as_not_open_and_carries_no_price():
+def test_agent_payment_names_the_published_price_and_no_retired_rail():
+    """Until 2026-11-05 this point had to say "It is not open" and name no
+    price "before the fee schedule publishes one". Real payments opened on
+    Base mainnet that day and /pricing lists the agent price, so the point
+    names it, and it must be the price the code charges."""
+    import sys
+    sys.path.insert(0, str(PAGE.parents[2] / "server"))
+    import x402
     sec = _section()
-    assert "It is not open" in sec, "no real-money pay-per-anchor counter is open; the page must say so"
-    # The Lightning rail this point used to name was retired on 2026-09-28.
+    assert "It is not open" not in sec
+    assert f"{x402.DEFAULT_PRICE_CENTS} cent" in sec
     assert "Lightning" not in sec, "the doctrine still names the retired Lightning rail"
-    for token in ("sats", "$", "USD"):
-        assert token not in sec.split("<strong>One tool", 1)[0], (
-            f"the payment point must not imply a price ({token!r}) before the fee "
-            "schedule publishes one")
+    pricing = (PAGE.parents[1] / "pricing.html").read_text(encoding="utf-8")
+    assert f"{x402.DEFAULT_PRICE_CENTS} cent in USDC on Base" in pricing, "the fee schedule must list the agent price"
 
 
 def test_doctrine_names_no_competitor_and_promises_no_detection():

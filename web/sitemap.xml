@@ -86,6 +86,11 @@
     <priority>0.7</priority>
   </url>
   <url>
+    <loc>https://orphograph.com/check</loc>
+    <lastmod>2026-08-31</lastmod>
+    <priority>0.7</priority>
+  </url>
+  <url>
     <loc>https://orphograph.com/lp/prove-photo-pre-ai</loc>
     <lastmod>2026-08-31</lastmod>
     <priority>0.7</priority>

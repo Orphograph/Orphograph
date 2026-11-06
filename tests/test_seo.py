@@ -31,6 +31,7 @@ EXPECTED_URLS = [
     "https://orphograph.com/about",
     "https://orphograph.com/faq",
     "https://orphograph.com/verify-js",
+    "https://orphograph.com/check",
     "https://orphograph.com/lp/prove-photo-pre-ai",
     "https://orphograph.com/lp/bitcoin-timestamp-file",
     "https://orphograph.com/lp/c2pa-alternative",
@@ -325,6 +326,7 @@ def test_pay_pages_no_inline_styles(html_path: Path) -> None:
 CSP_CLEAN_SCRIPT = [
     "recover.html",
     "verify-js.html",
+    "check.html",
     "team/join.html",
     "founder/admin.html",
     "founder/funnel.html",

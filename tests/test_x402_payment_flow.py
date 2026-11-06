@@ -1322,13 +1322,14 @@ def test_x402_ledgers_never_fall_back_to_the_working_directory(tmp_path, monkeyp
     assert d in (repo / "data", repo)
 
 
-def test_the_agent_docs_say_x402_is_testnet_and_drop_the_five_calendars_claim():
+def test_the_agent_docs_say_x402_is_on_mainnet_and_drop_the_five_calendars_claim():
+    # Testnet until 2026-11-05; production has run Base mainnet since.
     web = Path(__file__).resolve().parent.parent / "web"
     agents = (web / "docs" / "agents.html").read_text()
-    assert "Base Sepolia" in agents and "test network" in agents
+    assert "Base mainnet" in agents and "test network" not in agents and "Base Sepolia" not in agents
     assert "five calendars" not in agents
     llms = (web / "llms.txt").read_text()
-    assert "x402" in llms and "TEST network" in llms
+    assert "x402" in llms and "Base mainnet" in llms and "TEST network" not in llms
 
 
 

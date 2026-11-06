@@ -151,6 +151,10 @@
     "version": "1",
     "sha256": "afa891972814f3f9f6e44f8a0da22dacac4f11546013b25276f524559dc63605"
   },
+  "/check.js": {
+    "version": "1",
+    "sha256": "c180c6cc3ed94f53583abe78d4c6229e3295849b0f915735df0f49dcd933589d"
+  },
   "/checkout-cta.js": {
     "version": "8",
     "sha256": "a091bac901d1f31dac42fc721bd8800ba1bac0cea03ffc86b60f26b0cb80dd72"

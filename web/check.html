@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Orphograph — Check what you received</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#f6f1e3">
+<meta name="description" content="Check that a text or file you received is exactly what an Orphograph receipt anchored, in your browser. Nothing you paste is sent.">
+<link rel="icon" type="image/png" href="/favicon.png?v=8">
+<meta property="og:title" content="Orphograph — Check what you received">
+<meta property="og:description" content="Check a received text, file or agent step against its receipt, in your browser.">
+<meta property="og:url" content="https://orphograph.com/check">
+<meta property="og:type" content="article">
+<meta property="og:image" content="https://orphograph.com/og-image.png?v=8">
+<link rel="canonical" href="https://orphograph.com/check">
+<link rel="stylesheet" href="/css/orpho-tokens.css?v=2">
+<link rel="stylesheet" href="/css/orpho-primitives.css?v=3">
+<link rel="stylesheet" href="/index.css?v=22">
+<link rel="stylesheet" href="/verify-js.css?v=1">
+<meta name="copyright" content="© 2026 Orphograph. MIT — see /LICENSE">
+</head>
+<body class="orpho">
+
+<header class="orpho-header nav">
+  <a href="/" class="orpho-brand brand">
+    <img class="orpho-brand__mark" src="/seal-display.png?v=8" alt="" width="62" height="62">
+    <span class="orpho-brand__text">
+      <span class="orpho-brand__name">Orphograph</span>
+      <span class="orpho-brand__sub">Empirical Notary</span>
+    </span>
+  </a>
+  <nav class="orpho-nav">
+    <a href="/learn">Method</a>
+      <a href="/writers">Writers</a>
+      <a href="/pricing">Pricing</a>
+      <a href="/about">Office</a>
+      <a href="/signin">Vault</a>
+      <a href="/access" class="nav-signin">Sign in</a>
+      <a href="/#drop" class="cta">Anchor a file</a>
+  </nav>
+</header>
+
+<main class="v-wrap">
+
+  <p class="v-eyebrow">Receiving side</p>
+  <h1 class="v-h1">Check what you received.</h1>
+  <p class="v-lede">
+    Someone sent you a reply, a report, a file, or one step of an AI agent's work, with an Orphograph receipt.
+    Paste it or choose the file. This page hashes it in your browser and checks the hash against the public receipt.
+    What you paste is never sent; only the receipt id is used to fetch the public record, and every hash in that
+    record is recomputed here rather than believed.
+  </p>
+
+  <div class="v-callout">
+    <strong>What a match means.</strong> This exact output existed by the time it was anchored, and has not changed
+    since. It does not show who produced it, or that it is correct.
+  </div>
+
+  <form id="chk-form" autocomplete="off">
+    <h2 class="v-h2">The receipt</h2>
+    <div class="v-rule"></div>
+    <div class="v-fetch-row">
+      <label for="chk-rid">Receipt id</label><br>
+      <input id="chk-rid" type="text" placeholder="e.g. ChvTMbYLIACHEHJT" spellcheck="false" maxlength="64">
+    </div>
+
+    <h2 class="v-h2">What you received</h2>
+    <div class="v-rule"></div>
+    <div class="v-zone">
+      <p class="v-zone-label"><label for="chk-text">Paste the text exactly as you received it.</label></p>
+      <textarea id="chk-text" spellcheck="false" placeholder="The reply, report or step text"></textarea>
+      <p class="v-zone-hint">Or choose the file instead (exact bytes; best for anything with special line endings):</p>
+      <input id="chk-file" type="file">
+      <p id="chk-file-name" class="v-zone-status"></p>
+    </div>
+    <div class="v-fetch-row">
+      <label for="chk-salt">Salt (only if the sender gave you one)</label><br>
+      <input id="chk-salt" type="text" placeholder="hex" spellcheck="false" maxlength="128">
+    </div>
+
+    <div class="v-actions">
+      <button id="chk-go" class="v-btn" type="submit">Check</button>
+    </div>
+  </form>
+
+  <div id="chk-result" class="v-result pending" aria-live="polite">
+    <p id="chk-verdict" class="v-verdict">Waiting for a receipt id and what you received.</p>
+    <div id="chk-rows"></div>
+    <p class="v-row"><a id="chk-receipt-link" href="/" hidden>Open the full receipt</a></p>
+  </div>
+
+  <h2 class="v-h2">For the sender</h2>
+  <div class="v-rule"></div>
+  <p class="v-note">
+    Send the output with a check link: <span class="mono">https://orphograph.com/check#r=&lt;receipt id&gt;</span>.
+    Everything after <span class="mono">#</span> stays in the reader's browser. For a salted anchor, add
+    <span class="mono">&amp;s=&lt;salt hex&gt;</span> only if the reader should be able to check it.
+    Agents can run the same check with the MCP tool <span class="mono">orphograph_verify_output</span>.
+  </p>
+  <p class="v-note">
+    Prefer to check without this office at all? The <a href="/verify-js">independent verifier</a> and the
+    proof files in each receipt's download work offline.
+  </p>
+
+</main>
+
+<footer>
+  <div class="wrap v-footer-inner">
+    <p>Orphograph &middot; An empirical notary.</p>
+    <p class="mt-8">
+      <a href="/" class="link-muted">Home</a> &middot;
+      <a href="/learn" class="link-muted">Method</a> &middot;
+      <a href="/faq" class="link-muted">FAQ</a> &middot;
+      <a href="/terms" class="link-muted">Terms</a> &middot;
+      <a href="/privacy" class="link-muted">Privacy</a>
+    </p>
+  </div>
+  <!-- legal-disclaimer -->
+  <div class="wrap legal-disclaimer">
+    Orphograph is not a law firm, not a notary, and not a qualified electronic-trust-service provider. A receipt is cryptographic proof that a file existed before a point in time — it is not legal advice.
+  </div>
+</footer>
+
+<script src="/check.js?v=1"></script>
+
+<script src="/statusbar.js?v=2" defer></script>
+<script src="/assets/event.js?v=1" defer></script>
+</body>
+</html>

@@ -1059,6 +1059,7 @@ def _build_sitemap() -> str:
         ("/what-is-this", "0.6"),
         ("/anchor-output", "0.6"),
         ("/verify-js", "0.7"),
+        ("/check", "0.7"),
         ("/lp/prove-photo-pre-ai", "0.7"),
         ("/lp/bitcoin-timestamp-file", "0.7"),
         ("/lp/c2pa-alternative", "0.7"),
