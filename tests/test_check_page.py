@@ -206,3 +206,52 @@ def test_check_script_is_the_pinned_file(server):
 def test_every_receipt_page_carries_its_check_link():
     html = (ROOT / "web/receipt.html").read_text()
     assert 'href="/check#r={{RECEIPT_ID}}"' in html
+
+
+_SALT = r"""
+const chk = require(process.argv[1]);
+const cases = JSON.parse(require("fs").readFileSync(0, "utf8"));
+process.stdout.write(JSON.stringify(cases.map(s => chk.saltProblem(s))));
+"""
+
+
+def test_salt_rule_is_the_mcp_rule_with_the_same_message():
+    salts = ["ab" * 32, "AB" * 32, "ab" * 31, "ab" * 33, "zz" * 32, "", "ab" * 32 + " ", "0x" + "ab" * 31]
+    proc = subprocess.run([shutil.which("node"), "-e", _SALT, str(CHECK_JS)], input=json.dumps(salts),
+                          capture_output=True, text=True, timeout=30)
+    assert proc.returncode == 0, proc.stderr
+    js = json.loads(proc.stdout)
+    for s, j in zip(salts, js):
+        _salt, py = M._parse_salt({"salt_hex": s})
+        assert (j is None) == (py is None), (s, j, py)
+        if py:
+            assert j == py, (s, j, py)
+
+
+_PASTE = r"""
+const chk = require(process.argv[1]);
+const c = JSON.parse(require("fs").readFileSync(0, "utf8"));
+(async () => {
+  for (const v of chk.pasteVariants(c.pasted)) {
+    const target = await chk.outputDigest(new TextEncoder().encode(v.text), "");
+    const r = await chk.decide("x", target, {hash_hex: c.anchored}, () => Promise.resolve({error: "e", status: 400}));
+    if (r.match) { process.stdout.write(JSON.stringify({label: v.label})); return; }
+  }
+  process.stdout.write(JSON.stringify({label: null}));
+})();
+"""
+
+
+@pytest.mark.parametrize("original, pasted, label", [
+    ("line one\r\nline two\r\n", "line one\nline two", "with Windows line endings (CRLF) and a final newline"),
+    ("report text\n", "report text", "with a final newline added"),
+    ("report text", "report text\n", "without its final newline"),
+    ("same bytes", "same bytes", ""),
+    ("approved", "approved.", None),
+])
+def test_pasted_text_matches_through_the_named_paste_variants_only(original, pasted, label):
+    proc = subprocess.run([shutil.which("node"), "-e", _PASTE, str(CHECK_JS)],
+                          input=json.dumps({"pasted": pasted, "anchored": _h(original.encode())}),
+                          capture_output=True, text=True, timeout=30)
+    assert proc.returncode == 0, proc.stderr
+    assert json.loads(proc.stdout)["label"] == label

@@ -28,7 +28,7 @@ def _surfaces() -> dict[str, str]:
     return {
         "openapi /api/anchor": spec["paths"]["/api/anchor"]["post"]["description"],
         "llms.txt x402 entry": next(block for block in (ROOT / "web/llms.txt").read_text().split("\n- ")
-                                    if "x402" in block),
+                                    if block.startswith("x402 pay-per-anchor")),
         "docs/agents x402 items": " ".join(li for li in re.findall(r"<li>.*?</li>", html, re.S)
                                            if "x402" in li or "pays" in li or "Agents pay" in li),
     }

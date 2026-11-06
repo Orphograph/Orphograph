@@ -63,10 +63,30 @@
       var i = kv.indexOf("="), k = i < 0 ? kv : kv.slice(0, i), v = i < 0 ? "" : kv.slice(i + 1);
       try { v = decodeURIComponent(v); } catch (e) { v = ""; }
       if (k === "r" && RID_RE.test(v)) out.receipt_id = v;
-      if (k === "s" && v.length <= 128 && v.length % 2 === 0 && HEX_RE.test(v.toLowerCase())) {
-        out.salt_hex = v.toLowerCase();
-      }
+      if (k === "s" && !saltProblem(v)) out.salt_hex = v;
     });
+    return out;
+  }
+
+  /* The MCP tool's rule (mcp/orphograph_mcp.py _parse_salt), same message. */
+  var SALT_HEX_RE = /^[0-9a-f]{64}$/;
+  function saltProblem(saltHex) {
+    if (typeof saltHex === "string" && SALT_HEX_RE.test(saltHex)) return null;
+    return "salt_hex must be 64 lowercase hex characters (32 bytes)";
+  }
+
+  /* Pasting loses bytes a file keeps: a textarea turns CRLF into LF, and a
+     copy adds or drops the final newline. These are the only variants tried,
+     each named in the verdict, and only for pasted text, never for a file. */
+  function pasteVariants(text) {
+    var out = [], seen = {};
+    function add(label, s) { if (!seen.hasOwnProperty(s)) { seen[s] = 1; out.push({ label: label, text: s }); } }
+    var bare = text.replace(/\r?\n$/, "");
+    add("", text);
+    add("with a final newline added", bare + "\n");
+    add("without its final newline", bare);
+    add("with Windows line endings (CRLF)", bare.replace(/\r?\n/g, "\r\n"));
+    add("with Windows line endings (CRLF) and a final newline", bare.replace(/\r?\n/g, "\r\n") + "\r\n");
     return out;
   }
 
@@ -183,6 +203,7 @@
   }
 
   var api = { parseFragment: parseFragment, outputDigest: outputDigest, leafHash: leafHash,
+              saltProblem: saltProblem, pasteVariants: pasteVariants,
               merkleRoot: merkleRoot, rebuildRoot: rebuildRoot, decide: decide, toHex: toHex,
               fromHex: fromHex, RID_RE: RID_RE };
   if (typeof module !== "undefined" && module.exports) { module.exports = api; return; }
@@ -211,6 +232,7 @@
 
   $("chk-file").addEventListener("change", function (e) {
     droppedFile = e.target.files && e.target.files[0] ? e.target.files[0] : null;
+    if (droppedFile) $("chk-text").value = "";
     setText($("chk-file-name"), droppedFile ? droppedFile.name + " (" + droppedFile.size + " bytes)" : "");
   });
 
@@ -234,6 +256,7 @@
       rows.push(["Anchored at", res.anchored_at_utc || "unknown"]);
       rows.push(["In a Bitcoin block", res.btc_pinned_at_utc ? "yes, by " + res.btc_pinned_at_utc : "not yet; Bitcoin confirmation has taken from about an hour to several days"]);
     }
+    if (res.checked) rows.push(["Checked", res.checked]);
     if (res.output_sha256_hex) rows.push(["Your output's SHA-256", res.output_sha256_hex]);
     (res.problems || []).forEach(function (p) { rows.push(["Problem", p]); });
     var holder = $("chk-rows");
@@ -248,29 +271,54 @@
     if (RID_RE.test(rid)) { link.href = "/r/" + encodeURIComponent(rid); link.hidden = false; }
   }
 
+  $("chk-text").addEventListener("input", function () {
+    if (droppedFile && $("chk-text").value) {
+      droppedFile = null; $("chk-file").value = ""; setText($("chk-file-name"), "");
+    }
+  });
+
   $("chk-form").addEventListener("submit", function (e) {
     e.preventDefault();
     var rid = $("chk-rid").value.trim();
-    var saltHex = $("chk-salt").value.trim().toLowerCase();
+    var saltHex = $("chk-salt").value.trim();
     if (!RID_RE.test(rid)) { render({ ok: false, error: "that is not a receipt id" }); return; }
-    if (saltHex && (saltHex.length % 2 || !HEX_RE.test(saltHex))) {
-      render({ ok: false, error: "the salt must be hex" }); return;
-    }
-    var bytesP = droppedFile
-      ? droppedFile.arrayBuffer().then(function (b) { return new Uint8Array(b); })
-      : Promise.resolve(utf8($("chk-text").value));
+    if (saltHex && saltProblem(saltHex)) { render({ ok: false, error: saltProblem(saltHex) }); return; }
+    var file = droppedFile, pasted = $("chk-text").value;
     var btn = $("chk-go");
     btn.disabled = true;
-    bytesP.then(function (bytes) {
-      if (!bytes.length) throw new Error("paste the output or choose a file first");
-      return outputDigest(bytes, saltHex);
-    }).then(function (target) {
-      return getJson("/api/verify/" + encodeURIComponent(rid)).then(function (rec) {
-        return decide(rid, target, rec, function () {
-          return getJson("/api/verify_folder/" + encodeURIComponent(rid));
-        });
+    var recP = null, folderP = null;
+    function rec() { return recP || (recP = getJson("/api/verify/" + encodeURIComponent(rid))); }
+    function folder() { return folderP || (folderP = getJson("/api/verify_folder/" + encodeURIComponent(rid))); }
+    function check(bytes) {
+      return outputDigest(bytes, saltHex).then(function (target) {
+        return rec().then(function (r) { return decide(rid, target, r, folder); });
       });
-    }).then(render, function (err) {
+    }
+    var work;
+    if (file) {
+      work = file.arrayBuffer().then(function (b) { return check(new Uint8Array(b)); })
+        .then(function (res) { res.checked = "the file " + file.name + " (" + file.size + " bytes, exact)"; return res; });
+    } else if (!pasted) {
+      work = Promise.reject(new Error("paste the output or choose a file first"));
+    } else {
+      var variants = pasteVariants(pasted), first = null;
+      work = (function next(k) {
+        return check(utf8(variants[k].text)).then(function (res) {
+          if (k === 0) first = res;
+          if ((res.ok && res.match) || !res.ok || k + 1 >= variants.length) {
+            var out = res.ok && res.match ? res : first;
+            out.checked = "the pasted text" + (out === res && variants[k].label ? ", " + variants[k].label : "");
+            if (!(out.ok && out.match) && out.ok) {
+              out.reason = (out.reason || "the hashes differ") +
+                ". Pasting can change line endings and the final newline; tried those too. If you have the original file, choose it instead";
+            }
+            return out;
+          }
+          return next(k + 1);
+        });
+      })(0);
+    }
+    work.then(render, function (err) {
       render({ ok: false, error: err && err.message ? err.message : "could not check" });
     }).then(function () { btn.disabled = false; });
   });
