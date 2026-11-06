@@ -1,9 +1,14 @@
 # x402 on Base mainnet — what the switch needs, in order
 
-Status (2026-11-04): **not switched.** Production runs x402 on Base Sepolia, the
-test network. The code below is ready for mainnet and refuses to arm a
-half-finished switch. Nothing changes in production until the operator sets the
-secrets in step 3.
+Status (2026-11-05): **switched.** Production runs x402 on Base mainnet
+(`eip155:8453`) through the CDP facilitator at 1 cent per anchor; `/api/health`
+read back `armed: true, network: eip155:8453, price_atomic: "10000",
+config_problems: 0`, and a test transfer reached the payTo address on Base.
+Coinbase's discovery listing ("Bazaar") still waits for the first settled
+agent payment.
+
+> Superseded 2026-11-05 (kept visible): "Status (2026-11-04): **not switched.**
+> Production runs x402 on Base Sepolia, the test network."
 
 ## Why the CDP facilitator
 

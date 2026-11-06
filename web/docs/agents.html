@@ -179,22 +179,21 @@
     bought and read by agents.</p>
     <ul>
       <li><strong>Agents pay without an account.</strong> An agent stamps a hash, pays for that
-      one anchor, and gets a receipt with no signup. It is not open for real money yet: today an
-      agent anchors on the free tier, with an API key, or by paying on the test network (below), and
-      the <a href="/pricing">schedule of fees</a> will list a pay-per-anchor price the day real
-      payments open.</li>
+      one anchor, and gets a receipt with no signup. Past the free tier an agent pays 1 cent per
+      anchor in USDC on Base (below), or uses an API key.</li>
       <li><strong>One tool to stamp, one to look up.</strong> That is the whole marketplace listing
       above &mdash; <code>bitcoin_timestamp_receipt</code> and <code>verify_receipt</code>.
       Verification stays free with the open tools; the paid piece is an agent doing the office
       work for another agent.</li>
-      <li><strong>Or pay over plain HTTP, on the test network today.</strong> With
+      <li><strong>Or pay over plain HTTP.</strong> With
       <a href="https://www.x402.org/">x402</a> (USDC on Base), an agent past the free tier gets a
       <code>402</code> from <code>POST /api/anchor</code> whose <code>PAYMENT-REQUIRED</code> header
       carries the price and the pay-to address; it signs an EIP-3009 USDC authorization for that
       exact amount and resends the same request with a <code>PAYMENT-SIGNATURE</code> header; the
       answer is the receipt plus a <code>PAYMENT-RESPONSE</code> header carrying the settlement.
-      One authorization buys one anchor. It runs on <strong>Base Sepolia, the test network</strong>,
-      while the first real payments are verified: test USDC has no value, and mainnet opens later.</li>
+      One authorization buys one anchor, for 1 cent in USDC on <strong>Base mainnet</strong>;
+      <code>GET /api/health</code> shows the live network and price before an agent pays. The
+      MCP server (0.1.6) can pay for itself too, from a wallet key and a daily cap you set.</li>
       <li><strong>The proof stays on Bitcoin, not on whoever hosts the marketplace.</strong> Once Bitcoin has attested it, if the
       marketplace or the chain it settles on goes away, the receipt still points at a Bitcoin
       block. Same doctrine as the calendars: the office and the platform are both allowed

@@ -179,6 +179,9 @@ Disarming a rail that holds settled-but-undelivered (HELD) payments
 therefore leaves them unredeemable until it is armed again; check
 `x402_ledger.jsonl` for held charges before removing the pay-to address.
 
+> 2026-11-05: mainnet was approved and switched; see `docs/X402_MAINNET.md`. Item 1
+> below is kept as written.
+
 1. **Testnet only until mainnet is explicitly approved.** Create a Base
    Sepolia address to receive payments (a fresh EOA is enough; no ETH is
    needed to RECEIVE — the facilitator pays gas to settle).

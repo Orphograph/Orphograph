@@ -102,3 +102,33 @@ def test_main_exit_codes(monkeypatch, capsys):
     monkeypatch.setattr(chk, "_json", down)
     assert chk.main(["payto", WALLET]) == 2
     assert chk.main(["bazaar"]) == 2
+
+
+def _health(**x):
+    base = {"armed": True, "network": "eip155:8453", "price_atomic": "10000", "config_problems": 0}
+    base.update(x)
+    return lambda url, body=None: {"x402": base}
+
+
+def test_live_passes_when_production_matches_the_copy(monkeypatch):
+    monkeypatch.setattr(chk, "_json", _health())
+    ok, msg = chk.check_live()
+    assert ok and msg.startswith("PASS"), msg
+
+
+@pytest.mark.parametrize("over, why", [
+    ({"network": "eip155:84532"}, "network"),
+    ({"price_atomic": "20000"}, "price_atomic"),
+    ({"armed": False}, "not armed"),
+    ({"config_problems": 2}, "config_problems"),
+])
+def test_live_names_a_secrets_only_drift(monkeypatch, over, why):
+    monkeypatch.setattr(chk, "_json", _health(**over))
+    ok, msg = chk.check_live()
+    assert not ok and why in msg, msg
+
+
+def test_live_without_an_x402_block_is_could_not_check(monkeypatch):
+    monkeypatch.setattr(chk, "_json", lambda url, body=None: {"status": "ok"})
+    with pytest.raises(chk.CheckError):
+        chk.check_live()

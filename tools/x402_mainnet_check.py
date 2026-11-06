@@ -3,6 +3,7 @@
 
     python3 tools/x402_mainnet_check.py payto 0xYourAddress
     python3 tools/x402_mainnet_check.py bazaar
+    python3 tools/x402_mainnet_check.py live     # after ANY x402 secret change
 
 ``payto`` runs the server's own payTo rules (format, zero address, USDC token
 contract, EIP-55 checksum) and then asks a public Base mainnet RPC whether the
@@ -129,15 +130,42 @@ def check_bazaar() -> tuple[bool, str]:
                    "Expected until the first settled mainnet payment through CDP.")
 
 
+def check_live(base: str = "https://orphograph.com") -> tuple[bool, str]:
+    """Production must match what the public copy states: Base mainnet at
+    x402.DEFAULT_PRICE_CENTS. Price and network are set by Fly secrets, which
+    change no code, so this is the only check that sees a secrets-only drift
+    (2026-11-05: the network switched and four pages kept saying testnet)."""
+    health = _json(base.rstrip("/") + "/api/health")
+    x = health.get("x402") if isinstance(health, dict) else None
+    if not isinstance(x, dict):
+        raise CheckError("health has no x402 block")
+    want_price = str(x402.DEFAULT_PRICE_CENTS * 10_000)
+    problems = []
+    if x.get("armed") is not True:
+        problems.append("x402 is not armed")
+    if x.get("network") != x402.NETWORK_BASE_MAINNET:
+        problems.append(f"network is {x.get('network')}, the copy says {x402.NETWORK_BASE_MAINNET}")
+    if x.get("price_atomic") != want_price:
+        problems.append(f"price_atomic is {x.get('price_atomic')}, the copy says {want_price} "
+                        f"({x402.DEFAULT_PRICE_CENTS} cent)")
+    if x.get("config_problems"):
+        problems.append(f"config_problems = {x.get('config_problems')}")
+    if problems:
+        return False, "; ".join(problems) + ". Fix the secret or the copy (openapi, llms.txt, /docs/agents, /pricing)."
+    return True, f"PASS: live x402 is armed on {x['network']} at {x['price_atomic']} ({x402.DEFAULT_PRICE_CENTS} cent), as the copy says"
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("payto", help="check a receiving address before staging it")
     p.add_argument("address")
     sub.add_parser("bazaar", help="is Orphograph listed in the x402 discovery search?")
+    sub.add_parser("live", help="does production match the network and price the copy states?")
     args = parser.parse_args(argv)
     try:
-        ok, message = check_pay_to(args.address) if args.cmd == "payto" else check_bazaar()
+        ok, message = (check_pay_to(args.address) if args.cmd == "payto"
+                       else check_live() if args.cmd == "live" else check_bazaar())
     except CheckError as exc:
         print(f"COULD NOT CHECK: {exc}", file=sys.stderr)
         return 2

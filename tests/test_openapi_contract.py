@@ -291,8 +291,13 @@ class TestOpenapiContract(unittest.TestCase):
 
     def test_x402_network_and_claims(self):
         desc = self.spec["paths"]["/api/anchor"]["post"]["description"]
-        self.assertIn(_x402_default_network(), desc)
-        self.assertIn("TEST network", desc)
+        # Production runs mainnet (set by Fly secrets, 2026-11-05), so the
+        # contract names it, and never the test network an agent would
+        # discount as play money.
+        self.assertIn("eip155:8453", desc)
+        self.assertNotIn("TEST network", desc)
+        self.assertNotIn("84532", desc)
+        self.assertIn("1 cent", desc)
         self.assertEqual(check_claims(self.spec), [])
 
     # -- negative controls: each checker must fire on a planted defect
