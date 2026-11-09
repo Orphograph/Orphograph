@@ -39,7 +39,7 @@ __all__ = [
     "verify_inclusion",
 ]
 
-__version__ = "0.1.1"
+__version__ = "0.1.3"
 
 
 def anchor_folder(
