@@ -39,7 +39,7 @@ DEFAULT_TIMEOUT = 60.0
 # default.
 # The version is the package's (pyproject.toml, orphograph.__version__);
 # tests/test_class_fixes_2026_10_17.py pins them equal.
-USER_AGENT = "orphograph-python-sdk/0.1.1 (+https://orphograph.com)"
+USER_AGENT = "orphograph-python-sdk/0.1.3 (+https://orphograph.com)"
 
 
 class OrphographError(RuntimeError):

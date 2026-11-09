@@ -1,0 +1,13 @@
+{
+  "version": "0.1.2",
+  "sdist": "orphograph-0.1.2.tar.gz",
+  "sdist_sha256": "458bfd4fedb8417850d8af7aae014b024ab58b3af155b2bd94c0ee2dff1e3f27",
+  "files": {
+    "orphograph/__init__.py": "40a025ff182123a633eef7859ab3e1052134b0a871b4504705c0ab7108f71694",
+    "orphograph/__main__.py": "a23a3930914c7d66034a75396f3b070fd68c0053abb1a68d04f3d8b1a68c7ab1",
+    "orphograph/_cli.py": "5c42c4f1a207c74f867ba6e991dd46341022b41ad106e96f5f9cab4dc96e71bc",
+    "orphograph/_client.py": "c17b74d76da9bd52fa238197ec25dd328edddacf5160052b7f68a516c04c53d1",
+    "orphograph/_merkle.py": "b8d15f50f03539d07286b88dc5e3fb4baf9a63fa43d65cfbdf359f45ba8ec74a",
+    "orphograph/py.typed": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+}
