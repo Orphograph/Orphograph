@@ -34,6 +34,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import sys
 import threading
 import time
 from datetime import datetime, timezone
@@ -236,9 +237,20 @@ def _calendars_public(h: dict) -> dict:
     }
 
 
+STATS_SLOW_SEC = float(os.environ.get("ORPHO_STATS_SLOW_SEC", "1.0"))
+
+
 def _compute_snapshot() -> dict:
+    # @stats-cold-start: name the slow phase when a computation is slow.
+    # Only durations and a row count are logged — never a label or an id.
+    t0 = time.monotonic()
     h = health.snapshot()
+    t1 = time.monotonic()
     counts = _scan_ledger()
+    t2 = time.monotonic()
+    if t2 - t0 >= STATS_SLOW_SEC:
+        sys.stderr.write(f"[stats] compute {t2 - t0:.3f}s (health {t1 - t0:.3f}s, "
+                         f"ledger {t2 - t1:.3f}s, rows {counts.get('total', 0)})\n")
     return {
         "version": h.get("version"),
         "uptime_sec": h.get("uptime_sec"),
