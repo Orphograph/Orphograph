@@ -93,3 +93,82 @@ def test_build_manifest_tamper_breaks_reconstruction(tmp_path):
     manifest["leaves"][0]["file_sha256_hex"] = "00" * 32
     with pytest.raises(ValueError):
         merkle.MerkleTree.from_manifest(manifest)
+
+
+# ── network retry (2026-11-16) ────────────────────────────────────────────────
+# The 2026-11-15 run lost its week to one DNS failure ("nodename nor servname
+# provided"): the job had no retry. Retry ONLY failures where the request never
+# reached the server (DNS, refused, unreachable), so a retry cannot mint a
+# second receipt; a timeout after sending is never retried.
+import errno  # noqa: E402
+import socket  # noqa: E402
+import urllib.error  # noqa: E402
+
+
+class _Resp:
+    def __init__(self, payload: bytes):
+        self._p = payload
+
+    def read(self):
+        return self._p
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+
+def _scripted(monkeypatch, outcomes):
+    calls = []
+
+    def fake(req, timeout):
+        calls.append(req.full_url)
+        o = outcomes[min(len(calls) - 1, len(outcomes) - 1)]
+        if isinstance(o, BaseException):
+            raise o
+        return _Resp(o)
+
+    monkeypatch.setattr(weekly_anchor, "_urlopen", fake)
+    monkeypatch.setattr(weekly_anchor, "_sleep", lambda s: None)
+    monkeypatch.setenv("ORPHO_WEEKLY_RETRY_DELAYS", "1,1")
+    return calls
+
+
+_OK = b'{"receipt_id": "r1", "calendars_ok": 5, "calendars_total": 5}'
+_DNS = urllib.error.URLError(socket.gaierror(8, "nodename nor servname provided, or not known"))
+
+
+def test_dns_failure_is_retried_until_success(monkeypatch):
+    calls = _scripted(monkeypatch, [_DNS, _DNS, _OK])
+    out = weekly_anchor.anchor_folder({"root_hex": "00"}, "l", "s")
+    assert out.get("receipt_id") == "r1"
+    assert len(calls) == 3
+
+
+def test_refused_and_unreachable_are_retried(monkeypatch):
+    refused = urllib.error.URLError(ConnectionRefusedError(61, "refused"))
+    unreach = urllib.error.URLError(OSError(errno.ENETUNREACH, "Network is unreachable"))
+    calls = _scripted(monkeypatch, [refused, unreach, _OK])
+    assert weekly_anchor.anchor_folder({"root_hex": "00"}, "l", "s").get("receipt_id") == "r1"
+    assert len(calls) == 3
+
+
+def test_dns_failure_gives_up_after_all_attempts(monkeypatch):
+    calls = _scripted(monkeypatch, [_DNS])
+    out = weekly_anchor.anchor_folder({"root_hex": "00"}, "l", "s")
+    assert out.get("receipt_id") is None
+    assert "after 3 attempt" in out["error"]
+    assert len(calls) == 3
+
+
+@pytest.mark.parametrize("exc", [
+    urllib.error.URLError(TimeoutError("timed out")),   # may have been sent
+    TimeoutError("timed out"),
+    urllib.error.HTTPError("u", 503, "busy", {}, None),  # the server answered
+])
+def test_failures_after_send_are_never_retried(monkeypatch, exc):
+    calls = _scripted(monkeypatch, [exc, _OK])
+    out = weekly_anchor.anchor_folder({"root_hex": "00"}, "l", "s")
+    assert out.get("receipt_id") is None
+    assert len(calls) == 1
