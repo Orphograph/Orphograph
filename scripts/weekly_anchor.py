@@ -31,11 +31,14 @@ byte-identical to what the server recomputes and verifies.
 """
 from __future__ import annotations
 
+import errno
 import hashlib
 import json
 import os
+import socket
 import subprocess
 import sys
+import time
 import urllib.error
 import urllib.request
 from datetime import datetime, timezone
@@ -264,17 +267,47 @@ def anchor_folder(manifest: dict, label: str, office_signature: str) -> dict:
     req = urllib.request.Request(
         f"{BASE_URL}/api/anchor_folder", data=body, method="POST", headers=headers,
     )
-    try:
-        with _urlopen(req, timeout=60) as resp:
-            return json.loads(resp.read().decode("utf-8"))
-    except urllib.error.HTTPError as e:
+    delays = _retry_delays()
+    for attempt in range(1, len(delays) + 2):
         try:
-            body_raw = e.read().decode("utf-8", errors="replace")[:300]
-        except Exception:
-            body_raw = ""
-        return {"error": f"HTTP {e.code}", "body": body_raw}
-    except Exception as e:
-        return {"error": f"{type(e).__name__}: {e}"}
+            with _urlopen(req, timeout=60) as resp:
+                return json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as e:
+            try:
+                body_raw = e.read().decode("utf-8", errors="replace")[:300]
+            except Exception:
+                body_raw = ""
+            return {"error": f"HTTP {e.code}", "body": body_raw}
+        except Exception as e:
+            if _never_sent(e) and attempt <= len(delays):
+                sys.stderr.write(f"[weekly_anchor]   attempt {attempt} not sent ({e}); "
+                                 f"retrying in {delays[attempt - 1]:g}s\n")
+                _sleep(delays[attempt - 1])
+                continue
+            suffix = f" (after {attempt} attempt(s))" if _never_sent(e) else ""
+            return {"error": f"{type(e).__name__}: {e}{suffix}"}
+    return {"error": "unreachable"}  # pragma: no cover — the loop always returns
+
+
+# 2026-11-15 lost a week to one DNS failure. Retry ONLY failures where the
+# request never left this machine, so a retry cannot mint a second receipt.
+# A timeout may have been sent and is never retried.
+_sleep = time.sleep
+
+
+def _retry_delays() -> list[float]:
+    raw = os.environ.get("ORPHO_WEEKLY_RETRY_DELAYS", "60,300")
+    try:
+        return [float(x) for x in raw.split(",") if x.strip()]
+    except ValueError:
+        return [60.0, 300.0]
+
+
+def _never_sent(exc: BaseException) -> bool:
+    reason = exc.reason if isinstance(exc, urllib.error.URLError) else None
+    if isinstance(reason, (socket.gaierror, ConnectionRefusedError)):
+        return True
+    return getattr(reason, "errno", None) in (errno.ENETUNREACH, errno.EHOSTUNREACH)
 
 
 def main() -> int:
