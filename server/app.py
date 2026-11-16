@@ -92,6 +92,9 @@ WEB_DIR = ROOT / "web"
 
 HOST = os.environ.get("HOST", "127.0.0.1")
 PORT = int(os.environ.get("PORT", "8989"))
+# A request whose response starts this many seconds after its request line
+# gets a `slow` access-log line with the duration (@stats-cold-start).
+SLOW_REQUEST_SEC = float(os.environ.get("ORPHO_SLOW_REQUEST_SEC", "2.0"))
 
 MAX_BODY_BYTES = 4096  # we only accept tiny JSON payloads
 MAX_WEBHOOK_BODY_BYTES = 256 * 1024
@@ -1984,9 +1987,23 @@ class Handler(BaseHTTPRequestHandler):
             return f"{words[0]} {self._log_target(words[1])}"
         return "[unparsed request line]"
 
+    def parse_request(self):  # noqa: N802 (stdlib name)
+        # Start the clock once the request line is read, not in
+        # handle_one_request, which also spans the idle keep-alive wait.
+        self._t_request = time.monotonic()
+        return super().parse_request()
+
     def log_request(self, code="-", size="-"):
         code = getattr(code, "value", code)
         self.log_message('"%s" %s %s', self._log_requestline(), str(code), str(size))
+        # @stats-cold-start: the access log carried no duration, so a route
+        # that timed out at the edge after each deploy could not be placed.
+        # log_request runs when the response starts, after the handler's work.
+        started = getattr(self, "_t_request", None)
+        if started is not None:
+            took = time.monotonic() - started
+            if took >= SLOW_REQUEST_SEC:
+                self.log_message('slow "%s" %.3fs', self._log_requestline(), took)
 
     def log_error(self, format, *args):  # noqa: A002 (stdlib signature)
         # Every stdlib and app error message is "code %d, message %s"; the
