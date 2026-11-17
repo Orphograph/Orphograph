@@ -279,6 +279,12 @@ def snapshot() -> dict:
     return fresh
 
 
+def warm_ledger_memo() -> int:
+    """Run one ledger scan to fill the per-receipt manifest memo; returns the
+    row count. Leaves the snapshot cache untouched, so counts stay fresh."""
+    return int(_scan_ledger().get("total", 0))
+
+
 def _reset_cache_for_tests() -> None:
     """Test hook: drop the cached snapshot so the next call recomputes."""
     global _cached, _cached_at
