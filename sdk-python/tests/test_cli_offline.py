@@ -296,3 +296,35 @@ class TestVersionAndCopyDrift(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# 2026-11-17: receipt ids starting with "-" (about 1 in 64) were read by
+# argparse as option flags, so `orphograph verify DIR -AbC...` was a usage error.
+def test_cli_accepts_receipt_ids_that_start_with_a_dash(monkeypatch, tmp_path):
+    from orphograph import _cli
+    seen = {}
+
+    def fake_verify(folder, receipt_id, **kw):
+        seen["rid"] = receipt_id
+        raise _cli.OrphographError(503, "stop here")
+
+    monkeypatch.setattr(_cli, "verify_folder_detail", fake_verify)
+    rc = _cli.main(["verify", str(tmp_path), "-AbCdEfGhIjKlMnO"])
+    # An argparse usage error raises SystemExit before verify is called, so
+    # the id arriving here is the proof that parsing succeeded. (rc is 2 for
+    # the faked service error too, so it cannot tell the two apart.)
+    assert seen.get("rid") == "-AbCdEfGhIjKlMnO"
+    assert rc != 0
+
+
+def test_cli_inclusion_proof_accepts_a_dash_led_id(monkeypatch):
+    from orphograph import _cli
+    seen = {}
+
+    def fake_proof(receipt_id, path, **kw):
+        seen["rid"] = receipt_id
+        raise _cli.OrphographError(503, "stop here")
+
+    monkeypatch.setattr(_cli, "inclusion_proof", fake_proof)
+    _cli.main(["inclusion-proof", "-AbCdEfGhIjKlMnO", "a/b.txt"])
+    assert seen.get("rid") == "-AbCdEfGhIjKlMnO"
