@@ -7831,6 +7831,31 @@ def _seed_sample_folder_receipt() -> None:
     sys.stderr.write(f"seeded sample folder receipt {rid} from {sample_dir} → {target}\n")
 
 
+def _start_stats_warmup() -> None:
+    """Run the /api/stats ledger scan once in the background at boot.
+
+    @stats-cold-start, measured in production 2026-11-16: the first /api/stats
+    on a fresh process took 10.769 s, all in the ledger scan (423 rows; a
+    per-receipt manifest probe on a cold volume, remembered afterwards). The
+    post-deploy route check arrives ~100 s after boot with a 10 s timeout and
+    was always that first caller. Paying the scan here keeps it off every
+    request path. ORPHO_STATS_WARMUP=0 turns it off.
+    """
+    if os.environ.get("ORPHO_STATS_WARMUP", "1") != "1":
+        return
+
+    def warm() -> None:
+        t0 = time.monotonic()
+        try:
+            snap = stats.snapshot()
+            rows = snap.get("anchors", {}).get("total", 0)
+            sys.stderr.write(f"[stats] warmed in {time.monotonic() - t0:.3f}s (rows {rows})\n")
+        except Exception as exc:  # noqa: BLE001 — a warm-up failure must not stop the server
+            sys.stderr.write(f"[stats] warm-up failed: {type(exc).__name__}\n")
+
+    threading.Thread(target=warm, name="stats-warmup", daemon=True).start()
+
+
 def _start_upgrade_scheduler() -> None:
     """Background thread that runs upgrade_worker on a cadence.
 
@@ -8028,6 +8053,7 @@ def main() -> int:
     _start_upgrade_scheduler()
     _start_cadence_scheduler()
     _start_funnel_digest_scheduler()
+    _start_stats_warmup()
     # A pay-to address with an asset whose EIP-712 domain is unknown leaves the
     # rail unarmed (no facilitator could verify it); say so, or the founder sees
     # only `x402.armed: false` in /api/health with no reason.
