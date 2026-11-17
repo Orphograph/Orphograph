@@ -323,7 +323,14 @@ def _append_ledger(record: dict) -> None:
 
 
 def _new_receipt_id() -> str:
-    return secrets.token_urlsafe(12)
+    # Never mint an id that starts with "-" (about 1 draw in 64): command-line
+    # tools parse such an id as an option flag (2026-11-17,
+    # tests/test_dash_receipt_ids.py). Existing ids keep working; the CLIs
+    # accept them.
+    while True:
+        rid = secrets.token_urlsafe(12)
+        if not rid.startswith("-"):
+            return rid
 
 
 def _is_hex(s: str, length: int) -> bool:

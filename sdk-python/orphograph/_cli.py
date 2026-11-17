@@ -171,9 +171,38 @@ def _load_proof(proof_json: str, root_override: Optional[str]) -> tuple:
     return proof, root, source, embedded_path
 
 
+# Receipt ids are 16 base64url characters; about 1 in 64 starts with "-",
+# which argparse reads as an option flag (2026-11-17). An id-shaped token that
+# is not one of our own options is shielded from argparse and restored after.
+_DASH_ID = re.compile(r"-[A-Za-z0-9_-]{15}")
+_SHIELD = "\ue000"
+
+
+def _shield_dash_ids(parser, argv):
+    known = set()
+
+    def walk(p):
+        for action in p._actions:
+            known.update(action.option_strings)
+            if isinstance(action, argparse._SubParsersAction):
+                for sub in action.choices.values():
+                    walk(sub)
+
+    walk(parser)
+    return [_SHIELD + a if _DASH_ID.fullmatch(a) and a not in known else a for a in argv]
+
+
+def _unshield(args):
+    for k, v in vars(args).items():
+        if isinstance(v, str) and v.startswith(_SHIELD):
+            setattr(args, k, v[len(_SHIELD):])
+    return args
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     parser = _build_parser()
-    args = parser.parse_args(argv)
+    argv = sys.argv[1:] if argv is None else list(argv)
+    args = _unshield(parser.parse_args(_shield_dash_ids(parser, argv)))
     # An empty --server-url (an unset variable in `--server-url "$URL"`) fell
     # through to ORPHO_SERVER_URL or the live default: the caller named a
     # server and got another one. verify-inclusion makes no request.

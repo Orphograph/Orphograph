@@ -29,6 +29,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import sys
 import urllib.error
 import urllib.parse
@@ -167,6 +168,34 @@ def append_receipt(state_dir: str, record: dict) -> None:
         f.write(json.dumps(record, sort_keys=True) + "\n")
 
 
+# Receipt ids are 16 base64url characters; about 1 in 64 starts with "-",
+# which argparse reads as an option flag (2026-11-17). An id-shaped token that
+# is not one of our own options is shielded from argparse and restored after.
+_DASH_ID = re.compile(r"-[A-Za-z0-9_-]{15}")
+_SHIELD = "\ue000"
+
+
+def _shield_dash_ids(parser, argv):
+    known = set()
+
+    def walk(p):
+        for action in p._actions:
+            known.update(action.option_strings)
+            if isinstance(action, argparse._SubParsersAction):
+                for sub in action.choices.values():
+                    walk(sub)
+
+    walk(parser)
+    return [_SHIELD + a if _DASH_ID.fullmatch(a) and a not in known else a for a in argv]
+
+
+def _unshield(args):
+    for k, v in vars(args).items():
+        if isinstance(v, str) and v.startswith(_SHIELD):
+            setattr(args, k, v[len(_SHIELD):])
+    return args
+
+
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument("--base", default=os.environ.get("ORPHO_BASE_URL", DEFAULT_BASE))
@@ -189,7 +218,7 @@ def main() -> int:
     sp.add_argument("--dry-run", action="store_true", **anchor_option_kwargs)
     sp = sub.add_parser("verify"); sp.add_argument("receipt_id")
     sp.add_argument("--file", default=None)
-    args = p.parse_args()
+    args = _unshield(p.parse_args(_shield_dash_ids(p, sys.argv[1:])))
     if args.api_key and args.pack_token:
         p.error("use --api-key or --pack-token, not both")
 
