@@ -72,6 +72,7 @@ import stripe_api  # noqa: E402
 import stripe_webhook  # noqa: E402
 import nowpayments_api  # noqa: E402
 import nowpayments_webhook  # noqa: E402
+import xrpl_pay  # noqa: E402
 import subscriptions  # noqa: E402
 import teams  # noqa: E402
 from email_fold import LOWERCASE_HINT, fold_email, needs_lowercase  # noqa: E402
@@ -1887,7 +1888,8 @@ class Handler(BaseHTTPRequestHandler):
     # /blog/ slugs are public and stay readable.
     _LOG_ID_ROUTES = ("/r/", "/api/receipt/", "/api/verify/", "/api/verify_folder/",
                       "/api/verify_output/", "/api/badge/", "/certificate/",
-                      "/api/nowpayments/order/", "/api/me/receipt/")
+                      "/api/nowpayments/order/", "/api/me/receipt/",
+                      "/api/xrpl/invoice/")
     _LOG_CONTROL_TABLE = {
         **{c: f"\\x{c:02x}" for c in (*range(0x20), *range(0x7f, 0xa0))},
         ord("\\"): "\\\\",
@@ -2875,6 +2877,11 @@ class Handler(BaseHTTPRequestHandler):
                 "credits": credit_count,
             })
             return
+        if path.startswith("/api/xrpl/invoice/") and xrpl_pay.armed():
+            # Disarmed, this route does not exist: it falls through to the
+            # same 404 any unknown path gets.
+            self._handle_xrpl_invoice_status(path[len("/api/xrpl/invoice/"):].rstrip("/"))
+            return
         if path == "/api/me/webhooks":
             email = self._session_email()
             if not email:
@@ -3498,6 +3505,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         if self.path == "/api/nowpayments/create":
             self._handle_nowpayments_create()
+            return
+        if self.path == "/api/xrpl/invoice" and xrpl_pay.armed():
+            self._handle_xrpl_invoice_create()
             return
         # Maintenance mode: block user-facing requests but allow critical ops
         if ORPHO_MAINTENANCE_MODE:
@@ -7495,6 +7505,103 @@ class Handler(BaseHTTPRequestHandler):
             "plan": plan,
             "currency": currency,
         })
+
+    # ---------- XRPL (receive-only RLUSD rail, server/xrpl_pay.py) ----------
+
+    def _handle_xrpl_invoice_create(self) -> None:
+        """Buyer-initiated: quote a pack in RLUSD and hand back where to pay.
+
+        Body: {"plan": "writer_pack"|"pack_50", "email": "<required>"}.
+        Routed only while xrpl_pay.armed(). Same gates as the NOWPayments
+        create: checkout switch, the checkout rate bucket (its own key), the
+        body cap, and a required email (the claim code is mailed there).
+        """
+        if ORPHO_DISABLE_CHECKOUT:
+            _json_response(self, 503, {"error": "checkout disabled"})
+            return
+        allowed, retry_after = _checkout_limiter.check(f"xrpl:{self._client_key()}")
+        if not allowed:
+            _send_rate_limited(self, int(retry_after) + 1, {
+                "error": "rate limit exceeded",
+                "retry_after_seconds": int(retry_after) + 1,
+            })
+            return
+        length = _read_content_length(self)
+        if length < 0 or length > MAX_BODY_BYTES:
+            _json_response(self, 400, {"error": "invalid body size"})
+            return
+        raw = self.rfile.read(length) if length > 0 else b""
+        try:
+            body = json.loads(raw.decode("utf-8")) if raw else {}
+        except (ValueError, RecursionError):
+            _json_response(self, 400, {"error": "bad json"})
+            return
+        if not isinstance(body, dict):
+            _json_response(self, 400, {"error": "bad json shape"})
+            return
+        plan = str(body.get("plan", "")).strip().lower()
+        email = str(body.get("email", "")).strip()
+        if plan not in xrpl_pay.plans():
+            _json_response(self, 400, {"error": "unknown plan"})
+            return
+        if not email or "@" not in email or len(email) > 254:
+            _json_response(self, 400, {
+                "error": "A valid email is required — it is where we send your claim code.",
+            })
+            return
+        if needs_lowercase(email):
+            _refuse_email_needs_lowercase(self)
+            return
+        try:
+            record = xrpl_pay.create_invoice(plan, email)
+        except (OSError, RuntimeError) as e:
+            sys.stderr.write(f"[xrpl_pay] invoice not created: {type(e).__name__}\n")
+            _json_response(self, 503, {"ok": False, "error": "XRPL checkout unavailable."})
+            return
+        Handler._record_demand(self,
+            "checkout_created", auth_path="none", surface="xrpl", outcome="success")
+        _json_response(self, 200, {
+            "ok": True,
+            "invoice_id": record["invoice_id"],
+            "plan": plan,
+            "credits": record["credits"],
+            "expires_at": xrpl_pay.public_view(record, "skipped")["expires_at"],
+            "pay": xrpl_pay.pay_instructions(record),
+            "status_url": f"/api/xrpl/invoice/{record['invoice_id']}",
+        })
+
+    def _handle_xrpl_invoice_status(self, invoice_id: str) -> None:
+        """Status poll; also runs one bounded, throttled ledger check.
+
+        PRIVACY CONTRACT, as /api/nowpayments/order/: never the email, never
+        the claim code. A node failure answers verification "unavailable"
+        with the stored state unchanged, never "unpaid"."""
+        if not xrpl_pay.INVOICE_ID_RE.match(invoice_id):
+            _json_response(self, 400, {"error": "invalid invoice id"})
+            return
+        allowed, retry = self._lookup_allowed(
+            _status_limiter, f"xrplstat:{self._client_key()}")
+        if not allowed:
+            _send_rate_limited(self, int(retry) + 1, {"error": "too many requests"})
+            return
+        try:
+            outcome = xrpl_pay.check_invoice(invoice_id)
+        except KeyError:
+            _json_response(self, 404, {"error": "unknown invoice"})
+            return
+        except OSError as e:
+            sys.stderr.write(f"[xrpl_pay] invoice store unreadable: {type(e).__name__}\n")
+            _json_response(self, 503, {"error": "invoice store unavailable"})
+            return
+        if outcome["minted"]:
+            Handler._record_demand(self,
+                "payment_confirmed", auth_path="pack", surface="xrpl",
+                outcome="success", authenticated=True, paid=True)
+            Handler._record_demand(self,
+                "entitlement_activated", auth_path="pack", surface="xrpl",
+                outcome="success", authenticated=True, paid=True)
+        _json_response(self, 200, xrpl_pay.public_view(
+            outcome["record"], outcome["verification"], outcome["reason"]))
 
 
 # The site's stylesheet links, taken ONCE from the error template — the single
