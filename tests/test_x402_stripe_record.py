@@ -96,10 +96,7 @@ def _pay(base: str, nonce: str, hash_hex: str):
 
 
 def _pi_calls(data_dir: Path) -> list[dict]:
-    path = data_dir / "stub_stripe_calls.jsonl"
-    if not path.exists():
-        return []
-    rows = [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+    rows = _srv.jsonl_rows(data_dir / "stub_stripe_calls.jsonl")
     return [r for r in rows if r["path"] == PI_PATH]
 
 

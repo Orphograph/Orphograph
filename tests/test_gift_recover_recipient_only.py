@@ -53,9 +53,7 @@ def server(tmp_path_factory):
 
 
 def _rows(path: Path) -> list[dict]:
-    if not path.exists():
-        return []
-    return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+    return _srv.jsonl_rows(path)
 
 
 def _mails(d: Path) -> list[dict]:

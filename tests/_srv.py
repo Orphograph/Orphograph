@@ -375,6 +375,19 @@ def stalled_request(base: str, target: str, method: str = "POST", *,
         s.close()
 
 
+def jsonl_rows(path: str | os.PathLike) -> list:
+    """The complete records of a JSONL file a server process may still be
+    appending to. A record exists once its newline is on disk; text after the
+    last newline is a write in progress, not a malformed row, so it is left
+    for the next read (tests/test_jsonl_partial_line_reader.py)."""
+    path = Path(path)
+    if not path.exists():
+        return []
+    text = path.read_text()
+    complete = text[:text.rfind("\n") + 1]
+    return [json.loads(line) for line in complete.splitlines() if line.strip()]
+
+
 def _json_object(raw: bytes) -> dict:
     try:
         parsed = json.loads(raw)
