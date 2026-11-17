@@ -7847,8 +7847,11 @@ def _start_stats_warmup() -> None:
     def warm() -> None:
         t0 = time.monotonic()
         try:
-            snap = stats.snapshot()
-            rows = snap.get("anchors", {}).get("total", 0)
+            # Warm only the per-receipt manifest memo (the slow part). Calling
+            # stats.snapshot() here would also fill the 60 s response cache
+            # with boot-time counts, so the first real reader could see a
+            # stale count (caught by test_openapi_contract on PR #315).
+            rows = stats.warm_ledger_memo()
             sys.stderr.write(f"[stats] warmed in {time.monotonic() - t0:.3f}s (rows {rows})\n")
         except Exception as exc:  # noqa: BLE001 — a warm-up failure must not stop the server
             sys.stderr.write(f"[stats] warm-up failed: {type(exc).__name__}\n")
