@@ -244,3 +244,16 @@ def test_empty_source_ref_keeps_the_working_copy(tmp_path):
     leaves, _, note = weekly_anchor.source_leaves(repo, ["a.txt"], "", "")
     assert note == "working copy"
     assert leaves[0]["file_sha256_hex"] == hashlib.sha256(b"uncommitted edit").hexdigest()
+
+
+def test_every_artifact_is_tracked_on_this_tree():
+    """Each ARTIFACTS entry must be a tracked file. A listed path that does
+    not exist is skipped with a note on every run, so the weekly root silently
+    attests less than the list claims (web/seal.svg, absent since before
+    2026-11-16, was logged as a skip every week)."""
+    import subprocess
+    root = Path(__file__).resolve().parent.parent
+    tracked = set(subprocess.run(["git", "ls-files"], cwd=root, check=True,
+                                 capture_output=True, text=True).stdout.split())
+    missing = [a for a in weekly_anchor.ARTIFACTS if a not in tracked]
+    assert not missing, f"ARTIFACTS lists untracked paths: {missing}"
