@@ -172,3 +172,75 @@ def test_failures_after_send_are_never_retried(monkeypatch, exc):
     out = weekly_anchor.anchor_folder({"root_hex": "00"}, "l", "s")
     assert out.get("receipt_id") is None
     assert len(calls) == 1
+
+
+# ── anchor what is deployed, not the working copy (2026-11-17) ───────────────
+# Every weekly anchor since 10-11 had the same root: the job hashed the
+# founder's checkout, frozen at 5e3ffb0 (10-04) with uncommitted deletions,
+# while production moved 80+ commits on. Founder ruling 2026-11-17: anchor
+# what is deployed, i.e. the bytes of origin/master.
+import subprocess  # noqa: E402
+
+
+def _git(repo, *args):
+    return subprocess.run(["git", "-C", str(repo), *args], check=True,
+                          capture_output=True, text=True).stdout.strip()
+
+
+def _repo(tmp_path):
+    repo = tmp_path / "r"
+    repo.mkdir()
+    _git(repo, "init", "-q", "-b", "main")
+    _git(repo, "config", "user.email", "t@example.invalid")
+    _git(repo, "config", "user.name", "t")
+    _write(repo, "a.txt", b"committed v1")
+    _write(repo, "b.txt", b"committed b")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-q", "-m", "c1")
+    return repo
+
+
+def test_ref_leaves_hash_committed_bytes_not_the_working_copy(tmp_path):
+    repo = _repo(tmp_path)
+    _write(repo, "a.txt", b"uncommitted edit")      # working copy drifts
+    (repo / "b.txt").unlink()                        # and loses a file
+    leaves, head = weekly_anchor.collect_leaves_at_ref(repo, ["a.txt", "b.txt"], "main")
+    by = {lf["path"]: lf for lf in leaves}
+    assert head == _git(repo, "rev-parse", "main")
+    assert by["a.txt"]["file_sha256_hex"] == hashlib.sha256(b"committed v1").hexdigest()
+    assert by["b.txt"]["file_sha256_hex"] == hashlib.sha256(b"committed b").hexdigest()
+    assert by["a.txt"]["size_bytes"] == len(b"committed v1")
+
+
+def test_ref_leaves_match_working_tree_leaves_when_clean(tmp_path):
+    repo = _repo(tmp_path)
+    leaves, head = weekly_anchor.collect_leaves_at_ref(repo, ["a.txt", "b.txt"], "main")
+    assert leaves == weekly_anchor.collect_leaves(repo, ["a.txt", "b.txt"], head)
+
+
+def test_ref_leaves_skip_a_path_absent_at_the_ref(tmp_path):
+    repo = _repo(tmp_path)
+    leaves, _ = weekly_anchor.collect_leaves_at_ref(repo, ["a.txt", "nope.txt"], "main")
+    assert [lf["path"] for lf in leaves if lf["path"] != weekly_anchor.GIT_HEAD_LEAF_PATH] == ["a.txt"]
+
+
+def test_unknown_ref_raises(tmp_path):
+    repo = _repo(tmp_path)
+    with pytest.raises(weekly_anchor.SourceRefError):
+        weekly_anchor.collect_leaves_at_ref(repo, ["a.txt"], "no-such-ref")
+
+
+def test_source_leaves_says_when_the_fetch_failed(tmp_path):
+    repo = _repo(tmp_path)  # no "origin" remote, so the fetch fails
+    leaves, head, note = weekly_anchor.source_leaves(repo, ["a.txt"], "main", "")
+    assert head == _git(repo, "rev-parse", "main")
+    assert "fetch failed" in note and "main @" in note
+    assert any(lf["path"] == "a.txt" for lf in leaves)
+
+
+def test_empty_source_ref_keeps_the_working_copy(tmp_path):
+    repo = _repo(tmp_path)
+    _write(repo, "a.txt", b"uncommitted edit")
+    leaves, _, note = weekly_anchor.source_leaves(repo, ["a.txt"], "", "")
+    assert note == "working copy"
+    assert leaves[0]["file_sha256_hex"] == hashlib.sha256(b"uncommitted edit").hexdigest()
