@@ -146,6 +146,63 @@ def git_head() -> str:
         return ""
 
 
+# 2026-11-17 (founder ruling): anchor what is DEPLOYED. Every run since 10-11
+# hashed the founder's checkout, frozen at 10-04 with uncommitted deletions, so
+# the Standing Record attested the same October snapshot each week. The bytes
+# now come from a git ref (origin/master by default, after a fetch); setting
+# ORPHO_WEEKLY_SOURCE_REF="" restores the working-copy behaviour.
+DEFAULT_SOURCE_REF = "origin/master"
+
+
+class SourceRefError(RuntimeError):
+    """The configured source ref cannot be resolved."""
+
+
+def collect_leaves_at_ref(root: Path, artifacts: list[str], ref: str) -> tuple[list[dict], str]:
+    """Like collect_leaves, but hashes each artifact's bytes AT `ref`.
+
+    Returns (leaves, commit_sha). A path absent at the ref is skipped. The
+    working copy is never read, so local edits and deletions cannot leak in.
+    """
+    try:
+        sha = subprocess.run(["git", "-C", str(root), "rev-parse", "--verify", f"{ref}^{{commit}}"],
+                             check=True, capture_output=True, text=True).stdout.strip()
+    except subprocess.CalledProcessError as e:
+        raise SourceRefError(f"cannot resolve {ref!r}: {e.stderr.strip()[:200]}") from e
+    raw: list[tuple[str, bytes, int]] = []
+    for rel in artifacts:
+        blob = subprocess.run(["git", "-C", str(root), "cat-file", "blob", f"{sha}:{rel}"],
+                              capture_output=True)
+        if blob.returncode != 0:
+            sys.stderr.write(f"[weekly_anchor]   skip (absent at {ref}): {rel}\n")
+            continue
+        raw.append((rel, hashlib.sha256(blob.stdout).digest(), len(blob.stdout)))
+    head_digest = hashlib.sha256(sha.encode("utf-8")).digest()
+    raw.append((GIT_HEAD_LEAF_PATH, head_digest, len(sha.encode("utf-8"))))
+    raw.sort(key=lambda e: e[0].encode("utf-8"))
+    return [{"path": rel, "file_sha256_hex": digest.hex(), "size_bytes": size}
+            for rel, digest, size in raw], sha
+
+
+def source_leaves(root: Path, artifacts: list[str], ref: str, head: str) -> tuple[list[dict], str, str]:
+    """Pick the bytes to anchor. Returns (leaves, head_sha, source_note).
+
+    ref == "" -> the working copy (old behaviour). Otherwise fetch origin and
+    hash the ref; a failed fetch still anchors the last-fetched ref and says
+    so in the note, never silently. Raises SourceRefError if the ref is unknown.
+    """
+    if not ref:
+        return collect_leaves(root, artifacts, head), head, "working copy"
+    try:
+        fetched = subprocess.run(["git", "-C", str(root), "fetch", "--quiet", "origin"],
+                                 capture_output=True, timeout=120).returncode == 0
+    except (OSError, subprocess.TimeoutExpired):
+        fetched = False
+    leaves, sha = collect_leaves_at_ref(root, artifacts, ref)
+    note = f"{ref} @ {sha[:12]}" + ("" if fetched else " (fetch failed: last-fetched ref)")
+    return leaves, sha, note
+
+
 def collect_leaves(root: Path, artifacts: list[str], head: str) -> list[dict]:
     """Hash every existing artifact (+ the git HEAD) into leaf metadata.
 
@@ -325,7 +382,15 @@ def main() -> int:
                      "error": str(e), "git_head": head or None})
         return 2
 
-    leaves = collect_leaves(ROOT, ARTIFACTS, head)
+    ref = os.environ.get("ORPHO_WEEKLY_SOURCE_REF", DEFAULT_SOURCE_REF).strip()
+    try:
+        leaves, head, source_note = source_leaves(ROOT, ARTIFACTS, ref, head)
+    except SourceRefError as e:
+        sys.stderr.write(f"[weekly_anchor] FAILED: {e}\n")
+        _append_log({"ts": run_ts, "mode": "folder", "receipt_id": None,
+                     "error": str(e), "git_head": head or None})
+        return 2
+    sys.stderr.write(f"[weekly_anchor]   source: {source_note}\n")
     if not leaves:
         sys.stderr.write("[weekly_anchor] FAILED: no artifacts to anchor\n")
         return 1
