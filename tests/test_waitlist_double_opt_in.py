@@ -73,10 +73,7 @@ def _signup(base: str, email: str, interest: str = "personal"):
 
 def _mails(data_dir: Path, to: str) -> list[dict]:
     """Every send the mailer attempted to `to` (ASCII case folded)."""
-    p = data_dir / "stub_mail_sent.jsonl"
-    if not p.exists():
-        return []
-    rows = [json.loads(line) for line in p.read_text().splitlines() if line.strip()]
+    rows = _srv.jsonl_rows(data_dir / "stub_mail_sent.jsonl")
     return [r for r in rows if [a.lower() for a in r["payload"]["to"]] == [to.lower()]]
 
 
@@ -378,8 +375,7 @@ def test_the_confirm_route_is_in_the_route_lists(monkeypatch):
 # --- bundle review round 1 -------------------------------------------------------
 
 def _all_mails(data_dir: Path) -> list[dict]:
-    p = data_dir / "stub_mail_sent.jsonl"
-    return [json.loads(line) for line in p.read_text().splitlines() if line.strip()] if p.exists() else []
+    return _srv.jsonl_rows(data_dir / "stub_mail_sent.jsonl")
 
 
 def _parsed_rows(data_dir: Path) -> list[dict]:
