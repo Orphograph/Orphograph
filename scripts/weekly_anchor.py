@@ -82,7 +82,6 @@ ARTIFACTS = [
     "mcp/README.md",
     "web/mcp.html",
     "web/seal.png",
-    "web/seal.svg",
     "web/favicon.png",
     "web/index.html",
     "web/method/architecture.html",
