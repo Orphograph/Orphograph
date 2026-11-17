@@ -315,6 +315,27 @@ def nowpayments_mint_matcher(order_id: str):
     return matches
 
 
+def xrpl_mint_matcher(invoice_id: str):
+    """Predicate: is a mint source THIS XRPL invoice's own mint? The XRPL rail
+    (server/xrpl_pay.py) mints with "xrpl:<tx hash>:<invoice id>": exactly
+    three parts, the kind first and the invoice id whole and last, so neither
+    a fragment nor another invoice's id ever answers."""
+    def matches(src: str) -> bool:
+        parts = src.split(":")
+        return len(parts) == 3 and parts[0] == "xrpl" and parts[2] == invoice_id
+
+    return matches
+
+
+def find_xrpl_mint(invoice_id: str) -> dict | None:
+    """The most recent XRPL mint for exactly this invoice, or None. The XRPL
+    rail's exactly-once cross-check, as find_nowpayments_mint is the
+    NOWPayments webhook's."""
+    if not invoice_id:
+        return None
+    return _latest_mint(xrpl_mint_matcher(invoice_id))
+
+
 def find_mint_by_exact_source(sources: set[str]) -> dict | None:
     """The first mint row whose `source` IS one of `sources`, or None.
 

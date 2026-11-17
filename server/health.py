@@ -82,6 +82,16 @@ def _x402_state() -> dict:
             "stripe_record": x402.stripe_record_enabled(),
             "stripe_pending": pending}
 
+def _xrpl_state() -> dict:
+    """The receive-only XRPL rail (server/xrpl_pay.py): armed or not, and a
+    COUNT of config problems, like x402. Never the reasons, never an address."""
+    try:
+        import xrpl_pay
+    except Exception:  # pragma: no cover - the module ships with the server
+        return {"armed": False, "config_problems": 0}
+    return xrpl_pay.health_state()
+
+
 def _last_line_ts(path: Path) -> str | None:
     if not path.exists() or path.stat().st_size == 0:
         return None
@@ -203,6 +213,9 @@ def _compute_snapshot() -> dict:
         # observable proof of arming (secrets are not readable from outside).
         # The pay-to address is not repeated here; it is in every 402.
         "x402": _x402_state(),
+        # Receive-only RLUSD rail on the XRP Ledger; off unless
+        # ORPHO_XRPL_ADDRESS is set (docs/XRPL_RAIL.md).
+        "xrpl": _xrpl_state(),
         "counts": {
             "receipts_on_disk": receipts_count,
         },

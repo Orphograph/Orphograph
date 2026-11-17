@@ -214,7 +214,7 @@ ORIGIN_CLASSES = frozenset({
     "unknown",
 })
 AUTH_PATHS = frozenset({"free", "pack", "subscription", "api_key", "l402", "none"})
-SURFACES = frozenset({"single", "batch", "folder", "stripe", "nowpayments"})
+SURFACES = frozenset({"single", "batch", "folder", "stripe", "nowpayments", "xrpl"})
 OUTCOMES = frozenset({"success", "limited", "uncommitted", "failed"})
 _OFFER_VERSION_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,31}$")
 _HEX64_RE = re.compile(r"^[0-9a-f]{64}$")
